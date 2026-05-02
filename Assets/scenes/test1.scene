@@ -396,11 +396,14 @@
           "InitialRopeShorten": 0,
           "LowMomentumSwingControl": 42,
           "MaxAllowedStretch": 0,
+          "MaxMomentumCarryAccel": 170,
           "MaxRopeCorrection": 12000,
           "MaxSwingSpeedBoost": 2.2,
           "MinAlignmentAtHighSpeed": 0.05,
           "MinRopeLength": 8,
           "MinTautInputScale": 0.05,
+          "MomentumCarryEndSpeed": 1600,
+          "MomentumCarryStartSpeed": 500,
           "MomentumChangeThreshold": 0.2,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
@@ -418,6 +421,9 @@
           "SpeedBoostStart": 450,
           "StretchHoldPull": 1000,
           "SwingControl": 95,
+          "SwingDepthBoostExponent": 2.2,
+          "SwingDepthBoostMaxAccel": 115,
+          "SwingGravityAccel": 800,
           "TautInputDeadzone": 8,
           "TautRadialDamping": 8,
           "TautReleaseDistance": 6,
@@ -7496,17 +7502,17 @@
       "CustomBounds": false
     },
     "GameObjectSystems": {
-      "Sandbox.Clutter.ClutterGridSystem": {
-        "Storage": {
-          "$blob": "21ab6d27-4b97-43d9-a5c5-ba7c1af6c430"
+      "Sandbox.SelectionSetsSystem": {
+        "Data": {
+          "SelectionSets": []
         }
       },
       "Sandbox.MovieMaker.MovieRecorderSystem": {
         "DisableClientRecording": false
       },
-      "Sandbox.SelectionSetsSystem": {
-        "Data": {
-          "SelectionSets": []
+      "Sandbox.Clutter.ClutterGridSystem": {
+        "Storage": {
+          "$blob": "21ab6d27-4b97-43d9-a5c5-ba7c1af6c430"
         }
       }
     }

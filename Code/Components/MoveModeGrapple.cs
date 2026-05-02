@@ -13,8 +13,8 @@ public sealed class MoveModeGrapple : MoveMode
 	[Property] public float TautInputDeadzone { get; set; } = 8f;
 	[Property] public float TautReleaseDistance { get; set; } = 6f;
 	[Property] public float OutwardSuppressionSpeed { get; set; } = 120f;
-	[Property] public float MinTautInputScale { get; set; } = 0.05f;
-	[Property] public float TautRadialDamping { get; set; } = 8f;
+	[Property] public float MinTautInputScale { get; set; } = 0.2f;
+	[Property] public float TautRadialDamping { get; set; } = 5f;
 
 	[Property] public float InitialRopeShorten { get; set; } = 0f;
 	[Property] public float MinRopeLength { get; set; } = 8f;
@@ -28,6 +28,24 @@ public sealed class MoveModeGrapple : MoveMode
 	[Property] public float SpeedBoostEnd { get; set; } = 1800f;
 	[Property] public float MaxSwingSpeedBoost { get; set; } = 2.2f;
 	[Property] public float MinAlignmentAtHighSpeed { get; set; } = 0.05f;
+	[Property] public float MomentumCarryStartSpeed { get; set; } = 500f;
+	[Property] public float MomentumCarryEndSpeed { get; set; } = 1600f;
+	[Property] public float MaxMomentumCarryAccel { get; set; } = 170f;
+
+	/// <summary>Magnitude of world gravity along -Z used for tangent “deep swing” assist.</summary>
+	[Property] public float SwingGravityAccel { get; set; } = 800f;
+
+	/// <summary>Peak extra tangential accel at rope mid-swing toward bottom (combined with tangent gravity).</summary>
+	[Property] public float SwingDepthBoostMaxAccel { get; set; } = 115f;
+
+	/// <summary>Exponent on swing depth shaping (higher = more boost deeper in the arc).</summary>
+	[Property] public float SwingDepthBoostExponent { get; set; } = 2.2f;
+
+	/// <summary>
+	/// While holding retract, tangential swing assists are scaled by this (0 = off, 1 = same as free swing).
+	/// Logs showed retract held the whole sample — boosts were intentionally skipped before.
+	/// </summary>
+	[Property] public float RetractSwingAssistScale { get; set; } = 0.75f;
 
 	[Property] public float RetractSpeed { get; set; } = 520f;
 	[Property] public float RetractPullSpeed { get; set; } = 650f;
@@ -81,9 +99,6 @@ public sealed class MoveModeGrapple : MoveMode
 		if ( IsGrappling )
 			GrappleAge += Time.Delta;
 
-		if ( IsGrappling && DebugGrappleVelocity )
-			EmitDebugLog();
-
 		if ( IsGrappling && DrawRope )
 		{
 			Gizmo.Draw.Color = Color.Black;
@@ -126,9 +141,30 @@ public sealed class MoveModeGrapple : MoveMode
 		var currentSpeed = currentVelocity.Length;
 		var tangentSpeed = currentTangentVelocity.Length;
 
+		Vector3 tangentMotionDir;
+
+		if ( tangentSpeed > 1f )
+			tangentMotionDir = currentTangentVelocity.Normal;
+		else
+			tangentMotionDir = Vector3.Zero;
+
+		var gravDir = Vector3.Down;
+		var ropeDownDot = gravDir.Dot( ropeDir ); // ±1 apex, 0 at horizontal “deep” portions
+		var swingDepthFactor = MathF.Pow( 1f - MathF.Abs( ropeDownDot ), SwingDepthBoostExponent );
+		var gravityAlongMotion = tangentSpeed > 1f ? gravDir.Dot( tangentMotionDir ) : 0f;
+
+		var naturalTangentAssist =
+			tangentSpeed > 1f && gravityAlongMotion > 0f
+				? gravityAlongMotion * SwingGravityAccel * swingDepthFactor
+				: 0f;
+
+		var depthBoostAccel =
+			tangentSpeed > 1f && gravityAlongMotion > 0f ? SwingDepthBoostMaxAccel * swingDepthFactor * gravityAlongMotion : 0f;
+
 		var move = Vector3.Zero;
 
 		var isRetracting = Input.Down( RetractButton );
+		var swingAssistScale = isRetracting ? Math.Clamp( RetractSwingAssistScale, 0f, 1f ) : 1f;
 		if ( isRetracting )
 		{
 			RopeLength -= RetractSpeed * Time.Delta;
@@ -175,6 +211,25 @@ public sealed class MoveModeGrapple : MoveMode
 			}
 		}
 
+		// Preserve high-speed swing energy through the bottom of the arc.
+		// This offsets losses from rope correction / integration without adding hard pulls.
+		if ( IsRopeTaut && tangentSpeed > 1f && swingAssistScale > 0f )
+		{
+			var carryRange = Math.Max( MomentumCarryEndSpeed - MomentumCarryStartSpeed, 1f );
+			var carryAlpha = Math.Clamp( (tangentSpeed - MomentumCarryStartSpeed) / carryRange, 0f, 1f );
+			if ( carryAlpha > 0f )
+			{
+				var carryAccel = MaxMomentumCarryAccel * carryAlpha * swingAssistScale;
+				move += tangentMotionDir * carryAccel * attachAlpha;
+			}
+		}
+
+		// Deeper into the arc (rope closer to horizontal), bias tangential motion slightly faster.
+		if ( IsRopeTaut && tangentSpeed > 1f && swingAssistScale > 0f )
+		{
+			move += tangentMotionDir * (naturalTangentAssist + depthBoostAccel) * swingAssistScale * attachAlpha;
+		}
+
 		if ( IsRopeTaut )
 		{
 			// Radial speed along rope (+ toward anchor, - away from anchor)
@@ -202,7 +257,8 @@ public sealed class MoveModeGrapple : MoveMode
 			{
 				DebugLogTimer = 0f;
 				var stretch = distance - maxRopeDistance;
-				Log.Warning( $"[Grapple] v:{currentSpeed:0.0} tan:{tangentSpeed:0.0} rad:{currentRadialSpeed:0.0} dist:{distance:0.0} rope:{maxRopeDistance:0.0} stretch:{stretch:0.00} taut:{IsRopeTaut} inScale:{tautInputScale:0.00} retract:{isRetracting}" );
+				Log.Warning(
+					$"[Grapple] v:{currentSpeed:0.0} tan:{tangentSpeed:0.0} rad:{currentRadialSpeed:0.0} dist:{distance:0.0} rope:{maxRopeDistance:0.0} stretch:{stretch:0.00} taut:{IsRopeTaut} inScale:{tautInputScale:0.00} retract:{isRetracting} assist:{swingAssistScale:0.00} depth:{swingDepthFactor:0.00} gMot:{gravityAlongMotion:0.00}" );
 			}
 		}
 
@@ -297,28 +353,5 @@ public sealed class MoveModeGrapple : MoveMode
 		IsGrappling = false;
 		IsRopeTaut = false;
 		DebugLogTimer = 0f;
-	}
-
-	private void EmitDebugLog()
-	{
-		DebugLogTimer += Time.Delta;
-		if ( DebugLogTimer < Math.Max( DebugLogInterval, 0.01f ) )
-			return;
-
-		DebugLogTimer = 0f;
-
-		var toPoint = GrapplePoint - WorldPosition;
-		var distance = toPoint.Length;
-		if ( distance <= 0.001f )
-			return;
-
-		var ropeDir = toPoint / distance;
-		var velocity = Controller.Velocity;
-		var radialSpeed = velocity.Dot( ropeDir );
-		var tangentVelocity = velocity - ropeDir * radialSpeed;
-		var maxRopeDistance = RopeLength + MaxAllowedStretch;
-		var stretch = distance - maxRopeDistance;
-
-		Log.Warning( $"[Grapple] v:{velocity.Length:0.0} tan:{tangentVelocity.Length:0.0} rad:{radialSpeed:0.0} dist:{distance:0.0} rope:{maxRopeDistance:0.0} stretch:{stretch:0.00} taut:{IsRopeTaut}" );
 	}
 }
