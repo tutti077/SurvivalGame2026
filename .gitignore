@@ -1,2 +1,85 @@
-*.rbc
-*.fyc
+# =========================
+# S&box / Unity-like ignores
+# =========================
+
+# Build folders
+bin/
+obj/
+build/
+Build/
+dist/
+
+# S&box specific
+.sbox/
+.cache/
+.temp/
+logs/
+
+# Asset processing / cache
+Library/
+Temp/
+Obj/
+Logs/
+MemoryCaptures/
+
+# User-specific files
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+
+# VS / Rider / IDE
+.vs/
+.vscode/
+.idea/
+*.resharper
+*.DotSettings.user
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Generated code / cache
+Generated/
+Cache/
+DerivedData/
+
+# Package managers
+node_modules/
+
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.app
+
+# Temp files
+*.tmp
+*.temp
+*.bak
+
+# Debug
+*.pdb
+*.mdb
+
+# Archives
+*.zip
+*.tar
+*.gz
+*.rar
+
+# Environment files
+.env
+
+# Ignore local config overrides
+*.local.json
