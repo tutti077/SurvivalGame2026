@@ -2,7 +2,9 @@ using System;
 using Sandbox;
 using Sandbox.Movement;
 
-public sealed class MoveModeGrapple2 : MoveMode
+namespace Game;
+
+public sealed class MoveModeGrapple2 : MoveMode, IGrappleStop
 {
 	[Property] public float Range { get; set; } = 3000f;
 	[Property] public float AimAssistRadius { get; set; } = 48f;
@@ -56,7 +58,11 @@ public sealed class MoveModeGrapple2 : MoveMode
 
 	[Property] public bool DrawRope { get; set; } = true;
 
-	private bool IsGrappling;
+	public bool IsGrappling { get; private set; }
+
+	/// <inheritdoc />
+	public bool GrappleSwingStaminaDrainActive { get; private set; }
+
 	private Vector3 GrapplePoint;
 	private float RopeLength;
 	private float GrappleAge;
@@ -113,13 +119,22 @@ public sealed class MoveModeGrapple2 : MoveMode
 	public override Vector3 UpdateMove( Rotation eyes, Vector3 input )
 	{
 		if ( !IsGrappling )
+		{
+			GrappleSwingStaminaDrainActive = false;
 			return Vector3.Zero;
+		}
 
 		var toPoint = GrapplePoint - WorldPosition;
 		var distance = toPoint.Length;
 
 		if ( distance <= 1f )
+		{
+			GrappleSwingStaminaDrainActive = false;
 			return Vector3.Zero;
+		}
+
+		var stamina = Controller is not null ? PlayerStamina.FindForPlayerRoot( Controller.GameObject ) : null;
+		var allowGrappleAirControl = stamina is null || stamina.HasStaminaForActions;
 
 		var ropeDir = toPoint.Normal;
 		var attachAlpha = Math.Clamp( GrappleAge / AttachRampTime, 0f, 1f );
@@ -149,60 +164,69 @@ public sealed class MoveModeGrapple2 : MoveMode
 		if ( !rightDir.IsNearZeroLength )
 			rightDir = rightDir.Normal;
 
-		var wishDir = forwardDir * input.x - rightDir * input.y;
+		var wishPlanarRaw = forwardDir * input.x - rightDir * input.y;
 
-		if ( !wishDir.IsNearZeroLength )
+		if ( allowGrappleAirControl )
 		{
-			wishDir = wishDir.Normal;
+			var wishDir = wishPlanarRaw;
 
-			var airControlDir = wishDir - ropeDir * wishDir.Dot( ropeDir );
-
-			if ( !airControlDir.IsNearZeroLength )
+			if ( !wishDir.IsNearZeroLength )
 			{
-				airControlDir = airControlDir.Normal;
-				move += airControlDir * AirControl;
-			}
-		}
+				wishDir = wishDir.Normal;
 
-		if ( currentTangentSpeed > MinSpeedForQualityBoost && input.x > 0f && !forwardDir.IsNearZeroLength )
-		{
-			var currentTangentDir = currentTangentVelocity.Normal;
-			var forwardTangent = forwardDir - ropeDir * forwardDir.Dot( ropeDir );
+				var airControlDir = wishDir - ropeDir * wishDir.Dot( ropeDir );
 
-			if ( !forwardTangent.IsNearZeroLength )
-			{
-				forwardTangent = forwardTangent.Normal;
-
-				var forwardAlignment = forwardTangent.Dot( currentTangentDir );
-				var ropeAngleQuality = 1f - MathF.Abs( currentVelocity.Normal.Dot( ropeDir ) );
-				var swingQuality = Math.Clamp( forwardAlignment, 0f, 1f ) * Math.Clamp( ropeAngleQuality, 0f, 1f );
-
-				if ( swingQuality > MomentumChangeThreshold )
+				if ( !airControlDir.IsNearZeroLength )
 				{
-					var speedRoom = Math.Clamp( 1f - currentTangentSpeed / MaxSwingSpeed, 0f, 1f );
-
-					SwingMomentum = Math.Clamp(
-						SwingMomentum + swingQuality * SwingBuildRate * Time.Delta,
-						0f,
-						1f
-					);
-
-					var swingMultiplier = MathF.Pow( SwingMomentum, SwingQualityBoostRamp );
-					var qualityBoost = SwingQualitySpeedBoost * swingQuality * swingMultiplier * speedRoom;
-
-					move += currentTangentDir * qualityBoost;
-					move += forwardTangent * SwingControl * swingMultiplier;
-				}
-				else
-				{
-					SwingMomentum = Math.Max( 0f, SwingMomentum - SwingDecayRate * Time.Delta );
+					airControlDir = airControlDir.Normal;
+					move += airControlDir * AirControl;
 				}
 			}
-		}
-		else if ( !wishDir.IsNearZeroLength )
-		{
-			SwingMomentum = Math.Clamp( SwingMomentum + SwingBuildRate * 0.2f * Time.Delta, 0f, 1f );
-			move += wishDir * LowMomentumSwingControl * MinSwingMultiplier;
+
+			if ( currentTangentSpeed > MinSpeedForQualityBoost && input.x > 0f && !forwardDir.IsNearZeroLength )
+			{
+				var currentTangentDir = currentTangentVelocity.Normal;
+				var forwardTangent = forwardDir - ropeDir * forwardDir.Dot( ropeDir );
+
+				if ( !forwardTangent.IsNearZeroLength )
+				{
+					forwardTangent = forwardTangent.Normal;
+
+					var forwardAlignment = forwardTangent.Dot( currentTangentDir );
+					var ropeAngleQuality = 1f - MathF.Abs( currentVelocity.Normal.Dot( ropeDir ) );
+					var swingQuality = Math.Clamp( forwardAlignment, 0f, 1f ) * Math.Clamp( ropeAngleQuality, 0f, 1f );
+
+					if ( swingQuality > MomentumChangeThreshold )
+					{
+						var speedRoom = Math.Clamp( 1f - currentTangentSpeed / MaxSwingSpeed, 0f, 1f );
+
+						SwingMomentum = Math.Clamp(
+							SwingMomentum + swingQuality * SwingBuildRate * Time.Delta,
+							0f,
+							1f
+						);
+
+						var swingMultiplier = MathF.Pow( SwingMomentum, SwingQualityBoostRamp );
+						var qualityBoost = SwingQualitySpeedBoost * swingQuality * swingMultiplier * speedRoom;
+
+						move += currentTangentDir * qualityBoost;
+						move += forwardTangent * SwingControl * swingMultiplier;
+					}
+					else
+					{
+						SwingMomentum = Math.Max( 0f, SwingMomentum - SwingDecayRate * Time.Delta );
+					}
+				}
+			}
+			else if ( !wishPlanarRaw.IsNearZeroLength )
+			{
+				SwingMomentum = Math.Clamp( SwingMomentum + SwingBuildRate * 0.2f * Time.Delta, 0f, 1f );
+				move += wishPlanarRaw.Normal * LowMomentumSwingControl * MinSwingMultiplier;
+			}
+			else
+			{
+				SwingMomentum = Math.Max( 0f, SwingMomentum - SwingDecayRate * Time.Delta );
+			}
 		}
 		else
 		{
@@ -226,6 +250,10 @@ public sealed class MoveModeGrapple2 : MoveMode
 
 		if ( move.Length > MaxGrappleMove )
 			move = move.Normal * MaxGrappleMove;
+
+		var retracting = !string.IsNullOrWhiteSpace( RetractButton ) && GrappleAge >= RetractStartDelay && Input.Down( RetractButton );
+		var swingMoveForStamina = GameMovementInput.AnyMoveKeyDown() || GameMovementInput.StrongAnalogMove();
+		GrappleSwingStaminaDrainActive = retracting || swingMoveForStamina;
 
 		return move;
 	}
@@ -286,6 +314,9 @@ public sealed class MoveModeGrapple2 : MoveMode
 		if ( !HasTarget )
 			return;
 
+		if ( Controller is not null && !PlayerStamina.HasStaminaToStartGrapple( Controller.GameObject ) )
+			return;
+
 		GrapplePoint = TargetPoint;
 		IsGrappling = true;
 
@@ -295,6 +326,9 @@ public sealed class MoveModeGrapple2 : MoveMode
 		GrappleAge = 0f;
 		SwingMomentum = 0f;
 		DebugTimer = 0f;
+
+		if ( Controller is not null )
+			PlayerStamina.ApplyGrappleAttachCost( Controller.GameObject );
 	}
 
 	private bool HasGrappleTag( GameObject obj )
@@ -310,9 +344,10 @@ public sealed class MoveModeGrapple2 : MoveMode
 		return false;
 	}
 
-	private void StopGrapple()
+	public void StopGrapple()
 	{
 		IsGrappling = false;
+		GrappleSwingStaminaDrainActive = false;
 		SwingMomentum = 0f;
 	}
 }
