@@ -1,0 +1,21 @@
+@namespace Game
+@using Sandbox.UI
+@inherits PanelComponent
+
+<root style="flex-direction: column; width: 280px; height: 44px; background-color: #1a0a0a; border: 2px solid #000; pointer-events: none;">
+	<div style="position: relative; width: 100%; height: 100%; background-color: #3d1515; overflow: hidden;">
+		<div style="height: 100%; width: @(FillPercent)%; background-color: #d32f2f;"></div>
+		<label style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; justify-content: center; align-items: center; color: #fff; font-size: 22px; font-weight: 900; letter-spacing: 1px; text-align: center; text-shadow: 0 0 6px black;">@AmountText</label>
+	</div>
+</root>
+
+@code
+{
+	[Property] public PlayerHealth Health { get; set; }
+
+	private string FillPercent => $"{(Health is null ? 0f : Health.HealthFraction * 100f):0.#}%";
+
+	private string AmountText => Health is null ? "0/0" : $"{Health.CurrentHealth:0}/{Health.MaxHealth:0}";
+
+	protected override int BuildHash() => System.HashCode.Combine( Health?.CurrentHealth ?? 0f, Health?.MaxHealth ?? 1f );
+}
