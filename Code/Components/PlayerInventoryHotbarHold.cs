@@ -90,6 +90,7 @@ public sealed class PlayerInventoryHotbarHold : Component
 		StripPickableForPreview( inst );
 		FreezeProxyPhysics( inst );
 		_proxy = inst;
+		ItemPickup.RegisterCarryPreviewRoot( _proxy );
 		ItemPickup.TrySnapCarriedPreview( _proxy );
 	}
 
@@ -114,6 +115,12 @@ public sealed class PlayerInventoryHotbarHold : Component
 		if ( root is null || !root.IsValid() )
 			return;
 
+		foreach ( var c in root.Components.GetAll<Collider>() )
+		{
+			if ( c is not null && c.IsValid() )
+				c.Enabled = false;
+		}
+
 		var rb = root.Components.Get<Rigidbody>();
 		if ( rb is not null && rb.IsValid() )
 		{
@@ -129,6 +136,8 @@ public sealed class PlayerInventoryHotbarHold : Component
 
 	private void DestroyProxy()
 	{
+		ItemPickup?.ClearCarryPreviewRoot();
+
 		if ( _proxy is not null && _proxy.IsValid() )
 			_proxy.Destroy();
 

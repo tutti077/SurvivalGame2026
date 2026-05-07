@@ -78,6 +78,7 @@ public sealed class PlayerItemPickup : Component
 	[Property] public bool DisableHeldCollidersWhileCarried { get; set; } = true;
 
 	private GameObject _held;
+	private GameObject _carryPreviewRoot;
 	private Rigidbody _heldBody;
 	private PickableItem _heldPickable;
 	private bool _hadMotion;
@@ -91,6 +92,54 @@ public sealed class PlayerItemPickup : Component
 
 	/// <summary>Physics/visual root currently held (for other systems, e.g. grapple aim traces).</summary>
 	public GameObject HeldRoot => _held is not null && _held.IsValid() ? _held : null;
+
+	/// <summary>Find who is carrying this world object (usually the local player).</summary>
+	public static bool TryFindPickupHolding( GameObject heldRoot, out PlayerItemPickup pickup )
+	{
+		pickup = null;
+		if ( heldRoot is null || !heldRoot.IsValid() || heldRoot.Scene is null )
+			return false;
+
+		foreach ( var p in heldRoot.Scene.GetAllComponents<PlayerItemPickup>() )
+		{
+			if ( p is null )
+				continue;
+
+			var h = p.HeldRoot;
+			if ( h is not null && h.IsValid() && ReferenceEquals( h, heldRoot ) )
+			{
+				pickup = p;
+				return true;
+			}
+
+			var pr = p._carryPreviewRoot;
+			if ( pr is not null && pr.IsValid() && ReferenceEquals( pr, heldRoot ) )
+			{
+				pickup = p;
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/// <summary>Same rays as pickup / camera aim — reused for melee sweep from the carrier.</summary>
+	public bool TryGetCarryAimRay( out Vector3 start, out Vector3 forward )
+		=> TryGetPickupAimRay( out start, out forward );
+
+	/// <summary>
+	/// Registers the hotbar / inventory preview mesh so <see cref="TryFindPickupHolding"/> + <see cref="MeleeWeapon"/>
+	/// work while nothing is kinematically picked up (<see cref="HeldRoot"/> is null). Cleared when preview is destroyed.
+	/// </summary>
+	public void RegisterCarryPreviewRoot( GameObject root )
+	{
+		_carryPreviewRoot = root is not null && root.IsValid() ? root : null;
+	}
+
+	public void ClearCarryPreviewRoot()
+	{
+		_carryPreviewRoot = null;
+	}
 
 	/// <summary>
 	/// Snap a non-inventory preview prop (e.g. hotbar ghost mesh) to the same carry pose as kinematic pickup.
@@ -136,6 +185,8 @@ public sealed class PlayerItemPickup : Component
 
 	protected override void OnDisabled()
 	{
+		ClearCarryPreviewRoot();
+
 		if ( _held is not null && _held.IsValid() )
 			Drop();
 

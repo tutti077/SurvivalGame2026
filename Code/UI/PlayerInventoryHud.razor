@@ -9,7 +9,7 @@
 <root class="inv-root @(Inventory is not null && Inventory.IsInventoryOpen ? "inv-root-open" : "") @ClosedHotbarDragClass()">
 	@if ( Inventory is not null )
 	{
-		@* Pump: slot hover/outline only once per Panel.Tick. Drag PNG tracks pointer move events (cheap). *@
+		@* Fullscreen no-op layer (kept for layout); ghost/hover run from OnUpdate + Mouse.Delta vs stale Mouse.Position. *@
 		<InventoryHudDragPumpPanel @ref="_dragPump" />
 
 		<label class="inv-build-watermark">v@(GameBuildLabel.Display)</label>
@@ -117,8 +117,11 @@
 	private bool _scenePreviewBuilt;
 	private float _dragMouseX;
 	private float _dragMouseY;
-	/// <summary>Screen-space point for ghost + hover. Prefer <see cref="MousePanelEvent"/> <c>This</c>+<c>LocalPosition</c> — <see cref="Mouse.Position"/> is advanced in <see cref="Mouse.Frame"/> and lags inside <c>mousemove</c>.</summary>
+	/// <summary>Screen-space point for ghost + hover.</summary>
 	private Vector2 _dragGhostScreenPx;
+
+	private float _dragDbgNextLogAt;
+	private int _dragDbgGhostCalls;
 	private Panel _dragGhostPanel;
 	private int _hoverSlot = -1;
 	private int _dragLastHoverSlot = -1;
@@ -139,10 +142,6 @@
 
 	/// <summary>True from slot left-mousedown until a completing UI mouseup (slot, backdrop, drop zone, or window chrome).</summary>
 	private bool _dragUiCapture;
-
-	/// <summary>Used by <see cref="InventoryHudDragPumpPanel"/> — UI <see cref="Sandbox.UI.Panel.Tick"/>, not game tick.</summary>
-	public bool IsDragPresentationPumpActive
-		=> Inventory is not null && _dragUiCapture && _dragFrom >= 0;
 
 	protected override void OnMouseMove( MousePanelEvent e )
 	{
@@ -181,16 +180,17 @@
 	}
 
 	/// <summary>
-	/// The Razor panel root still lays out fullscreen on a <see cref="Sandbox.ScreenPanel"/> in many builds.
-	/// Forcing pointer-events:none on <see cref="Panel"/> mimics hitting through empty space so camera mouse look works immediately on spawn.
-	/// Slots/backdrop/windows set their own pointer-events in CSS.
+	/// For gameplay we keep the root pass-through (<c>pointer-events:none</c>) so empty HUD space does not steal look.
+	/// During drag we must allow the root to receive cursor tracking; otherwise <see cref="Panel.MousePosition"/> and layout are wrong
+	/// (telemetry: <c>panelMouse</c> ≠ <see cref="Mouse.Position"/>).
 	/// </summary>
-	private void ForceRootPanelTransparentToPointerPassthrough()
+	private void ApplyRootPointerPassthroughUnlessDragging()
 	{
 		if ( Panel is null )
 			return;
 
-		Panel.Style.PointerEvents = Sandbox.UI.PointerEvents.None;
+		Panel.Style.PointerEvents =
+			_dragUiCapture && _dragFrom >= 0 ? Sandbox.UI.PointerEvents.All : Sandbox.UI.PointerEvents.None;
 	}
 
 	/// <summary>
@@ -212,6 +212,35 @@
 			return;
 
 		Log.Info( $"[PlayerInventoryHud] {message}" );
+	}
+
+	/// <summary>1 Hz while dragging (requires <see cref="PlayerInventory.DebugInventory"/>) so the console shows live pump stats, not only on mouseup.</summary>
+	private void TryHudDragTelemetrySecondTick()
+	{
+		if ( Inventory is null || !Inventory.DebugInventory || !_dragUiCapture || _dragFrom < 0 )
+			return;
+
+		if ( Time.Now < _dragDbgNextLogAt )
+			return;
+
+		_dragDbgNextLogAt = Time.Now + 1f;
+		var auth = Mouse.Position;
+		var pm = Panel is not null && Panel.IsValid ? Panel.MousePosition : default;
+		var scl = Panel is not null && Panel.IsValid ? Panel.ScaleToScreen : 0f;
+		var pe = Panel?.Style?.PointerEvents.ToString() ?? "?";
+		Log.Info(
+			$"[PlayerInventoryHud] drag.telemetry (1s): calls={_dragDbgGhostCalls} ptr={pe} | " +
+			$"auth=({auth.x:0.##},{auth.y:0.##}) ghost=({_dragGhostScreenPx.x:0.##},{_dragGhostScreenPx.y:0.##}) err={(_dragGhostScreenPx - auth).Length:0.##} | " +
+			$"mouseΔ=({Mouse.Delta.x:0.##},{Mouse.Delta.y:0.##}) inΔ=({Input.MouseDelta.x:0.##},{Input.MouseDelta.y:0.##}) | " +
+			$"rootLocal=({_dragMouseX:0.##},{_dragMouseY:0.##}) panelMouse=({pm.x:0.##},{pm.y:0.##}) scale={scl:0.####} Δ={Time.Delta:0.##}" );
+
+		_dragDbgGhostCalls = 0;
+	}
+
+	private void ResetHudDragTelemetrySchedule()
+	{
+		_dragDbgNextLogAt = Time.Now + 0.2f;
+		_dragDbgGhostCalls = 0;
 	}
 
 	private void HudPointerDbg( string source, MousePanelEvent me, string extra = "" )
@@ -440,8 +469,11 @@
 		_dragLastHoverSlot = slotIndex;
 		_dragUiCapture = true;
 		InvalidateDragGhostPanelReference();
-		// Seed ghost point with current cursor so initial integration doesn't jump.
-		_dragGhostScreenPx = Mouse.Position;
+		ApplyRootPointerPassthroughUnlessDragging();
+		var m = Mouse.Position;
+		_dragGhostScreenPx = m;
+		if ( Inventory.DebugInventory )
+			ResetHudDragTelemetrySchedule();
 		UpdateDragGhostFromRootMouse();
 		_hoverSlot = ResolveHoveredSlotScreenSpaceCached( _dragGhostScreenPx );
 		if ( _hoverSlot >= 0 )
@@ -449,51 +481,29 @@
 		ApplyDragDecorations( sourceIdx: _dragFrom, hoverIdx: _hoverSlot );
 	}
 
-	/// <summary>UI-frame ghost update.</summary>
-	public void OnDragPresentationPumpTick()
-	{
-		UpdateDragGhostFromRootMouse();
-		UpdateDragHoverFromScreenPointAndApply();
-	}
-
 	/// <summary>
-	/// Basic path: one source of truth for drag position.
-	/// Read HUD root local mouse each UI frame and place the ghost directly from it.
+	/// Ghost tracks <see cref="Mouse.Position"/> only (no <see cref="Mouse.Delta"/> — wrong scale in telemetry).
+	/// Layout uses the <b>same</b> math as <see cref="UpdateDragMouse"/> (origin + <see cref="Panel.ScaleToScreen"/>), not <see cref="Panel.ScreenPositionToPanelPosition"/>,
+	/// which offset the icon from the cursor in ScreenPanel builds.
 	/// </summary>
 	private void UpdateDragGhostFromRootMouse()
 	{
 		if ( !_dragUiCapture || _dragFrom < 0 || Panel is null || !Panel.IsValid )
 			return;
 
-		var auth = Mouse.Position;
-		var step = Mouse.Delta;
-
-		// Convert raw screen pixels to this panel's layout space using screen origin + panel scale.
-		// ScreenPositionToPanelPosition() has shown inconsistent offsets across ScreenPanel modes.
-		var origin = Panel.PanelPositionToScreenPosition( Vector2.Zero );
-		var s = Panel.ScaleToScreen;
-		if ( s < 0.0001f )
-			s = 1f;
-
-		// Smooth the render cursor by integrating delta; snap back if we drift too far.
-		if ( step.Length > 0.0001f )
-			_dragGhostScreenPx += step;
-		else
-		{
-			var dt = MathF.Max( RealTime.Delta, 1f / 2048f );
-			var k = MathF.Min( 1f, dt * 480f );
-			_dragGhostScreenPx = Vector2.Lerp( _dragGhostScreenPx, auth, k );
-		}
-
-		var drift = (_dragGhostScreenPx - auth).Length;
-		if ( drift > 18f )
-			_dragGhostScreenPx = auth;
-
-		var delta = _dragGhostScreenPx - origin;
-		var localRoot = new Vector2( delta.x / s, delta.y / s );
-		_dragMouseX = localRoot.x;
-		_dragMouseY = localRoot.y;
+		_dragGhostScreenPx = Mouse.Position;
+		UpdateDragMouse();
 		ApplyDragGhostPanelPosition();
+	}
+
+	/// <summary>UI <see cref="Sandbox.UI.Panel.Tick"/> — same math as <see cref="OnUpdate"/>, safe to call every frame (no delta integration).</summary>
+	public void PumpDragPresentationUiTick()
+	{
+		if ( Inventory is null || !_dragUiCapture || _dragFrom < 0 || Panel is null || !Panel.IsValid )
+			return;
+
+		UpdateDragGhostFromRootMouse();
+		UpdateDragHoverFromScreenPointAndApply();
 	}
 
 	private void UpdateDragHoverFromScreenPointAndApply()
@@ -1523,6 +1533,7 @@
 			return;
 
 		RebuildSlotPanelCache();
+		ApplyRootPointerPassthroughUnlessDragging();
 		_dragGhostScreenPx = Mouse.Position;
 		UpdateDragGhostFromRootMouse();
 		var hover = ResolveHoveredSlotScreenSpaceCached( _dragGhostScreenPx );
@@ -1536,8 +1547,17 @@
 	{
 		base.OnUpdate();
 
-		ForceRootPanelTransparentToPointerPassthrough();
+		ApplyRootPointerPassthroughUnlessDragging();
 		SyncGameplayMouseForPlayerController();
+
+		if ( Inventory is not null && _dragUiCapture && _dragFrom >= 0 && Panel is not null && Panel.IsValid )
+		{
+			UpdateDragGhostFromRootMouse();
+			UpdateDragHoverFromScreenPointAndApply();
+			if ( Inventory.DebugInventory )
+				_dragDbgGhostCalls++;
+			TryHudDragTelemetrySecondTick();
+		}
 
 		if ( Inventory is null )
 			return;
@@ -1577,8 +1597,6 @@
 				}
 			}
 		}
-
-		// Drag ghost + hover rings: see <see cref="InventoryHudDragPumpPanel"/> (Panel.Tick, UI-frame).
 
 		if ( !Inventory.IsInventoryOpen || _scenePreviewBuilt )
 			return;

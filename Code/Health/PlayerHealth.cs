@@ -10,6 +10,8 @@ namespace Game;
 /// </summary>
 public sealed partial class PlayerHealth : Component
 {
+	private static int _nextEnemyId = 1;
+
 	[Property, Sync( SyncFlags.FromHost ), Change( nameof( OnMaxHealthChanged ) )]
 	public float MaxHealth { get; set; } = 100f;
 
@@ -22,6 +24,21 @@ public sealed partial class PlayerHealth : Component
 	/// <summary>3D scale for the overhead bar (<c>WorldPanel.RenderScale</c>).</summary>
 	[Property] public float WorldPanelRenderScale { get; set; } = 1.35f;
 
+	/// <summary>Force this health to render only world-space UI (never local screen HUD).</summary>
+	[Property] public bool WorldBarOnly { get; set; }
+
+	/// <summary>Enemy label prefix for generated IDs (e.g. Enemy_1, Enemy_2).</summary>
+	[Property] public string EnemyNamePrefix { get; set; } = "Enemy";
+
+	/// <summary>Stable identity key for HUD binding/debug. Players use username; enemies use prefix+counter.</summary>
+	[Property] public string EntityId { get; private set; } = "";
+
+	/// <summary>Non-player respawn behavior with a simple scale animation.</summary>
+	[Property] public bool EnableNonPlayerRespawnAnimation { get; set; } = true;
+	[Property] public float NonPlayerRespawnDelaySeconds { get; set; } = 2.0f;
+	[Property] public float NonPlayerDeathAnimSeconds { get; set; } = 0.2f;
+	[Property] public float NonPlayerRespawnAnimSeconds { get; set; } = 0.2f;
+
 	/// <summary>Invoked locally when <see cref="CurrentHealth"/> or <see cref="MaxHealth"/> changes (including from sync).</summary>
 	public event Action<float, float> OnHealthChanged;
 
@@ -30,6 +47,7 @@ public sealed partial class PlayerHealth : Component
 
 	private GameObject _worldUi;
 	private GameObject _screenUi;
+	private bool _respawnRoutineRunning;
 
 	/// <summary>0..1</summary>
 	public float HealthFraction => MaxHealth > 0.001f ? Math.Clamp( CurrentHealth / MaxHealth, 0f, 1f ) : 0f;
@@ -58,11 +76,14 @@ public sealed partial class PlayerHealth : Component
 				: Math.Clamp( CurrentHealth, 0f, MaxHealth );
 		}
 
+		EnsureEntityId();
 		CreateHealthUi();
+		OnDied += HandleNonPlayerDeath;
 	}
 
 	protected override void OnDestroy()
 	{
+		OnDied -= HandleNonPlayerDeath;
 		_worldUi?.Destroy();
 		_screenUi?.Destroy();
 		_worldUi = null;
@@ -88,9 +109,11 @@ public sealed partial class PlayerHealth : Component
 
 	private void CreateHealthUi()
 	{
+		var hasPlayerController = FindPlayerControllerAncestor( GameObject ) is not null;
+		var worldOnly = WorldBarOnly || !hasPlayerController;
 		var local = IsLocalOwnerForUi();
 
-		if ( !local )
+		if ( worldOnly || !local )
 		{
 			_worldUi = new GameObject( true, "PlayerHealthWorldUi" );
 			_worldUi.Parent = GameObject;
@@ -110,6 +133,82 @@ public sealed partial class PlayerHealth : Component
 		// Defer ScreenPanel/VitalsHud until after the first engine tick — mirrors the Alt+Enter "focus refresh" workaround
 		// where immediate UI mount could leave mouse routed to overlay instead of PlayerController.
 		_ = CreateLocalScreenUiHostDeferredAsync();
+	}
+
+	private void EnsureEntityId()
+	{
+		if ( !string.IsNullOrWhiteSpace( EntityId ) )
+			return;
+
+		var pc = FindPlayerControllerAncestor( GameObject );
+		if ( pc is not null )
+		{
+			var name = pc.Network?.Owner?.DisplayName;
+			EntityId = string.IsNullOrWhiteSpace( name ) ? pc.GameObject.Name : name;
+			return;
+		}
+
+		EntityId = $"{EnemyNamePrefix}_{_nextEnemyId++}";
+	}
+
+	private bool IsNonPlayerHealth()
+		=> FindPlayerControllerAncestor( GameObject ) is null;
+
+	private void HandleNonPlayerDeath()
+	{
+		if ( _respawnRoutineRunning || !EnableNonPlayerRespawnAnimation || !IsNonPlayerHealth() )
+			return;
+
+		_ = RunNonPlayerRespawnRoutineAsync();
+	}
+
+	private async Task RunNonPlayerRespawnRoutineAsync()
+	{
+		_respawnRoutineRunning = true;
+		var baseScale = GameObject.LocalScale;
+
+		var deathDur = Math.Max( 0.01f, NonPlayerDeathAnimSeconds );
+		for ( var t = 0f; t < deathDur && GameObject.IsValid(); t += Time.Delta )
+		{
+			var a = Math.Clamp( t / deathDur, 0f, 1f );
+			GameObject.LocalScale = Vector3.Lerp( baseScale, baseScale * 0.15f, a );
+			await GameTask.Yield();
+		}
+
+		if ( !GameObject.IsValid() )
+			return;
+
+		GameObject.LocalScale = baseScale * 0.15f;
+		await GameTask.DelaySeconds( Math.Max( 0f, NonPlayerRespawnDelaySeconds ) );
+		if ( !GameObject.IsValid() )
+			return;
+
+		ResetToFull();
+
+		var respawnDur = Math.Max( 0.01f, NonPlayerRespawnAnimSeconds );
+		for ( var t = 0f; t < respawnDur && GameObject.IsValid(); t += Time.Delta )
+		{
+			var a = Math.Clamp( t / respawnDur, 0f, 1f );
+			GameObject.LocalScale = Vector3.Lerp( baseScale * 0.15f, baseScale, a );
+			await GameTask.Yield();
+		}
+
+		if ( GameObject.IsValid() )
+			GameObject.LocalScale = baseScale;
+
+		_respawnRoutineRunning = false;
+	}
+
+	private static PlayerController FindPlayerControllerAncestor( GameObject start )
+	{
+		for ( var go = start; go is not null; go = go.Parent )
+		{
+			var pc = go.Components.Get<PlayerController>();
+			if ( pc is not null )
+				return pc;
+		}
+
+		return null;
 	}
 
 	private async Task CreateLocalScreenUiHostDeferredAsync()

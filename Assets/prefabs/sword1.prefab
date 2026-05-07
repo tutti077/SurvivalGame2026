@@ -6,7 +6,7 @@
     "Name": "sword1",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
-    "Scale": "0.0599999987,0.00999999978,0.800000012",
+    "Scale": "50,50,50",
     "Tags": "pickup",
     "Enabled": true,
     "NetworkMode": 2,
@@ -16,23 +16,35 @@
     "OwnerTransfer": 1,
     "Components": [
       {
-        "__type": "Sandbox.ModelRenderer",
+        "__type": "Sandbox.SkinnedModelRenderer",
         "__guid": "f3e98cab-175b-4e43-b706-55f6574bb59e",
         "__enabled": true,
         "Flags": 0,
+        "AnimationGraph": null,
         "BodyGroups": 18446744073709551615,
+        "BoneMergeTarget": null,
         "CreateAttachments": false,
+        "CreateBoneObjects": false,
         "LodOverride": null,
         "MaterialGroup": null,
         "MaterialOverride": null,
         "Materials": null,
-        "Model": "models/dev/box.vmdl",
+        "Model": "models/sword_left/basic_sword_bind.vmdl",
+        "Morphs": {},
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null,
+        "Parameters": {
+          "bools": {},
+          "ints": {},
+          "floats": {},
+          "vectors": {},
+          "rotations": {}
+        },
+        "PlaybackRate": 1,
         "RenderOptions": {
           "GameLayer": true,
           "OverlayLayer": false,
@@ -40,7 +52,13 @@
           "AfterUILayer": false
         },
         "RenderType": "On",
-        "Tint": "1,0,0,1"
+        "Sequence": {
+          "Name": null,
+          "Looping": false,
+          "Blending": false
+        },
+        "Tint": "1,1,1,1",
+        "UseAnimGraph": false
       },
       {
         "__type": "Sandbox.Rigidbody",
@@ -97,7 +115,7 @@
         "OnTriggerEnter": null,
         "OnTriggerExit": null,
         "RollingResistance": 0,
-		"Scale": "1,1,1",
+        "Scale": "1,1,1",
         "Static": false,
         "Surface": null,
         "SurfaceVelocity": "0,0,0"
@@ -107,15 +125,39 @@
         "__guid": "93f98229-fec0-4e6a-9a61-f4ed869bfdb8",
         "__enabled": true,
         "Flags": 0,
+        "AllowDamageFriendlyNpcs": false,
+        "AllowDamageOverheadOnlyTargets": true,
+        "AttackButton": "attack1",
+        "AttackCooldownSeconds": 0.4,
+        "AttackDamage": 22,
+        "AttackInputLockSeconds": 0.75,
+        "AttackRange": 110,
         "AttackStaminaCost": 5,
+        "AttackSweepSelfInsetExtra": 28,
+        "AttackTraceRadius": 14,
+        "AutoCreatedTargetMaxHealth": 100,
+        "AutoCreateHealthOnFirstHit": true,
+        "ForceDirectSequencePlayback": true,
+        "FriendlyFireAgainstPlayers": false,
         "HeldLocalAngles": "0,0,0",
-        "HeldLocalOffset": "0,0,0",
+        "HeldLocalOffset": "16,0,0",
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null,
+        "RequireStaminaForAttack": false,
+        "RequireSwingToFinishBeforeNextAttack": true,
+        "SwingAnimationDurationSeconds": 0.55,
+        "SwingSequenceName": "basic_sword_attack_left",
+        "SwingSequencePlaybackRate": 1,
+        "SwingSkinnedRenderer": {
+          "_type": "component",
+          "component_id": "f3e98cab-175b-4e43-b706-55f6574bb59e",
+          "go": "53235cb6-520c-4f9c-a9a6-0fa536bd8754",
+          "component_type": "SkinnedModelRenderer"
+        },
         "WeaponKind": "Sword"
       },
       {
@@ -137,7 +179,28 @@
         "WorldPickupCount": 1
       }
     ],
-    "Children": []
+    "Children": [],
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": []
   },
   "ResourceVersion": 2,
   "ShowInMenu": false,

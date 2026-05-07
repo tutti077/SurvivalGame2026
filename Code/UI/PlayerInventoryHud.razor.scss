@@ -6,6 +6,8 @@ PlayerInventoryHud {
 	.inv-build-watermark {
 		position: absolute;
 		right: 12px;
+		bottom: 12px;
+		top: auto;
 		z-index: 9000;
 		pointer-events: none;
 		opacity: 0.42;
@@ -18,15 +20,16 @@ PlayerInventoryHud {
 		white-space: nowrap;
 	}
 
-	/* Bag open: label is normal top-right inside full-screen root. */
+	/* Bag open: full-screen root — watermark is viewport bottom-right. */
 	.inv-root-open .inv-build-watermark {
-		top: 10px;
+		right: 12px;
+		bottom: 12px;
 	}
 
-	/* Bag closed: version label sits in corner of the bottom dock strip. */
+	/* Bag closed: dock strip — bottom-right within the HUD root. */
 	.inv-root:not(.inv-root-open) .inv-build-watermark {
-		top: 8px;
-		right: 8px;
+		right: 10px;
+		bottom: 10px;
 	}
 
 	.inv-root {
