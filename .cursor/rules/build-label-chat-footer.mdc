@@ -1,0 +1,18 @@
+---
+description: End each reply with the same build label as the in-game version watermark (GameBuildLabel.Display).
+alwaysApply: true
+---
+
+# Chat build label footer
+
+Before sending a **final** response to the user in this repo, read `Code/GameBuildLabel.cs` (constant `GameBuildLabel.Display`) and append one last line to the message.
+
+Format (replace `X.Y.Z` with the actual constant value, no braces):
+
+`Build label — vX.Y.Z (Assistant)`
+
+If the file is missing or unreadable:
+
+`Build label — (see GameBuildLabel.cs) (Assistant)`
+
+Keep the rest of the reply unchanged.

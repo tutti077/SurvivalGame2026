@@ -39,4 +39,44 @@ public static class GameMovementInput
 		var toggledHead = char.IsUpper( head ) ? char.ToLowerInvariant( head ) : char.ToUpperInvariant( head );
 		return Input.Down( toggledHead + action.Substring( 1 ) );
 	}
+
+	public static bool InputPressedFlexible( string action )
+	{
+		if ( string.IsNullOrEmpty( action ) )
+			return false;
+
+		if ( Input.Pressed( action ) )
+			return true;
+
+		if ( action.Length == 1 )
+		{
+			var c = action[0];
+			var other = char.IsUpper( c ) ? char.ToLowerInvariant( c ) : char.ToUpperInvariant( c );
+			return Input.Pressed( other.ToString() );
+		}
+
+		var head = action[0];
+		var toggledHead = char.IsUpper( head ) ? char.ToLowerInvariant( head ) : char.ToUpperInvariant( head );
+		return Input.Pressed( toggledHead + action.Substring( 1 ) );
+	}
+
+	public static bool InputReleasedFlexible( string action )
+	{
+		if ( string.IsNullOrEmpty( action ) )
+			return false;
+
+		if ( Input.Released( action ) )
+			return true;
+
+		if ( action.Length == 1 )
+		{
+			var c = action[0];
+			var other = char.IsUpper( c ) ? char.ToLowerInvariant( c ) : char.ToUpperInvariant( c );
+			return Input.Released( other.ToString() );
+		}
+
+		var head = action[0];
+		var toggledHead = char.IsUpper( head ) ? char.ToLowerInvariant( head ) : char.ToUpperInvariant( head );
+		return Input.Released( toggledHead + action.Substring( 1 ) );
+	}
 }

@@ -342,7 +342,7 @@
           "AimStrengthEyes": 1,
           "AimStrengthHead": 1,
           "AirFriction": 0.1,
-          "AltMoveButton": "run",
+          "AltMoveButton": "Run",
           "Body": {
             "_type": "component",
             "component_id": "f6659a04-8776-4626-97e3-ce073c93f75e",
@@ -510,7 +510,7 @@
           "WorkshopItems": []
         },
         {
-          "__type": "MoveModeGrapple",
+          "__type": "Game.MoveModeGrapple",
           "__guid": "8409f7c4-d437-4c4f-b985-4830be1031a2",
           "__enabled": true,
           "Flags": 0,

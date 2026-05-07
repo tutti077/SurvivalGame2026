@@ -1,3 +1,4 @@
+namespace Game;
 
 public sealed class MyComponent : Component
 {

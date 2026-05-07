@@ -92,6 +92,42 @@ public sealed class PlayerItemPickup : Component
 	/// <summary>Physics/visual root currently held (for other systems, e.g. grapple aim traces).</summary>
 	public GameObject HeldRoot => _held is not null && _held.IsValid() ? _held : null;
 
+	/// <summary>
+	/// Snap a non-inventory preview prop (e.g. hotbar ghost mesh) to the same carry pose as kinematic pickup.
+	/// Does not modify <see cref="HeldRoot"/>; caller owns the object. Temporarily binds grip search to <paramref name="root"/>
+	/// so <see cref="MeleeWeapon"/> offsets apply to the preview mesh.
+	/// </summary>
+	public bool TrySnapCarriedPreview( GameObject root )
+	{
+		if ( root is null || !root.IsValid() )
+			return false;
+
+		var restoreHeld = _held;
+		_held = root;
+		try
+		{
+			if ( !TryGetHoldTransform( out var targetPos, out var targetRot ) )
+				return false;
+
+			var rb = FindRigidbodyOnHierarchy( root );
+			var moveRoot = rb is not null && rb.IsValid() ? rb.GameObject : root;
+			moveRoot.WorldPosition = targetPos;
+			moveRoot.WorldRotation = targetRot;
+
+			if ( rb is not null && rb.IsValid() )
+			{
+				rb.Velocity = Vector3.Zero;
+				rb.AngularVelocity = Vector3.Zero;
+			}
+
+			return true;
+		}
+		finally
+		{
+			_held = restoreHeld;
+		}
+	}
+
 	protected override void OnEnabled()
 	{
 		_player = null;
@@ -271,6 +307,20 @@ public sealed class PlayerItemPickup : Component
 
 		if ( MatchPickupTag && !HasPickupTag( tr.GameObject, pickable.PickupTag ) )
 			return;
+
+		var pc = Player;
+		if ( pc is not null && pc.IsProxy )
+			return;
+
+		if ( !string.IsNullOrWhiteSpace( pickable.InventoryItemId ) )
+		{
+			var inv = FindPlayerInventory();
+			if ( inv is not null && PlayerInventory.CanAuthoritativePickup() && inv.HostTryAddFromWorld( pickable.InventoryItemId, Math.Max( 1, pickable.WorldPickupCount ) ) )
+			{
+				pickable.GameObject.Destroy();
+				return;
+			}
+		}
 
 		var target = pickable.GameObject;
 		_held = target;
@@ -461,6 +511,18 @@ public sealed class PlayerItemPickup : Component
 		}
 
 		return null;
+	}
+
+	private PlayerInventory FindPlayerInventory()
+	{
+		for ( var go = GameObject; go is not null; go = go.Parent )
+		{
+			var inv = go.Components.Get<PlayerInventory>();
+			if ( inv is not null )
+				return inv;
+		}
+
+		return GameObject.Components.Get<PlayerInventory>();
 	}
 
 	private static PickableItem FindPickable( GameObject obj )

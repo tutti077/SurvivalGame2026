@@ -1,0 +1,14 @@
+---
+description: Increment GameBuildLabel / csproj patch after every code or project config edit in this repo.
+alwaysApply: true
+---
+
+# Patch bump on every edit
+
+Whenever you modify any **source or project configuration** file for this addon (anything under `Code/`, `.cursor/rules/*.mdc` if it changes tooling behavior tied to builds, `survivalgamebasics.csproj`, or Razor/SCSS in `Code/UI/`), in the **same assistant turn**:
+
+1. Open `Code/GameBuildLabel.cs`.
+2. Increase the **semver patch** segment of `GameBuildLabel.Display` (the part after the last dot), e.g. `0.2.3` → `0.2.4`; `1.0.9` → `1.0.10`.
+3. Set `<Version>` in `Code/survivalgamebasics.csproj` to the **exact same** string.
+
+Do **not** bump for chat-only replies with zero file edits. For a turn that contains **multiple** edits, bump **once** at the end of that turn.

@@ -41,6 +41,10 @@ public sealed class MoveModeGrapple2 : MoveMode, IGrappleStop
 	[Property] public float RetractPullSpeed { get; set; } = 25f;
 	[Property] public float RetractStartDelay { get; set; } = 0.15f;
 
+	[Property] public bool AutoRetractOnHighSpeed { get; set; } = true;
+	[Property] public float AutoRetractMinSpeed { get; set; } = 500f;
+	[Property] public float AutoRetractMinGrappleAge { get; set; } = 0.08f;
+
 	[Property] public float AttachRampTime { get; set; } = 0.45f;
 
 	[Property] public float CrosshairSize { get; set; } = 12f;
@@ -147,7 +151,12 @@ public sealed class MoveModeGrapple2 : MoveMode, IGrappleStop
 
 		move -= ropeDir * radialSpeed * RadialVelocityDamping * attachAlpha;
 
-		if ( !string.IsNullOrWhiteSpace( RetractButton ) && GrappleAge >= RetractStartDelay && Input.Down( RetractButton ) )
+		var manualRetract = !string.IsNullOrWhiteSpace( RetractButton ) && GrappleAge >= RetractStartDelay && Input.Down( RetractButton );
+		var autoVelocityRetract = AutoRetractOnHighSpeed
+			&& GrappleAge >= AutoRetractMinGrappleAge
+			&& currentVelocity.Length >= AutoRetractMinSpeed;
+
+		if ( manualRetract || autoVelocityRetract )
 		{
 			RopeLength -= RetractSpeed * Time.Delta;
 			RopeLength = Math.Max( MinRopeLength, RopeLength );
@@ -251,9 +260,7 @@ public sealed class MoveModeGrapple2 : MoveMode, IGrappleStop
 		if ( move.Length > MaxGrappleMove )
 			move = move.Normal * MaxGrappleMove;
 
-		var retracting = !string.IsNullOrWhiteSpace( RetractButton ) && GrappleAge >= RetractStartDelay && Input.Down( RetractButton );
-		var swingMoveForStamina = GameMovementInput.AnyMoveKeyDown() || GameMovementInput.StrongAnalogMove();
-		GrappleSwingStaminaDrainActive = retracting || swingMoveForStamina;
+		GrappleSwingStaminaDrainActive = autoVelocityRetract;
 
 		return move;
 	}

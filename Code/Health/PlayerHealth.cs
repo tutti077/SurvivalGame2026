@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Sandbox;
 
 namespace Game;
@@ -103,19 +104,44 @@ public sealed partial class PlayerHealth : Component
 
 			var bar = _worldUi.Components.Create<PlayerHealthWorldBar>();
 			bar.Health = this;
+			return;
 		}
 
-		if ( local )
-		{
-			_screenUi = new GameObject( true, "PlayerVitalsScreenUi" );
-			_screenUi.Parent = GameObject;
+		// Defer ScreenPanel/VitalsHud until after the first engine tick — mirrors the Alt+Enter "focus refresh" workaround
+		// where immediate UI mount could leave mouse routed to overlay instead of PlayerController.
+		_ = CreateLocalScreenUiHostDeferredAsync();
+	}
 
-			_ = _screenUi.Components.Create<Sandbox.ScreenPanel>();
+	private async Task CreateLocalScreenUiHostDeferredAsync()
+	{
+		await GameTask.Yield();
+		await GameTask.Yield();
 
-			var hud = _screenUi.Components.Create<PlayerVitalsHud>();
-			hud.Health = this;
-			hud.Stamina = FindPlayerStamina();
-		}
+		if ( !GameObject.IsValid() || !IsLocalOwnerForUi() )
+			return;
+
+		EnsureLocalScreenUiHost();
+	}
+
+	/// <summary>Idempotent: local owner screen-space host (one <see cref="Sandbox.ScreenPanel"/> + vitals). <see cref="PlayerInventory"/> attaches its HUD here so a second ScreenPanel cannot eat the whole viewport.</summary>
+	internal GameObject EnsureLocalScreenUiHost()
+	{
+		if ( !IsLocalOwnerForUi() )
+			return null;
+
+		if ( _screenUi is not null && _screenUi.IsValid() )
+			return _screenUi;
+
+		_screenUi = new GameObject( true, "PlayerLocalScreenUi" );
+		_screenUi.Parent = GameObject;
+
+		_ = _screenUi.Components.Create<Sandbox.ScreenPanel>();
+
+		var hud = _screenUi.Components.Create<PlayerVitalsHud>();
+		hud.Health = this;
+		hud.Stamina = FindPlayerStamina();
+
+		return _screenUi;
 	}
 
 	private PlayerStamina FindPlayerStamina()

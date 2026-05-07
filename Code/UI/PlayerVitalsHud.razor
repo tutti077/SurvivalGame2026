@@ -3,20 +3,21 @@
 @inherits PanelComponent
 
 @* Health above stamina; compact footprint for FP view. *@
+@* Every child must ignore hits — inherited pointer-events:none is not guaranteed for all UI nodes under ScreenPanel. *@
 <root style="position: absolute; left: 0; bottom: 0; width: 520px; height: 200px; background-color: transparent; pointer-events: none; flex-direction: column; justify-content: flex-end; align-items: flex-start; padding-bottom: 28px; padding-left: 22px; gap: 8px;">
-	<div style="position: relative; width: 480px; height: 56px; background-color: #1a0a0a; border: 2px solid #000;">
-		<div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; background-color: #3d1515; overflow: hidden;">
-			<div style="height: 100%; width: @(HealthFill)%; background-color: #d32f2f;"></div>
+	<div style="position: relative; width: 480px; height: 56px; background-color: #1a0a0a; border: 2px solid #000; pointer-events: none;">
+		<div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; background-color: #3d1515; overflow: hidden; pointer-events: none;">
+			<div style="height: 100%; width: @(HealthFill)%; background-color: #d32f2f; pointer-events: none;"></div>
 		</div>
-		<label style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; justify-content: center; align-items: center; color: #fff; font-size: 34px; font-weight: 900; letter-spacing: 2px; text-align: center; text-shadow: 0 0 8px black, 0 2px 4px black;">@HealthText</label>
+		<label style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; justify-content: center; align-items: center; color: #fff; font-size: 34px; font-weight: 900; letter-spacing: 2px; text-align: center; text-shadow: 0 0 8px black, 0 2px 4px black; pointer-events: none;">@HealthText</label>
 	</div>
 
-	<div style="position: relative; width: 480px; height: 36px; background-color: #0f1418; border: 2px solid #000;">
-		<div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; background-color: #1a2830; overflow: hidden;">
-			<div style="height: 100%; width: @(StaminaFill)%; background-color: #c9a227;"></div>
+	<div style="position: relative; width: 480px; height: 36px; background-color: #0f1418; border: 2px solid #000; pointer-events: none;">
+		<div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; background-color: #1a2830; overflow: hidden; pointer-events: none;">
+			<div style="height: 100%; width: @(StaminaFill)%; background-color: #c9a227; pointer-events: none;"></div>
 		</div>
 		<div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; opacity: 0.55; background-image: linear-gradient(90deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.65) 4%, transparent 4%, transparent 100%); background-size: @(TickStepPercent)% 100%;"></div>
-		<label style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; justify-content: center; align-items: center; color: #fff; font-size: 22px; font-weight: 900; letter-spacing: 1px; text-align: center; text-shadow: 0 0 6px black;">@StaminaText</label>
+		<label style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; justify-content: center; align-items: center; color: #fff; font-size: 22px; font-weight: 900; letter-spacing: 1px; text-align: center; text-shadow: 0 0 6px black; pointer-events: none;">@StaminaText</label>
 	</div>
 </root>
 
@@ -37,6 +38,13 @@
 	private float TickStepPercent => Stamina is null
 		? 10f
 		: 100f / Math.Clamp( Stamina.StaminaBarTickDivisions, 2, 48 );
+
+	protected override void OnUpdate()
+	{
+		base.OnUpdate();
+		if ( Panel is not null )
+			Panel.Style.PointerEvents = PointerEvents.None;
+	}
 
 	protected override int BuildHash() => System.HashCode.Combine(
 		Health?.CurrentHealth ?? 0f,

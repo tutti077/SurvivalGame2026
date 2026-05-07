@@ -16,9 +16,7 @@
     "TickRate": 50,
     "GameNetworkType": "Multiplayer",
     "MapSelect": "Unrestricted",
-    "MapList": [
-      "facepunch.flatgrass"
-    ],
+    "MapList": [],
     "RankType": "None",
     "PerMapRanking": false,
     "LeaderboardType": "None",

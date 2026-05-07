@@ -6,7 +6,7 @@ namespace Game;
 
 /// <summary>
 /// Host-authoritative stamina. Sprint drain uses run input plus locomotion (wish, analog, or move keys) so it does not drop out when
-/// the mouse steals analog or wish briefly dips. Regen only on ground (not grappling, swimming, or climbing), not while holding sprint/run,
+/// the mouse steals analog or wish briefly dips; sprint does not drain stamina while grappling (run has no effect there). Regen only on ground (not grappling, swimming, or climbing), not while holding sprint/run,
 /// after empty (delay), and until the post-use cooldown passes with no net loss. Regen targets ~<see cref="StaminaRegenFillTimeSeconds"/> from 0→max and ramps faster near full (see <see cref="StaminaRegenAccelerationExponent"/>, <see cref="StaminaRegenBaselineWeight"/>).
 /// </summary>
 public sealed partial class PlayerStamina : Component, PlayerController.IEvents
@@ -47,6 +47,7 @@ public sealed partial class PlayerStamina : Component, PlayerController.IEvents
 
 	[Property] public float GrappleStartStaminaCost { get; set; } = 5f;
 
+	/// <summary>Per second while grapple auto high-speed retract is active (move keys no longer drain swing stamina).</summary>
 	[Property] public float GrappleSwingStaminaDrainPerSecond { get; set; } = 2f;
 
 	[Property] public string AttackButton { get; set; } = "attack1";
@@ -426,7 +427,7 @@ public sealed partial class PlayerStamina : Component, PlayerController.IEvents
 	}
 
 	private bool IsConsumingSprintStamina( PlayerController pc )
-		=> WantsRunSpeedInput( pc ) && HasSprintLocomotionForDrain( pc ) && CurrentStamina > StaminaEpsilon;
+		=> !IsAnyGrappleActive( pc.GameObject ) && WantsRunSpeedInput( pc ) && HasSprintLocomotionForDrain( pc ) && CurrentStamina > StaminaEpsilon;
 
 	private PlayerController FindPlayerController()
 	{

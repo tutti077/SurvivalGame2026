@@ -1,0 +1,4 @@
+since sprint doesnt have an effect while grappling then stamina shouldnt be reduced by sprint when grappling. Also grapple retract still 
+
+I want to add a main menu screen that loads when the game is started. from there will be boxes that you click on with your mouse to go into different menus. One will be a join game button that joins our game. Eventually itll have to be networked in some way, just not now. Im not sure how it works but i should be able to easily link my friend to the game so that we load into the same scene.
+

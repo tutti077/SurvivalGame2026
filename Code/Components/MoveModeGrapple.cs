@@ -62,6 +62,15 @@ public sealed class MoveModeGrapple : MoveMode, IGrappleStop
 	[Property] public float RetractSpeed { get; set; } = 520f;
 	[Property] public float RetractPullSpeed { get; set; } = 650f;
 
+	/// <summary>When enabled, rope shortens automatically once speed reaches <see cref="AutoRetractMinSpeed"/> (same pull as manual retract).</summary>
+	[Property] public bool AutoRetractOnHighSpeed { get; set; } = true;
+
+	/// <summary>World velocity length at or above which automatic retract runs.</summary>
+	[Property] public float AutoRetractMinSpeed { get; set; } = 500f;
+
+	/// <summary>Seconds after attach before auto retract can begin (avoids launch impulse triggering immediately).</summary>
+	[Property] public float AutoRetractMinGrappleAge { get; set; } = 0.08f;
+
 	[Property] public float AttachRampTime { get; set; } = 0.001f;
 
 	[Property] public float CrosshairSurfaceOffset { get; set; } = 8f;
@@ -241,9 +250,13 @@ public sealed class MoveModeGrapple : MoveMode, IGrappleStop
 
 		var move = Vector3.Zero;
 
-		var isRetracting = Input.Down( RetractButton );
-		var swingAssistScale = isRetracting ? Math.Clamp( RetractSwingAssistScale, 0f, 1f ) : 1f;
-		if ( isRetracting )
+		var manualRetract = Input.Down( RetractButton );
+		var autoVelocityRetract = AutoRetractOnHighSpeed
+			&& GrappleAge >= AutoRetractMinGrappleAge
+			&& currentSpeed >= AutoRetractMinSpeed;
+		var isRetractingRope = manualRetract || autoVelocityRetract;
+		var swingAssistScale = isRetractingRope ? Math.Clamp( RetractSwingAssistScale, 0f, 1f ) : 1f;
+		if ( isRetractingRope )
 		{
 			RopeLength -= RetractSpeed * Time.Delta;
 			RopeLength = Math.Max( MinRopeLength, RopeLength );
@@ -324,7 +337,7 @@ public sealed class MoveModeGrapple : MoveMode, IGrappleStop
 
 		// Near taut rope, damp radial speed to kill oscillation.
 		// Skip during retract so reel-in remains strong.
-		if ( tautAlpha > 0f && !isRetracting )
+		if ( tautAlpha > 0f && !isRetractingRope )
 			move -= ropeDir * currentRadialSpeed * TautRadialDamping * tautAlpha * attachAlpha;
 
 		if ( DebugGrappleVelocity )
@@ -336,13 +349,12 @@ public sealed class MoveModeGrapple : MoveMode, IGrappleStop
 				DebugLogTimer = 0f;
 				var stretch = distance - maxRopeDistance;
 				Log.Warning(
-					$"[Grapple] v:{currentSpeed:0.0} tan:{tangentSpeed:0.0} rad:{currentRadialSpeed:0.0} dist:{distance:0.0} rope:{maxRopeDistance:0.0} stretch:{stretch:0.00} taut:{IsRopeTaut} inScale:{tautInputScale:0.00} retract:{isRetracting} assist:{swingAssistScale:0.00} depth:{swingDepthFactor:0.00} gMot:{gravityAlongMotion:0.00}" );
+					$"[Grapple] v:{currentSpeed:0.0} tan:{tangentSpeed:0.0} rad:{currentRadialSpeed:0.0} dist:{distance:0.0} rope:{maxRopeDistance:0.0} stretch:{stretch:0.00} taut:{IsRopeTaut} inScale:{tautInputScale:0.00} retract:{isRetractingRope} autoVelRetract:{autoVelocityRetract} assist:{swingAssistScale:0.00} depth:{swingDepthFactor:0.00} gMot:{gravityAlongMotion:0.00}" );
 			}
 		}
 
-		// Do not use UpdateMove wish (input): it can be non-zero from look/move blending without WASD. Keys + strong stick only; retract always costs.
-		var swingMoveForStamina = GameMovementInput.AnyMoveKeyDown() || GameMovementInput.StrongAnalogMove();
-		GrappleSwingStaminaDrainActive = isRetracting || swingMoveForStamina;
+		// WASD swing does not drain stamina; PlayerStamina.GrappleSwingStaminaDrainPerSecond applies only while auto high-speed retract is active.
+		GrappleSwingStaminaDrainActive = autoVelocityRetract;
 
 		return move;
 	}
