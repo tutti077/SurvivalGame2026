@@ -6,15 +6,15 @@ using Sandbox;
 namespace Game;
 
 /// <summary>
-/// Add on the same player hierarchy as <see cref="PlayerHealth"/> (any parent/child of the pawn is fine).
+/// Add on the same player hierarchy as <see cref="EntityHealthFeature"/> (any parent/child of the pawn is fine).
 /// <see cref="Health"/> is auto-found if left empty. Listens for death, then (host only, or offline) respawns at the captured start pose.
 /// </summary>
 [Title( "Player Death" )]
 [Category( "Health" )]
 public class PlayerDeath : Component
 {
-	/// <summary>If unset, searches this object, parents, and descendants for <see cref="PlayerHealth"/>.</summary>
-	[Property] public PlayerHealth Health { get; set; }
+	/// <summary>If unset, searches this object, parents, and descendants for <see cref="EntityHealthFeature"/>.</summary>
+	[Property] public EntityHealthFeature Health { get; set; }
 
 	[Property] public float RespawnDelaySeconds { get; set; } = 0.5f;
 
@@ -58,7 +58,7 @@ public class PlayerDeath : Component
 			if ( !_warnedMissingHealth )
 			{
 				_warnedMissingHealth = true;
-				Log.Warning( $"PlayerDeath on '{GameObject.Name}': no PlayerHealth found on this object, parents, or children — assign Health or move the component. Respawn will not run." );
+				Log.Warning( $"PlayerDeath on '{GameObject.Name}': no EntityHealthFeature found on this object, parents, or children — assign Health or move the component. Respawn will not run." );
 			}
 
 			return;
@@ -79,18 +79,18 @@ public class PlayerDeath : Component
 		_subscribedToHealth = false;
 	}
 
-	private PlayerHealth FindPlayerHealthOnHierarchy()
+	private EntityHealthFeature FindPlayerHealthOnHierarchy()
 	{
 		foreach ( var go in EnumerateSelfAndAncestors( GameObject ) )
 		{
-			var h = go.Components.Get<PlayerHealth>();
+			var h = go.Components.Get<EntityHealthFeature>();
 			if ( h is not null && h.IsValid() )
 				return h;
 		}
 
 		foreach ( var go in EnumerateDescendants( GameObject ) )
 		{
-			var h = go.Components.Get<PlayerHealth>();
+			var h = go.Components.Get<EntityHealthFeature>();
 			if ( h is not null && h.IsValid() )
 				return h;
 		}
@@ -100,7 +100,7 @@ public class PlayerDeath : Component
 		{
 			foreach ( var go in EnumerateSelfAndDescendants( pc.GameObject ) )
 			{
-				var h = go.Components.Get<PlayerHealth>();
+				var h = go.Components.Get<EntityHealthFeature>();
 				if ( h is not null && h.IsValid() )
 					return h;
 			}

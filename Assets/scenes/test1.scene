@@ -476,45 +476,53 @@
           "UseThirdPersonHoldOffsets": false
         },
         {
-          "__type": "Game.PlayerHealth",
+          "__type": "Game.EntityCore",
           "__guid": "b618ca8b-616a-4cdf-bd3b-966debfd6ee3",
           "__enabled": true,
           "Flags": 0,
-          "CurrentHealth": 100,
-          "EnableNonPlayerRespawnAnimation": true,
-          "EnemyNamePrefix": "Enemy",
+          "DisplayName": "",
+          "DisplayNameOverride": "",
+          "DisplayUsesInternalId": false,
+          "EnableAir": false,
+          "EnableStamina": true,
+          "EnemyBaseMaxHealth": 100,
+          "EnemyName": "enemyName",
           "EntityId": "",
-          "MaxHealth": 100,
-          "NonPlayerDeathAnimSeconds": 0.2,
-          "NonPlayerRespawnAnimSeconds": 0.2,
-          "NonPlayerRespawnDelaySeconds": 2,
+          "Kind": "Player",
+          "NeutralBaseMaxHealth": 100,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
           "OnComponentFixedUpdate": null,
           "OnComponentStart": null,
           "OnComponentUpdate": null,
-          "WorldBarLocalOffset": "0,0,0",
-          "WorldBarOnly": false,
-          "WorldPanelRenderScale": 1.35
+          "OverheadAnchorLocalOffset": "0,0,42",
+          "PlayerBaseMaxHealth": 100
         },
         {
-          "__type": "Game.PlayerHealthWorldBar",
+          "__type": "Game.EntityHealthFeature",
           "__guid": "4891440e-cb7a-409b-8e4e-1f7e5f927080",
           "__enabled": true,
           "Flags": 0,
-          "Health": {
-            "_type": "component",
-            "component_id": "b618ca8b-616a-4cdf-bd3b-966debfd6ee3",
-            "go": "0deabfab-2e2e-47b0-aea7-a819cec3e906",
-            "component_type": "PlayerHealth"
-          },
+          "ArmorFlatReduction": 0,
+          "ArmorPercentReduction": 0,
+          "CurrentHealth": 100,
+          "DeathAnimSeconds": 0.2,
+          "EnableRespawnAnimation": true,
+          "MaxHealth": 100,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
           "OnComponentFixedUpdate": null,
           "OnComponentStart": null,
-          "OnComponentUpdate": null
+          "OnComponentUpdate": null,
+          "RespawnAnimSeconds": 0.2,
+          "RespawnDelaySeconds": 2,
+          "UseEntityCoreDefaultMaxHealth": true,
+          "WorldBarFaceCameraYawOnly": true,
+          "WorldBarLocalOffset": "0,0,0",
+          "WorldBarOnly": false,
+          "WorldPanelRenderScale": 1.35
         },
         {
           "__type": "Game.PlayerDeath",
@@ -532,11 +540,12 @@
           "RespawnPoint": null
         },
         {
-          "__type": "Game.PlayerStamina",
+          "__type": "Game.EntityStaminaFeature",
           "__guid": "f1e4c9a5-39d8-4fdb-a1d2-daabcdf8bad6",
           "__enabled": true,
           "Flags": 0,
           "AttackButton": "attack1",
+          "EnabledForThisEntity": true,
           "GrappleStartStaminaCost": 5,
           "GrappleSwingStaminaDrainPerSecond": 2,
           "JumpStaminaCost": 5,
@@ -10806,11 +10815,214 @@
       ]
     },
     {
-      "__guid": "022dc21e-0aab-48bb-83ba-fe615a87a62c",
+      "__guid": "3b7d226c-9adf-471b-bf7a-774d7bc04d1f",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "sword1",
+      "Position": "0,0,0",
+      "Rotation": "0,0,0,1",
+      "Scale": "50,50,50",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Sandbox.Rigidbody",
+          "__guid": "77e0fd0b-59ff-4fed-b4e6-0542d813fdb8",
+          "__enabled": true,
+          "Flags": 0,
+          "AngularDamping": 0,
+          "EnableImpactDamage": true,
+          "EnhancedCcd": false,
+          "Gravity": true,
+          "GravityScale": 1,
+          "ImpactDamage": 0,
+          "LinearDamping": 0,
+          "Locking": {
+            "X": false,
+            "Y": false,
+            "Z": false,
+            "Pitch": false,
+            "Yaw": false,
+            "Roll": false
+          },
+          "MassCenterOverride": "0,0,0",
+          "MassOverride": 0,
+          "MinImpactDamageSpeed": 500,
+          "MotionEnabled": true,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "OverrideMassCenter": false,
+          "RigidbodyFlags": 0,
+          "StartAsleep": false
+        },
+        {
+          "__type": "Sandbox.BoxCollider",
+          "__guid": "394e6351-d67e-4d5e-aa8e-5f17088e1cbc",
+          "__enabled": true,
+          "Flags": 0,
+          "Center": "0,0,0",
+          "ColliderFlags": 0,
+          "Elasticity": 0,
+          "Friction": 0,
+          "IsTrigger": false,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "OnObjectTriggerEnter": null,
+          "OnObjectTriggerExit": null,
+          "OnTriggerEnter": null,
+          "OnTriggerExit": null,
+          "RollingResistance": 0,
+          "Scale": "1,1,1",
+          "Static": false,
+          "Surface": null,
+          "SurfaceVelocity": "0,0,0"
+        },
+        {
+          "__type": "Game.MeleeWeapon",
+          "__guid": "d9a87bf1-b080-4350-954e-c889952f8093",
+          "__enabled": true,
+          "Flags": 0,
+          "AttackButton": "attack1",
+          "AttackCooldownSeconds": 0.4,
+          "AttackDamage": 22,
+          "AttackRange": 110,
+          "AttackStaminaCost": 5,
+          "AttackTraceRadius": 14,
+          "AutoCreatedTargetMaxHealth": 100,
+          "AutoCreateTargetHealthOnHit": true,
+          "DamageWindowEndNormalized": 0.75,
+          "DamageWindowStartNormalized": 0.25,
+          "ForceDirectSequencePlayback": true,
+          "HeldLocalAngles": "0,0,0",
+          "HeldLocalOffset": "16,0,0",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "SwingArcHalfAngleDegrees": 70,
+          "SwingArcHeightOffset": 46,
+          "SwingArcReach": 90,
+          "SwingDurationSeconds": 0.45,
+          "SwingSequenceName": "basic_sword_attack_left",
+          "SwingSequencePlaybackRate": 1,
+          "SwingSkinnedRenderer": null,
+          "WeaponKind": "Sword"
+        },
+        {
+          "__type": "Game.PickableItem",
+          "__guid": "9cd14211-d424-4d1f-8b11-e190aa03e7f7",
+          "__enabled": true,
+          "Flags": 0,
+          "DisplayName": "Sword",
+          "InventoryItemId": "sword",
+          "ItemWeaponType": "Sword",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "PickupTag": "pickup",
+          "StaticUntilPickedUp": true,
+          "WorldPickupCount": 1
+        },
+        {
+          "__type": "Sandbox.SkinnedModelRenderer",
+          "__guid": "f2b3efda-f1a9-4b32-9180-9a50bb5130f8",
+          "__enabled": true,
+          "Flags": 0,
+          "AnimationGraph": null,
+          "BodyGroups": 18446744073709551615,
+          "BoneMergeTarget": null,
+          "CreateAttachments": false,
+          "CreateBoneObjects": false,
+          "LodOverride": null,
+          "MaterialGroup": null,
+          "MaterialOverride": null,
+          "Materials": null,
+          "Model": "models/sword_left/basic_sword_bind.vmdl",
+          "Morphs": {},
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "Parameters": {
+            "bools": {},
+            "ints": {},
+            "floats": {},
+            "vectors": {},
+            "rotations": {}
+          },
+          "PlaybackRate": 1,
+          "RenderOptions": {
+            "GameLayer": true,
+            "OverlayLayer": false,
+            "BloomLayer": false,
+            "AfterUILayer": false
+          },
+          "RenderType": "On",
+          "Sequence": {
+            "Name": null,
+            "Looping": true,
+            "Blending": false
+          },
+          "Tint": "1,1,1,1",
+          "UseAnimGraph": true
+        }
+      ],
+      "Children": []
+    },
+    {
+      "__guid": "28ef8c5f-1b05-405e-a854-77d507442523",
+      "__version": 2,
+      "__Prefab": "prefabs/sword1.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "53235cb6-520c-4f9c-a9a6-0fa536bd8754"
+            },
+            "Property": "Position",
+            "Value": "502.399719,-103.593887,36.6106148"
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "53235cb6-520c-4f9c-a9a6-0fa536bd8754": "28ef8c5f-1b05-405e-a854-77d507442523",
+        "f3e98cab-175b-4e43-b706-55f6574bb59e": "ad4f9d8a-cf86-4ef8-8a01-2c0b0ac8d827",
+        "88594ba1-85b5-4035-8e3f-403e772c64fa": "c4648637-cf2b-46ef-a6c2-c7a62cf9622e",
+        "30721f45-6762-488e-83cc-4fb2bfac5720": "7ae0ef14-98df-4813-9985-515a01443721",
+        "93f98229-fec0-4e6a-9a61-f4ed869bfdb8": "66b7efe9-32ee-4b89-811b-4a9d5e1a9960",
+        "803c525e-4a96-4ec4-9172-d36ce1832a55": "bf223fa0-0f37-4b5a-9fd1-128b5d24494d"
+      }
+    },
+    {
+      "__guid": "afb3fb14-55b7-4724-ba5d-a8e28136d8ee",
       "__version": 2,
       "Flags": 0,
       "Name": "TrainingDummy",
-      "Position": "783.909058,-368.532562,51.383194",
+      "Position": "785.208618,-523.017761,42.130867",
       "Rotation": "0,0,0,1",
       "Scale": "1,1,1",
       "Tags": "",
@@ -10823,7 +11035,7 @@
       "Components": [
         {
           "__type": "Sandbox.ModelRenderer",
-          "__guid": "096fd92f-574d-46d8-a95a-707a17407e19",
+          "__guid": "9fda6b4b-608a-4981-b895-c639ca46644e",
           "__enabled": true,
           "Flags": 0,
           "BodyGroups": 18446744073709551615,
@@ -10850,7 +11062,7 @@
         },
         {
           "__type": "Sandbox.BoxCollider",
-          "__guid": "c509e745-f18f-4265-a271-0c13d7193791",
+          "__guid": "abe26e0c-cc27-4272-bef3-e5c5c543cdf9",
           "__enabled": true,
           "Flags": 0,
           "Center": "0,0,0",
@@ -10875,136 +11087,72 @@
           "SurfaceVelocity": "0,0,0"
         },
         {
-          "__type": "Game.SimpleEnemyHealthWorldBar",
-          "__guid": "f5ab392d-69ba-41b0-92c1-7c8830a7bda0",
+          "__type": "Game.EntityCore",
+          "__guid": "a7dae259-657d-4c61-b8c9-4ca528914f00",
           "__enabled": true,
           "Flags": 0,
-          "Health": null,
+          "DisplayName": "",
+          "DisplayNameOverride": "",
+          "DisplayUsesInternalId": false,
+          "EnableAir": false,
+          "EnableStamina": true,
+          "EnemyBaseMaxHealth": 100,
+          "EnemyName": "Dummy",
+          "EntityId": "",
+          "Kind": "Enemy",
+          "NeutralBaseMaxHealth": 100,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
           "OnComponentFixedUpdate": null,
           "OnComponentStart": null,
-          "OnComponentUpdate": null
+          "OnComponentUpdate": null,
+          "OverheadAnchorLocalOffset": "0,0,42",
+          "PlayerBaseMaxHealth": 100
+        },
+        {
+          "__type": "Game.EntityHealthFeature",
+          "__guid": "2b01765e-a480-4881-9964-8130d92e3d79",
+          "__enabled": true,
+          "Flags": 0,
+          "ArmorFlatReduction": 0,
+          "ArmorPercentReduction": 0,
+          "CurrentHealth": 100,
+          "DeathAnimSeconds": 0.2,
+          "EnableRespawnAnimation": true,
+          "MaxHealth": 100,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "RespawnAnimSeconds": 0.2,
+          "RespawnDelaySeconds": 2,
+          "UseEntityCoreDefaultMaxHealth": true,
+          "WorldBarFaceCameraYawOnly": true,
+          "WorldBarLocalOffset": "0,0,0",
+          "WorldBarOnly": false,
+          "WorldPanelRenderScale": 1.35
+        },
+        {
+          "__type": "Game.EntityNameplateFeature",
+          "__guid": "fe03726b-1d1b-437c-a37c-15bcb9917675",
+          "__enabled": true,
+          "Flags": 0,
+          "FaceCameraYawOnly": true,
+          "MirrorFacing": true,
+          "NameLocalOffset": "0,0,18",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "TextScale": 1
         }
       ],
-      "Children": [
-        {
-          "__guid": "fac25438-87c3-4bac-9087-18f6d6bf14f7",
-          "__version": 2,
-          "Flags": 0,
-          "Name": "Object",
-          "Position": "0,0,45",
-          "Rotation": "0,0,0,1",
-          "Scale": "1,1,1",
-          "Tags": "",
-          "Enabled": true,
-          "NetworkMode": 2,
-          "NetworkFlags": 0,
-          "NetworkOrphaned": 0,
-          "NetworkTransmit": true,
-          "OwnerTransfer": 1,
-          "Components": [
-            {
-              "__type": "Sandbox.TextRenderer",
-              "__guid": "955fefdd-e74c-49cb-a7cf-8024dadf8a66",
-              "__enabled": true,
-              "Flags": 0,
-              "__version": 2,
-              "BlendMode": "Normal",
-              "FogStrength": 1,
-              "HorizontalAlignment": "Center",
-              "OnComponentDestroy": null,
-              "OnComponentDisabled": null,
-              "OnComponentEnabled": null,
-              "OnComponentFixedUpdate": null,
-              "OnComponentStart": null,
-              "OnComponentUpdate": null,
-              "RenderOptions": {
-                "GameLayer": true,
-                "OverlayLayer": false,
-                "BloomLayer": false,
-                "AfterUILayer": false
-              },
-              "Scale": 1,
-              "TextScope": {
-                "Text": "Dummy",
-                "TextColor": "1,1,1,1",
-                "FontName": "Poppins",
-                "FontSize": 32,
-                "FontWeight": 400,
-                "FontItalic": false,
-                "FontVariantNumeric": "Normal",
-                "LineHeight": 1,
-                "LetterSpacing": 0,
-                "WordSpacing": 0,
-                "FilterMode": "Bilinear",
-                "FontSmooth": "Auto",
-                "Outline": {
-                  "Enabled": false,
-                  "Size": 4,
-                  "Color": "0,0,1,1"
-                },
-                "Shadow": {
-                  "Enabled": false,
-                  "Size": 4,
-                  "Color": "0,0,0,1",
-                  "Offset": "4,4"
-                },
-                "OutlineUnder": {
-                  "Enabled": false,
-                  "Size": 4,
-                  "Color": "0,1,0,1"
-                },
-                "ShadowUnder": {
-                  "Enabled": false,
-                  "Size": 4,
-                  "Color": "0,0,0,1",
-                  "Offset": "4,4"
-                }
-              },
-              "VerticalAlignment": "Center"
-            }
-          ],
-          "Children": []
-        }
-      ]
-    },
-    {
-      "__guid": "28ef8c5f-1b05-405e-a854-77d507442523",
-      "__version": 2,
-      "__Prefab": "prefabs/sword1.prefab",
-      "__PrefabInstancePatch": {
-        "AddedObjects": [],
-        "RemovedObjects": [],
-        "PropertyOverrides": [
-          {
-            "Target": {
-              "Type": "GameObject",
-              "IdValue": "53235cb6-520c-4f9c-a9a6-0fa536bd8754"
-            },
-            "Property": "Position",
-            "Value": "502.399719,-103.593887,36.6106148"
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "93f98229-fec0-4e6a-9a61-f4ed869bfdb8"
-            },
-            "Property": "AutoCreateTargetHealthOnHit",
-            "Value": true
-          }
-        ],
-        "MovedObjects": []
-      },
-      "__PrefabIdToInstanceId": {
-        "53235cb6-520c-4f9c-a9a6-0fa536bd8754": "28ef8c5f-1b05-405e-a854-77d507442523",
-        "f3e98cab-175b-4e43-b706-55f6574bb59e": "ad4f9d8a-cf86-4ef8-8a01-2c0b0ac8d827",
-        "88594ba1-85b5-4035-8e3f-403e772c64fa": "c4648637-cf2b-46ef-a6c2-c7a62cf9622e",
-        "30721f45-6762-488e-83cc-4fb2bfac5720": "7ae0ef14-98df-4813-9985-515a01443721",
-        "93f98229-fec0-4e6a-9a61-f4ed869bfdb8": "66b7efe9-32ee-4b89-811b-4a9d5e1a9960",
-        "803c525e-4a96-4ec4-9172-d36ce1832a55": "bf223fa0-0f37-4b5a-9fd1-128b5d24494d"
-      }
+      "Children": []
     }
   ],
   "SceneProperties": {
@@ -11027,18 +11175,13 @@
       "CustomBounds": false
     },
     "GameObjectSystems": {
-      "Sandbox.MovieMaker.MovieRecorderSystem": {
-        "DisableClientRecording": false
-      },
       "Sandbox.SelectionSetsSystem": {
         "Data": {
           "SelectionSets": []
         }
       },
-      "Sandbox.Clutter.ClutterGridSystem": {
-        "Storage": {
-          "$blob": "1d03c038-0e2a-46ff-b099-2c992fe5b857"
-        }
+      "Sandbox.MovieMaker.MovieRecorderSystem": {
+        "DisableClientRecording": false
       }
     }
   },

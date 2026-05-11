@@ -205,7 +205,7 @@ public sealed class MoveModeGrapple : MoveMode, IGrappleStop
 			return Vector3.Zero;
 		}
 
-		var stamina = Controller is not null ? PlayerStamina.FindForPlayerRoot( Controller.GameObject ) : null;
+		var stamina = Controller is not null ? EntityStaminaFeature.FindForEntityRoot( Controller.GameObject ) : null;
 		var allowGrappleAirControl = stamina is null || stamina.HasStaminaForActions;
 
 		var ropeDir = toPoint.Normal;
@@ -353,7 +353,7 @@ public sealed class MoveModeGrapple : MoveMode, IGrappleStop
 			}
 		}
 
-		// WASD swing does not drain stamina; PlayerStamina.GrappleSwingStaminaDrainPerSecond applies only while auto high-speed retract is active.
+		// WASD swing does not drain stamina; EntityStaminaFeature.GrappleSwingStaminaDrainPerSecond applies only while auto high-speed retract is active.
 		GrappleSwingStaminaDrainActive = autoVelocityRetract;
 
 		return move;
@@ -597,7 +597,7 @@ public sealed class MoveModeGrapple : MoveMode, IGrappleStop
 		if ( !HasTarget )
 			return;
 
-		if ( Controller is not null && !PlayerStamina.HasStaminaToStartGrapple( Controller.GameObject ) )
+		if ( Controller is not null && !EntityStaminaFeature.HasStaminaToStartGrapple( Controller.GameObject ) )
 			return;
 
 		GrapplePoint = TargetPoint;
@@ -614,7 +614,7 @@ public sealed class MoveModeGrapple : MoveMode, IGrappleStop
 			Log.Warning( "[Grapple] Debug enabled. Logging velocity samples..." );
 
 		if ( Controller is not null )
-			PlayerStamina.ApplyGrappleAttachCost( Controller.GameObject );
+			EntityStaminaFeature.ApplyGrappleAttachCost( Controller.GameObject );
 	}
 
 	private bool HasGrappleTag( GameObject obj )

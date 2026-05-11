@@ -106,7 +106,7 @@ public sealed class MoveModeGrapple1 : MoveMode, IGrappleStop
 			return Vector3.Zero;
 		}
 
-		var stamina = Controller is not null ? PlayerStamina.FindForPlayerRoot( Controller.GameObject ) : null;
+		var stamina = Controller is not null ? EntityStaminaFeature.FindForEntityRoot( Controller.GameObject ) : null;
 		var allowGrappleAirControl = stamina is null || stamina.HasStaminaForActions;
 
 		var ropeDir = toPoint.Normal;
@@ -231,7 +231,7 @@ public sealed class MoveModeGrapple1 : MoveMode, IGrappleStop
 		if ( !HasTarget )
 			return;
 
-		if ( Controller is not null && !PlayerStamina.HasStaminaToStartGrapple( Controller.GameObject ) )
+		if ( Controller is not null && !EntityStaminaFeature.HasStaminaToStartGrapple( Controller.GameObject ) )
 			return;
 
 		GrapplePoint = TargetPoint;
@@ -243,7 +243,7 @@ public sealed class MoveModeGrapple1 : MoveMode, IGrappleStop
 		GrappleAge = 0f;
 
 		if ( Controller is not null )
-			PlayerStamina.ApplyGrappleAttachCost( Controller.GameObject );
+			EntityStaminaFeature.ApplyGrappleAttachCost( Controller.GameObject );
 	}
 
 	private bool HasGrappleTag( GameObject obj )

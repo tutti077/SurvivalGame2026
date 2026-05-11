@@ -297,16 +297,16 @@ public sealed partial class PlayerInventory : Component
 		return n.IsOwner;
 	}
 
-	private PlayerHealth FindPlayerHealth()
+	private EntityHealthFeature FindPlayerHealth()
 	{
 		for ( var go = GameObject; go is not null; go = go.Parent )
 		{
-			var h = go.Components.Get<PlayerHealth>();
+			var h = go.Components.Get<EntityHealthFeature>();
 			if ( h is not null )
 				return h;
 		}
 
-		return GameObject.Components.Get<PlayerHealth>();
+		return GameObject.Components.Get<EntityHealthFeature>();
 	}
 
 	private void CreateUi()

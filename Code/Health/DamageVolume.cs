@@ -6,7 +6,7 @@ namespace Game;
 
 /// <summary>
 /// Put on the same <see cref="GameObject"/> as a trigger <see cref="Collider"/> (IsTrigger = true), or a parent of trigger colliders.
-/// On host, removes health from <see cref="PlayerHealth"/> on the object that entered. Optional per-target cooldown.
+/// On host, removes health from <see cref="EntityHealthFeature"/> on the object that entered. Optional per-target cooldown.
 /// If <see cref="DamageTags"/> is empty, any player in the volume can be damaged. If non-empty, the other object must have
 /// <b>at least one</b> of those tags on itself or an ancestor.
 /// </summary>
@@ -19,7 +19,7 @@ public sealed class DamageVolume : Component
 	[Property] public float CooldownSeconds { get; set; } = 0.35f;
 
 	/// <summary>
-	/// If empty, any <see cref="PlayerHealth"/> hit is damaged. Otherwise the entering hierarchy must include at least one of these tags.
+	/// If empty, any <see cref="EntityHealthFeature"/> hit is damaged. Otherwise the entering hierarchy must include at least one of these tags.
 	/// </summary>
 	[Property] public List<string> DamageTags { get; set; } = new() { "player" };
 
@@ -91,7 +91,7 @@ public sealed class DamageVolume : Component
 		if ( CooldownSeconds > 0f && _lastDamage.TryGetValue( root, out var since ) && since < CooldownSeconds )
 			return;
 
-		var health = FindPlayerHealthInHierarchy( root );
+		var health = FindHealthInHierarchy( root );
 		if ( health is null || !health.IsValid() )
 			return;
 
@@ -132,11 +132,11 @@ public sealed class DamageVolume : Component
 		return null;
 	}
 
-	private static PlayerHealth FindPlayerHealthInHierarchy( GameObject root )
+	private static EntityHealthFeature FindHealthInHierarchy( GameObject root )
 	{
 		for ( var go = root; go is not null; go = go.Parent )
 		{
-			var h = go.Components.Get<PlayerHealth>();
+			var h = go.Components.Get<EntityHealthFeature>();
 			if ( h is not null )
 				return h;
 		}

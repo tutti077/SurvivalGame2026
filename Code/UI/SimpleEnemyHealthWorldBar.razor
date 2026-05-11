@@ -2,13 +2,13 @@
 @using Sandbox.UI
 @inherits PanelComponent
 
-<root style="width: 420px; height: 28px; background-color: rgba(12,12,14,0.92); border: 2px solid #070707; pointer-events: none; overflow: hidden;">
-	<div style="height: 100%; width: @(FillPercent)%; background-color: #d32222;"></div>
+<root style="width: 800px; height: 28px; background-color: rgba(12,12,14,0.92); border: 2px solid #070707; pointer-events: none; overflow: hidden;">
+	<div style="height: 100%; width: @(FillPercent); background-color: #d32222;"></div>
 </root>
 
 @code
 {
-	[Property] public PlayerHealth Health { get; set; }
+	[Property] public EntityHealthFeature Health { get; set; }
 
 	private string FillPercent => $"{(Health is null ? 0f : Health.HealthFraction * 100f):0.#}%";
 
