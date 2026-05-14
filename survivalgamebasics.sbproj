@@ -20,7 +20,13 @@
     "RankType": "None",
     "PerMapRanking": false,
     "LeaderboardType": "None",
-    "CsProjName": "",
-    "StartupScene": "scenes/minimal.scene"
+    "CsProjName": "survivalgamebasics",
+    "StartupScene": "scenes/testscene1.scene",
+    "MapStartupScene": "scenes/testscene1.scene",
+    "ProjectTemplate": null,
+    "LaunchMode": "Launcher",
+    "ControlModes": {
+      "Keyboard": true
+    }
   }
 }
