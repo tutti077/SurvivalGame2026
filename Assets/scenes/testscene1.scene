@@ -150,7 +150,7 @@
           "OnComponentFixedUpdate": null,
           "OnComponentStart": null,
           "OnComponentUpdate": null,
-          "StaminaRegenDelaySeconds": 10,
+          "StaminaRegenDelaySeconds": 4,
           "StaminaRegenMaxPerSecond": 40,
           "StaminaRegenMinPerSecond": 4,
           "StaminaRegenRampSeconds": 1.5
@@ -303,7 +303,7 @@
             "AfterUILayer": false
           },
           "RenderType": "On",
-          "Tint": "1,1,1,1"
+          "Tint": "0.31628,0.22802,0.22802,1"
         },
         {
           "__type": "Sandbox.Rigidbody",
@@ -336,7 +336,6 @@
           "OnComponentStart": null,
           "OnComponentUpdate": null,
           "OverrideMassCenter": false,
-          "PreciseContacts": false,
           "RigidbodyFlags": 0,
           "SleepThreshold": 2,
           "StartAsleep": false
@@ -676,16 +675,7 @@
       "__PrefabInstancePatch": {
         "AddedObjects": [],
         "RemovedObjects": [],
-        "PropertyOverrides": [
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "4785e803-a655-4137-8dc0-d456a8086f19"
-            },
-            "Property": "StaminaRegenDelayOverrideSeconds",
-            "Value": -1
-          }
-        ],
+        "PropertyOverrides": [],
         "MovedObjects": []
       },
       "__PrefabIdToInstanceId": {
@@ -696,17 +686,17 @@
         "ded41f18-ffe7-4185-ab1c-9616122dc6f0": "dc838cca-3925-4160-a957-20f046b79f3a",
         "bce430cc-f569-4381-9ec0-f2d872648efc": "e06538d6-75a2-4ff5-ae33-ba41dd06b563",
         "0a11b2aa-5b15-493c-81ee-367859dc63ff": "4d3879ae-b2a4-42de-9a86-0310ad0ac128",
-        "663b7081-af57-4150-a97d-794851260d6e": "0a75d590-21f9-4570-add1-4df2f1608175",
-        "e966959a-4e68-4d85-8efc-50ee669e76cd": "001ef5f8-e6bd-4822-ad51-b40241ec1b44",
-        "1870d24a-c69d-47ae-b3c8-e81b31f260ae": "e0c77770-52df-4e2b-855a-8bf862b149e7",
-        "6e38aa8a-f172-44e9-8476-e9f9fa4172aa": "86edd718-2f7c-45f8-9037-d23c46cd05ca",
+        "a334750f-a7f9-4e36-9c2d-563b96bda182": "75f5c604-7ddc-4f09-9125-3f15cb090ed4",
+        "c8b5a3d1-3afe-4693-9f5e-57b86c57b6a2": "bc8398ea-4ba1-4b29-83f0-5592219128fd",
+        "f4c3d2e1-b0a9-8c7d-6e5f-4a3b2c1d0e9f": "5f15ce22-6cfa-4ac7-942e-75f8bd80310a",
+        "4785e803-a655-4137-8dc0-d456a8086f19": "10c99103-9e0e-4d1f-80c0-fab8b78829aa",
         "563539eb-c977-45a3-92f0-e25aa1211547": "06a44474-4594-4b8c-8349-95fd246b72b7",
         "86859f44-e8df-4009-90a2-8ca9b4dc36cc": "73a897dc-0168-4ff0-b5b2-5dbe019832ad",
         "48bb4076-d3c6-455e-99c1-98e9ff82c2c4": "924eb568-7e4c-447f-8d7b-770dbfab6fc7",
         "22adeaa4-3eff-455e-b0ad-8186e47120c5": "6248d7ab-f248-4381-a4bd-c0d74f692f36",
         "f334590a-a6d7-44af-98bd-14ec93294ec7": "731c3429-0b8e-4199-85c3-fadb789fce28",
         "4d8ed045-4f00-411d-9d8e-42b4f855dc9b": "86dc9574-88cd-455a-bb43-fda1b9d1be86",
-        "6718165c-8461-4db6-9a6f-8e6a0e673f1e": "8cb83438-aa94-41fa-8ced-9ee9884a3331"
+        "25dd5bed-58eb-4648-bd3b-0de6ea746503": "bd4785b3-cd24-4388-9229-fc154ca44dcb"
       }
     }
   ],
@@ -744,9 +734,6 @@
         "Data": {
           "SelectionSets": []
         }
-      },
-      "Sandbox.MovieMaker.MovieRecorderSystem": {
-        "DisableClientRecording": false
       }
     }
   },

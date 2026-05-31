@@ -7,7 +7,7 @@ namespace Survival;
 /// Camera uses explicit floats so RPC/codegen reliably carries world positions (some builds are picky about <see cref="Vector3"/> on structs).
 /// Swing-from uses two floats for horizontal XZ for the same RPC reliability; vertical arc intent is a separate float so it is not confused with <see cref="SwingFromY"/> (world +Z on XZ).
 /// <see cref="SwingDirs"/> is authoritative for discrete **L / R / U only** (no forward); floats mirror that for traces.
-/// Primary: attack direction is locked on press; post-release <see cref="PostSwingDragScreenX"/>/<see cref="PostSwingDragScreenY"/> (pixels during the swing window) feed <see cref="MeleeCameraSwingDamage"/> on the host <see cref="CombatAuthority"/> using the attacker’s <see cref="PlayerCombat"/> damage tuning.
+/// Post-release <see cref="PostSwingDragScreenX"/>/<see cref="PostSwingDragScreenY"/> feed <see cref="MeleeCombatDamageMultiplier"/> on the host.
 /// </remarks>
 public readonly record struct AttackReleaseIntent
 {
@@ -43,6 +43,9 @@ public readonly record struct AttackReleaseIntent
 	/// <summary>Discrete swing-from: <see cref="SwingDirs.Left"/>, <see cref="SwingDirs.Right"/>, or <see cref="SwingDirs.Up"/> only.</summary>
 	public byte SwingDir { get; init; }
 
+	/// <summary>Locked attack pattern from cursor via <see cref="PlayerCombat.ResolveAttackTypeFromCursorDir"/> (informational; host re-resolves from <see cref="SwingDir"/>).</summary>
+	public byte AttackType { get; init; }
+
 	/// <summary>Legacy prepaid cap (0 = host debits stamina once on release from hold duration via <see cref="PlayerCombat.GetPrimaryAttackStaminaCostForHoldDuration"/>).</summary>
 	public float StaminaPrepaidMax { get; init; }
 
@@ -77,6 +80,15 @@ public readonly struct AttackReleaseResult
 	public string DebugDetail { get; init; }
 }
 
+/// <summary>Authoritative summary after a phased melee swing completes on the host (may arrive after <see cref="AttackReleaseResult"/>).</summary>
+public readonly record struct MeleeSweepOutcomeSummary
+{
+	public ushort IntentSequence { get; init; }
+	public bool AnyHit { get; init; }
+	public float TotalDamageDealt { get; init; }
+	public Guid FirstHitTargetId { get; init; }
+}
+
 public static class AttackReleaseDebugCode
 {
 	public const int OkMiss = 10;
@@ -90,6 +102,8 @@ public static class AttackReleaseDebugCode
 	public const int RejectNoCombatAuthority = 12;
 	public const int RejectAttackerMissingPlayerCombat = 13;
 	public const int RejectInsufficientStamina = 14;
+	public const int OkMeleeSweepStarted = 15;
+	public const int RejectMeleeBusy = 16;
 }
 
 public interface IDamageable
@@ -138,12 +152,16 @@ public static class AttackCombatConstants
 	public const float DefaultMeleeWeaponDamage = 10f;
 }
 
-/// <summary>Server-only: melee damage multiplier from post-release mouse drag vs locked swing dir.</summary>
-public static class MeleeCameraSwingDamage
+/// <summary>
+/// Global melee combat damage multiplier: starts at <see cref="Standard"/> (1.0), then bonuses/penalties are added.
+/// Follow-through drag, heavy attack, etc. — see <see cref="Compute"/> on <see cref="PlayerCombat"/>.
+/// </summary>
+public static class MeleeCombatDamageMultiplier
 {
+	public const float Standard = 1f;
+
 	/// <summary>
-	/// Unit screen-space drag that scores as “good” follow-through for the locked swing (+x right, +y down).
-	/// Left = pull mouse left (−x), Right = pull right (+x), Up overhead = pull down (+y).
+	/// Unit screen-space drag that scores as good follow-through for the locked swing (+x right, +y down).
 	/// </summary>
 	public static Vector2 GoodDragUnitScreen( byte swingDir )
 	{
@@ -165,15 +183,48 @@ public static class MeleeCameraSwingDamage
 	}
 
 	/// <summary>
-	/// <paramref name="dragScreen"/> = sum of mouse deltas during the swing window.
-	/// Below <paramref name="clearDragPixels"/> on both good and bad axes → <paramref name="neutralMul"/>.
-	/// Clear motion on the bad axis and it dominates good → <paramref name="badMul"/>.
-	/// Clear motion on the good axis and good ≥ bad → <paramref name="goodMul"/>.
+	/// Builds the combat multiplier: base + drag + phase penalties + heavy bonus (all additive).
 	/// </summary>
-	public static float ComputePostDragMultiplier( byte lockedSwingDir, Vector2 dragScreen, float clearDragPixels,
-		float neutralMul, float goodMul, float badMul )
+	public static float Compute(
+		byte lockedSwingDir,
+		Vector2 dragScreen,
+		float clearDragPixels,
+		float goodBonus,
+		float badPenalty,
+		bool isHeavy,
+		float heavyBonus,
+		byte attackState,
+		float earlyActivePenalty,
+		float lateActivePenalty,
+		float baseMultiplier = Standard )
+	{
+		var total = baseMultiplier
+		            + EvaluateDragBonus( lockedSwingDir, dragScreen, clearDragPixels, goodBonus, badPenalty )
+		            + EvaluatePhaseAdjustment( attackState, earlyActivePenalty, lateActivePenalty );
+		if ( isHeavy )
+			total += heavyBonus;
+		return Math.Max( 0f, total );
+	}
+
+	static float EvaluatePhaseAdjustment( byte attackState, float earlyActivePenalty, float lateActivePenalty )
+	{
+		if ( attackState == MeleeAttackStates.EarlyActive )
+			return -Math.Max( 0f, earlyActivePenalty );
+		if ( attackState == MeleeAttackStates.LateActive )
+			return -Math.Max( 0f, lateActivePenalty );
+		return 0f;
+	}
+
+	static float EvaluateDragBonus(
+		byte lockedSwingDir,
+		Vector2 dragScreen,
+		float clearDragPixels,
+		float goodBonus,
+		float badPenalty )
 	{
 		clearDragPixels = Math.Max( 1f, clearDragPixels );
+		goodBonus = Math.Max( 0f, goodBonus );
+		badPenalty = Math.Max( 0f, badPenalty );
 
 		var gU = GoodDragUnitScreen( lockedSwingDir );
 		var bU = BadDragUnitScreen( lockedSwingDir );
@@ -181,14 +232,24 @@ public static class MeleeCameraSwingDamage
 		var bad = MathF.Max( 0f, Vector2.Dot( dragScreen, bU ) );
 
 		if ( good < clearDragPixels && bad < clearDragPixels )
-			return neutralMul;
+			return 0f;
 
 		if ( bad >= clearDragPixels && bad > good )
-			return badMul;
+			return -badPenalty;
 
 		if ( good >= clearDragPixels && good >= bad )
-			return goodMul;
+			return goodBonus;
 
-		return neutralMul;
+		return 0f;
 	}
+}
+
+/// <summary>Legacy name — use <see cref="MeleeCombatDamageMultiplier"/>.</summary>
+public static class MeleeCameraSwingDamage
+{
+	public static Vector2 GoodDragUnitScreen( byte swingDir ) =>
+		MeleeCombatDamageMultiplier.GoodDragUnitScreen( swingDir );
+
+	public static Vector2 BadDragUnitScreen( byte swingDir ) =>
+		MeleeCombatDamageMultiplier.BadDragUnitScreen( swingDir );
 }

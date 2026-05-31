@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Sandbox;
 
 namespace Survival;
 
@@ -21,7 +22,7 @@ public sealed class CombatAuthority : Component
 	public float MaxPlayerRootVsServerDelta { get; set; } = 256f;
 
 	[Property, Group( "Combat — Debug" )]
-	public bool LogMeleeStaminaSettlement { get; set; }
+	public bool LogMeleeStaminaSettlement { get; set; } = true;
 
 	readonly Dictionary<Guid, double> _lastAcceptedAttackByAttacker = new();
 
@@ -115,6 +116,9 @@ public sealed class CombatAuthority : Component
 		if ( !double.IsFinite( intent.PressedGlobalSeconds ) || !double.IsFinite( intent.ReleasedGlobalSeconds ) )
 			return Fail( AttackReleaseDebugCode.RejectDirection, "attack intent timing not finite" );
 
+		if ( !pc.ServerCanBeginMeleeAttackAction() )
+			return Fail( AttackReleaseDebugCode.RejectMeleeBusy, "melee attack action busy or cannot begin on host" );
+
 		var staminaCost = pc.GetPrimaryAttackStaminaCostForHoldDuration( holdSeconds );
 		if ( staminaCost > 1e-4f )
 		{
@@ -182,65 +186,23 @@ public sealed class CombatAuthority : Component
 
 		var swingAuth = ServerNormalizeSwingFromXz( intent.SwingFromX, intent.SwingFromY, attacker.WorldRotation );
 		var swingVert = ServerClampSwingVertical( intent.SwingVerticalHint );
-		var drag = new Vector2( intent.PostSwingDragScreenX, intent.PostSwingDragScreenY );
-		var maxLen = Math.Max( 32f, pc.SwingMaxPostDragSanityPixels );
-		if ( drag.Length > maxLen )
-			drag = drag.Normal * maxLen;
+		var isHeavy = pc.IsHeavyAttackForHoldDuration( holdSeconds );
+		var attackType = pc.ResolveAttackTypeFromIntent( intent );
+		var swingNote =
+			$" {FormatSwingLog( swingAuth, swingVert, intent.SwingDir )} type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} hold={holdSeconds:0.###}s";
 
-		var camMul = MeleeCameraSwingDamage.ComputePostDragMultiplier(
-			intent.SwingDir,
-			drag,
-			pc.SwingDragGoodPixels,
-			pc.SwingDragDamageNeutralMul,
-			pc.SwingDragDamageGoodMul,
-			pc.SwingDragDamageBadMul );
-		var baseDmg = pc.MeleeWeaponBaseDamage > 0f ? pc.MeleeWeaponBaseDamage : AttackCombatConstants.DefaultMeleeWeaponDamage;
-		var amount = baseDmg * camMul;
-		var swingNote = $" {FormatSwingLog( swingAuth, swingVert, intent.SwingDir )} drag×{camMul:0.###} drag=({drag.x:F0},{drag.y:F0}) base={baseDmg:0.#}";
+		pc.ServerStartMeleeAttackAction( intent, holdSeconds, isHeavy, swingNote );
 
-		var serverEye = attacker.WorldPosition + Vector3.Up * pc.ServerEyeHeight;
-		var tr = RunAuthorityMeleeTrace( serverEye, dir, attacker );
-		if ( !tr.Hit || !tr.GameObject.IsValid() )
-		{
-			_lastAcceptedAttackByAttacker[attacker.Id] = RealTime.GlobalNow;
-			var travel = tr.Hit ? (tr.HitPosition - serverEye).Length : AttackCombatConstants.DefaultMeleeRange;
-			return AcceptMiss( $"trace miss travel={travel:0.#} / {AttackCombatConstants.DefaultMeleeRange}{swingNote}" );
-		}
-
-		if ( !TryFindDamageable( tr.GameObject, out var recv ) || recv is not DamageReceiver dmg )
-		{
-			_lastAcceptedAttackByAttacker[attacker.Id] = RealTime.GlobalNow;
-			return AcceptMiss( $"hit {tr.GameObject.Name} no DamageReceiver{swingNote}" );
-		}
-
-		// Ray ignore can miss odd collider roots; never debit HP on the attacker's own hierarchy.
-		if ( IsGameObjectUnderHierarchy( attacker, tr.GameObject ) )
-		{
-			_lastAcceptedAttackByAttacker[attacker.Id] = RealTime.GlobalNow;
-			return AcceptMiss( $"hit self/attacker hierarchy ({tr.GameObject.Name}){swingNote}" );
-		}
-
-		var victimVitals = ResolvePlayerVitalsForDamageReceiver( dmg );
-		// In multiplayer, scene-placed bodies with PlayerVitals can sit on top of spawned pawns and steal traces — only networked pawns take PvP melee damage.
-		if ( attacker.Network is { Active: true }
-		     && victimVitals is not null
-		     && victimVitals.GameObject.Network is not { Active: true } )
-		{
-			_lastAcceptedAttackByAttacker[attacker.Id] = RealTime.GlobalNow;
-			return AcceptMiss( $"hit non-networked vitals ({tr.GameObject.Name}){swingNote}" );
-		}
-
-		var dealtToTarget = dmg.TakeDamage( amount, pc );
 		_lastAcceptedAttackByAttacker[attacker.Id] = RealTime.GlobalNow;
 
 		return new AttackReleaseResult
 		{
 			Accepted = true,
-			Hit = true,
-			DamageDealt = dealtToTarget,
-			TargetGameObjectId = recv.GameObject.Id,
-			DebugCode = AttackReleaseDebugCode.OkHit,
-			DebugDetail = $"hit {tr.GameObject.Name} preArmor={amount:0.#} dealt={dealtToTarget:0.#}{swingNote}"
+			Hit = false,
+			DamageDealt = 0f,
+			TargetGameObjectId = Guid.Empty,
+			DebugCode = AttackReleaseDebugCode.OkMeleeSweepStarted,
+			DebugDetail = $"scheduled host sweep seq={intent.IntentSequence} type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} wind={pc.MeleeWindupDuration:0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( pc, attackType ):0.###}s rec={pc.MeleeRecoveryDuration:0.###}s{swingNote}"
 		};
 	}
 
@@ -348,7 +310,7 @@ public sealed class CombatAuthority : Component
 			DebugDetail = detail
 		};
 
-	static bool IsGameObjectUnderHierarchy( GameObject root, GameObject node )
+	public static bool IsGameObjectUnderHierarchy( GameObject root, GameObject node )
 	{
 		if ( !root.IsValid() || !node.IsValid() )
 			return false;
@@ -362,7 +324,7 @@ public sealed class CombatAuthority : Component
 		return false;
 	}
 
-	static PlayerVitals ResolvePlayerVitalsForDamageReceiver( DamageReceiver dmg )
+	public static PlayerVitals ResolvePlayerVitalsForDamageReceiver( DamageReceiver dmg )
 	{
 		if ( dmg is null || !dmg.GameObject.IsValid() )
 			return null;
@@ -379,5 +341,25 @@ public sealed class CombatAuthority : Component
 		}
 
 		return null;
+	}
+
+	public static bool MayApplyMeleeDamageFromAttackerToReceiver( GameObject attackerRoot, DamageReceiver dmg )
+	{
+		var victimVitals = ResolvePlayerVitalsForDamageReceiver( dmg );
+		if ( attackerRoot.Network is { Active: true }
+		     && victimVitals is not null
+		     && victimVitals.GameObject.Network is not { Active: true } )
+			return false;
+
+		return true;
+	}
+
+	public static Guid ResolveMeleeVictimDedupId( DamageReceiver dmg )
+	{
+		var v = ResolvePlayerVitalsForDamageReceiver( dmg );
+		if ( v is not null && v.GameObject.IsValid() )
+			return v.GameObject.Id;
+
+		return dmg.GameObject.Id;
 	}
 }

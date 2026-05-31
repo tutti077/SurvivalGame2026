@@ -29,17 +29,43 @@ public readonly struct CombatChannelRules
 }
 
 [Title( "Player Combat" )]
-public class PlayerCombat : Component
+public partial class PlayerCombat : Component
 {
 	const string CombatClientLogVersion = "swing-window-v2";
 
-	[Property] public bool ShowCombatInputDebug { get; set; }
+	// --- Debug (inspector toggles at top) ---
+
+	[Property, Group( "Combat — Debug" )] public bool ShowCombatInputDebug { get; set; } = true;
+
+	[Property, Group( "Combat — Debug" )] public bool ShowSwingDirectionCrosshair { get; set; } = true;
 
 	[Property, Group( "Combat — Debug" )] public bool LogCombatNetworkingToConsole { get; set; } = true;
 
 	/// <summary>Owner: logs predicted primary-attack stamina (hold vs formula cost) when the swing window submits to the host.</summary>
-	[Property, Group( "Combat — Debug" )] public bool LogAttackStaminaDebug { get; set; }
-	[Property] public bool ShowSwingDirectionCrosshair { get; set; } = true;
+	[Property, Group( "Combat — Debug" )] public bool LogAttackStaminaDebug { get; set; } = true;
+
+	[Property, Group( "Combat — Debug" )] public bool LogMeleeSweepHitsToConsole { get; set; } = true;
+
+	/// <summary>Draws the shared attack path (blue / yellow / red by attack state). On host by default; see <see cref="ClientMeleeSwingTraceDebug"/>.</summary>
+	[Property, Group( "Combat — Debug" ), Title( "Debug draw enabled" )]
+	public bool MeleeDebugDrawEnabled { get; set; } = true;
+
+	[Property, Group( "Combat — Debug" ), Title( "Debug sample points enabled" )]
+	public bool MeleeDebugDrawSamplePointsEnabled { get; set; } = true;
+
+	/// <summary>How long completed attack debug lines/spheres stay visible after the swing finishes.</summary>
+	[Property, Group( "Combat — Debug" ), Title( "Debug overlay persist (s)" )]
+	public float MeleeDebugOverlayDuration { get; set; } = 1f;
+
+	[Property, Group( "Combat — Debug" ), Title( "Debug arc sample count" )]
+	public float MeleeDebugArcSampleCount { get; set; } = 64f;
+
+	/// <summary>
+	/// When networked and host, after a swing starts, broadcasts intent so <b>every client</b> can draw the same trace (visual only, no hits).
+	/// Clients ignore it unless <see cref="MeleeDebugDrawEnabled"/> is on. For quick MP tests; turn off in shipping.
+	/// </summary>
+	[Property, Group( "Combat — Debug" ), Title( "Clients replicate swing trace (debug)" )]
+	public bool ClientMeleeSwingTraceDebug { get; set; } = true;
 
 	[Property, Group( "Input" )] public string PrimaryAttackAction { get; set; } = "Attack1";
 	[Property, Group( "Input" )] public string BlockAction { get; set; } = "Attack2";
@@ -53,31 +79,195 @@ public class PlayerCombat : Component
 	[Property, Group( "Combat — Networking" )] public CombatAuthority HostCombatAuthority { get; set; }
 
 	/// <summary>Authoritative weapon damage before camera/swing alignment (server multiplies that next).</summary>
-	[Property, Group( "Combat — Melee" )] public float MeleeWeaponBaseDamage { get; set; } = AttackCombatConstants.DefaultMeleeWeaponDamage;
+	[Property, Group( "Combat — Melee" )] public float MeleeWeaponBaseDamage { get; set; } = 30f;
 
 	[Property, Group( "Combat — Stamina" )] public float PrimaryAttackStaminaBase { get; set; } = 5f;
 
 	[Property, Group( "Combat — Stamina" )] public float PrimaryAttackStaminaPerHoldSecond { get; set; } = 10f;
 
-	[Property, Group( "Combat — Stamina" )] public float PrimaryAttackStaminaMaxCost { get; set; } = 45f;
+	[Property, Group( "Combat — Stamina" )] public float PrimaryAttackStaminaMaxCost { get; set; } = 25f;
 
-	/// <summary>Seconds of <see cref="Time.NowDouble"/> after primary **release** before hit + drag are sent to the host (post-release drag is summed until then).</summary>
-	[Property, Group( "Combat — Melee" )] public float SwingDamageWindowSeconds { get; set; } = 1f;
+	/// <summary>
+	/// After primary <b>release</b>, the owner waits this long while summing raw mouse delta into post-release drag (feeds damage tier on the host).
+	/// The attack intent is only sent to the host when this window ends — a large value feels like lag after you let go; use <c>0</c> for snappy (next-frame) dispatch.
+	/// </summary>
+	[Property, Group( "Combat — Melee" ), Title( "Post-release drag window (s)" )]
+	public float SwingDamageWindowSeconds { get; set; } = 0.12f;
 
-	/// <summary>Post-release drag (pixels) on the good or bad axis needed before damage uses the good or bad tier (otherwise neutral).</summary>
+	/// <summary>Post-release drag (pixels) on the good or bad axis needed before the combat multiplier gets the bonus or penalty.</summary>
 	[Property, Group( "Combat — Melee" )] public float SwingDragGoodPixels { get; set; } = 48f;
 
-	[Property, Group( "Combat — Melee" )] public float SwingDragDamageNeutralMul { get; set; } = 1f;
+	/// <summary>Added to <see cref="MeleeCombatDamageMultiplier.Standard"/> when follow-through drag matches the attack direction.</summary>
+	[Property, Group( "Combat — Melee" ), Title( "Swing drag good bonus (+)" )]
+	public float MeleeSwingDragGoodBonus { get; set; } = 0.15f;
 
-	[Property, Group( "Combat — Melee" )] public float SwingDragDamageGoodMul { get; set; } = 1.15f;
-
-	[Property, Group( "Combat — Melee" )] public float SwingDragDamageBadMul { get; set; } = 0.75f;
+	/// <summary>Subtracted from the combat multiplier when follow-through drag opposes the attack direction.</summary>
+	[Property, Group( "Combat — Melee" ), Title( "Swing drag bad penalty (−)" )]
+	public float MeleeSwingDragBadPenalty { get; set; } = 0.15f;
 
 	/// <summary>Clamp client-reported post-swing drag vector length (anti-cheat / overflow).</summary>
 	[Property, Group( "Combat — Melee" )] public float SwingMaxPostDragSanityPixels { get; set; } = 2800f;
 
-	/// <summary>Deadzone floor blended with <see cref="SwingLiveMicroMotionPixels"/> for live swing (keeps older prefab tuning meaningful).</summary>
+	[Property, Group( "Combat — Melee (attack action)" )] public GameObject MeleeBladeTip { get; set; }
+
+	[Property, Group( "Combat — Melee (attack action)" )] public GameObject MeleeBladeHeel { get; set; }
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Windup duration (s)" )]
+	public float MeleeWindupDuration { get; set; } = 0.25f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Recovery duration (s)" )]
+	public float MeleeRecoveryDuration { get; set; } = 0.4f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Attack range L/R" )]
+	public float MeleeAttackRangeLeftRight { get; set; } = 76f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Attack range forward" )]
+	public float MeleeAttackRangeForward { get; set; } = 76f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Hit volume thickness" )]
+	public float MeleeHitVolumeThickness { get; set; } = 5f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Sweep substep length" )]
+	public float MeleeSweepSubstepLength { get; set; } = 12f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Heavy attack hold threshold (s)" )]
+	public float MeleeHeavyAttackHoldThreshold { get; set; } = 0.35f;
+
+	/// <summary>Added to the combat damage multiplier when the attack is heavy (see <see cref="ComputeMeleeCombatDamageMultiplier"/>).</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Heavy attack damage bonus (+)" )]
+	public float MeleeHeavyAttackDamageBonus { get; set; } = 0.5f;
+
+	/// <summary>Baseline combat multiplier before drag/heavy bonuses (normally <see cref="MeleeCombatDamageMultiplier.Standard"/>).</summary>
+	[Property, Group( "Combat — Melee" ), Title( "Base combat damage multiplier" )]
+	public float MeleeBaseCombatDamageMultiplier { get; set; } = MeleeCombatDamageMultiplier.Standard;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Allow multiple hits per attack" )]
+	public bool MeleeAllowMultipleHitsPerAttack { get; set; }
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Max targets hit" )]
+	public int MeleeMaxTargetsHit { get; set; } = 1;
+
+	/// <summary>Legacy inspector total — active window is <see cref="MeleeEarlyActiveDuration"/> + <see cref="MeleeActiveDuration"/> + <see cref="MeleeLateActiveDuration"/>.</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Active swing duration L/R (s) — legacy" )]
+	public float MeleeAttackDurationLeftRight { get; set; } = 0.22f;
+
+	/// <summary>Legacy inspector total — active window uses shared phase durations for all attack types.</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Active swing duration forward (s) — legacy" )]
+	public float MeleeAttackDurationForward { get; set; } = 0.24f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Lateral arc total (°)" )]
+	public float MeleeLateralArcTotalDegrees { get; set; } = 150f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Arc start left (°) — legacy" )]
+	public float MeleeAttackArcLeftStartDegrees { get; set; } = -75f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Arc end left (°) — legacy" )]
+	public float MeleeAttackArcLeftEndDegrees { get; set; } = 75f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Arc start right (°) — legacy" )]
+	public float MeleeAttackArcRightStartDegrees { get; set; } = 75f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Arc end right (°) — legacy" )]
+	public float MeleeAttackArcRightEndDegrees { get; set; } = -75f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Arc start forward (°) — legacy (unused by path)" )]
+	public float MeleeAttackArcForwardStartDegrees { get; set; } = -90f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Arc end forward (°) — legacy (unused by path)" )]
+	public float MeleeAttackArcForwardEndDegrees { get; set; } = 90f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "EarlyActive duration (s) — blue" )]
+	public float MeleeEarlyActiveDuration { get; set; } = 0.037f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Active duration (s) — yellow" )]
+	public float MeleeActiveDuration { get; set; } = 0.146f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "LateActive duration (s) — red" )]
+	public float MeleeLateActiveDuration { get; set; } = 0.037f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Tilt left (° start→end drop only)" )]
+	public float MeleeAttackTiltDegreesLeft { get; set; } = 25f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Tilt right (° start→end drop only)" )]
+	public float MeleeAttackTiltDegreesRight { get; set; } = 25f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Tilt forward (° right-plane offset)" )]
+	public float MeleeAttackTiltDegreesForward { get; set; } = 10f;
+
+	/// <summary>Baseline offset along world up from <see cref="ServerEyeHeight"/> for L/R slashes (yaw-only basis; pitch ignored).</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Side slash start height" )]
+	public float MeleeAttackZaxisStart { get; set; } = -10f;
+
+	/// <summary>Max forward local reach as a fraction of <see cref="MeleeAttackRangeForward"/>.</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward max reach (× attackRangeForward)" )]
+	public float MeleeAttackForwardMaxReachFraction { get; set; } = 0.92f;
+
+	/// <summary>Overhead arc span (°) — default matches <see cref="MeleeLateralArcTotalDegrees"/>; end = start − total.</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc total (°)" )]
+	public float MeleeAttackForwardArcTotalDegrees { get; set; } = 150f;
+
+	/// <summary>Start angle on vertical arc (0° = +X forward, 90° = +Y up). End = start − arc total.</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc start (°)" )]
+	public float MeleeAttackForwardArcStartDegrees { get; set; } = 135f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward reach start multiplier" )]
+	public float MeleeAttackForwardReachStartMultiplier { get; set; } = 0.85f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward reach active multiplier" )]
+	public float MeleeAttackForwardReachActiveMultiplier { get; set; } = 1f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward reach end multiplier" )]
+	public float MeleeAttackForwardReachEndMultiplier { get; set; } = 0.95f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward plane right offset" )]
+	public float MeleeAttackForwardPlaneRightOffset { get; set; } = 12f;
+
+	/// <summary>How much pitch change during the swing bends the arc (lean back → lean forward).</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward lean pitch influence" )]
+	public float MeleeAttackForwardLeanPitchInfluence { get; set; } = 0.55f;
+
+	/// <summary>How much camera pitch steers the overhead arc (0 = yaw only, 1 = full pitch).</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pitch influence" )]
+	public float MeleeAttackForwardPitchInfluence { get; set; } = 0.42f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward min pitch (° look-up cap)" )]
+	public float MeleeAttackForwardMinPitchDegrees { get; set; } = -38f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward max pitch (° look-down cap)" )]
+	public float MeleeAttackForwardMaxPitchDegrees { get; set; } = 38f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "EarlyActive damage penalty (−)" )]
+	public float MeleeEarlyActiveDamagePenalty { get; set; } = 0.15f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "LateActive damage penalty (−)" )]
+	public float MeleeLateActiveDamagePenalty { get; set; } = 0.15f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Base stagger" )]
+	public float MeleeBaseStagger { get; set; } = 0.45f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "EarlyActive stagger multiplier" )]
+	public float MeleeEarlyActiveStaggerMultiplier { get; set; } = 0.33f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Active stagger multiplier" )]
+	public float MeleeActiveStaggerMultiplier { get; set; } = 1f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "LateActive stagger multiplier" )]
+	public float MeleeLateActiveStaggerMultiplier { get; set; } = 0.33f;
+
+	[Property, Group( "Combat — Melee (attack action)" )] public float MeleeVictimStaminaDrainOnHit { get; set; }
+
+	[Property, Group( "Combat — Melee (attack action)" )] public float MeleeBladeHeelFraction { get; set; } = 0.22f;
+
+	/// <summary>Filled when the host finishes the phased sweep (after windup/active/recovery).</summary>
+	public MeleeSweepOutcomeSummary LastMeleeSweepSummary { get; private set; }
+
 	[Property, Group( "Combat — Swing from look" )] public float SwingAxisDeadzone { get; set; } = 0.02f;
+
+	/// <summary>
+	/// When true, inverts left/right attack selection (southpaw). Forward overhead is unchanged.
+	/// Only read when resolving attack type at attack start — not re-read mid-swing.
+	/// </summary>
+	[Property, Group( "Combat — Swing from look" )] public bool SouthpawSwing { get; set; }
 
 	/// <summary>If true, treat negative <see cref="Input.MouseDelta"/>.y (mouse moved up the screen) as look-up for <see cref="SwingDirs.Up"/>.</summary>
 	[Property, Group( "Combat — Swing from look" )] public bool SwingInvertLookYForUp { get; set; } = true;
@@ -160,9 +350,8 @@ public class PlayerCombat : Component
 	Vector2 _primaryLookAccum;
 	Vector2 _blockLookAccum;
 
-	/// <summary>Live L/R/U from <see cref="Input.MouseDelta"/> every frame (no attack hold required); also used on primary release.</summary>
+	/// <summary>Live L/R/U from mouse evidence — teardrop, attack prep, and block preview.</summary>
 	byte _primaryLiveSwingDir = SwingDirs.Up;
-	/// <summary>Per-frame swing cardinal while block is held.</summary>
 	byte _blockLiveSwingDir = SwingDirs.Up;
 
 	/// <summary>Time-decayed signed pixel evidence (screen-space; y positive = mouse moved down) — framerate-independent input to the classifier.</summary>
@@ -200,10 +389,16 @@ public class PlayerCombat : Component
 
 	protected override void OnUpdate()
 	{
+		if ( GameObject.IsValid() )
+			MaybeTickServerMeleeAttackAction();
+
 		if ( !Active || !GameObject.IsValid() )
 			return;
 
 		MaybeWarnCombatAuthorityMisconfigured();
+
+		if ( IsServerSideForMeleeAuthority() && !IsLocalCombatDriver() && !GameObject.IsProxy )
+			return;
 
 		if ( !IsLocalCombatDriver() )
 			return;
@@ -262,7 +457,6 @@ public class PlayerCombat : Component
 		if ( _primarySwingPhaseActive && Time.NowDouble < _primarySwingPhaseEndAtSandbox )
 			_primaryPostReleaseDragAccum += rawFrame;
 
-		// Block: unchanged live tracking.
 		_blockSwingEvidence = _blockSwingEvidence * decay + frame;
 		ApplyLiveSwingFromEvidence( _blockSwingEvidence, ref _blockLiveSwingDir, ref _blockLastFlipRealSeconds );
 
@@ -300,6 +494,17 @@ public class PlayerCombat : Component
 		_stickySwingDir = _lockedPrimaryAttackSwingDir;
 	}
 
+	void CancelPrimarySwingPhase()
+	{
+		if ( !_primarySwingPhaseActive )
+			return;
+		_primarySwingPhaseActive = false;
+		_primaryPostReleaseDragAccum = default;
+		_hasLockedPrimaryAttackDir = false;
+		_combatNetDiag = "swing window cancelled";
+		LogCombatDiag( "CLIENT / OWNER", "Cancelled swing phase (new attack press)." );
+	}
+
 	void MaybeCompletePrimarySwingPhase()
 	{
 		if ( !_primarySwingPhaseActive )
@@ -324,7 +529,6 @@ public class PlayerCombat : Component
 
 		_primaryPostReleaseDragAccum = default;
 
-		RunLocalMeleeTraceForVfxOnly( sent );
 		LogCombatDiag( "CLIENT / OWNER",
 			$"{CombatClientLogVersion} — Submit swing end seq={sent.IntentSequence} drag=({sent.PostSwingDragScreenX:F1},{sent.PostSwingDragScreenY:F1}) {CombatAuthority.FormatSwingLog( new Vector2( sent.SwingFromX, sent.SwingFromY ), sent.SwingVerticalHint, sent.SwingDir )}" );
 		if ( LogAttackStaminaDebug )
@@ -337,22 +541,12 @@ public class PlayerCombat : Component
 		DispatchPrimaryAttackReleaseToAuthority( sent );
 	}
 
-	void CancelPrimarySwingPhase()
-	{
-		if ( !_primarySwingPhaseActive )
-			return;
-		_primarySwingPhaseActive = false;
-		_primaryPostReleaseDragAccum = default;
-		_hasLockedPrimaryAttackDir = false;
-		_combatNetDiag = "swing window cancelled";
-		LogCombatDiag( "CLIENT / OWNER", "Cancelled swing phase (new attack press)." );
-	}
-
 	protected virtual bool CanStartPrimaryAttack() => CanAffordPrimaryAttackOnPress();
 
 	protected virtual bool CanContinuePrimaryAttack() => true;
 
 	protected virtual bool CanStartBlock() => true;
+
 	protected virtual bool CanContinueBlock() => true;
 
 	/// <summary>
@@ -430,12 +624,12 @@ public class PlayerCombat : Component
 		return rxz.Normal;
 	}
 
-	void CardinalVectors( byte c, out Vector2 xz, out float v )
+	void CardinalVectors( byte c, Vector3 viewForwardForUpSwing, out Vector2 xz, out float v )
 	{
 		switch ( c )
 		{
 			case SwingDirs.Up:
-				xz = DefaultSwingForwardWorldXz();
+				SwingForwardWorldXzFromHorizontalView( viewForwardForUpSwing, out xz );
 				v = 1f;
 				return;
 			case SwingDirs.Left:
@@ -447,10 +641,26 @@ public class PlayerCombat : Component
 				v = 0f;
 				return;
 			default:
-				xz = DefaultSwingForwardWorldXz();
+				SwingForwardWorldXzFromHorizontalView( viewForwardForUpSwing, out xz );
 				v = 1f;
 				return;
 		}
+	}
+
+	/// <summary>Player-local combat basis for teardrop / swing evidence (flatten camera look to XZ).</summary>
+	void SwingForwardWorldXzFromHorizontalView( Vector3 viewDir, out Vector2 xz )
+	{
+		var u = viewDir.LengthSquared > 1e-12f ? viewDir.Normal : Vector3.Forward;
+		var fx = u.x;
+		var fz = u.z;
+		var len2 = fx * fx + fz * fz;
+		if ( len2 < 1e-10f )
+		{
+			xz = new Vector2( 0f, 1f );
+			return;
+		}
+		var il = 1f / MathF.Sqrt( len2 );
+		xz = new Vector2( fx * il, fz * il );
 	}
 
 	/// <summary>
@@ -488,14 +698,14 @@ public class PlayerCombat : Component
 
 		if ( preferHorizontalFirst )
 		{
-			if ( dx < -min )
-				return SwingDirs.Left;
 			if ( dx > min )
+				return SwingDirs.Left;
+			if ( dx < -min )
 				return SwingDirs.Right;
 			if ( yUp > min )
 				return SwingDirs.Up;
 			if ( yUp < -min )
-				return dx < 0f ? SwingDirs.Left : SwingDirs.Right;
+				return dx > 0f ? SwingDirs.Left : SwingDirs.Right;
 			return current;
 		}
 
@@ -503,16 +713,16 @@ public class PlayerCombat : Component
 			return SwingDirs.Up;
 		if ( yUp < -min )
 		{
-			if ( dx < -min )
-				return SwingDirs.Left;
 			if ( dx > min )
+				return SwingDirs.Left;
+			if ( dx < -min )
 				return SwingDirs.Right;
-			return dx < 0f ? SwingDirs.Left : SwingDirs.Right;
+			return dx > 0f ? SwingDirs.Left : SwingDirs.Right;
 		}
 
-		if ( dx < -min )
-			return SwingDirs.Left;
 		if ( dx > min )
+			return SwingDirs.Left;
+		if ( dx < -min )
 			return SwingDirs.Right;
 		return current;
 	}
@@ -523,9 +733,9 @@ public class PlayerCombat : Component
 		var yUp = SwingInvertLookYForUp ? -mouseDelta.y : mouseDelta.y;
 		var dx = mouseDelta.x;
 		if ( cardinal == SwingDirs.Left )
-			return MathF.Max( 0f, -dx );
-		if ( cardinal == SwingDirs.Right )
 			return MathF.Max( 0f, dx );
+		if ( cardinal == SwingDirs.Right )
+			return MathF.Max( 0f, -dx );
 		return MathF.Max( 0f, yUp );
 	}
 
@@ -568,6 +778,7 @@ public class PlayerCombat : Component
 		var center = new Vector2( rect.Left + rect.Width * 0.5f, rect.Top + rect.Height * 0.5f );
 
 		// Same live L/R/U + hysteresis path as attack; preview block swing while blocking, else attack.
+		// Same live L/R/U + hysteresis path as attack; preview block swing while blocking, else attack.
 		var swingPreview = Input.Down( BlockAction )
 			? _blockLiveSwingDir
 			: _primarySwingPhaseActive || _primary.Down
@@ -609,19 +820,10 @@ public class PlayerCombat : Component
 	static Vector2 SwingCardinalToScreenTeardropDir( byte cardinal )
 	{
 		if ( cardinal == SwingDirs.Left )
-			return new Vector2( -1f, 0f );
-		if ( cardinal == SwingDirs.Right )
 			return new Vector2( 1f, 0f );
+		if ( cardinal == SwingDirs.Right )
+			return new Vector2( -1f, 0f );
 		return new Vector2( 0f, -1f );
-	}
-
-	Vector2 DefaultSwingForwardWorldXz()
-	{
-		var f = WorldRotation.Forward;
-		var xz = new Vector2( f.x, f.z );
-		if ( xz.LengthSquared < 1e-8f )
-			return new Vector2( 0f, 1f );
-		return xz.Normal;
 	}
 
 	Rotation GetCameraYawRotation()
@@ -629,6 +831,85 @@ public class PlayerCombat : Component
 		var cam = ResolveIntentCamera();
 		var yaw = cam.IsValid() ? cam.WorldRotation.Angles().yaw : WorldRotation.Angles().yaw;
 		return new Angles( 0f, yaw, 0f ).ToRotation();
+	}
+
+	Rotation GetCameraAimRotation()
+	{
+		var cam = ResolveIntentCamera();
+		if ( cam.IsValid() )
+		{
+			var a = cam.WorldRotation.Angles();
+			return new Angles( a.pitch, a.yaw, 0f ).ToRotation();
+		}
+
+		var body = WorldRotation.Angles();
+		return new Angles( body.pitch, body.yaw, 0f ).ToRotation();
+	}
+
+	float GetCameraPitchDegrees()
+	{
+		var cam = ResolveIntentCamera();
+		if ( cam.IsValid() )
+			return cam.WorldRotation.Angles().pitch;
+
+		return WorldRotation.Angles().pitch;
+	}
+
+	/// <summary>Camera pitch clamped and scaled for overhead arcs — not used for L/R slashes.</summary>
+	public float GetMeleeForwardInfluencedPitchDegrees()
+	{
+		var min = Math.Min( MeleeAttackForwardMinPitchDegrees, MeleeAttackForwardMaxPitchDegrees );
+		var max = Math.Max( MeleeAttackForwardMinPitchDegrees, MeleeAttackForwardMaxPitchDegrees );
+		var pitch = Math.Clamp( GetCameraPitchDegrees(), min, max );
+		var influence = Math.Clamp( MeleeAttackForwardPitchInfluence, 0f, 1f );
+		return pitch * influence;
+	}
+
+	Rotation GetMeleeForwardCombatBasisRotation()
+	{
+		var aim = GetCameraAimRotation();
+		var yaw = aim.Angles().yaw;
+		var pitch = GetMeleeForwardInfluencedPitchDegrees();
+		return new Angles( pitch, yaw, 0f ).ToRotation();
+	}
+
+	/// <summary>L/R combat basis: camera yaw projected on the horizontal plane — pitch ignored.</summary>
+	Rotation GetMeleeLateralCombatBasisRotation() => GetCameraYawRotation();
+
+	/// <summary>Live aim for melee paths — yaw-only for L/R; yaw + influenced pitch for overhead.</summary>
+	public Rotation GetMeleeCombatBasisRotation( byte attackType ) =>
+		attackType == MeleeAttackTypes.Forward
+			? GetMeleeForwardCombatBasisRotation()
+			: GetMeleeLateralCombatBasisRotation();
+
+	/// <summary>Live aim for melee paths when attack type is unknown — yaw-only horizontal basis.</summary>
+	public Rotation GetMeleeCombatBasisRotation() => GetMeleeLateralCombatBasisRotation();
+
+	float _forwardMeleeStartPitchDegrees;
+	bool _forwardMeleeStartPitchCaptured;
+
+	public void CaptureForwardMeleeStartPitch( byte attackType )
+	{
+		if ( attackType != MeleeAttackTypes.Forward )
+			return;
+
+		_forwardMeleeStartPitchDegrees = GetMeleeForwardInfluencedPitchDegrees();
+		_forwardMeleeStartPitchCaptured = true;
+	}
+
+	public void ClearForwardMeleeStartPitch()
+	{
+		_forwardMeleeStartPitchCaptured = false;
+	}
+
+	/// <summary>Pitch delta since forward attack start — bends arc when leaning back then forward.</summary>
+	public float GetForwardMeleePitchLeanDegrees()
+	{
+		if ( !_forwardMeleeStartPitchCaptured )
+			return 0f;
+
+		var delta = GetMeleeForwardInfluencedPitchDegrees() - _forwardMeleeStartPitchDegrees;
+		return delta * Math.Clamp( MeleeAttackForwardLeanPitchInfluence, 0f, 1.5f );
 	}
 
 	CombatChannelRules GetPrimaryAttackRules() => new CombatChannelRules { CooldownAfterValidReleaseSeconds = AttackCooldownAfterRelease };
@@ -695,7 +976,7 @@ public class PlayerCombat : Component
 		var camPress = cp;
 		var camRel = cr;
 		var c = _hasLockedPrimaryAttackDir ? _lockedPrimaryAttackSwingDir : _primaryLiveSwingDir;
-		CardinalVectors( c, out var swingXz, out var swingV );
+		CardinalVectors( c, vr, out var swingXz, out var swingV );
 		_lastAttackSwingDir = c;
 		_stickySwingDir = c;
 
@@ -720,6 +1001,7 @@ public class PlayerCombat : Component
 			SwingFromY = swingXz.y,
 			SwingVerticalHint = swingV,
 			SwingDir = c,
+			AttackType = ResolveAttackTypeFromCursorDir( c ),
 			StaminaPrepaidMax = prepay,
 			PostSwingDragScreenX = 0f,
 			PostSwingDragScreenY = 0f
@@ -729,8 +1011,8 @@ public class PlayerCombat : Component
 		_primaryPostReleaseDragAccum = default;
 		var w = SwingDamageWindowSeconds;
 		if ( !float.IsFinite( w ) || w < 0f )
-			w = 1f;
-		var window = Math.Max( 0.04, (double)w );
+			w = 0.12f;
+		var window = Math.Max( 0.0, (double)w );
 		_primarySwingPhaseEndAtSandbox = Time.NowDouble + window;
 		_primarySwingPhaseActive = true;
 
@@ -742,7 +1024,8 @@ public class PlayerCombat : Component
 	void OnOwnerValidBlockRelease( CombatButtonIntentSnapshot snapshot )
 	{
 		var c = _blockLiveSwingDir;
-		CardinalVectors( c, out var bxz, out var bv );
+		var vUp = snapshot.ViewDirectionOnRelease ?? snapshot.ViewDirectionOnPress ?? GetViewDirectionForIntent();
+		CardinalVectors( c, vUp, out var bxz, out var bv );
 		_blockReleaseSwingXz = bxz;
 		_blockReleaseSwingVerticalHint = bv;
 		_blockReleaseSwingDir = c;
@@ -785,25 +1068,14 @@ public class PlayerCombat : Component
 		RpcSubmitPrimaryAttackRelease( intent );
 	}
 
-	void RunLocalMeleeTraceForVfxOnly( AttackReleaseIntent intent )
+	[Rpc.Broadcast( NetFlags.HostOnly )]
+	public void RpcBroadcastMeleeSwingTraceDebug( AttackReleaseIntent intent )
 	{
-		if ( !GameObject.IsValid() )
-		{
-			LastLocalPredictedHitForVfx = Guid.Empty;
+		if ( Networking.IsHost )
 			return;
-		}
-
-		var dir = intent.ViewForwardOnPress;
-		if ( dir.LengthSquared < 0.0001f )
-		{
-			LastLocalPredictedHitForVfx = Guid.Empty;
+		if ( !MeleeDebugDrawEnabled )
 			return;
-		}
-
-		dir = dir.Normal;
-		var origin = intent.ClientPlayerWorldPosition + Vector3.Up * ServerEyeHeight;
-		var tr = CombatAuthority.RunAuthorityMeleeTrace( origin, dir, GameObject );
-		LastLocalPredictedHitForVfx = tr.Hit && tr.GameObject.IsValid() ? tr.GameObject.Id : Guid.Empty;
+		StartClientMeleeSwingTracePlayback( intent );
 	}
 
 	[Rpc.Host]
@@ -858,6 +1130,35 @@ public class PlayerCombat : Component
 		LastServerAttackResult = result;
 		_combatNetDiag = $"rpc owner: acc={result.Accepted} hit={result.Hit} dmg={result.DamageDealt:0.#}";
 		LogCombatDiag( "CLIENT (Rpc.Owner)", FormatAttackResultLog( result ) );
+	}
+
+	[Rpc.Owner]
+	public void RpcOwnerMeleeSwingComplete( ushort intentSequence, bool anyHit, float totalDamageDealt, Guid firstHitTargetId ) =>
+		ApplyAuthoritativeMeleeSweepSummary( intentSequence, anyHit, totalDamageDealt, firstHitTargetId );
+
+	/// <summary>Applies host sweep outcome locally (offline) or from <see cref="RpcOwnerMeleeSwingComplete"/>.</summary>
+	public void ApplyAuthoritativeMeleeSweepSummary( ushort intentSequence, bool anyHit, float totalDamageDealt, Guid firstHitTargetId )
+	{
+		LastMeleeSweepSummary = new MeleeSweepOutcomeSummary
+		{
+			IntentSequence = intentSequence,
+			AnyHit = anyHit,
+			TotalDamageDealt = totalDamageDealt,
+			FirstHitTargetId = firstHitTargetId
+		};
+
+		LastServerAttackResult = new AttackReleaseResult
+		{
+			Accepted = true,
+			Hit = anyHit,
+			DamageDealt = totalDamageDealt,
+			TargetGameObjectId = firstHitTargetId,
+			DebugCode = anyHit ? AttackReleaseDebugCode.OkHit : AttackReleaseDebugCode.OkMiss,
+			DebugDetail = $"melee sweep complete seq={intentSequence} totalDealt={totalDamageDealt:0.#}"
+		};
+
+		_combatNetDiag = $"rpc owner sweep: seq={intentSequence} anyHit={anyHit} total={totalDamageDealt:0.#}";
+		LogCombatDiag( "CLIENT (Rpc.Owner)", FormatAttackResultLog( LastServerAttackResult ) );
 	}
 
 	CombatAuthority ResolveCombatAuthority()
@@ -977,9 +1278,6 @@ public class PlayerCombat : Component
 				"Tip: CLIENT — host Rpc.Host logs in EDITOR Output.",
 				size: 12f );
 		}
-
-		var head = WorldPosition + Vector3.Up * 80f;
-		DebugOverlay.Text( head, $"{PrimaryAttackAction}:{(_primary.Down ? "DOWN" : "up")} {PrimaryAttack.HoldDurationSeconds:0.00}s\n{BlockAction}:{(_block.Down ? "DOWN" : "up")} {Block.HoldDurationSeconds:0.00}s", size: 12f, duration: 0f );
 	}
 
 	static string FormatChannel( string label, string action, CombatChannel ch )

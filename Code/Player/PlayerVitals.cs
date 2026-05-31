@@ -29,6 +29,9 @@ public sealed class PlayerVitals : Component
 
 	[Property, Group( "Debug" )] public bool LogWhenStaminaReachesFull { get; set; } = true;
 
+	/// <summary>Debug: ignore stamina costs and keep the bar full. Remove before shipping.</summary>
+	[Property, Group( "Debug" )] public bool InfiniteStaminaDebug { get; set; }
+
 	/// <summary>Optional spawn root; if unset, the first enabled <see cref="SpawnPoint"/> in this scene is used.</summary>
 	[Property, Group( "Death / Respawn" )] public GameObject RespawnPointOverride { get; set; }
 
@@ -38,6 +41,16 @@ public sealed class PlayerVitals : Component
 	public float CurrentStaminaMax { get; private set; }
 	public double LastStaminaDrainArmedAtRealtime { get; private set; }
 	public float LastStaminaRegenDelayResolvedSeconds { get; private set; }
+
+	/// <summary>Last melee stagger amount applied by the host (hook for future hit reactions).</summary>
+	public float LastMeleeStaggerApplied { get; private set; }
+
+	public void ApplyMeleeStagger( float amount )
+	{
+		if ( amount <= 1e-4f )
+			return;
+		LastMeleeStaggerApplied = amount;
+	}
 	public float LastStaminaDrainAmount { get; private set; }
 
 	/// <summary>Raised when any displayed vital changes (for HUD).</summary>
@@ -115,6 +128,21 @@ public sealed class PlayerVitals : Component
 
 		if ( _pendingDeathRespawnHost )
 			TryRunHostDeathRespawn();
+
+		MaintainInfiniteStaminaDebugDisplay();
+	}
+
+	void MaintainInfiniteStaminaDebugDisplay()
+	{
+		if ( !InfiniteStaminaDebug )
+			return;
+
+		var max = Math.Max( 0f, CurrentStaminaMax );
+		if ( MathF.Abs( CurrentStamina - max ) <= 0.01f )
+			return;
+
+		CurrentStamina = max;
+		OnVitalsChanged?.Invoke();
 	}
 
 	protected override void OnStart()
@@ -199,6 +227,9 @@ public sealed class PlayerVitals : Component
 	/// <summary>True if current stamina can pay <paramref name="cost"/> (cost ≤ 0 always passes).</summary>
 	public bool HasStaminaFor( float cost )
 	{
+		if ( InfiniteStaminaDebug )
+			return true;
+
 		if ( cost <= 0f )
 			return true;
 
@@ -243,6 +274,9 @@ public sealed class PlayerVitals : Component
 		if ( staminaCost <= 0f )
 			return true;
 
+		if ( InfiniteStaminaDebug )
+			return true;
+
 		if ( !CanAffordStamina( staminaCost ) )
 			return false;
 
@@ -264,7 +298,7 @@ public sealed class PlayerVitals : Component
 	/// </summary>
 	public void ApplyLocalStaminaSprintPreviewSpend( float decrease )
 	{
-		if ( decrease <= 0f || !IsLocalInputOwnedPawn() )
+		if ( InfiniteStaminaDebug || decrease <= 0f || !IsLocalInputOwnedPawn() )
 			return;
 
 		CurrentStamina = Math.Max( 0f, CurrentStamina - decrease );
@@ -307,7 +341,7 @@ public sealed class PlayerVitals : Component
 
 	/// <summary>True when current stamina is at or below the provided exhausted threshold.</summary>
 	public bool IsStaminaExhausted( float exhaustedStaminaEpsilon ) =>
-		CurrentStamina <= Math.Max( 0f, exhaustedStaminaEpsilon );
+		!InfiniteStaminaDebug && CurrentStamina <= Math.Max( 0f, exhaustedStaminaEpsilon );
 
 	/// <summary>
 	/// Host authority asks vitals for per-pawn stamina regen delay so lookup stays tied to this owning vitals root.
@@ -365,6 +399,9 @@ public sealed class PlayerVitals : Component
 	{
 		if ( !MayIssueVitalsDelta() )
 			return false;
+
+		if ( InfiniteStaminaDebug && staminaDelta < 0f )
+			return true;
 
 		if ( mergePendingSprintDebt && staminaDelta < 0f && !Networking.IsHost && GameObject.Network is { Active: true }
 		     && Components.Get<PlayerMovement>() is { } pmPre )

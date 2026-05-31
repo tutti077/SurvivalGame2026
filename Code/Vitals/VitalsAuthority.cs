@@ -16,7 +16,7 @@ public sealed class VitalsAuthority : Component
 	public static VitalsAuthority Instance { get; private set; }
 
 	/// <summary>Default seconds after the last time stamina was <b>reduced</b> (negative stamina delta in <see cref="TryApplyDeltas"/>) before regen begins, in real time (<see cref="RealTime.GlobalNow"/>). Non-negative per-pawn overrides take precedence.</summary>
-	[Property, Group( "Stamina regen" )] public float StaminaRegenDelaySeconds { get; set; } = 10f;
+	[Property, Group( "Stamina regen" )] public float StaminaRegenDelaySeconds { get; set; } = 4f;
 
 	/// <summary>Stamina restored per second at the start of the regen ramp (right after <see cref="StaminaRegenDelaySeconds"/>). When equal to <see cref="StaminaRegenMaxPerSecond"/>, regen rate stays flat.</summary>
 	[Property, Group( "Stamina regen" )] public float StaminaRegenMinPerSecond { get; set; } = 20f;
@@ -297,6 +297,15 @@ public sealed class VitalsAuthority : Component
 
 		if ( staminaDelta < 0f )
 		{
+			if ( vitals.InfiniteStaminaDebug )
+			{
+				r.Stamina = r.StaminaMax;
+				_players[id] = r;
+				_vitalsByPlayerId[id] = vitals;
+				vitals.ApplyFromAuthorityAndSync( ToSnapshot( r ) );
+				return true;
+			}
+
 			var drain = -staminaDelta;
 			if ( clientAuthorityStaminaBeforeSpend is { } clientSt
 			     && Networking.IsHost
