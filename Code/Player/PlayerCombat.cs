@@ -392,7 +392,6 @@ public partial class PlayerCombat : Component
 	double _primarySwingPhaseEndAtSandbox;
 	Vector2 _primaryPostReleaseDragAccum;
 	AttackReleaseIntent _pendingPrimarySwingIntent;
-	bool _hadPrimaryAttackDownLastFrame;
 
 	bool IsLocalCombatDriver()
 	{
@@ -437,15 +436,16 @@ public partial class PlayerCombat : Component
 		_primary.Step( PrimaryAttackAction, CanStartPrimaryAttack, CanContinuePrimaryAttack, GetViewDirectionForIntent, GetCameraPositionForIntent, GetPrimaryAttackRules(), OnOwnerValidPrimaryAttackRelease );
 		_block.Step( BlockAction, CanStartBlock, CanContinueBlock, GetViewDirectionForIntent, GetCameraPositionForIntent, GetBlockRules(), OnOwnerValidBlockRelease );
 
-		// First frame primary is held: lock swing dir (stamina is debited on host release from hold duration, not on press).
-		if ( _primary.Down && !_hadPrimaryAttackDownLastFrame )
+		// Lock swing dir on physical press (not only when the combat channel accepts) so the teardrop stays fixed for the whole hold.
+		if ( Input.Pressed( PrimaryAttackAction ) )
 		{
 			if ( _primarySwingPhaseActive )
 				CancelPrimarySwingPhase();
 			LockPreparedPrimaryAttackDirection();
 		}
 
-		_hadPrimaryAttackDownLastFrame = _primary.Down;
+		if ( Input.Released( PrimaryAttackAction ) && !_primarySwingPhaseActive )
+			_hasLockedPrimaryAttackDir = false;
 
 		TickSwingLookAccumulatorsAfterCombatStep();
 
@@ -463,8 +463,9 @@ public partial class PlayerCombat : Component
 		var rawFrame = Input.MouseDelta;
 		var frame = FilterSwingMouseEvidenceDelta( rawFrame );
 
-		// Primary: direction is locked on press and frozen during hold; post-release drag only during swing phase.
-		if ( !_primary.Down && !_primarySwingPhaseActive )
+		// Primary: direction is locked on press and frozen while Attack1 is held; post-release drag only during swing phase.
+		var primaryAttackHeld = Input.Down( PrimaryAttackAction );
+		if ( !primaryAttackHeld && !_primarySwingPhaseActive )
 		{
 			_primarySwingEvidence = _primarySwingEvidence * decay + frame;
 			ApplyLiveSwingFromEvidence( _primarySwingEvidence, ref _primaryLiveSwingDir, ref _primaryLastFlipRealSeconds );
@@ -796,10 +797,11 @@ public partial class PlayerCombat : Component
 		var center = new Vector2( rect.Left + rect.Width * 0.5f, rect.Top + rect.Height * 0.5f );
 
 		// Same live L/R/U + hysteresis path as attack; preview block swing while blocking, else attack.
+		var primaryAttackHeld = Input.Down( PrimaryAttackAction );
 		var swingPreview = Input.Down( BlockAction )
 			? _blockLiveSwingDir
-			: _primarySwingPhaseActive || _primary.Down
-				? _lockedPrimaryAttackSwingDir
+			: _primarySwingPhaseActive || primaryAttackHeld
+				? _hasLockedPrimaryAttackDir ? _lockedPrimaryAttackSwingDir : _primaryLiveSwingDir
 				: _primaryLiveSwingDir;
 		var dir = SwingCardinalToScreenTeardropDir( swingPreview );
 		var dLen = dir.Length;
