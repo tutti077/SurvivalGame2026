@@ -8,6 +8,12 @@ public partial class PlayerCombat
 	[Property, Group( "Combat — Block" ), Title( "Show block guard + ground arc" )]
 	public bool ShowBlockVisualization { get; set; } = true;
 
+	[Property, Group( "Combat — Block" ), Title( "Show block footprint volume (wedge fill)" )]
+	public bool ShowBlockFootprintVolume { get; set; } = true;
+
+	[Property, Group( "Combat — Block" ), Title( "Footprint volume fill alpha" )]
+	public float BlockFootprintFillAlpha { get; set; } = 0.09f;
+
 	[Property, Group( "Combat — Block" ), Title( "Block sample sphere radius" )]
 	public float BlockSampleSphereRadius { get; set; } = 2f;
 
@@ -125,10 +131,7 @@ public partial class PlayerCombat
 		if ( !IsLocalCombatDriver() )
 			return;
 
-		if ( Input.Pressed( BlockAction ) )
-			CancelAllAttackActivity();
-
-		var blockHeld = Input.Down( BlockAction ) && !_meleeBlockConsumedAwaitingRelease;
+		var blockHeld = LocalBlockInputActive();
 		var attacking = _primary.Down || _primarySwingPhaseActive || ServerHasActiveMeleeAttackAction;
 
 		if ( blockHeld )
@@ -211,7 +214,7 @@ public partial class PlayerCombat
 		if ( Input.Released( BlockAction ) )
 			_meleeBlockConsumedAwaitingRelease = false;
 
-		var active = Input.Down( BlockAction ) && !_meleeBlockConsumedAwaitingRelease;
+		var active = LocalBlockInputActive();
 		var dir = GetBlockGuardDirection();
 		var prevDir = _authoritativeMeleeBlockDirection;
 
@@ -316,7 +319,7 @@ public partial class PlayerCombat
 
 	byte GetBlockGuardDirection()
 	{
-		if ( IsLocalCombatDriver() && Input.Down( BlockAction ) && !_meleeBlockConsumedAwaitingRelease )
+		if ( IsLocalCombatDriver() && LocalBlockInputActive() )
 			return NormalizeCardinalBlockDirection( _heldBlockGuardDir );
 
 		return NormalizeCardinalBlockDirection( _authoritativeMeleeBlockDirection );
@@ -350,11 +353,12 @@ public partial class PlayerCombat
 		if ( dir is not (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) )
 			dir = SwingDirs.Up;
 
+		var drawDuration = MathF.Max( 0.016f, Time.Delta * 1.5f );
+		var lineColor = BlockDebugColor;
+
 		var sampleCount = GetBlockGuardSampleCount();
 		Span<Vector3> samples = stackalloc Vector3[48];
 		var count = MeleeBlockPath.BuildGuardSamples( this, dir, sampleCount, samples );
-		var drawDuration = MathF.Max( 0.016f, Time.Delta * 1.5f );
-		var lineColor = BlockDebugColor;
 
 		if ( count >= 2 )
 		{
@@ -369,6 +373,34 @@ public partial class PlayerCombat
 
 		MeleeBlockPath.EnumerateGroundArcSegments( this, dir, 32, ( p0, p1 ) =>
 			DebugOverlay.Line( p0, p1, lineColor.WithAlpha( 0.85f ), drawDuration ) );
+
+		if ( ShowBlockFootprintVolume )
+			DrawBlockFootprintSolidFill( dir );
+	}
+
+	void DrawBlockFootprintSolidFill( byte blockDir )
+	{
+		if ( blockDir is not (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) )
+			return;
+
+		Gizmo.Draw.Color = BlockDebugColor.WithAlpha( Math.Clamp( BlockFootprintFillAlpha, 0.02f, 0.35f ) );
+		MeleeBlockPath.EnumerateFootprintSolidTriangles( this, blockDir,
+			( a, b, c ) => Gizmo.Draw.SolidTriangle( a, b, c ) );
+	}
+
+	protected override void DrawGizmos()
+	{
+		if ( !ShowBlockVisualization || !ShowBlockFootprintVolume || !GameObject.IsValid() )
+			return;
+
+		if ( !ShouldDrawMeleeBlockVisualization() )
+			return;
+
+		var dir = GetBlockGuardDirection();
+		if ( dir is not (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) )
+			dir = SwingDirs.Up;
+
+		DrawBlockFootprintSolidFill( dir );
 	}
 
 	bool ShouldDrawMeleeBlockVisualization()
@@ -377,7 +409,7 @@ public partial class PlayerCombat
 			return false;
 
 		if ( IsLocalCombatDriver() )
-			return Input.Down( BlockAction ) && !_meleeBlockConsumedAwaitingRelease;
+			return LocalBlockInputActive();
 
 		return IsServerSideForMeleeAuthority() && IsAuthoritativeMeleeBlocking;
 	}

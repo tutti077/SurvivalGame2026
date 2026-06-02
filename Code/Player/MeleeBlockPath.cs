@@ -146,13 +146,52 @@ public static class MeleeBlockPath
 		+ combatBasis.Right * local.z;
 
 	/// <summary>
-	/// First point along <paramref name="rayOrigin"/>→<paramref name="rayEnd"/> that enters the held guard line
-	/// (same samples as debug viz), expanded by guard sphere radius + <paramref name="extraThickness"/>.
+	/// First point along the ray inside the footprint wedge (same side/angles as guard line + ground arc).
 	/// </summary>
-	public static bool TryRaycastActiveGuardVolume(
+	public static bool RayEntersFootprintBeforeDistance(
 		PlayerCombat defender,
 		Vector3 rayOrigin,
 		Vector3 rayEnd,
+		float beforeDistance,
+		float extraThickness )
+	{
+		if ( defender is null || !defender.GameObject.IsValid() || !defender.IsAuthoritativeMeleeBlocking )
+			return false;
+
+		var blockDir = defender.AuthoritativeMeleeBlockDirection;
+		if ( blockDir is not (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) )
+			return false;
+
+		var delta = rayEnd - rayOrigin;
+		var lineLen = delta.Length;
+		if ( lineLen < 1e-4f )
+			return false;
+
+		var rayDir = delta / lineLen;
+		var pad = Math.Max( 0f, extraThickness );
+		var stepLen = Math.Max( 1.5f, Math.Max( 0.75f, defender.BlockSampleSphereRadius + pad ) * 0.5f );
+		var maxDist = Math.Min( lineLen, Math.Max( 0f, beforeDistance ) );
+		var steps = Math.Max( 1, (int)MathF.Ceiling( maxDist / stepLen ) );
+
+		for ( var i = 1; i <= steps; i++ )
+		{
+			var dist = maxDist * (i / (float)steps);
+			var point = rayOrigin + rayDir * dist;
+			if ( IsPointInsideActiveBlockFootprint( defender, blockDir, point, pad ) )
+				return true;
+		}
+
+		return false;
+	}
+
+	/// <summary>
+	/// First hit on the held guard polyline along the ray, up to <paramref name="beforeDistance"/>.
+	/// </summary>
+	public static bool TryRaycastGuardLine(
+		PlayerCombat defender,
+		Vector3 rayOrigin,
+		Vector3 rayEnd,
+		float beforeDistance,
 		float extraThickness,
 		out float distanceAlongRay,
 		out Vector3 hitPosition )
@@ -173,51 +212,212 @@ public static class MeleeBlockPath
 			return false;
 
 		var rayDir = delta / lineLen;
+		var pad = Math.Max( 0f, extraThickness );
+		var hitRadius = Math.Max( 0.5f, defender.BlockSampleSphereRadius + pad );
 		var sampleCount = defender.GetBlockGuardSampleCount();
 		Span<Vector3> samples = stackalloc Vector3[48];
 		var count = BuildGuardSamples( defender, blockDir, sampleCount, samples );
 		if ( count < 1 )
 			return false;
 
-		var hitRadius = Math.Max( 0.5f, defender.BlockSampleSphereRadius + Math.Max( 0f, extraThickness ) );
-		var stepLen = Math.Max( 0.75f, hitRadius * 0.5f );
-		var steps = Math.Max( 1, (int)MathF.Ceiling( lineLen / stepLen ) );
+		var stepLen = Math.Max( 1f, hitRadius * 0.5f );
+		var maxDist = Math.Min( lineLen, Math.Max( 0f, beforeDistance ) );
+		var steps = Math.Max( 1, (int)MathF.Ceiling( maxDist / stepLen ) );
+		var bestDist = float.MaxValue;
 
 		for ( var i = 1; i <= steps; i++ )
 		{
-			var dist = lineLen * (i / (float)steps);
+			var dist = maxDist * (i / (float)steps);
 			var point = rayOrigin + rayDir * dist;
 			if ( DistancePointToGuardPolyline( point, samples, count ) > hitRadius + 1e-4f )
 				continue;
+			if ( dist >= bestDist )
+				continue;
 
+			bestDist = dist;
 			distanceAlongRay = dist;
 			hitPosition = point;
-			return true;
 		}
 
-		return false;
+		return bestDist < float.MaxValue;
 	}
 
-	/// <summary>True when the active guard is struck along the ray before <paramref name="bodyHitDistanceAlongRay"/>.</summary>
+	/// <summary>
+	/// Block only when the ray enters the footprint wedge, then hits the guard line before the body cutoff.
+	/// </summary>
+	public static bool TryRaycastBlockGuardLine(
+		PlayerCombat defender,
+		Vector3 rayOrigin,
+		Vector3 rayEnd,
+		float beforeBodyDistance,
+		float extraThickness,
+		out float guardLineDistance,
+		out Vector3 guardLinePosition )
+	{
+		guardLineDistance = 0f;
+		guardLinePosition = default;
+
+		if ( !RayEntersFootprintBeforeDistance( defender, rayOrigin, rayEnd, beforeBodyDistance, extraThickness ) )
+			return false;
+
+		return TryRaycastGuardLine( defender, rayOrigin, rayEnd, beforeBodyDistance, extraThickness,
+			out guardLineDistance, out guardLinePosition );
+	}
+
+	/// <summary>Horizontal wedge — same angles as guard line + ground arc (teardrop side).</summary>
+	public static void GetActiveBlockFootprintAngleRange( PlayerCombat pc, byte blockDir, out float startDeg, out float endDeg ) =>
+		GetGroundArcAngleRange( pc, blockDir, out startDeg, out endDeg );
+
+	public static bool IsPointInsideActiveBlockFootprint( PlayerCombat pc, Vector3 pointWorld, float extraThickness = 0f )
+	{
+		if ( pc is null || !pc.GameObject.IsValid() || !pc.IsAuthoritativeMeleeBlocking )
+			return false;
+
+		var blockDir = pc.AuthoritativeMeleeBlockDirection;
+		if ( blockDir is not (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) )
+			return false;
+
+		return IsPointInsideActiveBlockFootprint( pc, blockDir, pointWorld, extraThickness );
+	}
+
+	static bool IsPointInsideActiveBlockFootprint( PlayerCombat pc, byte blockDir, Vector3 pointWorld, float extraThickness )
+	{
+		var basis = pc.GetBlockCombatBasisRotation();
+		var root = pc.GameObject.WorldPosition;
+		var to = pointWorld - root;
+		var localForward = Vector3.Dot( to, basis.Forward );
+		var localRight = Vector3.Dot( to, basis.Right );
+		var localUp = Vector3.Dot( to, basis.Up );
+
+		if ( localForward < -Math.Max( 1f, extraThickness ) - 1e-4f )
+			return false;
+
+		var angleDeg = MathF.Atan2( localRight, localForward ) * (180f / MathF.PI);
+		if ( blockDir == SwingDirs.Up )
+		{
+			if ( MeleeBlockResolution.IsInOverheadBackArc( pc, angleDeg ) )
+				return false;
+		}
+		else if ( MeleeBlockResolution.IsInLateralBackArc( pc, angleDeg ) )
+		{
+			return false;
+		}
+
+		GetActiveBlockFootprintAngleRange( pc, blockDir, out var arcStartDeg, out var arcEndDeg );
+		if ( !IsAngleBetweenInclusive( angleDeg, arcStartDeg, arcEndDeg ) )
+			return false;
+
+		var radial = MathF.Sqrt( localForward * localForward + localRight * localRight );
+		var radialMax = Math.Max( 8f, pc.BlockGroundArcRadius ) + extraThickness;
+		if ( radial > radialMax + 1e-4f )
+			return false;
+
+		GetActiveBlockFootprintVerticalRange( pc, blockDir, extraThickness, out var yMin, out var yMax );
+		return localUp >= yMin - 1e-4f && localUp <= yMax + 1e-4f;
+	}
+
+	public static float GetOverheadGuardLineHeight( PlayerCombat pc ) =>
+		pc.ServerEyeHeight + pc.BlockOverheadUpOffset;
+
+	public static void GetActiveBlockFootprintVerticalRange(
+		PlayerCombat pc,
+		byte blockDir,
+		float extraThickness,
+		out float yMin,
+		out float yMax )
+	{
+		var pad = Math.Max( 0f, extraThickness );
+		var samplePad = Math.Max( 1f, pc.BlockSampleSphereRadius );
+		yMin = pc.BlockGroundArcHeightOffset - pad;
+		// L/R/U share the same vertical span: feet arc → overhead guard line height.
+		yMax = GetOverheadGuardLineHeight( pc ) + samplePad + pad;
+	}
+
+	static bool IsAngleBetweenInclusive( float angleDeg, float startDeg, float endDeg ) =>
+		angleDeg >= startDeg - 1e-4f && angleDeg <= endDeg + 1e-4f;
+
+	static Vector3 FootprintPointToWorld( Vector3 root, Rotation basis, float angleDeg, float radial, float localUp )
+	{
+		var rad = angleDeg * MathF.PI / 180f;
+		var local = new Vector3( MathF.Cos( rad ) * radial, localUp, MathF.Sin( rad ) * radial );
+		return LocalCombatToWorld( root, basis, local );
+	}
+
+	/// <summary>World point on the block footprint wedge (combat-local horizontal angle + radial reach + height).</summary>
+	public static Vector3 GetFootprintPointWorld(
+		PlayerCombat pc,
+		byte blockDir,
+		float angleDeg,
+		float radial,
+		float localUp )
+	{
+		var root = pc.GameObject.WorldPosition;
+		var basis = pc.GetBlockCombatBasisRotation();
+		return FootprintPointToWorld( root, basis, angleDeg, radial, localUp );
+	}
+
+	/// <summary>True when footprint is entered and the guard line is hit before the body cutoff.</summary>
 	public static bool RayHitsActiveGuardBeforeDistance(
 		PlayerCombat defender,
 		Vector3 rayOrigin,
 		Vector3 rayEnd,
 		float bodyHitDistanceAlongRay,
 		float extraThickness,
-		out Vector3 guardHitPosition )
-	{
-		guardHitPosition = default;
-		if ( !TryRaycastActiveGuardVolume( defender, rayOrigin, rayEnd, extraThickness, out var guardDist, out guardHitPosition ) )
-			return false;
+		out Vector3 guardHitPosition ) =>
+		TryRaycastBlockGuardLine( defender, rayOrigin, rayEnd, bodyHitDistanceAlongRay, extraThickness,
+			out _, out guardHitPosition );
 
-		return guardDist <= bodyHitDistanceAlongRay + 1e-4f;
-	}
-
-	public static float ProjectDistanceAlongRay( Vector3 rayOrigin, Vector3 rayUnitDir, Vector3 worldPoint )
+	public static void EnumerateFootprintSolidTriangles(
+		PlayerCombat pc,
+		byte blockDir,
+		Action<Vector3, Vector3, Vector3> emitTriangle )
 	{
-		var along = Vector3.Dot( worldPoint - rayOrigin, rayUnitDir );
-		return MathF.Max( 0f, along );
+		if ( emitTriangle is null || pc is null || !pc.GameObject.IsValid() )
+			return;
+
+		if ( blockDir is not (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) )
+			return;
+
+		var root = pc.GameObject.WorldPosition;
+		var basis = pc.GetBlockCombatBasisRotation();
+		GetActiveBlockFootprintAngleRange( pc, blockDir, out var arcStartDeg, out var arcEndDeg );
+		GetActiveBlockFootprintVerticalRange( pc, blockDir, 0f, out var yMin, out var yMax );
+		var radialMax = Math.Max( 8f, pc.BlockGroundArcRadius );
+
+		var arcSpan = MathF.Max( 1f, arcEndDeg - arcStartDeg );
+		var angleSteps = Math.Clamp( (int)MathF.Ceiling( arcSpan / 8f ), 6, 20 );
+		var originLow = root + basis.Up * yMin;
+		var originHigh = root + basis.Up * yMax;
+
+		for ( var i = 0; i < angleSteps; i++ )
+		{
+			var t0 = i / (float)angleSteps;
+			var t1 = (i + 1) / (float)angleSteps;
+			var ang0 = arcStartDeg + arcSpan * t0;
+			var ang1 = arcStartDeg + arcSpan * t1;
+
+			var aLow = FootprintPointToWorld( root, basis, ang0, radialMax, yMin );
+			var bLow = FootprintPointToWorld( root, basis, ang1, radialMax, yMin );
+			var aHigh = FootprintPointToWorld( root, basis, ang0, radialMax, yMax );
+			var bHigh = FootprintPointToWorld( root, basis, ang1, radialMax, yMax );
+
+			emitTriangle( originLow, aLow, bLow );
+			emitTriangle( originHigh, bHigh, aHigh );
+			emitTriangle( aLow, aHigh, bHigh );
+			emitTriangle( aLow, bHigh, bLow );
+
+			if ( i == 0 )
+			{
+				emitTriangle( originLow, originHigh, aHigh );
+				emitTriangle( originLow, aHigh, aLow );
+			}
+
+			if ( i == angleSteps - 1 )
+			{
+				emitTriangle( originLow, bLow, originHigh );
+				emitTriangle( originLow, originHigh, bHigh );
+			}
+		}
 	}
 
 	static float DistancePointToGuardPolyline( Vector3 point, Span<Vector3> samples, int count )
@@ -241,5 +441,11 @@ public static class MeleeBlockPath
 
 		var t = Math.Clamp( Vector3.Dot( point - a, ab ) / lenSq, 0f, 1f );
 		return point.Distance( a + ab * t );
+	}
+
+	public static float ProjectDistanceAlongRay( Vector3 rayOrigin, Vector3 rayUnitDir, Vector3 worldPoint )
+	{
+		var along = Vector3.Dot( worldPoint - rayOrigin, rayUnitDir );
+		return MathF.Max( 0f, along );
 	}
 }

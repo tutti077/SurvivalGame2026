@@ -423,8 +423,8 @@ public partial class PlayerCombat
 				continue;
 			if ( !defender.IsAuthoritativeMeleeBlocking )
 				continue;
-			if ( !MeleeBlockPath.TryRaycastActiveGuardVolume( defender, origin, tip, thickness, out var guardDist,
-				     out var guardPos ) )
+			if ( !MeleeBlockPath.TryRaycastBlockGuardLine( defender, origin, tip, float.MaxValue, thickness,
+				     out var guardDist, out var guardPos ) )
 				continue;
 			if ( guardDist >= bestDist )
 				continue;

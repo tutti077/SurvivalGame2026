@@ -71,10 +71,10 @@ public static class MeleeAttackSweep
 				continue;
 			if ( !defender.IsAuthoritativeMeleeBlocking )
 				continue;
-			if ( !MeleeBlockPath.TryRaycastActiveGuardVolume( defender, origin, tip, rayThickness, out var guardDist,
-				     out var guardPos ) )
+			if ( !MeleeBlockPath.TryRaycastBlockGuardLine( defender, origin, tip, bodyHitDist + 1e-4f, rayThickness,
+				     out var guardDist, out var guardPos ) )
 				continue;
-			if ( guardDist >= blockFirstDist || guardDist > bodyHitDist + 1e-4f )
+			if ( guardDist >= blockFirstDist )
 				continue;
 
 			var contact = new MeleeBlockContact

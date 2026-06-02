@@ -371,6 +371,7 @@ public partial class PlayerCombat : Component
 	/// </summary>
 	Vector2 _primaryLookAccum;
 	Vector2 _blockLookAccum;
+	bool _wasBlockButtonDownLastFrame;
 
 	/// <summary>Live L/R/U from mouse evidence — teardrop, attack prep, and block preview.</summary>
 	byte _primaryLiveSwingDir = SwingDirs.Up;
@@ -448,14 +449,18 @@ public partial class PlayerCombat : Component
 		if ( Input.Pressed( PrimaryAttackAction ) && !_primary.Down )
 			_primaryLookAccum = default;
 
-		if ( Input.Pressed( BlockAction ) && !_block.Down )
-			_blockLookAccum = default;
-
 		_primary.Step( PrimaryAttackAction, CanStartPrimaryAttack, CanContinuePrimaryAttack, GetViewDirectionForIntent, GetCameraPositionForIntent, GetPrimaryAttackRules(), OnOwnerValidPrimaryAttackRelease );
 		_block.Step( BlockAction, CanStartBlock, CanContinueBlock, GetViewDirectionForIntent, GetCameraPositionForIntent, GetBlockRules(), OnOwnerValidBlockRelease );
 
-		if ( Input.Pressed( BlockAction ) )
+		var blockStartedThisFrame = _block.Down && !_wasBlockButtonDownLastFrame;
+		if ( blockStartedThisFrame )
+		{
+			_blockLookAccum = default;
 			OnBlockPressCommitGuardDirection();
+			CancelAllAttackActivity();
+		}
+
+		_wasBlockButtonDownLastFrame = _block.Down;
 
 		// Lock attack direction on press / first held frame; teardrop stays fixed until release (then through drag window).
 		var primaryAttackHeld = Input.Down( PrimaryAttackAction );
@@ -509,7 +514,7 @@ public partial class PlayerCombat : Component
 			_primaryPostReleaseDragAccum += rawFrame;
 
 		// Block: rotate decayed evidence with view yaw so look spin does not flip L/R/U; morph only on teardrop intent.
-		var blockHeld = Input.Down( BlockAction ) && !_meleeBlockConsumedAwaitingRelease;
+		var blockHeld = LocalBlockInputActive();
 		if ( blockHeld )
 		{
 			var yaw = GetBlockCombatBasisYaw();
@@ -637,9 +642,12 @@ public partial class PlayerCombat : Component
 
 	protected virtual bool CanContinuePrimaryAttack() => true;
 
-	protected virtual bool CanStartBlock() => true;
+	protected virtual bool CanStartBlock() => _postBlockRecoveryRemaining <= 0.001f;
 
-	protected virtual bool CanContinueBlock() => true;
+	protected virtual bool CanContinueBlock() => !_meleeBlockConsumedAwaitingRelease;
+
+	bool LocalBlockInputActive() =>
+		IsLocalCombatDriver() && _block.Down && !_meleeBlockConsumedAwaitingRelease;
 
 	/// <summary>
 	/// Camera for view / crosshair: first <see cref="CameraComponent"/> on this pawn or its descendants,
