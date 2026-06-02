@@ -46,25 +46,24 @@ public partial class PlayerCombat : Component
 
 	[Property, Group( "Combat — Debug" )] public bool LogMeleeSweepHitsToConsole { get; set; } = true;
 
-	/// <summary>Draws the shared attack path (blue / yellow / red by attack state). On host by default; see <see cref="ClientMeleeSwingTraceDebug"/>.</summary>
-	[Property, Group( "Combat — Debug" ), Title( "Debug draw enabled" )]
+	/// <summary>Draws attack-path overlay lines/spheres (blue / yellow / red). Gameplay sampling uses <see cref="MeleeAttackArcDegreeStep"/> regardless.</summary>
+	[Property, Group( "Combat — Debug" ), Title( "Attack path overlay draw" )]
 	public bool MeleeDebugDrawEnabled { get; set; } = true;
 
-	[Property, Group( "Combat — Debug" ), Title( "Debug sample points enabled" )]
+	[Property, Group( "Combat — Debug" ), Title( "Overlay spheres at path samples" )]
 	public bool MeleeDebugDrawSamplePointsEnabled { get; set; } = true;
 
-	/// <summary>How long completed attack debug lines/spheres stay visible after the swing finishes.</summary>
-	[Property, Group( "Combat — Debug" ), Title( "Debug overlay persist (s)" )]
+	/// <summary>How long each overlay line/sphere stays on screen (seconds).</summary>
+	[Property, Group( "Combat — Debug" ), Title( "Overlay persist (s)" )]
 	public float MeleeDebugOverlayDuration { get; set; } = 1f;
 
-	[Property, Group( "Combat — Debug" ), Title( "Debug arc sample count" )]
-	public float MeleeDebugArcSampleCount { get; set; } = 64f;
+	/// <summary>Duration passed to <see cref="DebugOverlay"/> for attack path overlay draws.</summary>
+	internal float GetMeleeDebugOverlayDrawDuration() => Math.Max( 0.008f, MeleeDebugOverlayDuration );
 
 	/// <summary>
-	/// When networked and host, after a swing starts, broadcasts intent so <b>every client</b> can draw the same trace (visual only, no hits).
-	/// Clients ignore it unless <see cref="MeleeDebugDrawEnabled"/> is on. For quick MP tests; turn off in shipping.
+	/// When networked and host, after a swing starts, broadcasts intent so clients can draw the same path overlay (visual only).
 	/// </summary>
-	[Property, Group( "Combat — Debug" ), Title( "Clients replicate swing trace (debug)" )]
+	[Property, Group( "Combat — Debug" ), Title( "Clients replicate path overlay" )]
 	public bool ClientMeleeSwingTraceDebug { get; set; } = true;
 
 	[Property, Group( "Input" )] public string PrimaryAttackAction { get; set; } = "Attack1";
@@ -125,7 +124,7 @@ public partial class PlayerCombat : Component
 	public float MeleeAttackRangeForward { get; set; } = 76f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Hit volume thickness" )]
-	public float MeleeHitVolumeThickness { get; set; } = 5f;
+	public float MeleeHitVolumeThickness { get; set; } = 2f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Sweep substep length" )]
 	public float MeleeSweepSubstepLength { get; set; } = 12f;
@@ -147,34 +146,17 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Max targets hit" )]
 	public int MeleeMaxTargetsHit { get; set; } = 1;
 
-	/// <summary>Legacy inspector total — active window is <see cref="MeleeEarlyActiveDuration"/> + <see cref="MeleeActiveDuration"/> + <see cref="MeleeLateActiveDuration"/>.</summary>
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Active swing duration L/R (s) — legacy" )]
-	public float MeleeAttackDurationLeftRight { get; set; } = 0.22f;
-
-	/// <summary>Legacy inspector total — active window uses shared phase durations for all attack types.</summary>
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Active swing duration forward (s) — legacy" )]
-	public float MeleeAttackDurationForward { get; set; } = 0.24f;
-
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Lateral arc total (°)" )]
 	public float MeleeLateralArcTotalDegrees { get; set; } = 150f;
 
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Arc start left (°) — legacy" )]
-	public float MeleeAttackArcLeftStartDegrees { get; set; } = -75f;
+	/// <summary>
+	/// Spacing along the attack path and per degree of body turn (1 = every degree; 150° arc → ~150 samples, 360° turn → 360).
+	/// Drives core path sampling; overlay lines use <see cref="MeleeDebugDrawEnabled"/>.
+	/// </summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Attack arc degree step" )]
+	public float MeleeAttackArcDegreeStep { get; set; } = 1f;
 
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Arc end left (°) — legacy" )]
-	public float MeleeAttackArcLeftEndDegrees { get; set; } = 75f;
-
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Arc start right (°) — legacy" )]
-	public float MeleeAttackArcRightStartDegrees { get; set; } = 75f;
-
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Arc end right (°) — legacy" )]
-	public float MeleeAttackArcRightEndDegrees { get; set; } = -75f;
-
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Arc start forward (°) — legacy (unused by path)" )]
-	public float MeleeAttackArcForwardStartDegrees { get; set; } = -90f;
-
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Arc end forward (°) — legacy (unused by path)" )]
-	public float MeleeAttackArcForwardEndDegrees { get; set; } = 90f;
+	internal float GetMeleeAttackArcDegreeStep() => Math.Max( 1f, MeleeAttackArcDegreeStep );
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "EarlyActive duration (s) — blue" )]
 	public float MeleeEarlyActiveDuration { get; set; } = 0.037f;
@@ -200,24 +182,60 @@ public partial class PlayerCombat : Component
 
 	/// <summary>Max forward local reach as a fraction of <see cref="MeleeAttackRangeForward"/>.</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward max reach (× attackRangeForward)" )]
-	public float MeleeAttackForwardMaxReachFraction { get; set; } = 0.92f;
+	public float MeleeAttackForwardMaxReachFraction { get; set; } = 0.88f;
 
 	/// <summary>Overhead arc span (°) — default matches <see cref="MeleeLateralArcTotalDegrees"/>; end = start − total.</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc total (°)" )]
-	public float MeleeAttackForwardArcTotalDegrees { get; set; } = 150f;
+	public float MeleeAttackForwardArcTotalDegrees { get; set; } = 158f;
 
-	/// <summary>Start angle on vertical arc (0° = +X forward, 90° = +Y up). End = start − arc total.</summary>
+	/// <summary>Start angle on vertical arc (0° = +X forward, 90° = +Y up). End = start − arc total. Higher = more up at windup.</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc start (°)" )]
-	public float MeleeAttackForwardArcStartDegrees { get; set; } = 135f;
+	public float MeleeAttackForwardArcStartDegrees { get; set; } = 146f;
+
+	/// <summary>Cos scale at windup; ramps to <see cref="MeleeAttackForwardArcForwardScale"/> by mid-stroke.</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc forward scale (start)" )]
+	public float MeleeAttackForwardArcForwardScaleStart { get; set; } = 0.32f;
+
+	/// <summary>Scales cos (forward) component at mid/late stroke — lower pulls the start back.</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc forward scale" )]
+	public float MeleeAttackForwardArcForwardScale { get; set; } = 0.62f;
+
+	/// <summary>Scales sin (up/down) component — higher exaggerates up-then-down.</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc vertical scale" )]
+	public float MeleeAttackForwardArcVerticalScale { get; set; } = 0.9f;
+
+	/// <summary>Legacy — no longer drives pivot; kept for prefab revert. See head pivot locals below.</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pivot forward start (× range, legacy)" )]
+	public float MeleeAttackForwardPivotForwardStartFraction { get; set; } = 0.035f;
+
+	/// <summary>Legacy — no longer drives pivot; kept for prefab revert. See head pivot locals below.</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pivot forward end (× range, legacy)" )]
+	public float MeleeAttackForwardPivotForwardEndFraction { get; set; } = 0.09f;
+
+	/// <summary>Overhead arc pivot: combat-local +X from body origin at stroke start (head/shoulder, not weapon reach).</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pivot forward local (start)" )]
+	public float MeleeAttackForwardPivotForwardLocal { get; set; } = 8f;
+
+	/// <summary>Overhead arc pivot forward at stroke end (lerps with start over the swing).</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pivot forward local (end)" )]
+	public float MeleeAttackForwardPivotForwardLocalEnd { get; set; } = 10f;
+
+	/// <summary>Added to <see cref="ServerEyeHeight"/> for arc pivot height (negative ≈ neck/shoulder beside head).</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pivot up from eye" )]
+	public float MeleeAttackForwardPivotUpFromEye { get; set; } = -8f;
+
+	/// <summary>Combat-local right offset for arc pivot only (blade still uses plane right offset).</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pivot right offset" )]
+	public float MeleeAttackForwardPivotRightOffset { get; set; } = 0f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward reach start multiplier" )]
-	public float MeleeAttackForwardReachStartMultiplier { get; set; } = 0.85f;
+	public float MeleeAttackForwardReachStartMultiplier { get; set; } = 0.4f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward reach active multiplier" )]
-	public float MeleeAttackForwardReachActiveMultiplier { get; set; } = 1f;
+	public float MeleeAttackForwardReachActiveMultiplier { get; set; } = 0.9f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward reach end multiplier" )]
-	public float MeleeAttackForwardReachEndMultiplier { get; set; } = 0.95f;
+	public float MeleeAttackForwardReachEndMultiplier { get; set; } = 0.82f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward plane right offset" )]
 	public float MeleeAttackForwardPlaneRightOffset { get; set; } = 12f;
@@ -778,7 +796,6 @@ public partial class PlayerCombat : Component
 		var center = new Vector2( rect.Left + rect.Width * 0.5f, rect.Top + rect.Height * 0.5f );
 
 		// Same live L/R/U + hysteresis path as attack; preview block swing while blocking, else attack.
-		// Same live L/R/U + hysteresis path as attack; preview block swing while blocking, else attack.
 		var swingPreview = Input.Down( BlockAction )
 			? _blockLiveSwingDir
 			: _primarySwingPhaseActive || _primary.Down
@@ -884,6 +901,19 @@ public partial class PlayerCombat : Component
 
 	/// <summary>Live aim for melee paths when attack type is unknown — yaw-only horizontal basis.</summary>
 	public Rotation GetMeleeCombatBasisRotation() => GetMeleeLateralCombatBasisRotation();
+
+	/// <summary>Horizontal yaw of the live combat basis for this attack type.</summary>
+	public float GetMeleeCombatBasisYaw( byte attackType ) =>
+		GetMeleeCombatBasisRotation( attackType ).Angles().yaw;
+
+	/// <summary>Combat basis with an explicit yaw (pitch rules unchanged for overhead).</summary>
+	public Rotation GetMeleeCombatBasisRotationForYaw( byte attackType, float yawDegrees )
+	{
+		if ( attackType == MeleeAttackTypes.Forward )
+			return new Angles( GetMeleeForwardInfluencedPitchDegrees(), yawDegrees, 0f ).ToRotation();
+
+		return new Angles( 0f, yawDegrees, 0f ).ToRotation();
+	}
 
 	float _forwardMeleeStartPitchDegrees;
 	bool _forwardMeleeStartPitchCaptured;

@@ -158,10 +158,7 @@ public static class MeleeAttackSweep
 
 		var dmgAmount = damage;
 		var stMul = 1f;
-		PlayerCombat blockingCombat = null;
-		if ( MeleeAttackResolution.TryGetParryDamageMultiplier( dmg, out var parryMul ) )
-			dmgAmount *= parryMul;
-		else if ( MeleeAttackResolution.TryGetBlockDamageMultiplier( attackerRoot, dmg, attackType, isHeavy, out var blockMul, out var blockStMul, out blockingCombat ) )
+		if ( MeleeAttackResolution.TryGetBlockDamageMultiplier( attackerRoot, dmg, attackType, isHeavy, out var blockMul, out var blockStMul, out _ ) )
 		{
 			dmgAmount *= blockMul;
 			stMul *= blockStMul;

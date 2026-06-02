@@ -18,17 +18,17 @@ Other scripts and whole subtrees exist (environment, AI, networking managers, et
 
 Sword **colliders must not** be the source of HP damage (use them for VFX / clash / debug only). Real damage comes only from a **server-authoritative** phased attack on **`PlayerCombat`**:
 
-**Owner → host timing:** After you **release** primary attack, the client waits **`SwingDamageWindowSeconds`** (Melee group, inspector **“Post-release drag window (s)”**) while summing mouse movement, then sends intent. Large values feel like lag after release; **`0`** dispatches on the next frame. The host still runs **windup → EarlyActive / Active / LateActive → recovery** after accept.
+**Owner → host timing:** After you **release** primary attack, the client waits **`SwingDamageWindowSeconds`** while summing mouse movement for drag-based damage tiers, then sends intent. The host runs **windup → EarlyActive / Active / LateActive → recovery** after accept.
 
-1. **Attack selection** — directional cursor locks on press. Default (`SouthpawSwing` false): **right → RightAttack**, **left → LeftAttack**, **up → ForwardAttack**. `SouthpawSwing` inverts L/R only. Resolved type is locked for the attack instance; host re-resolves from `SwingDir` + attacker's `SouthpawSwing`.
-2. **Light / heavy** — host decides from hold duration vs `MeleeHeavyAttackHoldThreshold`; heavy applies `MeleeHeavyAttackDamageMultiplier` to state base damage.
-3. **Shared geometry** — `MeleeAttackPath` builds paths in **player-local combat space** (+X forward, +Y up, +Z right). **L/R**: horizontal arc in XZ (`MeleeAttackRangeLeftRight`, `MeleeLateralArcTotalDegrees` default **150°**); combat basis = **yaw-only** horizontal forward/right (camera pitch ignored); height from **`MeleeAttackZaxisStart`** + tilt. **Overhead**: same arc span default (**150°**) in vertical XY — `MeleeAttackForwardArcStartDegrees` + `MeleeAttackForwardArcTotalDegrees`; `MeleeAttackRangeForward` × reach multipliers. Shared **`MeleeEarlyActiveDuration` / `MeleeActiveDuration` / `MeleeLateActiveDuration`** drive EarlyActive / Active / LateActive for **all** attack types (time-based only; total active = sum of those three). Samples append over time; live transform bends new samples only.
-4. **Phases (time-based)** — shared early / active / late durations split the active window into EarlyActive (blue) / Active (yellow) / LateActive (red) for every attack type. **Not** arc degrees. State applies `Melee*DamageMultiplier` × `MeleeWeaponBaseDamage`; stagger uses `MeleeBaseStagger` × `Melee*StaggerMultiplier`. Heavy multiplies damage after that.
-5. **Hits** — thickened sphere substeps along tip+heel motion (`MeleeHitVolumeThickness`). Per-target dedup; `MeleeAllowMultipleHitsPerAttack` + `MeleeMaxTargetsHit` cap multi-target swings.
-6. **`CombatAuthority`** validates intent, rate limits, stamina, light/heavy, then calls `PlayerCombat.ServerStartMeleeAttackAction`.
-7. **Block (hold)** — hold **Attack2** with teardrop **L / R / U**: **Right** blocks **RightAttack** from a **90°** arc on your right; **Left** blocks **LeftAttack** from the left arc; **Up** blocks **ForwardAttack** only. Direction updates live while held. Stance ends after a successful block until you release block (**10** / **20** stamina for light / heavy). Tune on **`PlayerCombat`** (`MeleeBlock*`).
+1. **Attack selection** — directional cursor locks on press (`SouthpawSwing` inverts L/R). Host resolves from `SwingDir` + attacker's `SouthpawSwing`.
+2. **Light / heavy** — hold duration vs `MeleeHeavyAttackHoldThreshold`; heavy uses `MeleeHeavyAttackDamageBonus`.
+3. **Geometry** — `MeleeAttackPath` in combat-local space (+X forward, +Y up, +Z right). L/R: horizontal arc; overhead: vertical XY arc. Phases: `MeleeEarlyActiveDuration` / `MeleeActiveDuration` / `MeleeLateActiveDuration`.
+4. **Hits** — `MeleeAttackSweep` sphere substeps along tip+heel motion (`MeleeHitVolumeThickness`). Per-target dedup; optional multi-hit via `MeleeAllowMultipleHitsPerAttack`.
+5. **Attack path** — `MeleeAttackArcDegreeStep` (default 1°) samples the swing along `MeleeAttackPath` (~150 samples on a 150° arc, 360 on a full turn). Colored overlay lines are optional (`MeleeDebugDrawEnabled`); the path sampling is core combat readability.
+6. **`CombatAuthority`** validates intent, rate limits, stamina, then calls `PlayerCombat.ServerStartMeleeAttackAction`.
+7. **Block (hold)** — Attack2 + teardrop L/R/U on the local driver (`_blockLiveSwingDir` while held). Server block resolution is not wired yet (`MeleeAttackResolution.TryGetBlockDamageMultiplier` returns false until re-implemented on `PlayerCombat`).
 
-Helpers under `Code/Player/`: `MeleeAttackPath`, `MeleeAttackSweep`, `MeleeAttackResolution`, `MeleeBlockDefender` — **tune on `PlayerCombat`**.
+**Active combat helpers** (do not add parallel systems): `MeleeAttackPath`, `MeleeAttackSweep`, `MeleeAttackResolution`, `PlayerCombat.ServerMeleeAttack.cs`, `AttackCombatTypes.cs`, `MeleeAttackTypes.cs`.
 
 ## Commandment #2 — End every assistant reply with “what you need to do”
 

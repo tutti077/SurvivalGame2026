@@ -4,6 +4,39 @@ using Sandbox;
 
 namespace Survival;
 
+/// <summary>Per-swing scratch for attack debug overlay (lead trail + arc draw state).</summary>
+struct MeleeAttackDebugDrawScratch
+{
+	internal Vector3 LastLeadTipWorld;
+	internal bool HasLastLeadTip;
+	internal float LastArcProgress01;
+	internal HashSet<int> DrawnArcSampleIndices;
+	internal HashSet<int> DrawnRelativeYawStepIndices;
+	internal float SwingBasisYaw;
+	internal bool HasSwingBasisYaw;
+	internal float YawRingProgress01;
+	internal bool HasYawRingProgress;
+	internal int YawRingArcSampleEnd;
+	internal float AbsYawDegreesTurned;
+	internal float YawTurnSign;
+	internal float LastDrawBasisYaw;
+	internal bool HasLastDrawBasisYaw;
+
+	internal void Reset()
+	{
+		HasLastLeadTip = false;
+		LastArcProgress01 = -1f;
+		DrawnArcSampleIndices?.Clear();
+		DrawnRelativeYawStepIndices?.Clear();
+		HasSwingBasisYaw = false;
+		HasYawRingProgress = false;
+		YawRingArcSampleEnd = 0;
+		AbsYawDegreesTurned = 0f;
+		YawTurnSign = 1f;
+		HasLastDrawBasisYaw = false;
+	}
+}
+
 /// <summary>
 /// Host-side phased primary melee (windup → EarlyActive/Active/LateActive sweeps → recovery). Lives on <see cref="PlayerCombat"/> per Commandment #1.
 /// </summary>
@@ -175,33 +208,151 @@ public partial class PlayerCombat
 		_clientSwingTracePlayback = new ServerMeleeAttackRuntime( this, intent, hold, heavy, "client-trace", visualOnly: true );
 	}
 
-	void DrawAccumulatedAttackPath( IReadOnlyList<MeleeAttackPathPoint> path )
+	/// <summary>Core attack-path sampling every frame; optional overlay when <see cref="MeleeDebugDrawEnabled"/>.</summary>
+	void AdvanceAttackPath(
+		byte attackType,
+		float activeProgress01,
+		byte attackState,
+		float currentBasisYaw,
+		ref MeleeAttackDebugDrawScratch scratch )
 	{
-		if ( !MeleeDebugDrawEnabled || !GameObject.IsValid() || path is null || path.Count == 0 )
+		if ( !GameObject.IsValid() )
+			return;
+
+		if ( !ServerHasActiveMeleeAttackAction && _clientSwingTracePlayback is null )
 			return;
 
 		if ( !IsServerSideForMeleeAuthority() && _clientSwingTracePlayback is null )
 			return;
 
-		var drawDuration = Math.Max( 0f, MeleeDebugOverlayDuration );
-		var hitRadius = Math.Max( 2f, MeleeHitVolumeThickness );
-
-		for ( var i = 1; i < path.Count; i++ )
-		{
-			var a = path[i - 1];
-			var b = path[i];
-			var color = GetMeleeDebugColorForState( b.AttackState );
-			DebugOverlay.Line( a.TipWorld, b.TipWorld, color, drawDuration );
-		}
-
-		if ( !MeleeDebugDrawSamplePointsEnabled )
+		activeProgress01 = Math.Clamp( activeProgress01, 0f, 1f );
+		if ( attackState == MeleeAttackStates.Recovery )
 			return;
 
-		foreach ( var sample in path )
+		var drawOverlay = MeleeDebugDrawEnabled;
+		var overlayDuration = GetMeleeDebugOverlayDrawDuration();
+		var degreeStep = GetMeleeAttackArcDegreeStep();
+
+		if ( activeProgress01 > 1e-5f && MeleeAttackStates.DealsDamage( attackState ) )
 		{
-			var color = GetMeleeDebugColorForState( sample.AttackState ).WithAlpha( 0.42f );
-			DebugOverlay.Sphere( new Sphere( sample.TipWorld, hitRadius ), color, drawDuration );
+			UpdateAttackPathSamples( attackType, currentBasisYaw, activeProgress01, attackState, degreeStep,
+				drawOverlay, overlayDuration, ref scratch );
 		}
+
+		if ( !drawOverlay )
+			return;
+
+		var livePhaseColor = GetMeleeDebugColorForState( attackState );
+		SampleServerMeleeBladeWorld( attackType, activeProgress01, out var liveTip, out _ );
+		var weaponRange = MeleeAttackPath.GetAttackRange( this, attackType );
+		var maxTrailLen = Math.Max( weaponRange * 1.35f, 24f );
+
+		if ( scratch.HasLastLeadTip )
+		{
+			var trailDelta = liveTip - scratch.LastLeadTipWorld;
+			var trailLen = trailDelta.Length;
+			if ( trailLen >= 4f && trailLen <= maxTrailLen )
+			{
+				var trailColor = livePhaseColor.WithAlpha( 0.22f );
+				DebugOverlay.Line( scratch.LastLeadTipWorld, liveTip, trailColor, overlayDuration );
+			}
+			else if ( trailLen > maxTrailLen )
+				scratch.HasLastLeadTip = false;
+		}
+
+		scratch.LastLeadTipWorld = liveTip;
+		scratch.HasLastLeadTip = true;
+	}
+
+	/// <summary>Records arc + rotation path samples (<see cref="MeleeAttackArcDegreeStep"/>); draws only when <paramref name="drawOverlay"/>.</summary>
+	void UpdateAttackPathSamples(
+		byte attackType,
+		float currentBasisYaw,
+		float activeProgress01,
+		byte attackStateForDraw,
+		float degreeStep,
+		bool drawOverlay,
+		float overlayDuration,
+		ref MeleeAttackDebugDrawScratch scratch )
+	{
+		scratch.DrawnArcSampleIndices ??= new HashSet<int>();
+		scratch.DrawnRelativeYawStepIndices ??= new HashSet<int>();
+		var drawnArcSamples = scratch.DrawnArcSampleIndices;
+		var drawnYawSteps = scratch.DrawnRelativeYawStepIndices;
+		var hitRadius = Math.Max( 2f, MeleeHitVolumeThickness );
+		var drawSpheres = MeleeDebugDrawSamplePointsEnabled;
+		var sampleCount = MeleeAttackPath.GetArcPathSampleCount( this, attackType, degreeStep );
+		var maxRotationSpokes = MeleeAttackPath.GetRotationSpokeCount( degreeStep );
+
+		if ( !scratch.HasSwingBasisYaw )
+		{
+			scratch.SwingBasisYaw = currentBasisYaw;
+			scratch.HasSwingBasisYaw = true;
+		}
+
+		if ( !scratch.HasYawRingProgress )
+		{
+			scratch.YawRingProgress01 = activeProgress01;
+			scratch.HasYawRingProgress = true;
+		}
+
+		var currentArcEnd = MeleeAttackPath.RevealedArcSampleExclusiveEnd( activeProgress01, sampleCount );
+		if ( currentArcEnd > scratch.YawRingArcSampleEnd )
+		{
+			scratch.YawRingArcSampleEnd = currentArcEnd;
+			scratch.YawRingProgress01 = MeleeAttackPath.ArcSampleIndexToProgress01( sampleCount,
+				Math.Max( 0, currentArcEnd - 1 ) );
+		}
+
+		void EmitPathSample( float basisYaw, float arcProgress01, byte stateForColor )
+		{
+			if ( !drawOverlay )
+				return;
+
+			var basis = GetMeleeCombatBasisRotationForYaw( attackType, basisYaw );
+			var origin = MeleeAttackPath.GetSwingPivotWorld( GameObject, this, attackType, basis );
+			var spokeColor = GetMeleeDebugColorForState( stateForColor ).WithAlpha( 0.42f );
+			MeleeAttackPath.EvaluateWorldBlade( GameObject, this, attackType, arcProgress01, basis, out var tip, out _ );
+			DebugOverlay.Line( origin, tip, spokeColor, overlayDuration );
+			if ( drawSpheres )
+				DebugOverlay.Sphere( new Sphere( tip, hitRadius ), spokeColor.WithAlpha( 0.35f ), overlayDuration );
+		}
+
+		void RecordArcSample( int sampleIndex )
+		{
+			if ( !drawnArcSamples.Add( sampleIndex ) )
+				return;
+
+			var arcProgress = MeleeAttackPath.ArcSampleIndexToProgress01( sampleCount, sampleIndex );
+			EmitPathSample( currentBasisYaw, arcProgress, attackStateForDraw );
+		}
+
+		MeleeAttackPath.ForEachNewlyRevealedArcSampleIndex( this, attackType, degreeStep, scratch.LastArcProgress01,
+			activeProgress01, RecordArcSample );
+
+		if ( scratch.HasLastDrawBasisYaw )
+		{
+			var yawDelta = Angles.NormalizeAngle( currentBasisYaw - scratch.LastDrawBasisYaw );
+			scratch.AbsYawDegreesTurned += MathF.Abs( yawDelta );
+			if ( MathF.Abs( yawDelta ) > 1e-4f )
+				scratch.YawTurnSign = MathF.Sign( yawDelta );
+		}
+
+		var rotationSpokesOwed = Math.Min( maxRotationSpokes,
+			(int)MathF.Floor( scratch.AbsYawDegreesTurned / degreeStep ) );
+
+		for ( var stepIndex = 0; stepIndex < rotationSpokesOwed; stepIndex++ )
+		{
+			if ( !drawnYawSteps.Add( stepIndex ) )
+				continue;
+
+			var spokeYaw = Angles.NormalizeAngle( scratch.SwingBasisYaw + scratch.YawTurnSign * stepIndex * degreeStep );
+			EmitPathSample( spokeYaw, scratch.YawRingProgress01, attackStateForDraw );
+		}
+
+		scratch.LastDrawBasisYaw = currentBasisYaw;
+		scratch.HasLastDrawBasisYaw = true;
+		scratch.LastArcProgress01 = activeProgress01;
 	}
 
 	void SampleServerMeleeBladeWorld( byte attackType, float arcProgress01, out Vector3 tip, out Vector3 heel )
@@ -238,7 +389,6 @@ public partial class PlayerCombat
 		readonly bool _allowMultiple;
 		readonly int _maxTargets;
 
-		readonly List<MeleeAttackPathPoint> _pathSamples = new();
 		readonly HashSet<Guid> _hitVictims = new();
 
 		double _startedAtSandbox;
@@ -252,9 +402,8 @@ public partial class PlayerCombat
 		int _targetsHitCount;
 		float _prevActiveT01;
 		float _prevActiveElapsed;
-		float _lastPathSampleActiveElapsed = -1f;
-		bool _appendedFinalActiveSample;
 		bool _stopHitValidation;
+		MeleeAttackDebugDrawScratch _debugDrawScratch;
 
 		internal ServerMeleeAttackRuntime(
 			PlayerCombat pc,
@@ -281,6 +430,7 @@ public partial class PlayerCombat
 			_allowMultiple = pc.MeleeAllowMultipleHitsPerAttack;
 			_maxTargets = _allowMultiple ? Math.Max( 1, pc.MeleeMaxTargetsHit ) : 1;
 			_startedAtSandbox = Time.NowDouble;
+			_debugDrawScratch.Reset();
 			_pc.CaptureForwardMeleeStartPitch( _attackType );
 		}
 
@@ -306,21 +456,14 @@ public partial class PlayerCombat
 
 			if ( elapsed < windEnd )
 			{
-				_pc.DrawAccumulatedAttackPath( _pathSamples );
+				_pc.AdvanceAttackPath( _attackType, 0f, MeleeAttackStates.Windup,
+					_pc.GetMeleeCombatBasisYaw( _attackType ), ref _debugDrawScratch );
 				return true;
 			}
 
 			if ( elapsed >= activeEnd )
 			{
-				if ( !_appendedFinalActiveSample )
-				{
-					_appendedFinalActiveSample = true;
-					var finalState = MeleeAttackPath.ClassifyActiveState( _pc, _attackType, _active );
-					_pc.SampleServerMeleeBladeWorld( _attackType, 1f, out var finalTip, out var finalHeel );
-					AppendPathSample( 1f, _active, finalState, finalTip, finalHeel, forceAppend: true );
-				}
-
-				_pc.DrawAccumulatedAttackPath( _pathSamples );
+				_debugDrawScratch.Reset();
 				if ( elapsed < totalEnd )
 					return true;
 
@@ -330,15 +473,17 @@ public partial class PlayerCombat
 
 			var activeLen = Math.Max( 1e-4f, _active );
 			var activeElapsed = elapsed - windEnd;
+			var latePhaseEnd = MeleeAttackPath.GetLatePhaseEndElapsedSeconds( _pc, _attackType );
+			activeElapsed = Math.Min( activeElapsed, latePhaseEnd );
 			var activeT01 = Math.Clamp( activeElapsed / activeLen, 0f, 1f );
 			var segState = MeleeAttackPath.ClassifyActiveState( _pc, _attackType, activeElapsed );
 
-			if ( _lastPathSampleActiveElapsed >= 0f )
-				AppendPhaseBoundarySamples( _prevActiveElapsed, activeElapsed );
-
 			_pc.SampleServerMeleeBladeWorld( _attackType, activeT01, out var tip, out var heel );
-			AppendPathSample( activeT01, activeElapsed, segState, tip, heel );
-			_pc.DrawAccumulatedAttackPath( _pathSamples );
+			if ( MeleeAttackStates.DealsDamage( segState ) )
+			{
+				_pc.AdvanceAttackPath( _attackType, activeT01, segState, _pc.GetMeleeCombatBasisYaw( _attackType ),
+					ref _debugDrawScratch );
+			}
 
 			if ( !_havePrevSample )
 			{
@@ -386,78 +531,6 @@ public partial class PlayerCombat
 			_prevTip = tip;
 			_prevHeel = heel;
 			return true;
-		}
-
-		void AppendPhaseBoundarySamples( float prevElapsed, float curElapsed )
-		{
-			MeleeAttackPath.GetPhaseBoundaryElapsedSeconds( _pc, _attackType, out var activeStart, out var lateStart );
-
-			TryAppendBoundarySample( prevElapsed, curElapsed, activeStart );
-			TryAppendBoundarySample( prevElapsed, curElapsed, lateStart );
-		}
-
-		void TryAppendBoundarySample( float prevElapsed, float curElapsed, float boundaryElapsed )
-		{
-			if ( prevElapsed >= boundaryElapsed - 1e-5f || curElapsed < boundaryElapsed - 1e-5f )
-				return;
-
-			var t01 = MeleeAttackPath.ActiveProgressFromElapsed( _pc, _attackType, boundaryElapsed );
-			var state = MeleeAttackPath.ClassifyActiveState( _pc, _attackType, boundaryElapsed );
-			_pc.SampleServerMeleeBladeWorld( _attackType, t01, out var tip, out var heel );
-			AppendPathSample( t01, boundaryElapsed, state, tip, heel, forceAppend: true );
-		}
-
-		void AppendPathSample( float activeT01, float activeElapsed, byte attackState, Vector3 tip, Vector3 heel,
-			bool forceAppend = false )
-		{
-			var spacing = Math.Max( 2f, _radius * 0.9f );
-
-			if ( _pathSamples.Count > 0 )
-			{
-				var last = _pathSamples[^1];
-				var dist = (tip - last.TipWorld).Length;
-				var lastElapsed = _lastPathSampleActiveElapsed >= 0f ? _lastPathSampleActiveElapsed : activeElapsed;
-				var stateChanged = last.AttackState != attackState;
-				var minTime = Math.Max( 0.008f, _active / 72f );
-				var timeDue = activeElapsed - lastElapsed >= minTime - 1e-5f;
-
-				if ( dist > spacing )
-				{
-					var steps = Math.Max( 1, (int)MathF.Ceiling( dist / spacing ) );
-					for ( var i = 1; i <= steps; i++ )
-					{
-						var f = i / (float)steps;
-						var it = last.ActiveProgress01 + (activeT01 - last.ActiveProgress01) * f;
-						var iElapsed = lastElapsed + (activeElapsed - lastElapsed) * f;
-						var istate = MeleeAttackPath.ClassifyActiveState( _pc, _attackType, iElapsed );
-						PushPathPoint(
-							Vector3.Lerp( last.TipWorld, tip, f ),
-							Vector3.Lerp( last.HeelWorld, heel, f ),
-							it,
-							istate,
-							iElapsed );
-					}
-
-					return;
-				}
-
-				if ( !forceAppend && !stateChanged && !timeDue && dist * dist < spacing * spacing * 0.04f )
-					return;
-			}
-
-			PushPathPoint( tip, heel, activeT01, attackState, activeElapsed );
-		}
-
-		void PushPathPoint( Vector3 tip, Vector3 heel, float activeT01, byte attackState, float activeElapsed )
-		{
-			_pathSamples.Add( new MeleeAttackPathPoint
-			{
-				TipWorld = tip,
-				HeelWorld = heel,
-				ActiveProgress01 = activeT01,
-				AttackState = attackState
-			} );
-			_lastPathSampleActiveElapsed = activeElapsed;
 		}
 
 		void OnHit( MeleeHitResult hit )

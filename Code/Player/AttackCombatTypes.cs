@@ -243,13 +243,3 @@ public static class MeleeCombatDamageMultiplier
 		return 0f;
 	}
 }
-
-/// <summary>Legacy name — use <see cref="MeleeCombatDamageMultiplier"/>.</summary>
-public static class MeleeCameraSwingDamage
-{
-	public static Vector2 GoodDragUnitScreen( byte swingDir ) =>
-		MeleeCombatDamageMultiplier.GoodDragUnitScreen( swingDir );
-
-	public static Vector2 BadDragUnitScreen( byte swingDir ) =>
-		MeleeCombatDamageMultiplier.BadDragUnitScreen( swingDir );
-}

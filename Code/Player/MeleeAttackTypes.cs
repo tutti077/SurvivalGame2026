@@ -72,20 +72,3 @@ public readonly record struct MeleeHitResult
 	public int TargetsHitCount { get; init; }
 	public bool TargetWasAlreadyHit { get; init; }
 }
-
-public readonly struct MeleePathSample
-{
-	public Vector3 TipWorld { get; init; }
-	public Vector3 HeelWorld { get; init; }
-	public float ArcProgress01 { get; init; }
-	public byte AttackState { get; init; }
-}
-
-/// <summary>One world-space sample appended to the current attack instance path (host + debug).</summary>
-public readonly struct MeleeAttackPathPoint
-{
-	public Vector3 TipWorld { get; init; }
-	public Vector3 HeelWorld { get; init; }
-	public float ActiveProgress01 { get; init; }
-	public byte AttackState { get; init; }
-}
