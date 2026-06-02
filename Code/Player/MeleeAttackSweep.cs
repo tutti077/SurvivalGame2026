@@ -9,6 +9,194 @@ namespace Survival;
 /// </summary>
 public static class MeleeAttackSweep
 {
+	public static bool RaySweepFromOrigin(
+		Scene scene,
+		GameObject attackerRoot,
+		PlayerCombat attackerCombat,
+		Vector3 origin,
+		Vector3 tip,
+		HashSet<Guid> hitVictimRootIds,
+		int maxTargetsHit,
+		bool allowMultipleHits,
+		float damage,
+		float stagger,
+		byte attackState,
+		byte attackType,
+		bool isHeavy,
+		ushort attackInstanceId,
+		string swingLogNote,
+		bool logHits,
+		ref int targetsHitCount,
+		Action<MeleeHitResult> onHitReported )
+	{
+		if ( !allowMultipleHits && targetsHitCount >= 1 )
+			return false;
+		if ( targetsHitCount >= maxTargetsHit )
+			return false;
+		if ( !scene.IsValid() || !attackerRoot.IsValid() || attackerCombat is null )
+			return false;
+
+		var delta = tip - origin;
+		var lineLen = delta.Length;
+		if ( lineLen < 1e-4f )
+			return false;
+
+		var dir = delta / lineLen;
+		var bodyHitDist = float.MaxValue;
+		DamageReceiver bodyReceiver = null;
+		Vector3 bodyHitPos = tip;
+
+		var tr = scene.Trace.Ray( origin, tip )
+			.IgnoreGameObjectHierarchy( attackerRoot )
+			.UseHitboxes()
+			.Run();
+		if ( tr.Hit && tr.GameObject.IsValid()
+		     && CombatAuthority.TryFindDamageable( tr.GameObject, out var recv )
+		     && recv is DamageReceiver dmg
+		     && !CombatAuthority.IsGameObjectUnderHierarchy( attackerRoot, tr.GameObject )
+		     && CombatAuthority.MayApplyMeleeDamageFromAttackerToReceiver( attackerRoot, dmg ) )
+		{
+			bodyHitDist = Math.Clamp( tr.Distance, 0f, lineLen );
+			bodyReceiver = dmg;
+			bodyHitPos = tr.HitPosition;
+		}
+
+		var rayThickness = Math.Max( 2f, attackerCombat.MeleeHitVolumeThickness );
+		PlayerCombat blockFirstDefender = null;
+		var blockFirstDist = float.MaxValue;
+		var blockFirstPos = tip;
+		foreach ( var defender in scene.GetAllComponents<PlayerCombat>() )
+		{
+			if ( defender is null || defender == attackerCombat || !defender.Enabled || !defender.GameObject.IsValid() )
+				continue;
+			if ( !defender.IsAuthoritativeMeleeBlocking )
+				continue;
+			if ( !MeleeBlockPath.TryRaycastActiveGuardVolume( defender, origin, tip, rayThickness, out var guardDist,
+				     out var guardPos ) )
+				continue;
+			if ( guardDist >= blockFirstDist || guardDist > bodyHitDist + 1e-4f )
+				continue;
+
+			var contact = new MeleeBlockContact
+			{
+				AttackerRoot = attackerRoot,
+				AttackerPosition = attackerRoot.WorldPosition,
+				DefenderRoot = defender.GameObject,
+				DefenderCombat = defender,
+				HitPosition = guardPos,
+				AttackType = attackType,
+				AttackWasHeavy = isHeavy,
+				HitSandboxTime = Time.NowDouble
+			};
+			if ( !defender.TryServerResolveBlock( in contact, defender.LogMeleeBlockRejectionsToConsole,
+				     out var guardBlockMul, out _, out _, out _ ) || guardBlockMul > 0.999f )
+				continue;
+
+			blockFirstDefender = defender;
+			blockFirstDist = guardDist;
+			blockFirstPos = guardPos;
+		}
+
+		// Active guard line hit before body => block wins.
+		if ( blockFirstDefender is not null && blockFirstDist <= bodyHitDist + 1e-4f )
+		{
+			var dedupId = blockFirstDefender.GameObject.Id;
+			if ( !hitVictimRootIds.Add( dedupId ) )
+				return false;
+
+			blockFirstDefender.NotifyAuthoritativeMeleeBlockIntercepted();
+			blockFirstDefender.ConsumeAuthoritativeMeleeBlock( isHeavy );
+			targetsHitCount++;
+
+			onHitReported?.Invoke( new MeleeHitResult
+			{
+				AttackerId = attackerRoot.Id,
+				TargetId = dedupId,
+				AttackInstanceId = attackInstanceId,
+				AttackType = attackType,
+				IsHeavy = isHeavy,
+				AttackState = attackState,
+				HitPosition = blockFirstPos,
+				DamageApplied = 0f,
+				StaggerApplied = 0f,
+				TargetsHitCount = targetsHitCount,
+				TargetWasAlreadyHit = false,
+				WasBlocked = true,
+				IncomingAngleDegrees = MeleeBlockResolution.ComputeIncomingHitAngleDegrees(
+					blockFirstDefender.GameObject.WorldPosition,
+					blockFirstDefender.GetBlockCombatBasisYaw(),
+					blockFirstPos )
+			} );
+
+			if ( logHits )
+			{
+				Log.Info(
+					$"[PlayerCombat/MeleeSweepRay] {MeleeAttackTypes.Label( attackType )} {MeleeAttackStates.Label( attackState )} heavy={isHeavy} BLOCKED by {blockFirstDefender.GameObject.Name} targets={targetsHitCount}{swingLogNote}" );
+			}
+
+			return true;
+		}
+
+		if ( bodyReceiver is null )
+			return false;
+
+		var vitals = CombatAuthority.ResolvePlayerVitalsForDamageReceiver( bodyReceiver );
+		if ( vitals is not null && vitals.CurrentHealth <= 0.001f )
+			return false;
+
+		var dedupBodyId = CombatAuthority.ResolveMeleeVictimDedupId( bodyReceiver );
+		if ( !hitVictimRootIds.Add( dedupBodyId ) )
+			return false;
+
+		var dmgAmount = damage;
+		var stMul = 1f;
+		var wasBlocked = false;
+		var incomingAngle = 0f;
+		PlayerCombat blockingCombat = null;
+		if ( MeleeAttackResolution.TryGetBlockDamageMultiplier( attackerRoot, bodyReceiver, bodyHitPos, attackType, isHeavy,
+			     origin, tip, rayThickness, out var blockMul, out var blockStMul, out blockingCombat, out var blockTrace ) )
+		{
+			dmgAmount *= blockMul;
+			stMul *= blockStMul;
+			wasBlocked = blockMul <= 1e-4f;
+			incomingAngle = blockTrace.IncomingAngleDegrees;
+			blockingCombat?.NotifyAuthoritativeMeleeBlockIntercepted();
+			if ( wasBlocked )
+				blockingCombat?.ConsumeAuthoritativeMeleeBlock( isHeavy );
+		}
+
+		var dealt = bodyReceiver.TakeDamage( dmgAmount, attackerCombat );
+		var staggerApplied = stagger * stMul;
+		attackerCombat.ApplyMeleeStaggerToVictim( vitals, staggerApplied );
+		targetsHitCount++;
+
+		onHitReported?.Invoke( new MeleeHitResult
+		{
+			AttackerId = attackerRoot.Id,
+			TargetId = dedupBodyId,
+			AttackInstanceId = attackInstanceId,
+			AttackType = attackType,
+			IsHeavy = isHeavy,
+			AttackState = attackState,
+			HitPosition = bodyHitPos,
+			DamageApplied = dealt,
+			StaggerApplied = staggerApplied,
+			TargetsHitCount = targetsHitCount,
+			TargetWasAlreadyHit = false,
+			WasBlocked = wasBlocked,
+			IncomingAngleDegrees = incomingAngle
+		} );
+
+		if ( logHits )
+		{
+			var blockNote = wasBlocked ? " BLOCKED" : "";
+			Log.Info(
+				$"[PlayerCombat/MeleeSweepRay] {MeleeAttackTypes.Label( attackType )} {MeleeAttackStates.Label( attackState )} heavy={isHeavy} hit {bodyReceiver.GameObject.Name} dmg={dealt:0.#} stagger={staggerApplied:0.#} angle={incomingAngle:0.#}°{blockNote} targets={targetsHitCount}{swingLogNote}" );
+		}
+
+		return true;
+	}
+
 	public static bool SphereSweepBladeSegment(
 		Scene scene,
 		GameObject attackerRoot,
@@ -206,4 +394,5 @@ public static class MeleeAttackSweep
 
 		return true;
 	}
+
 }

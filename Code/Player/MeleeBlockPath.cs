@@ -144,4 +144,102 @@ public static class MeleeBlockPath
 		+ combatBasis.Forward * local.x
 		+ combatBasis.Up * local.y
 		+ combatBasis.Right * local.z;
+
+	/// <summary>
+	/// First point along <paramref name="rayOrigin"/>→<paramref name="rayEnd"/> that enters the held guard line
+	/// (same samples as debug viz), expanded by guard sphere radius + <paramref name="extraThickness"/>.
+	/// </summary>
+	public static bool TryRaycastActiveGuardVolume(
+		PlayerCombat defender,
+		Vector3 rayOrigin,
+		Vector3 rayEnd,
+		float extraThickness,
+		out float distanceAlongRay,
+		out Vector3 hitPosition )
+	{
+		distanceAlongRay = 0f;
+		hitPosition = default;
+
+		if ( defender is null || !defender.GameObject.IsValid() || !defender.IsAuthoritativeMeleeBlocking )
+			return false;
+
+		var blockDir = defender.AuthoritativeMeleeBlockDirection;
+		if ( blockDir is not (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) )
+			return false;
+
+		var delta = rayEnd - rayOrigin;
+		var lineLen = delta.Length;
+		if ( lineLen < 1e-4f )
+			return false;
+
+		var rayDir = delta / lineLen;
+		var sampleCount = defender.GetBlockGuardSampleCount();
+		Span<Vector3> samples = stackalloc Vector3[48];
+		var count = BuildGuardSamples( defender, blockDir, sampleCount, samples );
+		if ( count < 1 )
+			return false;
+
+		var hitRadius = Math.Max( 0.5f, defender.BlockSampleSphereRadius + Math.Max( 0f, extraThickness ) );
+		var stepLen = Math.Max( 0.75f, hitRadius * 0.5f );
+		var steps = Math.Max( 1, (int)MathF.Ceiling( lineLen / stepLen ) );
+
+		for ( var i = 1; i <= steps; i++ )
+		{
+			var dist = lineLen * (i / (float)steps);
+			var point = rayOrigin + rayDir * dist;
+			if ( DistancePointToGuardPolyline( point, samples, count ) > hitRadius + 1e-4f )
+				continue;
+
+			distanceAlongRay = dist;
+			hitPosition = point;
+			return true;
+		}
+
+		return false;
+	}
+
+	/// <summary>True when the active guard is struck along the ray before <paramref name="bodyHitDistanceAlongRay"/>.</summary>
+	public static bool RayHitsActiveGuardBeforeDistance(
+		PlayerCombat defender,
+		Vector3 rayOrigin,
+		Vector3 rayEnd,
+		float bodyHitDistanceAlongRay,
+		float extraThickness,
+		out Vector3 guardHitPosition )
+	{
+		guardHitPosition = default;
+		if ( !TryRaycastActiveGuardVolume( defender, rayOrigin, rayEnd, extraThickness, out var guardDist, out guardHitPosition ) )
+			return false;
+
+		return guardDist <= bodyHitDistanceAlongRay + 1e-4f;
+	}
+
+	public static float ProjectDistanceAlongRay( Vector3 rayOrigin, Vector3 rayUnitDir, Vector3 worldPoint )
+	{
+		var along = Vector3.Dot( worldPoint - rayOrigin, rayUnitDir );
+		return MathF.Max( 0f, along );
+	}
+
+	static float DistancePointToGuardPolyline( Vector3 point, Span<Vector3> samples, int count )
+	{
+		var best = float.MaxValue;
+		for ( var i = 0; i < count; i++ )
+			best = MathF.Min( best, point.Distance( samples[i] ) );
+
+		for ( var i = 1; i < count; i++ )
+			best = MathF.Min( best, DistancePointToSegment( point, samples[i - 1], samples[i] ) );
+
+		return best;
+	}
+
+	static float DistancePointToSegment( Vector3 point, Vector3 a, Vector3 b )
+	{
+		var ab = b - a;
+		var lenSq = ab.LengthSquared;
+		if ( lenSq < 1e-8f )
+			return point.Distance( a );
+
+		var t = Math.Clamp( Vector3.Dot( point - a, ab ) / lenSq, 0f, 1f );
+		return point.Distance( a + ab * t );
+	}
 }

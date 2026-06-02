@@ -706,7 +706,7 @@
       "Name": "BlockTrainingDummy",
       "Position": "353.009277,-143.056885,34.4427872",
       "Rotation": "0,0,0,1",
-      "Scale": "1,1,1",
+      "Scale": "0.349999994,0.349999994,1",
       "Tags": "",
       "Enabled": true,
       "NetworkMode": 2,
@@ -741,6 +741,32 @@
           },
           "RenderType": "On",
           "Tint": "1,1,1,1"
+        },
+        {
+          "__type": "Sandbox.BoxCollider",
+          "__guid": "c68dbc8f-b6fb-424c-abbf-50c340dcbe40",
+          "__enabled": true,
+          "Flags": 0,
+          "Center": "0,0,0",
+          "ColliderFlags": 0,
+          "Elasticity": null,
+          "Friction": null,
+          "IsTrigger": false,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "OnObjectTriggerEnter": null,
+          "OnObjectTriggerExit": null,
+          "OnTriggerEnter": null,
+          "OnTriggerExit": null,
+          "RollingResistance": null,
+          "Scale": "50,50,50",
+          "Static": false,
+          "Surface": null,
+          "SurfaceVelocity": "0,0,0"
         },
         {
           "__type": "Survival.PlayerCombat",
@@ -860,6 +886,41 @@
           "SwingMouseEvidenceDeadzonePixels": 2.25,
           "SwingMouseEvidenceMaxStepPixels": 26,
           "SwingUpFromSideWinRatio": 1.04
+        },
+        {
+          "__type": "Survival.TrainingDummyAttackTelegraph",
+          "__guid": "bea0d543-d064-4d71-bef0-f96c745480cc",
+          "__enabled": true,
+          "Flags": 0,
+          "AttackPathVerticalOffset": -24,
+          "AutoFaceTarget": true,
+          "Combat": {
+            "_type": "component",
+            "component_id": "5fffe14d-f909-457e-b915-8bffc822be85",
+            "go": "ba430c2f-612b-4125-a64d-ba0f058d3eb8",
+            "component_type": "PlayerCombat"
+          },
+          "CooldownSeconds": 2,
+          "FaceTargetOnAttackStart": true,
+          "FacingYawOffsetDegrees": 0,
+          "HoldSeconds": 0.12,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "ShowTelegraphDebug": true,
+          "TargetCombatOverride": {
+            "_type": "component",
+            "component_id": "bd4785b3-cd24-4388-9229-fc154ca44dcb",
+            "go": "39e068df-5dfa-45db-b9f3-a77027242e06",
+            "component_type": "PlayerCombat"
+          },
+          "TargetSearchRadius": 280,
+          "TelegraphEyeHeight": 64,
+          "TelegraphLineLength": 92,
+          "TelegraphSeconds": 2
         }
       ],
       "Children": []

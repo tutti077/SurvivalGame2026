@@ -17,6 +17,23 @@ public static class MeleeAttackResolution
 		out float damageMultiplier,
 		out float victimStaminaDrainMultiplier,
 		out PlayerCombat blockingCombat,
+		out MeleeBlockValidationTrace blockTrace ) =>
+		TryGetBlockDamageMultiplier( attackerRoot, victimReceiver, hitPosition, attackType, attackWasHeavy,
+			blockRayOrigin: null, blockRayEnd: null, extraRayThickness: 0f, out damageMultiplier,
+			out victimStaminaDrainMultiplier, out blockingCombat, out blockTrace );
+
+	public static bool TryGetBlockDamageMultiplier(
+		GameObject attackerRoot,
+		DamageReceiver victimReceiver,
+		Vector3 hitPosition,
+		byte attackType,
+		bool attackWasHeavy,
+		Vector3? blockRayOrigin,
+		Vector3? blockRayEnd,
+		float extraRayThickness,
+		out float damageMultiplier,
+		out float victimStaminaDrainMultiplier,
+		out PlayerCombat blockingCombat,
 		out MeleeBlockValidationTrace blockTrace )
 	{
 		damageMultiplier = 1f;
@@ -32,13 +49,30 @@ public static class MeleeAttackResolution
 			return false;
 
 		blockingCombat = defender;
+
+		var resolveHitPos = hitPosition;
+		if ( blockRayOrigin.HasValue && blockRayEnd.HasValue )
+		{
+			var rayDelta = blockRayEnd.Value - blockRayOrigin.Value;
+			if ( rayDelta.Length < 1e-4f )
+				return false;
+
+			var rayDir = rayDelta / rayDelta.Length;
+			var bodyDist = MeleeBlockPath.ProjectDistanceAlongRay( blockRayOrigin.Value, rayDir, hitPosition );
+			if ( !MeleeBlockPath.RayHitsActiveGuardBeforeDistance( defender, blockRayOrigin.Value, blockRayEnd.Value,
+				     bodyDist, extraRayThickness, out var guardHitPos ) )
+				return false;
+
+			resolveHitPos = guardHitPos;
+		}
+
 		var contact = new MeleeBlockContact
 		{
 			AttackerRoot = attackerRoot,
 			AttackerPosition = attackerRoot.WorldPosition,
 			DefenderRoot = defender.GameObject,
 			DefenderCombat = defender,
-			HitPosition = hitPosition,
+			HitPosition = resolveHitPos,
 			AttackType = attackType,
 			AttackWasHeavy = attackWasHeavy,
 			HitSandboxTime = Time.NowDouble

@@ -11,6 +11,7 @@ struct MeleeAttackDebugDrawScratch
 	internal bool HasLastLeadTip;
 	internal float LastArcProgress01;
 	internal HashSet<long> DrawnArcYawKeys;
+	internal bool StopRayDrawingAfterBlock;
 	internal HashSet<int> DrawnRelativeYawStepIndices;
 	internal float SwingBasisYaw;
 	internal bool HasSwingBasisYaw;
@@ -27,6 +28,7 @@ struct MeleeAttackDebugDrawScratch
 		HasLastLeadTip = false;
 		LastArcProgress01 = -1f;
 		DrawnArcYawKeys?.Clear();
+		StopRayDrawingAfterBlock = false;
 		DrawnRelativeYawStepIndices?.Clear();
 		HasSwingBasisYaw = false;
 		HasYawRingProgress = false;
@@ -286,6 +288,12 @@ public partial class PlayerCombat
 		float overlayDuration,
 		ref MeleeAttackDebugDrawScratch scratch )
 	{
+		if ( scratch.StopRayDrawingAfterBlock )
+		{
+			scratch.LastArcProgress01 = activeProgress01;
+			return;
+		}
+
 		scratch.DrawnArcYawKeys ??= new HashSet<long>();
 		var drawnArcYawKeys = scratch.DrawnArcYawKeys;
 		var hitRadius = Math.Max( 2f, MeleeHitVolumeThickness );
@@ -293,36 +301,17 @@ public partial class PlayerCombat
 		var sampleCount = MeleeAttackPath.GetArcPathSampleCount( this, attackType, degreeStep );
 		var maxRotationSpokes = MeleeAttackPath.GetRotationDebugSpokeCount( degreeStep );
 
-		void EmitPathSample( float basisYaw, float arcProgress01, byte stateForColor )
-		{
-			if ( !drawOverlay )
-				return;
-
-			var basis = GetMeleeCombatBasisRotationForYaw( attackType, basisYaw );
-			var origin = MeleeAttackPath.GetSwingPivotWorld( GameObject, this, attackType, basis );
-			var spokeColor = GetMeleeDebugColorForState( stateForColor ).WithAlpha( 0.42f );
-			MeleeAttackPath.EvaluateWorldBlade( GameObject, this, attackType, arcProgress01, basis, out var tip, out _ );
-			DebugOverlay.Line( origin, tip, spokeColor, overlayDuration );
-			if ( drawSpheres )
-				DebugOverlay.Sphere( new Sphere( tip, hitRadius ), spokeColor.WithAlpha( 0.35f ), overlayDuration );
-		}
-
-		void RecordArcSampleAtYaw( int sampleIndex, int yawBucket, byte stateForColor )
-		{
-			var key = MeleeAttackPath.PackArcYawDebugKey( sampleIndex, yawBucket ) ^ ((long)stateForColor << 56);
-			if ( !drawnArcYawKeys.Add( key ) )
-				return;
-
-			var arcProgress = MeleeAttackPath.ArcSampleIndexToProgress01( sampleCount, sampleIndex );
-			EmitPathSample( currentBasisYaw, arcProgress, stateForColor );
-		}
-
 		if ( drawOverlay )
 		{
-			// Emit one time-slice ray for the current phase/progress; coverage expands by time + yaw/transform motion.
 			var yawBucket = MeleeAttackPath.QuantizeYawDegrees( currentBasisYaw, degreeStep );
 			var currentSampleIndex = Math.Clamp( (int)MathF.Round( activeProgress01 * (sampleCount - 1) ), 0, sampleCount - 1 );
-			RecordArcSampleAtYaw( currentSampleIndex, yawBucket, attackStateForDraw );
+			var key = MeleeAttackPath.PackArcYawDebugKey( currentSampleIndex, yawBucket ) ^ ((long)attackStateForDraw << 56);
+			if ( drawnArcYawKeys.Add( key ) )
+			{
+				var arcProgress = MeleeAttackPath.ArcSampleIndexToProgress01( sampleCount, currentSampleIndex );
+				EmitMeleeDebugPathRay( attackType, currentBasisYaw, arcProgress, attackStateForDraw, drawOverlay,
+					overlayDuration, hitRadius, drawSpheres, ref scratch );
+			}
 		}
 
 		if ( !MeleeDebugDrawRotationSpokes )
@@ -372,12 +361,95 @@ public partial class PlayerCombat
 				continue;
 
 			var spokeYaw = Angles.NormalizeAngle( scratch.SwingBasisYaw + scratch.YawTurnSign * stepIndex * degreeStep );
-			EmitPathSample( spokeYaw, scratch.YawRingProgress01, attackStateForDraw );
+			EmitMeleeDebugPathRay( attackType, spokeYaw, scratch.YawRingProgress01, attackStateForDraw, drawOverlay,
+				overlayDuration, hitRadius, drawSpheres, ref scratch );
+			if ( scratch.StopRayDrawingAfterBlock )
+				break;
 		}
 
 		scratch.LastDrawBasisYaw = currentBasisYaw;
 		scratch.HasLastDrawBasisYaw = true;
 		scratch.LastArcProgress01 = activeProgress01;
+	}
+
+	void EmitMeleeDebugPathRay(
+		byte attackType,
+		float basisYaw,
+		float arcProgress01,
+		byte attackStateForDraw,
+		bool drawOverlay,
+		float overlayDuration,
+		float hitRadius,
+		bool drawSpheres,
+		ref MeleeAttackDebugDrawScratch scratch )
+	{
+		if ( !drawOverlay || scratch.StopRayDrawingAfterBlock )
+			return;
+
+		var basis = GetMeleeCombatBasisRotationForYaw( attackType, basisYaw );
+		var origin = MeleeAttackPath.GetSwingPivotWorld( GameObject, this, attackType, basis );
+		var spokeColor = GetMeleeDebugColorForState( attackStateForDraw ).WithAlpha( 0.42f );
+		MeleeAttackPath.EvaluateWorldBlade( GameObject, this, attackType, arcProgress01, basis, out var tip, out _ );
+		var drawTip = tip;
+		if ( TryGetFirstBlockingConeHitPoint( origin, tip, out var blockHitPoint ) )
+		{
+			drawTip = blockHitPoint;
+			scratch.StopRayDrawingAfterBlock = true;
+		}
+
+		DebugOverlay.Line( origin, drawTip, spokeColor, overlayDuration );
+		if ( drawSpheres )
+			DebugOverlay.Sphere( new Sphere( drawTip, hitRadius ), spokeColor.WithAlpha( 0.35f ), overlayDuration );
+	}
+
+	bool TryGetFirstBlockingConeHitPoint( Vector3 origin, Vector3 tip, out Vector3 hitPoint )
+	{
+		hitPoint = tip;
+
+		if ( !GameObject.IsValid() )
+			return false;
+
+		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+		if ( !scene.IsValid() )
+			return false;
+
+		var thickness = Math.Max( 2f, MeleeHitVolumeThickness );
+		var bestDist = float.MaxValue;
+		var found = false;
+
+		foreach ( var defender in scene.GetAllComponents<PlayerCombat>() )
+		{
+			if ( defender is null || defender == this || !defender.Enabled || !defender.GameObject.IsValid() )
+				continue;
+			if ( !defender.IsAuthoritativeMeleeBlocking )
+				continue;
+			if ( !MeleeBlockPath.TryRaycastActiveGuardVolume( defender, origin, tip, thickness, out var guardDist,
+				     out var guardPos ) )
+				continue;
+			if ( guardDist >= bestDist )
+				continue;
+
+			var contact = new MeleeBlockContact
+			{
+				AttackerRoot = GameObject,
+				AttackerPosition = GameObject.WorldPosition,
+				DefenderRoot = defender.GameObject,
+				DefenderCombat = defender,
+				HitPosition = guardPos,
+				AttackType = 0,
+				AttackWasHeavy = false,
+				HitSandboxTime = Time.NowDouble
+			};
+			if ( !defender.TryServerResolveBlock( in contact, logRejections: false, out var blockMul, out _, out _, out _ )
+			     || blockMul > 0.999f )
+				continue;
+
+			bestDist = guardDist;
+			hitPoint = guardPos;
+			found = true;
+		}
+
+		return found;
 	}
 
 	void SampleServerMeleeBladeWorld( byte attackType, float arcProgress01, out Vector3 tip, out Vector3 heel )
@@ -525,17 +597,15 @@ public partial class PlayerCombat
 				var hitState = MeleeAttackPath.ClassifyActiveState( _pc, _attackType, midElapsed );
 				var damage = _pc.GetMeleeDamageForState( hitState, _isHeavy, _intent );
 				var stagger = _pc.GetMeleeStaggerForState( hitState );
+				var basis = _pc.GetMeleeCombatBasisRotation( _attackType );
+				var rayOrigin = MeleeAttackPath.GetSwingPivotWorld( attacker, _pc, _attackType, basis );
 
-				_stopHitValidation = MeleeAttackSweep.SphereSweepBladeSegment(
+				_stopHitValidation = MeleeAttackSweep.RaySweepFromOrigin(
 					scene,
 					attacker,
 					_pc,
-					_radius,
-					_substep,
-					_prevTip,
+					rayOrigin,
 					tip,
-					_prevHeel,
-					heel,
 					_hitVictims,
 					_maxTargets,
 					_allowMultiple,
@@ -549,6 +619,14 @@ public partial class PlayerCombat
 					_logHits,
 					ref _targetsHitCount,
 					OnHit );
+
+				// End this attack action immediately on first relevant contact (hit or block), per training flow.
+				if ( _stopHitValidation )
+				{
+					_debugDrawScratch.Reset();
+					TrySendCompletion();
+					return false;
+				}
 			}
 
 			_prevActiveT01 = activeT01;

@@ -923,14 +923,15 @@ public partial class PlayerCombat : Component
 
 	Rotation GetCameraYawRotation()
 	{
-		var cam = ResolveIntentCamera();
+		// Non-local actors (training dummies, remote pawns on host) must not borrow Scene.Camera yaw.
+		var cam = IsLocalCombatDriver() ? ResolveIntentCamera() : default;
 		var yaw = cam.IsValid() ? cam.WorldRotation.Angles().yaw : WorldRotation.Angles().yaw;
 		return new Angles( 0f, yaw, 0f ).ToRotation();
 	}
 
 	Rotation GetCameraAimRotation()
 	{
-		var cam = ResolveIntentCamera();
+		var cam = IsLocalCombatDriver() ? ResolveIntentCamera() : default;
 		if ( cam.IsValid() )
 		{
 			var a = cam.WorldRotation.Angles();
@@ -943,7 +944,7 @@ public partial class PlayerCombat : Component
 
 	float GetCameraPitchDegrees()
 	{
-		var cam = ResolveIntentCamera();
+		var cam = IsLocalCombatDriver() ? ResolveIntentCamera() : default;
 		if ( cam.IsValid() )
 			return cam.WorldRotation.Angles().pitch;
 
