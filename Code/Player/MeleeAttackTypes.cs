@@ -71,4 +71,6 @@ public readonly record struct MeleeHitResult
 	public float StaggerApplied { get; init; }
 	public int TargetsHitCount { get; init; }
 	public bool TargetWasAlreadyHit { get; init; }
+	public bool WasBlocked { get; init; }
+	public float IncomingAngleDegrees { get; init; }
 }

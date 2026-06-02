@@ -26,9 +26,9 @@ Sword **colliders must not** be the source of HP damage (use them for VFX / clas
 4. **Hits** — `MeleeAttackSweep` sphere substeps along tip+heel motion (`MeleeHitVolumeThickness`). Per-target dedup; optional multi-hit via `MeleeAllowMultipleHitsPerAttack`.
 5. **Attack path** — `MeleeAttackArcDegreeStep` (default 1°) samples the swing along `MeleeAttackPath` (~150 samples on a 150° arc, 360 on a full turn). Colored overlay lines are optional (`MeleeDebugDrawEnabled`); the path sampling is core combat readability.
 6. **`CombatAuthority`** validates intent, rate limits, stamina, then calls `PlayerCombat.ServerStartMeleeAttackAction`.
-7. **Block (hold)** — Attack2 + teardrop L/R/U on the local driver (`_blockLiveSwingDir` while held). Server block resolution is not wired yet (`MeleeAttackResolution.TryGetBlockDamageMultiplier` returns false until re-implemented on `PlayerCombat`).
+7. **Block (hold)** — Attack2 locks teardrop L/R/U on press. Host validates incoming hit angle vs defender facing: lateral blocks cover ±75° front halves (150° total); overhead block covers ±25° (50°). Behind-arc hits always connect. Guard viz: green vertical/horizontal line (62u, 2u spheres) + thin ground arc (`BlockGroundArcHeightOffset`). Server computes block result in `MeleeBlockResolution`; clients send block state via RPC only — host does not trust defender hit claims.
 
-**Active combat helpers** (do not add parallel systems): `MeleeAttackPath`, `MeleeAttackSweep`, `MeleeAttackResolution`, `PlayerCombat.ServerMeleeAttack.cs`, `AttackCombatTypes.cs`, `MeleeAttackTypes.cs`.
+**Active combat helpers** (do not add parallel systems): `MeleeAttackPath`, `MeleeAttackSweep`, `MeleeAttackResolution`, `MeleeBlockPath`, `MeleeBlockResolution`, `PlayerCombat.ServerMeleeAttack.cs`, `PlayerCombat.Block.cs`, `AttackCombatTypes.cs`, `MeleeAttackTypes.cs`.
 
 ## Commandment #2 — End every assistant reply with “what you need to do”
 

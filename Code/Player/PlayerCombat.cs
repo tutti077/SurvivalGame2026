@@ -53,6 +53,10 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Debug" ), Title( "Overlay spheres at path samples" )]
 	public bool MeleeDebugDrawSamplePointsEnabled { get; set; } = true;
 
+	/// <summary>Extra rays while turning mid-swing (one per degree of yaw at a fixed arc point). Usually off — use arc fan only.</summary>
+	[Property, Group( "Combat — Debug" ), Title( "Rotation spoke overlay" )]
+	public bool MeleeDebugDrawRotationSpokes { get; set; } = false;
+
 	/// <summary>How long each overlay line/sphere stays on screen (seconds).</summary>
 	[Property, Group( "Combat — Debug" ), Title( "Overlay persist (s)" )]
 	public float MeleeDebugOverlayDuration { get; set; } = 1f;
@@ -150,7 +154,7 @@ public partial class PlayerCombat : Component
 	public float MeleeLateralArcTotalDegrees { get; set; } = 150f;
 
 	/// <summary>
-	/// Spacing along the attack path and per degree of body turn (1 = every degree; 150° arc → ~150 samples, 360° turn → 360).
+	/// Spacing along the attack path and per degree of body turn (1 = one ray every 1° along the arc; 150° → ~151 samples).
 	/// Drives core path sampling; overlay lines use <see cref="MeleeDebugDrawEnabled"/>.
 	/// </summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Attack arc degree step" )]
@@ -379,6 +383,10 @@ public partial class PlayerCombat : Component
 	double _primaryLastFlipRealSeconds;
 	double _blockLastFlipRealSeconds;
 
+	/// <summary>Previous combat yaw while blocking — used to rotate swing evidence so look does not morph guard.</summary>
+	float _blockGuardPrevYaw;
+	bool _blockGuardYawTracking;
+
 	byte _stickySwingDir = SwingDirs.Up;
 	byte _lastAttackSwingDir = SwingDirs.Up;
 	Vector2 _blockReleaseSwingXz;
@@ -387,6 +395,7 @@ public partial class PlayerCombat : Component
 
 	byte _lockedPrimaryAttackSwingDir;
 	bool _hasLockedPrimaryAttackDir;
+	bool _wasPrimaryAttackButtonDownLastFrame;
 	bool _primarySwingPhaseActive;
 	/// <summary>End of post-release swing window, in <see cref="Time.NowDouble"/> (same clock as combat snapshots).</summary>
 	double _primarySwingPhaseEndAtSandbox;
@@ -401,7 +410,9 @@ public partial class PlayerCombat : Component
 		if ( GameObject.Network is { Active: true } n && !n.IsOwner )
 			return false;
 
-		return true;
+		// Only pawns with an enabled PlayerController read global Input (not training dummies / combat-only props).
+		var controller = GameObject.Components.Get<PlayerController>();
+		return controller is not null && controller.Enabled;
 	}
 
 	protected override void OnUpdate()
@@ -414,8 +425,15 @@ public partial class PlayerCombat : Component
 
 		MaybeWarnCombatAuthorityMisconfigured();
 
+		if ( IsServerSideForMeleeAuthority() && !GameObject.IsProxy )
+			ServerTickMeleeBlockTimers();
+
 		if ( IsServerSideForMeleeAuthority() && !IsLocalCombatDriver() && !GameObject.IsProxy )
+		{
+			TickAuthoritativeMeleeBlockState();
+			DrawMeleeBlockGuardVisualization();
 			return;
+		}
 
 		if ( !IsLocalCombatDriver() )
 			return;
@@ -436,24 +454,35 @@ public partial class PlayerCombat : Component
 		_primary.Step( PrimaryAttackAction, CanStartPrimaryAttack, CanContinuePrimaryAttack, GetViewDirectionForIntent, GetCameraPositionForIntent, GetPrimaryAttackRules(), OnOwnerValidPrimaryAttackRelease );
 		_block.Step( BlockAction, CanStartBlock, CanContinueBlock, GetViewDirectionForIntent, GetCameraPositionForIntent, GetBlockRules(), OnOwnerValidBlockRelease );
 
-		// Lock swing dir on physical press (not only when the combat channel accepts) so the teardrop stays fixed for the whole hold.
-		if ( Input.Pressed( PrimaryAttackAction ) )
+		if ( Input.Pressed( BlockAction ) )
+			OnBlockPressCommitGuardDirection();
+
+		// Lock attack direction on press / first held frame; teardrop stays fixed until release (then through drag window).
+		var primaryAttackHeld = Input.Down( PrimaryAttackAction );
+		if ( Input.Pressed( PrimaryAttackAction ) || (primaryAttackHeld && !_wasPrimaryAttackButtonDownLastFrame) )
 		{
 			if ( _primarySwingPhaseActive )
 				CancelPrimarySwingPhase();
 			LockPreparedPrimaryAttackDirection();
 		}
 
+		_wasPrimaryAttackButtonDownLastFrame = primaryAttackHeld;
+
 		if ( Input.Released( PrimaryAttackAction ) && !_primarySwingPhaseActive )
 			_hasLockedPrimaryAttackDir = false;
 
 		TickSwingLookAccumulatorsAfterCombatStep();
+
+		TickAuthoritativeMeleeBlockState();
+		TickCombatStateMachine();
 
 		if ( ShowCombatInputDebug )
 			DrawCombatInputDebug();
 
 		if ( ShowSwingDirectionCrosshair )
 			DrawTeardropCrosshairOverlay();
+
+		DrawMeleeBlockGuardVisualization();
 	}
 
 	void TickSwingLookAccumulatorsAfterCombatStep()
@@ -463,21 +492,48 @@ public partial class PlayerCombat : Component
 		var rawFrame = Input.MouseDelta;
 		var frame = FilterSwingMouseEvidenceDelta( rawFrame );
 
-		// Primary: direction is locked on press and frozen while Attack1 is held; post-release drag only during swing phase.
+		// Primary: locked on press; frozen while Attack1 is held and through post-release drag window.
 		var primaryAttackHeld = Input.Down( PrimaryAttackAction );
-		if ( !primaryAttackHeld && !_primarySwingPhaseActive )
+		var attackDirectionFrozen = primaryAttackHeld || _primarySwingPhaseActive;
+		if ( !attackDirectionFrozen )
 		{
 			_primarySwingEvidence = _primarySwingEvidence * decay + frame;
 			ApplyLiveSwingFromEvidence( _primarySwingEvidence, ref _primaryLiveSwingDir, ref _primaryLastFlipRealSeconds );
 		}
 		else if ( _hasLockedPrimaryAttackDir )
 			_primaryLiveSwingDir = _lockedPrimaryAttackSwingDir;
+		else if ( primaryAttackHeld )
+			LockPreparedPrimaryAttackDirection();
 
 		if ( _primarySwingPhaseActive && Time.NowDouble < _primarySwingPhaseEndAtSandbox )
 			_primaryPostReleaseDragAccum += rawFrame;
 
-		_blockSwingEvidence = _blockSwingEvidence * decay + frame;
-		ApplyLiveSwingFromEvidence( _blockSwingEvidence, ref _blockLiveSwingDir, ref _blockLastFlipRealSeconds );
+		// Block: rotate decayed evidence with view yaw so look spin does not flip L/R/U; morph only on teardrop intent.
+		var blockHeld = Input.Down( BlockAction ) && !_meleeBlockConsumedAwaitingRelease;
+		if ( blockHeld )
+		{
+			var yaw = GetBlockCombatBasisYaw();
+			if ( !_blockGuardYawTracking )
+			{
+				_blockGuardPrevYaw = yaw;
+				_blockGuardYawTracking = true;
+			}
+
+			var yawDelta = NormalizeDegreesDelta( yaw - _blockGuardPrevYaw );
+			_blockGuardPrevYaw = yaw;
+			if ( MathF.Abs( yawDelta ) > 1e-4f )
+				_blockSwingEvidence = RotateSwingEvidenceDegrees( _blockSwingEvidence, -yawDelta );
+
+			_blockSwingEvidence = _blockSwingEvidence * decay + frame;
+			ApplyLiveSwingFromEvidence( _blockSwingEvidence, ref _heldBlockGuardDir, ref _blockLastFlipRealSeconds );
+			_blockLiveSwingDir = _heldBlockGuardDir;
+		}
+		else
+		{
+			_blockGuardYawTracking = false;
+			_blockSwingEvidence = _blockSwingEvidence * decay + frame;
+			ApplyLiveSwingFromEvidence( _blockSwingEvidence, ref _blockLiveSwingDir, ref _blockLastFlipRealSeconds );
+		}
 
 		if ( Input.Down( PrimaryAttackAction ) )
 			_primaryLookAccum += rawFrame;
@@ -499,6 +555,23 @@ public partial class PlayerCombat : Component
 		var cap = Math.Max( dz, SwingMouseEvidenceMaxStepPixels );
 		var mag = MathF.Min( len, cap );
 		return dir * mag;
+	}
+
+	static float NormalizeDegreesDelta( float delta )
+	{
+		while ( delta > 180f )
+			delta -= 360f;
+		while ( delta < -180f )
+			delta += 360f;
+		return delta;
+	}
+
+	static Vector2 RotateSwingEvidenceDegrees( Vector2 v, float deltaDegrees )
+	{
+		var rad = deltaDegrees * (MathF.PI / 180f);
+		var c = MathF.Cos( rad );
+		var s = MathF.Sin( rad );
+		return new Vector2( v.x * c - v.y * s, v.x * s + v.y * c );
 	}
 
 	void LockPreparedPrimaryAttackDirection()
@@ -796,13 +869,16 @@ public partial class PlayerCombat : Component
 		var rect = cam.ScreenRect;
 		var center = new Vector2( rect.Left + rect.Width * 0.5f, rect.Top + rect.Height * 0.5f );
 
-		// Same live L/R/U + hysteresis path as attack; preview block swing while blocking, else attack.
+		// Attack hold locks teardrop; block morph only when not holding attack.
 		var primaryAttackHeld = Input.Down( PrimaryAttackAction );
-		var swingPreview = Input.Down( BlockAction )
-			? _blockLiveSwingDir
-			: _primarySwingPhaseActive || primaryAttackHeld
-				? _hasLockedPrimaryAttackDir ? _lockedPrimaryAttackSwingDir : _primaryLiveSwingDir
-				: _primaryLiveSwingDir;
+		var attackFrozen = primaryAttackHeld || _primarySwingPhaseActive;
+		byte swingPreview;
+		if ( attackFrozen && _hasLockedPrimaryAttackDir )
+			swingPreview = _lockedPrimaryAttackSwingDir;
+		else if ( Input.Down( BlockAction ) )
+			swingPreview = _blockLiveSwingDir;
+		else
+			swingPreview = _primaryLiveSwingDir;
 		var dir = SwingCardinalToScreenTeardropDir( swingPreview );
 		var dLen = dir.Length;
 		if ( dLen > 1e-5f )
@@ -903,6 +979,14 @@ public partial class PlayerCombat : Component
 
 	/// <summary>Live aim for melee paths when attack type is unknown — yaw-only horizontal basis.</summary>
 	public Rotation GetMeleeCombatBasisRotation() => GetMeleeLateralCombatBasisRotation();
+
+	/// <summary>Horizontal look yaw — block guard/arc follow view spin every frame (not pawn body snap).</summary>
+	public Rotation GetBlockCombatBasisRotation() => GetCameraYawRotation();
+
+	public float GetBlockCombatBasisYaw() => GetBlockCombatBasisRotation().Angles().yaw;
+
+	internal static byte NormalizeCardinalBlockDirection( byte dir ) =>
+		dir is (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) ? dir : SwingDirs.Up;
 
 	/// <summary>Horizontal yaw of the live combat basis for this attack type.</summary>
 	public float GetMeleeCombatBasisYaw( byte attackType ) =>

@@ -144,12 +144,19 @@ public static class MeleeAttackPath
 		} );
 	}
 
-	/// <summary>Number of path samples along the attack arc (e.g. 150° ÷ 1° → 150).</summary>
+	public static float ArcDegreeToProgress01( PlayerCombat pc, byte attackType, float arcDegree )
+	{
+		GetArcDegreeSpan( pc, attackType, out var startDeg, out var endDeg );
+		return ArcDegreeToProgress01( startDeg, endDeg, arcDegree );
+	}
+
+	/// <summary>Number of path samples along the attack arc (e.g. 150° ÷ 1° → 151 inclusive steps).</summary>
 	public static int GetArcPathSampleCount( PlayerCombat pc, byte attackType, float degreeStep )
 	{
 		GetArcDegreeSpan( pc, attackType, out var startDeg, out var endDeg );
 		degreeStep = Math.Max( 1f, degreeStep );
-		return Math.Max( 1, (int)MathF.Round( MathF.Abs( endDeg - startDeg ) / degreeStep ) );
+		var span = MathF.Abs( endDeg - startDeg );
+		return Math.Max( 1, (int)MathF.Floor( span / degreeStep ) + 1 );
 	}
 
 	/// <summary>Stroke progress 0–1 for arc sample index 0…count−1.</summary>
@@ -158,6 +165,15 @@ public static class MeleeAttackPath
 		sampleCount = Math.Max( 1, sampleCount );
 		sampleIndex = Math.Clamp( sampleIndex, 0, sampleCount - 1 );
 		return sampleCount <= 1 ? 0f : sampleIndex / (float)(sampleCount - 1);
+	}
+
+	/// <summary>Sample index for an arc angle along the attack fan (matches <see cref="ForEachArcDegreeStep"/> spacing).</summary>
+	public static int ArcDegreeToSampleIndex( PlayerCombat pc, byte attackType, float degreeStep, float arcDegree )
+	{
+		GetArcDegreeSpan( pc, attackType, out var startDeg, out var endDeg );
+		var count = GetArcPathSampleCount( pc, attackType, degreeStep );
+		var t = ArcDegreeToProgress01( startDeg, endDeg, arcDegree );
+		return Math.Clamp( (int)MathF.Round( t * (count - 1) ), 0, count - 1 );
 	}
 
 	/// <summary>Arc angle for debug sample index along the attack path.</summary>
@@ -209,6 +225,17 @@ public static class MeleeAttackPath
 		var bucket = (int)MathF.Floor( (yaw + 180f) / degreeStep );
 		return Math.Clamp( bucket, 0, bucketCount - 1 );
 	}
+
+	/// <summary>Signed yaw bucket for debug keying; keeps continuous turning steps at <paramref name="degreeStep"/> spacing.</summary>
+	public static int QuantizeYawDegrees( float yawDegrees, float degreeStep )
+	{
+		degreeStep = Math.Max( 1f, degreeStep );
+		return (int)MathF.Round( Angles.NormalizeAngle( yawDegrees ) / degreeStep );
+	}
+
+	/// <summary>Pack (arc sample index, yaw bucket) into a stable key for deduping debug rays.</summary>
+	public static long PackArcYawDebugKey( int sampleIndex, int yawBucket ) =>
+		((long)sampleIndex << 32) ^ (uint)yawBucket;
 
 	/// <summary>Max rotation debug spokes for a full 360° turn (e.g. 72 at 5°).</summary>
 	public static int GetRotationDebugSpokeCount( float degreeStep ) =>

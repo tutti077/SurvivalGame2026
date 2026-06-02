@@ -4,13 +4,13 @@ using Sandbox;
 
 namespace Survival;
 
-/// <summary>Per-swing scratch for attack debug overlay (lead trail + arc draw state).</summary>
+/// <summary>Per-swing scratch for attack debug overlay (lead trail + optional rotation spokes).</summary>
 struct MeleeAttackDebugDrawScratch
 {
 	internal Vector3 LastLeadTipWorld;
 	internal bool HasLastLeadTip;
 	internal float LastArcProgress01;
-	internal HashSet<int> DrawnArcSampleIndices;
+	internal HashSet<long> DrawnArcYawKeys;
 	internal HashSet<int> DrawnRelativeYawStepIndices;
 	internal float SwingBasisYaw;
 	internal bool HasSwingBasisYaw;
@@ -26,7 +26,7 @@ struct MeleeAttackDebugDrawScratch
 	{
 		HasLastLeadTip = false;
 		LastArcProgress01 = -1f;
-		DrawnArcSampleIndices?.Clear();
+		DrawnArcYawKeys?.Clear();
 		DrawnRelativeYawStepIndices?.Clear();
 		HasSwingBasisYaw = false;
 		HasYawRingProgress = false;
@@ -169,6 +169,14 @@ public partial class PlayerCombat
 			RpcBroadcastMeleeSwingTraceDebug( intent );
 	}
 
+	public void ServerCancelMeleeAttack()
+	{
+		if ( !IsServerSideForMeleeAuthority() || GameObject.IsProxy )
+			return;
+
+		_serverMeleeAttack = null;
+	}
+
 	void MaybeTickServerMeleeAttackAction()
 	{
 		if ( !GameObject.IsValid() )
@@ -264,7 +272,10 @@ public partial class PlayerCombat
 		scratch.HasLastLeadTip = true;
 	}
 
-	/// <summary>Records arc + rotation path samples (<see cref="MeleeAttackArcDegreeStep"/>); draws only when <paramref name="drawOverlay"/>.</summary>
+	/// <summary>
+	/// Time-phase debug rays: while in Early/Active/Late windows, emit the current swing sample at the current yaw.
+	/// Turning or moving during a phase paints that phase's color coverage over time (no per-tick mini-fans).
+	/// </summary>
 	void UpdateAttackPathSamples(
 		byte attackType,
 		float currentBasisYaw,
@@ -275,34 +286,12 @@ public partial class PlayerCombat
 		float overlayDuration,
 		ref MeleeAttackDebugDrawScratch scratch )
 	{
-		scratch.DrawnArcSampleIndices ??= new HashSet<int>();
-		scratch.DrawnRelativeYawStepIndices ??= new HashSet<int>();
-		var drawnArcSamples = scratch.DrawnArcSampleIndices;
-		var drawnYawSteps = scratch.DrawnRelativeYawStepIndices;
+		scratch.DrawnArcYawKeys ??= new HashSet<long>();
+		var drawnArcYawKeys = scratch.DrawnArcYawKeys;
 		var hitRadius = Math.Max( 2f, MeleeHitVolumeThickness );
 		var drawSpheres = MeleeDebugDrawSamplePointsEnabled;
 		var sampleCount = MeleeAttackPath.GetArcPathSampleCount( this, attackType, degreeStep );
-		var maxRotationSpokes = MeleeAttackPath.GetRotationSpokeCount( degreeStep );
-
-		if ( !scratch.HasSwingBasisYaw )
-		{
-			scratch.SwingBasisYaw = currentBasisYaw;
-			scratch.HasSwingBasisYaw = true;
-		}
-
-		if ( !scratch.HasYawRingProgress )
-		{
-			scratch.YawRingProgress01 = activeProgress01;
-			scratch.HasYawRingProgress = true;
-		}
-
-		var currentArcEnd = MeleeAttackPath.RevealedArcSampleExclusiveEnd( activeProgress01, sampleCount );
-		if ( currentArcEnd > scratch.YawRingArcSampleEnd )
-		{
-			scratch.YawRingArcSampleEnd = currentArcEnd;
-			scratch.YawRingProgress01 = MeleeAttackPath.ArcSampleIndexToProgress01( sampleCount,
-				Math.Max( 0, currentArcEnd - 1 ) );
-		}
+		var maxRotationSpokes = MeleeAttackPath.GetRotationDebugSpokeCount( degreeStep );
 
 		void EmitPathSample( float basisYaw, float arcProgress01, byte stateForColor )
 		{
@@ -318,17 +307,53 @@ public partial class PlayerCombat
 				DebugOverlay.Sphere( new Sphere( tip, hitRadius ), spokeColor.WithAlpha( 0.35f ), overlayDuration );
 		}
 
-		void RecordArcSample( int sampleIndex )
+		void RecordArcSampleAtYaw( int sampleIndex, int yawBucket, byte stateForColor )
 		{
-			if ( !drawnArcSamples.Add( sampleIndex ) )
+			var key = MeleeAttackPath.PackArcYawDebugKey( sampleIndex, yawBucket ) ^ ((long)stateForColor << 56);
+			if ( !drawnArcYawKeys.Add( key ) )
 				return;
 
 			var arcProgress = MeleeAttackPath.ArcSampleIndexToProgress01( sampleCount, sampleIndex );
-			EmitPathSample( currentBasisYaw, arcProgress, attackStateForDraw );
+			EmitPathSample( currentBasisYaw, arcProgress, stateForColor );
 		}
 
-		MeleeAttackPath.ForEachNewlyRevealedArcSampleIndex( this, attackType, degreeStep, scratch.LastArcProgress01,
-			activeProgress01, RecordArcSample );
+		if ( drawOverlay )
+		{
+			// Emit one time-slice ray for the current phase/progress; coverage expands by time + yaw/transform motion.
+			var yawBucket = MeleeAttackPath.QuantizeYawDegrees( currentBasisYaw, degreeStep );
+			var currentSampleIndex = Math.Clamp( (int)MathF.Round( activeProgress01 * (sampleCount - 1) ), 0, sampleCount - 1 );
+			RecordArcSampleAtYaw( currentSampleIndex, yawBucket, attackStateForDraw );
+		}
+
+		if ( !MeleeDebugDrawRotationSpokes )
+		{
+			scratch.LastArcProgress01 = activeProgress01;
+			return;
+		}
+
+		scratch.DrawnRelativeYawStepIndices ??= new HashSet<int>();
+		var drawnYawSteps = scratch.DrawnRelativeYawStepIndices;
+
+		if ( !scratch.HasSwingBasisYaw )
+		{
+			scratch.SwingBasisYaw = currentBasisYaw;
+			scratch.HasSwingBasisYaw = true;
+		}
+
+		if ( !scratch.HasYawRingProgress )
+		{
+			scratch.YawRingProgress01 = activeProgress01;
+			scratch.HasYawRingProgress = true;
+		}
+
+		var sampleCountForRing = sampleCount;
+		var currentArcEndForRing = MeleeAttackPath.RevealedArcSampleExclusiveEnd( activeProgress01, sampleCountForRing );
+		if ( currentArcEndForRing > scratch.YawRingArcSampleEnd )
+		{
+			scratch.YawRingArcSampleEnd = currentArcEndForRing;
+			scratch.YawRingProgress01 = MeleeAttackPath.ArcSampleIndexToProgress01( sampleCountForRing,
+				Math.Max( 0, currentArcEndForRing - 1 ) );
+		}
 
 		if ( scratch.HasLastDrawBasisYaw )
 		{
@@ -553,6 +578,9 @@ public partial class PlayerCombat
 
 			if ( !_pc.IsValid() || !_pc.GameObject.IsValid() )
 				return;
+
+			if ( !_visualOnly )
+				_pc.NotifyServerMeleeAttackFinished();
 
 			if ( !_visualOnly && _pc.GameObject.Network is { Active: true } )
 				_pc.RpcOwnerMeleeSwingComplete( _sequence, _anyHit, _totalDamageDealt, _firstHitTargetId );
