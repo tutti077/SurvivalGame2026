@@ -25,9 +25,12 @@ public sealed class PlayerVitals : Component
 	/// <summary>Subtracted from incoming damage before health (client hint; host still applies via authority).</summary>
 	[Property] public float ArmorFlat { get; set; }
 
-	[Property, Group( "Debug" )] public bool LogVitalsNetworking { get; set; } = true;
+	[Property, Group( "Debug" )] public bool LogVitalsNetworking { get; set; }
 
-	[Property, Group( "Debug" )] public bool LogWhenStaminaReachesFull { get; set; } = true;
+	[Property, Group( "Debug" )] public bool LogWhenStaminaReachesFull { get; set; }
+
+	/// <summary>When health is reduced on the host, logs attacker → victim damage and remaining HP.</summary>
+	[Property, Group( "Debug" )] public bool LogDamageAppliedToConsole { get; set; } = true;
 
 	/// <summary>Debug: ignore stamina costs and keep the bar full. Remove before shipping.</summary>
 	[Property, Group( "Debug" )] public bool InfiniteStaminaDebug { get; set; }
@@ -65,6 +68,10 @@ public sealed class PlayerVitals : Component
 	bool _pendingAuthorityRegistration;
 
 	int _staminaFullLogCount;
+	int _deathCount;
+
+	/// <summary>Host/offline deaths this session (incremented before respawn).</summary>
+	public int DeathCount => _deathCount;
 
 	/// <summary>
 	/// Short process/network role for vitals-related logs: <c>offline</c>, <c>host</c>, <c>client</c>, <c>proxy</c>, or <c>non-owner</c>.
@@ -380,15 +387,13 @@ public sealed class PlayerVitals : Component
 		var auth = VitalsAuthority.Instance;
 		if ( auth is not null )
 		{
-			auth.TryApplyDeltas( GameObject, -afterArmor, 0f, this );
-			var attackerName = attacker is not null ? attacker.GameObject.Name : "—";
-			Log.Info( $"{VitalsLogPrefix()} {GameObject.Name} −{afterArmor:0.#} HP (pre-armor {incoming:0.#}, flat {ArmorFlat:0.#}) from {attackerName} → {CurrentHealth:0.#}/{CurrentHealthMax:0.#} HP" );
+			auth.TryApplyDeltas( GameObject, -afterArmor, 0f, this, damageSource: attacker );
 			return afterArmor;
 		}
 
 		var newHealth = Math.Max( 0f, CurrentHealth - afterArmor );
 		ApplyLocalSnapshot( new VitalsSnapshot( newHealth, CurrentHealthMax, CurrentStamina, CurrentStaminaMax ) );
-		Log.Info( $"{VitalsLogPrefix()} {GameObject.Name} −{afterArmor:0.#} HP (local, no VitalsAuthority) → {CurrentHealth:0.#} HP" );
+		LogDamageApplied( attacker, afterArmor, CurrentHealth, CurrentHealthMax );
 		return afterArmor;
 	}
 
@@ -500,6 +505,10 @@ public sealed class PlayerVitals : Component
 		if ( !IsHostOrOffline || CurrentHealth > 0.001f )
 			return;
 
+		_deathCount++;
+		if ( LogDamageAppliedToConsole )
+			Log.Info( $"[Death] {GameObject.Name} died (death #{_deathCount})" );
+
 		_pendingDeathRespawnHost = false;
 
 		var hasSpawn = TryResolveSpawnTransform( out var spawnPos, out var spawnRot );
@@ -535,8 +544,24 @@ public sealed class PlayerVitals : Component
 
 		_jumpStaminaChargedThisAirborne = false;
 
-		var logPos = hasSpawn ? spawnPos : GameObject.WorldPosition;
-		Log.Info( $"{VitalsLogPrefix()} Death → respawn for {GameObject.Name} at {logPos} (HP/ST restored)." );
+		if ( LogVitalsNetworking )
+		{
+			var logPos = hasSpawn ? spawnPos : GameObject.WorldPosition;
+			Log.Info( $"{VitalsLogPrefix()} Death → respawn for {GameObject.Name} at {logPos} (HP/ST restored)." );
+		}
+	}
+
+	/// <summary>Host/offline: one-line damage log (attacker → victim, rounded damage, HP left).</summary>
+	internal void LogDamageApplied( Component damageSource, float damageDealt, float healthRemaining, float healthMax )
+	{
+		if ( !LogDamageAppliedToConsole || damageDealt <= 1e-4f )
+			return;
+
+		var sourceName = damageSource is not null && damageSource.GameObject.IsValid()
+			? damageSource.GameObject.Name
+			: "world";
+		var amount = MathF.Round( damageDealt, MidpointRounding.AwayFromZero );
+		Log.Info( $"[Damage] {sourceName} dealt {amount:0} damage to {GameObject.Name} → {healthRemaining:0}/{healthMax:0} HP" );
 	}
 
 	void TryRunHostDeathRespawn()

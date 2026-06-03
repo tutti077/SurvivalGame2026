@@ -39,7 +39,7 @@ public partial class PlayerCombat
 	public float BlockGroundArcHeightOffset { get; set; } = 2f;
 
 	[Property, Group( "Combat — Block" ), Title( "Log rejected blocks to console" )]
-	public bool LogMeleeBlockRejectionsToConsole { get; set; } = true;
+	public bool LogMeleeBlockRejectionsToConsole { get; set; }
 
 	[Property, Group( "Combat — Block" ), Title( "Overhead block up (above chest)" )]
 	public float BlockOverheadUpOffset { get; set; } = 12f;

@@ -39,12 +39,12 @@ public partial class PlayerCombat : Component
 
 	[Property, Group( "Combat — Debug" )] public bool ShowSwingDirectionCrosshair { get; set; } = true;
 
-	[Property, Group( "Combat — Debug" )] public bool LogCombatNetworkingToConsole { get; set; } = true;
+	[Property, Group( "Combat — Debug" )] public bool LogCombatNetworkingToConsole { get; set; }
 
 	/// <summary>Owner: logs predicted primary-attack stamina (hold vs formula cost) when the swing window submits to the host.</summary>
-	[Property, Group( "Combat — Debug" )] public bool LogAttackStaminaDebug { get; set; } = true;
+	[Property, Group( "Combat — Debug" )] public bool LogAttackStaminaDebug { get; set; }
 
-	[Property, Group( "Combat — Debug" )] public bool LogMeleeSweepHitsToConsole { get; set; } = true;
+	[Property, Group( "Combat — Debug" )] public bool LogMeleeSweepHitsToConsole { get; set; }
 
 	/// <summary>Draws attack-path overlay lines/spheres (blue / yellow / red). Gameplay sampling uses <see cref="MeleeAttackArcDegreeStep"/> regardless.</summary>
 	[Property, Group( "Combat — Debug" ), Title( "Attack path overlay draw" )]
@@ -82,13 +82,13 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Networking" )] public CombatAuthority HostCombatAuthority { get; set; }
 
 	/// <summary>Authoritative weapon damage before camera/swing alignment (server multiplies that next).</summary>
-	[Property, Group( "Combat — Melee" )] public float MeleeWeaponBaseDamage { get; set; } = 30f;
+	[Property, Group( "Combat — Melee" )] public float MeleeWeaponBaseDamage { get; set; } = 8f;
 
-	[Property, Group( "Combat — Stamina" )] public float PrimaryAttackStaminaBase { get; set; } = 5f;
+	[Property, Group( "Combat — Stamina" ), Title( "Primary attack stamina (light)" )]
+	public float PrimaryAttackStaminaLightCost { get; set; } = 8f;
 
-	[Property, Group( "Combat — Stamina" )] public float PrimaryAttackStaminaPerHoldSecond { get; set; } = 10f;
-
-	[Property, Group( "Combat — Stamina" )] public float PrimaryAttackStaminaMaxCost { get; set; } = 25f;
+	[Property, Group( "Combat — Stamina" ), Title( "Primary attack stamina (heavy)" )]
+	public float PrimaryAttackStaminaHeavyCost { get; set; } = 15f;
 
 	/// <summary>
 	/// After primary <b>release</b>, the owner waits this long while summing raw mouse delta into post-release drag (feeds damage tier on the host).
@@ -144,7 +144,7 @@ public partial class PlayerCombat : Component
 
 	/// <summary>Added to the combat damage multiplier when the attack is heavy (see <see cref="ComputeMeleeCombatDamageMultiplier"/>).</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Heavy attack damage bonus (+)" )]
-	public float MeleeHeavyAttackDamageBonus { get; set; } = 0.5f;
+	public float MeleeHeavyAttackDamageBonus { get; set; } = 0.3f;
 
 	/// <summary>Baseline combat multiplier before drag/heavy bonuses (normally <see cref="MeleeCombatDamageMultiplier.Standard"/>).</summary>
 	[Property, Group( "Combat — Melee" ), Title( "Base combat damage multiplier" )]
@@ -192,7 +192,11 @@ public partial class PlayerCombat : Component
 
 	/// <summary>Max forward local reach as a fraction of <see cref="MeleeAttackRangeForward"/>.</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward max reach (× attackRangeForward)" )]
-	public float MeleeAttackForwardMaxReachFraction { get; set; } = 0.88f;
+	public float MeleeAttackForwardMaxReachFraction { get; set; } = 1f;
+
+	/// <summary>Scales overhead +X reach vs lateral-matched path (1 = same; lower = shorter forward).</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward path reach scale" )]
+	public float MeleeAttackForwardPathReachScale { get; set; } = 0.94f;
 
 	/// <summary>Overhead arc span (°) — default matches <see cref="MeleeLateralArcTotalDegrees"/>; end = start − total.</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc total (°)" )]
@@ -204,15 +208,15 @@ public partial class PlayerCombat : Component
 
 	/// <summary>Cos scale at windup; ramps to <see cref="MeleeAttackForwardArcForwardScale"/> by mid-stroke.</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc forward scale (start)" )]
-	public float MeleeAttackForwardArcForwardScaleStart { get; set; } = 0.32f;
+	public float MeleeAttackForwardArcForwardScaleStart { get; set; } = 1f;
 
-	/// <summary>Scales cos (forward) component at mid/late stroke — lower pulls the start back.</summary>
+	/// <summary>Legacy cos scale (path uses lateral-matched reach; kept for prefab compatibility).</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc forward scale" )]
-	public float MeleeAttackForwardArcForwardScale { get; set; } = 0.62f;
+	public float MeleeAttackForwardArcForwardScale { get; set; } = 1f;
 
 	/// <summary>Scales sin (up/down) component — higher exaggerates up-then-down.</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc vertical scale" )]
-	public float MeleeAttackForwardArcVerticalScale { get; set; } = 0.9f;
+	public float MeleeAttackForwardArcVerticalScale { get; set; } = 1.02f;
 
 	/// <summary>Legacy — no longer drives pivot; kept for prefab revert. See head pivot locals below.</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pivot forward start (× range, legacy)" )]
@@ -239,13 +243,13 @@ public partial class PlayerCombat : Component
 	public float MeleeAttackForwardPivotRightOffset { get; set; } = 0f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward reach start multiplier" )]
-	public float MeleeAttackForwardReachStartMultiplier { get; set; } = 0.4f;
+	public float MeleeAttackForwardReachStartMultiplier { get; set; } = 1f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward reach active multiplier" )]
-	public float MeleeAttackForwardReachActiveMultiplier { get; set; } = 0.9f;
+	public float MeleeAttackForwardReachActiveMultiplier { get; set; } = 1f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward reach end multiplier" )]
-	public float MeleeAttackForwardReachEndMultiplier { get; set; } = 0.82f;
+	public float MeleeAttackForwardReachEndMultiplier { get; set; } = 1f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward plane right offset" )]
 	public float MeleeAttackForwardPlaneRightOffset { get; set; } = 12f;
@@ -267,8 +271,8 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "EarlyActive damage penalty (−)" )]
 	public float MeleeEarlyActiveDamagePenalty { get; set; } = 0.15f;
 
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "LateActive damage penalty (−)" )]
-	public float MeleeLateActiveDamagePenalty { get; set; } = 0.15f;
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "LateActive damage bonus (+)" )]
+	public float MeleeLateActiveDamageBonus { get; set; } = 0.15f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Base stagger" )]
 	public float MeleeBaseStagger { get; set; } = 0.45f;
@@ -417,13 +421,16 @@ public partial class PlayerCombat : Component
 	bool _windupTelegraphActive;
 	byte _windupTelegraphAttackType;
 	float _windupTelegraphBasisYaw;
+	bool _windupTelegraphHeavy;
 	bool _lastSentWindupTelegraphActive;
 	byte _lastSentWindupTelegraphAttackType;
 	float _lastSentWindupTelegraphBasisYaw;
+	bool _lastSentWindupTelegraphHeavy;
 	bool _lastSentWindupTelegraphValid;
 	bool _lastBroadcastWindupTelegraphActive;
 	byte _lastBroadcastWindupTelegraphAttackType;
 	float _lastBroadcastWindupTelegraphBasisYaw;
+	bool _lastBroadcastWindupTelegraphHeavy;
 	bool _lastBroadcastWindupTelegraphValid;
 
 	bool IsLocalCombatDriver()
@@ -666,7 +673,8 @@ public partial class PlayerCombat : Component
 		{
 			var hold = Math.Max( 0f, (float)( sent.ReleasedGlobalSeconds - sent.PressedGlobalSeconds ) );
 			var predicted = GetPrimaryAttackStaminaCostForHoldDuration( hold );
-			Log.Info( $"[PlayerCombat/Stamina] predict hold={hold:0.###}s cost={predicted:0.#} (base={PrimaryAttackStaminaBase:0.#} +/s={PrimaryAttackStaminaPerHoldSecond:0.#}, max={PrimaryAttackStaminaMaxCost:0.#})" );
+			var heavy = IsHeavyAttackForHoldDuration( hold );
+			Log.Info( $"[PlayerCombat/Stamina] predict hold={hold:0.###}s cost={predicted:0.#} heavy={heavy} (light={PrimaryAttackStaminaLightCost:0.#} heavy={PrimaryAttackStaminaHeavyCost:0.#})" );
 		}
 
 		DispatchPrimaryAttackReleaseToAuthority( sent );
@@ -674,7 +682,15 @@ public partial class PlayerCombat : Component
 
 	protected virtual bool CanStartPrimaryAttack() => CanAffordPrimaryAttackOnPress();
 
-	protected virtual bool CanContinuePrimaryAttack() => true;
+	protected virtual bool CanContinuePrimaryAttack()
+	{
+		var vitals = Components.Get<PlayerVitals>();
+		if ( vitals is null )
+			return false;
+
+		var hold = _primary.Snapshot.HoldDurationSeconds;
+		return vitals.CanAffordStamina( GetPrimaryAttackStaminaCostForHoldDuration( hold ) );
+	}
 
 	protected virtual bool CanStartBlock() => _postBlockRecoveryRemaining <= 0.001f;
 
@@ -1165,28 +1181,24 @@ public partial class PlayerCombat : Component
 	CombatChannelRules GetPrimaryAttackRules() => new CombatChannelRules { CooldownAfterValidReleaseSeconds = AttackCooldownAfterRelease };
 	CombatChannelRules GetBlockRules() => new CombatChannelRules { CooldownAfterValidReleaseSeconds = BlockCooldownAfterRelease };
 
-	float ComputePrimaryAttackStaminaCost( float holdSeconds )
-	{
-		var h = MathF.Max( 0f, holdSeconds );
-		return MathF.Min( PrimaryAttackStaminaMaxCost, PrimaryAttackStaminaBase + PrimaryAttackStaminaPerHoldSecond * h );
-	}
-
-	/// <summary>Same formula as the owner-side swing cost; used by <see cref="CombatAuthority"/> on the host.</summary>
+	/// <summary>Light vs heavy stamina from hold duration vs <see cref="MeleeHeavyAttackHoldThreshold"/>.</summary>
 	public float GetPrimaryAttackStaminaCostForHoldDuration( float holdSeconds ) =>
-		ComputePrimaryAttackStaminaCost( holdSeconds );
+		IsHeavyAttackForHoldDuration( holdSeconds )
+			? Math.Max( 0f, PrimaryAttackStaminaHeavyCost )
+			: Math.Max( 0f, PrimaryAttackStaminaLightCost );
 
-	/// <summary>Press gate: must afford the worst-case swing stamina so we never start a charge we cannot pay for.</summary>
+	/// <summary>Press gate: afford a light tap; hold past heavy threshold requires heavy cost while charging.</summary>
 	bool CanAffordPrimaryAttackOnPress()
 	{
-		var maxCost = PrimaryAttackStaminaMaxCost;
-		if ( maxCost <= 0f && PrimaryAttackStaminaBase <= 0f && PrimaryAttackStaminaPerHoldSecond <= 0f )
+		var minCost = GetPrimaryAttackStaminaCostForHoldDuration( 0f );
+		if ( minCost <= 0f && PrimaryAttackStaminaHeavyCost <= 0f )
 			return true;
 
 		var vitals = Components.Get<PlayerVitals>();
 		if ( vitals is null )
 			return false;
 
-		return vitals.CanAffordStamina( maxCost );
+		return vitals.CanAffordStamina( minCost );
 	}
 
 	/// <summary>

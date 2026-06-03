@@ -22,7 +22,7 @@ public sealed class CombatAuthority : Component
 	public float MaxPlayerRootVsServerDelta { get; set; } = 256f;
 
 	[Property, Group( "Combat — Debug" )]
-	public bool LogMeleeStaminaSettlement { get; set; } = true;
+	public bool LogMeleeStaminaSettlement { get; set; }
 
 	readonly Dictionary<Guid, double> _lastAcceptedAttackByAttacker = new();
 
@@ -52,7 +52,7 @@ public sealed class CombatAuthority : Component
 		if ( pc is null )
 			return RejectResult( AttackReleaseDebugCode.RejectAttackerMissingPlayerCombat, "attacker has no PlayerCombat" );
 
-		var prepaid = Math.Clamp( intent.StaminaPrepaidMax, 0f, pc.PrimaryAttackStaminaMaxCost );
+		var prepaid = Math.Clamp( intent.StaminaPrepaidMax, 0f, pc.PrimaryAttackStaminaHeavyCost );
 		var pv = attacker.Components.Get<PlayerVitals>();
 
 		var refundPrepaidOnEarlyFail = prepaid > 1e-4f;

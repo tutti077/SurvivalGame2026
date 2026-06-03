@@ -16,7 +16,7 @@ public sealed class DamageOverTimeTrap : Component, Component.ITriggerListener
 
 	[Property] public float DamageTickIntervalSeconds { get; set; } = 1f;
 
-	[Property, Group( "Debug" )] public bool LogTrap { get; set; } = true;
+	[Property, Group( "Debug" )] public bool LogTrap { get; set; }
 
 	[Property, Group( "Setup" )]
 	public bool AutoEnableTriggerOnFirstBoxCollider { get; set; } = true;
@@ -196,8 +196,7 @@ public sealed class DamageOverTimeTrap : Component, Component.ITriggerListener
 		var auth = VitalsAuthority.Instance;
 		if ( auth is not null )
 		{
-			if ( auth.TryApplyDeltas( vitals.GameObject, healthDelta, 0f, vitals ) && LogTrap )
-				Log.Info( $"[DamageOverTimeTrap] authority Δhp={healthDelta:0.##} on {vitals.GameObject.Name} → HP={vitals.CurrentHealth:0.#}/{vitals.CurrentHealthMax:0.#}" );
+			auth.TryApplyDeltas( vitals.GameObject, healthDelta, 0f, vitals, damageSource: this );
 			return;
 		}
 

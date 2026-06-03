@@ -258,7 +258,7 @@ public sealed class VitalsAuthority : Component
 	/// <summary>Host: apply deltas (negative = damage / stamina cost). Updates <paramref name="vitals"/> and syncs to owner.</summary>
 	/// <param name="mergePendingSprintDebtForNegativeStamina">When true and stamina delta is negative, pull <see cref="PlayerMovement.TakePendingSprintStaminaDebt"/> into the spend. Set false when the caller already merged (e.g. client Rpc payload).</param>
 	/// <param name="clientAuthorityStaminaBeforeSpend">Optional owner baseline (≈ displayed stamina + unsynced sprint debt) for negative stamina deltas — rejects cheats/large desync vs <see cref="VitalsRecord.Stamina"/>.</param>
-	public bool TryApplyDeltas( GameObject playerRoot, float healthDelta, float staminaDelta, PlayerVitals vitals, bool mergePendingSprintDebtForNegativeStamina = true, float? clientAuthorityStaminaBeforeSpend = null )
+	public bool TryApplyDeltas( GameObject playerRoot, float healthDelta, float staminaDelta, PlayerVitals vitals, bool mergePendingSprintDebtForNegativeStamina = true, float? clientAuthorityStaminaBeforeSpend = null, Component damageSource = null )
 	{
 		if ( !IsHostContext() || vitals is null || !vitals.GameObject.IsValid() )
 			return false;
@@ -294,7 +294,12 @@ public sealed class VitalsAuthority : Component
 		r.Health = Math.Clamp( r.Health + healthDelta, 0f, r.HealthMax );
 
 		if ( healthDelta < 0f )
+		{
 			_healthRegenGate.ArmNoRegenBefore( id, nowT, HealthRegenDelayAfterDamageSeconds );
+			var removed = MathF.Max( 0f, healthBefore - r.Health );
+			if ( removed > 1e-4f )
+				vitals.LogDamageApplied( damageSource, removed, r.Health, r.HealthMax );
+		}
 
 		if ( staminaDelta < 0f )
 		{

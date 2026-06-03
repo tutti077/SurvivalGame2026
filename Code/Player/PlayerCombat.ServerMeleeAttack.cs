@@ -86,8 +86,12 @@ public partial class PlayerCombat
 	public float GetMeleeWeaponBaseDamage() =>
 		MeleeWeaponBaseDamage > 0f ? MeleeWeaponBaseDamage : AttackCombatConstants.DefaultMeleeWeaponDamage;
 
-	public float GetMeleeDamageForState( byte attackState, bool isHeavy, byte swingDir, Vector2 postDragScreen ) =>
-		GetMeleeWeaponBaseDamage() * ComputeMeleeCombatDamageMultiplier( swingDir, postDragScreen, isHeavy, attackState );
+	public float GetMeleeDamageForState( byte attackState, bool isHeavy, byte swingDir, Vector2 postDragScreen )
+	{
+		var raw = GetMeleeWeaponBaseDamage()
+		          * ComputeMeleeCombatDamageMultiplier( swingDir, postDragScreen, isHeavy, attackState );
+		return MathF.Round( raw, MidpointRounding.AwayFromZero );
+	}
 
 	public float GetMeleeDamageForState( byte attackState, bool isHeavy, in AttackReleaseIntent intent ) =>
 		GetMeleeDamageForState( attackState, isHeavy, intent.SwingDir,
@@ -105,7 +109,7 @@ public partial class PlayerCombat
 			MeleeHeavyAttackDamageBonus,
 			attackState,
 			MeleeEarlyActiveDamagePenalty,
-			MeleeLateActiveDamagePenalty,
+			MeleeLateActiveDamageBonus,
 			MeleeBaseCombatDamageMultiplier );
 
 	public float ComputeMeleeCombatDamageMultiplier( in AttackReleaseIntent intent, bool isHeavy, byte attackState ) =>
@@ -407,7 +411,7 @@ public partial class PlayerCombat
 		if ( !ShowMeleeAttackWindupTelegraph || !_windupTelegraphActive )
 			return;
 
-		DrawMeleeAttackWindupTelegraph( _windupTelegraphAttackType, _windupTelegraphBasisYaw );
+		DrawMeleeAttackWindupTelegraph( _windupTelegraphAttackType, _windupTelegraphBasisYaw, _windupTelegraphHeavy );
 	}
 
 	void TickWindupTelegraphNetworkState()
@@ -415,33 +419,35 @@ public partial class PlayerCombat
 		if ( !ShowMeleeAttackWindupTelegraph )
 		{
 			if ( _windupTelegraphActive )
-				PublishWindupTelegraphState( false, 0, 0f );
+				PublishWindupTelegraphState( false, 0, 0f, false );
 			return;
 		}
 
-		if ( !TryComputeLocalWindupTelegraph( out var attackType, out var basisYaw ) )
+		if ( !TryComputeLocalWindupTelegraph( out var attackType, out var basisYaw, out var isHeavy ) )
 		{
 			if ( _windupTelegraphActive )
-				PublishWindupTelegraphState( false, 0, 0f );
+				PublishWindupTelegraphState( false, 0, 0f, false );
 			return;
 		}
 
-		PublishWindupTelegraphState( true, attackType, basisYaw );
+		PublishWindupTelegraphState( true, attackType, basisYaw, isHeavy );
 	}
 
-	bool TryComputeLocalWindupTelegraph( out byte attackType, out float basisYaw )
+	bool TryComputeLocalWindupTelegraph( out byte attackType, out float basisYaw, out bool isHeavy )
 	{
 		attackType = 0;
 		basisYaw = 0f;
+		isHeavy = false;
 
 		if ( _clientSwingTracePlayback?.IsInWindupPhase == true )
 		{
 			attackType = _clientSwingTracePlayback.AttackType;
 			basisYaw = GetMeleeCombatBasisYaw( attackType );
+			isHeavy = _clientSwingTracePlayback.IsHeavy;
 			return true;
 		}
 
-		if ( ServerHasActiveMeleeAttackInWindup( out attackType, out basisYaw ) )
+		if ( ServerHasActiveMeleeAttackInWindup( out attackType, out basisYaw, out isHeavy ) )
 			return true;
 
 		if ( !_hasLockedPrimaryAttackDir )
@@ -452,54 +458,61 @@ public partial class PlayerCombat
 
 		attackType = ResolveAttackTypeFromCursorDir( _lockedPrimaryAttackSwingDir );
 		basisYaw = GetMeleeCombatBasisYaw( attackType );
+		isHeavy = IsHeavyAttackForHoldDuration( _primary.Snapshot.HoldDurationSeconds );
 		return true;
 	}
 
-	bool ServerHasActiveMeleeAttackInWindup( out byte attackType, out float basisYaw )
+	bool ServerHasActiveMeleeAttackInWindup( out byte attackType, out float basisYaw, out bool isHeavy )
 	{
 		attackType = 0;
 		basisYaw = 0f;
+		isHeavy = false;
 		if ( _serverMeleeAttack?.IsInWindupPhase != true )
 			return false;
 
 		attackType = _serverMeleeAttack.AttackType;
 		basisYaw = GetMeleeCombatBasisYaw( attackType );
+		isHeavy = _serverMeleeAttack.IsHeavy;
 		return true;
 	}
 
-	void PublishWindupTelegraphState( bool active, byte attackType, float basisYaw )
+	void PublishWindupTelegraphState( bool active, byte attackType, float basisYaw, bool isHeavy )
 	{
 		if ( active == _lastSentWindupTelegraphActive && _lastSentWindupTelegraphValid
 		     && attackType == _lastSentWindupTelegraphAttackType
+		     && isHeavy == _lastSentWindupTelegraphHeavy
 		     && ( !active || MathF.Abs( basisYaw - _lastSentWindupTelegraphBasisYaw ) < 0.4f ) )
 			return;
 
 		_lastSentWindupTelegraphActive = active;
 		_lastSentWindupTelegraphAttackType = attackType;
 		_lastSentWindupTelegraphBasisYaw = basisYaw;
+		_lastSentWindupTelegraphHeavy = isHeavy;
 		_lastSentWindupTelegraphValid = true;
-		ApplyWindupTelegraphState( active, attackType, basisYaw );
+		ApplyWindupTelegraphState( active, attackType, basisYaw, isHeavy );
 
 		if ( GameObject.Network is not { Active: true } )
 			return;
 
 		if ( Networking.IsHost )
-			BroadcastWindupTelegraphIfHost( active, attackType, basisYaw );
+			BroadcastWindupTelegraphIfHost( active, attackType, basisYaw, isHeavy );
 		else
-			RpcSubmitWindupTelegraph( active, attackType, basisYaw );
+			RpcSubmitWindupTelegraph( active, attackType, basisYaw, isHeavy );
 	}
 
-	void ApplyWindupTelegraphState( bool active, byte attackType, float basisYaw )
+	void ApplyWindupTelegraphState( bool active, byte attackType, float basisYaw, bool isHeavy )
 	{
 		_windupTelegraphActive = active;
 		_windupTelegraphAttackType = attackType;
 		_windupTelegraphBasisYaw = basisYaw;
+		_windupTelegraphHeavy = isHeavy;
 	}
 
-	void BroadcastWindupTelegraphIfHost( bool active, byte attackType, float basisYaw )
+	void BroadcastWindupTelegraphIfHost( bool active, byte attackType, float basisYaw, bool isHeavy )
 	{
 		var changed = active != _lastBroadcastWindupTelegraphActive
 		              || attackType != _lastBroadcastWindupTelegraphAttackType
+		              || isHeavy != _lastBroadcastWindupTelegraphHeavy
 		              || !_lastBroadcastWindupTelegraphValid
 		              || ( active && MathF.Abs( basisYaw - _lastBroadcastWindupTelegraphBasisYaw ) >= 0.4f );
 
@@ -509,12 +522,13 @@ public partial class PlayerCombat
 		_lastBroadcastWindupTelegraphActive = active;
 		_lastBroadcastWindupTelegraphAttackType = attackType;
 		_lastBroadcastWindupTelegraphBasisYaw = basisYaw;
+		_lastBroadcastWindupTelegraphHeavy = isHeavy;
 		_lastBroadcastWindupTelegraphValid = true;
-		RpcBroadcastWindupTelegraph( active, attackType, basisYaw );
+		RpcBroadcastWindupTelegraph( active, attackType, basisYaw, isHeavy );
 	}
 
 	[Rpc.Host]
-	void RpcSubmitWindupTelegraph( bool active, byte attackType, float basisYaw )
+	void RpcSubmitWindupTelegraph( bool active, byte attackType, float basisYaw, bool isHeavy )
 	{
 		if ( !Networking.IsHost || !GameObject.IsValid() )
 			return;
@@ -523,21 +537,21 @@ public partial class PlayerCombat
 		     && !ConnectionIdentity.SameClient( caller, owner ) )
 			return;
 
-		ApplyWindupTelegraphState( active, attackType, basisYaw );
-		BroadcastWindupTelegraphIfHost( active, attackType, basisYaw );
+		ApplyWindupTelegraphState( active, attackType, basisYaw, isHeavy );
+		BroadcastWindupTelegraphIfHost( active, attackType, basisYaw, isHeavy );
 	}
 
 	[Rpc.Broadcast( NetFlags.HostOnly )]
-	void RpcBroadcastWindupTelegraph( bool active, byte attackType, float basisYaw )
+	void RpcBroadcastWindupTelegraph( bool active, byte attackType, float basisYaw, bool isHeavy )
 	{
 		if ( Networking.IsHost )
 			return;
 
-		ApplyWindupTelegraphState( active, attackType, basisYaw );
+		ApplyWindupTelegraphState( active, attackType, basisYaw, isHeavy );
 	}
 
-	/// <summary>Black thick line at the first attack-path sample — windup telegraph until colored sweep rays begin.</summary>
-	void DrawMeleeAttackWindupTelegraph( byte attackType, float basisYaw )
+	/// <summary>Thick line at the first attack-path sample — black (light) or white (heavy) until colored sweep rays begin.</summary>
+	void DrawMeleeAttackWindupTelegraph( byte attackType, float basisYaw, bool isHeavy )
 	{
 		if ( !GameObject.IsValid() )
 			return;
@@ -546,7 +560,7 @@ public partial class PlayerCombat
 		var origin = MeleeAttackPath.GetSwingPivotWorld( GameObject, this, attackType, basis );
 		MeleeAttackPath.EvaluateWorldBlade( GameObject, this, attackType, 0f, basis, out var tip, out _ );
 		var drawFor = MathF.Max( 0.03f, Time.Delta * 1.5f );
-		var color = Color.Black.WithAlpha( 0.92f );
+		var color = isHeavy ? Color.White.WithAlpha( 0.92f ) : Color.Black.WithAlpha( 0.92f );
 		var thickness = Math.Max( 2f, MeleeWindupTelegraphThickness );
 		DrawThickDebugLine( origin, tip, color, drawFor, thickness );
 		DrawThickDebugLineSphere( tip, thickness * 0.45f, color.WithAlpha( 0.85f ), drawFor );
@@ -727,6 +741,22 @@ public partial class PlayerCombat
 				var elapsed = (float)( Time.NowDouble - _startedAtSandbox );
 				return elapsed < _windup;
 			}
+		}
+
+		internal bool IsHeavy => _isHeavy;
+
+		internal float GetActiveArcProgress01()
+		{
+			var elapsed = (float)( Time.NowDouble - _startedAtSandbox );
+			var windEnd = _windup;
+			var activeEnd = windEnd + _active;
+			if ( elapsed < windEnd )
+				return 0f;
+			if ( elapsed >= activeEnd )
+				return 1f;
+			var activeLen = Math.Max( 1e-4f, _active );
+			var activeElapsed = Math.Min( elapsed - windEnd, MeleeAttackPath.GetLatePhaseEndElapsedSeconds( _pc, _attackType ) );
+			return Math.Clamp( activeElapsed / activeLen, 0f, 1f );
 		}
 
 		internal bool Tick( Scene scene )

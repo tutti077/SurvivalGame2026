@@ -453,33 +453,30 @@ public static class MeleeAttackPath
 	{
 		t = Math.Clamp( t, 0f, 1f );
 		var range = GetAttackRange( pc, MeleeAttackTypes.Forward );
-		var reachMul = GetForwardReachMultiplier( pc, t );
-		var effectiveRange = range * reachMul;
-
 		var angleRad = Lerp( startDeg, endDeg, t ) * Deg2Rad;
 
 		var pivot = GetForwardSwingPivotLocal( pc, t );
-		var forwardScale = GetForwardArcForwardScale( pc, t );
+		var reachScale = Math.Clamp( pc.MeleeAttackForwardPathReachScale, 0.75f, 1.15f );
+		var pivotForward = range * 0.14f;
 		var verticalScale = Math.Clamp( pc.MeleeAttackForwardArcVerticalScale, 0.2f, 2f );
 
-		var arcForward = pivot.x + MathF.Cos( angleRad ) * effectiveRange * forwardScale;
-		var arcUp = pivot.y + MathF.Sin( angleRad ) * effectiveRange * verticalScale;
+		// +X reach ≈ lateral slashes, scaled by <see cref="PlayerCombat.MeleeAttackForwardPathReachScale"/>.
+		var arcForward = pivotForward + MathF.Cos( angleRad ) * range * reachScale;
+		var arcUp = pivot.y + MathF.Sin( angleRad ) * range * verticalScale;
 
 		tipLocal = new Vector3( arcForward, arcUp, pc.MeleeAttackForwardPlaneRightOffset );
 
 		ApplyForwardPlaneTilt( ref tipLocal, pc.ServerEyeHeight, pc.MeleeAttackTiltDegreesForward * Deg2Rad );
 		ApplyForwardPitchLean( ref tipLocal, pc, pivot );
-		ClampForwardLocalFromPivot( ref tipLocal, pivot, range * reachMul, pc );
+		ClampForwardLocalFromPivot( ref tipLocal, pivot, range * 1.14f * reachScale, pc );
 	}
 
 	/// <summary>Head-adjacent arc origin in combat-local space (+X forward, +Y up, +Z right).</summary>
 	static Vector3 GetForwardSwingPivotLocal( PlayerCombat pc, float strokeProgress01 )
 	{
 		strokeProgress01 = Math.Clamp( strokeProgress01, 0f, 1f );
-		var forward = Lerp(
-			pc.MeleeAttackForwardPivotForwardLocal,
-			pc.MeleeAttackForwardPivotForwardLocalEnd,
-			strokeProgress01 );
+		var range = GetAttackRange( pc, MeleeAttackTypes.Forward );
+		var forward = Lerp( range * 0.14f, range * 0.18f, strokeProgress01 );
 		var up = pc.ServerEyeHeight + pc.MeleeAttackForwardPivotUpFromEye;
 		return new Vector3( forward, up, pc.MeleeAttackForwardPivotRightOffset );
 	}
@@ -541,7 +538,7 @@ public static class MeleeAttackPath
 
 	static void ClampForwardLocalFromPivot( ref Vector3 local, Vector3 pivotLocal, float maxReach, PlayerCombat pc )
 	{
-		maxReach *= Math.Clamp( pc.MeleeAttackForwardMaxReachFraction, 0.55f, 1.05f );
+		maxReach *= Math.Clamp( pc.MeleeAttackForwardMaxReachFraction, 0.85f, 1.25f );
 		var offset = local - pivotLocal;
 		var dist = offset.Length;
 		if ( dist > maxReach && dist > 1e-4f )

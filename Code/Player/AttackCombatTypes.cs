@@ -134,7 +134,6 @@ public sealed class DamageReceiver : Component, IDamageable
 		if ( vitals is not null )
 			return vitals.ApplyDamageAfterArmor( scaled, attacker );
 
-		Log.Info( $"{GameObject.Name}: TakeDamage {scaled:0.#} from {attacker?.GameObject.Name} (no PlayerVitals)" );
 		return scaled;
 	}
 
@@ -159,7 +158,7 @@ public static class AttackCombatConstants
 	public const float DefaultMeleeRange = 80f;
 
 	/// <summary>Fallback if <see cref="PlayerCombat.MeleeWeaponBaseDamage"/> wasn’t replicated in older assets.</summary>
-	public const float DefaultMeleeWeaponDamage = 10f;
+	public const float DefaultMeleeWeaponDamage = 8f;
 }
 
 /// <summary>
@@ -193,7 +192,7 @@ public static class MeleeCombatDamageMultiplier
 	}
 
 	/// <summary>
-	/// Builds the combat multiplier: base + drag + phase penalties + heavy bonus (all additive).
+	/// Builds the combat multiplier: base + drag + phase adjustments + heavy bonus (all additive).
 	/// </summary>
 	public static float Compute(
 		byte lockedSwingDir,
@@ -205,23 +204,23 @@ public static class MeleeCombatDamageMultiplier
 		float heavyBonus,
 		byte attackState,
 		float earlyActivePenalty,
-		float lateActivePenalty,
+		float lateActiveBonus,
 		float baseMultiplier = Standard )
 	{
 		var total = baseMultiplier
 		            + EvaluateDragBonus( lockedSwingDir, dragScreen, clearDragPixels, goodBonus, badPenalty )
-		            + EvaluatePhaseAdjustment( attackState, earlyActivePenalty, lateActivePenalty );
+		            + EvaluatePhaseAdjustment( attackState, earlyActivePenalty, lateActiveBonus );
 		if ( isHeavy )
 			total += heavyBonus;
 		return Math.Max( 0f, total );
 	}
 
-	static float EvaluatePhaseAdjustment( byte attackState, float earlyActivePenalty, float lateActivePenalty )
+	static float EvaluatePhaseAdjustment( byte attackState, float earlyActivePenalty, float lateActiveBonus )
 	{
 		if ( attackState == MeleeAttackStates.EarlyActive )
 			return -Math.Max( 0f, earlyActivePenalty );
 		if ( attackState == MeleeAttackStates.LateActive )
-			return -Math.Max( 0f, lateActivePenalty );
+			return Math.Max( 0f, lateActiveBonus );
 		return 0f;
 	}
 
