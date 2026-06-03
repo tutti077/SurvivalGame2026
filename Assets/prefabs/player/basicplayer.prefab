@@ -298,7 +298,7 @@
         "MeleeSwingDragGoodBonus": 0.15,
         "MeleeVictimStaminaDrainOnHit": 0,
         "MeleeWeaponBaseDamage": 30,
-        "MeleeWindupDuration": 0.25,
+        "MeleeWindupDuration": 0.35,
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
