@@ -118,6 +118,12 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Windup duration (s)" )]
 	public float MeleeWindupDuration { get; set; } = 0.25f;
 
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Show windup direction telegraph" )]
+	public bool ShowMeleeAttackWindupTelegraph { get; set; } = true;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Windup telegraph line thickness" )]
+	public float MeleeWindupTelegraphThickness { get; set; } = 6f;
+
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Recovery duration (s)" )]
 	public float MeleeRecoveryDuration { get; set; } = 0.4f;
 
@@ -408,6 +414,18 @@ public partial class PlayerCombat : Component
 	bool _meleeIntentForwardPitchCaptured;
 	float _meleeIntentForwardStartPitchDegrees;
 
+	bool _windupTelegraphActive;
+	byte _windupTelegraphAttackType;
+	float _windupTelegraphBasisYaw;
+	bool _lastSentWindupTelegraphActive;
+	byte _lastSentWindupTelegraphAttackType;
+	float _lastSentWindupTelegraphBasisYaw;
+	bool _lastSentWindupTelegraphValid;
+	bool _lastBroadcastWindupTelegraphActive;
+	byte _lastBroadcastWindupTelegraphAttackType;
+	float _lastBroadcastWindupTelegraphBasisYaw;
+	bool _lastBroadcastWindupTelegraphValid;
+
 	bool IsLocalCombatDriver()
 	{
 		if ( GameObject.IsProxy )
@@ -427,7 +445,10 @@ public partial class PlayerCombat : Component
 		{
 			MaybeTickServerMeleeAttackAction();
 			if ( IsLocalCombatDriver() )
-				TickAllRemoteCombatVisualizationsInScene();
+		{
+			TickAllRemoteCombatVisualizationsInScene();
+			TickWindupTelegraphNetworkState();
+		}
 		}
 
 		if ( !Active || !GameObject.IsValid() )
@@ -494,6 +515,8 @@ public partial class PlayerCombat : Component
 
 		if ( ShouldDrawMeleeBlockVisualization() )
 			DrawMeleeBlockGuardVisualization();
+
+		DrawWindupTelegraphIfNeeded();
 	}
 
 	void TickSwingLookAccumulatorsAfterCombatStep()

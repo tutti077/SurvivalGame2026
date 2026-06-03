@@ -5,5 +5,5 @@ namespace Game;
 /// </summary>
 public static class GameBuildLabel
 {
-	public const string Display = "0.3.318";
+	public const string Display = "0.3.321";
 }

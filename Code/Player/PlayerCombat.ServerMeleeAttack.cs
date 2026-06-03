@@ -252,6 +252,7 @@ public partial class PlayerCombat
 
 			pc.TickClientSwingTracePlaybackOnly( scene );
 			pc.DrawRemoteBlockVisualizationIfNeeded();
+			pc.DrawWindupTelegraphIfNeeded();
 		}
 	}
 
@@ -401,6 +402,178 @@ public partial class PlayerCombat
 		scratch.LastArcProgress01 = activeProgress01;
 	}
 
+	internal void DrawWindupTelegraphIfNeeded()
+	{
+		if ( !ShowMeleeAttackWindupTelegraph || !_windupTelegraphActive )
+			return;
+
+		DrawMeleeAttackWindupTelegraph( _windupTelegraphAttackType, _windupTelegraphBasisYaw );
+	}
+
+	void TickWindupTelegraphNetworkState()
+	{
+		if ( !ShowMeleeAttackWindupTelegraph )
+		{
+			if ( _windupTelegraphActive )
+				PublishWindupTelegraphState( false, 0, 0f );
+			return;
+		}
+
+		if ( !TryComputeLocalWindupTelegraph( out var attackType, out var basisYaw ) )
+		{
+			if ( _windupTelegraphActive )
+				PublishWindupTelegraphState( false, 0, 0f );
+			return;
+		}
+
+		PublishWindupTelegraphState( true, attackType, basisYaw );
+	}
+
+	bool TryComputeLocalWindupTelegraph( out byte attackType, out float basisYaw )
+	{
+		attackType = 0;
+		basisYaw = 0f;
+
+		if ( _clientSwingTracePlayback?.IsInWindupPhase == true )
+		{
+			attackType = _clientSwingTracePlayback.AttackType;
+			basisYaw = GetMeleeCombatBasisYaw( attackType );
+			return true;
+		}
+
+		if ( ServerHasActiveMeleeAttackInWindup( out attackType, out basisYaw ) )
+			return true;
+
+		if ( !_hasLockedPrimaryAttackDir )
+			return false;
+
+		if ( !Input.Down( PrimaryAttackAction ) && !_primarySwingPhaseActive )
+			return false;
+
+		attackType = ResolveAttackTypeFromCursorDir( _lockedPrimaryAttackSwingDir );
+		basisYaw = GetMeleeCombatBasisYaw( attackType );
+		return true;
+	}
+
+	bool ServerHasActiveMeleeAttackInWindup( out byte attackType, out float basisYaw )
+	{
+		attackType = 0;
+		basisYaw = 0f;
+		if ( _serverMeleeAttack?.IsInWindupPhase != true )
+			return false;
+
+		attackType = _serverMeleeAttack.AttackType;
+		basisYaw = GetMeleeCombatBasisYaw( attackType );
+		return true;
+	}
+
+	void PublishWindupTelegraphState( bool active, byte attackType, float basisYaw )
+	{
+		if ( active == _lastSentWindupTelegraphActive && _lastSentWindupTelegraphValid
+		     && attackType == _lastSentWindupTelegraphAttackType
+		     && ( !active || MathF.Abs( basisYaw - _lastSentWindupTelegraphBasisYaw ) < 0.4f ) )
+			return;
+
+		_lastSentWindupTelegraphActive = active;
+		_lastSentWindupTelegraphAttackType = attackType;
+		_lastSentWindupTelegraphBasisYaw = basisYaw;
+		_lastSentWindupTelegraphValid = true;
+		ApplyWindupTelegraphState( active, attackType, basisYaw );
+
+		if ( GameObject.Network is not { Active: true } )
+			return;
+
+		if ( Networking.IsHost )
+			BroadcastWindupTelegraphIfHost( active, attackType, basisYaw );
+		else
+			RpcSubmitWindupTelegraph( active, attackType, basisYaw );
+	}
+
+	void ApplyWindupTelegraphState( bool active, byte attackType, float basisYaw )
+	{
+		_windupTelegraphActive = active;
+		_windupTelegraphAttackType = attackType;
+		_windupTelegraphBasisYaw = basisYaw;
+	}
+
+	void BroadcastWindupTelegraphIfHost( bool active, byte attackType, float basisYaw )
+	{
+		var changed = active != _lastBroadcastWindupTelegraphActive
+		              || attackType != _lastBroadcastWindupTelegraphAttackType
+		              || !_lastBroadcastWindupTelegraphValid
+		              || ( active && MathF.Abs( basisYaw - _lastBroadcastWindupTelegraphBasisYaw ) >= 0.4f );
+
+		if ( !changed )
+			return;
+
+		_lastBroadcastWindupTelegraphActive = active;
+		_lastBroadcastWindupTelegraphAttackType = attackType;
+		_lastBroadcastWindupTelegraphBasisYaw = basisYaw;
+		_lastBroadcastWindupTelegraphValid = true;
+		RpcBroadcastWindupTelegraph( active, attackType, basisYaw );
+	}
+
+	[Rpc.Host]
+	void RpcSubmitWindupTelegraph( bool active, byte attackType, float basisYaw )
+	{
+		if ( !Networking.IsHost || !GameObject.IsValid() )
+			return;
+
+		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
+		     && !ConnectionIdentity.SameClient( caller, owner ) )
+			return;
+
+		ApplyWindupTelegraphState( active, attackType, basisYaw );
+		BroadcastWindupTelegraphIfHost( active, attackType, basisYaw );
+	}
+
+	[Rpc.Broadcast( NetFlags.HostOnly )]
+	void RpcBroadcastWindupTelegraph( bool active, byte attackType, float basisYaw )
+	{
+		if ( Networking.IsHost )
+			return;
+
+		ApplyWindupTelegraphState( active, attackType, basisYaw );
+	}
+
+	/// <summary>Black thick line at the first attack-path sample — windup telegraph until colored sweep rays begin.</summary>
+	void DrawMeleeAttackWindupTelegraph( byte attackType, float basisYaw )
+	{
+		if ( !GameObject.IsValid() )
+			return;
+
+		var basis = GetMeleeCombatBasisRotationForYaw( attackType, basisYaw );
+		var origin = MeleeAttackPath.GetSwingPivotWorld( GameObject, this, attackType, basis );
+		MeleeAttackPath.EvaluateWorldBlade( GameObject, this, attackType, 0f, basis, out var tip, out _ );
+		var drawFor = MathF.Max( 0.03f, Time.Delta * 1.5f );
+		var color = Color.Black.WithAlpha( 0.92f );
+		var thickness = Math.Max( 2f, MeleeWindupTelegraphThickness );
+		DrawThickDebugLine( origin, tip, color, drawFor, thickness );
+		DrawThickDebugLineSphere( tip, thickness * 0.45f, color.WithAlpha( 0.85f ), drawFor );
+	}
+
+	void DrawThickDebugLine( Vector3 start, Vector3 end, Color color, float duration, float thickness )
+	{
+		DebugOverlay.Line( start, end, color, duration );
+
+		var delta = end - start;
+		if ( delta.LengthSquared < 1e-6f )
+			return;
+
+		var dir = delta.Normal;
+		var side = Vector3.Cross( dir, Vector3.Up );
+		if ( side.LengthSquared < 1e-6f )
+			side = Vector3.Cross( dir, Vector3.Right );
+		side = side.Normal;
+
+		var half = thickness * 0.5f;
+		DebugOverlay.Line( start + side * half, end + side * half, color, duration );
+		DebugOverlay.Line( start - side * half, end - side * half, color, duration );
+	}
+
+	void DrawThickDebugLineSphere( Vector3 center, float radius, Color color, float duration ) =>
+		DebugOverlay.Sphere( new Sphere( center, Math.Max( 1f, radius ) ), color, duration );
+
 	void EmitMeleeDebugPathRay(
 		byte attackType,
 		float basisYaw,
@@ -543,6 +716,17 @@ public partial class PlayerCombat
 			_startedAtSandbox = Time.NowDouble;
 			_debugDrawScratch.Reset();
 			_pc.PushMeleeAttackBasisFromIntent( intent, _attackType );
+		}
+
+		internal byte AttackType => _attackType;
+
+		internal bool IsInWindupPhase
+		{
+			get
+			{
+				var elapsed = (float)( Time.NowDouble - _startedAtSandbox );
+				return elapsed < _windup;
+			}
 		}
 
 		internal bool Tick( Scene scene )
