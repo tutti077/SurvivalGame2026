@@ -4,8 +4,10 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Server-authoritative directional block: incoming hit angle vs defender facing and held block direction.
-/// 0° = straight ahead; negative = attacker's hit from defender's left; positive = from right.
+/// Server-authoritative directional block: attack ray must enter the held block region (footprint / guard)
+/// before the defender body. Left teardrop = left-side region; right teardrop = right-side region.
+/// Lateral holds may block left or right attacks when geometry passes and the attacker is in that teardrop's front arc
+/// (blocks behind the defender or on the wrong flank fail even if the wide arc is along the ray).
 /// </summary>
 public static class MeleeBlockResolution
 {
@@ -102,7 +104,7 @@ public static class MeleeBlockResolution
 		}
 
 		var blockDir = defender.AuthoritativeMeleeBlockDirection;
-		var angle = ComputeIncomingHitAngleDegrees( defender, contact.HitPosition, contact.AttackerPosition );
+		var angle = ComputeIncomingAngleFromAttacker( defender, contact.AttackerPosition );
 		trace = new MeleeBlockValidationTrace
 		{
 			IncomingAngleDegrees = angle,
@@ -117,66 +119,131 @@ public static class MeleeBlockResolution
 			return false;
 		}
 
-		var blocked = blockDir switch
+		var overheadAttack = IsOverheadAttack( in contact );
+		if ( overheadAttack )
 		{
-			SwingDirs.Up => TryResolveOverheadBlock( defender, angle, out rejectReason ),
-			SwingDirs.Left => TryResolveLateralBlock( defender, angle, isLeftBlock: true, out rejectReason ),
-			_ => TryResolveLateralBlock( defender, angle, isLeftBlock: false, out rejectReason )
-		};
-
-		trace = trace with { RejectReason = rejectReason };
-
-		if ( !blocked )
-		{
-			if ( logRejections && rejectReason != MeleeBlockRejectReason.None && defender.LogMeleeBlockRejectionsToConsole )
+			if ( blockDir != SwingDirs.Up )
 			{
-				Log.Info(
-					$"[MeleeBlock] reject {defender.GameObject.Name}: {rejectReason} angle={angle:0.#}° block={SwingDirs.Letter( blockDir )} from {contact.AttackerRoot?.Name}" );
+				rejectReason = MeleeBlockRejectReason.WrongBlockForAttackType;
+				trace = trace with { RejectReason = rejectReason };
+				LogReject( defender, contact, logRejections, rejectReason, angle, blockDir );
+				return false;
 			}
-
+		}
+		else if ( blockDir == SwingDirs.Up )
+		{
+			rejectReason = MeleeBlockRejectReason.WrongBlockForAttackType;
+			trace = trace with { RejectReason = rejectReason };
+			LogReject( defender, contact, logRejections, rejectReason, angle, blockDir );
 			return false;
 		}
 
+		if ( !contact.AttackRayGeometryValidated )
+		{
+			rejectReason = MeleeBlockRejectReason.RayMissedBlockRegion;
+			trace = trace with { RejectReason = rejectReason };
+			LogReject( defender, contact, logRejections, rejectReason, angle, blockDir );
+			return false;
+		}
+
+		if ( !HeldBlockFacesIncomingAttack( defender, blockDir, overheadAttack, angle, out rejectReason ) )
+		{
+			trace = trace with { RejectReason = rejectReason };
+			LogReject( defender, contact, logRejections, rejectReason, angle, blockDir );
+			return false;
+		}
+
+		rejectReason = MeleeBlockRejectReason.None;
+		trace = trace with { RejectReason = rejectReason };
 		damageMultiplier = Math.Clamp( defender.MeleeBlockedDamageMultiplier, 0f, 1f );
 		staggerMultiplier = Math.Clamp( defender.MeleeBlockedStaggerMultiplier, 0f, 1f );
 		return true;
 	}
 
-	static bool TryResolveOverheadBlock( PlayerCombat pc, float angleDegrees, out MeleeBlockRejectReason reason )
+	public static bool IsOverheadAttack( in MeleeBlockContact contact )
 	{
-		if ( IsInOverheadBackArc( pc, angleDegrees ) )
+		if ( contact.AttackSwingDir == SwingDirs.Up )
+			return true;
+
+		return contact.AttackType == MeleeAttackTypes.Forward;
+	}
+
+	/// <summary>Incoming angle from attacker root vs block look yaw (0° ahead, − = left, + = right).</summary>
+	public static float ComputeIncomingAngleFromAttacker( PlayerCombat defender, Vector3 attackerPosition )
+	{
+		if ( defender is null || !defender.GameObject.IsValid() )
+			return 0f;
+
+		var yaw = defender.IsAuthoritativeMeleeBlocking
+			? defender.GetBlockCombatBasisYaw()
+			: defender.GetMeleeCombatBasisRotation().Angles().yaw;
+		return ComputeIncomingHitAngleDegrees( defender.GameObject.WorldPosition, yaw, attackerPosition );
+	}
+
+	/// <summary>
+	/// Wide block arcs can sit along the ray before the torso center; require the attacker to be in the held teardrop's front wedge.
+	/// </summary>
+	public static bool HeldBlockFacesIncomingAttack(
+		PlayerCombat pc,
+		byte blockDir,
+		bool overheadAttack,
+		float incomingAngleDegrees,
+		out MeleeBlockRejectReason reason )
+	{
+		reason = MeleeBlockRejectReason.None;
+
+		if ( overheadAttack )
+		{
+			if ( IsInOverheadBackArc( pc, incomingAngleDegrees ) )
+			{
+				reason = MeleeBlockRejectReason.IncomingFromBackArc;
+				return false;
+			}
+
+			if ( !IsInOverheadBlockZone( pc, incomingAngleDegrees ) )
+			{
+				reason = MeleeBlockRejectReason.WrongBlockForAngle;
+				return false;
+			}
+
+			return true;
+		}
+
+		if ( IsInLateralBackArc( pc, incomingAngleDegrees ) )
 		{
 			reason = MeleeBlockRejectReason.IncomingFromBackArc;
 			return false;
 		}
 
-		if ( !IsInOverheadBlockZone( pc, angleDegrees ) )
+		var inHeldZone = blockDir switch
+		{
+			SwingDirs.Left => IsInLeftBlockZone( pc, incomingAngleDegrees ),
+			SwingDirs.Right => IsInRightBlockZone( pc, incomingAngleDegrees ),
+			_ => false
+		};
+
+		if ( !inHeldZone )
 		{
 			reason = MeleeBlockRejectReason.WrongBlockForAngle;
 			return false;
 		}
 
-		reason = MeleeBlockRejectReason.None;
 		return true;
 	}
 
-	static bool TryResolveLateralBlock( PlayerCombat pc, float angleDegrees, bool isLeftBlock, out MeleeBlockRejectReason reason )
+	static void LogReject(
+		PlayerCombat defender,
+		in MeleeBlockContact contact,
+		bool logRejections,
+		MeleeBlockRejectReason rejectReason,
+		float angle,
+		byte blockDir )
 	{
-		if ( IsInLateralBackArc( pc, angleDegrees ) )
-		{
-			reason = MeleeBlockRejectReason.IncomingFromBackArc;
-			return false;
-		}
+		if ( !logRejections || rejectReason == MeleeBlockRejectReason.None || !defender.LogMeleeBlockRejectionsToConsole )
+			return;
 
-		var inZone = isLeftBlock ? IsInLeftBlockZone( pc, angleDegrees ) : IsInRightBlockZone( pc, angleDegrees );
-		if ( !inZone )
-		{
-			reason = MeleeBlockRejectReason.WrongBlockForAngle;
-			return false;
-		}
-
-		reason = MeleeBlockRejectReason.None;
-		return true;
+		Log.Info(
+			$"[MeleeBlock] reject {defender.GameObject.Name}: {rejectReason} angle={angle:0.#}° block={SwingDirs.Letter( blockDir )} swing={SwingDirs.Letter( contact.AttackSwingDir )} attack={MeleeAttackTypes.Label( contact.AttackType )} from {contact.AttackerRoot?.Name}" );
 	}
 
 	public static PlayerCombat FindDefenderCombat( DamageReceiver receiver )

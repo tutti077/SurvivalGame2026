@@ -11,7 +11,6 @@ struct MeleeAttackDebugDrawScratch
 	internal bool HasLastLeadTip;
 	internal float LastArcProgress01;
 	internal HashSet<long> DrawnArcYawKeys;
-	internal bool StopRayDrawingAfterBlock;
 	internal HashSet<int> DrawnRelativeYawStepIndices;
 	internal float SwingBasisYaw;
 	internal bool HasSwingBasisYaw;
@@ -28,7 +27,6 @@ struct MeleeAttackDebugDrawScratch
 		HasLastLeadTip = false;
 		LastArcProgress01 = -1f;
 		DrawnArcYawKeys?.Clear();
-		StopRayDrawingAfterBlock = false;
 		DrawnRelativeYawStepIndices?.Clear();
 		HasSwingBasisYaw = false;
 		HasYawRingProgress = false;
@@ -58,7 +56,11 @@ public partial class PlayerCombat
 
 	public bool ServerCanBeginMeleeAttackAction()
 	{
-		if ( !GameObject.IsValid() || GameObject.IsProxy )
+		if ( !GameObject.IsValid() )
+			return false;
+
+		// Host simulates client-owned pawns even when they are proxies on the listen server.
+		if ( GameObject.IsProxy && !Networking.IsHost )
 			return false;
 
 		if ( !IsServerSideForMeleeAuthority() )
@@ -152,7 +154,10 @@ public partial class PlayerCombat
 
 	public void ServerStartMeleeAttackAction( in AttackReleaseIntent intent, float holdSeconds, bool isHeavy, string swingLogNote )
 	{
-		if ( !GameObject.IsValid() || GameObject.IsProxy || !IsServerSideForMeleeAuthority() )
+		if ( !GameObject.IsValid() || !IsServerSideForMeleeAuthority() )
+			return;
+
+		if ( GameObject.IsProxy && !Networking.IsHost )
 			return;
 
 		if ( _serverMeleeAttack is not null )
@@ -173,9 +178,14 @@ public partial class PlayerCombat
 
 	public void ServerCancelMeleeAttack()
 	{
-		if ( !IsServerSideForMeleeAuthority() || GameObject.IsProxy )
+		if ( !IsServerSideForMeleeAuthority() )
 			return;
 
+		if ( GameObject.IsProxy && !Networking.IsHost )
+			return;
+
+		ClearMeleeAttackBasisFromIntent();
+		ClearForwardMeleeStartPitch();
 		_serverMeleeAttack = null;
 	}
 
@@ -195,7 +205,8 @@ public partial class PlayerCombat
 		if ( _clientSwingTracePlayback is not null && !_clientSwingTracePlayback.Tick( scene ) )
 			_clientSwingTracePlayback = null;
 
-		if ( GameObject.IsProxy )
+		// Client proxies never run host sweeps; listen-server host still simulates client-owned pawns.
+		if ( GameObject.IsProxy && !Networking.IsHost )
 			return;
 
 		if ( !IsServerSideForMeleeAuthority() )
@@ -216,6 +227,32 @@ public partial class PlayerCombat
 		var hold = Math.Max( 0f, (float)( intent.ReleasedGlobalSeconds - intent.PressedGlobalSeconds ) );
 		var heavy = IsHeavyAttackForHoldDuration( hold );
 		_clientSwingTracePlayback = new ServerMeleeAttackRuntime( this, intent, hold, heavy, "client-trace", visualOnly: true );
+	}
+
+	/// <summary>Local owner ticks remote swing overlays — proxy pawns may not receive OnUpdate.</summary>
+	internal void TickClientSwingTracePlaybackOnly( Scene scene )
+	{
+		if ( _clientSwingTracePlayback is null )
+			return;
+
+		if ( !_clientSwingTracePlayback.Tick( scene ) )
+			_clientSwingTracePlayback = null;
+	}
+
+	void TickAllRemoteCombatVisualizationsInScene()
+	{
+		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+		if ( !scene.IsValid() )
+			return;
+
+		foreach ( var pc in scene.GetAllComponents<PlayerCombat>() )
+		{
+			if ( pc is null || !pc.GameObject.IsValid() || pc == this || pc.IsLocalCombatDriver() )
+				continue;
+
+			pc.TickClientSwingTracePlaybackOnly( scene );
+			pc.DrawRemoteBlockVisualizationIfNeeded();
+		}
 	}
 
 	/// <summary>Core attack-path sampling every frame; optional overlay when <see cref="MeleeDebugDrawEnabled"/>.</summary>
@@ -288,12 +325,6 @@ public partial class PlayerCombat
 		float overlayDuration,
 		ref MeleeAttackDebugDrawScratch scratch )
 	{
-		if ( scratch.StopRayDrawingAfterBlock )
-		{
-			scratch.LastArcProgress01 = activeProgress01;
-			return;
-		}
-
 		scratch.DrawnArcYawKeys ??= new HashSet<long>();
 		var drawnArcYawKeys = scratch.DrawnArcYawKeys;
 		var hitRadius = Math.Max( 2f, MeleeHitVolumeThickness );
@@ -363,8 +394,6 @@ public partial class PlayerCombat
 			var spokeYaw = Angles.NormalizeAngle( scratch.SwingBasisYaw + scratch.YawTurnSign * stepIndex * degreeStep );
 			EmitMeleeDebugPathRay( attackType, spokeYaw, scratch.YawRingProgress01, attackStateForDraw, drawOverlay,
 				overlayDuration, hitRadius, drawSpheres, ref scratch );
-			if ( scratch.StopRayDrawingAfterBlock )
-				break;
 		}
 
 		scratch.LastDrawBasisYaw = currentBasisYaw;
@@ -383,7 +412,7 @@ public partial class PlayerCombat
 		bool drawSpheres,
 		ref MeleeAttackDebugDrawScratch scratch )
 	{
-		if ( !drawOverlay || scratch.StopRayDrawingAfterBlock )
+		if ( !drawOverlay )
 			return;
 
 		var basis = GetMeleeCombatBasisRotationForYaw( attackType, basisYaw );
@@ -391,18 +420,18 @@ public partial class PlayerCombat
 		var spokeColor = GetMeleeDebugColorForState( attackStateForDraw ).WithAlpha( 0.42f );
 		MeleeAttackPath.EvaluateWorldBlade( GameObject, this, attackType, arcProgress01, basis, out var tip, out _ );
 		var drawTip = tip;
-		if ( TryGetFirstBlockingConeHitPoint( origin, tip, out var blockHitPoint ) )
-		{
-			drawTip = blockHitPoint;
-			scratch.StopRayDrawingAfterBlock = true;
-		}
+		if ( TryGetDebugGuardLineClipPoint( origin, tip, out var guardClipPoint ) )
+			drawTip = guardClipPoint;
 
 		DebugOverlay.Line( origin, drawTip, spokeColor, overlayDuration );
 		if ( drawSpheres )
 			DebugOverlay.Sphere( new Sphere( drawTip, hitRadius ), spokeColor.WithAlpha( 0.35f ), overlayDuration );
 	}
 
-	bool TryGetFirstBlockingConeHitPoint( Vector3 origin, Vector3 tip, out Vector3 hitPoint )
+	/// <summary>
+	/// Debug only: clip this swing sample at the guard polyline (footprint is combat-only, not used here).
+	/// </summary>
+	bool TryGetDebugGuardLineClipPoint( Vector3 origin, Vector3 tip, out Vector3 hitPoint )
 	{
 		hitPoint = tip;
 
@@ -423,25 +452,10 @@ public partial class PlayerCombat
 				continue;
 			if ( !defender.IsAuthoritativeMeleeBlocking )
 				continue;
-			if ( !MeleeBlockPath.TryRaycastBlockGuardLine( defender, origin, tip, float.MaxValue, thickness,
+			if ( !MeleeBlockPath.TryRaycastGuardLine( defender, origin, tip, float.MaxValue, thickness,
 				     out var guardDist, out var guardPos ) )
 				continue;
 			if ( guardDist >= bestDist )
-				continue;
-
-			var contact = new MeleeBlockContact
-			{
-				AttackerRoot = GameObject,
-				AttackerPosition = GameObject.WorldPosition,
-				DefenderRoot = defender.GameObject,
-				DefenderCombat = defender,
-				HitPosition = guardPos,
-				AttackType = 0,
-				AttackWasHeavy = false,
-				HitSandboxTime = Time.NowDouble
-			};
-			if ( !defender.TryServerResolveBlock( in contact, logRejections: false, out var blockMul, out _, out _, out _ )
-			     || blockMul > 0.999f )
 				continue;
 
 			bestDist = guardDist;
@@ -528,7 +542,7 @@ public partial class PlayerCombat
 			_maxTargets = _allowMultiple ? Math.Max( 1, pc.MeleeMaxTargetsHit ) : 1;
 			_startedAtSandbox = Time.NowDouble;
 			_debugDrawScratch.Reset();
-			_pc.CaptureForwardMeleeStartPitch( _attackType );
+			_pc.PushMeleeAttackBasisFromIntent( intent, _attackType );
 		}
 
 		internal bool Tick( Scene scene )
@@ -613,6 +627,7 @@ public partial class PlayerCombat
 					stagger,
 					hitState,
 					_attackType,
+					_intent.SwingDir,
 					_isHeavy,
 					_instanceId,
 					_swingNote,
@@ -651,8 +666,12 @@ public partial class PlayerCombat
 				return;
 			_completionSent = true;
 
-			if ( _attackType == MeleeAttackTypes.Forward && _pc.IsValid() )
-				_pc.ClearForwardMeleeStartPitch();
+			if ( _pc.IsValid() )
+			{
+				_pc.ClearMeleeAttackBasisFromIntent();
+				if ( _attackType == MeleeAttackTypes.Forward )
+					_pc.ClearForwardMeleeStartPitch();
+			}
 
 			if ( !_pc.IsValid() || !_pc.GameObject.IsValid() )
 				return;

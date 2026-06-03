@@ -51,6 +51,12 @@ public readonly record struct AttackReleaseIntent
 
 	public float PostSwingDragScreenX { get; init; }
 	public float PostSwingDragScreenY { get; init; }
+
+	/// <summary>Combat-path yaw (degrees) when submitted; unset (NaN) = derive from view forward.</summary>
+	public float CombatBasisYawDegrees { get; init; }
+
+	/// <summary>View pitch (degrees) when submitted; unset (NaN) = derive from view forward.</summary>
+	public float CombatBasisPitchDegrees { get; init; }
 }
 
 /// <summary>Only three melee swing directions (no forward).</summary>
@@ -67,6 +73,10 @@ public static class SwingDirs
 		if ( c == Up ) return "U";
 		return "?";
 	}
+
+	/// <summary>Swap L/R; overhead unchanged. Attack teardrop uses mirror of stored combat dir for HUD placement.</summary>
+	public static byte MirrorLateral( byte dir ) =>
+		dir == Left ? Right : dir == Right ? Left : dir;
 }
 
 /// <summary>Server→owner authoritative outcome (do not trust client damage).</summary>

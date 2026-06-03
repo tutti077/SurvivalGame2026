@@ -111,7 +111,7 @@ public sealed class PlayerVitals : Component
 	protected override void OnUpdate()
 	{
 		base.OnUpdate();
-		if ( _pendingAuthorityRegistration && !GameObject.IsProxy )
+		if ( _pendingAuthorityRegistration )
 		{
 			if ( GameObject.Network is { Active: true } && !Networking.IsHost )
 				_pendingAuthorityRegistration = false;
@@ -152,7 +152,7 @@ public sealed class PlayerVitals : Component
 
 		EnsureDamageReceiverForMelee();
 
-		if ( GameObject.IsProxy )
+		if ( GameObject.IsProxy && !Networking.IsHost )
 			return;
 
 		if ( GameObject.Network is not { Active: true } )
@@ -454,7 +454,8 @@ public sealed class PlayerVitals : Component
 				Math.Clamp( CurrentStamina + staminaDelta, 0f, sMax ),
 				sMax ) );
 			LogVitalsNetwork( $"host local fallback (no VitalsAuthority) Δhp={healthDelta:0.####} → HP={CurrentHealth:0.#}/{CurrentHealthMax:0.#}" );
-			if ( GameObject.Network is { Active: true } net0 && net0.Owner is { } own && own != Connection.Local )
+			if ( GameObject.Network is { Active: true } net0 && net0.Owner is { } own
+			     && !ConnectionIdentity.SameClient( own, Connection.Local ) && CurrentHealth > 0.001f )
 				RpcVitalsSync( CurrentHealth, CurrentHealthMax, CurrentStamina, CurrentStaminaMax );
 			return true;
 		}
@@ -467,12 +468,14 @@ public sealed class PlayerVitals : Component
 	/// <summary>Called by <see cref="VitalsAuthority"/> on the host after mutating server state.</summary>
 	public void ApplyFromAuthorityAndSync( VitalsSnapshot snap )
 	{
-		ApplyLocalSnapshot( snap );
-		if ( GameObject.Network is { Active: true } net1 && Networking.IsHost && net1.Owner is { } own && own != Connection.Local )
-			RpcVitalsSync( snap.Health, snap.HealthMax, snap.Stamina, snap.StaminaMax );
+		// Respawn is handled explicitly after lethal authority deltas — never push 0 HP to the owner first.
+		ApplyLocalSnapshot( snap, allowDeathRespawn: false );
+		if ( GameObject.Network is { Active: true } net1 && Networking.IsHost && net1.Owner is { } own
+		     && !ConnectionIdentity.SameClient( own, Connection.Local ) && CurrentHealth > 0.001f )
+			RpcVitalsSync( CurrentHealth, CurrentHealthMax, CurrentStamina, CurrentStaminaMax );
 	}
 
-	void ApplyLocalSnapshot( VitalsSnapshot s )
+	void ApplyLocalSnapshot( VitalsSnapshot s, bool allowDeathRespawn = true )
 	{
 		var wasAlive = CurrentHealth > 0.001f;
 		var previousStamina = CurrentStamina;
@@ -484,11 +487,56 @@ public sealed class PlayerVitals : Component
 		LogStaminaFullTransition( previousStamina, previousStaminaMax );
 		OnVitalsChanged?.Invoke();
 
-		if ( !GameObject.IsProxy && ( GameObject.Network is not { Active: true } || Networking.IsHost ) )
+		if ( IsHostOrOffline && ( GameObject.Network is not { Active: true } || Networking.IsHost ) )
 			VitalsAuthority.Instance?.EnsureRecordFromVitalsIfMissing( GameObject, this );
 
-		if ( wasAlive && CurrentHealth <= 0.001f && IsHostOrOffline && !GameObject.IsProxy )
-			_pendingDeathRespawnHost = true;
+		if ( allowDeathRespawn && wasAlive && CurrentHealth <= 0.001f && IsHostOrOffline )
+			HostExecuteDeathRespawnIfDead();
+	}
+
+	/// <summary>Host-only: teleport + refill pools; replicated to every machine.</summary>
+	public void HostExecuteDeathRespawnIfDead()
+	{
+		if ( !IsHostOrOffline || CurrentHealth > 0.001f )
+			return;
+
+		_pendingDeathRespawnHost = false;
+
+		var hasSpawn = TryResolveSpawnTransform( out var spawnPos, out var spawnRot );
+		if ( !hasSpawn )
+			Log.Warning( $"{VitalsLogPrefix()} {GameObject.Name}: no SpawnPoint or RespawnPointOverride — respawn position unchanged." );
+
+		// Client-owned pawns are simulated by the owner — host proxy transforms do not stick.
+		var hostSimulatesTransform = GameObject.Network is not { Active: true } || !GameObject.IsProxy;
+		if ( hasSpawn && hostSimulatesTransform )
+			ApplyRespawnTransform( spawnPos, spawnRot );
+
+		var auth = VitalsAuthority.Instance;
+		VitalsSnapshot snap;
+		if ( auth is not null )
+		{
+			var restored = auth.RegisterAndGetSnapshot( GameObject, MaxHealth, MaxStamina, forceFullPoolsAndResetRegenClocks: true );
+			snap = restored ?? new VitalsSnapshot( MaxHealth, MaxHealth, MaxStamina, MaxStamina );
+		}
+		else
+			snap = new VitalsSnapshot( MaxHealth, MaxHealth, MaxStamina, MaxStamina );
+
+		ApplyLocalSnapshot( snap, allowDeathRespawn: false );
+
+		if ( GameObject.Network is { Active: true } net )
+		{
+			var pos = hasSpawn ? spawnPos : GameObject.WorldPosition;
+			var rot = hasSpawn ? spawnRot : GameObject.WorldRotation;
+			RpcBroadcastDeathRespawn( pos, rot, snap.Health, snap.HealthMax, snap.Stamina, snap.StaminaMax );
+
+			if ( net.Owner is { } owner && !ConnectionIdentity.SameClient( owner, Connection.Local ) )
+				RpcOwnerDeathRespawnTransform( pos, rot );
+		}
+
+		_jumpStaminaChargedThisAirborne = false;
+
+		var logPos = hasSpawn ? spawnPos : GameObject.WorldPosition;
+		Log.Info( $"{VitalsLogPrefix()} Death → respawn for {GameObject.Name} at {logPos} (HP/ST restored)." );
 	}
 
 	void TryRunHostDeathRespawn()
@@ -496,43 +544,8 @@ public sealed class PlayerVitals : Component
 		if ( !_pendingDeathRespawnHost )
 			return;
 
-		if ( !IsHostOrOffline || GameObject.IsProxy )
-			return;
-
 		_pendingDeathRespawnHost = false;
-
-		if ( CurrentHealth > 0.001f )
-			return;
-
-		var spawnGo = ResolveRespawnRoot();
-		if ( spawnGo is not null && spawnGo.IsValid() )
-		{
-			GameObject.WorldPosition = spawnGo.WorldPosition;
-			GameObject.WorldRotation = spawnGo.WorldRotation;
-		}
-		else
-			Log.Warning( $"{VitalsLogPrefix()} {GameObject.Name}: no SpawnPoint or RespawnPointOverride — respawn position unchanged." );
-
-		var rb = GameObject.Components.Get<Rigidbody>();
-		if ( rb is not null )
-		{
-			rb.Velocity = Vector3.Zero;
-			rb.AngularVelocity = Vector3.Zero;
-		}
-
-		var auth = VitalsAuthority.Instance;
-		if ( auth is not null )
-		{
-			var snap = auth.RegisterAndGetSnapshot( GameObject, MaxHealth, MaxStamina, forceFullPoolsAndResetRegenClocks: true );
-			if ( snap is { } s )
-				ApplyFromAuthorityAndSync( s );
-		}
-		else
-			ApplyLocalSnapshot( new VitalsSnapshot( MaxHealth, MaxHealth, MaxStamina, MaxStamina ) );
-
-		_jumpStaminaChargedThisAirborne = false;
-
-		Log.Info( $"{VitalsLogPrefix()} Death → respawn for {GameObject.Name} at {GameObject.WorldPosition} (HP/ST restored)." );
+		HostExecuteDeathRespawnIfDead();
 	}
 
 	GameObject ResolveRespawnRoot()
@@ -551,6 +564,65 @@ public sealed class PlayerVitals : Component
 		}
 
 		return null;
+	}
+
+	/// <summary>Spawn transform from scene — not from the pawn (host cannot move client-owned proxies).</summary>
+	bool TryResolveSpawnTransform( out Vector3 position, out Rotation rotation )
+	{
+		position = GameObject.WorldPosition;
+		rotation = GameObject.WorldRotation;
+
+		var spawnGo = ResolveRespawnRoot();
+		if ( spawnGo is null || !spawnGo.IsValid() )
+			return false;
+
+		position = spawnGo.WorldPosition;
+		rotation = spawnGo.WorldRotation;
+		return true;
+	}
+
+	void ApplyRespawnTransform( Vector3 worldPosition, Rotation worldRotation )
+	{
+		if ( !GameObject.IsValid() )
+			return;
+
+		GameObject.WorldPosition = worldPosition;
+		GameObject.WorldRotation = worldRotation;
+		Transform.ClearInterpolation();
+		if ( GameObject.Network is { Active: true } )
+			Network.ClearInterpolation();
+
+		var rb = GameObject.Components.Get<Rigidbody>();
+		if ( rb is not null )
+		{
+			rb.Velocity = Vector3.Zero;
+			rb.AngularVelocity = Vector3.Zero;
+		}
+	}
+
+	/// <summary>Owner client: authoritative transform snap (position is owner-simulated).</summary>
+	[Rpc.Owner]
+	public void RpcOwnerDeathRespawnTransform( Vector3 worldPosition, Rotation worldRotation )
+	{
+		ApplyRespawnTransform( worldPosition, worldRotation );
+		LogVitalsNetwork( $"Rpc.Owner death respawn transform @ {worldPosition}" );
+	}
+
+	/// <summary>Host → all machines (including owner): teleport + full pools after death.</summary>
+	[Rpc.Broadcast( NetFlags.HostOnly )]
+	public void RpcBroadcastDeathRespawn( Vector3 worldPosition, Rotation worldRotation, float health, float healthMax, float stamina, float staminaMax )
+	{
+		ApplyDeathRespawnLocal( worldPosition, worldRotation, health, healthMax, stamina, staminaMax );
+	}
+
+	void ApplyDeathRespawnLocal( Vector3 worldPosition, Rotation worldRotation, float health, float healthMax, float stamina, float staminaMax )
+	{
+		if ( !GameObject.IsValid() )
+			return;
+
+		ApplyRespawnTransform( worldPosition, worldRotation );
+		ApplyLocalSnapshot( new VitalsSnapshot( health, healthMax, stamina, staminaMax ), allowDeathRespawn: false );
+		LogVitalsNetwork( $"death respawn applied @ {worldPosition} HP={health:0.#}/{healthMax:0.#}" );
 	}
 
 	[Rpc.Host]
@@ -596,7 +668,8 @@ public sealed class PlayerVitals : Component
 			Math.Clamp( CurrentStamina + staminaDelta, 0f, sMaxRpc ),
 			sMaxRpc ) );
 		LogVitalsNetwork( $"Rpc.Host local fallback (no VitalsAuthority) Δhp={healthDelta:0.####} → HP={CurrentHealth:0.#}/{CurrentHealthMax:0.#}" );
-		if ( GameObject.Network is { Active: true } n && n.Owner is { } own && own != Connection.Local )
+		if ( GameObject.Network is { Active: true } n && n.Owner is { } own
+		     && !ConnectionIdentity.SameClient( own, Connection.Local ) && CurrentHealth > 0.001f )
 			RpcVitalsSync( CurrentHealth, CurrentHealthMax, CurrentStamina, CurrentStaminaMax );
 	}
 
@@ -604,7 +677,7 @@ public sealed class PlayerVitals : Component
 	public void RpcVitalsSync( float health, float healthMax, float stamina, float staminaMax )
 	{
 		LogVitalsNetwork( $"Rpc.Owner sync HP={health:0.#}/{healthMax:0.#} ST={stamina:0.#}/{staminaMax:0.#}" );
-		ApplyLocalSnapshot( new VitalsSnapshot( health, healthMax, stamina, staminaMax ) );
+		ApplyLocalSnapshot( new VitalsSnapshot( health, healthMax, stamina, staminaMax ), allowDeathRespawn: false );
 	}
 
 	void LogVitalsNetwork( string message )

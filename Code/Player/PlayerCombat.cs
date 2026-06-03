@@ -373,7 +373,7 @@ public partial class PlayerCombat : Component
 	Vector2 _blockLookAccum;
 	bool _wasBlockButtonDownLastFrame;
 
-	/// <summary>Live L/R/U from mouse evidence — teardrop, attack prep, and block preview.</summary>
+	/// <summary>Live L/R/U from mouse evidence — block preview uses screen-aligned cardinals; attack stores mirrored L/R for combat.</summary>
 	byte _primaryLiveSwingDir = SwingDirs.Up;
 	byte _blockLiveSwingDir = SwingDirs.Up;
 
@@ -403,6 +403,11 @@ public partial class PlayerCombat : Component
 	Vector2 _primaryPostReleaseDragAccum;
 	AttackReleaseIntent _pendingPrimarySwingIntent;
 
+	/// <summary>When set, non-local attack/block paths use intent yaw instead of pawn body rotation.</summary>
+	float? _meleeIntentBasisYawOverride;
+	bool _meleeIntentForwardPitchCaptured;
+	float _meleeIntentForwardStartPitchDegrees;
+
 	bool IsLocalCombatDriver()
 	{
 		if ( GameObject.IsProxy )
@@ -419,7 +424,11 @@ public partial class PlayerCombat : Component
 	protected override void OnUpdate()
 	{
 		if ( GameObject.IsValid() )
+		{
 			MaybeTickServerMeleeAttackAction();
+			if ( IsLocalCombatDriver() )
+				TickAllRemoteCombatVisualizationsInScene();
+		}
 
 		if ( !Active || !GameObject.IsValid() )
 			return;
@@ -429,12 +438,8 @@ public partial class PlayerCombat : Component
 		if ( IsServerSideForMeleeAuthority() && !GameObject.IsProxy )
 			ServerTickMeleeBlockTimers();
 
-		if ( IsServerSideForMeleeAuthority() && !IsLocalCombatDriver() && !GameObject.IsProxy )
-		{
+		if ( IsServerSideForMeleeAuthority() && !IsLocalCombatDriver() && !( GameObject.IsProxy && !Networking.IsHost ) )
 			TickAuthoritativeMeleeBlockState();
-			DrawMeleeBlockGuardVisualization();
-			return;
-		}
 
 		if ( !IsLocalCombatDriver() )
 			return;
@@ -487,7 +492,8 @@ public partial class PlayerCombat : Component
 		if ( ShowSwingDirectionCrosshair )
 			DrawTeardropCrosshairOverlay();
 
-		DrawMeleeBlockGuardVisualization();
+		if ( ShouldDrawMeleeBlockVisualization() )
+			DrawMeleeBlockGuardVisualization();
 	}
 
 	void TickSwingLookAccumulatorsAfterCombatStep()
@@ -503,7 +509,8 @@ public partial class PlayerCombat : Component
 		if ( !attackDirectionFrozen )
 		{
 			_primarySwingEvidence = _primarySwingEvidence * decay + frame;
-			ApplyLiveSwingFromEvidence( _primarySwingEvidence, ref _primaryLiveSwingDir, ref _primaryLastFlipRealSeconds );
+			ApplyLiveSwingFromEvidence( _primarySwingEvidence, ref _primaryLiveSwingDir, ref _primaryLastFlipRealSeconds,
+				invertAttackLateral: true );
 		}
 		else if ( _hasLockedPrimaryAttackDir )
 			_primaryLiveSwingDir = _lockedPrimaryAttackSwingDir;
@@ -585,7 +592,7 @@ public partial class PlayerCombat : Component
 		var decay = SwingEvidenceDecaySeconds > 1e-4f ? MathF.Exp( -dt / SwingEvidenceDecaySeconds ) : 0f;
 		var e = _primarySwingEvidence * decay + FilterSwingMouseEvidenceDelta( Input.MouseDelta );
 		_primarySwingEvidence = e;
-		_lockedPrimaryAttackSwingDir = ClassifyLiveSwingFrame( e, _primaryLiveSwingDir );
+		_lockedPrimaryAttackSwingDir = ClassifyAttackLiveSwingFrame( e, _primaryLiveSwingDir );
 		_hasLockedPrimaryAttackDir = true;
 		_lastAttackSwingDir = _lockedPrimaryAttackSwingDir;
 		_stickySwingDir = _lockedPrimaryAttackSwingDir;
@@ -618,10 +625,14 @@ public partial class PlayerCombat : Component
 		if ( drag.Length > maxLen )
 			drag = drag.Normal * maxLen;
 
+		var attackType = ResolveAttackTypeFromCursorDir( _pendingPrimarySwingIntent.SwingDir );
 		var sent = _pendingPrimarySwingIntent with
 		{
 			PostSwingDragScreenX = drag.x,
-			PostSwingDragScreenY = drag.y
+			PostSwingDragScreenY = drag.y,
+			ViewForwardOnRelease = GetViewDirectionForIntent(),
+			CombatBasisYawDegrees = GetMeleeCombatBasisYaw( attackType ),
+			CombatBasisPitchDegrees = GetCameraPitchDegrees()
 		};
 
 		_primaryPostReleaseDragAccum = default;
@@ -799,13 +810,13 @@ public partial class PlayerCombat : Component
 		if ( preferHorizontalFirst )
 		{
 			if ( dx > min )
-				return SwingDirs.Left;
-			if ( dx < -min )
 				return SwingDirs.Right;
+			if ( dx < -min )
+				return SwingDirs.Left;
 			if ( yUp > min )
 				return SwingDirs.Up;
 			if ( yUp < -min )
-				return dx > 0f ? SwingDirs.Left : SwingDirs.Right;
+				return dx > 0f ? SwingDirs.Right : SwingDirs.Left;
 			return current;
 		}
 
@@ -814,16 +825,16 @@ public partial class PlayerCombat : Component
 		if ( yUp < -min )
 		{
 			if ( dx > min )
-				return SwingDirs.Left;
-			if ( dx < -min )
 				return SwingDirs.Right;
-			return dx > 0f ? SwingDirs.Left : SwingDirs.Right;
+			if ( dx < -min )
+				return SwingDirs.Left;
+			return dx > 0f ? SwingDirs.Right : SwingDirs.Left;
 		}
 
 		if ( dx > min )
-			return SwingDirs.Left;
-		if ( dx < -min )
 			return SwingDirs.Right;
+		if ( dx < -min )
+			return SwingDirs.Left;
 		return current;
 	}
 
@@ -833,9 +844,9 @@ public partial class PlayerCombat : Component
 		var yUp = SwingInvertLookYForUp ? -mouseDelta.y : mouseDelta.y;
 		var dx = mouseDelta.x;
 		if ( cardinal == SwingDirs.Left )
-			return MathF.Max( 0f, dx );
-		if ( cardinal == SwingDirs.Right )
 			return MathF.Max( 0f, -dx );
+		if ( cardinal == SwingDirs.Right )
+			return MathF.Max( 0f, dx );
 		return MathF.Max( 0f, yUp );
 	}
 
@@ -845,9 +856,13 @@ public partial class PlayerCombat : Component
 	/// and (3) at least <see cref="SwingMinFlipHoldMs"/> have passed since the previous flip (1.5× for L↔R).
 	/// All three are framerate-independent — no per-frame mouse delta thresholds remain.
 	/// </summary>
-	void ApplyLiveSwingFromEvidence( Vector2 evidence, ref byte currentDir, ref double lastFlipRealSeconds )
+	void ApplyLiveSwingFromEvidence( Vector2 evidence, ref byte currentDir, ref double lastFlipRealSeconds,
+		bool invertAttackLateral = false )
 	{
-		var desire = ClassifyLiveSwingFrame( evidence, currentDir );
+		var classifyCurrent = invertAttackLateral ? SwingDirs.MirrorLateral( currentDir ) : currentDir;
+		var desire = ClassifyLiveSwingFrame( evidence, classifyCurrent );
+		if ( invertAttackLateral )
+			desire = SwingDirs.MirrorLateral( desire );
 		if ( desire == currentDir )
 			return;
 
@@ -859,13 +874,17 @@ public partial class PlayerCombat : Component
 		if ( now - lastFlipRealSeconds < holdSeconds )
 			return;
 
-		var contrib = ContributionTowardCardinal( desire, evidence );
+		var evidenceCardinal = invertAttackLateral ? SwingDirs.MirrorLateral( desire ) : desire;
+		var contrib = ContributionTowardCardinal( evidenceCardinal, evidence );
 		if ( contrib < SwingFlipCommitThreshold( currentDir, desire ) )
 			return;
 
 		currentDir = desire;
 		lastFlipRealSeconds = now;
 	}
+
+	byte ClassifyAttackLiveSwingFrame( Vector2 evidence, byte currentAttackDir ) =>
+		SwingDirs.MirrorLateral( ClassifyLiveSwingFrame( evidence, SwingDirs.MirrorLateral( currentAttackDir ) ) );
 
 	void DrawTeardropCrosshairOverlay()
 	{
@@ -881,12 +900,25 @@ public partial class PlayerCombat : Component
 		var primaryAttackHeld = Input.Down( PrimaryAttackAction );
 		var attackFrozen = primaryAttackHeld || _primarySwingPhaseActive;
 		byte swingPreview;
+		var mirrorTeardropForAttack = false;
 		if ( attackFrozen && _hasLockedPrimaryAttackDir )
+		{
 			swingPreview = _lockedPrimaryAttackSwingDir;
+			mirrorTeardropForAttack = true;
+		}
 		else if ( Input.Down( BlockAction ) )
+		{
 			swingPreview = _blockLiveSwingDir;
+		}
 		else
+		{
 			swingPreview = _primaryLiveSwingDir;
+			mirrorTeardropForAttack = true;
+		}
+
+		if ( mirrorTeardropForAttack )
+			swingPreview = SwingDirs.MirrorLateral( swingPreview );
+
 		var dir = SwingCardinalToScreenTeardropDir( swingPreview );
 		var dLen = dir.Length;
 		if ( dLen > 1e-5f )
@@ -919,13 +951,15 @@ public partial class PlayerCombat : Component
 		hud.DrawCircle( center, new Vector2( r * 2f, r * 2f ), col );
 	}
 
-	/// <summary>Unit offsets in screen space (+x right, +y down) for L / R / U — same cardinals as <see cref="ClassifyLiveSwingFrame"/>.</summary>
+	/// <summary>
+	/// Screen teardrop offset (+x right, +y down). Block: stored cardinal = screen side. Attack HUD mirrors stored combat dir.
+	/// </summary>
 	static Vector2 SwingCardinalToScreenTeardropDir( byte cardinal )
 	{
 		if ( cardinal == SwingDirs.Left )
-			return new Vector2( 1f, 0f );
-		if ( cardinal == SwingDirs.Right )
 			return new Vector2( -1f, 0f );
+		if ( cardinal == SwingDirs.Right )
+			return new Vector2( 1f, 0f );
 		return new Vector2( 0f, -1f );
 	}
 
@@ -964,9 +998,77 @@ public partial class PlayerCombat : Component
 	{
 		var min = Math.Min( MeleeAttackForwardMinPitchDegrees, MeleeAttackForwardMaxPitchDegrees );
 		var max = Math.Max( MeleeAttackForwardMinPitchDegrees, MeleeAttackForwardMaxPitchDegrees );
-		var pitch = Math.Clamp( GetCameraPitchDegrees(), min, max );
+		var pitch = _meleeIntentForwardPitchCaptured
+			? _meleeIntentForwardStartPitchDegrees
+			: Math.Clamp( GetCameraPitchDegrees(), min, max );
 		var influence = Math.Clamp( MeleeAttackForwardPitchInfluence, 0f, 1f );
 		return pitch * influence;
+	}
+
+	/// <summary>
+	/// Remote / host-proxy pawns: pin aim from submitted intent so overlays match the attacker.
+	/// Local owner: live camera yaw (and forward pitch capture) so turning during a swing paints debug coverage.
+	/// </summary>
+	internal void PushMeleeAttackBasisFromIntent( in AttackReleaseIntent intent, byte attackType )
+	{
+		if ( IsLocalCombatDriver() )
+		{
+			ClearMeleeAttackBasisFromIntent();
+			CaptureForwardMeleeStartPitch( attackType );
+			return;
+		}
+
+		_meleeIntentBasisYawOverride = ResolveIntentCombatBasisYaw( intent, attackType );
+		if ( attackType == MeleeAttackTypes.Forward )
+		{
+			var min = Math.Min( MeleeAttackForwardMinPitchDegrees, MeleeAttackForwardMaxPitchDegrees );
+			var max = Math.Max( MeleeAttackForwardMinPitchDegrees, MeleeAttackForwardMaxPitchDegrees );
+			var pitch = Math.Clamp( ResolveIntentViewPitchDegrees( intent ), min, max );
+			var influence = Math.Clamp( MeleeAttackForwardPitchInfluence, 0f, 1f );
+			_meleeIntentForwardStartPitchDegrees = pitch * influence;
+			_meleeIntentForwardPitchCaptured = true;
+		}
+		else
+			_meleeIntentForwardPitchCaptured = false;
+	}
+
+	internal void ClearMeleeAttackBasisFromIntent()
+	{
+		_meleeIntentBasisYawOverride = null;
+		_meleeIntentForwardPitchCaptured = false;
+	}
+
+	static float ResolveIntentCombatBasisYaw( in AttackReleaseIntent intent, byte attackType )
+	{
+		_ = attackType;
+		if ( !float.IsNaN( intent.CombatBasisYawDegrees ) )
+			return intent.CombatBasisYawDegrees;
+
+		var forward = intent.ViewForwardOnRelease;
+		if ( forward.LengthSquared < 1e-8f )
+			forward = intent.ViewForwardOnPress;
+		if ( forward.LengthSquared < 1e-8f )
+			return 0f;
+
+		var flat = forward.WithY( 0f );
+		if ( flat.LengthSquared < 1e-8f )
+			return Rotation.LookAt( forward.Normal ).Angles().yaw;
+
+		return Rotation.LookAt( flat.Normal ).Angles().yaw;
+	}
+
+	static float ResolveIntentViewPitchDegrees( in AttackReleaseIntent intent )
+	{
+		if ( !float.IsNaN( intent.CombatBasisPitchDegrees ) )
+			return intent.CombatBasisPitchDegrees;
+
+		var forward = intent.ViewForwardOnRelease;
+		if ( forward.LengthSquared < 1e-8f )
+			forward = intent.ViewForwardOnPress;
+		if ( forward.LengthSquared < 1e-8f )
+			return 0f;
+
+		return Rotation.LookAt( forward.Normal ).Angles().pitch;
 	}
 
 	Rotation GetMeleeForwardCombatBasisRotation()
@@ -981,18 +1083,18 @@ public partial class PlayerCombat : Component
 	Rotation GetMeleeLateralCombatBasisRotation() => GetCameraYawRotation();
 
 	/// <summary>Live aim for melee paths — yaw-only for L/R; yaw + influenced pitch for overhead.</summary>
-	public Rotation GetMeleeCombatBasisRotation( byte attackType ) =>
-		attackType == MeleeAttackTypes.Forward
+	public Rotation GetMeleeCombatBasisRotation( byte attackType )
+	{
+		if ( _meleeIntentBasisYawOverride is { } intentYaw )
+			return GetMeleeCombatBasisRotationForYaw( attackType, intentYaw );
+
+		return attackType == MeleeAttackTypes.Forward
 			? GetMeleeForwardCombatBasisRotation()
 			: GetMeleeLateralCombatBasisRotation();
+	}
 
 	/// <summary>Live aim for melee paths when attack type is unknown — yaw-only horizontal basis.</summary>
 	public Rotation GetMeleeCombatBasisRotation() => GetMeleeLateralCombatBasisRotation();
-
-	/// <summary>Horizontal look yaw — block guard/arc follow view spin every frame (not pawn body snap).</summary>
-	public Rotation GetBlockCombatBasisRotation() => GetCameraYawRotation();
-
-	public float GetBlockCombatBasisYaw() => GetBlockCombatBasisRotation().Angles().yaw;
 
 	internal static byte NormalizeCardinalBlockDirection( byte dir ) =>
 		dir is (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) ? dir : SwingDirs.Up;
@@ -1106,6 +1208,7 @@ public partial class PlayerCombat : Component
 		_stickySwingDir = c;
 
 		var prepay = GetPrimaryAttackPressStaminaPrepayAmount();
+		var attackType = ResolveAttackTypeFromCursorDir( c );
 
 		var intent = new AttackReleaseIntent
 		{
@@ -1126,10 +1229,12 @@ public partial class PlayerCombat : Component
 			SwingFromY = swingXz.y,
 			SwingVerticalHint = swingV,
 			SwingDir = c,
-			AttackType = ResolveAttackTypeFromCursorDir( c ),
+			AttackType = attackType,
 			StaminaPrepaidMax = prepay,
 			PostSwingDragScreenX = 0f,
-			PostSwingDragScreenY = 0f
+			PostSwingDragScreenY = 0f,
+			CombatBasisYawDegrees = GetMeleeCombatBasisYaw( attackType ),
+			CombatBasisPitchDegrees = GetCameraPitchDegrees()
 		};
 
 		_pendingPrimarySwingIntent = intent;
@@ -1196,10 +1301,13 @@ public partial class PlayerCombat : Component
 	[Rpc.Broadcast( NetFlags.HostOnly )]
 	public void RpcBroadcastMeleeSwingTraceDebug( AttackReleaseIntent intent )
 	{
-		if ( Networking.IsHost )
+		if ( !MeleeDebugDrawEnabled || !ClientMeleeSwingTraceDebug )
 			return;
-		if ( !MeleeDebugDrawEnabled )
+
+		// Host already draws via the authoritative server runtime when one is running on this machine.
+		if ( Networking.IsHost && ServerHasActiveMeleeAttackAction )
 			return;
+
 		StartClientMeleeSwingTracePlayback( intent );
 	}
 

@@ -290,6 +290,7 @@ public sealed class VitalsAuthority : Component
 			_players[id] = r;
 		}
 
+		var healthBefore = r.Health;
 		r.Health = Math.Clamp( r.Health + healthDelta, 0f, r.HealthMax );
 
 		if ( healthDelta < 0f )
@@ -342,6 +343,10 @@ public sealed class VitalsAuthority : Component
 		_vitalsByPlayerId[id] = vitals;
 		var snap = ToSnapshot( r );
 		vitals.ApplyFromAuthorityAndSync( snap );
+
+		if ( healthBefore > 0.001f && r.Health <= 0.001f )
+			vitals.HostExecuteDeathRespawnIfDead();
+
 		return true;
 	}
 

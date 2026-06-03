@@ -22,6 +22,7 @@ public static class MeleeAttackSweep
 		float stagger,
 		byte attackState,
 		byte attackType,
+		byte attackSwingDir,
 		bool isHeavy,
 		ushort attackInstanceId,
 		string swingLogNote,
@@ -85,8 +86,10 @@ public static class MeleeAttackSweep
 				DefenderCombat = defender,
 				HitPosition = guardPos,
 				AttackType = attackType,
+				AttackSwingDir = attackSwingDir,
 				AttackWasHeavy = isHeavy,
-				HitSandboxTime = Time.NowDouble
+				HitSandboxTime = Time.NowDouble,
+				AttackRayGeometryValidated = true
 			};
 			if ( !defender.TryServerResolveBlock( in contact, defender.LogMeleeBlockRejectionsToConsole,
 				     out var guardBlockMul, out _, out _, out _ ) || guardBlockMul > 0.999f )
@@ -153,8 +156,9 @@ public static class MeleeAttackSweep
 		var wasBlocked = false;
 		var incomingAngle = 0f;
 		PlayerCombat blockingCombat = null;
-		if ( MeleeAttackResolution.TryGetBlockDamageMultiplier( attackerRoot, bodyReceiver, bodyHitPos, attackType, isHeavy,
-			     origin, tip, rayThickness, out var blockMul, out var blockStMul, out blockingCombat, out var blockTrace ) )
+		if ( MeleeAttackResolution.TryGetBlockDamageMultiplier( attackerRoot, bodyReceiver, bodyHitPos, attackType,
+			     attackSwingDir, isHeavy, origin, tip, rayThickness, out var blockMul, out var blockStMul,
+			     out blockingCombat, out var blockTrace ) )
 		{
 			dmgAmount *= blockMul;
 			stMul *= blockStMul;
@@ -350,7 +354,8 @@ public static class MeleeAttackSweep
 		var incomingAngle = 0f;
 		PlayerCombat blockingCombat = null;
 
-		if ( MeleeAttackResolution.TryGetBlockDamageMultiplier( attackerRoot, dmg, tr.HitPosition, attackType, isHeavy,
+		if ( MeleeAttackResolution.TryGetBlockDamageMultiplier( attackerRoot, dmg, tr.HitPosition, attackType,
+			     attackSwingDir: 0, isHeavy, segA, segB, Math.Max( 2f, attackerCombat.MeleeHitVolumeThickness ),
 			     out var blockMul, out var blockStMul, out blockingCombat, out var blockTrace ) )
 		{
 			dmgAmount *= blockMul;

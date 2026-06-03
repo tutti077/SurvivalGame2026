@@ -120,23 +120,23 @@ public static class MeleeBlockPath
 	}
 
 	/// <summary>
-	/// Shared feet-arc span and guard-line edge. Matches teardrop L/R (same side as vertical guard).
-	/// In this project +Z combat-right / +angle maps to teardrop-left guard side.
+	/// Feet-arc span and guard-line edge on the same side as the teardrop (do not invert):
+	/// left teardrop → defender's left (−angle), right teardrop → defender's right (+angle).
 	/// </summary>
 	public static void GetLateralBlockAngles( PlayerCombat pc, byte blockDir, out float arcStartDeg, out float arcEndDeg, out float guardEdgeDeg )
 	{
 		var half = pc.MeleeBlockLateralHalfArcDegrees;
 		if ( blockDir == SwingDirs.Left )
 		{
-			arcStartDeg = 0f;
-			arcEndDeg = half;
-			guardEdgeDeg = half;
+			arcStartDeg = -half;
+			arcEndDeg = 0f;
+			guardEdgeDeg = -half;
 			return;
 		}
 
-		arcStartDeg = -half;
-		arcEndDeg = 0f;
-		guardEdgeDeg = -half;
+		arcStartDeg = 0f;
+		arcEndDeg = half;
+		guardEdgeDeg = half;
 	}
 
 	static Vector3 LocalCombatToWorld( Vector3 origin, Rotation combatBasis, Vector3 local ) =>
@@ -185,7 +185,7 @@ public static class MeleeBlockPath
 	}
 
 	/// <summary>
-	/// First hit on the held guard polyline along the ray, up to <paramref name="beforeDistance"/>.
+	/// First hit where the ray intersects the held guard polyline (vertical L/R, horizontal overhead), up to <paramref name="beforeDistance"/>.
 	/// </summary>
 	public static bool TryRaycastGuardLine(
 		PlayerCombat defender,
@@ -220,30 +220,172 @@ public static class MeleeBlockPath
 		if ( count < 1 )
 			return false;
 
-		var stepLen = Math.Max( 1f, hitRadius * 0.5f );
+		var maxDist = Math.Min( lineLen, Math.Max( 0f, beforeDistance ) );
+		return TryRayFirstHitOnGuardPolyline( rayOrigin, rayDir, maxDist, samples, count, hitRadius,
+			out distanceAlongRay, out hitPosition );
+	}
+
+	/// <summary>Earliest point along a ray that comes within <paramref name="hitRadius"/> of the guard sample polyline.</summary>
+	static bool TryRayFirstHitOnGuardPolyline(
+		Vector3 rayOrigin,
+		Vector3 rayDir,
+		float maxDistAlongRay,
+		Span<Vector3> samples,
+		int count,
+		float hitRadius,
+		out float distanceAlongRay,
+		out Vector3 hitPosition )
+	{
+		distanceAlongRay = float.MaxValue;
+		hitPosition = default;
+		if ( count < 1 || maxDistAlongRay <= 1e-4f )
+			return false;
+
+		if ( count == 1 )
+		{
+			if ( TryRayPointHit( rayOrigin, rayDir, maxDistAlongRay, samples[0], hitRadius, out distanceAlongRay, out hitPosition ) )
+				return true;
+			return false;
+		}
+
+		for ( var i = 1; i < count; i++ )
+		{
+			if ( !TryRaySegmentHit( rayOrigin, rayDir, maxDistAlongRay, samples[i - 1], samples[i], hitRadius,
+				     out var t, out var pos ) )
+				continue;
+			if ( t >= distanceAlongRay - 1e-4f )
+				continue;
+
+			distanceAlongRay = t;
+			hitPosition = pos;
+		}
+
+		return distanceAlongRay < float.MaxValue - 1f;
+	}
+
+	static bool TryRayPointHit(
+		Vector3 rayOrigin,
+		Vector3 rayDir,
+		float maxDistAlongRay,
+		Vector3 point,
+		float hitRadius,
+		out float distanceAlongRay,
+		out Vector3 hitPosition )
+	{
+		distanceAlongRay = 0f;
+		hitPosition = default;
+		var along = Vector3.Dot( point - rayOrigin, rayDir );
+		if ( along < -1e-4f || along > maxDistAlongRay + 1e-4f )
+			return false;
+
+		along = Math.Clamp( along, 0f, maxDistAlongRay );
+		var closestOnRay = rayOrigin + rayDir * along;
+		if ( closestOnRay.Distance( point ) > hitRadius + 1e-4f )
+			return false;
+
+		distanceAlongRay = along;
+		hitPosition = closestOnRay;
+		return true;
+	}
+
+	static bool TryRaySegmentHit(
+		Vector3 rayOrigin,
+		Vector3 rayDir,
+		float maxDistAlongRay,
+		Vector3 segA,
+		Vector3 segB,
+		float hitRadius,
+		out float distanceAlongRay,
+		out Vector3 hitPosition )
+	{
+		distanceAlongRay = 0f;
+		hitPosition = default;
+
+		var segDelta = segB - segA;
+		var a = Vector3.Dot( rayDir, rayDir );
+		var b = Vector3.Dot( rayDir, segDelta );
+		var c = Vector3.Dot( segDelta, segDelta );
+		var w = rayOrigin - segA;
+		var d = Vector3.Dot( rayDir, w );
+		var e = Vector3.Dot( segDelta, w );
+		var denom = a * c - b * b;
+
+		float rayT;
+		float segS;
+
+		if ( denom < 1e-8f )
+		{
+			rayT = Math.Clamp( -d / Math.Max( a, 1e-8f ), 0f, maxDistAlongRay );
+			segS = c < 1e-8f ? 0f : Math.Clamp( -e / c, 0f, 1f );
+		}
+		else
+		{
+			rayT = ( b * e - c * d ) / denom;
+			segS = ( a * e - b * d ) / denom;
+			rayT = Math.Clamp( rayT, 0f, maxDistAlongRay );
+			segS = Math.Clamp( segS, 0f, 1f );
+		}
+
+		var closestOnRay = rayOrigin + rayDir * rayT;
+		var closestOnSeg = segA + segDelta * segS;
+		if ( closestOnRay.Distance( closestOnSeg ) > hitRadius + 1e-4f )
+			return false;
+
+		distanceAlongRay = rayT;
+		hitPosition = closestOnRay;
+		return true;
+	}
+
+	/// <summary>
+	/// First point along the ray inside the held block footprint wedge (before body cutoff).
+	/// </summary>
+	public static bool TryGetFirstFootprintEntryBeforeDistance(
+		PlayerCombat defender,
+		Vector3 rayOrigin,
+		Vector3 rayEnd,
+		float beforeDistance,
+		float extraThickness,
+		out float entryDistance,
+		out Vector3 entryPosition )
+	{
+		entryDistance = 0f;
+		entryPosition = default;
+
+		if ( defender is null || !defender.GameObject.IsValid() || !defender.IsAuthoritativeMeleeBlocking )
+			return false;
+
+		var blockDir = defender.AuthoritativeMeleeBlockDirection;
+		if ( blockDir is not (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) )
+			return false;
+
+		var delta = rayEnd - rayOrigin;
+		var lineLen = delta.Length;
+		if ( lineLen < 1e-4f )
+			return false;
+
+		var rayDir = delta / lineLen;
+		var pad = Math.Max( 0f, extraThickness );
+		var stepLen = Math.Max( 1.5f, Math.Max( 0.75f, defender.BlockSampleSphereRadius + pad ) * 0.5f );
 		var maxDist = Math.Min( lineLen, Math.Max( 0f, beforeDistance ) );
 		var steps = Math.Max( 1, (int)MathF.Ceiling( maxDist / stepLen ) );
-		var bestDist = float.MaxValue;
 
 		for ( var i = 1; i <= steps; i++ )
 		{
 			var dist = maxDist * (i / (float)steps);
 			var point = rayOrigin + rayDir * dist;
-			if ( DistancePointToGuardPolyline( point, samples, count ) > hitRadius + 1e-4f )
-				continue;
-			if ( dist >= bestDist )
+			if ( !IsPointInsideActiveBlockFootprint( defender, blockDir, point, pad ) )
 				continue;
 
-			bestDist = dist;
-			distanceAlongRay = dist;
-			hitPosition = point;
+			entryDistance = dist;
+			entryPosition = point;
+			return true;
 		}
 
-		return bestDist < float.MaxValue;
+		return false;
 	}
 
 	/// <summary>
-	/// Block only when the ray enters the footprint wedge, then hits the guard line before the body cutoff.
+	/// Block ray hits the held guard polyline before the body; footprint entry is a fallback when the line is missed.
 	/// </summary>
 	public static bool TryRaycastBlockGuardLine(
 		PlayerCombat defender,
@@ -257,10 +399,11 @@ public static class MeleeBlockPath
 		guardLineDistance = 0f;
 		guardLinePosition = default;
 
-		if ( !RayEntersFootprintBeforeDistance( defender, rayOrigin, rayEnd, beforeBodyDistance, extraThickness ) )
-			return false;
+		if ( TryRaycastGuardLine( defender, rayOrigin, rayEnd, beforeBodyDistance, extraThickness,
+			     out guardLineDistance, out guardLinePosition ) )
+			return true;
 
-		return TryRaycastGuardLine( defender, rayOrigin, rayEnd, beforeBodyDistance, extraThickness,
+		return TryGetFirstFootprintEntryBeforeDistance( defender, rayOrigin, rayEnd, beforeBodyDistance, extraThickness,
 			out guardLineDistance, out guardLinePosition );
 	}
 
@@ -356,7 +499,7 @@ public static class MeleeBlockPath
 		return FootprintPointToWorld( root, basis, angleDeg, radial, localUp );
 	}
 
-	/// <summary>True when footprint is entered and the guard line is hit before the body cutoff.</summary>
+	/// <summary>True when the ray hits the active guard line (or footprint fallback) before the body cutoff.</summary>
 	public static bool RayHitsActiveGuardBeforeDistance(
 		PlayerCombat defender,
 		Vector3 rayOrigin,

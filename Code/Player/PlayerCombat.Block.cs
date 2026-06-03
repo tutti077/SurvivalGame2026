@@ -74,10 +74,33 @@ public partial class PlayerCombat
 
 	bool _hostReportedBlockActive;
 	byte _hostReportedBlockDirection = SwingDirs.Up;
+	float _hostReportedBlockBasisYaw;
 
-	bool _meleeBlockConsumedAwaitingRelease;
+	float _remoteBlockBasisYaw;
+	bool _remoteBlockBasisYawValid;
+
 	bool _lastSentBlockActive;
 	byte _lastSentBlockDirection = byte.MaxValue;
+	bool _lastSentBlockYawValid;
+	float _lastSentBlockBasisYaw;
+
+	bool _lastBroadcastBlockActive;
+	byte _lastBroadcastBlockDirection = byte.MaxValue;
+	bool _lastBroadcastBlockYawValid;
+	float _lastBroadcastBlockBasisYaw;
+
+	bool _meleeBlockConsumedAwaitingRelease;
+
+	/// <summary>Horizontal look yaw for block guard on remote pawns (view yaw ≠ body yaw).</summary>
+	public Rotation GetBlockCombatBasisRotation()
+	{
+		if ( !IsLocalCombatDriver() && _remoteBlockBasisYawValid && IsAuthoritativeMeleeBlocking )
+			return new Angles( 0f, _remoteBlockBasisYaw, 0f ).ToRotation();
+
+		return GetCameraYawRotation();
+	}
+
+	public float GetBlockCombatBasisYaw() => GetBlockCombatBasisRotation().Angles().yaw;
 
 	/// <summary>Committed block pose (L/R/U); morphs only when teardrop cardinal changes, not on look rotation.</summary>
 	byte _heldBlockGuardDir = SwingDirs.Up;
@@ -197,14 +220,14 @@ public partial class PlayerCombat
 
 	void TickAuthoritativeMeleeBlockState()
 	{
-		if ( GameObject.IsProxy )
+		if ( GameObject.IsProxy && !Networking.IsHost )
 			return;
 
 		_blockDirectionChangedThisFrame = false;
 
 		if ( IsServerSideForMeleeAuthority() && !IsLocalCombatDriver() )
 		{
-			SetAuthoritativeMeleeBlockState( _hostReportedBlockActive, _hostReportedBlockDirection );
+			SetAuthoritativeMeleeBlockState( _hostReportedBlockActive, _hostReportedBlockDirection, _hostReportedBlockBasisYaw );
 			return;
 		}
 
@@ -227,7 +250,7 @@ public partial class PlayerCombat
 			_blockDirectionChangedThisFrame = true;
 	}
 
-	void SetAuthoritativeMeleeBlockState( bool active, byte direction )
+	void SetAuthoritativeMeleeBlockState( bool active, byte direction, float? remoteBasisYaw = null )
 	{
 		var now = Time.NowDouble;
 
@@ -241,21 +264,75 @@ public partial class PlayerCombat
 		_authoritativeMeleeBlockActive = active;
 		if ( direction is SwingDirs.Left or SwingDirs.Right or SwingDirs.Up )
 			_authoritativeMeleeBlockDirection = direction;
+
+		if ( !active )
+			_remoteBlockBasisYawValid = false;
+		else if ( remoteBasisYaw is { } yaw )
+		{
+			_remoteBlockBasisYaw = yaw;
+			_remoteBlockBasisYawValid = true;
+		}
+
+		if ( GameObject.Network is { Active: true } && Networking.IsHost )
+		{
+			var vizYaw = remoteBasisYaw ?? GetBlockCombatBasisYaw();
+			BroadcastMeleeBlockVisualizationIfHost( active, _authoritativeMeleeBlockDirection, vizYaw );
+		}
+	}
+
+	void BroadcastMeleeBlockVisualizationIfHost( bool active, byte direction, float basisYaw )
+	{
+		var activeChanged = active != _lastBroadcastBlockActive;
+		var dirChanged = direction != _lastBroadcastBlockDirection;
+		var yawChanged = !_lastBroadcastBlockYawValid || MathF.Abs( basisYaw - _lastBroadcastBlockBasisYaw ) >= 0.35f;
+
+		if ( !activeChanged && !dirChanged && !( active && yawChanged ) )
+			return;
+
+		_lastBroadcastBlockActive = active;
+		_lastBroadcastBlockDirection = direction;
+		_lastBroadcastBlockBasisYaw = basisYaw;
+		_lastBroadcastBlockYawValid = true;
+
+		RpcBroadcastMeleeBlockVisualization( active, direction, basisYaw );
+	}
+
+	[Rpc.Broadcast( NetFlags.HostOnly )]
+	void RpcBroadcastMeleeBlockVisualization( bool active, byte direction, float basisYaw )
+	{
+		if ( Networking.IsHost )
+			return;
+
+		_authoritativeMeleeBlockActive = active;
+		if ( direction is SwingDirs.Left or SwingDirs.Right or SwingDirs.Up )
+			_authoritativeMeleeBlockDirection = direction;
+
+		if ( active )
+		{
+			_remoteBlockBasisYaw = basisYaw;
+			_remoteBlockBasisYawValid = true;
+		}
+		else
+			_remoteBlockBasisYawValid = false;
 	}
 
 	void MaybeSendMeleeBlockStateRpc( bool active, byte direction )
 	{
-		if ( active == _lastSentBlockActive && direction == _lastSentBlockDirection )
+		var basisYaw = GetBlockCombatBasisYaw();
+		if ( active == _lastSentBlockActive && direction == _lastSentBlockDirection
+		     && _lastSentBlockYawValid && MathF.Abs( basisYaw - _lastSentBlockBasisYaw ) < 0.4f )
 			return;
 
 		_lastSentBlockActive = active;
 		_lastSentBlockDirection = direction;
+		_lastSentBlockBasisYaw = basisYaw;
+		_lastSentBlockYawValid = true;
 		var pressedSandbox = _block.Snapshot.PressedSandboxTimeNowDouble ?? Time.NowDouble;
-		RpcSubmitMeleeBlockState( active, direction, pressedSandbox );
+		RpcSubmitMeleeBlockState( active, direction, pressedSandbox, basisYaw );
 	}
 
 	[Rpc.Host]
-	void RpcSubmitMeleeBlockState( bool active, byte direction, double blockPressedSandboxTime )
+	void RpcSubmitMeleeBlockState( bool active, byte direction, double blockPressedSandboxTime, float basisYaw )
 	{
 		if ( !Networking.IsHost || !GameObject.IsValid() )
 			return;
@@ -267,6 +344,7 @@ public partial class PlayerCombat
 		_hostReportedBlockActive = active;
 		if ( direction is SwingDirs.Left or SwingDirs.Right or SwingDirs.Up )
 			_hostReportedBlockDirection = direction;
+		_hostReportedBlockBasisYaw = basisYaw;
 
 		if ( active && ServerHasActiveMeleeAttackAction )
 			ServerCancelMeleeAttack();
@@ -276,7 +354,7 @@ public partial class PlayerCombat
 			if ( active && !_authoritativeMeleeBlockActive && blockPressedSandboxTime > 1e-6 )
 				_serverBlockStartedAtSandbox = blockPressedSandboxTime;
 
-			SetAuthoritativeMeleeBlockState( active, direction );
+			SetAuthoritativeMeleeBlockState( active, direction, basisYaw );
 		}
 	}
 
@@ -343,6 +421,12 @@ public partial class PlayerCombat
 		out MeleeBlockValidationTrace trace ) =>
 		MeleeBlockResolution.TryResolve( this, in contact, logRejections, out damageMultiplier, out staggerMultiplier,
 			out rejectReason, out trace );
+
+	internal void DrawRemoteBlockVisualizationIfNeeded()
+	{
+		if ( ShouldDrawMeleeBlockVisualization() )
+			DrawMeleeBlockGuardVisualization();
+	}
 
 	void DrawMeleeBlockGuardVisualization()
 	{
@@ -411,6 +495,6 @@ public partial class PlayerCombat
 		if ( IsLocalCombatDriver() )
 			return LocalBlockInputActive();
 
-		return IsServerSideForMeleeAuthority() && IsAuthoritativeMeleeBlocking;
+		return IsAuthoritativeMeleeBlocking;
 	}
 }
