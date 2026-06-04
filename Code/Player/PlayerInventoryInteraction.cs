@@ -99,12 +99,13 @@ public sealed class PlayerInventoryInteraction : Component
 		_dragGhost.Style.Set( "display", "none" );
 		_dragGhost.Style.Set( "pointer-events", "none" );
 
+		var iconInset = 4f * InventoryMenuSection.Scale;
 		_dragIcon = new Panel { Parent = _dragGhost };
 		_dragIcon.Style.Set( "position", "absolute" );
-		_dragIcon.Style.Set( "left", "4px" );
-		_dragIcon.Style.Set( "top", "4px" );
-		_dragIcon.Style.Set( "right", "4px" );
-		_dragIcon.Style.Set( "bottom", "4px" );
+		_dragIcon.Style.Set( "left", $"{iconInset}px" );
+		_dragIcon.Style.Set( "top", $"{iconInset}px" );
+		_dragIcon.Style.Set( "right", $"{iconInset}px" );
+		_dragIcon.Style.Set( "bottom", $"{iconInset}px" );
 		_dragIcon.Style.Set( "background-size", "contain" );
 		_dragIcon.Style.Set( "background-repeat", "no-repeat" );
 		_dragIcon.Style.Set( "background-position", "center" );
@@ -120,7 +121,7 @@ public sealed class PlayerInventoryInteraction : Component
 		_dragCount.Style.Set( "background-color", "rgba(0,0,0,0.65)" );
 		_dragCount.Style.Set( "border-radius", "3px" );
 		_dragCount.Style.FontColor = Color.White;
-		_dragCount.Style.FontSize = Length.Pixels( 13f );
+		_dragCount.Style.FontSize = Length.Pixels( InventoryMenuSection.CountFontSize );
 		_dragCount.Style.Set( "text-shadow", "1px 1px 2px black" );
 
 	}
