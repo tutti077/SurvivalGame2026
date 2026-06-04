@@ -32,6 +32,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 	Panel _sectionRoot;
 	Panel _craftOutline;
+	Panel _craftProgressFill;
 	Panel _craftButton;
 	Label _craftButtonLabel;
 	Panel _detailIcon;
@@ -44,7 +45,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	bool _menuOpen;
 	bool _craftHoldActive;
 	bool _craftHoldCompleted;
-	double _craftHoldStartSandbox;
+	float _craftHoldElapsed;
 	bool _craftButtonPressedVisual;
 
 	static readonly Color CraftButtonColor = new( 0.22f, 0.45f, 0.28f, 0.95f );
@@ -98,6 +99,19 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_craftOutline.Style.Set( "opacity", "0" );
 
 		_craftButton = new CraftButtonPanel( this ) { Parent = craftWrap };
+		_craftButton.Style.Set( "position", "relative" );
+		_craftButton.Style.Set( "overflow", "hidden" );
+
+		_craftProgressFill = new Panel { Parent = _craftButton };
+		_craftProgressFill.Style.Set( "position", "absolute" );
+		_craftProgressFill.Style.Set( "left", "0" );
+		_craftProgressFill.Style.Set( "top", "0" );
+		_craftProgressFill.Style.Set( "bottom", "0" );
+		_craftProgressFill.Style.Width = Length.Percent( 0 );
+		_craftProgressFill.Style.Set( "z-index", "0" );
+		_craftProgressFill.Style.Set( "pointer-events", "none" );
+		_craftProgressFill.Style.BackgroundColor = new Color( 0.45f, 0.88f, 0.52f, 0.55f );
+		_craftProgressFill.Style.Set( "display", "none" );
 		_craftButton.Style.Set( "padding-left", $"{12f * LayoutScale}px" );
 		_craftButton.Style.Set( "padding-right", $"{12f * LayoutScale}px" );
 		_craftButton.Style.Set( "padding-top", $"{6f * LayoutScale}px" );
@@ -114,6 +128,8 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_craftButtonLabel.Style.FontColor = Color.White;
 		_craftButtonLabel.Style.FontSize = Length.Pixels( 15f * TextScale );
 		_craftButtonLabel.Style.Set( "pointer-events", "none" );
+		_craftButtonLabel.Style.Set( "position", "relative" );
+		_craftButtonLabel.Style.Set( "z-index", "2" );
 
 		var detail = new Panel { Parent = _sectionRoot };
 		detail.Style.Set( "flex-direction", "column" );
@@ -311,7 +327,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 		_craftHoldActive = true;
 		_craftHoldCompleted = false;
-		_craftHoldStartSandbox = Time.NowDouble;
+		_craftHoldElapsed = 0f;
 		SetCraftHoldVisual( 0f );
 	}
 
@@ -322,8 +338,16 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		SetCraftHoldVisual( 0f );
 	}
 
-	/// <summary>Called from <see cref="CraftButtonPanel.Tick"/> while the button holds mouse capture.</summary>
-	public void AdvanceCraftHold()
+	/// <summary>Called from <see cref="CraftButtonPanel.Tick"/> each frame while LMB hold is active.</summary>
+	public void AdvanceCraftHoldWhileHeld()
+	{
+		if ( !_craftHoldActive )
+			return;
+
+		AdvanceCraftHold();
+	}
+
+	void AdvanceCraftHold()
 	{
 		if ( !_craftHoldActive || _craftHoldCompleted )
 			return;
@@ -334,8 +358,9 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 			return;
 		}
 
-		var duration = Math.Max( 0.05, CraftHoldSeconds );
-		var t = (float)Math.Clamp( ( Time.NowDouble - _craftHoldStartSandbox ) / duration, 0.0, 1.0 );
+		_craftHoldElapsed += Time.Delta;
+		var duration = Math.Max( 0.05f, CraftHoldSeconds );
+		var t = Math.Clamp( _craftHoldElapsed / duration, 0f, 1f );
 		SetCraftHoldVisual( t );
 
 		if ( t < 1f )
@@ -356,10 +381,6 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 	public void TickMenu( bool menuOpen )
 	{
-		if ( !menuOpen || !_craftHoldActive )
-			return;
-
-		AdvanceCraftHold();
 	}
 
 	public void OnMenuGlobalMouseUp()
@@ -368,21 +389,32 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 	void SetCraftHoldVisual( float progress )
 	{
+		if ( _craftProgressFill is not null && _craftProgressFill.IsValid() )
+		{
+			if ( progress <= 0f )
+			{
+				_craftProgressFill.Style.Width = Length.Percent( 0 );
+				_craftProgressFill.Style.Set( "display", "none" );
+			}
+			else
+			{
+				_craftProgressFill.Style.Set( "display", "flex" );
+				_craftProgressFill.Style.Width = Length.Percent( progress * 100f );
+			}
+		}
+
 		if ( _craftOutline is null || !_craftOutline.IsValid() )
 			return;
 
 		if ( progress <= 0f )
 		{
 			_craftOutline.Style.Set( "opacity", "0" );
-			_craftOutline.Style.Set( "border-width", "2px" );
 			return;
 		}
 
-		_craftOutline.Style.Set( "opacity", "1" );
-		var borderPx = 2f + progress * 3f;
-		_craftOutline.Style.Set( "border-width", $"{borderPx}px" );
-		var alpha = 0.35f + progress * 0.65f;
-		_craftOutline.Style.Set( "border-color", $"rgba(159, 214, 166, {alpha})" );
+		_craftOutline.Style.Set( "opacity", progress >= 1f ? "1" : "0.85" );
+		_craftOutline.Style.Set( "border-width", "2px" );
+		_craftOutline.Style.Set( "border-color", "#9fd6a6" );
 	}
 
 	public bool CanCraftSelectedRecipe()
@@ -563,6 +595,12 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		public CraftButtonPanel( CraftingMenuSection section ) => _section = section;
 
 		public override bool WantsMouseInput() => true;
+
+		public override void Tick()
+		{
+			base.Tick();
+			_section.AdvanceCraftHoldWhileHeld();
+		}
 
 		protected override void OnMouseDown( MousePanelEvent e )
 		{
