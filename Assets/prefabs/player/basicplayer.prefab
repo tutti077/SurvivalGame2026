@@ -359,7 +359,7 @@
         "__enabled": true,
         "Flags": 0,
         "ArmorFlat": 0,
-        "InfiniteStaminaDebug": true,
+        "InfiniteStaminaDebug": false,
         "LogDamageAppliedToConsole": true,
         "LogVitalsNetworking": false,
         "LogWhenStaminaReachesFull": false,
@@ -458,13 +458,13 @@
         "CraftingMenuAction": "CraftingMenu",
         "InventoryMenuAction": "InventoryMenu",
         "MapMenuAction": "MapMenu",
-        "SettingsMenuAction": "SettingsMenu",
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
-        "OnComponentUpdate": null
+        "OnComponentUpdate": null,
+        "SettingsMenuAction": "SettingsMenu"
       },
       {
         "__type": "Survival.PlayerCrafting",

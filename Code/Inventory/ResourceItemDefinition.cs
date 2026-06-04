@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Sandbox;
 
 namespace Survival;
@@ -29,10 +30,13 @@ public sealed class ResourceItemDefinition : Component
 	[Property, Group( "Harvest" ), Title( "Harvestable" )]
 	public bool Harvestable { get; set; }
 
-	[Property, Group( "Harvest" )]
+	[Property, Group( "Harvest" ), Title( "Harvest Yields" )]
+	public List<HarvestYieldEntry> HarvestYields { get; set; } = new();
+
+	[Property, Group( "Harvest" ), Title( "Legacy Yield Low (used when Harvest Yields is empty)" )]
 	public int BaseYieldPerTickLow { get; set; } = 1;
 
-	[Property, Group( "Harvest" )]
+	[Property, Group( "Harvest" ), Title( "Legacy Yield High (used when Harvest Yields is empty)" )]
 	public int BaseYieldPerTickHigh { get; set; } = 1;
 
 	[Property, Group( "Harvest" ), Title( "Tool Type Required" )]
@@ -195,7 +199,7 @@ public sealed class ResourceItemDefinition : Component
 			return HarvestTickResult.Failed( "depleted" );
 		}
 
-		var yield = RollYieldAmount();
+		var loot = RollHarvestLoot();
 		_remainingHarvestTicks--;
 
 		var depletedThisTick = false;
@@ -207,16 +211,17 @@ public sealed class ResourceItemDefinition : Component
 
 		if ( LogHarvest )
 		{
+			var lootSummary = loot.Length > 0
+				? string.Join( ", ", Array.ConvertAll( loot, l => $"+{l.Amount} {l.ResourceId}" ) )
+				: "nothing";
 			Log.Info(
-				$"[ResourceItemDefinition] {GameObject.Name}: harvest tick +{yield} {ResourceId} ({DisplayName}), remaining={_remainingHarvestTicks}, tool={toolType} tier={toolTier}." );
+				$"[ResourceItemDefinition] {GameObject.Name}: harvest tick {lootSummary} ({DisplayName}), remaining={_remainingHarvestTicks}, tool={toolType} tier={toolTier}." );
 		}
 
 		return new HarvestTickResult
 		{
 			Success = true,
-			YieldAmount = yield,
-			ResourceId = ResourceId,
-			DisplayName = DisplayName,
+			Loot = loot,
 			RemainingHarvestTicks = _remainingHarvestTicks,
 			DepletedThisTick = depletedThisTick,
 		};
@@ -294,16 +299,106 @@ public sealed class ResourceItemDefinition : Component
 		ApplyDepletedVisual( depleted );
 	}
 
-	/// <summary>Upper bound on yield for one tick (used to validate storage before harvesting).</summary>
-	public int GetMaxYieldPerTick() =>
-		Math.Max( 0, Math.Max( BaseYieldPerTickLow, BaseYieldPerTickHigh ) );
-
-	int RollYieldAmount()
+	/// <summary>Guaranteed loot lines that must fit before a harvest tick is allowed.</summary>
+	public void CollectGuaranteedCapacityNeeds( List<(string ResourceId, int Amount)> needs )
 	{
-		var low = Math.Max( 0, BaseYieldPerTickLow );
-		var high = Math.Max( low, BaseYieldPerTickHigh );
+		needs.Clear();
+		foreach ( var entry in EnumerateEffectiveYieldEntries() )
+		{
+			if ( string.IsNullOrWhiteSpace( entry.ResourceId ) )
+				continue;
+
+			if ( entry.ChancePercent < 100f )
+				continue;
+
+			var max = GetEntryMaxAmount( entry );
+			if ( max > 0 )
+				needs.Add( (entry.ResourceId, max) );
+		}
+	}
+
+	/// <summary>True when at least one yield entry can produce loot this tick.</summary>
+	public bool HasAnyPossibleLoot()
+	{
+		foreach ( var entry in EnumerateEffectiveYieldEntries() )
+		{
+			if ( !string.IsNullOrWhiteSpace( entry.ResourceId ) && entry.ChancePercent > 0f )
+				return true;
+		}
+
+		return false;
+	}
+
+	IEnumerable<HarvestYieldEntry> EnumerateEffectiveYieldEntries()
+	{
+		if ( HarvestYields is { Count: > 0 } )
+		{
+			foreach ( var entry in HarvestYields )
+			{
+				if ( entry is not null )
+					yield return entry;
+			}
+
+			yield break;
+		}
+
+		yield return new HarvestYieldEntry
+		{
+			ResourceId = ResourceId,
+			AmountLow = BaseYieldPerTickLow,
+			AmountHigh = BaseYieldPerTickHigh,
+			ChancePercent = 100f,
+		};
+	}
+
+	HarvestLootItem[] RollHarvestLoot()
+	{
+		var rolled = new List<HarvestLootItem>();
+
+		foreach ( var entry in EnumerateEffectiveYieldEntries() )
+		{
+			if ( string.IsNullOrWhiteSpace( entry.ResourceId ) )
+				continue;
+
+			if ( !RollChance( entry.ChancePercent ) )
+				continue;
+
+			var amount = RollEntryAmount( entry );
+			if ( amount <= 0 )
+				continue;
+
+			var display = ResourceCatalog.Resolve( entry.ResourceId ).DisplayName;
+			rolled.Add( new HarvestLootItem( entry.ResourceId, amount, display ) );
+		}
+
+		return rolled.ToArray();
+	}
+
+	static int GetEntryMaxAmount( HarvestYieldEntry entry )
+	{
+		var low = Math.Max( 0, entry.AmountLow );
+		var high = Math.Max( low, entry.AmountHigh );
+		return high;
+	}
+
+	bool RollChance( float chancePercent )
+	{
+		if ( chancePercent >= 100f )
+			return true;
+
+		if ( chancePercent <= 0f )
+			return false;
+
+		return _rng.NextDouble() * 100.0 < chancePercent;
+	}
+
+	int RollEntryAmount( HarvestYieldEntry entry )
+	{
+		var low = Math.Max( 0, entry.AmountLow );
+		var high = Math.Max( low, entry.AmountHigh );
 		if ( low == high )
 			return low;
+
 		return _rng.Next( low, high + 1 );
 	}
 }

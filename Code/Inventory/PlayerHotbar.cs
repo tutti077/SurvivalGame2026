@@ -142,6 +142,63 @@ public sealed class PlayerHotbar : Component
 		return amount - remaining;
 	}
 
+	/// <summary>Simulate overflow placement into a slot copy (mutates <paramref name="slots"/>).</summary>
+	internal int SimulateOverflowAbsorb( InventorySlot[] slots, string resourceId, int amount )
+	{
+		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) || slots is null || slots.Length != SlotCount )
+			return amount;
+
+		var remaining = amount;
+
+		for ( var pass = 0; pass < 3 && remaining > 0; pass++ )
+		{
+			for ( var i = 0; i < SlotCount && remaining > 0; i++ )
+			{
+				var matches = pass switch
+				{
+					0 => BindingMatches( i, resourceId ),
+					1 => !slots[i].IsEmpty
+					     && string.Equals( slots[i].ResourceId, resourceId, StringComparison.OrdinalIgnoreCase ),
+					2 => slots[i].IsEmpty,
+					_ => false
+				};
+
+				if ( !matches )
+					continue;
+
+				remaining = SimulateAddToSlot( ref slots[i], resourceId, remaining );
+			}
+		}
+
+		return remaining;
+	}
+
+	static int SimulateAddToSlot( ref InventorySlot slot, string resourceId, int amount )
+	{
+		if ( amount <= 0 )
+			return 0;
+
+		var maxStack = ResourceCatalog.GetMaxStack( resourceId );
+
+		if ( slot.IsEmpty )
+		{
+			var place = Math.Min( amount, maxStack );
+			slot = new InventorySlot { ResourceId = resourceId, Count = place };
+			return amount - place;
+		}
+
+		if ( !string.Equals( slot.ResourceId, resourceId, StringComparison.OrdinalIgnoreCase ) )
+			return amount;
+
+		var room = maxStack - slot.Count;
+		if ( room <= 0 )
+			return amount;
+
+		var add = Math.Min( amount, room );
+		slot.Count += add;
+		return amount - add;
+	}
+
 	static int PeekAddToSlot( in InventorySlot slot, string resourceId, int amount )
 	{
 		if ( amount <= 0 )

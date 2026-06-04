@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Sandbox;
 
 namespace Survival;
@@ -32,6 +33,7 @@ public sealed class PlayerHandHarvest : Component
 
 	PlayerVitals _vitals;
 	double _nextFocusScanAt;
+	readonly List<(string ResourceId, int Amount)> _capacityScratch = new();
 
 	protected override void OnStart()
 	{
@@ -169,15 +171,18 @@ public sealed class PlayerHandHarvest : Component
 
 	bool CanReceiveHarvestYield( ResourceItemDefinition node )
 	{
-		if ( node is null || string.IsNullOrWhiteSpace( node.ResourceId ) )
-			return false;
-
-		var yield = node.GetMaxYieldPerTick();
-		if ( yield <= 0 )
+		if ( node is null || !node.HasAnyPossibleLoot() )
 			return false;
 
 		var inventory = Components.Get<PlayerInventory>();
-		return inventory is not null && inventory.CanAcceptResource( node.ResourceId, yield );
+		if ( inventory is null )
+			return false;
+
+		node.CollectGuaranteedCapacityNeeds( _capacityScratch );
+		if ( _capacityScratch.Count > 0 )
+			return inventory.CanAcceptResourceBundle( _capacityScratch );
+
+		return true;
 	}
 
 	void RequestHandHarvest( ResourceItemDefinition node )
@@ -232,8 +237,15 @@ public sealed class PlayerHandHarvest : Component
 		}
 
 		var inventory = Components.Get<PlayerInventory>();
-		var maxYield = node.GetMaxYieldPerTick();
-		if ( inventory is null || maxYield <= 0 || !inventory.CanAcceptResource( node.ResourceId, maxYield ) )
+		if ( inventory is null )
+		{
+			if ( LogHandHarvest )
+				Log.Info( $"[PlayerHandHarvest] {GameObject.Name}: hand harvest rejected — no inventory." );
+			return;
+		}
+
+		node.CollectGuaranteedCapacityNeeds( _capacityScratch );
+		if ( _capacityScratch.Count > 0 && !inventory.CanAcceptResourceBundle( _capacityScratch ) )
 		{
 			if ( LogHandHarvest )
 				Log.Info( $"[PlayerHandHarvest] {GameObject.Name}: hand harvest rejected — inventory and hotbar full." );
@@ -247,27 +259,39 @@ public sealed class PlayerHandHarvest : Component
 		if ( LogHandHarvest )
 		{
 			if ( result.Success )
-				Log.Info( $"[PlayerHandHarvest] {GameObject.Name}: +{result.YieldAmount} {result.ResourceId} ({result.DisplayName})." );
+				Log.Info( $"[PlayerHandHarvest] {GameObject.Name}: {FormatLootLog( result.Loot )}." );
 			else
 				Log.Info( $"[PlayerHandHarvest] {GameObject.Name}: harvest failed — {result.FailReason}." );
 		}
 	}
 
+	static string FormatLootLog( HarvestLootItem[] loot )
+	{
+		if ( loot is null || loot.Length == 0 )
+			return "no loot";
+
+		var parts = new string[loot.Length];
+		for ( var i = 0; i < loot.Length; i++ )
+			parts[i] = $"+{loot[i].Amount} {loot[i].ResourceId}";
+
+		return string.Join( ", ", parts );
+	}
+
 	void TryDepositHarvest( HarvestTickResult result )
 	{
-		if ( result.YieldAmount <= 0 || string.IsNullOrWhiteSpace( result.ResourceId ) )
+		if ( result.Loot is null || result.Loot.Length == 0 )
 			return;
 
 		var inventory = Components.Get<PlayerInventory>();
 		if ( inventory is null )
 		{
 			if ( LogHandHarvest )
-				Log.Warning( $"[PlayerHandHarvest] {GameObject.Name}: no PlayerInventory to receive {result.YieldAmount} {result.ResourceId}." );
+				Log.Warning( $"[PlayerHandHarvest] {GameObject.Name}: no PlayerInventory to receive harvest loot." );
 			return;
 		}
 
-		if ( !inventory.HostTryAddResource( result.ResourceId, result.YieldAmount ) && LogHandHarvest )
-			Log.Warning( $"[PlayerHandHarvest] {GameObject.Name}: inventory full — lost {result.YieldAmount} {result.ResourceId}." );
+		if ( !inventory.HostTryAddHarvestLoot( result.Loot ) && LogHandHarvest )
+			Log.Warning( $"[PlayerHandHarvest] {GameObject.Name}: inventory full — lost {FormatLootLog( result.Loot )}." );
 	}
 
 	bool TryResolveHarvestNode( Guid nodeRootId, out ResourceItemDefinition node )

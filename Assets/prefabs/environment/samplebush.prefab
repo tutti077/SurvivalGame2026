@@ -50,6 +50,20 @@
         "AutoEnsureTraceCollider": true,
         "BaseYieldPerTickHigh": 1,
         "BaseYieldPerTickLow": 1,
+        "HarvestYields": [
+          {
+            "AmountHigh": 1,
+            "AmountLow": 1,
+            "ChancePercent": 100,
+            "ResourceId": "sample_bush"
+          },
+          {
+            "AmountHigh": 1,
+            "AmountLow": 1,
+            "ChancePercent": 25,
+            "ResourceId": "sample_stick"
+          }
+        ],
         "DisplayName": "Bush",
         "FallbackColor": "0.1837,0.36279,0.027,1",
         "HandHarvestRange": 80,

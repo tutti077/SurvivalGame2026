@@ -168,6 +168,67 @@ public sealed class PlayerInventory : Component
 	public bool CanAcceptResource( string resourceId, int amount ) =>
 		PeekAcceptAmount( resourceId, amount ) >= amount;
 
+	/// <summary>True if every listed resource amount can fit when deposited in order (inventory then hotbar overflow).</summary>
+	public bool CanAcceptResourceBundle( IReadOnlyList<(string ResourceId, int Amount)> needs )
+	{
+		if ( needs is null || needs.Count == 0 )
+			return false;
+
+		EnsureSlotArray();
+
+		var scratchInv = new InventorySlot[_slots.Length];
+		for ( var i = 0; i < _slots.Length; i++ )
+			scratchInv[i] = _slots[i];
+
+		var hotbar = Components.Get<PlayerHotbar>();
+		InventorySlot[] scratchHot = null;
+		if ( hotbar is not null )
+		{
+			scratchHot = new InventorySlot[PlayerHotbar.SlotCount];
+			for ( var i = 0; i < scratchHot.Length; i++ )
+				scratchHot[i] = hotbar.GetSlot( i );
+		}
+
+		foreach ( var (resourceId, amount) in needs )
+		{
+			if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
+				continue;
+
+			var remaining = amount;
+			remaining = PeekInventoryAbsorb( scratchInv, resourceId, remaining );
+
+			if ( remaining > 0 && scratchHot is not null )
+				remaining = hotbar.SimulateOverflowAbsorb( scratchHot, resourceId, remaining );
+
+			if ( remaining > 0 )
+				return false;
+		}
+
+		return true;
+	}
+
+	/// <summary>Host/offline: deposit multiple harvest loot lines (guaranteed lines should be pre-checked).</summary>
+	public bool HostTryAddHarvestLoot( HarvestLootItem[] loot )
+	{
+		if ( loot is null || loot.Length == 0 )
+			return false;
+
+		if ( !HasHostAuthority )
+			return false;
+
+		var addedAny = false;
+		foreach ( var item in loot )
+		{
+			if ( item.Amount <= 0 || string.IsNullOrWhiteSpace( item.ResourceId ) )
+				continue;
+
+			if ( HostTryAddResource( item.ResourceId, item.Amount ) )
+				addedAny = true;
+		}
+
+		return addedAny;
+	}
+
 	/// <summary>How much of <paramref name="amount"/> can fit in inventory then hotbar overflow (read-only).</summary>
 	public int PeekAcceptAmount( string resourceId, int amount )
 	{
