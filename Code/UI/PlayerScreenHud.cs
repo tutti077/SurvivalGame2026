@@ -15,7 +15,8 @@ public sealed class PlayerScreenHud : PanelComponent
 	const float BarWidth = 360f;
 	const float BarHeight = 22f;
 	const float BarGap = 6f;
-	const float MenuColumnWidth = 303f;
+	const float InventoryMenuColumnWidth = 400f;
+	const float CraftingMenuColumnWidth = 455f;
 	const string DefaultHarvestPromptText = "Harvest";
 
 	static readonly Color DepletedPortionColor = new Color( 0.82f, 0.82f, 0.83f );
@@ -25,7 +26,9 @@ public sealed class PlayerScreenHud : PanelComponent
 	PlayerGameMenuController _menuController;
 	PlayerInventory _inventory;
 	PlayerInventoryInteraction _inventoryInteraction;
+	PlayerCrafting _crafting;
 	InventoryMenuInputOverlay _menuInputOverlay;
+	MenuPageNavigator _pageNavigator;
 	ScreenPanel _hudScreen;
 	bool _deferScreenPanelCamera;
 	bool _built;
@@ -41,8 +44,12 @@ public sealed class PlayerScreenHud : PanelComponent
 	bool _promptWasVisible;
 
 	Panel _menuRoot;
-	Panel _menuColumn;
+	Panel _menuLeftRoot;
+	Panel _menuRightRoot;
+	Panel _leftMenuColumn;
+	Panel _rightMenuColumn;
 	readonly List<IPlayerMenuSection> _sections = new();
+	CraftingMenuSection _craftingSection;
 
 	protected override void OnTreeFirstBuilt()
 	{
@@ -55,6 +62,14 @@ public sealed class PlayerScreenHud : PanelComponent
 		base.OnUpdate();
 		if ( !_built )
 			TryBuildHud();
+
+		if ( _menuController is not null && _menuController.IsMenuOpen )
+		{
+			for ( var i = 0; i < _sections.Count; i++ )
+				_sections[i].TickMenu( true );
+
+			_inventoryInteraction?.PollInventoryInput( _menuController.VisiblePanels );
+		}
 
 		if ( !_deferScreenPanelCamera || _hudScreen is null || !_hudScreen.IsValid() )
 			return;
@@ -75,7 +90,10 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _inventory is not null )
 			_inventory.InventoryChanged -= OnInventoryChanged;
 		if ( _menuController is not null )
+		{
 			_menuController.MenuOpenChanged -= OnMenuOpenChanged;
+			_menuController.MenuLayoutChanged -= OnMenuLayoutChanged;
+		}
 		base.OnDestroy();
 	}
 
@@ -253,6 +271,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_menuController = FindOnAncestors<PlayerGameMenuController>();
 		_inventory = FindOnAncestors<PlayerInventory>();
 		_inventoryInteraction = FindOnAncestors<PlayerInventoryInteraction>();
+		_crafting = FindOnAncestors<PlayerCrafting>();
 		if ( _menuController is null || _inventory is null )
 		{
 			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: missing menu controller or inventory — menu skipped." );
@@ -262,12 +281,15 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _inventoryInteraction is null )
 			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerInventoryInteraction — inventory clicks disabled." );
 
+		if ( _crafting is null )
+			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerCrafting — craft button disabled." );
+
 		_inventoryInteraction?.BindMenu( _menuController );
 
 		_menuInputOverlay = new InventoryMenuInputOverlay { Parent = Panel };
 		_menuInputOverlay.BindMenuController( _menuController );
 		_menuInputOverlay.BindInventoryInteraction( _inventoryInteraction );
-		_menuInputOverlay.ButtonInput = PanelInputType.Game;
+		_menuInputOverlay.ButtonInput = PanelInputType.UI;
 		_menuInputOverlay.Style.Set( "position", "absolute" );
 		_menuInputOverlay.Style.Set( "left", "0" );
 		_menuInputOverlay.Style.Set( "top", "0" );
@@ -275,53 +297,93 @@ public sealed class PlayerScreenHud : PanelComponent
 		_menuInputOverlay.Style.Set( "height", "100%" );
 		_menuInputOverlay.SetOpen( false );
 
+		_pageNavigator = new MenuPageNavigator( _menuController );
+		_pageNavigator.Build( _menuInputOverlay );
+
 		_menuRoot = new Panel { Parent = _menuInputOverlay };
 		_menuRoot.Style.Set( "position", "absolute" );
+		_menuRoot.Style.Set( "left", "0" );
 		_menuRoot.Style.Set( "top", "0" );
-		_menuRoot.Style.Set( "bottom", "0" );
 		_menuRoot.Style.Set( "right", "0" );
-		_menuRoot.Style.Set( "width", "33%" );
-		_menuRoot.Style.Set( "align-items", "center" );
-		_menuRoot.Style.Set( "justify-content", "center" );
-		_menuRoot.Style.Set( "padding-right", "20px" );
-		_menuRoot.Style.Set( "padding-left", "12px" );
-		_menuRoot.Style.Set( "pointer-events", "auto" );
+		_menuRoot.Style.Set( "bottom", "0" );
+		_menuRoot.Style.Set( "pointer-events", "none" );
+		_menuRoot.Style.Set( "display", "none" );
 
-		_menuColumn = new Panel { Parent = _menuRoot };
-		_menuColumn.Style.Set( "position", "relative" );
-		_menuColumn.Style.Width = Length.Pixels( MenuColumnWidth );
-		_menuColumn.Style.Set( "flex-direction", "column" );
-		_menuColumn.Style.Set( "gap", "14px" );
-		_menuColumn.Style.PaddingTop = Length.Pixels( 16f );
-		_menuColumn.Style.PaddingBottom = Length.Pixels( 16f );
-		_menuColumn.Style.PaddingLeft = Length.Pixels( 16f );
-		_menuColumn.Style.PaddingRight = Length.Pixels( 16f );
-		_menuColumn.Style.BackgroundColor = new Color( 0.05f, 0.06f, 0.08f, 0.88f );
-		_menuColumn.Style.Set( "border-radius", "8px" );
-		_menuColumn.Style.Set( "border-width", "1px" );
-		_menuColumn.Style.Set( "border-color", "#383d47" );
+		_menuLeftRoot = CreateMenuSideAnchor( _menuRoot, alignLeft: true );
+		_menuRightRoot = CreateMenuSideAnchor( _menuRoot, alignLeft: false );
 
-		if ( _inventoryInteraction is not null )
-		{
-			var capture = new InventoryMenuCapturePanel { Parent = _menuColumn, Interaction = _inventoryInteraction };
-			capture.Style.Set( "position", "absolute" );
-			capture.Style.Set( "left", "0" );
-			capture.Style.Set( "top", "0" );
-			capture.Style.Set( "right", "0" );
-			capture.Style.Set( "bottom", "0" );
-			capture.Style.Set( "pointer-events", "auto" );
-		}
+		_leftMenuColumn = CreateMenuColumn( _menuLeftRoot, CraftingMenuColumnWidth );
+		_rightMenuColumn = CreateMenuColumn( _menuRightRoot, InventoryMenuColumnWidth );
 
-		var section = new InventoryMenuSection( _inventory, _inventoryInteraction );
-		_sections.Add( section );
-		section.Build( _menuColumn );
-		section.SetMenuOpen( _menuController.IsMenuOpen );
+		_craftingSection = new CraftingMenuSection( _inventory, _crafting );
+		_sections.Add( _craftingSection );
+		_craftingSection.Build( _leftMenuColumn );
 
-		_inventoryInteraction?.BindDragLayer( _menuColumn );
+		var inventorySection = new InventoryMenuSection( _inventory, _inventoryInteraction );
+		_sections.Add( inventorySection );
+		inventorySection.Build( _rightMenuColumn );
+
+		_inventoryInteraction?.BindDragLayer( _rightMenuColumn );
 
 		_inventory.InventoryChanged += OnInventoryChanged;
 		_menuController.MenuOpenChanged += OnMenuOpenChanged;
+		_menuController.MenuLayoutChanged += OnMenuLayoutChanged;
 		ApplyMenuOpenState( _menuController.IsMenuOpen );
+	}
+
+	static Panel CreateMenuSideAnchor( Panel parent, bool alignLeft )
+	{
+		var anchor = new Panel { Parent = parent };
+		anchor.Style.Set( "position", "absolute" );
+		anchor.Style.Set( "top", "0" );
+		anchor.Style.Set( "bottom", "0" );
+		anchor.Style.Set( "width", "33%" );
+		anchor.Style.Set( "display", "none" );
+		anchor.Style.Set( "flex-direction", "column" );
+		anchor.Style.Set( "align-items", "center" );
+		anchor.Style.Set( "justify-content", "center" );
+		anchor.Style.Set( "pointer-events", "auto" );
+
+		if ( alignLeft )
+		{
+			anchor.Style.Set( "left", "0" );
+			anchor.Style.Set( "width", "38%" );
+			anchor.Style.Set( "align-items", "flex-start" );
+			anchor.Style.Set( "justify-content", "center" );
+			anchor.Style.PaddingLeft = Length.Pixels( 8f );
+			anchor.Style.PaddingRight = Length.Pixels( 10f );
+		}
+		else
+		{
+			anchor.Style.Set( "right", "0" );
+			anchor.Style.PaddingRight = Length.Pixels( 20f );
+			anchor.Style.PaddingLeft = Length.Pixels( 12f );
+		}
+
+		return anchor;
+	}
+
+	static Panel CreateMenuColumn( Panel parent, float widthPixels )
+	{
+		var pad = widthPixels > 400f ? 20f : 16f;
+		var gap = widthPixels > 400f ? 16f : 14f;
+
+		var column = new Panel { Parent = parent };
+		column.Style.Set( "position", "relative" );
+		column.Style.Width = Length.Pixels( widthPixels );
+		column.Style.Set( "flex-direction", "column" );
+		column.Style.Set( "gap", $"{gap}px" );
+		column.Style.Set( "flex-shrink", "0" );
+		column.Style.Set( "pointer-events", "auto" );
+		column.Style.PaddingTop = Length.Pixels( pad );
+		column.Style.PaddingBottom = Length.Pixels( pad );
+		column.Style.PaddingLeft = Length.Pixels( pad );
+		column.Style.PaddingRight = Length.Pixels( pad );
+		column.Style.BackgroundColor = new Color( 0.05f, 0.06f, 0.08f, 0.88f );
+		column.Style.Set( "border-radius", "8px" );
+		column.Style.Set( "border-width", "1px" );
+		column.Style.Set( "border-color", "#383d47" );
+		return column;
 	}
 
 	void OnHarvestFocusChanged()
@@ -347,28 +409,66 @@ public sealed class PlayerScreenHud : PanelComponent
 
 	void OnMenuOpenChanged( bool isOpen ) => ApplyMenuOpenState( isOpen );
 
+	void OnMenuLayoutChanged() => ApplyMenuLayout();
+
 	void ApplyMenuOpenState( bool isOpen )
 	{
 		if ( _menuRoot is null )
 			return;
 
-		Panel.Style.Set( "pointer-events", "none" );
+		Panel.Style.Set( "pointer-events", isOpen ? "auto" : "none" );
 
 		_menuInputOverlay?.SetOpen( isOpen );
+		_pageNavigator?.SetMenuOpen( isOpen );
 
 		_menuRoot.Style.Set( "display", isOpen ? "flex" : "none" );
+		_menuRoot.Style.Set( "pointer-events", isOpen ? "auto" : "none" );
 
 		foreach ( var section in _sections )
 			section.SetMenuOpen( isOpen );
 
 		if ( isOpen )
+		{
+			ApplyMenuLayout();
 			RefreshAllSections();
+		}
+		else
+		{
+			if ( _menuLeftRoot is not null )
+				_menuLeftRoot.Style.Set( "display", "none" );
+			if ( _menuRightRoot is not null )
+				_menuRightRoot.Style.Set( "display", "none" );
+		}
+	}
+
+	void ApplyMenuLayout()
+	{
+		if ( _menuController is null )
+			return;
+
+		var panels = _menuController.VisiblePanels;
+		var showCrafting = (panels & MenuPanelFlags.Crafting) != 0;
+		var showInventory = (panels & MenuPanelFlags.Inventory) != 0;
+
+		if ( _menuLeftRoot is not null )
+			_menuLeftRoot.Style.Set( "display", showCrafting ? "flex" : "none" );
+
+		if ( _menuRightRoot is not null )
+			_menuRightRoot.Style.Set( "display", showInventory ? "flex" : "none" );
+
+		_pageNavigator?.RefreshHighlight();
 	}
 
 	void RefreshAllSections()
 	{
 		foreach ( var section in _sections )
 			section.Refresh();
+	}
+
+	void OnMenuGlobalMouseUp()
+	{
+		for ( var i = 0; i < _sections.Count; i++ )
+			_sections[i].OnMenuGlobalMouseUp();
 	}
 
 	void RefreshVitals()

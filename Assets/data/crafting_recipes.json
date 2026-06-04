@@ -1,0 +1,22 @@
+{
+  "recipes": [
+    {
+      "id": "sample_sword",
+      "displayName": "Sample Sword",
+      "icon": "ui/items/item_sample_sword.png",
+      "unlockId": "",
+      "outputResourceId": "sample_sword",
+      "outputAmount": 1,
+      "numberOfItemsCrafted": 1,
+      "ingredients": [
+        { "resourceId": "sample_rock", "amount": 3 },
+        { "resourceId": "sample_stick", "amount": 2 },
+        { "resourceId": "sample_bush", "amount": 5 }
+      ],
+      "stats": [
+        { "label": "Damage", "value": "12" },
+        { "label": "Speed", "value": "1.0" }
+      ]
+    }
+  ]
+}

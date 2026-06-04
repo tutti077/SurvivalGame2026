@@ -18,6 +18,12 @@ public static class ResourceCatalog
 	static readonly Dictionary<string, Texture> IconCache =
 		new( System.StringComparer.OrdinalIgnoreCase );
 
+	static readonly Dictionary<string, string> KnownIconPaths =
+		new( System.StringComparer.OrdinalIgnoreCase )
+		{
+			["sample_sword"] = "ui/items/item_sample_sword.png",
+		};
+
 	public static void Register( ResourceItemDefinition definition )
 	{
 		if ( definition is null || !definition.IsValid() || string.IsNullOrWhiteSpace( definition.ResourceId ) )
@@ -43,9 +49,10 @@ public static class ResourceCatalog
 		if ( !string.IsNullOrWhiteSpace( resourceId ) && Definitions.TryGetValue( resourceId, out var def ) && def.IsValid() )
 			return def.ToCatalogEntry();
 
+		var icon = GetCachedIcon( resourceId );
 		return new ResourceDefinition(
-			string.IsNullOrWhiteSpace( resourceId ) ? "Unknown" : resourceId,
-			null,
+			FormatDisplayName( resourceId ),
+			icon,
 			new Color( 0.45f, 0.48f, 0.52f ),
 			64 );
 	}
@@ -56,6 +63,38 @@ public static class ResourceCatalog
 			return Math.Max( 1, def.MaxStack );
 
 		return 64;
+	}
+
+	public static string GetIconPath( string resourceId )
+	{
+		if ( string.IsNullOrWhiteSpace( resourceId ) )
+			return null;
+
+		if ( Definitions.TryGetValue( resourceId, out var def ) && def.IsValid() && !string.IsNullOrWhiteSpace( def.Icon ) )
+			return def.Icon;
+
+		if ( KnownIconPaths.TryGetValue( resourceId, out var knownPath ) )
+			return knownPath;
+
+		if ( MountedIconExists( $"{resourceId}.png" ) )
+			return $"ui/items/{resourceId}.png";
+
+		if ( MountedIconExists( $"{resourceId}.jpg" ) )
+			return $"ui/items/{resourceId}.jpg";
+
+		return $"ui/items/{resourceId}.png";
+	}
+
+	static bool MountedIconExists( string fileName )
+	{
+		try
+		{
+			return FileSystem.Mounted.FileExists( $"ui/items/{fileName}" );
+		}
+		catch
+		{
+			return false;
+		}
 	}
 
 	public static Texture GetCachedIcon( string resourceId )
@@ -69,10 +108,30 @@ public static class ResourceCatalog
 		if ( Definitions.TryGetValue( resourceId, out var def ) && def.IsValid() )
 			cached = def.ResolveIcon();
 		else
-			cached = null;
+			cached = MenuUiTextures.TryLoadForResourceId( resourceId );
 
 		IconCache[resourceId] = cached;
 		return cached;
+	}
+
+	static string FormatDisplayName( string resourceId )
+	{
+		if ( string.IsNullOrWhiteSpace( resourceId ) )
+			return "Unknown";
+
+		var parts = resourceId.Split( '_', StringSplitOptions.RemoveEmptyEntries );
+		if ( parts.Length == 0 )
+			return resourceId;
+
+		for ( var i = 0; i < parts.Length; i++ )
+		{
+			var part = parts[i];
+			if ( part.Length == 0 )
+				continue;
+			parts[i] = char.ToUpperInvariant( part[0] ) + ( part.Length > 1 ? part[1..] : string.Empty );
+		}
+
+		return string.Join( ' ', parts );
 	}
 
 	public static void ApplyStackVisual( Panel iconPanel, Label countLabel, in InventorySlot slot )
@@ -97,19 +156,14 @@ public static class ResourceCatalog
 		}
 
 		var def = Resolve( slot.ResourceId );
-		var texture = GetCachedIcon( slot.ResourceId );
-		if ( texture is not null )
-		{
-			iconPanel.Style.BackgroundImage = texture;
-			iconPanel.Style.BackgroundColor = Color.Transparent;
-		}
-		else
+		var iconPath = GetIconPath( slot.ResourceId );
+		if ( !MenuUiTextures.ApplyBackground( iconPanel, iconPath ) )
 		{
 			iconPanel.Style.BackgroundImage = null;
+			iconPanel.Style.Set( "background-image", "none" );
 			iconPanel.Style.BackgroundColor = def.FallbackColor.WithAlpha( 0.95f );
+			iconPanel.Style.Set( "display", "flex" );
 		}
-
-		iconPanel.Style.Set( "display", "flex" );
 		if ( countLabel is not null )
 		{
 			if ( def.MaxStack <= 1 )

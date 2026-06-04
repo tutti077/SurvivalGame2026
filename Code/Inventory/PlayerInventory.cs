@@ -25,6 +25,7 @@ public sealed class PlayerInventory : Component
 	protected override void OnStart()
 	{
 		base.OnStart();
+		ResourceItemLibraryHost.EnsureSpawned( Scene );
 		EnsureSlotArray();
 	}
 
@@ -38,6 +39,126 @@ public sealed class PlayerInventory : Component
 		if ( index < 0 || index >= _slots.Length )
 			return InventorySlot.Empty;
 		return _slots[index];
+	}
+
+	/// <summary>Total count of a resource across all slots (host and predicting client).</summary>
+	public int CountResource( string resourceId )
+	{
+		if ( string.IsNullOrWhiteSpace( resourceId ) )
+			return 0;
+
+		EnsureSlotArray();
+		var total = 0;
+		for ( var i = 0; i < _slots.Length; i++ )
+		{
+			if ( _slots[i].IsEmpty )
+				continue;
+
+			if ( !string.Equals( _slots[i].ResourceId, resourceId, StringComparison.OrdinalIgnoreCase ) )
+				continue;
+
+			total += _slots[i].Count;
+		}
+
+		return total;
+	}
+
+	public bool HasResources( IReadOnlyList<CraftingIngredient> ingredients )
+	{
+		if ( ingredients is null || ingredients.Count == 0 )
+			return false;
+
+		for ( var i = 0; i < ingredients.Count; i++ )
+		{
+			var ing = ingredients[i];
+			if ( ing is null || string.IsNullOrWhiteSpace( ing.ResourceId ) || ing.Amount <= 0 )
+				return false;
+
+			if ( CountResource( ing.ResourceId ) < ing.Amount )
+				return false;
+		}
+
+		return true;
+	}
+
+	/// <summary>Host/offline: remove stacked resources for crafting.</summary>
+	public bool HostTryConsumeResources( IReadOnlyList<CraftingIngredient> ingredients )
+	{
+		if ( !HasHostAuthority || ingredients is null || ingredients.Count == 0 )
+			return false;
+
+		if ( !HasResources( ingredients ) )
+			return false;
+
+		EnsureSlotArray();
+
+		for ( var i = 0; i < ingredients.Count; i++ )
+		{
+			var ing = ingredients[i];
+			var remaining = ing.Amount;
+
+			for ( var slotIndex = 0; slotIndex < _slots.Length && remaining > 0; slotIndex++ )
+			{
+				ref var slot = ref _slots[slotIndex];
+				if ( slot.IsEmpty )
+					continue;
+
+				if ( !string.Equals( slot.ResourceId, ing.ResourceId, StringComparison.OrdinalIgnoreCase ) )
+					continue;
+
+				var take = Math.Min( remaining, slot.Count );
+				slot.Count -= take;
+				remaining -= take;
+				if ( slot.Count <= 0 )
+					slot = InventorySlot.Empty;
+			}
+
+			if ( remaining > 0 )
+				return false;
+		}
+
+		NotifyInventoryChanged();
+		return true;
+	}
+
+	/// <summary>Local UI check: whether <paramref name="amount"/> more of a resource could fit.</summary>
+	public bool CanFitResource( string resourceId, int amount ) => SimulateFitRoom( resourceId, amount );
+
+	/// <summary>Whether the inventory has room for more of a resource (host/offline).</summary>
+	public bool HostCanFitResource( string resourceId, int amount )
+	{
+		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) || !HasHostAuthority )
+			return false;
+
+		return SimulateFitRoom( resourceId, amount );
+	}
+
+	bool SimulateFitRoom( string resourceId, int amount )
+	{
+		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
+			return false;
+
+		EnsureSlotArray();
+		var maxStack = ResourceCatalog.GetMaxStack( resourceId );
+		var remaining = amount;
+
+		for ( var i = 0; i < _slots.Length && remaining > 0; i++ )
+		{
+			if ( _slots[i].IsEmpty )
+			{
+				remaining -= maxStack;
+				continue;
+			}
+
+			if ( !string.Equals( _slots[i].ResourceId, resourceId, StringComparison.OrdinalIgnoreCase ) )
+				continue;
+
+			var room = maxStack - _slots[i].Count;
+			if ( room > 0 )
+				remaining -= room;
+		}
+
+		return remaining <= 0;
 	}
 
 	/// <summary>Host/offline: add harvested resources into inventory.</summary>
@@ -806,5 +927,33 @@ public sealed class PlayerInventory : Component
 
 		var grid = new PlayerInventoryGridHost( targetGridId, this );
 		HostTryQuickMove( fromSlotIndex, grid );
+	}
+
+	/// <summary>Local player requests a craft (same RPC path as other inventory host actions).</summary>
+	public bool OwnerTryCraftRecipe( string recipeId )
+	{
+		if ( string.IsNullOrWhiteSpace( recipeId ) || !IsLocalManagingClient() )
+			return false;
+
+		if ( HasHostAuthority )
+			return TryCraftRecipeOnHost( recipeId );
+
+		RpcHostCraftRecipe( recipeId );
+		return false;
+	}
+
+	bool TryCraftRecipeOnHost( string recipeId )
+	{
+		var crafting = Components.Get<PlayerCrafting>();
+		return crafting is not null && crafting.HostTryCraft( recipeId );
+	}
+
+	[Rpc.Host]
+	void RpcHostCraftRecipe( string recipeId )
+	{
+		if ( !Networking.IsHost )
+			return;
+
+		TryCraftRecipeOnHost( recipeId );
 	}
 }

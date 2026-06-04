@@ -63,6 +63,7 @@ public sealed class ResourceItemDefinition : Component
 	public int RemainingHarvestTicks => Harvestable ? _remainingHarvestTicks : 0;
 
 	Texture _resolvedIcon;
+	string _resolvedIconPath;
 	bool _isDepleted;
 	int _remainingHarvestTicks;
 	double _respawnAt;
@@ -73,6 +74,8 @@ public sealed class ResourceItemDefinition : Component
 
 	protected override void OnEnabled()
 	{
+		_resolvedIcon = null;
+		_resolvedIconPath = null;
 		base.OnEnabled();
 		ResourceCatalog.Register( this );
 
@@ -121,21 +124,18 @@ public sealed class ResourceItemDefinition : Component
 
 	public Texture ResolveIcon()
 	{
-		if ( _resolvedIcon is not null && _resolvedIcon.IsValid() )
-			return _resolvedIcon;
-
 		if ( string.IsNullOrWhiteSpace( Icon ) )
-			return null;
-
-		try
-		{
-			_resolvedIcon = Texture.Load( Icon );
-		}
-		catch
 		{
 			_resolvedIcon = null;
+			_resolvedIconPath = null;
+			return null;
 		}
 
+		if ( _resolvedIcon is not null && _resolvedIcon.IsValid() && string.Equals( _resolvedIconPath, Icon, StringComparison.OrdinalIgnoreCase ) )
+			return _resolvedIcon;
+
+		_resolvedIconPath = Icon;
+		_resolvedIcon = MenuUiTextures.TryLoad( Icon );
 		return _resolvedIcon;
 	}
 

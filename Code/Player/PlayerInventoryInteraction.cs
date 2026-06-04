@@ -138,8 +138,6 @@ public sealed class PlayerInventoryInteraction : Component
 		UpdateDragGhostPosition();
 		UpdateDropHoverSlot();
 
-		if ( _leftDragActive && Input.Released( "Attack1" ) )
-			FinishLeftDrag( ResolveDropTargetSlotIndex() );
 	}
 
 	/// <summary>Called from slot panels while dragging so release hit-test has a fallback.</summary>
@@ -174,9 +172,18 @@ public sealed class PlayerInventoryInteraction : Component
 		if ( !isLeft && !isRight )
 			return;
 
-		if ( isLeft && shift )
+		if ( isLeft )
 		{
-			TryQuickMove( slot.SlotIndex );
+			if ( shift )
+			{
+				TryQuickMove( slot.SlotIndex );
+				return;
+			}
+
+			if ( _held.IsEmpty )
+				BeginDragFromSlot( slot );
+			else
+				_leftDragActive = true;
 			return;
 		}
 
@@ -195,13 +202,7 @@ public sealed class PlayerInventoryInteraction : Component
 				TryTakeOneFromSlot( slot.SlotIndex );
 			else
 				TryDropOneIntoSlot( slot.SlotIndex );
-			return;
 		}
-
-		if ( _held.IsEmpty )
-			BeginDragFromSlot( slot );
-		else
-			_leftDragActive = true;
 	}
 
 	public void OnSlotMouseUp( InventorySlotPanel slot, MousePanelEvent e )
@@ -210,6 +211,10 @@ public sealed class PlayerInventoryInteraction : Component
 			return;
 
 		FinishLeftDrag( ResolveDropTargetSlotIndex() );
+	}
+
+	public void PollInventoryInput( MenuPanelFlags visiblePanels )
+	{
 	}
 
 	public void OnGlobalMouseUp()

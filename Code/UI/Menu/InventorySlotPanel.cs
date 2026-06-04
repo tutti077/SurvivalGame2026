@@ -14,6 +14,8 @@ public sealed class InventorySlotPanel : Panel
 		Interaction = interaction;
 	}
 
+	public override bool WantsMouseInput() => true;
+
 	protected override void OnMouseDown( MousePanelEvent e )
 	{
 		base.OnMouseDown( e );
