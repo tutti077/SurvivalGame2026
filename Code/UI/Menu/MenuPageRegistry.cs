@@ -12,6 +12,7 @@ public static class MenuPageRegistry
 		new( MenuPageIds.Skills, "Skills", "ui/menu/SkillsTab.png", MenuPanelFlags.Skills, allowsHotkey: false ),
 		new( MenuPageIds.Quests, "Quests", "ui/menu/QuestsTab.png", MenuPanelFlags.Inventory | MenuPanelFlags.Quests, allowsHotkey: false ),
 		new( MenuPageIds.Map, "Map", "ui/menu/MapTab.png", MenuPanelFlags.Map ),
+		new( MenuPageIds.Settings, "Settings", "ui/menu/tab_blank.png", MenuPanelFlags.Settings ),
 	};
 
 	public static MenuPageDefinition Get( string pageId )

@@ -32,4 +32,5 @@ public enum MenuPanelFlags
 	Skills = 4,
 	Map = 8,
 	Quests = 16,
+	Settings = 32,
 }

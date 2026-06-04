@@ -434,6 +434,7 @@
         "CraftingMenuAction": "CraftingMenu",
         "InventoryMenuAction": "InventoryMenu",
         "MapMenuAction": "MapMenu",
+        "SettingsMenuAction": "SettingsMenu",
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,

@@ -56,6 +56,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	QuestMenuSection _questsSection;
 	SkillsMenuSection _skillsSection;
 	MapMenuSection _mapSection;
+	GameSettingsMenuSection _settingsSection;
 
 	protected override void OnTreeFirstBuilt()
 	{
@@ -332,6 +333,10 @@ public sealed class PlayerScreenHud : PanelComponent
 		_sections.Add( _mapSection );
 		_mapSection.Build( _menuMapRoot );
 
+		_settingsSection = new GameSettingsMenuSection();
+		_sections.Add( _settingsSection );
+		_settingsSection.Build( _menuMapRoot );
+
 		_craftingSection = new CraftingMenuSection( _inventory, _crafting );
 		_sections.Add( _craftingSection );
 		_craftingSection.Build( _leftMenuColumn );
@@ -524,14 +529,16 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		var panels = _menuController.VisiblePanels;
 		var showMap = (panels & MenuPanelFlags.Map) != 0;
-		var showSkills = !showMap && (panels & MenuPanelFlags.Skills) != 0;
-		var showQuests = !showMap && !showSkills && (panels & MenuPanelFlags.Quests) != 0;
-		var showCrafting = !showMap && !showSkills && !showQuests && (panels & MenuPanelFlags.Crafting) != 0;
+		var showSettings = (panels & MenuPanelFlags.Settings) != 0;
+		var showFullscreen = showMap || showSettings;
+		var showSkills = !showFullscreen && (panels & MenuPanelFlags.Skills) != 0;
+		var showQuests = !showFullscreen && !showSkills && (panels & MenuPanelFlags.Quests) != 0;
+		var showCrafting = !showFullscreen && !showSkills && !showQuests && (panels & MenuPanelFlags.Crafting) != 0;
 		var showLeftColumn = showCrafting || showQuests;
-		var showInventory = !showMap && !showSkills && (panels & MenuPanelFlags.Inventory) != 0;
+		var showInventory = !showFullscreen && !showSkills && (panels & MenuPanelFlags.Inventory) != 0;
 
 		if ( _menuMapRoot is not null )
-			_menuMapRoot.Style.Set( "display", showMap ? "flex" : "none" );
+			_menuMapRoot.Style.Set( "display", showFullscreen ? "flex" : "none" );
 
 		if ( _menuSkillsCenterRoot is not null )
 			_menuSkillsCenterRoot.Style.Set( "display", showSkills ? "flex" : "none" );
@@ -549,6 +556,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_questsSection?.SetPanelVisible( showQuests );
 		_skillsSection?.SetPanelVisible( showSkills );
 		_mapSection?.SetPanelVisible( showMap );
+		_settingsSection?.SetPanelVisible( showSettings );
 
 		for ( var i = 0; i < _sections.Count; i++ )
 		{

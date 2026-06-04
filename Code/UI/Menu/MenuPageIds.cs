@@ -8,4 +8,5 @@ public static class MenuPageIds
 	public const string Quests = "quests";
 	public const string Skills = "skills";
 	public const string Map = "map";
+	public const string Settings = "settings";
 }

@@ -35,6 +35,9 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 	[Property, Group( "Input" )]
 	public string MapMenuAction { get; set; } = "MapMenu";
 
+	[Property, Group( "Input" )]
+	public string SettingsMenuAction { get; set; } = "SettingsMenu";
+
 	public bool IsMenuOpen { get; private set; }
 
 
@@ -160,6 +163,12 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 		if ( WasActionPressed( MapMenuAction ) )
 		{
 			HandlePageHotkey( MenuPageIds.Map );
+			return;
+		}
+
+		if ( WasActionPressed( SettingsMenuAction ) )
+		{
+			HandlePageHotkey( MenuPageIds.Settings );
 			return;
 		}
 

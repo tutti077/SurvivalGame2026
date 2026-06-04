@@ -3522,37 +3522,56 @@
       }
     },
     {
-      "__guid": "6a865fcd-1282-4df8-912f-7212f0c16284",
+      "__guid": "3b1b2d4f-2681-469f-9ae7-24013e1bae2a",
       "__version": 2,
-      "__Prefab": "prefabs/environment/samplebush.prefab",
-      "__PrefabInstancePatch": {
-        "AddedObjects": [],
-        "RemovedObjects": [],
-        "PropertyOverrides": [
-          {
-            "Target": {
-              "Type": "GameObject",
-              "IdValue": "8ae00320-0e16-40c8-9275-01a362936d1b"
-            },
-            "Property": "Name",
-            "Value": "sampleBush"
+      "Flags": 0,
+      "Name": "GameObject (6)",
+      "Position": "-304.948792,-498.582367,10.1200848",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [],
+      "Children": [
+        {
+          "__guid": "6a865fcd-1282-4df8-912f-7212f0c16284",
+          "__version": 2,
+          "__Prefab": "prefabs/environment/samplebush.prefab",
+          "__PrefabInstancePatch": {
+            "AddedObjects": [],
+            "RemovedObjects": [],
+            "PropertyOverrides": [
+              {
+                "Target": {
+                  "Type": "GameObject",
+                  "IdValue": "8ae00320-0e16-40c8-9275-01a362936d1b"
+                },
+                "Property": "Name",
+                "Value": "sampleBush"
+              },
+              {
+                "Target": {
+                  "Type": "Component",
+                  "IdValue": "f6c07270-df35-42bc-bffd-8f3d65a4db77"
+                },
+                "Property": "HarvestTicksUntilGone",
+                "Value": 1
+              }
+            ],
+            "MovedObjects": []
           },
-          {
-            "Target": {
-              "Type": "GameObject",
-              "IdValue": "8ae00320-0e16-40c8-9275-01a362936d1b"
-            },
-            "Property": "Position",
-            "Value": "-304.948792,-498.582367,10.1200848"
+          "__PrefabIdToInstanceId": {
+            "8ae00320-0e16-40c8-9275-01a362936d1b": "6a865fcd-1282-4df8-912f-7212f0c16284",
+            "0cc95a3c-e90c-4a6c-ac16-bbd785f7523f": "8470d91c-053c-439a-babc-8177c7b39a59",
+            "f6c07270-df35-42bc-bffd-8f3d65a4db77": "8c2da473-baaf-4dcf-8419-15620eb749d3"
           }
-        ],
-        "MovedObjects": []
-      },
-      "__PrefabIdToInstanceId": {
-        "8ae00320-0e16-40c8-9275-01a362936d1b": "6a865fcd-1282-4df8-912f-7212f0c16284",
-        "0cc95a3c-e90c-4a6c-ac16-bbd785f7523f": "8470d91c-053c-439a-babc-8177c7b39a59",
-        "f6c07270-df35-42bc-bffd-8f3d65a4db77": "8c2da473-baaf-4dcf-8419-15620eb749d3"
-      }
+        }
+      ]
     }
   ],
   "SceneProperties": {
@@ -3580,14 +3599,14 @@
       "CustomBounds": false
     },
     "GameObjectSystems": {
-      "Sandbox.SelectionSetsSystem": {
-        "Data": {
-          "SelectionSets": []
-        }
-      },
       "Sandbox.Clutter.ClutterGridSystem": {
         "Storage": {
           "$blob": "5f3639c5-3cc3-498f-90a1-bcdf2b19262a"
+        }
+      },
+      "Sandbox.SelectionSetsSystem": {
+        "Data": {
+          "SelectionSets": []
         }
       }
     }
