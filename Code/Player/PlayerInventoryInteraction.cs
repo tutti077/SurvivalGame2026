@@ -29,6 +29,7 @@ public sealed class PlayerInventoryInteraction : Component
 	Vector2 _grabOffset;
 	bool _leftDragActive;
 	int _dragSourceSlot = -1;
+	int _dropHoverSlot = -1;
 	protected override void OnStart()
 	{
 		base.OnStart();
@@ -136,8 +137,9 @@ public sealed class PlayerInventoryInteraction : Component
 
 		UpdateDragGhostPosition();
 
-		if ( _leftDragActive && Input.Released( "Attack1" ) )
-			OnGlobalMouseUp();
+		var hover = FindSlotIndexAtScreenPosition( GetDropProbeScreenPosition() );
+		if ( hover >= 0 )
+			_dropHoverSlot = hover;
 	}
 
 	void OnMenuOpenChanged( bool open )
@@ -194,10 +196,10 @@ public sealed class PlayerInventoryInteraction : Component
 
 	public void OnSlotMouseUp( InventorySlotPanel slot, MousePanelEvent e )
 	{
-		if ( e.Button != "mouseleft" )
-			return;
-
-		FinishLeftDrag( FindDropTargetSlotIndex() );
+		// Left release is finished in OnGlobalMouseUp (bubbled from overlay). The panel that
+		// received mouse-down is not always under the cursor on release.
+		_ = slot;
+		_ = e;
 	}
 
 	public void OnGlobalMouseUp()
@@ -205,7 +207,7 @@ public sealed class PlayerInventoryInteraction : Component
 		if ( !_leftDragActive )
 			return;
 
-		FinishLeftDrag( FindDropTargetSlotIndex() );
+		FinishLeftDrag( ResolveDropTargetSlotIndex() );
 	}
 
 	void BeginDragFromSlot( InventorySlotPanel slot )
@@ -214,9 +216,8 @@ public sealed class PlayerInventoryInteraction : Component
 			return;
 
 		_held.Set( picked.ResourceId, picked.Count );
-		var topLeftScreen = slot.PanelPositionToScreenPosition( Vector2.Zero );
-		_grabOffset = Mouse.Position - topLeftScreen;
 		_dragSourceSlot = slot.SlotIndex;
+		_dropHoverSlot = slot.SlotIndex;
 		_leftDragActive = true;
 
 		ShowDragGhost();
@@ -235,20 +236,72 @@ public sealed class PlayerInventoryInteraction : Component
 		{
 			HideDragGhost();
 			_dragSourceSlot = -1;
+			_dropHoverSlot = -1;
 			return;
 		}
 
-		if ( targetSlotIndex < 0 )
-			targetSlotIndex = FindDropTargetSlotIndex();
-
-		if ( targetSlotIndex < 0 && _dragSourceSlot >= 0 )
-			targetSlotIndex = _dragSourceSlot;
-
-		if ( targetSlotIndex >= 0 )
-			TryPlaceHeldOnSlot( targetSlotIndex );
-
+		var sourceSlot = _dragSourceSlot;
 		_dragSourceSlot = -1;
+
+		if ( targetSlotIndex < 0 )
+			targetSlotIndex = ResolveDropTargetSlotIndex();
+
+		_dropHoverSlot = -1;
+
+		if ( targetSlotIndex < 0 )
+		{
+			ReturnHeldToSourceSlot( sourceSlot );
+			UpdateDragGhostVisibility();
+			return;
+		}
+
+		if ( sourceSlot >= 0 && targetSlotIndex != sourceSlot && TrySwapDragIntoOccupiedSlot( sourceSlot, targetSlotIndex ) )
+		{
+			UpdateDragGhostVisibility();
+			return;
+		}
+
+		TryPlaceHeldOnSlot( targetSlotIndex );
 		UpdateDragGhostVisibility();
+	}
+
+	bool TrySwapDragIntoOccupiedSlot( int sourceSlotIndex, int targetSlotIndex )
+	{
+		if ( _held.IsEmpty || _inventory is null || sourceSlotIndex < 0 || sourceSlotIndex == targetSlotIndex )
+			return false;
+
+		var target = _inventory.GetSlot( targetSlotIndex );
+		if ( target.IsEmpty )
+			return false;
+
+		if ( string.Equals( target.ResourceId, _held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
+			return false;
+
+		var heldCopy = _held;
+		if ( !_inventory.OwnerTrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref heldCopy ) )
+			return false;
+
+		_held = heldCopy;
+		return true;
+	}
+
+	void ReturnHeldToSourceSlot( int sourceSlotIndex )
+	{
+		if ( _held.IsEmpty || _inventory is null )
+			return;
+
+		if ( sourceSlotIndex < 0 )
+		{
+			ReturnHeldToInventory();
+			return;
+		}
+
+		var heldCopy = _held;
+		_inventory.OwnerTryPlaceHeld( sourceSlotIndex, ref heldCopy );
+		_held = heldCopy;
+
+		if ( _held.IsEmpty )
+			HideDragGhost();
 	}
 
 	void TryPlaceHeldOnSlot( int slotIndex )
@@ -401,24 +454,16 @@ public sealed class PlayerInventoryInteraction : Component
 		return 0;
 	}
 
-	int FindDropTargetSlotIndex()
+	int ResolveDropTargetSlotIndex()
 	{
-		return FindSlotIndexAtScreenPosition( GetDropProbeScreenPosition() );
+		var hit = FindSlotIndexAtScreenPosition( GetDropProbeScreenPosition() );
+		if ( hit >= 0 )
+			return hit;
+
+		return _dropHoverSlot;
 	}
 
-	Vector2 GetDropProbeScreenPosition()
-	{
-		if ( _leftDragActive && !_held.IsEmpty && _dragGhost is not null && _dragGhost.IsValid() )
-		{
-			var rect = _dragGhost.Box.Rect;
-			var w = rect.Right - rect.Left;
-			var h = rect.Bottom - rect.Top;
-			if ( w > 0f && h > 0f )
-				return new Vector2( rect.Left + w * 0.5f, rect.Top + h * 0.5f );
-		}
-
-		return Mouse.Position;
-	}
+	Vector2 GetDropProbeScreenPosition() => Mouse.Position;
 
 	int FindSlotIndexAtScreenPosition( Vector2 screenPosition )
 	{
@@ -428,11 +473,24 @@ public sealed class PlayerInventoryInteraction : Component
 			if ( slot is null || !slot.IsValid() )
 				continue;
 
-			if ( slot.IsInside( screenPosition ) )
+			if ( SlotContainsScreenPoint( slot, screenPosition ) )
 				return slot.SlotIndex;
 		}
 
 		return -1;
+	}
+
+	static bool SlotContainsScreenPoint( InventorySlotPanel slot, Vector2 screenPosition )
+	{
+		if ( slot.IsInside( screenPosition ) )
+			return true;
+
+		var rect = slot.Box.Rect;
+		if ( rect.Width <= 0f || rect.Height <= 0f )
+			return false;
+
+		return screenPosition.x >= rect.Left && screenPosition.x <= rect.Right
+		       && screenPosition.y >= rect.Top && screenPosition.y <= rect.Bottom;
 	}
 
 	void ShowDragGhost()
@@ -440,6 +498,7 @@ public sealed class PlayerInventoryInteraction : Component
 		if ( _dragGhost is null )
 			return;
 
+		_grabOffset = GetDragGrabOffsetBottomLeft();
 		_dragGhost.Style.Set( "display", "flex" );
 		ResourceCatalog.ApplyStackVisual( _dragIcon, _dragCount, new InventorySlot
 		{
@@ -480,6 +539,40 @@ public sealed class PlayerInventoryInteraction : Component
 			local /= scale;
 
 		return local;
+	}
+
+	/// <summary>Screen-space offset so the ghost's bottom-left corner sits on <see cref="Mouse.Position"/>.</summary>
+	Vector2 GetDragGrabOffsetBottomLeft() => new Vector2( 0f, GetDragGhostHeightScreen() );
+
+	float GetDragGhostHeightScreen()
+	{
+		if ( _dragGhost is not null && _dragGhost.IsValid() )
+		{
+			var rect = _dragGhost.Box.Rect;
+			var h = rect.Bottom - rect.Top;
+			if ( h > 0f )
+				return h;
+		}
+
+		if ( _dragLayer is not null && _dragLayer.IsValid() )
+		{
+			var scale = _dragLayer.ScaleToScreen;
+			if ( scale > 0.001f )
+				return InventoryMenuSection.SlotSize * scale;
+		}
+
+		for ( var i = 0; i < _slots.Count; i++ )
+		{
+			var slot = _slots[i];
+			if ( slot is null || !slot.IsValid() )
+				continue;
+
+			var h = slot.Box.Rect.Bottom - slot.Box.Rect.Top;
+			if ( h > 0f )
+				return h;
+		}
+
+		return InventoryMenuSection.SlotSize;
 	}
 
 	void UpdateDragGhostPosition()

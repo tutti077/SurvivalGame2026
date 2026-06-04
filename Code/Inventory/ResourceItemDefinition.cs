@@ -16,6 +16,9 @@ public sealed class ResourceItemDefinition : Component
 	[Property, Group( "Identity" )]
 	public string DisplayName { get; set; } = "Rock";
 
+	[Property, Group( "Identity" ), Title( "Max Stack" ), Range( 1, 9999 )]
+	public int MaxStack { get; set; } = 64;
+
 	/// <summary>Project-relative image path (e.g. <c>ui/items/sample_rock.jpg</c> or <c>.png</c>).</summary>
 	[Property, Group( "UI" ), Title( "Icon Path" )]
 	public string Icon { get; set; } = "ui/items/sample_rock.jpg";
@@ -138,7 +141,7 @@ public sealed class ResourceItemDefinition : Component
 
 	internal ResourceCatalog.ResourceDefinition ToCatalogEntry()
 	{
-		return new ResourceCatalog.ResourceDefinition( DisplayName, ResolveIcon(), FallbackColor );
+		return new ResourceCatalog.ResourceDefinition( DisplayName, ResolveIcon(), FallbackColor, Math.Max( 1, MaxStack ) );
 	}
 
 	public void ResetToFull()

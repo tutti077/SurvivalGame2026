@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System;
 using Sandbox;
 using Sandbox.UI;
 
@@ -9,7 +10,7 @@ namespace Survival;
 /// </summary>
 public static class ResourceCatalog
 {
-	public readonly record struct ResourceDefinition( string DisplayName, Texture Icon, Color FallbackColor );
+	public readonly record struct ResourceDefinition( string DisplayName, Texture Icon, Color FallbackColor, int MaxStack );
 
 	static readonly Dictionary<string, ResourceItemDefinition> Definitions =
 		new( System.StringComparer.OrdinalIgnoreCase );
@@ -45,7 +46,16 @@ public static class ResourceCatalog
 		return new ResourceDefinition(
 			string.IsNullOrWhiteSpace( resourceId ) ? "Unknown" : resourceId,
 			null,
-			new Color( 0.45f, 0.48f, 0.52f ) );
+			new Color( 0.45f, 0.48f, 0.52f ),
+			64 );
+	}
+
+	public static int GetMaxStack( string resourceId )
+	{
+		if ( !string.IsNullOrWhiteSpace( resourceId ) && Definitions.TryGetValue( resourceId, out var def ) && def.IsValid() )
+			return Math.Max( 1, def.MaxStack );
+
+		return 64;
 	}
 
 	public static Texture GetCachedIcon( string resourceId )
@@ -102,8 +112,16 @@ public static class ResourceCatalog
 		iconPanel.Style.Set( "display", "flex" );
 		if ( countLabel is not null )
 		{
-			countLabel.Text = count.ToString();
-			countLabel.Style.Set( "display", "flex" );
+			if ( def.MaxStack <= 1 )
+			{
+				countLabel.Text = string.Empty;
+				countLabel.Style.Set( "display", "none" );
+			}
+			else
+			{
+				countLabel.Text = count.ToString();
+				countLabel.Style.Set( "display", "flex" );
+			}
 		}
 	}
 }

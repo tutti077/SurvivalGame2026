@@ -54,10 +54,11 @@
         "FallbackColor": "0.58,0.5,0.42,1",
         "HandHarvestRange": 80,
         "Harvestable": true,
-        "HarvestTicksUntilGone": 1,
+        "HarvestTicksUntilGone": 5,
         "HideModelWhenDepleted": true,
         "Icon": "ui/items/sample_rock.jpg",
         "LogHarvest": true,
+        "MaxStack": 20,
         "MinimumToolTier": 0,
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
@@ -66,7 +67,7 @@
         "OnComponentStart": null,
         "OnComponentUpdate": null,
         "ResourceId": "sample_rock",
-        "RespawnRateSeconds": 3,
+        "RespawnRateSeconds": 1,
         "ToolTypeRequired": "Hand"
       }
     ],
