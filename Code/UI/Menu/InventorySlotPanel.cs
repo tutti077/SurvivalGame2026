@@ -25,4 +25,10 @@ public sealed class InventorySlotPanel : Panel
 		base.OnMouseUp( e );
 		Interaction?.OnSlotMouseUp( this, e );
 	}
+
+	public override void Tick()
+	{
+		base.Tick();
+		Interaction?.NotifyDropHover( SlotIndex, this );
+	}
 }

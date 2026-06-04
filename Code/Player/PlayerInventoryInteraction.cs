@@ -136,10 +136,20 @@ public sealed class PlayerInventoryInteraction : Component
 			return;
 
 		UpdateDragGhostPosition();
+		UpdateDropHoverSlot();
 
-		var hover = FindSlotIndexAtScreenPosition( GetDropProbeScreenPosition() );
-		if ( hover >= 0 )
-			_dropHoverSlot = hover;
+		if ( _leftDragActive && Input.Released( "Attack1" ) )
+			FinishLeftDrag( ResolveDropTargetSlotIndex() );
+	}
+
+	/// <summary>Called from slot panels while dragging so release hit-test has a fallback.</summary>
+	public void NotifyDropHover( int slotIndex, InventorySlotPanel slot )
+	{
+		if ( !_leftDragActive || slot is null || !slot.IsValid() )
+			return;
+
+		if ( SlotContainsScreenPoint( slot, GetDropProbeScreenPosition() ) )
+			_dropHoverSlot = slotIndex;
 	}
 
 	void OnMenuOpenChanged( bool open )
@@ -196,10 +206,10 @@ public sealed class PlayerInventoryInteraction : Component
 
 	public void OnSlotMouseUp( InventorySlotPanel slot, MousePanelEvent e )
 	{
-		// Left release is finished in OnGlobalMouseUp (bubbled from overlay). The panel that
-		// received mouse-down is not always under the cursor on release.
-		_ = slot;
-		_ = e;
+		if ( e.Button != "mouseleft" || !_leftDragActive )
+			return;
+
+		FinishLeftDrag( ResolveDropTargetSlotIndex() );
 	}
 
 	public void OnGlobalMouseUp()
@@ -255,34 +265,16 @@ public sealed class PlayerInventoryInteraction : Component
 			return;
 		}
 
-		if ( sourceSlot >= 0 && targetSlotIndex != sourceSlot && TrySwapDragIntoOccupiedSlot( sourceSlot, targetSlotIndex ) )
+		var heldCopy = _held;
+		if ( !_inventory.OwnerTryFinishDragDrop( sourceSlot, targetSlotIndex, ref heldCopy ) )
 		{
+			ReturnHeldToSourceSlot( sourceSlot );
 			UpdateDragGhostVisibility();
 			return;
 		}
 
-		TryPlaceHeldOnSlot( targetSlotIndex );
-		UpdateDragGhostVisibility();
-	}
-
-	bool TrySwapDragIntoOccupiedSlot( int sourceSlotIndex, int targetSlotIndex )
-	{
-		if ( _held.IsEmpty || _inventory is null || sourceSlotIndex < 0 || sourceSlotIndex == targetSlotIndex )
-			return false;
-
-		var target = _inventory.GetSlot( targetSlotIndex );
-		if ( target.IsEmpty )
-			return false;
-
-		if ( string.Equals( target.ResourceId, _held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-			return false;
-
-		var heldCopy = _held;
-		if ( !_inventory.OwnerTrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref heldCopy ) )
-			return false;
-
 		_held = heldCopy;
-		return true;
+		UpdateDragGhostVisibility();
 	}
 
 	void ReturnHeldToSourceSlot( int sourceSlotIndex )
@@ -454,6 +446,13 @@ public sealed class PlayerInventoryInteraction : Component
 		return 0;
 	}
 
+	void UpdateDropHoverSlot()
+	{
+		var hover = FindSlotIndexAtScreenPosition( GetDropProbeScreenPosition() );
+		if ( hover >= 0 )
+			_dropHoverSlot = hover;
+	}
+
 	int ResolveDropTargetSlotIndex()
 	{
 		var hit = FindSlotIndexAtScreenPosition( GetDropProbeScreenPosition() );
@@ -482,6 +481,20 @@ public sealed class PlayerInventoryInteraction : Component
 
 	static bool SlotContainsScreenPoint( InventorySlotPanel slot, Vector2 screenPosition )
 	{
+		if ( !slot.IsValid() )
+			return false;
+
+		var topLeft = slot.PanelPositionToScreenPosition( Vector2.Zero );
+		var bottomRight = slot.PanelPositionToScreenPosition(
+			new Vector2( InventoryMenuSection.SlotSize, InventoryMenuSection.SlotSize ) );
+
+		if ( bottomRight.x > topLeft.x && bottomRight.y > topLeft.y )
+		{
+			if ( screenPosition.x >= topLeft.x && screenPosition.x <= bottomRight.x
+			     && screenPosition.y >= topLeft.y && screenPosition.y <= bottomRight.y )
+				return true;
+		}
+
 		if ( slot.IsInside( screenPosition ) )
 			return true;
 

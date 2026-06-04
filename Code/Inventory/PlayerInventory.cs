@@ -220,6 +220,46 @@ public sealed class PlayerInventory : Component
 		return ClientTryApplySwapDrag( sourceSlotIndex, targetSlotIndex, ref held );
 	}
 
+	/// <summary>Completes a left-drag onto <paramref name="targetSlotIndex"/> (swap when occupied by a different item).</summary>
+	public bool OwnerTryFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
+	{
+		if ( held.IsEmpty || !IsLocalManagingClient() )
+			return false;
+
+		if ( HasHostAuthority )
+			return HostTryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
+
+		if ( !TryGetSlotRef( targetSlotIndex, out _ ) )
+			return false;
+
+		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, held.ResourceId, held.Count );
+		return ClientTryApplyFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
+	}
+
+	public bool HostTryFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
+	{
+		if ( held.IsEmpty || !HasHostAuthority )
+			return false;
+
+		EnsureSlotArray();
+		if ( targetSlotIndex < 0 || targetSlotIndex >= _slots.Length )
+			return false;
+
+		if ( sourceSlotIndex == targetSlotIndex )
+		{
+			_slots[targetSlotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
+			held.Clear();
+			NotifyInventoryChanged();
+			return true;
+		}
+
+		ref var target = ref _slots[targetSlotIndex];
+		if ( !target.IsEmpty && !string.Equals( target.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
+			return HostTrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref held );
+
+		return HostTryPlaceHeld( targetSlotIndex, ref held );
+	}
+
 	public bool OwnerTryTakeOne( int slotIndex )
 	{
 		if ( !IsLocalManagingClient() )
@@ -636,6 +676,33 @@ public sealed class PlayerInventory : Component
 		return true;
 	}
 
+	bool ClientTryApplyFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
+	{
+		if ( HasHostAuthority )
+			return HostTryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
+
+		if ( held.IsEmpty )
+			return false;
+
+		EnsureSlotArray();
+		if ( targetSlotIndex < 0 || targetSlotIndex >= _slots.Length )
+			return false;
+
+		if ( sourceSlotIndex == targetSlotIndex )
+		{
+			_slots[targetSlotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
+			held.Clear();
+			NotifyInventoryChanged();
+			return true;
+		}
+
+		ref var target = ref _slots[targetSlotIndex];
+		if ( !target.IsEmpty && !string.Equals( target.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
+			return ClientTryApplySwapDrag( sourceSlotIndex, targetSlotIndex, ref held );
+
+		return ClientTryApplyPlaceHeld( targetSlotIndex, ref held );
+	}
+
 	bool TryGetSlotRef( int index, out InventorySlot slot )
 	{
 		EnsureSlotArray();
@@ -678,6 +745,17 @@ public sealed class PlayerInventory : Component
 		var held = new InventoryCursorStack();
 		held.Set( resourceId, count );
 		HostTrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref held );
+	}
+
+	[Rpc.Host]
+	void RpcHostFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count )
+	{
+		if ( !Networking.IsHost )
+			return;
+
+		var held = new InventoryCursorStack();
+		held.Set( resourceId, count );
+		HostTryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
 	}
 
 	[Rpc.Host]

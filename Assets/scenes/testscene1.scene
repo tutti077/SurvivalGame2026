@@ -3468,7 +3468,7 @@
               "IdValue": "7b03ae53-6aa1-4f8f-b9f2-05a124be88cb"
             },
             "Property": "Position",
-            "Value": "-100.937798,-498.854797,24.8430405"
+            "Value": "-100.937798,-498.854797,4.62100983"
           }
         ],
         "MovedObjects": []
@@ -3501,7 +3501,15 @@
               "IdValue": "69f3dff5-c417-479e-b35f-3f458fde47ab"
             },
             "Property": "Position",
-            "Value": "-178.750519,-504.232819,24.9994202"
+            "Value": "-178.750519,-504.232819,1.7922039"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "69f3dff5-c417-479e-b35f-3f458fde47ab"
+            },
+            "Property": "Rotation",
+            "Value": "0,0,0.278571904,0.960415363"
           }
         ],
         "MovedObjects": []
