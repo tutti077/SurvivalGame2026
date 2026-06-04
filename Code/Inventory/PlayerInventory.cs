@@ -17,6 +17,9 @@ public sealed class PlayerInventory : Component
 
 	public event Action InventoryChanged;
 
+	/// <summary>Fired on the managing client when resources are successfully added (harvest, craft output, etc.).</summary>
+	public event Action<ResourcePickupNotice> ResourcePickedUp;
+
 	InventorySlot[] _slots = Array.Empty<InventorySlot>();
 
 	public bool HasHostAuthority =>
@@ -186,12 +189,7 @@ public sealed class PlayerInventory : Component
 					_slots[stackIndex].Count += add;
 					remaining -= add;
 					if ( remaining <= 0 )
-					{
-						NotifyInventoryChanged();
-						if ( LogInventory )
-							Log.Info( $"[PlayerInventory] {GameObject.Name}: stacked +{amount} {resourceId} in slot {stackIndex} → {_slots[stackIndex].Count}." );
-						return true;
-					}
+						break;
 				}
 			}
 
@@ -203,21 +201,47 @@ public sealed class PlayerInventory : Component
 			remaining -= place;
 		}
 
-		if ( remaining < amount )
-		{
-			NotifyInventoryChanged();
-			if ( LogInventory )
-				Log.Info( $"[PlayerInventory] {GameObject.Name}: placed +{amount - remaining} {resourceId} (partial)." );
-		}
-
-		if ( remaining > 0 )
+		var added = amount - remaining;
+		if ( added <= 0 )
 		{
 			if ( LogInventory )
 				Log.Warning( $"[PlayerInventory] {GameObject.Name}: inventory full — could not add {remaining} {resourceId}." );
-			return remaining < amount;
+			return false;
 		}
 
-		return true;
+		NotifyInventoryChanged();
+		ReportResourcePickedUp( resourceId, added );
+
+		if ( LogInventory )
+			Log.Info( $"[PlayerInventory] {GameObject.Name}: +{added} {resourceId}{( remaining > 0 ? $" ({remaining} lost — full)" : "" )}." );
+
+		return remaining <= 0;
+	}
+
+	void ReportResourcePickedUp( string resourceId, int amountAdded )
+	{
+		if ( amountAdded <= 0 )
+			return;
+
+		var notice = new ResourcePickupNotice( resourceId, amountAdded );
+
+		if ( IsLocalManagingClient() )
+		{
+			ResourcePickedUp?.Invoke( notice );
+			return;
+		}
+
+		if ( GameObject.Network is { Active: true } && Networking.IsHost && GameObject.Network.Owner is not null )
+			RpcOwnerResourcePickedUp( resourceId, amountAdded );
+	}
+
+	[Rpc.Owner]
+	void RpcOwnerResourcePickedUp( string resourceId, int amountAdded )
+	{
+		if ( amountAdded <= 0 || !IsLocalManagingClient() )
+			return;
+
+		ResourcePickedUp?.Invoke( new ResourcePickupNotice( resourceId, amountAdded ) );
 	}
 
 	void EnsureSlotArray()

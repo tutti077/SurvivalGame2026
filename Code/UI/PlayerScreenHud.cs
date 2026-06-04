@@ -57,6 +57,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	SkillsMenuSection _skillsSection;
 	MapMenuSection _mapSection;
 	GameSettingsMenuSection _settingsSection;
+	PickupNotificationHud _pickupNotifications;
 
 	protected override void OnTreeFirstBuilt()
 	{
@@ -78,6 +79,8 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction?.PollInventoryInput( _menuController.VisiblePanels );
 		}
 
+		_pickupNotifications?.Tick();
+
 		if ( !_deferScreenPanelCamera || _hudScreen is null || !_hudScreen.IsValid() )
 			return;
 
@@ -95,7 +98,10 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _handHarvest is not null )
 			_handHarvest.FocusedNodeChanged -= OnHarvestFocusChanged;
 		if ( _inventory is not null )
+		{
 			_inventory.InventoryChanged -= OnInventoryChanged;
+			_inventory.ResourcePickedUp -= OnResourcePickedUp;
+		}
 		if ( _menuController is not null )
 		{
 			_menuController.MenuOpenChanged -= OnMenuOpenChanged;
@@ -131,8 +137,11 @@ public sealed class PlayerScreenHud : PanelComponent
 		Panel.Style.Set( "height", "100%" );
 		Panel.Style.Set( "pointer-events", "none" );
 
+		_inventory = FindOnAncestors<PlayerInventory>();
+
 		BuildVitals( Panel );
 		BuildHarvestPrompt( Panel );
+		BuildPickupNotifications( Panel );
 		BuildGameMenu( Panel );
 
 		if ( screen is not null )
@@ -272,6 +281,21 @@ public sealed class PlayerScreenHud : PanelComponent
 		_handHarvest.FocusedNodeChanged += OnHarvestFocusChanged;
 		OnHarvestFocusChanged();
 	}
+
+	void BuildPickupNotifications( Panel root )
+	{
+		if ( _inventory is null )
+		{
+			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerInventory — pickup toasts skipped." );
+			return;
+		}
+
+		_pickupNotifications = new PickupNotificationHud();
+		_pickupNotifications.Build( root );
+		_inventory.ResourcePickedUp += OnResourcePickedUp;
+	}
+
+	void OnResourcePickedUp( ResourcePickupNotice notice ) => _pickupNotifications?.Enqueue( notice );
 
 	void BuildGameMenu( Panel root )
 	{
