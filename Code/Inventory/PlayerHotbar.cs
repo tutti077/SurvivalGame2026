@@ -80,7 +80,208 @@ public sealed class PlayerHotbar : Component
 		return wrapped < 0 ? wrapped + SlotCount : wrapped;
 	}
 
-	/// <summary>Host: overflow into hotbar when inventory has no room (remembered slot, stacks, then any empty slot).</summary>
+	/// <summary>Count of a resource in hotbar item stacks (not bindings/ghosts).</summary>
+	public int CountResource( string resourceId )
+	{
+		if ( string.IsNullOrWhiteSpace( resourceId ) )
+			return 0;
+
+		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
+		var total = 0;
+		for ( var i = 0; i < SlotCount; i++ )
+		{
+			if ( _slots[i].IsEmpty )
+				continue;
+
+			if ( !ResourceCatalog.ResourceIdsMatch( _slots[i].ResourceId, resourceId ) )
+				continue;
+
+			total += _slots[i].Count;
+		}
+
+		return total;
+	}
+
+	/// <summary>Host: pickup into hotbar stacks, then empty slots with a matching binding ghost.</summary>
+	public int TryAddResourcePickup( string resourceId, int amount )
+	{
+		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) || !HasHostAuthority )
+			return amount;
+
+		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
+		var remaining = TryAddToMatchingStacks( resourceId, amount );
+		return TryAddToBindingSlots( resourceId, remaining );
+	}
+
+	/// <summary>Host: merge pickup into existing hotbar stacks.</summary>
+	public int TryAddToMatchingStacks( string resourceId, int amount )
+	{
+		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) || !HasHostAuthority )
+			return amount;
+
+		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
+		var remaining = amount;
+
+		for ( var i = 0; i < SlotCount && remaining > 0; i++ )
+		{
+			if ( _slots[i].IsEmpty )
+				continue;
+
+			if ( !ResourceCatalog.ResourceIdsMatch( _slots[i].ResourceId, resourceId ) )
+				continue;
+
+			remaining = TryAddToSlot( i, resourceId, remaining );
+		}
+
+		return remaining;
+	}
+
+	int TryAddToBindingSlots( string resourceId, int amount )
+	{
+		if ( amount <= 0 )
+			return 0;
+
+		var remaining = amount;
+
+		for ( var i = 0; i < SlotCount && remaining > 0; i++ )
+		{
+			if ( !_slots[i].IsEmpty )
+				continue;
+
+			if ( !BindingMatches( i, resourceId ) )
+				continue;
+
+			remaining = TryAddToSlot( i, resourceId, remaining, rememberSlot: true );
+		}
+
+		return remaining;
+	}
+
+	/// <summary>How much could fit via hotbar stacks plus binding ghosts (read-only).</summary>
+	public int PeekPickupAcceptAmount( string resourceId, int amount )
+	{
+		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
+			return 0;
+
+		var accepted = PeekMatchingStackAcceptAmount( resourceId, amount );
+		var remaining = amount - accepted;
+		if ( remaining <= 0 )
+			return accepted;
+
+		return accepted + PeekBindingGhostAcceptAmount( resourceId, remaining );
+	}
+
+	/// <summary>Simulate pickup absorb on a hotbar slot copy (stacks then binding ghosts).</summary>
+	public int SimulatePickupAbsorb( InventorySlot[] slots, string resourceId, int amount )
+	{
+		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) || slots is null || slots.Length != SlotCount )
+			return amount;
+
+		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
+		var remaining = amount;
+
+		for ( var i = 0; i < SlotCount && remaining > 0; i++ )
+		{
+			if ( slots[i].IsEmpty )
+				continue;
+
+			if ( !ResourceCatalog.ResourceIdsMatch( slots[i].ResourceId, resourceId ) )
+				continue;
+
+			remaining = SimulateAddToSlot( ref slots[i], resourceId, remaining );
+		}
+
+		for ( var i = 0; i < SlotCount && remaining > 0; i++ )
+		{
+			if ( !slots[i].IsEmpty )
+				continue;
+
+			if ( !BindingMatches( i, resourceId ) )
+				continue;
+
+			remaining = SimulateAddToSlot( ref slots[i], resourceId, remaining );
+		}
+
+		return remaining;
+	}
+
+	/// <summary>How much could merge into existing hotbar stacks (read-only).</summary>
+	public int PeekMatchingStackAcceptAmount( string resourceId, int amount )
+	{
+		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
+			return 0;
+
+		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
+		var remaining = amount;
+
+		for ( var i = 0; i < SlotCount && remaining > 0; i++ )
+		{
+			if ( _slots[i].IsEmpty )
+				continue;
+
+			if ( !ResourceCatalog.ResourceIdsMatch( _slots[i].ResourceId, resourceId ) )
+				continue;
+
+			remaining = PeekAddToSlot( _slots[i], resourceId, remaining );
+		}
+
+		return amount - remaining;
+	}
+
+	/// <summary>How much could fit into empty slots with a matching binding ghost (read-only).</summary>
+	public int PeekBindingGhostAcceptAmount( string resourceId, int amount )
+	{
+		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
+			return 0;
+
+		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
+		var remaining = amount;
+
+		for ( var i = 0; i < SlotCount && remaining > 0; i++ )
+		{
+			if ( !_slots[i].IsEmpty )
+				continue;
+
+			if ( !BindingMatches( i, resourceId ) )
+				continue;
+
+			remaining = PeekAddToSlot( _slots[i], resourceId, remaining );
+		}
+
+		return amount - remaining;
+	}
+
+	/// <summary>Host: consume up to <paramref name="amount"/> from hotbar stacks.</summary>
+	public int TryConsumeResource( string resourceId, int amount )
+	{
+		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) || !HasHostAuthority )
+			return amount;
+
+		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
+		var remaining = amount;
+
+		for ( var i = 0; i < SlotCount && remaining > 0; i++ )
+		{
+			if ( _slots[i].IsEmpty )
+				continue;
+
+			if ( !ResourceCatalog.ResourceIdsMatch( _slots[i].ResourceId, resourceId ) )
+				continue;
+
+			var take = Math.Min( remaining, _slots[i].Count );
+			_slots[i].Count -= take;
+			remaining -= take;
+			if ( _slots[i].Count <= 0 )
+				_slots[i] = InventorySlot.Empty;
+		}
+
+		if ( remaining < amount )
+			NotifyChanged();
+
+		return remaining;
+	}
+
+	/// <summary>Host: spill into hotbar when inventory has no room (remembered slot, stacks, then any empty slot).</summary>
 	public int TryAddResourceOverflow( string resourceId, int amount )
 	{
 		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) || !HasHostAuthority )
@@ -308,6 +509,19 @@ public sealed class PlayerHotbar : Component
 		RpcSyncBindings( _bindings );
 	}
 
+	/// <summary>Local client: forget a hotbar slot binding (ghost icon).</summary>
+	public bool OwnerClearBinding( int slotIndex )
+	{
+		if ( !IsLocalManagingClient() || slotIndex < 0 || slotIndex >= SlotCount )
+			return false;
+
+		if ( string.IsNullOrWhiteSpace( _bindings[slotIndex] ) )
+			return false;
+
+		ClearBinding( slotIndex );
+		return true;
+	}
+
 	void PersistBindingsLocal()
 	{
 		if ( IsLocalManagingClient() )
@@ -337,6 +551,7 @@ public sealed class PlayerHotbar : Component
 			return false;
 
 		_slots[slotIndex] = InventorySlot.Empty;
+		ClearBindingIfSlotEmpty( slotIndex );
 		NotifyChanged();
 		RpcHostPickupAll( slotIndex );
 		picked = slot;
@@ -351,74 +566,102 @@ public sealed class PlayerHotbar : Component
 
 		picked = slot;
 		_slots[slotIndex] = InventorySlot.Empty;
+		ClearBindingIfSlotEmpty( slotIndex );
 		NotifyChanged();
 		return true;
 	}
 
-	public bool OwnerTryTakeOne( int slotIndex )
+	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken )
 	{
-		if ( !IsLocalManagingClient() )
+		taken = InventorySlot.Empty;
+		if ( !IsLocalManagingClient() || !TryGetSlotRef( slotIndex, out var slot ) || slot.IsEmpty )
 			return false;
 
 		if ( HasHostAuthority )
-			return HostTryTakeOne( slotIndex );
+		{
+			if ( !HostTryTakeOne( slotIndex ) )
+				return false;
 
-		if ( !TryGetSlotRef( slotIndex, out var slot ) || slot.IsEmpty )
-			return false;
+			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = 1 };
+			return true;
+		}
 
 		_slots[slotIndex].Count--;
 		if ( _slots[slotIndex].Count <= 0 )
+		{
 			_slots[slotIndex] = InventorySlot.Empty;
+			ClearBindingIfSlotEmpty( slotIndex );
+		}
 
+		taken = new InventorySlot { ResourceId = slot.ResourceId, Count = 1 };
 		NotifyChanged();
 		RpcHostTakeOne( slotIndex );
 		return true;
 	}
 
-	public bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held )
+	public bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held, out int placedCount )
 	{
-		if ( held.IsEmpty || !IsLocalManagingClient() )
-			return false;
-
-		if ( HasHostAuthority )
-			return HostTryDropOne( slotIndex, held );
-
-		if ( !TryGetSlotRef( slotIndex, out var dest ) )
+		placedCount = 0;
+		if ( held.IsEmpty || !IsLocalManagingClient() || !TryGetSlotRef( slotIndex, out var dest ) )
 			return false;
 
 		if ( !dest.IsEmpty && !string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 			return false;
 
+		if ( HasHostAuthority )
+		{
+			if ( !HostTryDropOne( slotIndex, held ) )
+				return false;
+
+			placedCount = 1;
+			return true;
+		}
+
+		var add = dest.IsEmpty
+			? ResourceCatalog.ClampAddToStack( held.ResourceId, 0, 1 )
+			: ResourceCatalog.ClampAddToStack( held.ResourceId, dest.Count, 1 );
+		if ( add <= 0 )
+			return false;
+
 		RpcHostDropOne( slotIndex, held.ResourceId, held.Count );
 		if ( dest.IsEmpty )
-			_slots[slotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = 1 };
+			_slots[slotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = add };
 		else
-			_slots[slotIndex].Count++;
+			_slots[slotIndex].Count += add;
 
+		placedCount = add;
 		UpdateBindingFromSlot( slotIndex );
 		NotifyChanged();
 		return true;
 	}
 
-	public bool OwnerTryTakeHalf( int slotIndex )
+	public bool OwnerTryTakeHalf( int slotIndex, out InventorySlot taken )
 	{
-		if ( !IsLocalManagingClient() )
-			return false;
-
-		if ( HasHostAuthority )
-			return HostTryTakeHalf( slotIndex );
-
-		if ( !TryGetSlotRef( slotIndex, out var slot ) || slot.IsEmpty )
+		taken = InventorySlot.Empty;
+		if ( !IsLocalManagingClient() || !TryGetSlotRef( slotIndex, out var slot ) || slot.IsEmpty )
 			return false;
 
 		var half = slot.Count / 2;
 		if ( half <= 0 )
 			return false;
 
+		if ( HasHostAuthority )
+		{
+			if ( !HostTryTakeHalf( slotIndex ) )
+				return false;
+
+			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = half };
+			return true;
+		}
+
 		_slots[slotIndex].Count -= half;
 		if ( _slots[slotIndex].Count <= 0 )
+		{
 			_slots[slotIndex] = InventorySlot.Empty;
+			ClearBindingIfSlotEmpty( slotIndex );
+		}
 
+		taken = new InventorySlot { ResourceId = slot.ResourceId, Count = half };
 		NotifyChanged();
 		RpcHostTakeHalf( slotIndex );
 		return true;
@@ -442,13 +685,19 @@ public sealed class PlayerHotbar : Component
 		if ( !dest.IsEmpty && !string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 			return false;
 
+		var add = dest.IsEmpty
+			? ResourceCatalog.ClampAddToStack( held.ResourceId, 0, half )
+			: ResourceCatalog.ClampAddToStack( held.ResourceId, dest.Count, half );
+		if ( add <= 0 )
+			return false;
+
 		RpcHostPlaceHalf( slotIndex, held.ResourceId, held.Count );
 		if ( dest.IsEmpty )
-			_slots[slotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = half };
+			_slots[slotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = add };
 		else
-			_slots[slotIndex].Count += half;
+			_slots[slotIndex].Count += add;
 
-		held.Count -= half;
+		held.Count -= add;
 		if ( held.Count <= 0 )
 			held.Clear();
 
@@ -464,7 +713,10 @@ public sealed class PlayerHotbar : Component
 
 		_slots[slotIndex].Count--;
 		if ( _slots[slotIndex].Count <= 0 )
+		{
 			_slots[slotIndex] = InventorySlot.Empty;
+			ClearBindingIfSlotEmpty( slotIndex );
+		}
 
 		NotifyChanged();
 		return true;
@@ -508,7 +760,10 @@ public sealed class PlayerHotbar : Component
 
 		_slots[slotIndex].Count -= half;
 		if ( _slots[slotIndex].Count <= 0 )
+		{
 			_slots[slotIndex] = InventorySlot.Empty;
+			ClearBindingIfSlotEmpty( slotIndex );
+		}
 
 		NotifyChanged();
 		return true;
@@ -527,8 +782,12 @@ public sealed class PlayerHotbar : Component
 
 		if ( dest.IsEmpty )
 		{
-			dest = new InventorySlot { ResourceId = held.ResourceId, Count = half };
-			held.Count -= half;
+			var place = ResourceCatalog.ClampAddToStack( held.ResourceId, 0, half );
+			if ( place <= 0 )
+				return false;
+
+			dest = new InventorySlot { ResourceId = held.ResourceId, Count = place };
+			held.Count -= place;
 			if ( held.Count <= 0 )
 				held.Clear();
 
@@ -540,12 +799,10 @@ public sealed class PlayerHotbar : Component
 		if ( !string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 			return false;
 
-		var maxStack = ResourceCatalog.GetMaxStack( held.ResourceId );
-		var room = maxStack - dest.Count;
-		if ( room <= 0 )
+		var add = ResourceCatalog.ClampAddToStack( held.ResourceId, dest.Count, half );
+		if ( add <= 0 )
 			return false;
 
-		var add = Math.Min( half, room );
 		dest.Count += add;
 		held.Count -= add;
 		if ( held.Count <= 0 )
@@ -614,8 +871,15 @@ public sealed class PlayerHotbar : Component
 
 		if ( dest.IsEmpty )
 		{
-			dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-			held.Clear();
+			var place = ResourceCatalog.ClampAddToStack( held.ResourceId, 0, held.Count );
+			if ( place <= 0 )
+				return false;
+
+			dest = new InventorySlot { ResourceId = held.ResourceId, Count = place };
+			held.Count -= place;
+			if ( held.Count <= 0 )
+				held.Clear();
+
 			UpdateBindingFromSlot( slotIndex );
 			NotifyChanged();
 			return true;
@@ -623,8 +887,7 @@ public sealed class PlayerHotbar : Component
 
 		if ( string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 		{
-			var maxStack = ResourceCatalog.GetMaxStack( held.ResourceId );
-			var room = maxStack - dest.Count;
+			var room = ResourceCatalog.GetMaxStack( held.ResourceId ) - dest.Count;
 			if ( room <= 0 )
 			{
 				var displaced = dest;
@@ -683,17 +946,23 @@ public sealed class PlayerHotbar : Component
 		ref var dest = ref _slots[slotIndex];
 		if ( dest.IsEmpty )
 		{
-			dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-			held.Clear();
+			var place = ResourceCatalog.ClampAddToStack( held.ResourceId, 0, held.Count );
+			if ( place <= 0 )
+				return false;
+
+			dest = new InventorySlot { ResourceId = held.ResourceId, Count = place };
+			held.Count -= place;
+			if ( held.Count <= 0 )
+				held.Clear();
+
 			NotifyChanged();
 			return true;
 		}
 
 		if ( string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 		{
-			var maxStack = ResourceCatalog.GetMaxStack( held.ResourceId );
-			var room = maxStack - dest.Count;
-			if ( room <= 0 )
+			var add = ResourceCatalog.ClampAddToStack( held.ResourceId, dest.Count, held.Count );
+			if ( add <= 0 )
 			{
 				var displaced = dest;
 				dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
@@ -702,7 +971,6 @@ public sealed class PlayerHotbar : Component
 				return true;
 			}
 
-			var add = Math.Min( held.Count, room );
 			dest.Count += add;
 			held.Count -= add;
 			if ( held.Count <= 0 )
@@ -808,6 +1076,14 @@ public sealed class PlayerHotbar : Component
 			return;
 
 		RememberResourceSlot( slotIndex, _slots[slotIndex].ResourceId );
+	}
+
+	void ClearBindingIfSlotEmpty( int slotIndex )
+	{
+		if ( slotIndex < 0 || slotIndex >= SlotCount || !_slots[slotIndex].IsEmpty )
+			return;
+
+		ClearBinding( slotIndex );
 	}
 
 	void NotifyChanged()

@@ -80,9 +80,27 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		if ( string.IsNullOrWhiteSpace( SprintInputAction ) || SprintStaminaPerSecond <= 0f || _vitals is null )
 			return false;
 		if ( IsLocalMovementDriver() )
-			return Input.Down( SprintInputAction ) && !_vitals.IsStaminaExhausted( ExhaustedStaminaEpsilon );
+			return WantsSprintStaminaSpend();
 		return _sprintHeldReportedOnHost;
 	}
+
+	/// <summary>Sprint stamina only while Run is held and a WASD movement key is held.</summary>
+	bool WantsSprintStaminaSpend()
+	{
+		if ( _vitals is null || string.IsNullOrWhiteSpace( SprintInputAction ) )
+			return false;
+
+		if ( !Input.Down( SprintInputAction ) || _vitals.IsStaminaExhausted( ExhaustedStaminaEpsilon ) )
+			return false;
+
+		return HasMovementSprintIntent();
+	}
+
+	static bool HasMovementSprintIntent() =>
+		Input.Down( "Forward" )
+		|| Input.Down( "Backward" )
+		|| Input.Down( "Left" )
+		|| Input.Down( "Right" );
 
 	public void PreInput()
 	{
@@ -144,7 +162,7 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		}
 
 		var wantsSprint = Input.Down( SprintInputAction );
-		var sprintAllowed = wantsSprint && !_vitals.IsStaminaExhausted( ExhaustedStaminaEpsilon );
+		var sprintAllowed = WantsSprintStaminaSpend();
 		var reportHeld = sprintAllowed;
 
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost && reportHeld != _sprintHeldReportedToHostLast )

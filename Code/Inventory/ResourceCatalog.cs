@@ -28,6 +28,36 @@ public static class ResourceCatalog
 			["building_hammer"] = "ui/items/item_build_hammer.png",
 		};
 
+	/// <summary>Maps old/sample resource ids to current catalog ids.</summary>
+	static readonly Dictionary<string, string> LegacyResourceAliases =
+		new( System.StringComparer.OrdinalIgnoreCase )
+		{
+			["stone"] = "rock",
+			["sample_rock"] = "rock",
+			["sample_stick"] = "wood",
+			["sample_bush"] = "plant_fiber",
+			["sample_sword"] = "sword",
+		};
+
+	/// <summary>Returns the canonical resource id used by crafting and the item library.</summary>
+	public static string NormalizeResourceId( string resourceId )
+	{
+		if ( string.IsNullOrWhiteSpace( resourceId ) )
+			return resourceId;
+
+		return LegacyResourceAliases.TryGetValue( resourceId, out var canonical )
+			? canonical
+			: resourceId;
+	}
+
+	public static bool ResourceIdsMatch( string a, string b )
+	{
+		if ( string.IsNullOrWhiteSpace( a ) || string.IsNullOrWhiteSpace( b ) )
+			return false;
+
+		return string.Equals( NormalizeResourceId( a ), NormalizeResourceId( b ), StringComparison.OrdinalIgnoreCase );
+	}
+
 	public static void Register( ResourceItemDefinition definition )
 	{
 		if ( definition is null || !definition.IsValid() || string.IsNullOrWhiteSpace( definition.ResourceId ) )
@@ -50,6 +80,8 @@ public static class ResourceCatalog
 
 	public static ResourceDefinition Resolve( string resourceId )
 	{
+		resourceId = NormalizeResourceId( resourceId );
+
 		if ( !string.IsNullOrWhiteSpace( resourceId ) && Definitions.TryGetValue( resourceId, out var def ) && def.IsValid() )
 			return def.ToCatalogEntry();
 
@@ -63,16 +95,30 @@ public static class ResourceCatalog
 
 	public static int GetMaxStack( string resourceId )
 	{
+		resourceId = NormalizeResourceId( resourceId );
+
 		if ( !string.IsNullOrWhiteSpace( resourceId ) && Definitions.TryGetValue( resourceId, out var def ) && def.IsValid() )
 			return Math.Max( 1, def.MaxStack );
 
 		return 64;
 	}
 
+	/// <summary>How many of <paramref name="desiredAdd"/> can merge into a stack that already has <paramref name="currentCount"/>.</summary>
+	public static int ClampAddToStack( string resourceId, int currentCount, int desiredAdd )
+	{
+		if ( desiredAdd <= 0 )
+			return 0;
+
+		var room = GetMaxStack( resourceId ) - Math.Max( 0, currentCount );
+		return room <= 0 ? 0 : Math.Min( desiredAdd, room );
+	}
+
 	public static string GetIconPath( string resourceId )
 	{
 		if ( string.IsNullOrWhiteSpace( resourceId ) )
 			return null;
+
+		resourceId = NormalizeResourceId( resourceId );
 
 		if ( Definitions.TryGetValue( resourceId, out var def ) && def.IsValid() && !string.IsNullOrWhiteSpace( def.Icon ) )
 			return def.Icon;
@@ -105,6 +151,8 @@ public static class ResourceCatalog
 	{
 		if ( string.IsNullOrWhiteSpace( resourceId ) )
 			return null;
+
+		resourceId = NormalizeResourceId( resourceId );
 
 		if ( IconCache.TryGetValue( resourceId, out var cached ) )
 			return cached;

@@ -3452,7 +3452,7 @@
     {
       "__guid": "a38d11ab-82fd-4f3c-85f7-811fb813d043",
       "__version": 2,
-      "__Prefab": "prefabs/environment/samplerock.prefab",
+      "__Prefab": "prefabs/environment/rock.prefab",
       "__PrefabInstancePatch": {
         "AddedObjects": [],
         "RemovedObjects": [],
@@ -3481,7 +3481,7 @@
             "Property": "HarvestYields",
             "Value": [
               {
-                "ResourceId": "stone",
+                "ResourceId": "rock",
                 "AmountLow": 1,
                 "AmountHigh": 20,
                 "ChancePercent": 100
@@ -3500,7 +3500,7 @@
     {
       "__guid": "d5efd56e-fea7-4716-8ef3-79bbfb718dad",
       "__version": 2,
-      "__Prefab": "prefabs/environment/samplestick.prefab",
+      "__Prefab": "prefabs/environment/stick.prefab",
       "__PrefabInstancePatch": {
         "AddedObjects": [],
         "RemovedObjects": [],
@@ -3556,7 +3556,7 @@
     {
       "__guid": "6a865fcd-1282-4df8-912f-7212f0c16284",
       "__version": 2,
-      "__Prefab": "prefabs/environment/samplebush.prefab",
+      "__Prefab": "prefabs/environment/bush.prefab",
       "__PrefabInstancePatch": {
         "AddedObjects": [],
         "RemovedObjects": [],

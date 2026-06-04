@@ -23,11 +23,11 @@ public interface IInventoryGridHost
 
 	bool OwnerTryReturnStack( ref InventoryCursorStack held );
 
-	bool OwnerTryTakeOne( int slotIndex );
+	bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken );
 
-	bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held );
+	bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held, out int placedCount );
 
-	bool OwnerTryTakeHalf( int slotIndex );
+	bool OwnerTryTakeHalf( int slotIndex, out InventorySlot taken );
 
 	bool OwnerTryPlaceHalf( int slotIndex, ref InventoryCursorStack held );
 

@@ -47,14 +47,23 @@ public sealed class PlayerInventoryGridHost : IInventoryGridHost
 		return false;
 	}
 
-	public bool OwnerTryTakeOne( int slotIndex ) =>
-		Inventory is not null && Inventory.OwnerTryTakeOne( slotIndex );
+	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken )
+	{
+		taken = InventorySlot.Empty;
+		return Inventory is not null && Inventory.OwnerTryTakeOne( slotIndex, out taken );
+	}
 
-	public bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held ) =>
-		Inventory is not null && Inventory.OwnerTryDropOne( slotIndex, held );
+	public bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held, out int placedCount )
+	{
+		placedCount = 0;
+		return Inventory is not null && Inventory.OwnerTryDropOne( slotIndex, held, out placedCount );
+	}
 
-	public bool OwnerTryTakeHalf( int slotIndex ) =>
-		Inventory is not null && Inventory.OwnerTryTakeHalf( slotIndex );
+	public bool OwnerTryTakeHalf( int slotIndex, out InventorySlot taken )
+	{
+		taken = InventorySlot.Empty;
+		return Inventory is not null && Inventory.OwnerTryTakeHalf( slotIndex, out taken );
+	}
 
 	public bool OwnerTryPlaceHalf( int slotIndex, ref InventoryCursorStack held ) =>
 		Inventory is not null && Inventory.OwnerTryPlaceHalf( slotIndex, ref held );

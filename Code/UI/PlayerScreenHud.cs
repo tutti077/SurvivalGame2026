@@ -528,7 +528,17 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _menuController is null || !_menuController.IsMenuOpen )
 			return;
 
-		RefreshAllSections();
+		RefreshInventoryDependentSections();
+	}
+
+	void RefreshInventoryDependentSections()
+	{
+		for ( var i = 0; i < _sections.Count; i++ )
+		{
+			var id = _sections[i].SectionId;
+			if ( id is "inventory" or "crafting" )
+				_sections[i].Refresh();
+		}
 	}
 
 	void OnMenuOpenChanged( bool isOpen ) => ApplyMenuOpenState( isOpen );

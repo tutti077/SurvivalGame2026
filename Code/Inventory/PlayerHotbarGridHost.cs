@@ -54,14 +54,23 @@ public sealed class PlayerHotbarGridHost : IInventoryGridHost
 		return false;
 	}
 
-	public bool OwnerTryTakeOne( int slotIndex ) =>
-		Hotbar is not null && Hotbar.OwnerTryTakeOne( slotIndex );
+	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken )
+	{
+		taken = InventorySlot.Empty;
+		return Hotbar is not null && Hotbar.OwnerTryTakeOne( slotIndex, out taken );
+	}
 
-	public bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held ) =>
-		Hotbar is not null && Hotbar.OwnerTryDropOne( slotIndex, held );
+	public bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held, out int placedCount )
+	{
+		placedCount = 0;
+		return Hotbar is not null && Hotbar.OwnerTryDropOne( slotIndex, held, out placedCount );
+	}
 
-	public bool OwnerTryTakeHalf( int slotIndex ) =>
-		Hotbar is not null && Hotbar.OwnerTryTakeHalf( slotIndex );
+	public bool OwnerTryTakeHalf( int slotIndex, out InventorySlot taken )
+	{
+		taken = InventorySlot.Empty;
+		return Hotbar is not null && Hotbar.OwnerTryTakeHalf( slotIndex, out taken );
+	}
 
 	public bool OwnerTryPlaceHalf( int slotIndex, ref InventoryCursorStack held ) =>
 		Hotbar is not null && Hotbar.OwnerTryPlaceHalf( slotIndex, ref held );

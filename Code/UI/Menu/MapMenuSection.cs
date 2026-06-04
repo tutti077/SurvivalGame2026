@@ -6,8 +6,6 @@ namespace Survival;
 /// <summary>Centered world map panel (placeholder image until exploration is implemented).</summary>
 public sealed class MapMenuSection : IPlayerMenuSection
 {
-	public const string DefaultMapImagePath = "ui/menu/map_placeholder.png";
-
 	public string SectionId => "map";
 
 	Panel _sectionRoot;
@@ -83,12 +81,14 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		if ( _mapImage is null )
 			return;
 
-		var applied = MenuUiTextures.ApplyBackground( _mapImage, DefaultMapImagePath );
+		_mapImage.Style.BackgroundImage = null;
+		_mapImage.Style.Set( "background-image", "none" );
+
 		if ( _placeholderLabel is not null )
-			_placeholderLabel.Style.Set( "display", applied ? "none" : "flex" );
+			_placeholderLabel.Style.Set( "display", "flex" );
 	}
 
-	public void Refresh() => ApplyMapImage();
+	public void Refresh() { }
 
 	public void SetMenuOpen( bool isOpen )
 	{

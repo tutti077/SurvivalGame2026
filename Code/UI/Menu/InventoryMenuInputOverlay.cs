@@ -86,6 +86,13 @@ public sealed class InventoryMenuInputOverlay : Panel
 		if ( _inventoryInteraction is null )
 			return false;
 
+		if ( !pressed && _inventoryInteraction.IsDragging )
+		{
+			_inventoryInteraction.ProcessSlotPress( null, e.Button, pressed: false );
+			e.StopPropagation();
+			return true;
+		}
+
 		var slot = _inventoryInteraction.FindHotbarSlotAtScreenPosition( Mouse.Position );
 		if ( slot is null )
 			return false;

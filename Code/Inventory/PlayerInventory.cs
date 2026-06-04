@@ -30,6 +30,32 @@ public sealed class PlayerInventory : Component
 		base.OnStart();
 		ResourceItemLibraryHost.EnsureSpawned( Scene );
 		EnsureSlotArray();
+		MigrateLegacyResourceSlots();
+	}
+
+	void MigrateLegacyResourceSlots()
+	{
+		if ( !HasHostAuthority )
+			return;
+
+		EnsureSlotArray();
+
+		var changed = false;
+		for ( var i = 0; i < _slots.Length; i++ )
+		{
+			if ( _slots[i].IsEmpty )
+				continue;
+
+			var normalized = ResourceCatalog.NormalizeResourceId( _slots[i].ResourceId );
+			if ( string.Equals( normalized, _slots[i].ResourceId, StringComparison.OrdinalIgnoreCase ) )
+				continue;
+
+			_slots[i] = new InventorySlot { ResourceId = normalized, Count = _slots[i].Count };
+			changed = true;
+		}
+
+		if ( changed )
+			NotifyInventoryChanged();
 	}
 
 	public ReadOnlySpan<InventorySlot> Slots => _slots;
@@ -44,12 +70,24 @@ public sealed class PlayerInventory : Component
 		return _slots[index];
 	}
 
-	/// <summary>Total count of a resource across all slots (host and predicting client).</summary>
+	/// <summary>Total count of a resource in inventory plus hotbar stacks.</summary>
 	public int CountResource( string resourceId )
 	{
 		if ( string.IsNullOrWhiteSpace( resourceId ) )
 			return 0;
 
+		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
+		var total = CountResourceInInventory( resourceId );
+
+		var hotbar = Components.Get<PlayerHotbar>();
+		if ( hotbar is not null )
+			total += hotbar.CountResource( resourceId );
+
+		return total;
+	}
+
+	int CountResourceInInventory( string resourceId )
+	{
 		EnsureSlotArray();
 		var total = 0;
 		for ( var i = 0; i < _slots.Length; i++ )
@@ -57,7 +95,7 @@ public sealed class PlayerInventory : Component
 			if ( _slots[i].IsEmpty )
 				continue;
 
-			if ( !string.Equals( _slots[i].ResourceId, resourceId, StringComparison.OrdinalIgnoreCase ) )
+			if ( !ResourceCatalog.ResourceIdsMatch( _slots[i].ResourceId, resourceId ) )
 				continue;
 
 			total += _slots[i].Count;
@@ -95,10 +133,15 @@ public sealed class PlayerInventory : Component
 
 		EnsureSlotArray();
 
+		var hotbar = Components.Get<PlayerHotbar>();
+
 		for ( var i = 0; i < ingredients.Count; i++ )
 		{
 			var ing = ingredients[i];
 			var remaining = ing.Amount;
+
+			if ( hotbar is not null )
+				remaining = hotbar.TryConsumeResource( ing.ResourceId, remaining );
 
 			for ( var slotIndex = 0; slotIndex < _slots.Length && remaining > 0; slotIndex++ )
 			{
@@ -106,7 +149,7 @@ public sealed class PlayerInventory : Component
 				if ( slot.IsEmpty )
 					continue;
 
-				if ( !string.Equals( slot.ResourceId, ing.ResourceId, StringComparison.OrdinalIgnoreCase ) )
+				if ( !ResourceCatalog.ResourceIdsMatch( slot.ResourceId, ing.ResourceId ) )
 					continue;
 
 				var take = Math.Min( remaining, slot.Count );
@@ -141,34 +184,15 @@ public sealed class PlayerInventory : Component
 		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
 			return false;
 
-		EnsureSlotArray();
-		var maxStack = ResourceCatalog.GetMaxStack( resourceId );
-		var remaining = amount;
-
-		for ( var i = 0; i < _slots.Length && remaining > 0; i++ )
-		{
-			if ( _slots[i].IsEmpty )
-			{
-				remaining -= maxStack;
-				continue;
-			}
-
-			if ( !string.Equals( _slots[i].ResourceId, resourceId, StringComparison.OrdinalIgnoreCase ) )
-				continue;
-
-			var room = maxStack - _slots[i].Count;
-			if ( room > 0 )
-				remaining -= room;
-		}
-
-		return remaining <= 0;
+		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
+		return PeekAcceptAmount( resourceId, amount ) >= amount;
 	}
 
 	/// <summary>True if inventory plus hotbar overflow can hold at least <paramref name="amount"/>.</summary>
 	public bool CanAcceptResource( string resourceId, int amount ) =>
 		PeekAcceptAmount( resourceId, amount ) >= amount;
 
-	/// <summary>True if every listed resource amount can fit when deposited in order (inventory then hotbar overflow).</summary>
+	/// <summary>True if every listed resource amount can fit (hotbar stacks, inventory, then hotbar spillover).</summary>
 	public bool CanAcceptResourceBundle( IReadOnlyList<(string ResourceId, int Amount)> needs )
 	{
 		if ( needs is null || needs.Count == 0 )
@@ -194,11 +218,14 @@ public sealed class PlayerInventory : Component
 			if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
 				continue;
 
+			var normalized = ResourceCatalog.NormalizeResourceId( resourceId );
 			var remaining = amount;
-			remaining = PeekInventoryAbsorb( scratchInv, resourceId, remaining );
 
-			if ( remaining > 0 && scratchHot is not null )
-				remaining = hotbar.SimulateOverflowAbsorb( scratchHot, resourceId, remaining );
+			if ( scratchHot is not null )
+				remaining = hotbar.SimulatePickupAbsorb( scratchHot, normalized, remaining );
+
+			if ( remaining > 0 )
+				remaining = PeekInventoryAbsorb( scratchInv, normalized, remaining );
 
 			if ( remaining > 0 )
 				return false;
@@ -229,26 +256,28 @@ public sealed class PlayerInventory : Component
 		return addedAny;
 	}
 
-	/// <summary>How much of <paramref name="amount"/> can fit in inventory then hotbar overflow (read-only).</summary>
+	/// <summary>How much of <paramref name="amount"/> can fit (hotbar stacks + binding ghosts, then inventory).</summary>
 	public int PeekAcceptAmount( string resourceId, int amount )
 	{
 		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
 			return 0;
 
+		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
 		EnsureSlotArray();
 
 		var remaining = amount;
-		remaining = PeekInventoryAbsorb( resourceId, remaining );
-
-		if ( remaining <= 0 )
-			return amount;
-
 		var hotbar = Components.Get<PlayerHotbar>();
-		if ( hotbar is null )
-			return amount - remaining;
 
-		var hotbarAccept = hotbar.PeekOverflowAcceptAmount( resourceId, remaining );
-		return amount - remaining + hotbarAccept;
+		if ( hotbar is not null )
+		{
+			var hotbarAccept = hotbar.PeekPickupAcceptAmount( resourceId, remaining );
+			remaining -= hotbarAccept;
+		}
+
+		if ( remaining > 0 )
+			remaining = PeekInventoryAbsorb( _slots, resourceId, remaining );
+
+		return amount - remaining;
 	}
 
 	static int PeekInventoryAbsorb( InventorySlot[] slots, string resourceId, int remaining )
@@ -313,9 +342,14 @@ public sealed class PlayerInventory : Component
 		if ( !HasHostAuthority )
 			return false;
 
+		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
 		EnsureSlotArray();
 
 		var remaining = amount;
+		var hotbar = Components.Get<PlayerHotbar>();
+
+		if ( hotbar is not null )
+			remaining = hotbar.TryAddResourcePickup( resourceId, remaining );
 
 		while ( remaining > 0 )
 		{
@@ -340,13 +374,6 @@ public sealed class PlayerInventory : Component
 			var place = Math.Min( remaining, maxStack );
 			_slots[emptyIndex] = new InventorySlot { ResourceId = resourceId, Count = place };
 			remaining -= place;
-		}
-
-		if ( remaining > 0 )
-		{
-			var hotbar = Components.Get<PlayerHotbar>();
-			if ( hotbar is not null )
-				remaining = hotbar.TryAddResourceOverflow( resourceId, remaining );
 		}
 
 		var added = amount - remaining;
@@ -553,38 +580,92 @@ public sealed class PlayerInventory : Component
 		return HostTryPlaceHeld( targetSlotIndex, ref held );
 	}
 
-	public bool OwnerTryTakeOne( int slotIndex )
+	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken )
 	{
-		if ( !IsLocalManagingClient() )
+		taken = InventorySlot.Empty;
+		if ( !IsLocalManagingClient() || !TryGetSlotRef( slotIndex, out var slot ) || slot.IsEmpty )
 			return false;
 
 		if ( HasHostAuthority )
-			return HostTryTakeOne( slotIndex );
+		{
+			if ( !HostTryTakeOne( slotIndex ) )
+				return false;
 
+			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = 1 };
+			return true;
+		}
+
+		_slots[slotIndex].Count--;
+		if ( _slots[slotIndex].Count <= 0 )
+			_slots[slotIndex] = InventorySlot.Empty;
+
+		taken = new InventorySlot { ResourceId = slot.ResourceId, Count = 1 };
+		NotifyInventoryChanged();
 		RpcHostTakeOne( slotIndex );
 		return true;
 	}
 
-	public bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held )
+	public bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held, out int placedCount )
 	{
-		if ( held.IsEmpty || !IsLocalManagingClient() )
+		placedCount = 0;
+		if ( held.IsEmpty || !IsLocalManagingClient() || !TryGetSlotRef( slotIndex, out var dest ) )
+			return false;
+
+		if ( !dest.IsEmpty && !string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 			return false;
 
 		if ( HasHostAuthority )
-			return HostTryDropOne( slotIndex, held );
+		{
+			if ( !HostTryDropOne( slotIndex, held ) )
+				return false;
+
+			placedCount = 1;
+			return true;
+		}
+
+		var add = dest.IsEmpty
+			? ResourceCatalog.ClampAddToStack( held.ResourceId, 0, 1 )
+			: ResourceCatalog.ClampAddToStack( held.ResourceId, dest.Count, 1 );
+		if ( add <= 0 )
+			return false;
 
 		RpcHostDropOne( slotIndex, held.ResourceId, held.Count );
+		EnsureSlotArray();
+		if ( dest.IsEmpty )
+			_slots[slotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = add };
+		else
+			_slots[slotIndex].Count += add;
+
+		placedCount = add;
+		NotifyInventoryChanged();
 		return true;
 	}
 
-	public bool OwnerTryTakeHalf( int slotIndex )
+	public bool OwnerTryTakeHalf( int slotIndex, out InventorySlot taken )
 	{
-		if ( !IsLocalManagingClient() )
+		taken = InventorySlot.Empty;
+		if ( !IsLocalManagingClient() || !TryGetSlotRef( slotIndex, out var slot ) || slot.IsEmpty )
+			return false;
+
+		var half = HostPeekTakeHalfAmount( slotIndex );
+		if ( half <= 0 )
 			return false;
 
 		if ( HasHostAuthority )
-			return HostTryTakeHalf( slotIndex );
+		{
+			if ( !HostTryTakeHalf( slotIndex ) )
+				return false;
 
+			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = half };
+			return true;
+		}
+
+		_slots[slotIndex].Count -= half;
+		if ( _slots[slotIndex].Count <= 0 )
+			_slots[slotIndex] = InventorySlot.Empty;
+
+		taken = new InventorySlot { ResourceId = slot.ResourceId, Count = half };
+		NotifyInventoryChanged();
 		RpcHostTakeHalf( slotIndex );
 		return true;
 	}
@@ -597,15 +678,34 @@ public sealed class PlayerInventory : Component
 		if ( HasHostAuthority )
 			return HostTryPlaceHalf( slotIndex, ref held );
 
-		RpcHostPlaceHalf( slotIndex, held.ResourceId, held.Count );
-		var half = held.Count / 2;
-		if ( half > 0 )
-		{
-			held.Count -= half;
-			if ( held.Count <= 0 )
-				held.Clear();
-		}
+		if ( !TryGetSlotRef( slotIndex, out var dest ) )
+			return false;
 
+		var half = held.Count / 2;
+		if ( half <= 0 )
+			return false;
+
+		if ( !dest.IsEmpty && !string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
+			return false;
+
+		var add = dest.IsEmpty
+			? ResourceCatalog.ClampAddToStack( held.ResourceId, 0, half )
+			: ResourceCatalog.ClampAddToStack( held.ResourceId, dest.Count, half );
+		if ( add <= 0 )
+			return false;
+
+		RpcHostPlaceHalf( slotIndex, held.ResourceId, held.Count );
+		EnsureSlotArray();
+		if ( dest.IsEmpty )
+			_slots[slotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = add };
+		else
+			_slots[slotIndex].Count += add;
+
+		held.Count -= add;
+		if ( held.Count <= 0 )
+			held.Clear();
+
+		NotifyInventoryChanged();
 		return true;
 	}
 
@@ -646,16 +746,22 @@ public sealed class PlayerInventory : Component
 
 		if ( dest.IsEmpty )
 		{
-			dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-			held.Clear();
+			var place = ResourceCatalog.ClampAddToStack( held.ResourceId, 0, held.Count );
+			if ( place <= 0 )
+				return false;
+
+			dest = new InventorySlot { ResourceId = held.ResourceId, Count = place };
+			held.Count -= place;
+			if ( held.Count <= 0 )
+				held.Clear();
+
 			NotifyInventoryChanged();
 			return true;
 		}
 
 		if ( string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 		{
-			var maxStack = ResourceCatalog.GetMaxStack( held.ResourceId );
-			var room = maxStack - dest.Count;
+			var room = ResourceCatalog.GetMaxStack( held.ResourceId ) - dest.Count;
 			if ( room <= 0 )
 			{
 				var displaced = dest;
@@ -737,6 +843,9 @@ public sealed class PlayerInventory : Component
 		if ( !string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 			return false;
 
+		if ( dest.Count >= ResourceCatalog.GetMaxStack( held.ResourceId ) )
+			return false;
+
 		dest.Count++;
 		NotifyInventoryChanged();
 		return true;
@@ -777,8 +886,12 @@ public sealed class PlayerInventory : Component
 
 		if ( dest.IsEmpty )
 		{
-			dest = new InventorySlot { ResourceId = held.ResourceId, Count = half };
-			held.Count -= half;
+			var place = ResourceCatalog.ClampAddToStack( held.ResourceId, 0, half );
+			if ( place <= 0 )
+				return false;
+
+			dest = new InventorySlot { ResourceId = held.ResourceId, Count = place };
+			held.Count -= place;
 			if ( held.Count <= 0 )
 				held.Clear();
 			NotifyInventoryChanged();
@@ -788,8 +901,12 @@ public sealed class PlayerInventory : Component
 		if ( !string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 			return false;
 
-		dest.Count += half;
-		held.Count -= half;
+		var add = ResourceCatalog.ClampAddToStack( held.ResourceId, dest.Count, half );
+		if ( add <= 0 )
+			return false;
+
+		dest.Count += add;
+		held.Count -= add;
 		if ( held.Count <= 0 )
 			held.Clear();
 		NotifyInventoryChanged();
@@ -820,8 +937,15 @@ public sealed class PlayerInventory : Component
 
 		if ( string.Equals( to.ResourceId, from.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 		{
-			to.Count += from.Count;
-			from = InventorySlot.Empty;
+			var add = ResourceCatalog.ClampAddToStack( from.ResourceId, to.Count, from.Count );
+			if ( add <= 0 )
+				return false;
+
+			to.Count += add;
+			from.Count -= add;
+			if ( from.Count <= 0 )
+				from = InventorySlot.Empty;
+
 			NotifyInventoryChanged();
 			return true;
 		}
@@ -838,9 +962,13 @@ public sealed class PlayerInventory : Component
 
 		if ( TryFindStackSlot( held.ResourceId, out var stackIndex ) )
 		{
-			_slots[stackIndex].Count += held.Count;
+			var add = ResourceCatalog.ClampAddToStack( held.ResourceId, _slots[stackIndex].Count, held.Count );
+			if ( add <= 0 )
+				return false;
+
+			_slots[stackIndex].Count += add;
 			NotifyInventoryChanged();
-			return true;
+			return add == held.Count;
 		}
 
 		if ( TryFindFirstEmptySlot( out var emptyIndex ) )
@@ -876,6 +1004,7 @@ public sealed class PlayerInventory : Component
 		if ( string.IsNullOrWhiteSpace( resourceId ) )
 			return false;
 
+		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
 		EnsureSlotArray();
 
 		for ( var i = 0; i < _slots.Length; i++ )
@@ -883,7 +1012,7 @@ public sealed class PlayerInventory : Component
 			if ( _slots[i].IsEmpty )
 				continue;
 
-			if ( !string.Equals( _slots[i].ResourceId, resourceId, StringComparison.OrdinalIgnoreCase ) )
+			if ( !ResourceCatalog.ResourceIdsMatch( _slots[i].ResourceId, resourceId ) )
 				continue;
 
 			if ( _slots[i].Count >= ResourceCatalog.GetMaxStack( resourceId ) )
@@ -906,17 +1035,23 @@ public sealed class PlayerInventory : Component
 
 		if ( dest.IsEmpty )
 		{
-			dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-			held.Clear();
+			var place = ResourceCatalog.ClampAddToStack( held.ResourceId, 0, held.Count );
+			if ( place <= 0 )
+				return false;
+
+			dest = new InventorySlot { ResourceId = held.ResourceId, Count = place };
+			held.Count -= place;
+			if ( held.Count <= 0 )
+				held.Clear();
+
 			NotifyInventoryChanged();
 			return true;
 		}
 
 		if ( string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 		{
-			var maxStack = ResourceCatalog.GetMaxStack( held.ResourceId );
-			var room = maxStack - dest.Count;
-			if ( room <= 0 )
+			var add = ResourceCatalog.ClampAddToStack( held.ResourceId, dest.Count, held.Count );
+			if ( add <= 0 )
 			{
 				var displaced = dest;
 				dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
@@ -925,7 +1060,6 @@ public sealed class PlayerInventory : Component
 				return true;
 			}
 
-			var add = Math.Min( held.Count, room );
 			dest.Count += add;
 			held.Count -= add;
 			if ( held.Count <= 0 )
