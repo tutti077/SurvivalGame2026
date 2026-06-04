@@ -3472,6 +3472,21 @@
             },
             "Property": "Position",
             "Value": "-100.937798,-498.854797,4.62100983"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "f1e2d3c4-b5a6-9788-7766-554433221100"
+            },
+            "Property": "HarvestYields",
+            "Value": [
+              {
+                "ResourceId": "stone",
+                "AmountLow": 1,
+                "AmountHigh": 20,
+                "ChancePercent": 100
+              }
+            ]
           }
         ],
         "MovedObjects": []
@@ -3513,6 +3528,21 @@
             },
             "Property": "Rotation",
             "Value": "0,0,0.278571904,0.960415363"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "96a36e07-7c92-4778-9238-0b7374e11078"
+            },
+            "Property": "HarvestYields",
+            "Value": [
+              {
+                "ResourceId": "wood",
+                "AmountLow": 1,
+                "AmountHigh": 20,
+                "ChancePercent": 100
+              }
+            ]
           }
         ],
         "MovedObjects": []
@@ -3554,6 +3584,27 @@
             },
             "Property": "HarvestTicksUntilGone",
             "Value": 1
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "f6c07270-df35-42bc-bffd-8f3d65a4db77"
+            },
+            "Property": "HarvestYields",
+            "Value": [
+              {
+                "ResourceId": "plant_fiber",
+                "AmountLow": 1,
+                "AmountHigh": 20,
+                "ChancePercent": 100
+              },
+              {
+                "ResourceId": "wood",
+                "AmountLow": 1,
+                "AmountHigh": 5,
+                "ChancePercent": 25
+              }
+            ]
           }
         ],
         "MovedObjects": []

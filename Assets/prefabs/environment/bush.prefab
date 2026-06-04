@@ -1,12 +1,12 @@
 {
   "RootObject": {
-    "__guid": "7b03ae53-6aa1-4f8f-b9f2-05a124be88cb",
+    "__guid": "8ae00320-0e16-40c8-9275-01a362936d1b",
     "__version": 2,
     "Flags": 0,
-    "Name": "sampleRock",
+    "Name": "bush",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
-    "Scale": "0.300000012,0.300000012,0.300000012",
+    "Scale": "1,1,1",
     "Tags": "",
     "Enabled": true,
     "NetworkMode": 1,
@@ -17,14 +17,14 @@
     "Components": [
       {
         "__type": "Sandbox.ModelRenderer",
-        "__guid": "0de75b50-d8df-402d-ae5b-bca32fdf2464",
+        "__guid": "0cc95a3c-e90c-4a6c-ac16-bbd785f7523f",
         "__enabled": true,
         "Flags": 0,
         "BodyGroups": 18446744073709551615,
         "CreateAttachments": false,
         "LodOverride": null,
         "MaterialGroup": null,
-        "MaterialOverride": "materials/environment/sample_rock.vmat",
+        "MaterialOverride": "materials/environment/bush.vmat",
         "Materials": null,
         "Model": "models/dev/sphere.vmdl",
         "OnComponentDestroy": null,
@@ -44,21 +44,35 @@
       },
       {
         "__type": "Survival.ResourceItemDefinition",
-        "__guid": "f1e2d3c4-b5a6-9788-7766-554433221100",
+        "__guid": "f6c07270-df35-42bc-bffd-8f3d65a4db77",
         "__enabled": true,
         "Flags": 0,
         "AutoEnsureTraceCollider": true,
-        "BaseYieldPerTickHigh": 20,
+        "BaseYieldPerTickHigh": 1,
         "BaseYieldPerTickLow": 1,
-        "DisplayName": "Rock",
-        "FallbackColor": "0.58,0.5,0.42,1",
+        "HarvestYields": [
+          {
+            "AmountHigh": 1,
+            "AmountLow": 1,
+            "ChancePercent": 100,
+            "ResourceId": "plant_fiber"
+          },
+          {
+            "AmountHigh": 1,
+            "AmountLow": 1,
+            "ChancePercent": 100,
+            "ResourceId": "wood"
+          }
+        ],
+        "DisplayName": "Bush",
+        "FallbackColor": "0.1837,0.36279,0.027,1",
         "HandHarvestRange": 80,
         "Harvestable": true,
-        "HarvestTicksUntilGone": 5,
+        "HarvestTicksUntilGone": 3,
         "HideModelWhenDepleted": true,
-        "Icon": "ui/items/sample_rock.jpg",
-        "LogHarvest": true,
-        "MaxStack": 20,
+        "Icon": "ui/items/plant_fiber.png",
+        "LogHarvest": false,
+        "MaxStack": 64,
         "MinimumToolTier": 0,
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
@@ -66,8 +80,8 @@
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null,
-        "ResourceId": "sample_rock",
-        "RespawnRateSeconds": 1,
+        "ResourceId": "world_bush",
+        "RespawnRateSeconds": 3,
         "ToolTypeRequired": "Hand"
       }
     ],

@@ -12,7 +12,7 @@ namespace Survival;
 public sealed class ResourceItemDefinition : Component
 {
 	[Property, Group( "Identity" )]
-	public string ResourceId { get; set; } = "sample_rock";
+	public string ResourceId { get; set; } = "rock";
 
 	[Property, Group( "Identity" )]
 	public string DisplayName { get; set; } = "Rock";
@@ -20,9 +20,9 @@ public sealed class ResourceItemDefinition : Component
 	[Property, Group( "Identity" ), Title( "Max Stack" ), Range( 1, 9999 )]
 	public int MaxStack { get; set; } = 64;
 
-	/// <summary>Project-relative image path (e.g. <c>ui/items/sample_rock.jpg</c> or <c>.png</c>).</summary>
+	/// <summary>Project-relative image path (e.g. <c>ui/items/rock.jpg</c> or <c>.png</c>).</summary>
 	[Property, Group( "UI" ), Title( "Icon Path" )]
-	public string Icon { get; set; } = "ui/items/sample_rock.jpg";
+	public string Icon { get; set; } = "ui/items/rock.jpg";
 
 	[Property, Group( "UI" )]
 	public Color FallbackColor { get; set; } = new Color( 0.58f, 0.50f, 0.42f );

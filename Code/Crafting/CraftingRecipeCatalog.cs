@@ -79,7 +79,7 @@ public static class CraftingRecipeCatalog
 		if ( TryLoadFromFile() )
 			return;
 
-		Recipes.Add( CreateFallbackSampleSword() );
+		Recipes.Add( CreateFallbackSword() );
 		Log.Warning( "[CraftingRecipeCatalog] Using built-in fallback recipes (json missing or invalid)." );
 	}
 
@@ -120,18 +120,18 @@ public static class CraftingRecipeCatalog
 		}
 	}
 
-	static CraftingRecipe CreateFallbackSampleSword() => new()
+	static CraftingRecipe CreateFallbackSword() => new()
 	{
-		Id = "sample_sword",
-		DisplayName = "Sample Sword",
-		Icon = "ui/items/item_sample_sword.png",
+		Id = "sword",
+		DisplayName = "Sword",
+		Icon = "ui/items/item_sword.png",
 		Ingredients =
 		{
-			new CraftingIngredient { ResourceId = "sample_rock", Amount = 3 },
-			new CraftingIngredient { ResourceId = "sample_stick", Amount = 2 },
-			new CraftingIngredient { ResourceId = "sample_bush", Amount = 5 },
+			new CraftingIngredient { ResourceId = "rock", Amount = 3 },
+			new CraftingIngredient { ResourceId = "wood", Amount = 2 },
+			new CraftingIngredient { ResourceId = "plant_fiber", Amount = 5 },
 		},
-		OutputResourceId = "sample_sword",
+		OutputResourceId = "sword",
 		OutputAmount = 1,
 		NumberOfItemsCrafted = 1,
 		Stats =

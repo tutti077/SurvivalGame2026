@@ -99,15 +99,15 @@ public static class QuestCatalog
 			DisplayName = "Welcome to the Wild",
 			Description = "Learn the basics of gathering and crafting to survive your first night.",
 			Task = "Hand-harvest 3 sticks and 2 rocks from resource nodes.",
-			Rewards = new List<string> { "25 XP", "sample_bush x1" }
+			Rewards = new List<string> { "25 XP", "Plant Fiber x1" }
 		} );
 		Quests.Add( new QuestDefinition
 		{
 			Id = "craft_blade",
 			DisplayName = "A Sharp Edge",
 			Description = "A simple sword will help you defend yourself and test combat systems.",
-			Task = "Craft a sample sword at the crafting station.",
-			Rewards = new List<string> { "50 XP", "sample_stick x3" }
+			Task = "Craft a sword at the crafting station.",
+			Rewards = new List<string> { "50 XP", "Wood x3" }
 		} );
 		Quests.Add( new QuestDefinition
 		{
@@ -115,7 +115,7 @@ public static class QuestCatalog
 			DisplayName = "Stock the Pack",
 			Description = "Fill your inventory with mixed materials for future recipes.",
 			Task = "Hold at least 5 different resource stacks in your inventory at once.",
-			Rewards = new List<string> { "75 XP", "sample_rock x5" }
+			Rewards = new List<string> { "75 XP", "Rock x5" }
 		} );
 	}
 

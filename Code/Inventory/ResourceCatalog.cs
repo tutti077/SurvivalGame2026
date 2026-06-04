@@ -21,7 +21,11 @@ public static class ResourceCatalog
 	static readonly Dictionary<string, string> KnownIconPaths =
 		new( System.StringComparer.OrdinalIgnoreCase )
 		{
-			["sample_sword"] = "ui/items/item_sample_sword.png",
+			["sword"] = "ui/items/item_sword.png",
+			["rock"] = "ui/items/rock.jpg",
+			["plant_fiber"] = "ui/items/plant_fiber.png",
+			["wood"] = "ui/items/wood.png",
+			["building_hammer"] = "ui/items/item_build_hammer.png",
 		};
 
 	public static void Register( ResourceItemDefinition definition )

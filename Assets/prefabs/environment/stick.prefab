@@ -1,12 +1,12 @@
 {
   "RootObject": {
-    "__guid": "8ae00320-0e16-40c8-9275-01a362936d1b",
+    "__guid": "69f3dff5-c417-479e-b35f-3f458fde47ab",
     "__version": 2,
     "Flags": 0,
-    "Name": "sampleBush",
+    "Name": "stick",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
-    "Scale": "1,1,1",
+    "Scale": "0.0500000007,1,0.0500000007",
     "Tags": "",
     "Enabled": true,
     "NetworkMode": 1,
@@ -17,16 +17,16 @@
     "Components": [
       {
         "__type": "Sandbox.ModelRenderer",
-        "__guid": "0cc95a3c-e90c-4a6c-ac16-bbd785f7523f",
+        "__guid": "2ef1dedc-283b-4de1-ae0e-170fd228c3c0",
         "__enabled": true,
         "Flags": 0,
         "BodyGroups": 18446744073709551615,
         "CreateAttachments": false,
         "LodOverride": null,
         "MaterialGroup": null,
-        "MaterialOverride": "materials/environment/sample_bush.vmat",
+        "MaterialOverride": "materials/environment/stick.vmat",
         "Materials": null,
-        "Model": "models/dev/sphere.vmdl",
+        "Model": "models/dev/box.vmdl",
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
@@ -44,7 +44,7 @@
       },
       {
         "__type": "Survival.ResourceItemDefinition",
-        "__guid": "f6c07270-df35-42bc-bffd-8f3d65a4db77",
+        "__guid": "96a36e07-7c92-4778-9238-0b7374e11078",
         "__enabled": true,
         "Flags": 0,
         "AutoEnsureTraceCollider": true,
@@ -55,24 +55,18 @@
             "AmountHigh": 1,
             "AmountLow": 1,
             "ChancePercent": 100,
-            "ResourceId": "sample_bush"
-          },
-          {
-            "AmountHigh": 1,
-            "AmountLow": 1,
-            "ChancePercent": 25,
-            "ResourceId": "sample_stick"
+            "ResourceId": "wood"
           }
         ],
-        "DisplayName": "Bush",
-        "FallbackColor": "0.1837,0.36279,0.027,1",
+        "DisplayName": "Stick",
+        "FallbackColor": "0.46512,0.23688,0.00865,1",
         "HandHarvestRange": 80,
         "Harvestable": true,
         "HarvestTicksUntilGone": 3,
         "HideModelWhenDepleted": true,
-        "Icon": "ui/items/sample_bush.png",
+        "Icon": "ui/items/wood.png",
         "LogHarvest": false,
-        "MaxStack": 64,
+        "MaxStack": 32,
         "MinimumToolTier": 0,
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
@@ -80,7 +74,7 @@
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null,
-        "ResourceId": "sample_bush",
+        "ResourceId": "world_stick",
         "RespawnRateSeconds": 3,
         "ToolTypeRequired": "Hand"
       }
