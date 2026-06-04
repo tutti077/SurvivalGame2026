@@ -316,7 +316,7 @@
         "ShowBlockVisualization": true,
         "ShowCombatInputDebug": false,
         "ShowMeleeAttackWindupTelegraph": true,
-        "ShowSwingDirectionCrosshair": false,
+        "ShowSwingDirectionCrosshair": true,
         "SouthpawSwing": false,
         "SwingAxisDeadzone": 0.02,
         "SwingDamageWindowSeconds": 0.12,
