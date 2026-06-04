@@ -1,0 +1,84 @@
+{
+  "skills": [
+    {
+      "id": "survival_core",
+      "displayName": "Survival Core",
+      "description": "Foundation of wilderness survival. Unlocks basic gathering instincts.",
+      "icon": "ui/items/sample_resource.png",
+      "x": 0.5,
+      "y": 0.5,
+      "parents": [],
+      "children": [ "forager", "stone_breaker" ]
+    },
+    {
+      "id": "forager",
+      "displayName": "Forager",
+      "description": "Hand harvesting yields slightly more resources from plants and loose nodes.",
+      "icon": "ui/items/sample_bush.png",
+      "x": 0.32,
+      "y": 0.28,
+      "parents": [ "survival_core" ],
+      "children": [ "crafting_focus", "pathfinder" ]
+    },
+    {
+      "id": "stone_breaker",
+      "displayName": "Stone Breaker",
+      "description": "Improved efficiency when harvesting rock nodes.",
+      "icon": "ui/items/sample_rock.png",
+      "x": 0.68,
+      "y": 0.28,
+      "parents": [ "survival_core" ],
+      "children": [ "inventory_tidy", "pathfinder" ]
+    },
+    {
+      "id": "crafting_focus",
+      "displayName": "Crafting Focus",
+      "description": "Hold-to-craft completes slightly faster (future tuning hook).",
+      "icon": "ui/items/sample_stick.png",
+      "x": 0.22,
+      "y": 0.52,
+      "parents": [ "forager" ],
+      "children": [ "blade_training" ]
+    },
+    {
+      "id": "inventory_tidy",
+      "displayName": "Inventory Tidy",
+      "description": "Stacks merge more generously when moving items (future tuning hook).",
+      "icon": "ui/menu/InventoryTab.png",
+      "x": 0.78,
+      "y": 0.52,
+      "parents": [ "stone_breaker" ],
+      "children": [ "guard_stance" ]
+    },
+    {
+      "id": "blade_training",
+      "displayName": "Blade Training",
+      "description": "Melee attacks cost less stamina on light swings (future tuning hook).",
+      "icon": "ui/items/item_sample_sword.png",
+      "x": 0.38,
+      "y": 0.76,
+      "parents": [ "crafting_focus" ],
+      "children": []
+    },
+    {
+      "id": "guard_stance",
+      "displayName": "Guard Stance",
+      "description": "Blocking recovers stamina sooner after a successful block (future tuning hook).",
+      "icon": "ui/menu/tab_blank.png",
+      "x": 0.62,
+      "y": 0.76,
+      "parents": [ "inventory_tidy" ],
+      "children": []
+    },
+    {
+      "id": "pathfinder",
+      "displayName": "Pathfinder",
+      "description": "Sprint drains stamina more slowly while exploring (future tuning hook).",
+      "icon": "ui/items/sample_resource.png",
+      "x": 0.5,
+      "y": 0.14,
+      "parents": [ "forager", "stone_breaker" ],
+      "children": []
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "quests": [
+    {
+      "id": "welcome",
+      "displayName": "Welcome to the Wild",
+      "description": "Learn the basics of gathering and crafting to survive your first night.",
+      "task": "Hand-harvest 3 sticks and 2 rocks from resource nodes.",
+      "rewards": [ "25 XP", "sample_bush x1" ]
+    },
+    {
+      "id": "craft_blade",
+      "displayName": "A Sharp Edge",
+      "description": "A simple sword will help you defend yourself and test combat systems.",
+      "task": "Craft a sample sword at the crafting station.",
+      "rewards": [ "50 XP", "sample_stick x3" ]
+    },
+    {
+      "id": "stock_up",
+      "displayName": "Stock the Pack",
+      "description": "Fill your inventory with mixed materials for future recipes.",
+      "task": "Hold at least 5 different resource stacks in your inventory at once.",
+      "rewards": [ "75 XP", "sample_rock x5" ]
+    },
+    {
+      "id": "guard_training",
+      "displayName": "Guard Training",
+      "description": "Practice blocking attacks from the training dummy.",
+      "task": "Successfully block 3 melee attacks.",
+      "rewards": [ "40 XP", "sample_resource x2" ]
+    }
+  ]
+}
