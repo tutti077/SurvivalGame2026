@@ -46,10 +46,16 @@ public sealed class PlayerScreenHud : PanelComponent
 	Panel _menuRoot;
 	Panel _menuLeftRoot;
 	Panel _menuRightRoot;
+	Panel _menuSkillsCenterRoot;
+	Panel _menuSkillsDetailRoot;
+	Panel _menuMapRoot;
 	Panel _leftMenuColumn;
 	Panel _rightMenuColumn;
 	readonly List<IPlayerMenuSection> _sections = new();
 	CraftingMenuSection _craftingSection;
+	QuestMenuSection _questsSection;
+	SkillsMenuSection _skillsSection;
+	MapMenuSection _mapSection;
 
 	protected override void OnTreeFirstBuilt()
 	{
@@ -309,15 +315,30 @@ public sealed class PlayerScreenHud : PanelComponent
 		_menuRoot.Style.Set( "pointer-events", "none" );
 		_menuRoot.Style.Set( "display", "none" );
 
+		_menuMapRoot = CreateMapCenterAnchor( _menuRoot );
+		_menuSkillsCenterRoot = CreateSkillsCenterAnchor( _menuRoot );
+		_menuSkillsDetailRoot = CreateSkillsDetailAnchor( _menuRoot );
 		_menuLeftRoot = CreateMenuSideAnchor( _menuRoot, alignLeft: true );
 		_menuRightRoot = CreateMenuSideAnchor( _menuRoot, alignLeft: false );
 
 		_leftMenuColumn = CreateMenuColumn( _menuLeftRoot, CraftingMenuColumnWidth );
 		_rightMenuColumn = CreateMenuColumn( _menuRightRoot, InventoryMenuColumnWidth );
 
+		_skillsSection = new SkillsMenuSection( _menuSkillsDetailRoot );
+		_sections.Add( _skillsSection );
+		_skillsSection.Build( _menuSkillsCenterRoot );
+
+		_mapSection = new MapMenuSection();
+		_sections.Add( _mapSection );
+		_mapSection.Build( _menuMapRoot );
+
 		_craftingSection = new CraftingMenuSection( _inventory, _crafting );
 		_sections.Add( _craftingSection );
 		_craftingSection.Build( _leftMenuColumn );
+
+		_questsSection = new QuestMenuSection();
+		_sections.Add( _questsSection );
+		_questsSection.Build( _leftMenuColumn );
 
 		var inventorySection = new InventoryMenuSection( _inventory, _inventoryInteraction );
 		_sections.Add( inventorySection );
@@ -329,6 +350,55 @@ public sealed class PlayerScreenHud : PanelComponent
 		_menuController.MenuOpenChanged += OnMenuOpenChanged;
 		_menuController.MenuLayoutChanged += OnMenuLayoutChanged;
 		ApplyMenuOpenState( _menuController.IsMenuOpen );
+	}
+
+	static Panel CreateMapCenterAnchor( Panel parent )
+	{
+		var anchor = new Panel { Parent = parent };
+		anchor.Style.Set( "position", "absolute" );
+		anchor.Style.Set( "left", "6%" );
+		anchor.Style.Set( "right", "6%" );
+		anchor.Style.Set( "top", "8%" );
+		anchor.Style.Set( "bottom", "6%" );
+		anchor.Style.Set( "display", "none" );
+		anchor.Style.Set( "flex-direction", "column" );
+		anchor.Style.Set( "align-items", "stretch" );
+		anchor.Style.Set( "justify-content", "center" );
+		anchor.Style.Set( "pointer-events", "auto" );
+		anchor.Style.Set( "z-index", "2" );
+		return anchor;
+	}
+
+	static Panel CreateSkillsCenterAnchor( Panel parent )
+	{
+		var anchor = new Panel { Parent = parent };
+		anchor.Style.Set( "position", "absolute" );
+		anchor.Style.Set( "left", "7%" );
+		anchor.Style.Set( "right", "26%" );
+		anchor.Style.Set( "top", "9%" );
+		anchor.Style.Set( "bottom", "7%" );
+		anchor.Style.Set( "display", "none" );
+		anchor.Style.Set( "flex-direction", "column" );
+		anchor.Style.Set( "align-items", "stretch" );
+		anchor.Style.Set( "justify-content", "center" );
+		anchor.Style.Set( "pointer-events", "auto" );
+		anchor.Style.Set( "z-index", "2" );
+		return anchor;
+	}
+
+	static Panel CreateSkillsDetailAnchor( Panel parent )
+	{
+		var anchor = new Panel { Parent = parent };
+		anchor.Style.Set( "position", "absolute" );
+		anchor.Style.Set( "right", "2%" );
+		anchor.Style.Set( "top", "9%" );
+		anchor.Style.Set( "bottom", "7%" );
+		anchor.Style.Set( "width", "22%" );
+		anchor.Style.Set( "display", "none" );
+		anchor.Style.Set( "flex-direction", "column" );
+		anchor.Style.Set( "pointer-events", "auto" );
+		anchor.Style.Set( "z-index", "2" );
+		return anchor;
 	}
 
 	static Panel CreateMenuSideAnchor( Panel parent, bool alignLeft )
@@ -438,6 +508,12 @@ public sealed class PlayerScreenHud : PanelComponent
 				_menuLeftRoot.Style.Set( "display", "none" );
 			if ( _menuRightRoot is not null )
 				_menuRightRoot.Style.Set( "display", "none" );
+			if ( _menuSkillsCenterRoot is not null )
+				_menuSkillsCenterRoot.Style.Set( "display", "none" );
+			if ( _menuSkillsDetailRoot is not null )
+				_menuSkillsDetailRoot.Style.Set( "display", "none" );
+			if ( _menuMapRoot is not null )
+				_menuMapRoot.Style.Set( "display", "none" );
 		}
 	}
 
@@ -447,14 +523,38 @@ public sealed class PlayerScreenHud : PanelComponent
 			return;
 
 		var panels = _menuController.VisiblePanels;
-		var showCrafting = (panels & MenuPanelFlags.Crafting) != 0;
-		var showInventory = (panels & MenuPanelFlags.Inventory) != 0;
+		var showMap = (panels & MenuPanelFlags.Map) != 0;
+		var showSkills = !showMap && (panels & MenuPanelFlags.Skills) != 0;
+		var showQuests = !showMap && !showSkills && (panels & MenuPanelFlags.Quests) != 0;
+		var showCrafting = !showMap && !showSkills && !showQuests && (panels & MenuPanelFlags.Crafting) != 0;
+		var showLeftColumn = showCrafting || showQuests;
+		var showInventory = !showMap && !showSkills && (panels & MenuPanelFlags.Inventory) != 0;
+
+		if ( _menuMapRoot is not null )
+			_menuMapRoot.Style.Set( "display", showMap ? "flex" : "none" );
+
+		if ( _menuSkillsCenterRoot is not null )
+			_menuSkillsCenterRoot.Style.Set( "display", showSkills ? "flex" : "none" );
+
+		if ( _menuSkillsDetailRoot is not null )
+			_menuSkillsDetailRoot.Style.Set( "display", showSkills ? "flex" : "none" );
 
 		if ( _menuLeftRoot is not null )
-			_menuLeftRoot.Style.Set( "display", showCrafting ? "flex" : "none" );
+			_menuLeftRoot.Style.Set( "display", showLeftColumn ? "flex" : "none" );
 
 		if ( _menuRightRoot is not null )
 			_menuRightRoot.Style.Set( "display", showInventory ? "flex" : "none" );
+
+		_craftingSection?.SetPanelVisible( showCrafting );
+		_questsSection?.SetPanelVisible( showQuests );
+		_skillsSection?.SetPanelVisible( showSkills );
+		_mapSection?.SetPanelVisible( showMap );
+
+		for ( var i = 0; i < _sections.Count; i++ )
+		{
+			if ( _sections[i].SectionId == "inventory" )
+				_sections[i].SetPanelVisible( showInventory );
+		}
 
 		_pageNavigator?.RefreshHighlight();
 	}

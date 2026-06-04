@@ -32,7 +32,8 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 	public string CraftingMenuAction { get; set; } = "CraftingMenu";
 
-
+	[Property, Group( "Input" )]
+	public string MapMenuAction { get; set; } = "MapMenu";
 
 	public bool IsMenuOpen { get; private set; }
 
@@ -151,19 +152,18 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 
 		if ( WasActionPressed( CraftingMenuAction ) )
-
 		{
-
 			HandlePageHotkey( MenuPageIds.Crafting );
-
 			return;
-
 		}
 
-
+		if ( WasActionPressed( MapMenuAction ) )
+		{
+			HandlePageHotkey( MenuPageIds.Map );
+			return;
+		}
 
 		if ( WasActionPressed( InventoryMenuAction ) )
-
 			HandlePageHotkey( MenuPageIds.Inventory );
 
 
@@ -262,7 +262,13 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 		if ( !IsMenuOpen )
 
+		{
+
+			OpenPage( pageId );
+
 			return;
+
+		}
 
 
 

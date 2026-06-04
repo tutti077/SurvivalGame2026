@@ -60,5 +60,7 @@ public static class ResourceItemLibraryHost
 
 		_instance.Name = "resource_item_library";
 		_instance.Parent = scene;
+		// Catalog-only definitions must not sit on the player spawn (some entries used to be Harvestable).
+		_instance.WorldPosition = new Vector3( 0f, 0f, -4096f );
 	}
 }

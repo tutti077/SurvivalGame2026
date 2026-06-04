@@ -17,6 +17,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	public const float DetailIconSize = 80f * WidthScale;
 	public const float MinSectionHeight = 420f * LengthScale;
 	public const float RecipeListMaxHeight = 220f * LengthScale;
+	public const float DetailAreaMaxHeight = MinSectionHeight - RecipeListMaxHeight - 80f * LayoutScale;
 
 	public const float CraftingTitleFontSize = 24f * TextScale;
 	public const float ItemNameFontSize = 20f * TextScale;
@@ -43,6 +44,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 	string _selectedRecipeId;
 	bool _menuOpen;
+	bool _panelVisible = true;
 	bool _craftHoldActive;
 	bool _craftHoldCompleted;
 	float _craftHoldElapsed;
@@ -291,6 +293,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 	public void SetPanelVisible( bool visible )
 	{
+		_panelVisible = visible;
 		UpdateVisibility();
 	}
 
@@ -299,7 +302,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( _sectionRoot is null )
 			return;
 
-		_sectionRoot.Style.Set( "display", _menuOpen ? "flex" : "none" );
+		_sectionRoot.Style.Set( "display", _menuOpen && _panelVisible ? "flex" : "none" );
 	}
 
 	public void TryCraftSelected()

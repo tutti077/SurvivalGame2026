@@ -8,7 +8,10 @@ public static class MenuPageRegistry
 	public static readonly MenuPageDefinition[] Pages =
 	{
 		new( MenuPageIds.Inventory, "Inventory", "ui/menu/InventoryTab.png", MenuPanelFlags.Inventory ),
-		new( MenuPageIds.Crafting, "Crafting", "ui/menu/tab_blank.png", MenuPanelFlags.Inventory | MenuPanelFlags.Crafting ),
+		new( MenuPageIds.Crafting, "Crafting", "ui/menu/CraftingTab.png", MenuPanelFlags.Inventory | MenuPanelFlags.Crafting ),
+		new( MenuPageIds.Skills, "Skills", "ui/menu/SkillsTab.png", MenuPanelFlags.Skills, allowsHotkey: false ),
+		new( MenuPageIds.Quests, "Quests", "ui/menu/QuestsTab.png", MenuPanelFlags.Inventory | MenuPanelFlags.Quests, allowsHotkey: false ),
+		new( MenuPageIds.Map, "Map", "ui/menu/MapTab.png", MenuPanelFlags.Map ),
 	};
 
 	public static MenuPageDefinition Get( string pageId )

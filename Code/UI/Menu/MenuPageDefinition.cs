@@ -10,12 +10,16 @@ public sealed class MenuPageDefinition
 	public string TabIconPath { get; }
 	public MenuPanelFlags Panels { get; }
 
-	public MenuPageDefinition( string pageId, string title, string tabIconPath, MenuPanelFlags panels )
+	/// <summary>When false, the page can only be opened from the top tab bar (e.g. skills).</summary>
+	public bool AllowsHotkey { get; }
+
+	public MenuPageDefinition( string pageId, string title, string tabIconPath, MenuPanelFlags panels, bool allowsHotkey = true )
 	{
 		PageId = pageId;
 		Title = title;
 		TabIconPath = tabIconPath;
 		Panels = panels;
+		AllowsHotkey = allowsHotkey;
 	}
 }
 
@@ -25,4 +29,7 @@ public enum MenuPanelFlags
 	None = 0,
 	Inventory = 1,
 	Crafting = 2,
+	Skills = 4,
+	Map = 8,
+	Quests = 16,
 }

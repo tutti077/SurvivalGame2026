@@ -59,7 +59,7 @@
         "Icon": "ui/items/sample_bush.png",
         "LogHarvest": false,
         "MaxStack": 64,
-        "MinimumToolTier": 20,
+        "MinimumToolTier": 0,
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
