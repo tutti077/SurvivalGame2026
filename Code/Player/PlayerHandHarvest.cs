@@ -4,7 +4,7 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Local pawn: hand harvest on <see cref="ResourceHarvestNode"/> within range while looking at it.
+/// Local pawn: hand harvest on <see cref="ResourceItemDefinition"/> within range while looking at it.
 /// Press <see cref="HandHarvestInputAction"/> (default F) while the prompt is shown.
 /// </summary>
 [Title( "Player Hand Harvest" )]
@@ -19,12 +19,19 @@ public sealed class PlayerHandHarvest : Component
 	[Property, Group( "Interaction" ), Title( "Pawn Eye Height" )]
 	public float PawnEyeHeight { get; set; } = 64f;
 
-	[Property, Group( "Debug" )]
-	public bool LogHandHarvest { get; set; } = true;
+	[Property, Group( "Interaction" ), Title( "Focus Scan Interval (seconds)" )]
+	public float FocusScanIntervalSeconds { get; set; } = 0.2f;
 
-	public ResourceHarvestNode FocusedNode { get; private set; }
+	[Property, Group( "Debug" )]
+	public bool LogHandHarvest { get; set; }
+
+	public ResourceItemDefinition FocusedNode { get; private set; }
+
+	/// <summary>Fires when <see cref="FocusedNode"/> reference changes (including to null).</summary>
+	public event Action FocusedNodeChanged;
 
 	PlayerVitals _vitals;
+	double _nextFocusScanAt;
 
 	protected override void OnStart()
 	{
@@ -41,11 +48,19 @@ public sealed class PlayerHandHarvest : Component
 
 		if ( _vitals is null || !_vitals.IsLocalInputOwnedPawn() )
 		{
-			FocusedNode = null;
+			SetFocusedNode( null );
 			return;
 		}
 
-		UpdateFocusedNode();
+		var menu = Components.Get<PlayerGameMenuController>();
+		if ( menu is not null && menu.IsMenuOpen )
+		{
+			SetFocusedNode( null );
+			return;
+		}
+
+		if ( Time.NowDouble >= _nextFocusScanAt )
+			UpdateFocusedNode();
 
 		if ( !Input.Pressed( HandHarvestInputAction ) )
 			return;
@@ -62,27 +77,46 @@ public sealed class PlayerHandHarvest : Component
 
 	void UpdateFocusedNode()
 	{
-		FocusedNode = null;
+		var interval = Math.Max( 0.05, FocusScanIntervalSeconds );
+		_nextFocusScanAt = Time.NowDouble + interval;
 
 		var cam = ResolveViewCamera();
 		if ( !cam.IsValid() )
+		{
+			SetFocusedNode( null );
 			return;
+		}
 
 		var viewPos = cam.WorldPosition;
 		var look = cam.WorldRotation.Forward.Normal;
 		if ( look.LengthSquared < 1e-8f )
+		{
+			SetFocusedNode( null );
 			return;
+		}
 
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
 		if ( !scene.IsValid() )
+		{
+			SetFocusedNode( null );
 			return;
+		}
 
-		ResourceHarvestNode best = null;
+		if ( TryFindFocusedNodeFromRay( scene, viewPos, look, out var rayNode ) )
+		{
+			SetFocusedNode( rayNode );
+			return;
+		}
+
+		ResourceItemDefinition best = null;
 		var bestDist = float.MaxValue;
 
-		foreach ( var candidate in scene.GetAllComponents<ResourceHarvestNode>() )
+		foreach ( var candidate in ResourceHarvestRegistry.Nodes )
 		{
 			if ( candidate is null || !candidate.GameObject.IsValid() )
+				continue;
+
+			if ( !HandHarvestTargeting.PassesQuickFocusCheck( candidate, GameObject, viewPos, look, LookConeDegrees ) )
 				continue;
 
 			if ( !HandHarvestTargeting.TryValidateFocus( candidate, GameObject, viewPos, look, LookConeDegrees, PawnEyeHeight, out _ ) )
@@ -96,10 +130,38 @@ public sealed class PlayerHandHarvest : Component
 			bestDist = dist;
 		}
 
-		FocusedNode = best;
+		SetFocusedNode( best );
 	}
 
-	void RequestHandHarvest( ResourceHarvestNode node )
+	void SetFocusedNode( ResourceItemDefinition node )
+	{
+		if ( FocusedNode == node )
+			return;
+
+		FocusedNode = node;
+		FocusedNodeChanged?.Invoke();
+	}
+
+	bool TryFindFocusedNodeFromRay( Scene scene, Vector3 eye, Vector3 dir, out ResourceItemDefinition node )
+	{
+		node = null;
+
+		var end = eye + dir * 320f;
+		var tr = scene.Trace.Ray( eye, end ).IgnoreGameObjectHierarchy( GameObject ).Run();
+		if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() )
+		{
+			tr = scene.Trace.Ray( eye, end ).IgnoreGameObjectHierarchy( GameObject ).UseHitboxes().Run();
+			if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() )
+				return false;
+		}
+
+		if ( !ResourceHarvestTrace.TryFindOnHierarchy( tr.GameObject, out node ) )
+			return false;
+
+		return HandHarvestTargeting.TryValidateFocus( node, GameObject, eye, dir, LookConeDegrees, PawnEyeHeight, out _ );
+	}
+
+	void RequestHandHarvest( ResourceItemDefinition node )
 	{
 		if ( node is null || !node.GameObject.IsValid() )
 			return;
@@ -151,6 +213,9 @@ public sealed class PlayerHandHarvest : Component
 		}
 
 		var result = node.TryPerformHarvestTick( HarvestToolType.Hand, 0 );
+		if ( result.Success )
+			TryDepositHarvest( result );
+
 		if ( LogHandHarvest )
 		{
 			if ( result.Success )
@@ -160,14 +225,28 @@ public sealed class PlayerHandHarvest : Component
 		}
 	}
 
-	static bool TryResolveHarvestNode( Guid nodeRootId, out ResourceHarvestNode node )
+	void TryDepositHarvest( HarvestTickResult result )
+	{
+		if ( result.YieldAmount <= 0 || string.IsNullOrWhiteSpace( result.ResourceId ) )
+			return;
+
+		var inventory = Components.Get<PlayerInventory>();
+		if ( inventory is null )
+		{
+			if ( LogHandHarvest )
+				Log.Warning( $"[PlayerHandHarvest] {GameObject.Name}: no PlayerInventory to receive {result.YieldAmount} {result.ResourceId}." );
+			return;
+		}
+
+		if ( !inventory.HostTryAddResource( result.ResourceId, result.YieldAmount ) && LogHandHarvest )
+			Log.Warning( $"[PlayerHandHarvest] {GameObject.Name}: inventory full — lost {result.YieldAmount} {result.ResourceId}." );
+	}
+
+	bool TryResolveHarvestNode( Guid nodeRootId, out ResourceItemDefinition node )
 	{
 		node = null;
-		var scene = Sandbox.Game.ActiveScene;
-		if ( !scene.IsValid() )
-			return false;
 
-		foreach ( var n in scene.GetAllComponents<ResourceHarvestNode>() )
+		foreach ( var n in ResourceHarvestRegistry.Nodes )
 		{
 			if ( n is null || !n.GameObject.IsValid() || n.GameObject.Id != nodeRootId )
 				continue;

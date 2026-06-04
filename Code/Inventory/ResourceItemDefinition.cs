@@ -4,51 +4,62 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// World harvest node: designer-tuned yield, tool requirements, depletion, and respawn.
-/// Host applies harvest ticks via <see cref="TryPerformHarvestTick"/>; inventory / interaction hooks in later.
+/// Resource identity (catalog + inventory UI) and optional world harvest behavior on the same GameObject.
+/// Library-only entries leave <see cref="Harvestable"/> off; things you pick in the world turn it on.
 /// </summary>
-[Title( "Resource Harvest Node" )]
-public sealed class ResourceHarvestNode : Component
+[Title( "Resource Item Definition" )]
+public sealed class ResourceItemDefinition : Component
 {
-	[Property, Group( "Resource" ), Title( "Resource Display Name" )]
-	public string DisplayName { get; set; } = "Resource";
+	[Property, Group( "Identity" )]
+	public string ResourceId { get; set; } = "sample_rock";
 
-	[Property, Group( "Resource" ), Title( "Resource ID" )]
-	public string ResourceId { get; set; } = "resource";
+	[Property, Group( "Identity" )]
+	public string DisplayName { get; set; } = "Rock";
 
-	[Property, Group( "Yield" )]
+	/// <summary>Project-relative image path (e.g. <c>ui/items/sample_rock.jpg</c> or <c>.png</c>).</summary>
+	[Property, Group( "UI" ), Title( "Icon Path" )]
+	public string Icon { get; set; } = "ui/items/sample_rock.jpg";
+
+	[Property, Group( "UI" )]
+	public Color FallbackColor { get; set; } = new Color( 0.58f, 0.50f, 0.42f );
+
+	[Property, Group( "Harvest" ), Title( "Harvestable" )]
+	public bool Harvestable { get; set; }
+
+	[Property, Group( "Harvest" )]
 	public int BaseYieldPerTickLow { get; set; } = 1;
 
-	[Property, Group( "Yield" )]
+	[Property, Group( "Harvest" )]
 	public int BaseYieldPerTickHigh { get; set; } = 1;
 
-	[Property, Group( "Requirements" ), Title( "Tool Type Required" )]
+	[Property, Group( "Harvest" ), Title( "Tool Type Required" )]
 	public HarvestToolType ToolTypeRequired { get; set; } = HarvestToolType.Axe;
 
-	[Property, Group( "Requirements" ), Title( "Minimum Tool Tier" ), Range( 0, 5 )]
+	[Property, Group( "Harvest" ), Title( "Minimum Tool Tier" ), Range( 0, 5 )]
 	public int MinimumToolTier { get; set; }
 
-	[Property, Group( "Requirements" ), Title( "Hand Harvest Range" )]
+	[Property, Group( "Harvest" ), Title( "Hand Harvest Range" )]
 	public float HandHarvestRange { get; set; } = 80f;
 
-	[Property, Group( "Depletion" ), Title( "Harvest Ticks Until Gone" )]
+	[Property, Group( "Harvest" ), Title( "Harvest Ticks Until Gone" )]
 	public int HarvestTicksUntilGone { get; set; } = 10;
 
-	[Property, Group( "Depletion" ), Title( "Respawn Rate (seconds)" )]
+	[Property, Group( "Harvest" ), Title( "Respawn Rate (seconds)" )]
 	public float RespawnRateSeconds { get; set; } = 60f;
 
-	[Property, Group( "Setup" ), Title( "Auto Ensure Trace Collider" )]
+	[Property, Group( "Harvest" ), Title( "Auto Ensure Trace Collider" )]
 	public bool AutoEnsureTraceCollider { get; set; } = true;
 
-	[Property, Group( "Setup" ), Title( "Hide Model When Depleted" )]
+	[Property, Group( "Harvest" ), Title( "Hide Model When Depleted" )]
 	public bool HideModelWhenDepleted { get; set; } = true;
 
-	[Property, Group( "Debug" )]
+	[Property, Group( "Harvest" ), Title( "Log Harvest" )]
 	public bool LogHarvest { get; set; }
 
-	public bool IsDepleted => _isDepleted;
-	public int RemainingHarvestTicks => _remainingHarvestTicks;
+	public bool IsDepleted => Harvestable && _isDepleted;
+	public int RemainingHarvestTicks => Harvestable ? _remainingHarvestTicks : 0;
 
+	Texture _resolvedIcon;
 	bool _isDepleted;
 	int _remainingHarvestTicks;
 	double _respawnAt;
@@ -57,16 +68,38 @@ public sealed class ResourceHarvestNode : Component
 	bool IsHostAuthority =>
 		GameObject.Network is not { Active: true } || Networking.IsHost;
 
+	protected override void OnEnabled()
+	{
+		base.OnEnabled();
+		ResourceCatalog.Register( this );
+
+		if ( Harvestable )
+			ResourceHarvestRegistry.Register( this );
+	}
+
+	protected override void OnDisabled()
+	{
+		if ( Harvestable )
+			ResourceHarvestRegistry.Unregister( this );
+
+		ResourceCatalog.Unregister( this );
+		base.OnDisabled();
+	}
+
 	protected override void OnStart()
 	{
 		base.OnStart();
+
+		if ( !Harvestable )
+			return;
+
 		EnsureTraceCollider();
 		ResetToFull();
 	}
 
 	protected override void OnUpdate()
 	{
-		if ( !_isDepleted || !IsHostAuthority )
+		if ( !Harvestable || !_isDepleted || !IsHostAuthority )
 			return;
 
 		if ( RespawnRateSeconds <= 0f )
@@ -77,14 +110,42 @@ public sealed class ResourceHarvestNode : Component
 
 		ResetToFull();
 		if ( LogHarvest )
-			Log.Info( $"[ResourceHarvestNode] {GameObject.Name}: respawned ({DisplayName}, id={ResourceId})." );
+			Log.Info( $"[ResourceItemDefinition] {GameObject.Name}: respawned ({DisplayName}, id={ResourceId})." );
 
 		if ( GameObject.Network is { Active: true } )
 			RpcSyncHarvestState( false, _remainingHarvestTicks );
 	}
 
+	public Texture ResolveIcon()
+	{
+		if ( _resolvedIcon is not null && _resolvedIcon.IsValid() )
+			return _resolvedIcon;
+
+		if ( string.IsNullOrWhiteSpace( Icon ) )
+			return null;
+
+		try
+		{
+			_resolvedIcon = Texture.Load( Icon );
+		}
+		catch
+		{
+			_resolvedIcon = null;
+		}
+
+		return _resolvedIcon;
+	}
+
+	internal ResourceCatalog.ResourceDefinition ToCatalogEntry()
+	{
+		return new ResourceCatalog.ResourceDefinition( DisplayName, ResolveIcon(), FallbackColor );
+	}
+
 	public void ResetToFull()
 	{
+		if ( !Harvestable )
+			return;
+
 		_isDepleted = false;
 		_remainingHarvestTicks = Math.Max( 0, HarvestTicksUntilGone );
 		_respawnAt = 0;
@@ -93,7 +154,7 @@ public sealed class ResourceHarvestNode : Component
 
 	public bool CanHarvestWith( HarvestToolType toolType, int toolTier )
 	{
-		if ( !Active || !GameObject.IsValid() || !GameObject.Enabled || _isDepleted )
+		if ( !Harvestable || !Active || !GameObject.IsValid() || !GameObject.Enabled || _isDepleted )
 			return false;
 
 		if ( toolType != ToolTypeRequired )
@@ -108,6 +169,9 @@ public sealed class ResourceHarvestNode : Component
 	/// <summary>Host-only: apply one harvest tick and return yield for this tick (0 if rejected or depleted).</summary>
 	public HarvestTickResult TryPerformHarvestTick( HarvestToolType toolType, int toolTier )
 	{
+		if ( !Harvestable )
+			return HarvestTickResult.Failed( "not a harvest node" );
+
 		if ( !IsHostAuthority )
 			return HarvestTickResult.Failed( "not host" );
 
@@ -141,7 +205,7 @@ public sealed class ResourceHarvestNode : Component
 		if ( LogHarvest )
 		{
 			Log.Info(
-				$"[ResourceHarvestNode] {GameObject.Name}: harvest tick +{yield} {ResourceId} ({DisplayName}), remaining={_remainingHarvestTicks}, tool={toolType} tier={toolTier}." );
+				$"[ResourceItemDefinition] {GameObject.Name}: harvest tick +{yield} {ResourceId} ({DisplayName}), remaining={_remainingHarvestTicks}, tool={toolType} tier={toolTier}." );
 		}
 
 		return new HarvestTickResult
@@ -180,7 +244,7 @@ public sealed class ResourceHarvestNode : Component
 			modelCol.Model = renderer.Model;
 			modelCol.Static = true;
 			if ( LogHarvest )
-				Log.Info( $"[ResourceHarvestNode] {GameObject.Name}: added ModelCollider for harvest traces." );
+				Log.Info( $"[ResourceItemDefinition] {GameObject.Name}: added ModelCollider for harvest traces." );
 			return;
 		}
 
@@ -188,7 +252,7 @@ public sealed class ResourceHarvestNode : Component
 		sphere.Radius = 16f;
 		sphere.Static = true;
 		if ( LogHarvest )
-			Log.Info( $"[ResourceHarvestNode] {GameObject.Name}: added SphereCollider fallback for harvest traces." );
+			Log.Info( $"[ResourceItemDefinition] {GameObject.Name}: added SphereCollider fallback for harvest traces." );
 	}
 
 	static bool HasSolidCollider( GameObject root )

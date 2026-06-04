@@ -687,7 +687,6 @@
         "bce430cc-f569-4381-9ec0-f2d872648efc": "e06538d6-75a2-4ff5-ae33-ba41dd06b563",
         "0a11b2aa-5b15-493c-81ee-367859dc63ff": "4d3879ae-b2a4-42de-9a86-0310ad0ac128",
         "a334750f-a7f9-4e36-9c2d-563b96bda182": "75f5c604-7ddc-4f09-9125-3f15cb090ed4",
-        "c8b5a3d1-3afe-4693-9f5e-57b86c57b6a2": "bc8398ea-4ba1-4b29-83f0-5592219128fd",
         "f4c3d2e1-b0a9-8c7d-6e5f-4a3b2c1d0e9f": "5f15ce22-6cfa-4ac7-942e-75f8bd80310a",
         "4785e803-a655-4137-8dc0-d456a8086f19": "10c99103-9e0e-4d1f-80c0-fab8b78829aa",
         "563539eb-c977-45a3-92f0-e25aa1211547": "06a44474-4594-4b8c-8349-95fd246b72b7",
@@ -697,8 +696,11 @@
         "f334590a-a6d7-44af-98bd-14ec93294ec7": "731c3429-0b8e-4199-85c3-fadb789fce28",
         "4d8ed045-4f00-411d-9d8e-42b4f855dc9b": "86dc9574-88cd-455a-bb43-fda1b9d1be86",
         "25dd5bed-58eb-4648-bd3b-0de6ea746503": "bd4785b3-cd24-4388-9229-fc154ca44dcb",
-        "f8b2c3d4-5e6f-7081-92a3-b4c5d6e7f809": "e627b548-8fae-4c2f-866d-4f6777e6c983",
-        "e7a1b2c3-4d5e-6f70-8192-a3b4c5d6e7f8": "100f1556-ec8c-47b2-969f-ec16145ee020"
+        "e7a1b2c3-4d5e-6f70-8192-a3b4c5d6e7f8": "100f1556-ec8c-47b2-969f-ec16145ee020",
+        "a1b2c3d4-e5f6-7890-abcd-ef1234567890": "d4e5f6a7-b8c9-4012-d3e4-f5a6b7c8d9e0",
+        "b2c3d4e5-f6a7-8901-bcde-f12345678901": "e5f6a7b8-c9d0-4123-e4f5-a6b7c8d9e0f1",
+        "c8b5a3d1-3afe-4693-9f5e-57b86c57b6a2": "fdbf69e5-6623-4258-b621-25a989ae7036",
+        "d4e5f6a7-b8c9-0123-def4-567890abcdef": "381a6891-f81c-4543-b177-d7e8775dda3f"
       }
     },
     {
@@ -3466,7 +3468,7 @@
               "IdValue": "7b03ae53-6aa1-4f8f-b9f2-05a124be88cb"
             },
             "Property": "Position",
-            "Value": "0,-226.267563,24.8430405"
+            "Value": "-100.937798,-498.854797,24.8430405"
           }
         ],
         "MovedObjects": []
@@ -3474,7 +3476,73 @@
       "__PrefabIdToInstanceId": {
         "7b03ae53-6aa1-4f8f-b9f2-05a124be88cb": "a38d11ab-82fd-4f3c-85f7-811fb813d043",
         "0de75b50-d8df-402d-ae5b-bca32fdf2464": "b8e4c621-9f12-4a6d-bc03-1f7a2d8e9041",
-        "cbe6bdf2-c3f1-4151-9e95-b01e46bc7704": "d2f9a018-6c44-4b7e-9a01-3e5b6c7d8e9f"
+        "f1e2d3c4-b5a6-9788-7766-554433221100": "fa6675f7-7058-429e-b4f8-1b030053f5a1"
+      }
+    },
+    {
+      "__guid": "d5efd56e-fea7-4716-8ef3-79bbfb718dad",
+      "__version": 2,
+      "__Prefab": "prefabs/environment/samplestick.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "69f3dff5-c417-479e-b35f-3f458fde47ab"
+            },
+            "Property": "Name",
+            "Value": "sampleStick"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "69f3dff5-c417-479e-b35f-3f458fde47ab"
+            },
+            "Property": "Position",
+            "Value": "-178.750519,-504.232819,24.9994202"
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "69f3dff5-c417-479e-b35f-3f458fde47ab": "d5efd56e-fea7-4716-8ef3-79bbfb718dad",
+        "2ef1dedc-283b-4de1-ae0e-170fd228c3c0": "cde107b4-e9ce-4954-b7ec-d8ea9328b8f2",
+        "96a36e07-7c92-4778-9238-0b7374e11078": "68923eee-66a8-4fd2-b469-52a0c2936117"
+      }
+    },
+    {
+      "__guid": "6a865fcd-1282-4df8-912f-7212f0c16284",
+      "__version": 2,
+      "__Prefab": "prefabs/environment/samplebush.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "8ae00320-0e16-40c8-9275-01a362936d1b"
+            },
+            "Property": "Name",
+            "Value": "sampleBush"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "8ae00320-0e16-40c8-9275-01a362936d1b"
+            },
+            "Property": "Position",
+            "Value": "-304.948792,-498.582367,10.1200848"
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "8ae00320-0e16-40c8-9275-01a362936d1b": "6a865fcd-1282-4df8-912f-7212f0c16284",
+        "0cc95a3c-e90c-4a6c-ac16-bbd785f7523f": "8470d91c-053c-439a-babc-8177c7b39a59",
+        "f6c07270-df35-42bc-bffd-8f3d65a4db77": "8c2da473-baaf-4dcf-8419-15620eb749d3"
       }
     }
   ],

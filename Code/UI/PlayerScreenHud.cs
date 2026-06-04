@@ -1,0 +1,488 @@
+using System;
+using System.Collections.Generic;
+using Sandbox;
+using Sandbox.UI;
+
+namespace Survival;
+
+/// <summary>
+/// Single <see cref="PanelComponent"/> for local pawn HUD: vitals, harvest prompt, and game menu.
+/// Replaces three separate panel roots (each ticked layout/audio separately).
+/// </summary>
+[Title( "Player Screen HUD" )]
+public sealed class PlayerScreenHud : PanelComponent
+{
+	const float BarWidth = 360f;
+	const float BarHeight = 22f;
+	const float BarGap = 6f;
+	const float MenuColumnWidth = 303f;
+	const string DefaultHarvestPromptText = "Harvest";
+
+	static readonly Color DepletedPortionColor = new Color( 0.82f, 0.82f, 0.83f );
+
+	PlayerVitals _vitals;
+	PlayerHandHarvest _handHarvest;
+	PlayerGameMenuController _menuController;
+	PlayerInventory _inventory;
+	PlayerInventoryInteraction _inventoryInteraction;
+	InventoryMenuInputOverlay _menuInputOverlay;
+	ScreenPanel _hudScreen;
+	bool _deferScreenPanelCamera;
+	bool _built;
+
+	Label _healthText;
+	Panel _healthRoot;
+	Panel _healthFill;
+	Label _staminaText;
+	Panel _staminaRoot;
+	Panel _staminaFill;
+
+	Panel _promptRoot;
+	bool _promptWasVisible;
+
+	Panel _menuRoot;
+	Panel _menuColumn;
+	readonly List<IPlayerMenuSection> _sections = new();
+
+	protected override void OnTreeFirstBuilt()
+	{
+		base.OnTreeFirstBuilt();
+		TryBuildHud();
+	}
+
+	protected override void OnUpdate()
+	{
+		base.OnUpdate();
+		if ( !_built )
+			TryBuildHud();
+
+		if ( !_deferScreenPanelCamera || _hudScreen is null || !_hudScreen.IsValid() )
+			return;
+
+		if ( TryBindScreenPanelCamera( _hudScreen ) )
+		{
+			_hudScreen.Enabled = true;
+			_deferScreenPanelCamera = false;
+		}
+	}
+
+	protected override void OnDestroy()
+	{
+		if ( _vitals is not null )
+			_vitals.OnVitalsChanged -= RefreshVitals;
+		if ( _handHarvest is not null )
+			_handHarvest.FocusedNodeChanged -= OnHarvestFocusChanged;
+		if ( _inventory is not null )
+			_inventory.InventoryChanged -= OnInventoryChanged;
+		if ( _menuController is not null )
+			_menuController.MenuOpenChanged -= OnMenuOpenChanged;
+		base.OnDestroy();
+	}
+
+	void TryBuildHud()
+	{
+		if ( _built )
+			return;
+
+		_vitals = FindOnAncestors<PlayerVitals>();
+		if ( _vitals is null || !_vitals.IsLocalInputOwnedPawn() )
+		{
+			if ( _vitals is null )
+				Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerVitals — HUD hidden." );
+			Panel.Style.Set( "display", "none" );
+			_built = true;
+			return;
+		}
+
+		var screen = Components.Get<ScreenPanel>();
+		_hudScreen = screen;
+		if ( screen is not null )
+			screen.Enabled = false;
+
+		Panel.Style.Set( "position", "absolute" );
+		Panel.Style.Set( "left", "0" );
+		Panel.Style.Set( "top", "0" );
+		Panel.Style.Set( "width", "100%" );
+		Panel.Style.Set( "height", "100%" );
+		Panel.Style.Set( "pointer-events", "none" );
+
+		BuildVitals( Panel );
+		BuildHarvestPrompt( Panel );
+		BuildGameMenu( Panel );
+
+		if ( screen is not null )
+		{
+			if ( TryBindScreenPanelCamera( screen ) )
+			{
+				screen.Enabled = true;
+				_deferScreenPanelCamera = false;
+			}
+			else
+			{
+				_deferScreenPanelCamera = true;
+				Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: ScreenPanel.TargetCamera not bound yet — will retry." );
+			}
+		}
+
+		_vitals.OnVitalsChanged += RefreshVitals;
+		RefreshVitals();
+
+		_built = true;
+	}
+
+	void BuildVitals( Panel root )
+	{
+		var vitalsHost = new Panel { Parent = root };
+		vitalsHost.Style.Set( "position", "absolute" );
+		vitalsHost.Style.Set( "left", "16px" );
+		vitalsHost.Style.Set( "bottom", "16px" );
+		vitalsHost.Style.Set( "pointer-events", "none" );
+
+		var hostHeight = BarHeight * 2f + BarGap;
+		var barsHost = new Panel { Parent = vitalsHost };
+		barsHost.Style.Width = Length.Pixels( BarWidth );
+		barsHost.Style.Height = Length.Pixels( hostHeight );
+		barsHost.Style.Set( "position", "relative" );
+
+		_healthRoot = new Panel { Parent = barsHost };
+		_healthRoot.Style.Set( "position", "absolute" );
+		_healthRoot.Style.Set( "left", "0" );
+		_healthRoot.Style.Set( "top", "0" );
+		_healthRoot.Style.Width = Length.Pixels( BarWidth );
+		_healthRoot.Style.Height = Length.Pixels( BarHeight );
+		_healthRoot.Style.BackgroundColor = DepletedPortionColor;
+		_healthRoot.Style.Set( "overflow", "hidden" );
+
+		_healthFill = new Panel { Parent = _healthRoot };
+		_healthFill.Style.Set( "position", "absolute" );
+		_healthFill.Style.Set( "top", "0" );
+		_healthFill.Style.Set( "left", "0" );
+		_healthFill.Style.Set( "height", "100%" );
+		_healthFill.Style.Set( "z-index", "0" );
+		_healthFill.Style.BackgroundColor = new Color( 0.92f, 0.18f, 0.14f );
+
+		_healthText = new Label { Parent = _healthRoot };
+		_healthText.Style.Set( "position", "absolute" );
+		_healthText.Style.Set( "width", "100%" );
+		_healthText.Style.Set( "height", "100%" );
+		_healthText.Style.Set( "align-items", "center" );
+		_healthText.Style.Set( "justify-content", "center" );
+		_healthText.Style.Set( "z-index", "1" );
+		_healthText.Style.FontColor = Color.Black;
+		_healthText.Style.FontSize = Length.Pixels( 14f );
+
+		_staminaRoot = new Panel { Parent = barsHost };
+		_staminaRoot.Style.Set( "position", "absolute" );
+		_staminaRoot.Style.Set( "left", "0" );
+		_staminaRoot.Style.Set( "top", $"{BarHeight + BarGap}px" );
+		_staminaRoot.Style.Width = Length.Pixels( BarWidth );
+		_staminaRoot.Style.Height = Length.Pixels( BarHeight );
+		_staminaRoot.Style.BackgroundColor = DepletedPortionColor;
+		_staminaRoot.Style.Set( "overflow", "hidden" );
+
+		_staminaFill = new Panel { Parent = _staminaRoot };
+		_staminaFill.Style.Set( "position", "absolute" );
+		_staminaFill.Style.Set( "top", "0" );
+		_staminaFill.Style.Set( "left", "0" );
+		_staminaFill.Style.Set( "height", "100%" );
+		_staminaFill.Style.Set( "z-index", "0" );
+		_staminaFill.Style.BackgroundColor = new Color( 0.98f, 0.86f, 0.2f );
+
+		_staminaText = new Label { Parent = _staminaRoot };
+		_staminaText.Style.Set( "position", "absolute" );
+		_staminaText.Style.Set( "width", "100%" );
+		_staminaText.Style.Set( "height", "100%" );
+		_staminaText.Style.Set( "align-items", "center" );
+		_staminaText.Style.Set( "justify-content", "center" );
+		_staminaText.Style.Set( "z-index", "1" );
+		_staminaText.Style.FontColor = Color.Black;
+		_staminaText.Style.FontSize = Length.Pixels( 14f );
+	}
+
+	void BuildHarvestPrompt( Panel root )
+	{
+		_handHarvest = FindOnAncestors<PlayerHandHarvest>();
+		if ( _handHarvest is null )
+		{
+			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerHandHarvest — harvest prompt skipped." );
+			return;
+		}
+
+		var promptHost = new Panel { Parent = root };
+		promptHost.Style.Set( "position", "absolute" );
+		promptHost.Style.Set( "left", "50%" );
+		promptHost.Style.Set( "top", "58%" );
+		promptHost.Style.Set( "transform", "translate(-50%, -50%)" );
+		promptHost.Style.Set( "pointer-events", "none" );
+
+		_promptRoot = new Panel { Parent = promptHost };
+		_promptRoot.Style.Set( "flex-direction", "row" );
+		_promptRoot.Style.Set( "align-items", "center" );
+		_promptRoot.Style.Set( "justify-content", "center" );
+		_promptRoot.Style.Set( "gap", "10px" );
+		_promptRoot.Style.PaddingLeft = Length.Pixels( 14f );
+		_promptRoot.Style.PaddingRight = Length.Pixels( 14f );
+		_promptRoot.Style.PaddingTop = Length.Pixels( 8f );
+		_promptRoot.Style.PaddingBottom = Length.Pixels( 8f );
+		_promptRoot.Style.BackgroundColor = new Color( 0.06f, 0.06f, 0.07f, 0.82f );
+		_promptRoot.Style.Set( "border-radius", "6px" );
+		_promptRoot.Style.Set( "display", "none" );
+
+		var keyCap = new Panel { Parent = _promptRoot };
+		keyCap.Style.MinWidth = Length.Pixels( 28f );
+		keyCap.Style.Height = Length.Pixels( 28f );
+		keyCap.Style.Set( "align-items", "center" );
+		keyCap.Style.Set( "justify-content", "center" );
+		keyCap.Style.BackgroundColor = new Color( 0.92f, 0.92f, 0.94f );
+		keyCap.Style.Set( "border-radius", "4px" );
+
+		var keyLabel = new Label { Parent = keyCap, Text = "F" };
+		keyLabel.Style.FontColor = Color.Black;
+		keyLabel.Style.FontSize = Length.Pixels( 15f );
+
+		var promptLabel = new Label { Parent = _promptRoot, Text = DefaultHarvestPromptText };
+		promptLabel.Style.FontColor = Color.White;
+		promptLabel.Style.FontSize = Length.Pixels( 18f );
+
+		_handHarvest.FocusedNodeChanged += OnHarvestFocusChanged;
+		OnHarvestFocusChanged();
+	}
+
+	void BuildGameMenu( Panel root )
+	{
+		_menuController = FindOnAncestors<PlayerGameMenuController>();
+		_inventory = FindOnAncestors<PlayerInventory>();
+		_inventoryInteraction = FindOnAncestors<PlayerInventoryInteraction>();
+		if ( _menuController is null || _inventory is null )
+		{
+			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: missing menu controller or inventory — menu skipped." );
+			return;
+		}
+
+		if ( _inventoryInteraction is null )
+			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerInventoryInteraction — inventory clicks disabled." );
+
+		_inventoryInteraction?.BindMenu( _menuController );
+
+		_menuInputOverlay = new InventoryMenuInputOverlay { Parent = Panel };
+		_menuInputOverlay.BindMenuController( _menuController );
+		_menuInputOverlay.BindInventoryInteraction( _inventoryInteraction );
+		_menuInputOverlay.ButtonInput = PanelInputType.Game;
+		_menuInputOverlay.Style.Set( "position", "absolute" );
+		_menuInputOverlay.Style.Set( "left", "0" );
+		_menuInputOverlay.Style.Set( "top", "0" );
+		_menuInputOverlay.Style.Set( "width", "100%" );
+		_menuInputOverlay.Style.Set( "height", "100%" );
+		_menuInputOverlay.SetOpen( false );
+
+		_menuRoot = new Panel { Parent = _menuInputOverlay };
+		_menuRoot.Style.Set( "position", "absolute" );
+		_menuRoot.Style.Set( "top", "0" );
+		_menuRoot.Style.Set( "bottom", "0" );
+		_menuRoot.Style.Set( "right", "0" );
+		_menuRoot.Style.Set( "width", "33%" );
+		_menuRoot.Style.Set( "align-items", "center" );
+		_menuRoot.Style.Set( "justify-content", "center" );
+		_menuRoot.Style.Set( "padding-right", "20px" );
+		_menuRoot.Style.Set( "padding-left", "12px" );
+		_menuRoot.Style.Set( "pointer-events", "auto" );
+
+		_menuColumn = new Panel { Parent = _menuRoot };
+		_menuColumn.Style.Set( "position", "relative" );
+		_menuColumn.Style.Width = Length.Pixels( MenuColumnWidth );
+		_menuColumn.Style.Set( "flex-direction", "column" );
+		_menuColumn.Style.Set( "gap", "14px" );
+		_menuColumn.Style.PaddingTop = Length.Pixels( 16f );
+		_menuColumn.Style.PaddingBottom = Length.Pixels( 16f );
+		_menuColumn.Style.PaddingLeft = Length.Pixels( 16f );
+		_menuColumn.Style.PaddingRight = Length.Pixels( 16f );
+		_menuColumn.Style.BackgroundColor = new Color( 0.05f, 0.06f, 0.08f, 0.88f );
+		_menuColumn.Style.Set( "border-radius", "8px" );
+		_menuColumn.Style.Set( "border-width", "1px" );
+		_menuColumn.Style.Set( "border-color", "#383d47" );
+
+		if ( _inventoryInteraction is not null )
+		{
+			var capture = new InventoryMenuCapturePanel { Parent = _menuColumn, Interaction = _inventoryInteraction };
+			capture.Style.Set( "position", "absolute" );
+			capture.Style.Set( "left", "0" );
+			capture.Style.Set( "top", "0" );
+			capture.Style.Set( "right", "0" );
+			capture.Style.Set( "bottom", "0" );
+			capture.Style.Set( "pointer-events", "auto" );
+		}
+
+		var section = new InventoryMenuSection( _inventory, _inventoryInteraction );
+		_sections.Add( section );
+		section.Build( _menuColumn );
+		section.SetMenuOpen( _menuController.IsMenuOpen );
+
+		_inventoryInteraction?.BindDragLayer( _menuColumn );
+
+		_inventory.InventoryChanged += OnInventoryChanged;
+		_menuController.MenuOpenChanged += OnMenuOpenChanged;
+		ApplyMenuOpenState( _menuController.IsMenuOpen );
+	}
+
+	void OnHarvestFocusChanged()
+	{
+		if ( _promptRoot is null )
+			return;
+
+		var show = _handHarvest is not null && _handHarvest.FocusedNode is not null;
+		if ( show == _promptWasVisible )
+			return;
+
+		_promptWasVisible = show;
+		_promptRoot.Style.Set( "display", show ? "flex" : "none" );
+	}
+
+	void OnInventoryChanged()
+	{
+		if ( _menuController is null || !_menuController.IsMenuOpen )
+			return;
+
+		RefreshAllSections();
+	}
+
+	void OnMenuOpenChanged( bool isOpen ) => ApplyMenuOpenState( isOpen );
+
+	void ApplyMenuOpenState( bool isOpen )
+	{
+		if ( _menuRoot is null )
+			return;
+
+		Panel.Style.Set( "pointer-events", "none" );
+
+		_menuInputOverlay?.SetOpen( isOpen );
+
+		_menuRoot.Style.Set( "display", isOpen ? "flex" : "none" );
+
+		foreach ( var section in _sections )
+			section.SetMenuOpen( isOpen );
+
+		if ( isOpen )
+			RefreshAllSections();
+	}
+
+	void RefreshAllSections()
+	{
+		foreach ( var section in _sections )
+			section.Refresh();
+	}
+
+	void RefreshVitals()
+	{
+		if ( _vitals is null || _healthFill is null )
+			return;
+
+		var hMax = Math.Max( 1f, _vitals.CurrentHealthMax );
+		var sMax = Math.Max( 1e-3f, _vitals.CurrentStaminaMax );
+		var hFrac = Math.Clamp( _vitals.CurrentHealth / hMax, 0f, 1f );
+		var sFrac = Math.Clamp( _vitals.CurrentStamina / sMax, 0f, 1f );
+
+		_healthText.Text = $"{_vitals.CurrentHealth:0}/{_vitals.CurrentHealthMax:0}";
+		_healthFill.Style.Width = Length.Pixels( BarWidth * hFrac );
+
+		_staminaText.Text = $"{_vitals.CurrentStamina:0}/{_vitals.CurrentStaminaMax:0}";
+		_staminaFill.Style.Width = Length.Pixels( BarWidth * sFrac );
+	}
+
+	T FindOnAncestors<T>() where T : Component
+	{
+		for ( var go = GameObject; go.IsValid(); go = go.Parent )
+		{
+			var c = go.Components.Get<T>();
+			if ( c is not null )
+				return c;
+		}
+
+		return null;
+	}
+
+	bool TryBindScreenPanelCamera( ScreenPanel screen )
+	{
+		if ( screen is null )
+			return true;
+		if ( !screen.IsValid() )
+			return false;
+
+		try
+		{
+			if ( TryResolveHudTargetCamera( GameObject, out var cam ) && cam.IsValid() )
+			{
+				screen.TargetCamera = cam;
+				return true;
+			}
+
+			var scene = Scene;
+			if ( scene is not null )
+			{
+				var sceneCam = scene.Camera;
+				if ( sceneCam is not null && sceneCam.IsValid() )
+				{
+					screen.TargetCamera = sceneCam;
+					return true;
+				}
+			}
+
+			var existing = screen.TargetCamera;
+			return existing is not null && existing.IsValid();
+		}
+		catch ( NullReferenceException )
+		{
+			return false;
+		}
+	}
+
+	static bool TryResolveHudTargetCamera( GameObject from, out CameraComponent found )
+	{
+		found = default;
+		if ( !from.IsValid() )
+			return false;
+
+		for ( var go = from; go.IsValid(); go = go.Parent )
+		{
+			var pc = go.Components.Get<PlayerController>();
+			if ( pc is null )
+				continue;
+
+			var embedded = pc.Components.Get<CameraComponent>();
+			if ( embedded.IsValid() )
+			{
+				found = embedded;
+				return true;
+			}
+		}
+
+		for ( var go = from; go.IsValid(); go = go.Parent )
+		{
+			if ( TryFindFirstCameraInHierarchy( go, out found ) && found.IsValid() )
+				return true;
+		}
+
+		return false;
+	}
+
+	static bool TryFindFirstCameraInHierarchy( GameObject go, out CameraComponent found )
+	{
+		found = default;
+		if ( !go.IsValid() )
+			return false;
+
+		var self = go.Components.Get<CameraComponent>();
+		if ( self.IsValid() )
+		{
+			found = self;
+			return true;
+		}
+
+		foreach ( var ch in go.Children )
+		{
+			if ( TryFindFirstCameraInHierarchy( ch, out found ) )
+				return true;
+		}
+
+		return false;
+	}
+}

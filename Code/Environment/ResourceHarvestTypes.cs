@@ -1,6 +1,6 @@
 namespace Survival;
 
-/// <summary>Host-side outcome of one harvest tick on a <see cref="ResourceHarvestNode"/>.</summary>
+/// <summary>Host-side outcome of one harvest tick on a world <see cref="ResourceItemDefinition"/>.</summary>
 public readonly record struct HarvestTickResult
 {
 	public bool Success { get; init; }

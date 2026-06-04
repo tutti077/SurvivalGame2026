@@ -1,6 +1,6 @@
 namespace Survival;
 
-/// <summary>Tool category required to harvest a <see cref="ResourceHarvestNode"/>.</summary>
+/// <summary>Tool category required to harvest a world <see cref="ResourceItemDefinition"/>.</summary>
 public enum HarvestToolType
 {
 	Axe = 0,

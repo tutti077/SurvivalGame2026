@@ -1,9 +1,9 @@
 namespace Survival;
 
-/// <summary>Ray-hit helpers for <see cref="ResourceHarvestNode"/>.</summary>
+/// <summary>Ray-hit helpers for world-harvest <see cref="ResourceItemDefinition"/>.</summary>
 public static class ResourceHarvestTrace
 {
-	public static bool TryFindOnHierarchy( GameObject hitObject, out ResourceHarvestNode node )
+	public static bool TryFindOnHierarchy( GameObject hitObject, out ResourceItemDefinition node )
 	{
 		node = null;
 		if ( hitObject is null || !hitObject.IsValid() )
@@ -11,8 +11,8 @@ public static class ResourceHarvestTrace
 
 		for ( var p = hitObject; p.IsValid(); p = p.Parent )
 		{
-			var n = p.Components.Get<ResourceHarvestNode>();
-			if ( n is null || !n.Enabled )
+			var n = p.Components.Get<ResourceItemDefinition>();
+			if ( n is null || !n.Enabled || !n.Harvestable )
 				continue;
 
 			node = n;
