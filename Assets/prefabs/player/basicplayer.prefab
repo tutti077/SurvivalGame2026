@@ -381,6 +381,34 @@
         "OnComponentUpdate": null
       },
       {
+        "__type": "Survival.HandHarvestPromptHud",
+        "__guid": "f8b2c3d4-5e6f-7081-92a3-b4c5d6e7f809",
+        "__enabled": true,
+        "Flags": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null
+      },
+      {
+        "__type": "Survival.PlayerHandHarvest",
+        "__guid": "e7a1b2c3-4d5e-6f70-8192-a3b4c5d6e7f8",
+        "__enabled": true,
+        "Flags": 0,
+        "HandHarvestInputAction": "HandHarvest",
+        "LogHandHarvest": true,
+        "LookConeDegrees": 18,
+        "PawnEyeHeight": 64,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null
+      },
+      {
         "__type": "Survival.PlayerMovement",
         "__guid": "a334750f-a7f9-4e36-9c2d-563b96bda182",
         "__enabled": true,

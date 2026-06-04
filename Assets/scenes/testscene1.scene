@@ -696,7 +696,9 @@
         "22adeaa4-3eff-455e-b0ad-8186e47120c5": "6248d7ab-f248-4381-a4bd-c0d74f692f36",
         "f334590a-a6d7-44af-98bd-14ec93294ec7": "731c3429-0b8e-4199-85c3-fadb789fce28",
         "4d8ed045-4f00-411d-9d8e-42b4f855dc9b": "86dc9574-88cd-455a-bb43-fda1b9d1be86",
-        "25dd5bed-58eb-4648-bd3b-0de6ea746503": "bd4785b3-cd24-4388-9229-fc154ca44dcb"
+        "25dd5bed-58eb-4648-bd3b-0de6ea746503": "bd4785b3-cd24-4388-9229-fc154ca44dcb",
+        "f8b2c3d4-5e6f-7081-92a3-b4c5d6e7f809": "e627b548-8fae-4c2f-866d-4f6777e6c983",
+        "e7a1b2c3-4d5e-6f70-8192-a3b4c5d6e7f8": "100f1556-ec8c-47b2-969f-ec16145ee020"
       }
     },
     {
@@ -3441,6 +3443,39 @@
           ]
         }
       ]
+    },
+    {
+      "__guid": "a38d11ab-82fd-4f3c-85f7-811fb813d043",
+      "__version": 2,
+      "__Prefab": "prefabs/environment/samplerock.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7b03ae53-6aa1-4f8f-b9f2-05a124be88cb"
+            },
+            "Property": "Name",
+            "Value": "sampleRock"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7b03ae53-6aa1-4f8f-b9f2-05a124be88cb"
+            },
+            "Property": "Position",
+            "Value": "0,-226.267563,24.8430405"
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7b03ae53-6aa1-4f8f-b9f2-05a124be88cb": "a38d11ab-82fd-4f3c-85f7-811fb813d043",
+        "0de75b50-d8df-402d-ae5b-bca32fdf2464": "b8e4c621-9f12-4a6d-bc03-1f7a2d8e9041",
+        "cbe6bdf2-c3f1-4151-9e95-b01e46bc7704": "d2f9a018-6c44-4b7e-9a01-3e5b6c7d8e9f"
+      }
     }
   ],
   "SceneProperties": {
