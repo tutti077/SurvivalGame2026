@@ -164,6 +164,85 @@ public sealed class PlayerInventory : Component
 		return remaining <= 0;
 	}
 
+	/// <summary>True if inventory plus hotbar overflow can hold at least <paramref name="amount"/>.</summary>
+	public bool CanAcceptResource( string resourceId, int amount ) =>
+		PeekAcceptAmount( resourceId, amount ) >= amount;
+
+	/// <summary>How much of <paramref name="amount"/> can fit in inventory then hotbar overflow (read-only).</summary>
+	public int PeekAcceptAmount( string resourceId, int amount )
+	{
+		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
+			return 0;
+
+		EnsureSlotArray();
+
+		var remaining = amount;
+		remaining = PeekInventoryAbsorb( resourceId, remaining );
+
+		if ( remaining <= 0 )
+			return amount;
+
+		var hotbar = Components.Get<PlayerHotbar>();
+		if ( hotbar is null )
+			return amount - remaining;
+
+		var hotbarAccept = hotbar.PeekOverflowAcceptAmount( resourceId, remaining );
+		return amount - remaining + hotbarAccept;
+	}
+
+	static int PeekInventoryAbsorb( InventorySlot[] slots, string resourceId, int remaining )
+	{
+		if ( remaining <= 0 )
+			return remaining;
+
+		var maxStack = ResourceCatalog.GetMaxStack( resourceId );
+
+		while ( remaining > 0 )
+		{
+			var progressed = false;
+
+			for ( var i = 0; i < slots.Length && remaining > 0; i++ )
+			{
+				if ( slots[i].IsEmpty )
+					continue;
+
+				if ( !string.Equals( slots[i].ResourceId, resourceId, StringComparison.OrdinalIgnoreCase ) )
+					continue;
+
+				var room = maxStack - slots[i].Count;
+				if ( room <= 0 )
+					continue;
+
+				var add = Math.Min( remaining, room );
+				remaining -= add;
+				progressed = true;
+			}
+
+			if ( remaining <= 0 )
+				break;
+
+			var placed = false;
+			for ( var i = 0; i < slots.Length; i++ )
+			{
+				if ( !slots[i].IsEmpty )
+					continue;
+
+				var add = Math.Min( remaining, maxStack );
+				remaining -= add;
+				placed = true;
+				break;
+			}
+
+			if ( !progressed && !placed )
+				break;
+		}
+
+		return remaining;
+	}
+
+	int PeekInventoryAbsorb( string resourceId, int remaining ) =>
+		PeekInventoryAbsorb( _slots, resourceId, remaining );
+
 	/// <summary>Host/offline: add harvested resources into inventory.</summary>
 	public bool HostTryAddResource( string resourceId, int amount )
 	{
@@ -176,6 +255,7 @@ public sealed class PlayerInventory : Component
 		EnsureSlotArray();
 
 		var remaining = amount;
+
 		while ( remaining > 0 )
 		{
 			var maxStack = ResourceCatalog.GetMaxStack( resourceId );
@@ -199,6 +279,13 @@ public sealed class PlayerInventory : Component
 			var place = Math.Min( remaining, maxStack );
 			_slots[emptyIndex] = new InventorySlot { ResourceId = resourceId, Count = place };
 			remaining -= place;
+		}
+
+		if ( remaining > 0 )
+		{
+			var hotbar = Components.Get<PlayerHotbar>();
+			if ( hotbar is not null )
+				remaining = hotbar.TryAddResourceOverflow( resourceId, remaining );
 		}
 
 		var added = amount - remaining;

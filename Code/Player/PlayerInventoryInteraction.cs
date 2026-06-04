@@ -6,6 +6,7 @@ namespace Survival;
 
 /// <summary>
 /// Local inventory cursor: drag ghost, click rules, and menu-open mouse unlock.
+/// Supports dragging between the player bag and hotbar.
 /// </summary>
 [Title( "Player Inventory Interaction" )]
 public sealed class PlayerInventoryInteraction : Component
@@ -18,8 +19,10 @@ public sealed class PlayerInventoryInteraction : Component
 
 	PlayerVitals _vitals;
 	PlayerInventory _inventory;
+	PlayerHotbar _hotbar;
 	PlayerGameMenuController _menu;
 
+	Panel _dragLayerRoot;
 	Panel _dragLayer;
 	Panel _dragGhost;
 	Panel _dragIcon;
@@ -28,17 +31,24 @@ public sealed class PlayerInventoryInteraction : Component
 	InventoryCursorStack _held;
 	Vector2 _grabOffset;
 	bool _leftDragActive;
+	IInventoryGridHost _dragSourceHost;
 	int _dragSourceSlot = -1;
-	int _dropHoverSlot = -1;
+	InventorySlotPanel _dropHoverSlot;
+	bool _hotbarHudDisplayed = true;
+
 	protected override void OnStart()
 	{
 		base.OnStart();
 		_vitals = Components.Get<PlayerVitals>();
 		_inventory = Components.Get<PlayerInventory>();
+		_hotbar = Components.Get<PlayerHotbar>();
 		_menu = Components.Get<PlayerGameMenuController>();
 
 		if ( _inventory is not null )
 			_grids.Add( new PlayerInventoryGridHost( "player", _inventory ) );
+
+		if ( _hotbar is not null )
+			_grids.Add( new PlayerHotbarGridHost( _hotbar ) );
 	}
 
 	protected override void OnDestroy()
@@ -58,9 +68,7 @@ public sealed class PlayerInventoryInteraction : Component
 
 		_menu = menu;
 		if ( _menu is not null )
-		{
 			_menu.MenuOpenChanged += OnMenuOpenChanged;
-		}
 	}
 
 	public void RegisterGrid( IInventoryGridHost grid )
@@ -77,20 +85,28 @@ public sealed class PlayerInventoryInteraction : Component
 		_slots.Add( slot );
 	}
 
-	/// <summary>Attach the drag ghost to the inventory column panel (same coordinate space as slots).</summary>
-	public void BindDragLayer( Panel menuColumn )
+	/// <summary>HUD root used for the drag ghost layer (created lazily on first drag).</summary>
+	public void SetDragLayerRoot( Panel dragRoot ) => _dragLayerRoot = dragRoot;
+
+	/// <summary>Legacy alias for <see cref="SetDragLayerRoot"/>.</summary>
+	public void BindDragLayer( Panel dragRoot ) => SetDragLayerRoot( dragRoot );
+
+	void EnsureDragLayer()
 	{
 		if ( _dragLayer is not null && _dragLayer.IsValid() )
 			return;
 
-		_dragLayer = new Panel { Parent = menuColumn };
+		if ( _dragLayerRoot is null || !_dragLayerRoot.IsValid() )
+			return;
+
+		_dragLayer = new InventoryDragLayerPanel { Parent = _dragLayerRoot };
 		_dragLayer.Style.Set( "position", "absolute" );
 		_dragLayer.Style.Set( "left", "0" );
 		_dragLayer.Style.Set( "top", "0" );
 		_dragLayer.Style.Set( "right", "0" );
 		_dragLayer.Style.Set( "bottom", "0" );
 		_dragLayer.Style.Set( "pointer-events", "none" );
-		_dragLayer.Style.Set( "z-index", "2000" );
+		_dragLayer.Style.Set( "z-index", "100" );
 
 		_dragGhost = new Panel { Parent = _dragLayer };
 		_dragGhost.Style.Set( "position", "absolute" );
@@ -123,32 +139,37 @@ public sealed class PlayerInventoryInteraction : Component
 		_dragCount.Style.FontColor = Color.White;
 		_dragCount.Style.FontSize = Length.Pixels( InventoryMenuSection.CountFontSize );
 		_dragCount.Style.Set( "text-shadow", "1px 1px 2px black" );
-
 	}
+
+	public void SetHotbarHudDisplayed( bool displayed ) => _hotbarHudDisplayed = displayed;
 
 	protected override void OnUpdate()
 	{
 		base.OnUpdate();
 
-		if ( _menu is null || !_menu.IsMenuOpen )
+		if ( !IsLocalInputOwnedPawn() )
 			return;
+
+		PollHotbarPointerInput();
+
+		if ( _leftDragActive && Input.Released( "mouseleft" ) )
+			FinishLeftDrag( ResolveDropTargetSlot() );
 
 		if ( !_leftDragActive && _held.IsEmpty )
 			return;
 
 		UpdateDragGhostPosition();
-		UpdateDropHoverSlot();
-
+		if ( _leftDragActive )
+			UpdateDropHoverSlot();
 	}
 
-	/// <summary>Called from slot panels while dragging so release hit-test has a fallback.</summary>
-	public void NotifyDropHover( int slotIndex, InventorySlotPanel slot )
+	public void NotifyDropHover( InventorySlotPanel slot )
 	{
 		if ( !_leftDragActive || slot is null || !slot.IsValid() )
 			return;
 
 		if ( SlotContainsScreenPoint( slot, GetDropProbeScreenPosition() ) )
-			_dropHoverSlot = slotIndex;
+			_dropHoverSlot = slot;
 	}
 
 	void OnMenuOpenChanged( bool open )
@@ -156,63 +177,116 @@ public sealed class PlayerInventoryInteraction : Component
 		if ( open )
 			return;
 
-		ReturnHeldToInventory();
+		ReturnHeldToSource();
 		_leftDragActive = false;
+		_dragSourceHost = null;
 		_dragSourceSlot = -1;
+		_dropHoverSlot = null;
 		HideDragGhost();
 	}
 
-	public void OnSlotMouseDown( InventorySlotPanel slot, MousePanelEvent e )
+	public void ProcessSlotPress( InventorySlotPanel slot, string button, bool pressed )
 	{
-		if ( !CanInteract() || _inventory is null || slot is null )
+		if ( slot?.GridHost is null )
 			return;
 
+		if ( button == "mouseleft" )
+		{
+			if ( pressed )
+				ProcessSlotLeftPress( slot );
+			else
+				ProcessSlotLeftRelease( slot );
+			return;
+		}
+
+		if ( button == "mouseright" && pressed )
+			ProcessSlotRightPress( slot );
+	}
+
+	public InventorySlotPanel FindHotbarSlotAtScreenPosition( Vector2 screenPosition )
+	{
+		for ( var i = _slots.Count - 1; i >= 0; i-- )
+		{
+			var slot = _slots[i];
+			if ( slot is null || !slot.IsValid() || !slot.IsHotbarSlot )
+				continue;
+
+			if ( SlotContainsScreenPoint( slot, screenPosition ) )
+				return slot;
+		}
+
+		return null;
+	}
+
+	void ProcessSlotLeftPress( InventorySlotPanel slot )
+	{
+		if ( !CanInteractSlot( slot ) )
+			return;
+
+		if ( Input.Down( "Run" ) )
+		{
+			TryQuickMove( slot );
+			return;
+		}
+
+		if ( _held.IsEmpty )
+			BeginDragFromSlot( slot );
+		else
+			_leftDragActive = true;
+	}
+
+	void ProcessSlotLeftRelease( InventorySlotPanel slot )
+	{
+		if ( !_leftDragActive )
+			return;
+
+		FinishLeftDrag( ResolveDropTargetSlot() ?? slot );
+	}
+
+	void ProcessSlotRightPress( InventorySlotPanel slot )
+	{
+		if ( !CanInteractSlot( slot ) )
+			return;
+
+		var host = slot.GridHost;
 		var shift = Input.Down( "Run" );
-		var isLeft = e.Button == "mouseleft";
-		var isRight = e.Button == "mouseright";
-		if ( !isLeft && !isRight )
-			return;
 
-		if ( isLeft )
+		if ( shift )
 		{
-			if ( shift )
-			{
-				TryQuickMove( slot.SlotIndex );
-				return;
-			}
-
 			if ( _held.IsEmpty )
-				BeginDragFromSlot( slot );
+				TryTakeHalfFromSlot( host, slot.SlotIndex );
 			else
-				_leftDragActive = true;
+				TryPlaceHalfIntoSlot( host, slot.SlotIndex );
 			return;
 		}
 
-		if ( isRight && shift )
-		{
-			if ( _held.IsEmpty )
-				TryTakeHalfFromSlot( slot.SlotIndex );
-			else
-				TryPlaceHalfIntoSlot( slot.SlotIndex );
-			return;
-		}
-
-		if ( isRight )
-		{
-			if ( _held.IsEmpty )
-				TryTakeOneFromSlot( slot.SlotIndex );
-			else
-				TryDropOneIntoSlot( slot.SlotIndex );
-		}
+		if ( _held.IsEmpty )
+			TryTakeOneFromSlot( host, slot.SlotIndex );
+		else
+			TryDropOneIntoSlot( host, slot.SlotIndex );
 	}
 
-	public void OnSlotMouseUp( InventorySlotPanel slot, MousePanelEvent e )
+	void PollHotbarPointerInput()
 	{
-		if ( e.Button != "mouseleft" || !_leftDragActive )
+		if ( !_hotbarHudDisplayed || !IsHotbarPointerUnlocked() )
 			return;
 
-		FinishLeftDrag( ResolveDropTargetSlotIndex() );
+		if ( _menu is not null && _menu.IsMenuOpen )
+			return;
+
+		var slot = FindHotbarSlotAtScreenPosition( Mouse.Position );
+
+		if ( Input.Pressed( "mouseleft" ) && slot is not null )
+			ProcessSlotLeftPress( slot );
+
+		if ( Input.Released( "mouseleft" ) && _leftDragActive )
+			FinishLeftDrag( ResolveDropTargetSlot() ?? slot );
+
+		if ( Input.Pressed( "mouseright" ) && slot is not null )
+			ProcessSlotRightPress( slot );
 	}
+
+	static bool IsHotbarPointerUnlocked() => Mouse.Visibility != MouseVisibility.Hidden;
 
 	public void PollInventoryInput( MenuPanelFlags visiblePanels )
 	{
@@ -223,24 +297,28 @@ public sealed class PlayerInventoryInteraction : Component
 		if ( !_leftDragActive )
 			return;
 
-		FinishLeftDrag( ResolveDropTargetSlotIndex() );
+		FinishLeftDrag( ResolveDropTargetSlot() );
 	}
 
 	void BeginDragFromSlot( InventorySlotPanel slot )
 	{
-		if ( !_inventory.OwnerTryPickupAll( slot.SlotIndex, out var picked ) || picked.IsEmpty )
+		EnsureDragLayer();
+
+		var host = slot.GridHost;
+		if ( host is null || !host.OwnerTryPickupAll( slot.SlotIndex, out var picked ) || picked.IsEmpty )
 			return;
 
 		_held.Set( picked.ResourceId, picked.Count );
+		_dragSourceHost = host;
 		_dragSourceSlot = slot.SlotIndex;
-		_dropHoverSlot = slot.SlotIndex;
+		_dropHoverSlot = slot;
 		_leftDragActive = true;
 
 		ShowDragGhost();
 		UpdateDragGhostPosition();
 	}
 
-	void FinishLeftDrag( int targetSlotIndex )
+	void FinishLeftDrag( InventorySlotPanel targetSlot )
 	{
 		if ( !_leftDragActive )
 			return;
@@ -251,30 +329,36 @@ public sealed class PlayerInventoryInteraction : Component
 		if ( _held.IsEmpty )
 		{
 			HideDragGhost();
+			_dragSourceHost = null;
 			_dragSourceSlot = -1;
-			_dropHoverSlot = -1;
+			_dropHoverSlot = null;
 			return;
 		}
 
+		var sourceHost = _dragSourceHost;
 		var sourceSlot = _dragSourceSlot;
+		_dragSourceHost = null;
 		_dragSourceSlot = -1;
+		_dropHoverSlot = null;
 
-		if ( targetSlotIndex < 0 )
-			targetSlotIndex = ResolveDropTargetSlotIndex();
-
-		_dropHoverSlot = -1;
-
-		if ( targetSlotIndex < 0 )
+		if ( targetSlot is null || targetSlot.GridHost is null )
 		{
-			ReturnHeldToSourceSlot( sourceSlot );
+			ReturnHeldToSourceSlot( sourceHost, sourceSlot );
 			UpdateDragGhostVisibility();
 			return;
 		}
 
+		var destHost = targetSlot.GridHost;
+		var destSlot = targetSlot.SlotIndex;
+
 		var heldCopy = _held;
-		if ( !_inventory.OwnerTryFinishDragDrop( sourceSlot, targetSlotIndex, ref heldCopy ) )
+		var ok = sourceHost is not null && sourceHost.GridId == destHost.GridId
+			? sourceHost.OwnerTryFinishDragDrop( sourceSlot, destSlot, ref heldCopy )
+			: TryCrossGridDrop( sourceHost, sourceSlot, destHost, destSlot, ref heldCopy );
+
+		if ( !ok )
 		{
-			ReturnHeldToSourceSlot( sourceSlot );
+			ReturnHeldToSourceSlot( sourceHost, sourceSlot );
 			UpdateDragGhostVisibility();
 			return;
 		}
@@ -283,46 +367,80 @@ public sealed class PlayerInventoryInteraction : Component
 		UpdateDragGhostVisibility();
 	}
 
-	void ReturnHeldToSourceSlot( int sourceSlotIndex )
+	static bool TryCrossGridDrop(
+		IInventoryGridHost sourceHost,
+		int sourceSlot,
+		IInventoryGridHost destHost,
+		int destSlot,
+		ref InventoryCursorStack held )
 	{
-		if ( _held.IsEmpty || _inventory is null )
+		if ( destHost is null || held.IsEmpty )
+			return false;
+
+		var heldCopy = held;
+		if ( !destHost.OwnerTryPlaceHeld( destSlot, ref heldCopy ) )
+			return false;
+
+		held = heldCopy;
+		if ( !held.IsEmpty && sourceHost is not null && sourceSlot >= 0 )
+		{
+			var remainder = held;
+			sourceHost.OwnerTryPlaceHeld( sourceSlot, ref remainder );
+			held = remainder;
+		}
+
+		return true;
+	}
+
+	void ReturnHeldToSourceSlot( IInventoryGridHost sourceHost, int sourceSlotIndex )
+	{
+		if ( _held.IsEmpty )
 			return;
 
-		if ( sourceSlotIndex < 0 )
+		if ( sourceHost is not null && sourceSlotIndex >= 0 )
 		{
-			ReturnHeldToInventory();
+			var heldCopy = _held;
+			sourceHost.OwnerTryPlaceHeld( sourceSlotIndex, ref heldCopy );
+			_held = heldCopy;
+
+			if ( _held.IsEmpty )
+				HideDragGhost();
 			return;
 		}
 
-		var heldCopy = _held;
-		_inventory.OwnerTryPlaceHeld( sourceSlotIndex, ref heldCopy );
-		_held = heldCopy;
+		ReturnHeldToInventory();
+	}
+
+	void ReturnHeldToSource()
+	{
+		if ( _held.IsEmpty )
+			return;
+
+		if ( _dragSourceHost is not null && _dragSourceSlot >= 0 )
+		{
+			var heldCopy = _held;
+			_dragSourceHost.OwnerTryPlaceHeld( _dragSourceSlot, ref heldCopy );
+			_held = heldCopy;
+		}
+		else
+		{
+			ReturnHeldToInventory();
+		}
 
 		if ( _held.IsEmpty )
 			HideDragGhost();
 	}
 
-	void TryPlaceHeldOnSlot( int slotIndex )
+	void TryTakeOneFromSlot( IInventoryGridHost host, int slotIndex )
 	{
-		if ( _held.IsEmpty )
-			return;
-
-		var heldCopy = _held;
-		_inventory.OwnerTryPlaceHeld( slotIndex, ref heldCopy );
-		_held = heldCopy;
-		UpdateDragGhostVisibility();
-	}
-
-	void TryTakeOneFromSlot( int slotIndex )
-	{
-		var source = _inventory.GetSlot( slotIndex );
+		var source = host.GetSlot( slotIndex );
 		if ( source.IsEmpty )
 			return;
 
 		if ( !_held.IsEmpty && !_held.CanStack( source.ResourceId ) )
 			return;
 
-		if ( !_inventory.OwnerTryTakeOne( slotIndex ) )
+		if ( !host.OwnerTryTakeOne( slotIndex ) )
 			return;
 
 		if ( _held.IsEmpty )
@@ -333,13 +451,13 @@ public sealed class PlayerInventoryInteraction : Component
 		UpdateDragGhostVisibility();
 	}
 
-	void TryDropOneIntoSlot( int slotIndex )
+	void TryDropOneIntoSlot( IInventoryGridHost host, int slotIndex )
 	{
 		if ( _held.IsEmpty )
 			return;
 
 		var heldCopy = _held;
-		if ( !_inventory.OwnerTryDropOne( slotIndex, heldCopy ) )
+		if ( !host.OwnerTryDropOne( slotIndex, heldCopy ) )
 			return;
 
 		_held.Count--;
@@ -349,9 +467,9 @@ public sealed class PlayerInventoryInteraction : Component
 		UpdateDragGhostVisibility();
 	}
 
-	void TryTakeHalfFromSlot( int slotIndex )
+	void TryTakeHalfFromSlot( IInventoryGridHost host, int slotIndex )
 	{
-		var source = _inventory.GetSlot( slotIndex );
+		var source = host.GetSlot( slotIndex );
 		if ( source.IsEmpty )
 			return;
 
@@ -362,7 +480,7 @@ public sealed class PlayerInventoryInteraction : Component
 		if ( !_held.IsEmpty && !_held.CanStack( source.ResourceId ) )
 			return;
 
-		if ( !_inventory.OwnerTryTakeHalf( slotIndex ) )
+		if ( !host.OwnerTryTakeHalf( slotIndex ) )
 			return;
 
 		if ( _held.IsEmpty )
@@ -373,7 +491,7 @@ public sealed class PlayerInventoryInteraction : Component
 		UpdateDragGhostVisibility();
 	}
 
-	void TryPlaceHalfIntoSlot( int slotIndex )
+	void TryPlaceHalfIntoSlot( IInventoryGridHost host, int slotIndex )
 	{
 		if ( _held.IsEmpty )
 			return;
@@ -382,44 +500,90 @@ public sealed class PlayerInventoryInteraction : Component
 		if ( half <= 0 )
 			return;
 
-		var dest = _inventory.GetSlot( slotIndex );
+		var dest = host.GetSlot( slotIndex );
 		if ( !dest.IsEmpty && !string.Equals( dest.ResourceId, _held.ResourceId, System.StringComparison.OrdinalIgnoreCase ) )
 			return;
 
 		var heldCopy = _held;
-		if ( !_inventory.OwnerTryPlaceHalf( slotIndex, ref heldCopy ) )
+		if ( !host.OwnerTryPlaceHalf( slotIndex, ref heldCopy ) )
 			return;
 
-		_held.Count -= half;
-		if ( _held.Count <= 0 )
-			_held.Clear();
-
+		_held = heldCopy;
 		UpdateDragGhostVisibility();
 	}
 
-	void TryQuickMove( int fromSlotIndex )
+	void TryQuickMove( InventorySlotPanel fromSlot )
 	{
-		var source = _inventory.GetSlot( fromSlotIndex );
+		if ( fromSlot?.GridHost is null )
+			return;
+
+		var fromHost = fromSlot.GridHost;
+		var fromIndex = fromSlot.SlotIndex;
+		var source = fromHost.GetSlot( fromIndex );
 		if ( source.IsEmpty )
 			return;
 
-		foreach ( var grid in _grids )
+		if ( fromHost.GridId == "player" && _inventory is not null )
 		{
-			if ( grid is null || grid.Inventory is null || grid.GridId == "player" )
-				continue;
+			foreach ( var grid in _grids )
+			{
+				if ( grid is null || grid.GridId == "player" )
+					continue;
 
-			if ( grid.Inventory.OwnerTryQuickMove( fromSlotIndex, grid ) )
-				return;
+				if ( grid.GridId == "hotbar" && TryCrossGridQuickMove( fromHost, fromIndex, grid ) )
+					return;
+
+				if ( grid.Inventory is not null && grid.Inventory.OwnerTryQuickMove( fromIndex, grid ) )
+					return;
+			}
+		}
+
+		if ( fromHost.GridId == "hotbar" )
+		{
+			foreach ( var grid in _grids )
+			{
+				if ( grid is null || grid.GridId != "player" )
+					continue;
+
+				if ( TryCrossGridQuickMove( fromHost, fromIndex, grid ) )
+					return;
+			}
 		}
 
 		foreach ( var grid in _grids )
 		{
-			if ( grid is null || grid.Inventory is null )
+			if ( grid is null || grid.Inventory is null || grid.GridId != "player" )
 				continue;
 
-			if ( grid.Inventory.OwnerTryQuickMove( fromSlotIndex, grid ) )
+			if ( grid.Inventory.OwnerTryQuickMove( fromIndex, grid ) )
 				return;
 		}
+	}
+
+	bool TryCrossGridQuickMove( IInventoryGridHost fromHost, int fromIndex, IInventoryGridHost toHost )
+	{
+		var source = fromHost.GetSlot( fromIndex );
+		if ( source.IsEmpty || toHost is null )
+			return false;
+
+		if ( !toHost.TryFindQuickMoveTarget( source, fromIndex, out var targetIndex ) )
+			return false;
+
+		if ( !fromHost.OwnerTryPickupAll( fromIndex, out var picked ) || picked.IsEmpty )
+			return false;
+
+		var held = new InventoryCursorStack();
+		held.Set( picked.ResourceId, picked.Count );
+		if ( !toHost.OwnerTryPlaceHeld( targetIndex, ref held ) )
+		{
+			fromHost.OwnerTryPlaceHeld( fromIndex, ref held );
+			return false;
+		}
+
+		if ( !held.IsEmpty )
+			fromHost.OwnerTryPlaceHeld( fromIndex, ref held );
+
+		return true;
 	}
 
 	void ReturnHeldToInventory()
@@ -454,15 +618,15 @@ public sealed class PlayerInventoryInteraction : Component
 
 	void UpdateDropHoverSlot()
 	{
-		var hover = FindSlotIndexAtScreenPosition( GetDropProbeScreenPosition() );
-		if ( hover >= 0 )
+		var hover = FindSlotAtScreenPosition( GetDropProbeScreenPosition() );
+		if ( hover is not null )
 			_dropHoverSlot = hover;
 	}
 
-	int ResolveDropTargetSlotIndex()
+	InventorySlotPanel ResolveDropTargetSlot()
 	{
-		var hit = FindSlotIndexAtScreenPosition( GetDropProbeScreenPosition() );
-		if ( hit >= 0 )
+		var hit = FindSlotAtScreenPosition( GetDropProbeScreenPosition() );
+		if ( hit is not null )
 			return hit;
 
 		return _dropHoverSlot;
@@ -470,7 +634,7 @@ public sealed class PlayerInventoryInteraction : Component
 
 	Vector2 GetDropProbeScreenPosition() => Mouse.Position;
 
-	int FindSlotIndexAtScreenPosition( Vector2 screenPosition )
+	InventorySlotPanel FindSlotAtScreenPosition( Vector2 screenPosition )
 	{
 		for ( var i = _slots.Count - 1; i >= 0; i-- )
 		{
@@ -479,10 +643,10 @@ public sealed class PlayerInventoryInteraction : Component
 				continue;
 
 			if ( SlotContainsScreenPoint( slot, screenPosition ) )
-				return slot.SlotIndex;
+				return slot;
 		}
 
-		return -1;
+		return null;
 	}
 
 	static bool SlotContainsScreenPoint( InventorySlotPanel slot, Vector2 screenPosition )
@@ -490,9 +654,10 @@ public sealed class PlayerInventoryInteraction : Component
 		if ( !slot.IsValid() )
 			return false;
 
+		var size = GetSlotScreenSize( slot );
+
 		var topLeft = slot.PanelPositionToScreenPosition( Vector2.Zero );
-		var bottomRight = slot.PanelPositionToScreenPosition(
-			new Vector2( InventoryMenuSection.SlotSize, InventoryMenuSection.SlotSize ) );
+		var bottomRight = slot.PanelPositionToScreenPosition( size );
 
 		if ( bottomRight.x > topLeft.x && bottomRight.y > topLeft.y )
 		{
@@ -510,6 +675,23 @@ public sealed class PlayerInventoryInteraction : Component
 
 		return screenPosition.x >= rect.Left && screenPosition.x <= rect.Right
 		       && screenPosition.y >= rect.Top && screenPosition.y <= rect.Bottom;
+	}
+
+	static Vector2 GetSlotScreenSize( InventorySlotPanel slot )
+	{
+		var rect = slot.Box.Rect;
+		var w = rect.Right - rect.Left;
+		var h = rect.Bottom - rect.Top;
+		if ( w > 0f && h > 0f )
+			return new Vector2( w, h );
+
+		var isHotbar = slot.GridHost?.GridId == "hotbar";
+		var size = isHotbar ? HotbarHud.SlotSize : InventoryMenuSection.SlotSize;
+		var scale = slot.ScaleToScreen;
+		if ( scale > 0.001f )
+			size *= scale;
+
+		return new Vector2( size, size );
 	}
 
 	void ShowDragGhost()
@@ -560,7 +742,6 @@ public sealed class PlayerInventoryInteraction : Component
 		return local;
 	}
 
-	/// <summary>Screen-space offset so the ghost's bottom-left corner sits on <see cref="Mouse.Position"/>.</summary>
 	Vector2 GetDragGrabOffsetBottomLeft() => new Vector2( 0f, GetDragGhostHeightScreen() );
 
 	float GetDragGhostHeightScreen()
@@ -612,17 +793,39 @@ public sealed class PlayerInventoryInteraction : Component
 		} );
 	}
 
-	bool CanInteract()
+	bool IsLocalInputOwnedPawn()
 	{
+		if ( _vitals is null )
+			_vitals = Components.Get<PlayerVitals>();
+		return _vitals is not null && _vitals.IsLocalInputOwnedPawn();
+	}
+
+	bool CanInteractSlot( InventorySlotPanel slot )
+	{
+		if ( slot?.GridHost is null )
+			return false;
+
 		if ( _vitals is null )
 			_vitals = Components.Get<PlayerVitals>();
 		if ( _inventory is null )
 			_inventory = Components.Get<PlayerInventory>();
+		if ( _hotbar is null )
+			_hotbar = Components.Get<PlayerHotbar>();
 		if ( _menu is null )
 			_menu = Components.Get<PlayerGameMenuController>();
 
-		return _vitals is not null && _vitals.IsLocalInputOwnedPawn()
-		       && _menu is not null && _menu.IsMenuOpen
+		if ( _vitals is null || !_vitals.IsLocalInputOwnedPawn() )
+			return false;
+
+		if ( slot.GridHost.GridId == "hotbar" )
+		{
+			return _hotbarHudDisplayed
+			       && IsHotbarPointerUnlocked()
+			       && _hotbar is not null
+			       && _hotbar.IsLocalManagingClient();
+		}
+
+		return _menu is not null && _menu.IsMenuOpen
 		       && _inventory is not null && _inventory.IsLocalManagingClient();
 	}
 }

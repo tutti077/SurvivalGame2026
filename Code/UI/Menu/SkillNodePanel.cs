@@ -14,7 +14,7 @@ public sealed class SkillNodePanel : Panel
 		Section = section;
 	}
 
-	public override bool WantsMouseInput() => true;
+	public override bool WantsMouseInput() => false;
 
 	protected override void OnMouseDown( MousePanelEvent e )
 	{

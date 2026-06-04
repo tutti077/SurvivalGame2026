@@ -427,6 +427,30 @@
         "SlotCount": 16
       },
       {
+        "__type": "Survival.PlayerHotbar",
+        "__guid": "f1e2d3c4-b5a6-7890-fedc-ba9876543210",
+        "__enabled": true,
+        "Flags": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null
+      },
+      {
+        "__type": "Survival.PlayerHotbarController",
+        "__guid": "a9b8c7d6-e5f4-3210-abcd-ef0123456789",
+        "__enabled": true,
+        "Flags": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null
+      },
+      {
         "__type": "Survival.PlayerGameMenuController",
         "__guid": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
         "__enabled": true,

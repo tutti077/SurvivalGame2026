@@ -701,7 +701,9 @@
         "b2c3d4e5-f6a7-8901-bcde-f12345678901": "e5f6a7b8-c9d0-4123-e4f5-a6b7c8d9e0f1",
         "c8b5a3d1-3afe-4693-9f5e-57b86c57b6a2": "fdbf69e5-6623-4258-b621-25a989ae7036",
         "d4e5f6a7-b8c9-0123-def4-567890abcdef": "381a6891-f81c-4543-b177-d7e8775dda3f",
-        "c1a2f3e4-d5b6-7890-cdef-123456789abc": "14dff6e5-739f-4491-9eae-d0289d382221"
+        "c1a2f3e4-d5b6-7890-cdef-123456789abc": "14dff6e5-739f-4491-9eae-d0289d382221",
+        "f1e2d3c4-b5a6-7890-fedc-ba9876543210": "ed3c51a4-66b9-4155-b5ac-2aedf6ed763c",
+        "a9b8c7d6-e5f4-3210-abcd-ef0123456789": "be49c427-186a-4327-8122-0daf5ee2d2aa"
       }
     },
     {
@@ -3522,56 +3524,45 @@
       }
     },
     {
-      "__guid": "3b1b2d4f-2681-469f-9ae7-24013e1bae2a",
+      "__guid": "6a865fcd-1282-4df8-912f-7212f0c16284",
       "__version": 2,
-      "Flags": 0,
-      "Name": "GameObject (6)",
-      "Position": "-304.948792,-498.582367,10.1200848",
-      "Rotation": "0,0,0,1",
-      "Scale": "1,1,1",
-      "Tags": "",
-      "Enabled": true,
-      "NetworkMode": 2,
-      "NetworkFlags": 0,
-      "NetworkOrphaned": 0,
-      "NetworkTransmit": true,
-      "OwnerTransfer": 1,
-      "Components": [],
-      "Children": [
-        {
-          "__guid": "6a865fcd-1282-4df8-912f-7212f0c16284",
-          "__version": 2,
-          "__Prefab": "prefabs/environment/samplebush.prefab",
-          "__PrefabInstancePatch": {
-            "AddedObjects": [],
-            "RemovedObjects": [],
-            "PropertyOverrides": [
-              {
-                "Target": {
-                  "Type": "GameObject",
-                  "IdValue": "8ae00320-0e16-40c8-9275-01a362936d1b"
-                },
-                "Property": "Name",
-                "Value": "sampleBush"
-              },
-              {
-                "Target": {
-                  "Type": "Component",
-                  "IdValue": "f6c07270-df35-42bc-bffd-8f3d65a4db77"
-                },
-                "Property": "HarvestTicksUntilGone",
-                "Value": 1
-              }
-            ],
-            "MovedObjects": []
+      "__Prefab": "prefabs/environment/samplebush.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "8ae00320-0e16-40c8-9275-01a362936d1b"
+            },
+            "Property": "Name",
+            "Value": "sampleBush"
           },
-          "__PrefabIdToInstanceId": {
-            "8ae00320-0e16-40c8-9275-01a362936d1b": "6a865fcd-1282-4df8-912f-7212f0c16284",
-            "0cc95a3c-e90c-4a6c-ac16-bbd785f7523f": "8470d91c-053c-439a-babc-8177c7b39a59",
-            "f6c07270-df35-42bc-bffd-8f3d65a4db77": "8c2da473-baaf-4dcf-8419-15620eb749d3"
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "8ae00320-0e16-40c8-9275-01a362936d1b"
+            },
+            "Property": "Position",
+            "Value": "-304.948792,-498.582367,10.1200848"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "f6c07270-df35-42bc-bffd-8f3d65a4db77"
+            },
+            "Property": "HarvestTicksUntilGone",
+            "Value": 1
           }
-        }
-      ]
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "8ae00320-0e16-40c8-9275-01a362936d1b": "6a865fcd-1282-4df8-912f-7212f0c16284",
+        "0cc95a3c-e90c-4a6c-ac16-bbd785f7523f": "8470d91c-053c-439a-babc-8177c7b39a59",
+        "f6c07270-df35-42bc-bffd-8f3d65a4db77": "8c2da473-baaf-4dcf-8419-15620eb749d3"
+      }
     }
   ],
   "SceneProperties": {

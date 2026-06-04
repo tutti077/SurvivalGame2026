@@ -60,14 +60,39 @@ public sealed class InventoryMenuInputOverlay : Panel
 			_menuController?.SetMenuOpen( false );
 	}
 
+	protected override void OnMouseDown( MousePanelEvent e )
+	{
+		if ( _isOpen && TryForwardHotbarPointer( e ) )
+			return;
+
+		base.OnMouseDown( e );
+	}
+
 	protected override void OnMouseUp( MousePanelEvent e )
 	{
+		if ( _isOpen && e.Button == "mouseleft" && TryForwardHotbarPointer( e, pressed: false ) )
+			return;
+
 		base.OnMouseUp( e );
 
 		if ( !_isOpen || e.Button != "mouseleft" )
 			return;
 
 		_inventoryInteraction?.OnGlobalMouseUp();
+	}
+
+	bool TryForwardHotbarPointer( MousePanelEvent e, bool pressed = true )
+	{
+		if ( _inventoryInteraction is null )
+			return false;
+
+		var slot = _inventoryInteraction.FindHotbarSlotAtScreenPosition( Mouse.Position );
+		if ( slot is null )
+			return false;
+
+		_inventoryInteraction.ProcessSlotPress( slot, e.Button, pressed );
+		e.StopPropagation();
+		return true;
 	}
 
 }

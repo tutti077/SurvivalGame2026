@@ -48,7 +48,7 @@
         "__enabled": true,
         "Flags": 0,
         "AutoEnsureTraceCollider": true,
-        "BaseYieldPerTickHigh": 1,
+        "BaseYieldPerTickHigh": 20,
         "BaseYieldPerTickLow": 1,
         "DisplayName": "Rock",
         "FallbackColor": "0.58,0.5,0.42,1",

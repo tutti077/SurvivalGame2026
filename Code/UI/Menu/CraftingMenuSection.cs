@@ -597,7 +597,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 		public CraftButtonPanel( CraftingMenuSection section ) => _section = section;
 
-		public override bool WantsMouseInput() => true;
+		public override bool WantsMouseInput() => false;
 
 		public override void Tick()
 		{

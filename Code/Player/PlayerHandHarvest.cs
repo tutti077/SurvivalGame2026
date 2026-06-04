@@ -122,6 +122,9 @@ public sealed class PlayerHandHarvest : Component
 			if ( !HandHarvestTargeting.TryValidateFocus( candidate, GameObject, viewPos, look, LookConeDegrees, PawnEyeHeight, out _ ) )
 				continue;
 
+			if ( !CanReceiveHarvestYield( candidate ) )
+				continue;
+
 			var dist = Vector3.DistanceBetween( GameObject.WorldPosition, candidate.GameObject.WorldPosition );
 			if ( dist >= bestDist )
 				continue;
@@ -158,7 +161,23 @@ public sealed class PlayerHandHarvest : Component
 		if ( !ResourceHarvestTrace.TryFindOnHierarchy( tr.GameObject, out node ) )
 			return false;
 
-		return HandHarvestTargeting.TryValidateFocus( node, GameObject, eye, dir, LookConeDegrees, PawnEyeHeight, out _ );
+		if ( !HandHarvestTargeting.TryValidateFocus( node, GameObject, eye, dir, LookConeDegrees, PawnEyeHeight, out _ ) )
+			return false;
+
+		return CanReceiveHarvestYield( node );
+	}
+
+	bool CanReceiveHarvestYield( ResourceItemDefinition node )
+	{
+		if ( node is null || string.IsNullOrWhiteSpace( node.ResourceId ) )
+			return false;
+
+		var yield = node.GetMaxYieldPerTick();
+		if ( yield <= 0 )
+			return false;
+
+		var inventory = Components.Get<PlayerInventory>();
+		return inventory is not null && inventory.CanAcceptResource( node.ResourceId, yield );
 	}
 
 	void RequestHandHarvest( ResourceItemDefinition node )
@@ -209,6 +228,15 @@ public sealed class PlayerHandHarvest : Component
 		{
 			if ( LogHandHarvest )
 				Log.Info( $"[PlayerHandHarvest] {GameObject.Name}: hand harvest rejected — {failReason}." );
+			return;
+		}
+
+		var inventory = Components.Get<PlayerInventory>();
+		var maxYield = node.GetMaxYieldPerTick();
+		if ( inventory is null || maxYield <= 0 || !inventory.CanAcceptResource( node.ResourceId, maxYield ) )
+		{
+			if ( LogHandHarvest )
+				Log.Info( $"[PlayerHandHarvest] {GameObject.Name}: hand harvest rejected — inventory and hotbar full." );
 			return;
 		}
 

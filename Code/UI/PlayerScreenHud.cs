@@ -25,7 +25,9 @@ public sealed class PlayerScreenHud : PanelComponent
 	PlayerHandHarvest _handHarvest;
 	PlayerGameMenuController _menuController;
 	PlayerInventory _inventory;
+	PlayerHotbar _hotbar;
 	PlayerInventoryInteraction _inventoryInteraction;
+	HotbarHud _hotbarHud;
 	PlayerCrafting _crafting;
 	InventoryMenuInputOverlay _menuInputOverlay;
 	MenuPageNavigator _pageNavigator;
@@ -102,6 +104,8 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventory.InventoryChanged -= OnInventoryChanged;
 			_inventory.ResourcePickedUp -= OnResourcePickedUp;
 		}
+
+		_hotbarHud?.Dispose();
 		if ( _menuController is not null )
 		{
 			_menuController.MenuOpenChanged -= OnMenuOpenChanged;
@@ -138,11 +142,16 @@ public sealed class PlayerScreenHud : PanelComponent
 		Panel.Style.Set( "pointer-events", "none" );
 
 		_inventory = FindOnAncestors<PlayerInventory>();
+		_hotbar = FindOnAncestors<PlayerHotbar>();
+
+		_inventoryInteraction = FindOnAncestors<PlayerInventoryInteraction>();
+		_inventoryInteraction?.SetDragLayerRoot( Panel );
 
 		BuildVitals( Panel );
 		BuildHarvestPrompt( Panel );
 		BuildPickupNotifications( Panel );
 		BuildGameMenu( Panel );
+		BuildHotbar( Panel );
 
 		if ( screen is not null )
 		{
@@ -297,6 +306,24 @@ public sealed class PlayerScreenHud : PanelComponent
 
 	void OnResourcePickedUp( ResourcePickupNotice notice ) => _pickupNotifications?.Enqueue( notice );
 
+	void BuildHotbar( Panel root )
+	{
+		_hotbar ??= FindOnAncestors<PlayerHotbar>();
+		_inventoryInteraction ??= FindOnAncestors<PlayerInventoryInteraction>();
+
+		if ( _hotbar is null )
+		{
+			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerHotbar — hotbar HUD skipped." );
+			return;
+		}
+
+		if ( _inventoryInteraction is null )
+			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerInventoryInteraction — hotbar drag disabled." );
+
+		_hotbarHud = new HotbarHud();
+		_hotbarHud.Build( root, _hotbar, _inventoryInteraction );
+	}
+
 	void BuildGameMenu( Panel root )
 	{
 		_menuController = FindOnAncestors<PlayerGameMenuController>();
@@ -372,8 +399,6 @@ public sealed class PlayerScreenHud : PanelComponent
 		var inventorySection = new InventoryMenuSection( _inventory, _inventoryInteraction );
 		_sections.Add( inventorySection );
 		inventorySection.Build( _rightMenuColumn );
-
-		_inventoryInteraction?.BindDragLayer( _rightMenuColumn );
 
 		_inventory.InventoryChanged += OnInventoryChanged;
 		_menuController.MenuOpenChanged += OnMenuOpenChanged;
@@ -526,6 +551,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		foreach ( var section in _sections )
 			section.SetMenuOpen( isOpen );
 
+		UpdateHotbarVisibility();
+
 		if ( isOpen )
 		{
 			ApplyMenuLayout();
@@ -589,6 +616,23 @@ public sealed class PlayerScreenHud : PanelComponent
 		}
 
 		_pageNavigator?.RefreshHighlight();
+		UpdateHotbarVisibility();
+	}
+
+	void UpdateHotbarVisibility()
+	{
+		if ( _hotbarHud is null )
+			return;
+
+		if ( _menuController is null || !_menuController.IsMenuOpen )
+		{
+			_hotbarHud.SetVisible( true );
+			return;
+		}
+
+		var panels = _menuController.VisiblePanels;
+		var hideForFullscreen = (panels & MenuPanelFlags.Map) != 0 || (panels & MenuPanelFlags.Settings) != 0;
+		_hotbarHud.SetVisible( !hideForFullscreen );
 	}
 
 	void RefreshAllSections()

@@ -294,6 +294,10 @@ public sealed class ResourceItemDefinition : Component
 		ApplyDepletedVisual( depleted );
 	}
 
+	/// <summary>Upper bound on yield for one tick (used to validate storage before harvesting).</summary>
+	public int GetMaxYieldPerTick() =>
+		Math.Max( 0, Math.Max( BaseYieldPerTickLow, BaseYieldPerTickHigh ) );
+
 	int RollYieldAmount()
 	{
 		var low = Math.Max( 0, BaseYieldPerTickLow );

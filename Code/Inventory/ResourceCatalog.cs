@@ -178,4 +178,35 @@ public static class ResourceCatalog
 			}
 		}
 	}
+
+	/// <summary>Faded item icon for an empty hotbar slot that still has a remembered binding.</summary>
+	public static void ApplyBindingGhostVisual( Panel iconPanel, Label countLabel, string resourceId )
+	{
+		if ( iconPanel is null )
+			return;
+
+		if ( string.IsNullOrWhiteSpace( resourceId ) )
+		{
+			ApplyStackVisual( iconPanel, countLabel, InventorySlot.Empty );
+			return;
+		}
+
+		var def = Resolve( resourceId );
+		var iconPath = GetIconPath( resourceId );
+		iconPanel.Style.Set( "opacity", "0.42" );
+		if ( !MenuUiTextures.ApplyBackground( iconPanel, iconPath ) )
+		{
+			iconPanel.Style.BackgroundImage = null;
+			iconPanel.Style.Set( "background-image", "none" );
+			iconPanel.Style.BackgroundColor = def.FallbackColor.WithAlpha( 0.38f );
+		}
+
+		iconPanel.Style.Set( "display", "flex" );
+
+		if ( countLabel is not null )
+		{
+			countLabel.Text = string.Empty;
+			countLabel.Style.Set( "display", "none" );
+		}
+	}
 }

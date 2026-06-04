@@ -64,7 +64,7 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 	bool _savedUseLookControls = true;
 
-	MouseVisibility _savedMouseVisibility = MouseVisibility.Auto;
+	MouseVisibility _savedMouseVisibility = MouseVisibility.Hidden;
 
 
 
@@ -235,7 +235,7 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 		else
 
-			Mouse.Visibility = _savedMouseVisibility;
+			Mouse.Visibility = MouseVisibility.Hidden;
 
 
 
@@ -432,8 +432,12 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 
 		_controller.UseLookControls = true;
+		_controller.UseCameraControls = true;
 
 		_savedUseLookControls = true;
+
+		if ( Mouse.Visibility != MouseVisibility.Hidden )
+			Mouse.Visibility = MouseVisibility.Hidden;
 
 	}
 

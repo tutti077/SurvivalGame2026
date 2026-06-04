@@ -18,6 +18,7 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 
 	readonly PlayerInventory _inventory;
 	readonly PlayerInventoryInteraction _interaction;
+	readonly PlayerInventoryGridHost _gridHost;
 	readonly List<SlotUi> _slotUi = new();
 
 	Panel _sectionRoot;
@@ -28,6 +29,7 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 	{
 		_inventory = inventory;
 		_interaction = interaction;
+		_gridHost = inventory is not null ? new PlayerInventoryGridHost( "player", inventory ) : null;
 	}
 
 	public void Build( Panel menuColumn )
@@ -72,7 +74,7 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 				if ( slotIndex >= slotCount )
 					break;
 
-				var slotPanel = new InventorySlotPanel( slotIndex, _interaction ) { Parent = rowPanel };
+				var slotPanel = new InventorySlotPanel( slotIndex, _gridHost, _interaction ) { Parent = rowPanel };
 				slotPanel.Style.Width = Length.Pixels( SlotSize );
 				slotPanel.Style.Height = Length.Pixels( SlotSize );
 				slotPanel.Style.Set( "flex-shrink", "0" );
