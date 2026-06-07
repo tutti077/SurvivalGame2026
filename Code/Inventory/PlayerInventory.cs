@@ -566,18 +566,43 @@ public sealed class PlayerInventory : Component
 			return false;
 
 		if ( sourceSlotIndex == targetSlotIndex )
-		{
-			_slots[targetSlotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-			held.Clear();
-			NotifyInventoryChanged();
-			return true;
-		}
+			return TryFinishDragDropOntoSameSlot( targetSlotIndex, ref held );
 
 		ref var target = ref _slots[targetSlotIndex];
 		if ( !target.IsEmpty && !string.Equals( target.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 			return HostTrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref held );
 
 		return HostTryPlaceHeld( targetSlotIndex, ref held );
+	}
+
+	bool TryFinishDragDropOntoSameSlot( int slotIndex, ref InventoryCursorStack held )
+	{
+		if ( !TryGetSlotRef( slotIndex, out _ ) )
+			return false;
+
+		ref var slot = ref _slots[slotIndex];
+		if ( slot.IsEmpty )
+		{
+			slot = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
+			held.Clear();
+			NotifyInventoryChanged();
+			return true;
+		}
+
+		if ( !ResourceCatalog.ResourceIdsMatch( slot.ResourceId, held.ResourceId ) )
+			return false;
+
+		var add = ResourceCatalog.ClampAddToStack( held.ResourceId, slot.Count, held.Count );
+		if ( add <= 0 )
+			return false;
+
+		slot.Count += add;
+		held.Count -= add;
+		if ( held.Count <= 0 )
+			held.Clear();
+
+		NotifyInventoryChanged();
+		return true;
 	}
 
 	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken )
@@ -955,30 +980,86 @@ public sealed class PlayerInventory : Component
 
 	public bool HostTryReturnStack( in InventoryCursorStack held )
 	{
+		var copy = held;
+		return HostTryAbsorbCursorStackIntoBag( ref copy );
+	}
+
+	/// <summary>Merges held stack into bag slots (matching stacks, then empties). Returns true if fully absorbed.</summary>
+	public bool OwnerTryAbsorbCursorStackIntoBag( ref InventoryCursorStack held )
+	{
+		if ( held.IsEmpty || !IsLocalManagingClient() )
+			return false;
+
+		if ( HasHostAuthority )
+			return HostTryAbsorbCursorStackIntoBag( ref held );
+
+		RpcHostAbsorbCursorStackIntoBag( held.ResourceId, held.Count );
+		return ClientTryApplyAbsorbCursorStackIntoBag( ref held );
+	}
+
+	public bool HostTryAbsorbCursorStackIntoBag( ref InventoryCursorStack held )
+	{
 		if ( held.IsEmpty || !HasHostAuthority )
 			return false;
 
+		AbsorbCursorStackIntoBagSlots( ref held, notify: true );
+		return held.IsEmpty;
+	}
+
+	bool ClientTryApplyAbsorbCursorStackIntoBag( ref InventoryCursorStack held )
+	{
+		if ( HasHostAuthority )
+			return HostTryAbsorbCursorStackIntoBag( ref held );
+
+		AbsorbCursorStackIntoBagSlots( ref held, notify: true );
+		return held.IsEmpty;
+	}
+
+	bool AbsorbCursorStackIntoBagSlots( ref InventoryCursorStack held, bool notify )
+	{
+		if ( held.IsEmpty )
+			return false;
+
 		EnsureSlotArray();
+		var resourceId = ResourceCatalog.NormalizeResourceId( held.ResourceId );
+		var changed = false;
 
-		if ( TryFindStackSlot( held.ResourceId, out var stackIndex ) )
+		for ( var i = 0; i < _slots.Length && held.Count > 0; i++ )
 		{
-			var add = ResourceCatalog.ClampAddToStack( held.ResourceId, _slots[stackIndex].Count, held.Count );
+			ref var slot = ref _slots[i];
+			if ( slot.IsEmpty || !ResourceCatalog.ResourceIdsMatch( slot.ResourceId, resourceId ) )
+				continue;
+
+			var add = ResourceCatalog.ClampAddToStack( resourceId, slot.Count, held.Count );
 			if ( add <= 0 )
-				return false;
+				continue;
 
-			_slots[stackIndex].Count += add;
-			NotifyInventoryChanged();
-			return add == held.Count;
+			slot.Count += add;
+			held.Count -= add;
+			changed = true;
 		}
 
-		if ( TryFindFirstEmptySlot( out var emptyIndex ) )
+		while ( held.Count > 0 )
 		{
-			_slots[emptyIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-			NotifyInventoryChanged();
-			return true;
+			if ( !TryFindFirstEmptySlot( out var emptyIndex ) )
+				break;
+
+			var place = ResourceCatalog.ClampAddToStack( resourceId, 0, held.Count );
+			if ( place <= 0 )
+				break;
+
+			_slots[emptyIndex] = new InventorySlot { ResourceId = resourceId, Count = place };
+			held.Count -= place;
+			changed = true;
 		}
 
-		return false;
+		if ( held.Count <= 0 )
+			held.Clear();
+
+		if ( changed && notify )
+			NotifyInventoryChanged();
+
+		return changed;
 	}
 
 	public bool TryFindFirstEmptySlot( out int slotIndex )
@@ -1116,12 +1197,7 @@ public sealed class PlayerInventory : Component
 			return false;
 
 		if ( sourceSlotIndex == targetSlotIndex )
-		{
-			_slots[targetSlotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-			held.Clear();
-			NotifyInventoryChanged();
-			return true;
-		}
+			return TryFinishDragDropOntoSameSlot( targetSlotIndex, ref held );
 
 		ref var target = ref _slots[targetSlotIndex];
 		if ( !target.IsEmpty && !string.Equals( target.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
@@ -1150,6 +1226,20 @@ public sealed class PlayerInventory : Component
 			return;
 
 		HostTryPickupAll( slotIndex, out _ );
+	}
+
+	[Rpc.Host]
+	void RpcHostAbsorbCursorStackIntoBag( string resourceId, int count )
+	{
+		if ( !Networking.IsHost )
+			return;
+
+		var held = new InventoryCursorStack();
+		held.Set( resourceId, count );
+		HostTryAbsorbCursorStackIntoBag( ref held );
+
+		if ( !held.IsEmpty )
+			HeldStackWorldDrop.TryDrop( GameObject, ref held );
 	}
 
 	[Rpc.Host]

@@ -822,9 +822,9 @@ public sealed class PlayerHotbar : Component
 
 		if ( sourceSlotIndex == targetSlotIndex )
 		{
-			_slots[targetSlotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-			held.Clear();
-			NotifyChanged();
+			if ( !TryFinishDragDropOntoSameSlot( targetSlotIndex, ref held ) )
+				return false;
+
 			RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, held.ResourceId, held.Count );
 			return true;
 		}
@@ -845,13 +845,7 @@ public sealed class PlayerHotbar : Component
 			return false;
 
 		if ( sourceSlotIndex == targetSlotIndex )
-		{
-			_slots[targetSlotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-			held.Clear();
-			UpdateBindingFromSlot( targetSlotIndex );
-			NotifyChanged();
-			return true;
-		}
+			return TryFinishDragDropOntoSameSlot( targetSlotIndex, ref held );
 
 		if ( !TryGetSlotRef( targetSlotIndex, out var target ) )
 			return false;
@@ -860,6 +854,38 @@ public sealed class PlayerHotbar : Component
 			return HostTrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref held );
 
 		return HostTryPlaceHeld( targetSlotIndex, ref held );
+	}
+
+	bool TryFinishDragDropOntoSameSlot( int slotIndex, ref InventoryCursorStack held )
+	{
+		if ( !TryGetSlotRef( slotIndex, out _ ) )
+			return false;
+
+		ref var slot = ref _slots[slotIndex];
+		if ( slot.IsEmpty )
+		{
+			slot = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
+			held.Clear();
+			UpdateBindingFromSlot( slotIndex );
+			NotifyChanged();
+			return true;
+		}
+
+		if ( !ResourceCatalog.ResourceIdsMatch( slot.ResourceId, held.ResourceId ) )
+			return false;
+
+		var add = ResourceCatalog.ClampAddToStack( held.ResourceId, slot.Count, held.Count );
+		if ( add <= 0 )
+			return false;
+
+		slot.Count += add;
+		held.Count -= add;
+		if ( held.Count <= 0 )
+			held.Clear();
+
+		UpdateBindingFromSlot( slotIndex );
+		NotifyChanged();
+		return true;
 	}
 
 	public bool HostTryPlaceHeld( int slotIndex, ref InventoryCursorStack held )
