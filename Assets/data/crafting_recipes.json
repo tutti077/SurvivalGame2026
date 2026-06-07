@@ -7,6 +7,7 @@
       "unlockId": "",
       "outputResourceId": "sword",
       "outputAmount": 1,
+      "maxStack": 1,
       "numberOfItemsCrafted": 1,
       "ingredients": [
         { "resourceId": "rock", "amount": 3 },
@@ -25,6 +26,7 @@
       "unlockId": "",
       "outputResourceId": "building_hammer",
       "outputAmount": 1,
+      "maxStack": 1,
       "numberOfItemsCrafted": 1,
       "ingredients": [
         { "resourceId": "wood", "amount": 10 },

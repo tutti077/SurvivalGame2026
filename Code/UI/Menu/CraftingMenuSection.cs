@@ -279,6 +279,8 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_menuOpen = isOpen;
 		if ( isOpen )
 		{
+			ResourceDefinitionCatalog.ForceReload();
+			ResourceItemLibraryHost.ForceReload();
 			CraftingRecipeCatalog.ForceReload();
 			Refresh();
 		}

@@ -30,11 +30,14 @@ public static class CraftingRecipeCatalog
 		EnsureLoaded();
 	}
 
-	/// <summary>Icon for crafting UI: prefer the crafted item's catalog icon over JSON (avoids stale recipe icon paths).</summary>
+	/// <summary>Icon for crafting UI: recipe icon, then resource/crafted output catalog paths.</summary>
 	public static string ResolveIconPath( CraftingRecipe recipe )
 	{
 		if ( recipe is null )
 			return null;
+
+		if ( !string.IsNullOrWhiteSpace( recipe.Icon ) && MenuUiTextures.MountedPathExists( recipe.Icon ) )
+			return recipe.Icon;
 
 		if ( !string.IsNullOrWhiteSpace( recipe.OutputResourceId ) )
 		{
@@ -43,12 +46,57 @@ public static class CraftingRecipeCatalog
 				return outputIcon;
 		}
 
-		if ( !string.IsNullOrWhiteSpace( recipe.Icon ) && MenuUiTextures.MountedPathExists( recipe.Icon ) )
-			return recipe.Icon;
+		return recipe.Icon;
+	}
 
-		return !string.IsNullOrWhiteSpace( recipe.OutputResourceId )
-			? ResourceCatalog.GetIconPath( recipe.OutputResourceId )
-			: recipe.Icon;
+	/// <summary>Recipe whose <see cref="CraftingRecipe.OutputResourceId"/> matches (crafted-only items).</summary>
+	public static bool TryGetRecipeByOutput( string outputResourceId, out CraftingRecipe recipe )
+	{
+		EnsureLoaded();
+		recipe = null;
+		if ( string.IsNullOrWhiteSpace( outputResourceId ) )
+			return false;
+
+		outputResourceId = ResourceCatalog.NormalizeResourceId( outputResourceId );
+		for ( var i = 0; i < Recipes.Count; i++ )
+		{
+			var candidate = Recipes[i];
+			if ( string.Equals(
+				    ResourceCatalog.NormalizeResourceId( candidate.OutputResourceId ),
+				    outputResourceId,
+				    StringComparison.OrdinalIgnoreCase ) )
+			{
+				recipe = candidate;
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public static string GetOutputIconPath( string outputResourceId )
+	{
+		if ( !TryGetRecipeByOutput( outputResourceId, out var recipe ) || string.IsNullOrWhiteSpace( recipe.Icon ) )
+			return null;
+
+		return recipe.Icon;
+	}
+
+	public static int GetOutputMaxStack( string outputResourceId )
+	{
+		return TryGetRecipeByOutput( outputResourceId, out var recipe ) ? recipe.ResolvedMaxStack : 0;
+	}
+
+	public static ResourceCatalog.ResourceDefinition ResolveOutputCatalogEntry( string outputResourceId )
+	{
+		if ( !TryGetRecipeByOutput( outputResourceId, out var recipe ) )
+			return default;
+
+		return new ResourceCatalog.ResourceDefinition(
+			recipe.DisplayName,
+			MenuUiTextures.TryLoad( recipe.Icon ),
+			new Color( 0.72f, 0.74f, 0.78f ),
+			recipe.ResolvedMaxStack );
 	}
 
 	public static CraftingRecipe Get( string recipeId )
@@ -133,6 +181,7 @@ public static class CraftingRecipeCatalog
 		},
 		OutputResourceId = "sword",
 		OutputAmount = 1,
+		MaxStack = 1,
 		NumberOfItemsCrafted = 1,
 		Stats =
 		{

@@ -34,9 +34,16 @@ public sealed class CraftingRecipe
 
 	public List<CraftingStatLine> Stats { get; set; } = new();
 
+	/// <summary>Inventory stack size for the crafted output. Defaults to 1 when unset.</summary>
+	[JsonPropertyName( "maxStack" )]
+	public int MaxStack { get; set; }
+
 	public int CraftBatchCount => Math.Max( 1, NumberOfItemsCrafted );
 
 	public int TotalOutputAmount => Math.Max( 1, OutputAmount ) * CraftBatchCount;
+
+	/// <summary>How many output items fit in one inventory stack after crafting.</summary>
+	public int ResolvedMaxStack => MaxStack > 0 ? MaxStack : 1;
 
 	public bool IsUnlockedByDefault => string.IsNullOrWhiteSpace( UnlockId );
 }

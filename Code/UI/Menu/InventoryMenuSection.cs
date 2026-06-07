@@ -110,6 +110,13 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 	public void SetMenuOpen( bool isOpen )
 	{
 		_menuOpen = isOpen;
+		if ( isOpen )
+		{
+			ResourceDefinitionCatalog.ForceReload();
+			ResourceItemLibraryHost.ForceReload();
+			Refresh();
+		}
+
 		UpdateVisibility();
 	}
 

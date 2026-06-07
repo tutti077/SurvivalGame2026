@@ -1,0 +1,112 @@
+{
+  "RootObject": {
+    "__guid": "96556e25-a9e9-4bc3-b41c-f82d1f2364f1",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "sampleFeathers",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "0.300000012,0.300000012,0.300000012",
+    "Tags": "",
+    "Enabled": true,
+    "NetworkMode": 1,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 1,
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "748b321f-ac12-4897-8d88-a0ab22cabc4d",
+        "__enabled": true,
+        "Flags": 0,
+        "BodyGroups": 18446744073709551615,
+        "CreateAttachments": false,
+        "LodOverride": null,
+        "MaterialGroup": null,
+        "MaterialOverride": "materials/environment/rock.vmat",
+        "Materials": null,
+        "Model": "models/dev/sphere.vmdl",
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "RenderOptions": {
+          "GameLayer": true,
+          "OverlayLayer": false,
+          "BloomLayer": false,
+          "AfterUILayer": false
+        },
+        "RenderType": "On",
+        "Tint": "0.95,0.87,0.87,1"
+      },
+      {
+        "__type": "Survival.ResourceItemDefinition",
+        "__guid": "d4c440a9-0bca-4a92-8565-655be7313150",
+        "__enabled": true,
+        "Flags": 0,
+        "AutoEnsureTraceCollider": true,
+        "BaseYieldPerTickHigh": 1,
+        "BaseYieldPerTickLow": 1,
+        "DisplayName": "Feathers",
+        "FallbackColor": "0.95,0.87,0.87,1",
+        "HandHarvestRange": 80,
+        "Harvestable": true,
+        "HarvestTicksUntilGone": 10,
+        "HarvestYields": [
+          {
+            "ResourceId": "feathers",
+            "AmountLow": 1,
+            "AmountHigh": 1,
+            "ChancePercent": 100
+          }
+        ],
+        "HideModelWhenDepleted": true,
+        "Icon": "ui/items/feathers.png",
+        "LogHarvest": true,
+        "MaxStack": 50,
+        "MinimumToolTier": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "ResourceId": "feathers",
+        "RespawnRateSeconds": 60,
+        "ToolTypeRequired": "Hand"
+      }
+    ],
+    "Children": [],
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

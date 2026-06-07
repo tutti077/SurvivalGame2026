@@ -12,7 +12,7 @@ namespace Survival;
 public sealed class ResourceItemDefinition : Component
 {
 	[Property, Group( "Identity" )]
-	public string ResourceId { get; set; } = "rock";
+	public string ResourceId { get; set; } = string.Empty;
 
 	[Property, Group( "Identity" )]
 	public string DisplayName { get; set; } = "Rock";
@@ -81,7 +81,9 @@ public sealed class ResourceItemDefinition : Component
 		_resolvedIcon = null;
 		_resolvedIconPath = null;
 		base.OnEnabled();
-		ResourceCatalog.Register( this );
+
+		if ( !string.IsNullOrWhiteSpace( ResourceId ) )
+			ResourceCatalog.Register( this );
 
 		if ( Harvestable )
 			ResourceHarvestRegistry.Register( this );
@@ -99,6 +101,8 @@ public sealed class ResourceItemDefinition : Component
 	protected override void OnStart()
 	{
 		base.OnStart();
+
+		ResourceDefinitionCatalog.TryApplyIdentity( this );
 
 		if ( !Harvestable )
 			return;
@@ -141,6 +145,28 @@ public sealed class ResourceItemDefinition : Component
 		_resolvedIconPath = Icon;
 		_resolvedIcon = MenuUiTextures.TryLoad( Icon );
 		return _resolvedIcon;
+	}
+
+	public void InvalidateIconCache()
+	{
+		_resolvedIcon = null;
+		_resolvedIconPath = null;
+	}
+
+	/// <summary>Catalog-only entry spawned from <see cref="ResourceDefinitionCatalog"/>.</summary>
+	public void ApplyCatalogData( ResourceDefinitionData data )
+	{
+		if ( data is null || string.IsNullOrWhiteSpace( data.Id ) )
+			return;
+
+		ResourceId = ResourceCatalog.NormalizeResourceId( data.Id );
+		DisplayName = data.DisplayName;
+		Icon = data.Icon;
+		MaxStack = Math.Max( 1, data.MaxStack );
+		FallbackColor = ResourceDefinitionCatalog.ParseFallbackColor( data.FallbackColor );
+		Harvestable = false;
+		InvalidateIconCache();
+		ResourceCatalog.Register( this );
 	}
 
 	internal ResourceCatalog.ResourceDefinition ToCatalogEntry()
@@ -368,7 +394,8 @@ public sealed class ResourceItemDefinition : Component
 				continue;
 
 			var display = ResourceCatalog.Resolve( entry.ResourceId ).DisplayName;
-			rolled.Add( new HarvestLootItem( entry.ResourceId, amount, display ) );
+			var resourceId = ResourceCatalog.NormalizeResourceId( entry.ResourceId );
+			rolled.Add( new HarvestLootItem( resourceId, amount, display ) );
 		}
 
 		return rolled.ToArray();

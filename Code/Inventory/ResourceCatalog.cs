@@ -19,14 +19,7 @@ public static class ResourceCatalog
 		new( System.StringComparer.OrdinalIgnoreCase );
 
 	static readonly Dictionary<string, string> KnownIconPaths =
-		new( System.StringComparer.OrdinalIgnoreCase )
-		{
-			["sword"] = "ui/items/item_sword.png",
-			["rock"] = "ui/items/rock.jpg",
-			["plant_fiber"] = "ui/items/plant_fiber.png",
-			["wood"] = "ui/items/wood.png",
-			["building_hammer"] = "ui/items/item_build_hammer.png",
-		};
+		new( System.StringComparer.OrdinalIgnoreCase );
 
 	/// <summary>Maps old/sample resource ids to current catalog ids.</summary>
 	static readonly Dictionary<string, string> LegacyResourceAliases =
@@ -63,8 +56,9 @@ public static class ResourceCatalog
 		if ( definition is null || !definition.IsValid() || string.IsNullOrWhiteSpace( definition.ResourceId ) )
 			return;
 
-		Definitions[definition.ResourceId] = definition;
-		IconCache.Remove( definition.ResourceId );
+		var id = NormalizeResourceId( definition.ResourceId );
+		Definitions[id] = definition;
+		IconCache.Remove( id );
 	}
 
 	public static void Unregister( ResourceItemDefinition definition )
@@ -72,10 +66,11 @@ public static class ResourceCatalog
 		if ( definition is null || string.IsNullOrWhiteSpace( definition.ResourceId ) )
 			return;
 
-		if ( Definitions.TryGetValue( definition.ResourceId, out var existing ) && existing == definition )
-			Definitions.Remove( definition.ResourceId );
+		var id = NormalizeResourceId( definition.ResourceId );
+		if ( Definitions.TryGetValue( id, out var existing ) && existing == definition )
+			Definitions.Remove( id );
 
-		IconCache.Remove( definition.ResourceId );
+		IconCache.Remove( id );
 	}
 
 	public static ResourceDefinition Resolve( string resourceId )
@@ -84,6 +79,12 @@ public static class ResourceCatalog
 
 		if ( !string.IsNullOrWhiteSpace( resourceId ) && Definitions.TryGetValue( resourceId, out var def ) && def.IsValid() )
 			return def.ToCatalogEntry();
+
+		if ( ResourceDefinitionCatalog.TryGet( resourceId, out _ ) )
+			return ResourceDefinitionCatalog.ResolveCatalogEntry( resourceId );
+
+		if ( CraftingRecipeCatalog.TryGetRecipeByOutput( resourceId, out _ ) )
+			return CraftingRecipeCatalog.ResolveOutputCatalogEntry( resourceId );
 
 		var icon = GetCachedIcon( resourceId );
 		return new ResourceDefinition(
@@ -99,6 +100,13 @@ public static class ResourceCatalog
 
 		if ( !string.IsNullOrWhiteSpace( resourceId ) && Definitions.TryGetValue( resourceId, out var def ) && def.IsValid() )
 			return Math.Max( 1, def.MaxStack );
+
+		if ( ResourceDefinitionCatalog.TryGet( resourceId, out _ ) )
+			return ResourceDefinitionCatalog.GetMaxStack( resourceId );
+
+		var craftedMax = CraftingRecipeCatalog.GetOutputMaxStack( resourceId );
+		if ( craftedMax > 0 )
+			return craftedMax;
 
 		return 64;
 	}
@@ -122,6 +130,14 @@ public static class ResourceCatalog
 
 		if ( Definitions.TryGetValue( resourceId, out var def ) && def.IsValid() && !string.IsNullOrWhiteSpace( def.Icon ) )
 			return def.Icon;
+
+		var jsonIcon = ResourceDefinitionCatalog.GetIconPath( resourceId );
+		if ( !string.IsNullOrWhiteSpace( jsonIcon ) )
+			return jsonIcon;
+
+		var craftedIcon = CraftingRecipeCatalog.GetOutputIconPath( resourceId );
+		if ( !string.IsNullOrWhiteSpace( craftedIcon ) )
+			return craftedIcon;
 
 		if ( KnownIconPaths.TryGetValue( resourceId, out var knownPath ) )
 			return knownPath;

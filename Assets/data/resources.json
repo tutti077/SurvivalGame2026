@@ -1,0 +1,95 @@
+{
+  "resources": [
+    {
+      "id": "rock",
+      "displayName": "Rock",
+      "icon": "ui/items/rock.jpg",
+      "maxStack": 20,
+      "fallbackColor": "0.58,0.5,0.42,1"
+    },
+    {
+      "id": "plant_fiber",
+      "displayName": "Plant Fiber",
+      "icon": "ui/items/plant_fiber.png",
+      "maxStack": 20,
+      "fallbackColor": "0.28,0.48,0.22,1"
+    },
+    {
+      "id": "wood",
+      "displayName": "Wood",
+      "icon": "ui/items/wood.png",
+      "maxStack": 20,
+      "fallbackColor": "0.45,0.32,0.18,1"
+    },
+    {
+      "id": "sand",
+      "displayName": "Sand",
+      "icon": "ui/items/sand.png",
+      "maxStack": 50,
+      "fallbackColor": "0.85,0.80,0.45,1"
+    },
+    {
+      "id": "clay",
+      "displayName": "Clay",
+      "icon": "ui/items/clay.png",
+      "maxStack": 50,
+      "fallbackColor": "0.80,0.60,0.20,1"
+    },
+    {
+      "id": "sap",
+      "displayName": "Sap",
+      "icon": "ui/items/sap.png",
+      "maxStack": 20,
+      "fallbackColor": "0.83,0.39,0.13,1"
+    },
+    {
+      "id": "flint",
+      "displayName": "Flint",
+      "icon": "ui/items/flint.png",
+      "maxStack": 50,
+      "fallbackColor": "0.74,0.74,0.74,1"
+    },
+    {
+      "id": "femur",
+      "displayName": "Femur",
+      "icon": "ui/items/femur.png",
+      "maxStack": 50,
+      "fallbackColor": "0.9,0.9,0.9,1"
+    },
+    {
+      "id": "hide",
+      "displayName": "Hide",
+      "icon": "ui/items/hide.png",
+      "maxStack": 50,
+      "fallbackColor": "0.5,0.04,0.04,1"
+    },
+    {
+      "id": "animal_fat",
+      "displayName": "Animal Fat",
+      "icon": "ui/items/animal_fat.png",
+      "maxStack": 50,
+      "fallbackColor": "0.9,0.9,0.9,1"
+    },
+    {
+      "id": "leather",
+      "displayName": "Leather",
+      "icon": "ui/items/leather.png",
+      "maxStack": 50,
+      "fallbackColor": "0.5,0.04,0.04,1"
+    },
+    {
+      "id": "feathers",
+      "displayName": "Feathers",
+      "icon": "ui/items/feathers.png",
+      "maxStack": 50,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "vines",
+      "displayName": "Vines",
+      "icon": "ui/items/vines.png",
+      "maxStack": 50,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    }
+  ]
+}

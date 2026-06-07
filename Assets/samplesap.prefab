@@ -1,0 +1,91 @@
+{
+  "RootObject": {
+    "__guid": "61b32b27-6192-4f34-93e7-5c2e7a75f4f5",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "sampleSap (1)",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "0.300000012,0.300000012,0.300000012",
+    "Tags": "",
+    "Enabled": true,
+    "NetworkMode": 1,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 1,
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "5a25a176-c4cb-45e7-8719-e9b28c791534",
+        "__enabled": true,
+        "Flags": 0,
+        "BodyGroups": 18446744073709551615,
+        "CreateAttachments": false,
+        "LodOverride": null,
+        "MaterialGroup": null,
+        "MaterialOverride": null,
+        "Materials": null,
+        "Model": "models/dev/sphere.vmdl",
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "RenderOptions": {
+          "GameLayer": true,
+          "OverlayLayer": false,
+          "BloomLayer": false,
+          "AfterUILayer": false
+        },
+        "RenderType": "On",
+        "Tint": "0.93953,0.47632,0.01311,1"
+      },
+      {
+        "__type": "Survival.ResourceItemDefinition",
+        "__guid": "16c143b6-7e85-4b92-a380-474dde2bc66a",
+        "__enabled": true,
+        "Flags": 0,
+        "AutoEnsureTraceCollider": true,
+        "BaseYieldPerTickHigh": 1,
+        "BaseYieldPerTickLow": 1,
+        "DisplayName": "Sap",
+        "FallbackColor": "0.95,0.87,0.87,1",
+        "HandHarvestRange": 80,
+        "Harvestable": true,
+        "HarvestTicksUntilGone": 10,
+        "HarvestYields": [
+          {
+            "ResourceId": "sap",
+            "AmountLow": 1,
+            "AmountHigh": 5,
+            "ChancePercent": 100
+          }
+        ],
+        "HideModelWhenDepleted": true,
+        "Icon": "ui/items/sap.png",
+        "LogHarvest": true,
+        "MaxStack": 20,
+        "MinimumToolTier": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "ResourceId": "sap",
+        "RespawnRateSeconds": 60,
+        "ToolTypeRequired": "Hand"
+      }
+    ],
+    "Children": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

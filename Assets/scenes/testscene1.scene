@@ -3472,21 +3472,6 @@
             },
             "Property": "Position",
             "Value": "-100.937798,-498.854797,4.62100983"
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "f1e2d3c4-b5a6-9788-7766-554433221100"
-            },
-            "Property": "HarvestYields",
-            "Value": [
-              {
-                "ResourceId": "rock",
-                "AmountLow": 1,
-                "AmountHigh": 20,
-                "ChancePercent": 100
-              }
-            ]
           }
         ],
         "MovedObjects": []
@@ -3614,6 +3599,72 @@
         "0cc95a3c-e90c-4a6c-ac16-bbd785f7523f": "8470d91c-053c-439a-babc-8177c7b39a59",
         "f6c07270-df35-42bc-bffd-8f3d65a4db77": "8c2da473-baaf-4dcf-8419-15620eb749d3"
       }
+    },
+    {
+      "__guid": "8fa7b183-0ea5-4232-9dca-bea1b437a578",
+      "__version": 2,
+      "__Prefab": "prefabs/environment/feathers.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "96556e25-a9e9-4bc3-b41c-f82d1f2364f1"
+            },
+            "Property": "Name",
+            "Value": "sampleFeathers"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "96556e25-a9e9-4bc3-b41c-f82d1f2364f1"
+            },
+            "Property": "Position",
+            "Value": "-400.937805,-498.854797,4.62100983"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "748b321f-ac12-4897-8d88-a0ab22cabc4d"
+            },
+            "Property": "MaterialOverride",
+            "Value": null
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "96556e25-a9e9-4bc3-b41c-f82d1f2364f1": "8fa7b183-0ea5-4232-9dca-bea1b437a578",
+        "748b321f-ac12-4897-8d88-a0ab22cabc4d": "0a701f08-2ca3-4b1b-b1c0-317f5ad2c7bd",
+        "d4c440a9-0bca-4a92-8565-655be7313150": "4785324d-6475-4153-b23e-3c38ce79402c"
+      }
+    },
+    {
+      "__guid": "bd951ac2-4f20-4684-9120-395ce4abf0ac",
+      "__version": 2,
+      "__Prefab": "samplesap.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "61b32b27-6192-4f34-93e7-5c2e7a75f4f5"
+            },
+            "Property": "Position",
+            "Value": "-462.155762,-498.854797,4.62100983"
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "61b32b27-6192-4f34-93e7-5c2e7a75f4f5": "bd951ac2-4f20-4684-9120-395ce4abf0ac",
+        "5a25a176-c4cb-45e7-8719-e9b28c791534": "47cd896d-199c-4adc-86f8-f2e6b0856ebd",
+        "16c143b6-7e85-4b92-a380-474dde2bc66a": "2d82e06c-1725-46d7-b9a5-ad9461861553"
+      }
     }
   ],
   "SceneProperties": {
@@ -3641,14 +3692,14 @@
       "CustomBounds": false
     },
     "GameObjectSystems": {
-      "Sandbox.Clutter.ClutterGridSystem": {
-        "Storage": {
-          "$blob": "5f3639c5-3cc3-498f-90a1-bcdf2b19262a"
-        }
-      },
       "Sandbox.SelectionSetsSystem": {
         "Data": {
           "SelectionSets": []
+        }
+      },
+      "Sandbox.Clutter.ClutterGridSystem": {
+        "Storage": {
+          "$blob": "432e91dd-45dc-4309-8fc9-b5de083dafa2"
         }
       }
     }
