@@ -18,6 +18,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	const float InventoryMenuColumnWidth = 400f;
 	const float CraftingMenuColumnWidth = 455f;
 	const string DefaultHarvestPromptText = "Harvest";
+	const int ZGameMenu = 2500;
 
 	static readonly Color DepletedPortionColor = new Color( 0.82f, 0.82f, 0.83f );
 
@@ -384,6 +385,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_menuInputOverlay.Style.Set( "top", "0" );
 		_menuInputOverlay.Style.Set( "width", "100%" );
 		_menuInputOverlay.Style.Set( "height", "100%" );
+		_menuInputOverlay.Style.Set( "z-index", ZGameMenu.ToString() );
 		_menuInputOverlay.SetOpen( false );
 
 		_pageNavigator = new MenuPageNavigator( _menuController );

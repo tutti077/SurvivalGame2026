@@ -14,6 +14,8 @@ public sealed class PickupNotificationHud
 	public const int MaxVisibleRows = 7;
 	public const float LifetimeSeconds = 3.5f;
 	public const float FadeSeconds = 0.85f;
+	/// <summary>Always behind menus, hotbar, and build UI.</summary>
+	public const int ZIndex = 0;
 
 	readonly List<PickupToastEntry> _entries = new();
 
@@ -34,7 +36,7 @@ public sealed class PickupNotificationHud
 		_host.Style.Set( "width", "220px" );
 		_host.Style.Set( "pointer-events", "none" );
 		_host.Style.Set( "overflow", "hidden" );
-		_host.Style.Set( "z-index", "3" );
+		_host.Style.Set( "z-index", ZIndex.ToString() );
 
 		_list = new Panel { Parent = _host };
 		_list.Style.Set( "position", "absolute" );
