@@ -1065,8 +1065,59 @@
       "__version": 2,
       "__Prefab": "prefabs/environment/feathers.prefab",
       "__PrefabInstancePatch": {
-        "AddedObjects": [],
-        "RemovedObjects": [],
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "29637f70-03b6-4328-a597-3514284968de"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "96556e25-a9e9-4bc3-b41c-f82d1f2364f1"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "d4c440a9-0bca-4a92-8565-655be7313150"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.ModelRenderer",
+              "__guid": "29637f70-03b6-4328-a597-3514284968de",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyGroups": 18446744073709551615,
+              "CreateAttachments": false,
+              "LodOverride": null,
+              "MaterialGroup": null,
+              "MaterialOverride": null,
+              "Materials": null,
+              "Model": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "RenderOptions": {
+                "GameLayer": true,
+                "OverlayLayer": false,
+                "BloomLayer": false,
+                "AfterUILayer": false
+              },
+              "RenderType": "On",
+              "Tint": "1,1,1,1"
+            }
+          }
+        ],
+        "RemovedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "748b321f-ac12-4897-8d88-a0ab22cabc4d"
+            }
+          }
+        ],
         "PropertyOverrides": [
           {
             "Target": {
@@ -1082,18 +1133,32 @@
               "IdValue": "96556e25-a9e9-4bc3-b41c-f82d1f2364f1"
             },
             "Property": "Position",
-            "Value": "-400.937805,-498.854797,4.62100983"
+            "Value": "-400.937805,-498.854797,1.04421711"
           },
           {
             "Target": {
-              "Type": "Component",
-              "IdValue": "748b321f-ac12-4897-8d88-a0ab22cabc4d"
+              "Type": "GameObject",
+              "IdValue": "96556e25-a9e9-4bc3-b41c-f82d1f2364f1"
             },
-            "Property": "MaterialOverride",
-            "Value": null
+            "Property": "Scale",
+            "Value": "0.300000012,0.300000012,0.0299999993"
           }
         ],
-        "MovedObjects": []
+        "MovedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "d4c440a9-0bca-4a92-8565-655be7313150"
+            },
+            "NewParent": {
+              "Type": "GameObject",
+              "IdValue": "96556e25-a9e9-4bc3-b41c-f82d1f2364f1"
+            },
+            "NewContainerProperty": "Components",
+            "IsNewContainerArray": true,
+            "NewPreviousElement": null
+          }
+        ]
       },
       "__PrefabIdToInstanceId": {
         "96556e25-a9e9-4bc3-b41c-f82d1f2364f1": "8fa7b183-0ea5-4232-9dca-bea1b437a578",
@@ -1116,6 +1181,14 @@
             },
             "Property": "Position",
             "Value": "-462.155762,-498.854797,4.62100983"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "61b32b27-6192-4f34-93e7-5c2e7a75f4f5"
+            },
+            "Property": "Scale",
+            "Value": "0.200000003,0.200000003,0.200000003"
           }
         ],
         "MovedObjects": []
@@ -1368,14 +1441,14 @@
       "CustomBounds": false
     },
     "GameObjectSystems": {
-      "Sandbox.SelectionSetsSystem": {
-        "Data": {
-          "SelectionSets": []
-        }
-      },
       "Sandbox.Clutter.ClutterGridSystem": {
         "Storage": {
           "$blob": "432e91dd-45dc-4309-8fc9-b5de083dafa2"
+        }
+      },
+      "Sandbox.SelectionSetsSystem": {
+        "Data": {
+          "SelectionSets": []
         }
       }
     }
