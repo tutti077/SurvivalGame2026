@@ -1,0 +1,55 @@
+{
+  "buildPieces": [
+    {
+      "id": "foundation",
+      "displayName": "Floor",
+      "icon": "ui/build/foundation.png",
+      "prefab": "prefabs/build/foundation.prefab",
+      "fallbackColor": "0.52,0.48,0.42,1",
+      "halfWidth": 30,
+      "halfHeight": 30,
+      "halfDepth": 1.2,
+      "costs": [
+        { "resourceId": "wood", "amount": 5 }
+      ]
+    },
+    {
+      "id": "wall",
+      "displayName": "Wall",
+      "icon": "ui/build/wall.png",
+      "prefab": "prefabs/build/wall.prefab",
+      "fallbackColor": "0.62,0.58,0.52,1",
+      "halfWidth": 30,
+      "halfHeight": 1.2,
+      "halfDepth": 30,
+      "costs": [
+        { "resourceId": "wood", "amount": 3 }
+      ]
+    },
+    {
+      "id": "45roof",
+      "displayName": "45° Roof",
+      "icon": "ui/build/45roof.png",
+      "prefab": "prefabs/build/45roof.prefab",
+      "fallbackColor": "0.48,0.36,0.28,1",
+      "halfWidth": 30,
+      "halfHeight": 30,
+      "halfDepth": 1.2,
+      "costs": [
+        { "resourceId": "wood", "amount": 2 }
+      ]
+    },
+    {
+      "id": "repair",
+      "displayName": "Repair",
+      "icon": "ui/build/repair.png",
+      "prefab": "",
+      "isRepairTool": true,
+      "allowTerrainPlacement": false,
+      "fallbackColor": "0.72,0.58,0.28,1",
+      "costs": [
+        { "resourceId": "wood", "amount": 1 }
+      ]
+    }
+  ]
+}

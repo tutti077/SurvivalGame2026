@@ -15,6 +15,8 @@ public sealed class TrainingDummyAttackTelegraph : Component
 	[Property, Group( "Timing" )] public float TelegraphSeconds { get; set; } = 0.85f;
 	[Property, Group( "Timing" )] public float CooldownSeconds { get; set; } = 0.45f;
 	[Property, Group( "Timing" )] public float HoldSeconds { get; set; } = 0.12f;
+	[Property, Group( "Range" ), Title( "Attack activation range" ), Description( "Dummy only telegraphs and attacks while a player pawn is within this distance." )]
+	public float AttackActivationRange { get; set; } = 256f;
 	[Property, Group( "Timing" ), Title( "Attack path vertical offset" )] public float AttackPathVerticalOffset { get; set; } = -24f;
 	[Property, Group( "Debug" )] public bool ShowTelegraphDebug { get; set; } = true;
 	[Property, Group( "Debug" )] public float TelegraphLineLength { get; set; } = 92f;
@@ -56,6 +58,12 @@ public sealed class TrainingDummyAttackTelegraph : Component
 		GameObject.WorldRotation = _lockedAttackRotation;
 		ApplyAttackPathVerticalOffset();
 
+		if ( !IsPlayerInAttackRange() )
+		{
+			ResetAttackCycle();
+			return;
+		}
+
 		if ( !_hasQueuedAttack )
 			QueueNextAttack();
 
@@ -72,6 +80,73 @@ public sealed class TrainingDummyAttackTelegraph : Component
 		}
 
 		QueueNextAttack();
+	}
+
+	void ResetAttackCycle()
+	{
+		_hasQueuedAttack = false;
+		_telegraphActive = false;
+		_phaseEndsAt = 0;
+	}
+
+	bool IsPlayerInAttackRange()
+	{
+		if ( AttackActivationRange <= 0f )
+			return true;
+
+		return TryGetNearestPlayerDistance( out var distance ) && distance <= AttackActivationRange;
+	}
+
+	bool TryGetNearestPlayerDistance( out float distance )
+	{
+		distance = float.MaxValue;
+		var scene = Scene;
+		if ( !scene.IsValid() )
+			return false;
+
+		var origin = GameObject.WorldPosition;
+		var found = false;
+
+		foreach ( var vitals in scene.GetAllComponents<PlayerVitals>() )
+		{
+			if ( vitals is null || !vitals.Enabled || vitals.GameObject is null || !vitals.GameObject.IsValid() )
+				continue;
+
+			if ( vitals.GameObject == GameObject || SharesHierarchy( vitals.GameObject, GameObject ) )
+				continue;
+
+			if ( vitals.Components.Get<PlayerController>() is null )
+				continue;
+
+			var d = Vector3.DistanceBetween( origin, vitals.GameObject.WorldPosition );
+			if ( d >= distance )
+				continue;
+
+			distance = d;
+			found = true;
+		}
+
+		return found;
+	}
+
+	static bool SharesHierarchy( GameObject a, GameObject b )
+	{
+		if ( !a.IsValid() || !b.IsValid() )
+			return false;
+
+		for ( var go = a; go.IsValid(); go = go.Parent )
+		{
+			if ( go == b )
+				return true;
+		}
+
+		for ( var go = b; go.IsValid(); go = go.Parent )
+		{
+			if ( go == a )
+				return true;
+		}
+
+		return false;
 	}
 
 	void QueueNextAttack()

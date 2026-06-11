@@ -23,6 +23,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 	PlayerVitals _vitals;
 	PlayerHandHarvest _handHarvest;
+	PlayerEquipment _equipment;
 	PlayerGameMenuController _menuController;
 	PlayerInventory _inventory;
 	PlayerHotbar _hotbar;
@@ -31,6 +32,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	PlayerCrafting _crafting;
 	InventoryMenuInputOverlay _menuInputOverlay;
 	MenuPageNavigator _pageNavigator;
+	BuildMenuHud _buildMenuHud;
 	ScreenPanel _hudScreen;
 	bool _deferScreenPanelCamera;
 	bool _built;
@@ -43,6 +45,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	Panel _staminaFill;
 
 	Panel _promptRoot;
+	Label _promptLabel;
 	bool _promptWasVisible;
 
 	Panel _menuRoot;
@@ -59,6 +62,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	SkillsMenuSection _skillsSection;
 	MapMenuSection _mapSection;
 	GameSettingsMenuSection _settingsSection;
+	EquipmentPaperdollSection _equipmentSection;
 	PickupNotificationHud _pickupNotifications;
 
 	protected override void OnTreeFirstBuilt()
@@ -98,7 +102,9 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _vitals is not null )
 			_vitals.OnVitalsChanged -= RefreshVitals;
 		if ( _handHarvest is not null )
-			_handHarvest.FocusedNodeChanged -= OnHarvestFocusChanged;
+			_handHarvest.FocusedNodeChanged -= OnInteractionPromptChanged;
+		if ( _equipment is not null )
+			_equipment.EquipmentChanged -= OnEquipmentToolChanged;
 		if ( _inventory is not null )
 		{
 			_inventory.InventoryChanged -= OnInventoryChanged;
@@ -106,6 +112,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		}
 
 		_hotbarHud?.Dispose();
+		_buildMenuHud = null;
 		if ( _menuController is not null )
 		{
 			_menuController.MenuOpenChanged -= OnMenuOpenChanged;
@@ -143,15 +150,19 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_inventory = FindOnAncestors<PlayerInventory>();
 		_hotbar = FindOnAncestors<PlayerHotbar>();
+		_equipment = FindOnAncestors<PlayerEquipment>();
 
 		_inventoryInteraction = FindOnAncestors<PlayerInventoryInteraction>();
 		_inventoryInteraction?.SetDragLayerRoot( Panel );
+		if ( _equipment is not null && _inventory is not null )
+			_inventoryInteraction?.RegisterGrid( new PlayerEquipmentPaperdollGridHost( _equipment, _inventory ) );
 
 		BuildVitals( Panel );
 		BuildHarvestPrompt( Panel );
 		BuildPickupNotifications( Panel );
 		BuildGameMenu( Panel );
 		BuildHotbar( Panel );
+		BuildBuildMenu( Panel );
 
 		if ( screen is not null )
 		{
@@ -245,9 +256,11 @@ public sealed class PlayerScreenHud : PanelComponent
 	void BuildHarvestPrompt( Panel root )
 	{
 		_handHarvest = FindOnAncestors<PlayerHandHarvest>();
+		_equipment ??= FindOnAncestors<PlayerEquipment>();
+
 		if ( _handHarvest is null )
 		{
-			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerHandHarvest — harvest prompt skipped." );
+			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerHandHarvest — interaction prompt skipped." );
 			return;
 		}
 
@@ -283,13 +296,17 @@ public sealed class PlayerScreenHud : PanelComponent
 		keyLabel.Style.FontColor = Color.Black;
 		keyLabel.Style.FontSize = Length.Pixels( 15f );
 
-		var promptLabel = new Label { Parent = _promptRoot, Text = DefaultHarvestPromptText };
-		promptLabel.Style.FontColor = Color.White;
-		promptLabel.Style.FontSize = Length.Pixels( 18f );
+		_promptLabel = new Label { Parent = _promptRoot, Text = DefaultHarvestPromptText };
+		_promptLabel.Style.FontColor = Color.White;
+		_promptLabel.Style.FontSize = Length.Pixels( 18f );
 
-		_handHarvest.FocusedNodeChanged += OnHarvestFocusChanged;
-		OnHarvestFocusChanged();
+		_handHarvest?.FocusedNodeChanged += OnInteractionPromptChanged;
+		if ( _equipment is not null )
+			_equipment.EquipmentChanged += OnEquipmentToolChanged;
+		OnInteractionPromptChanged();
 	}
+
+	void OnEquipmentToolChanged() => _equipmentSection?.Refresh();
 
 	void BuildPickupNotifications( Panel root )
 	{
@@ -324,10 +341,24 @@ public sealed class PlayerScreenHud : PanelComponent
 		_hotbarHud.Build( root, _hotbar, _inventoryInteraction );
 	}
 
+	void BuildBuildMenu( Panel root )
+	{
+		_equipment ??= FindOnAncestors<PlayerEquipment>();
+		if ( _equipment is null )
+		{
+			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerEquipment — build menu skipped." );
+			return;
+		}
+
+		_buildMenuHud = new BuildMenuHud( _equipment );
+		_buildMenuHud.Build( root );
+	}
+
 	void BuildGameMenu( Panel root )
 	{
 		_menuController = FindOnAncestors<PlayerGameMenuController>();
 		_inventory = FindOnAncestors<PlayerInventory>();
+		_equipment ??= FindOnAncestors<PlayerEquipment>();
 		_inventoryInteraction = FindOnAncestors<PlayerInventoryInteraction>();
 		_crafting = FindOnAncestors<PlayerCrafting>();
 		if ( _menuController is null || _inventory is null )
@@ -373,8 +404,12 @@ public sealed class PlayerScreenHud : PanelComponent
 		_menuLeftRoot = CreateMenuSideAnchor( _menuRoot, alignLeft: true );
 		_menuRightRoot = CreateMenuSideAnchor( _menuRoot, alignLeft: false );
 
-		_leftMenuColumn = CreateMenuColumn( _menuLeftRoot, CraftingMenuColumnWidth );
+		_leftMenuColumn = CreateMenuColumn( _menuLeftRoot, InventoryMenuColumnWidth );
 		_rightMenuColumn = CreateMenuColumn( _menuRightRoot, InventoryMenuColumnWidth );
+
+		_equipmentSection = new EquipmentPaperdollSection( _equipment, _inventory, _inventoryInteraction );
+		_sections.Add( _equipmentSection );
+		_equipmentSection.Build( _leftMenuColumn );
 
 		_skillsSection = new SkillsMenuSection( _menuSkillsDetailRoot );
 		_sections.Add( _skillsSection );
@@ -510,12 +545,15 @@ public sealed class PlayerScreenHud : PanelComponent
 		return column;
 	}
 
-	void OnHarvestFocusChanged()
+	void OnInteractionPromptChanged()
 	{
 		if ( _promptRoot is null )
 			return;
 
 		var show = _handHarvest is not null && _handHarvest.FocusedNode is not null;
+		if ( _promptLabel is not null )
+			_promptLabel.Text = DefaultHarvestPromptText;
+
 		if ( show == _promptWasVisible )
 			return;
 
@@ -536,7 +574,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		for ( var i = 0; i < _sections.Count; i++ )
 		{
 			var id = _sections[i].SectionId;
-			if ( id is "inventory" or "crafting" )
+			if ( id is "inventory" or "crafting" or "equipment" )
 				_sections[i].Refresh();
 		}
 	}
@@ -595,8 +633,9 @@ public sealed class PlayerScreenHud : PanelComponent
 		var showSkills = !showFullscreen && (panels & MenuPanelFlags.Skills) != 0;
 		var showQuests = !showFullscreen && !showSkills && (panels & MenuPanelFlags.Quests) != 0;
 		var showCrafting = !showFullscreen && !showSkills && !showQuests && (panels & MenuPanelFlags.Crafting) != 0;
-		var showLeftColumn = showCrafting || showQuests;
 		var showInventory = !showFullscreen && !showSkills && (panels & MenuPanelFlags.Inventory) != 0;
+		var showPaperdoll = showInventory && !showCrafting && !showQuests;
+		var showLeftColumn = showCrafting || showQuests || showPaperdoll;
 
 		if ( _menuMapRoot is not null )
 			_menuMapRoot.Style.Set( "display", showFullscreen ? "flex" : "none" );
@@ -615,6 +654,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_craftingSection?.SetPanelVisible( showCrafting );
 		_questsSection?.SetPanelVisible( showQuests );
+		_equipmentSection?.SetPanelVisible( showPaperdoll );
 		_skillsSection?.SetPanelVisible( showSkills );
 		_mapSection?.SetPanelVisible( showMap );
 		_settingsSection?.SetPanelVisible( showSettings );

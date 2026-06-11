@@ -71,7 +71,7 @@
           "component_type": "SkinnedModelRenderer"
         },
         "RotateWithGround": true,
-        "RotationAngleLimit": 45,
+        "RotationAngleLimit": 46,
         "RotationSpeed": 1,
         "RunByDefault": false,
         "RunSpeed": 320,
@@ -495,6 +495,30 @@
         "OnComponentStart": null,
         "OnComponentUpdate": null,
         "PawnEyeHeight": 64
+      },
+      {
+        "__type": "Survival.PlayerEquippedItem",
+        "__guid": "f8b2c3d4-e5f6-7890-abcd-ef012345678a",
+        "__enabled": true,
+        "Flags": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null
+      },
+      {
+        "__type": "Survival.PlayerEquipment",
+        "__guid": "c2d3e4f5-a6b7-8901-cdef-123456789def",
+        "__enabled": true,
+        "Flags": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null
       }
     ],
     "Children": [

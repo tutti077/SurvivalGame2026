@@ -33,10 +33,10 @@ public sealed class ResourceItemDefinition : Component
 	[Property, Group( "Harvest" ), Title( "Harvest Yields" )]
 	public List<HarvestYieldEntry> HarvestYields { get; set; } = new();
 
-	[Property, Group( "Harvest" ), Title( "Legacy Yield Low (used when Harvest Yields is empty)" )]
+	[Property, Group( "Harvest" ), Title( "Legacy Yield Low (used when Harvest Yields is empty)" ), Range( 0, 200 )]
 	public int BaseYieldPerTickLow { get; set; } = 1;
 
-	[Property, Group( "Harvest" ), Title( "Legacy Yield High (used when Harvest Yields is empty)" )]
+	[Property, Group( "Harvest" ), Title( "Legacy Yield High (used when Harvest Yields is empty)" ), Range( 0, 200 )]
 	public int BaseYieldPerTickHigh { get; set; } = 1;
 
 	[Property, Group( "Harvest" ), Title( "Tool Type Required" )]

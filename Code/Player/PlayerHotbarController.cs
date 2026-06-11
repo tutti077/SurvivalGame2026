@@ -2,7 +2,7 @@ using Sandbox;
 
 namespace Survival;
 
-/// <summary>Local hotbar selection: number keys and mouse wheel (when the game menu is closed).</summary>
+/// <summary>Number keys always; scroll swaps hotbar unless a build piece preview owns scroll.</summary>
 [Title( "Player Hotbar Controller" )]
 public sealed class PlayerHotbarController : Component
 {
@@ -14,6 +14,7 @@ public sealed class PlayerHotbarController : Component
 
 	PlayerVitals _vitals;
 	PlayerHotbar _hotbar;
+	PlayerEquipment _equipment;
 	PlayerGameMenuController _menu;
 
 	protected override void OnStart()
@@ -21,6 +22,7 @@ public sealed class PlayerHotbarController : Component
 		base.OnStart();
 		_vitals = Components.Get<PlayerVitals>();
 		_hotbar = Components.Get<PlayerHotbar>();
+		_equipment = Components.Get<PlayerEquipment>();
 		_menu = Components.Get<PlayerGameMenuController>();
 	}
 
@@ -34,6 +36,10 @@ public sealed class PlayerHotbarController : Component
 			return;
 
 		PollSlotKeys();
+
+		if ( IsBuildPreviewOwningScroll() )
+			return;
+
 		PollMouseWheel();
 	}
 
@@ -43,6 +49,8 @@ public sealed class PlayerHotbarController : Component
 			_vitals = Components.Get<PlayerVitals>();
 		if ( _hotbar is null )
 			_hotbar = Components.Get<PlayerHotbar>();
+		if ( _equipment is null )
+			_equipment = Components.Get<PlayerEquipment>();
 
 		return _vitals is not null && _vitals.IsLocalInputOwnedPawn()
 		       && _hotbar is not null && _hotbar.IsLocalManagingClient();
@@ -55,17 +63,43 @@ public sealed class PlayerHotbarController : Component
 			if ( !Input.Pressed( SlotActions[i] ) )
 				continue;
 
+			ExitBuildModeForHotbarSwap();
 			_hotbar.SetActiveSlot( i );
+			_equipment?.EquipFromHotbarSlot( i );
 			return;
 		}
+	}
+
+	void ExitBuildModeForHotbarSwap()
+	{
+		var hammer = _equipment?.GetActiveTool<ToolBuildHammer>();
+		if ( hammer is null )
+			return;
+
+		hammer.SetBuildMenuOpen( false );
+		hammer.ClearSelectedPiece();
+	}
+
+	bool IsBuildPreviewOwningScroll()
+	{
+		var hammer = _equipment?.GetActiveTool<ToolBuildHammer>();
+		return hammer is not null && hammer.IsPreviewingPlacePiece;
 	}
 
 	void PollMouseWheel()
 	{
 		var scroll = Input.MouseWheel.y;
 		if ( scroll > 0.01f )
+		{
+			ExitBuildModeForHotbarSwap();
 			_hotbar.StepActiveSlot( -1 );
+			_equipment?.EquipMainHandFromActiveHotbar();
+		}
 		else if ( scroll < -0.01f )
+		{
+			ExitBuildModeForHotbarSwap();
 			_hotbar.StepActiveSlot( 1 );
+			_equipment?.EquipMainHandFromActiveHotbar();
+		}
 	}
 }

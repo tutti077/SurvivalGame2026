@@ -1,0 +1,57 @@
+---
+description: Run checks rarely; cache aggressively; validate only at authority boundaries
+alwaysApply: true
+---
+
+# Infrequent Validation & Anti-Cheat Boundaries
+
+SurvivalGame2026 will grow complex. **Default to doing less work, less often.** Checks exist to keep the game inside defined bounds and stop players cheating — not to re-prove correctness every frame.
+
+## When to check
+
+| Moment | Validate? | Why |
+|--------|-----------|-----|
+| **Client preview / UI / local feedback** | Light, cached, approximate OK | Responsiveness; not authoritative |
+| **Player commits an action** (place, craft, spend) | Yes — once on the path that matters | Block invalid intent before it applies |
+| **Server / host authority** | Yes — full rules | Source of truth; anti-cheat lives here |
+| **Every frame / every ray / every neighbor** | No | Causes lag; use cached or incremental state |
+
+**Rule:** If a check does not reject cheating or enforce a design boundary, it probably should not run in hot paths.
+
+## How to implement
+
+1. **Cache immutable or slow-changing data** (prefab bounds, snap locals, catalogs) — build once per piece/version, not per lookup or per frame.
+2. **Never clone/spawn/trace the world in a loop** to “verify” something that a cached value already answers.
+3. **Invalidate caches only on real change** (catalog reload, prefab version bump, piece added/removed) — not on every read.
+4. **Incremental updates** over full-world scans: when a build piece is placed/removed, update only its support graph component — not every piece in the scene.
+5. **Client RPC sends intent; host re-validates once** with the same authority rules as local host play.
+
+## Examples from this project
+
+```csharp
+// ❌ BAD — clone prefab every cache hit to “validate” bounds (GC storm every frame)
+if ( cache.TryGet( id, out entry ) && EntryMatchesPrefab( prefab, entry ) )
+    return entry;
+
+// ✅ GOOD — cache by piece id; invalidate only when catalog/prefab actually changes
+if ( cache.TryGet( id, out entry ) ) return entry;
+entry = BuildEntryOnce( prefab, data );
+```
+
+```csharp
+// ❌ BAD — full scene scan every FixedUpdate for all build pieces
+foreach ( var piece in scene.GetAllComponents<BuildPiece>() ) RecalculateSupport( piece );
+
+// ✅ GOOD — recalculate connected component when a piece is placed or removed
+BuildStructuralSupport.OnPiecePlaced( piece, snapTarget, touchesGround );
+BuildStructuralSupport.OnPieceRemoved( removed );
+```
+
+## Before adding a new check, ask
+
+1. **What cheat or boundary failure does this stop?**
+2. **Can it run once at commit time instead of continuously?**
+3. **Can results be cached or incrementally maintained?**
+4. **Is the host the only place that must be strict?**
+
+If you cannot answer (1), do not add the check to a hot path.

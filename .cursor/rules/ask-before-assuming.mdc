@@ -1,0 +1,15 @@
+---
+description: Always ask clarifying questions before making assumptions on this project
+alwaysApply: true
+---
+
+# Ask Before Assuming
+
+Before implementing features, refactors, or architectural changes in SurvivalGame2026:
+
+1. **Ask the user** when requirements, naming, data shape, or ownership are not explicitly stated.
+2. **Do not guess** at item stats, slot layouts, component hierarchy, or migration strategy — confirm first.
+3. **Summarize your understanding** and list open questions when the request spans multiple systems.
+4. **Proceed only after** the user answers or explicitly says to use your best judgment for a specific point.
+
+Exceptions: follow established patterns already in the codebase for the same subsystem unless the user is changing that subsystem.
