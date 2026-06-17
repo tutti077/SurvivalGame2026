@@ -192,6 +192,64 @@
       "Children": []
     },
     {
+      "__guid": "e1a2b3c4-d5e6-4789-a012-3456789abcde",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "EnemySpawner",
+      "Position": "351.382141,-407.447479,34",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Survival.EnemySpawnButton",
+          "__guid": "f2b3c4d5-e6f7-4890-b123-456789abcdef",
+          "__enabled": true,
+          "Flags": 0,
+          "EnemyType": "Scav",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "PrefabPath": "prefabs/entity/scavT1.prefab",
+          "SpawnHealth": 0,
+          "SpawnPoint": {
+            "_type": "gameobject",
+            "go": "a3b4c5d6-e7f8-4901-c234-567890abcdef"
+          },
+          "Tier": 1
+        }
+      ],
+      "Children": [
+        {
+          "__guid": "a3b4c5d6-e7f8-4901-c234-567890abcdef",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "EnemySpawnPoint",
+          "Position": "0,0,0",
+          "Rotation": "0,0,0,1",
+          "Scale": "1,1,1",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [],
+          "Children": []
+        }
+      ]
+    },
+    {
       "__guid": "6ad70641-3c6c-4402-9c85-9a4969af4764",
       "__version": 2,
       "Flags": 0,
@@ -256,7 +314,7 @@
           "OnTriggerExit": null,
           "RollingResistance": null,
           "Scale": "100,100,10",
-          "Static": false,
+          "Static": true,
           "Surface": null,
           "SurfaceVelocity": "0,0,0"
         }
@@ -1414,6 +1472,45 @@
         }
       ],
       "Children": []
+    },
+    {
+      "__guid": "88303074-10e5-45a0-ae1a-143628613903",
+      "__version": 2,
+      "__Prefab": "prefabs/entity/scavt1.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "351.382141,-407.447479,34"
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "88303074-10e5-45a0-ae1a-143628613903",
+        "6f708192-a3b4-2345-f012-456789012345": "d3331949-1c4c-414c-8a54-a80b9f3f0f45",
+        "8192a3b4-c5d6-4567-1234-678901234567": "9da7d7b7-0913-476b-9f00-5705344fc8ca",
+        "708192a3-b4c5-3456-0123-567890123456": "ba5bac20-ed34-47f6-bd73-e22a2e4499ba",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "ad660636-c891-4ee4-b305-091d890927c1",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "04b5c270-cb39-4ee8-a4c5-33b7423f8141",
+        "b4c5d6e7-f809-7890-4567-901234567890": "b96e3749-bf81-4e86-900e-c6bc301850a2",
+        "c5d6e7f8-091a-8901-5678-012345678901": "cc77853c-62aa-4cb1-b407-d89e3b1618d2",
+        "d6e7f809-1a2b-9012-6789-123456789012": "03637c4c-6bca-4e70-b5c6-ff38f4e1c9ae",
+        "e7f8091a-2b3c-0123-789a-234567890123": "01b40498-a75f-49d6-bc02-9fe7534322fc",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "8219108d-b822-4d20-9dc7-8408f61071b2",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "23c62f4e-a077-41cf-a6d5-070fa6526a0a",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "442efc46-cc2e-46a8-899c-f6c0c00a97cb",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "39563fea-dece-44ee-8d27-5175fa6f9b60",
+        "4d5e6f70-8192-0123-def0-234567890123": "d04976f9-9d7f-4033-bd15-0e0acc6ea00d",
+        "5e6f7081-92a3-1234-ef01-345678901234": "ad04b250-0b34-4253-9840-dc834d5e308c",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "c99d9b75-c4b0-4f28-b118-544cfaebf0d9"
+      }
     }
   ],
   "SceneProperties": {
@@ -1427,18 +1524,22 @@
       "Author": "Tutti"
     },
     "NavMesh": {
-      "Enabled": false,
+      "Enabled": true,
       "IncludeStaticBodies": true,
-      "IncludeKeyframedBodies": true,
-      "EditorAutoUpdate": true,
+      "IncludeKeyframedBodies": false,
+      "EditorAutoUpdate": false,
       "AgentHeight": 64,
       "AgentRadius": 16,
-      "AgentStepSize": 18,
-      "AgentMaxSlope": 40,
+      "AgentStepSize": 40,
+      "AgentMaxSlope": 50,
       "ExcludedBodies": "",
       "IncludedBodies": "",
       "DeferGeneration": false,
-      "CustomBounds": false
+      "CustomBounds": false,
+      "BakedDataPath": {
+        "$reference_type": "filereference",
+        "path": "scenes/testscene1_scene_data/navmesh/baked.navdata"
+      }
     },
     "GameObjectSystems": {
       "Sandbox.Clutter.ClutterGridSystem": {

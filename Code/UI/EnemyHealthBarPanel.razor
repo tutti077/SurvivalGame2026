@@ -1,0 +1,43 @@
+@using Sandbox;
+@using Sandbox.UI;
+@namespace Survival
+@inherits PanelComponent
+
+<root>
+	<div class="hud-stack">
+		<div class="name">@Label</div>
+		<div class="bar-track">
+			<div class="bar-fill" style="width: @FillWidth"></div>
+		</div>
+	</div>
+</root>
+
+@code
+{
+	public string Label { get; set; } = "";
+
+	public float HealthFraction { get; set; } = 1f;
+
+	string FillWidth => $"{Math.Clamp( HealthFraction, 0f, 1f ) * 100f:0}%";
+
+	public void SetDisplay( string label, float healthFraction )
+	{
+		Label = label ?? "";
+		HealthFraction = healthFraction;
+		StateHasChanged();
+	}
+
+	public void SyncLayoutBounds( Vector2 size )
+	{
+		if ( Panel is Sandbox.UI.RootPanel root )
+			root.PanelBounds = new Rect( 0, 0, size.x, size.y );
+	}
+
+	protected override void OnTreeFirstBuilt()
+	{
+		base.OnTreeFirstBuilt();
+		SyncLayoutBounds( new Vector2( 640f, 128f ) );
+	}
+
+	protected override int BuildHash() => HashCode.Combine( Label, (int)(HealthFraction * 1000f) );
+}

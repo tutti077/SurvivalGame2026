@@ -94,6 +94,13 @@ public static class BuildViewCamera
 		return false;
 	}
 
+	/// <summary>True when the pawn's active view camera is first-person (near the body).</summary>
+	public static bool IsFirstPersonView( GameObject pawn )
+	{
+		var cam = Resolve( pawn );
+		return cam.IsValid() && IsFirstPersonViewCamera( pawn, cam );
+	}
+
 	static bool TryFindFirstCameraInHierarchy( GameObject go, out CameraComponent cam )
 	{
 		cam = default;

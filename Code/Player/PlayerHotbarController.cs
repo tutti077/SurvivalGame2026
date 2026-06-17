@@ -65,7 +65,7 @@ public sealed class PlayerHotbarController : Component
 
 			ExitBuildModeForHotbarSwap();
 			_hotbar.SetActiveSlot( i );
-			_equipment?.EquipFromHotbarSlot( i );
+			_equipment?.SyncEquipFromActiveHotbar();
 			return;
 		}
 	}
@@ -93,13 +93,13 @@ public sealed class PlayerHotbarController : Component
 		{
 			ExitBuildModeForHotbarSwap();
 			_hotbar.StepActiveSlot( -1 );
-			_equipment?.EquipMainHandFromActiveHotbar();
+			_equipment?.SyncEquipFromActiveHotbar();
 		}
 		else if ( scroll < -0.01f )
 		{
 			ExitBuildModeForHotbarSwap();
 			_hotbar.StepActiveSlot( 1 );
-			_equipment?.EquipMainHandFromActiveHotbar();
+			_equipment?.SyncEquipFromActiveHotbar();
 		}
 	}
 }

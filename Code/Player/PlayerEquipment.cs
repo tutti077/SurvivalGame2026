@@ -37,7 +37,10 @@ public sealed class PlayerEquipment : Component
 		EnsureToolsRoot();
 
 		if ( _hotbar is not null )
+		{
 			_hotbar.HotbarChanged += OnHotbarChanged;
+			_hotbar.ActiveSlotChanged += OnActiveSlotChanged;
+		}
 
 		RefreshDerivedState();
 		SyncEquipFromActiveHotbar();
@@ -46,7 +49,10 @@ public sealed class PlayerEquipment : Component
 	protected override void OnDestroy()
 	{
 		if ( _hotbar is not null )
+		{
 			_hotbar.HotbarChanged -= OnHotbarChanged;
+			_hotbar.ActiveSlotChanged -= OnActiveSlotChanged;
+		}
 
 		DestroyActiveTool();
 		base.OnDestroy();
@@ -72,27 +78,17 @@ public sealed class PlayerEquipment : Component
 		return _activeToolInstance.Components.Get<T>();
 	}
 
-	/// <summary>Scroll hotbar: equip active hotbar stack to MainHand only.</summary>
-	public void EquipMainHandFromActiveHotbar()
+	/// <summary>Re-equip from the active hotbar slot (keys, scroll, click).</summary>
+	public void SyncEquipFromActiveHotbar()
 	{
-		if ( _hotbar is null )
+		if ( _hotbar is null || !CanSyncFromHotbar() )
 			return;
 
-		var hotbarSlot = _hotbar.GetSlot( _hotbar.ActiveSlotIndex );
-		if ( hotbarSlot.IsEmpty )
-		{
-			SetSlot( EquipmentSlot.MainHand, InventorySlot.Empty );
-			return;
-		}
-
-		if ( !EquipmentCatalog.TryGet( hotbarSlot.ResourceId, out var profile ) || !profile.HotbarEquipable )
-			return;
-
-		if ( !EquipmentCatalog.IsSlotAllowed( profile, EquipmentSlot.MainHand ) )
-			return;
-
-		SetSlot( EquipmentSlot.MainHand, CreateEquippedStack( hotbarSlot.ResourceId ) );
+		EquipFromHotbarSlot( _hotbar.ActiveSlotIndex );
 	}
+
+	/// <summary>Scroll hotbar: equip active hotbar stack to MainHand only.</summary>
+	public void EquipMainHandFromActiveHotbar() => SyncEquipFromActiveHotbar();
 
 	/// <summary>Number key: equip hotbar stack to its profile primary slot.</summary>
 	public void EquipFromHotbarSlot( int hotbarIndex )
@@ -100,26 +96,38 @@ public sealed class PlayerEquipment : Component
 		if ( _hotbar is null )
 			return;
 
-		var hotbarSlot = _hotbar.GetSlot( hotbarIndex );
-		if ( hotbarSlot.IsEmpty )
+		if ( !TryResolveHotbarEquipResourceId( hotbarIndex, out var resourceId ) )
+		{
+			SetSlot( EquipmentSlot.MainHand, InventorySlot.Empty );
 			return;
+		}
 
-		if ( !EquipmentCatalog.TryGet( hotbarSlot.ResourceId, out var profile ) || !profile.HotbarEquipable )
+		if ( !EquipmentCatalog.TryGet( resourceId, out var profile ) || !profile.HotbarEquipable )
 			return;
 
 		var target = EquipmentCatalog.GetPrimarySlot( profile );
-		SetSlot( target, CreateEquippedStack( hotbarSlot.ResourceId ) );
+		SetSlot( target, CreateEquippedStack( resourceId ) );
+	}
+
+	bool TryResolveHotbarEquipResourceId( int hotbarIndex, out string resourceId )
+	{
+		resourceId = string.Empty;
+		if ( _hotbar is null || hotbarIndex < 0 || hotbarIndex >= PlayerHotbar.SlotCount )
+			return false;
+
+		var hotbarSlot = _hotbar.GetSlot( hotbarIndex );
+		if ( !hotbarSlot.IsEmpty )
+		{
+			resourceId = hotbarSlot.ResourceId;
+			return !string.IsNullOrWhiteSpace( resourceId );
+		}
+
+		return false;
 	}
 
 	void OnHotbarChanged() => SyncEquipFromActiveHotbar();
 
-	void SyncEquipFromActiveHotbar()
-	{
-		if ( _hotbar is null || !CanSyncFromHotbar() )
-			return;
-
-		EquipFromHotbarSlot( _hotbar.ActiveSlotIndex );
-	}
+	void OnActiveSlotChanged( int _ ) => SyncEquipFromActiveHotbar();
 
 	bool CanSyncFromHotbar()
 	{

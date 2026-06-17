@@ -131,10 +131,29 @@ public sealed class DamageReceiver : Component, IDamageable
 	{
 		var scaled = amount * DamageMultiplier;
 		var vitals = Components.Get<PlayerVitals>() ?? FindVitalsInParents( GameObject.Parent );
-		if ( vitals is not null )
+		if ( vitals is not null && vitals.Enabled )
 			return vitals.ApplyDamageAfterArmor( scaled, attacker );
 
+		var entity = Components.Get<EntityVitals>() ?? FindEntityVitalsInParents( GameObject.Parent );
+		if ( entity is not null && entity.Enabled )
+			return entity.ApplyDamage( scaled, attacker );
+
 		return scaled;
+	}
+
+	static EntityVitals FindEntityVitalsInParents( GameObject start )
+	{
+		if ( start is null || !start.IsValid() )
+			return null;
+
+		for ( var p = start; p.IsValid(); p = p.Parent )
+		{
+			var v = p.Components.Get<EntityVitals>();
+			if ( v is not null )
+				return v;
+		}
+
+		return null;
 	}
 
 	static PlayerVitals FindVitalsInParents( GameObject start )

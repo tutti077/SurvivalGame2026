@@ -34,6 +34,7 @@ public static class BuildAuthority
 		var piece = spawned.Components.Get<BuildPiece>() ?? spawned.Components.Create<BuildPiece>();
 		piece.Configure( pieceId, blueprint, previewGhost: false );
 		BuildSnapPlacement.InvalidatePieceCache();
+		BuildNavMeshSync.OnBuildPieceChanged( scene, spawned );
 
 		return true;
 	}
@@ -47,6 +48,7 @@ public static class BuildAuthority
 			return false;
 
 		target.Configure( target.PieceId, blueprint: false, previewGhost: false );
+		BuildNavMeshSync.OnBuildPieceChanged( target.Scene, target.GameObject );
 		return true;
 	}
 
@@ -55,8 +57,16 @@ public static class BuildAuthority
 		if ( !placer.IsValid() || target is null || !target.IsValid() || target.IsPreviewGhost )
 			return false;
 
+		var scene = target.Scene;
+		var bounds = target.GameObject.GetBounds();
+		if ( bounds.Size.LengthSquared < 1f )
+			bounds = BBox.FromPositionAndSize( target.GameObject.WorldPosition, 120f );
+
 		target.GameObject.Destroy();
 		BuildSnapPlacement.InvalidatePieceCache();
+		if ( scene.IsValid() )
+			BuildNavMeshSync.OnBuildPieceBoundsChanged( scene, bounds );
+
 		return true;
 	}
 }

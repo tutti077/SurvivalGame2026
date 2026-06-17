@@ -330,17 +330,49 @@ public sealed class CombatAuthority : Component
 			return null;
 
 		var self = dmg.GameObject.Components.Get<PlayerVitals>();
-		if ( self is not null )
+		if ( self is not null && self.Enabled )
 			return self;
 
 		for ( var p = dmg.GameObject.Parent; p.IsValid(); p = p.Parent )
 		{
 			var v = p.Components.Get<PlayerVitals>();
-			if ( v is not null )
+			if ( v is not null && v.Enabled )
 				return v;
 		}
 
 		return null;
+	}
+
+	public static EntityVitals ResolveEntityVitalsForDamageReceiver( DamageReceiver dmg )
+	{
+		if ( dmg is null || !dmg.GameObject.IsValid() )
+			return null;
+
+		var self = dmg.GameObject.Components.Get<EntityVitals>();
+		if ( self is not null && self.Enabled )
+			return self;
+
+		for ( var p = dmg.GameObject.Parent; p.IsValid(); p = p.Parent )
+		{
+			var v = p.Components.Get<EntityVitals>();
+			if ( v is not null && v.Enabled )
+				return v;
+		}
+
+		return null;
+	}
+
+	public static bool IsDamageVictimAlive( DamageReceiver dmg )
+	{
+		var player = ResolvePlayerVitalsForDamageReceiver( dmg );
+		if ( player is not null )
+			return player.CurrentHealth > 0.001f;
+
+		var entity = ResolveEntityVitalsForDamageReceiver( dmg );
+		if ( entity is not null )
+			return !entity.IsDead;
+
+		return true;
 	}
 
 	public static bool MayApplyMeleeDamageFromAttackerToReceiver( GameObject attackerRoot, DamageReceiver dmg )
@@ -356,9 +388,13 @@ public sealed class CombatAuthority : Component
 
 	public static Guid ResolveMeleeVictimDedupId( DamageReceiver dmg )
 	{
-		var v = ResolvePlayerVitalsForDamageReceiver( dmg );
-		if ( v is not null && v.GameObject.IsValid() )
-			return v.GameObject.Id;
+		var player = ResolvePlayerVitalsForDamageReceiver( dmg );
+		if ( player is not null && player.GameObject.IsValid() )
+			return player.GameObject.Id;
+
+		var entity = ResolveEntityVitalsForDamageReceiver( dmg );
+		if ( entity is not null && entity.GameObject.IsValid() )
+			return entity.GameObject.Id;
 
 		return dmg.GameObject.Id;
 	}

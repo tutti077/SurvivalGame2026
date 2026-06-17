@@ -328,11 +328,25 @@ public sealed class PlayerInventoryInteraction : Component
 
 		if ( _held.IsEmpty )
 		{
+			if ( slot.IsHotbarSlot )
+			{
+				SelectHotbarSlot( slot.SlotIndex );
+				return;
+			}
+
 			BeginDragFromSlot( slot );
 			return;
 		}
 
 		TryPlaceAllHeldIntoSlot( slot.GridHost, slot.SlotIndex );
+	}
+
+	void SelectHotbarSlot( int slotIndex )
+	{
+		if ( _hotbar is null || slotIndex < 0 || slotIndex >= PlayerHotbar.SlotCount )
+			return;
+
+		_hotbar.SetActiveSlot( slotIndex );
 	}
 
 	void ProcessSlotLeftRelease( InventorySlotPanel slot )

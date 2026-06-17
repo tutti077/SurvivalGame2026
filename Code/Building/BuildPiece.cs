@@ -44,6 +44,14 @@ public sealed class BuildPiece : Component
 		ApplyVisualTint();
 	}
 
+	protected override void OnStart()
+	{
+		if ( IsPreviewGhost || string.IsNullOrWhiteSpace( PieceId ) )
+			return;
+
+		EnsureWalkColliders( PieceId );
+	}
+
 	public void RefreshSnapPoints()
 	{
 		_snapPoints.Clear();
@@ -120,9 +128,37 @@ public sealed class BuildPiece : Component
 
 	void EnsureWalkColliders( string pieceId )
 	{
+		if ( string.Equals( pieceId, "foundation", StringComparison.OrdinalIgnoreCase ) )
+		{
+			RestoreFoundationCollider();
+			return;
+		}
+
 		if ( !string.Equals( pieceId, "45roof", StringComparison.OrdinalIgnoreCase ) )
 			return;
 
+		EnsureRoofWalkSurface();
+	}
+
+	void RestoreFoundationCollider()
+	{
+		var root = GameObject;
+		if ( !root.IsValid() )
+			return;
+
+		RemoveWalkChild( "WalkDeck" );
+
+		var rootBox = root.Components.Get<BoxCollider>();
+		if ( rootBox is not null )
+		{
+			rootBox.IsTrigger = false;
+			rootBox.Static = true;
+			rootBox.Enabled = true;
+		}
+	}
+
+	void EnsureRoofWalkSurface()
+	{
 		var root = GameObject;
 		if ( !root.IsValid() )
 			return;
@@ -131,31 +167,52 @@ public sealed class BuildPiece : Component
 		if ( rootBox is not null )
 			rootBox.IsTrigger = true;
 
-		GameObject ramp = null;
-		foreach ( var child in root.Children )
-		{
-			if ( child.IsValid() && child.Name == "WalkRamp" )
-			{
-				ramp = child;
-				break;
-			}
-		}
-
-		if ( ramp is null || !ramp.IsValid() )
-		{
-			ramp = new GameObject( false, "WalkRamp" );
-			ramp.Parent = root;
-			ramp.LocalPosition = Vector3.Zero;
-			ramp.LocalRotation = Rotation.Identity;
-			ramp.LocalScale = Vector3.One;
-		}
-
+		var ramp = GetOrCreateWalkChild( "WalkRamp" );
 		var walkBox = ramp.Components.Get<BoxCollider>() ?? ramp.Components.Create<BoxCollider>();
 		walkBox.Center = Vector3.Zero;
 		walkBox.Scale = new Vector3( 50f, 50f, 160f );
 		walkBox.Static = true;
 		walkBox.IsTrigger = false;
 		walkBox.Enabled = true;
+		ramp.LocalRotation = Rotation.Identity;
+		ramp.LocalPosition = Vector3.Zero;
+
+		var deck = GetOrCreateWalkChild( "WalkDeck" );
+		var deckBox = deck.Components.Get<BoxCollider>() ?? deck.Components.Create<BoxCollider>();
+		deckBox.Center = Vector3.Zero;
+		deckBox.Scale = new Vector3( 58f, 58f, 8f );
+		deckBox.Static = true;
+		deckBox.IsTrigger = false;
+		deckBox.Enabled = true;
+
+		var half = BuildModuleDimensions.RoofHalfExtents;
+		deck.LocalPosition = new Vector3( 0f, 0f, half.z - 2f );
+		deck.LocalRotation = Rotation.Identity;
+	}
+
+	void RemoveWalkChild( string childName )
+	{
+		foreach ( var child in GameObject.Children )
+		{
+			if ( child.IsValid() && child.Name == childName )
+				child.Destroy();
+		}
+	}
+
+	GameObject GetOrCreateWalkChild( string childName )
+	{
+		foreach ( var child in GameObject.Children )
+		{
+			if ( child.IsValid() && child.Name == childName )
+				return child;
+		}
+
+		var walk = new GameObject( false, childName );
+		walk.Parent = GameObject;
+		walk.LocalPosition = Vector3.Zero;
+		walk.LocalRotation = Rotation.Identity;
+		walk.LocalScale = Vector3.One;
+		return walk;
 	}
 }
 

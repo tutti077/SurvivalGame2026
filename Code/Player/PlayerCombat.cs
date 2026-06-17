@@ -476,6 +476,10 @@ public partial class PlayerCombat : Component
 		if ( menuController is not null && menuController.IsMenuOpen )
 			return;
 
+		var equipped = Components.Get<PlayerEquippedItem>();
+		if ( equipped is not null && !equipped.HasAction( EquippedItemActions.PrimaryMelee ) )
+			return;
+
 		_combatNetDiag = $"netActive={GameObject.Network is { Active: true }} isHost={Networking.IsHost}";
 
 		// Finish any expired swing window before processing this frame's input (uses sandbox time, not wall clock).

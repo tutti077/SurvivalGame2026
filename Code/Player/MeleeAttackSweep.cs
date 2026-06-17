@@ -143,8 +143,7 @@ public static class MeleeAttackSweep
 		if ( bodyReceiver is null )
 			return false;
 
-		var vitals = CombatAuthority.ResolvePlayerVitalsForDamageReceiver( bodyReceiver );
-		if ( vitals is not null && vitals.CurrentHealth <= 0.001f )
+		if ( !CombatAuthority.IsDamageVictimAlive( bodyReceiver ) )
 			return false;
 
 		var dedupBodyId = CombatAuthority.ResolveMeleeVictimDedupId( bodyReceiver );
@@ -171,6 +170,7 @@ public static class MeleeAttackSweep
 
 		var dealt = bodyReceiver.TakeDamage( dmgAmount, attackerCombat );
 		var staggerApplied = stagger * stMul;
+		var vitals = CombatAuthority.ResolvePlayerVitalsForDamageReceiver( bodyReceiver );
 		attackerCombat.ApplyMeleeStaggerToVictim( vitals, staggerApplied );
 		targetsHitCount++;
 
@@ -339,8 +339,7 @@ public static class MeleeAttackSweep
 		if ( !CombatAuthority.MayApplyMeleeDamageFromAttackerToReceiver( attackerRoot, dmg ) )
 			return false;
 
-		var vitals = CombatAuthority.ResolvePlayerVitalsForDamageReceiver( dmg );
-		if ( vitals is not null && vitals.CurrentHealth <= 0.001f )
+		if ( !CombatAuthority.IsDamageVictimAlive( dmg ) )
 			return false;
 
 		var dedupId = CombatAuthority.ResolveMeleeVictimDedupId( dmg );
@@ -369,6 +368,7 @@ public static class MeleeAttackSweep
 
 		var dealt = dmg.TakeDamage( dmgAmount, attackerCombat );
 		var staggerApplied = stagger * stMul;
+		var vitals = CombatAuthority.ResolvePlayerVitalsForDamageReceiver( dmg );
 		attackerCombat.ApplyMeleeStaggerToVictim( vitals, staggerApplied );
 
 		targetsHitCount++;
