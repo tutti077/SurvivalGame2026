@@ -179,7 +179,8 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 				var maxIter = Math.Max( 1, settings.ValleyAutoMaxIterationsPerSeed );
 				var seedAttempt = Math.Max( 1, TerrainPreviewMapIterationTracker.CurrentSeedAttempt );
 				var maxSeeds = Math.Max( 1, settings.ValleyAutoMaxSeedAttempts );
-				_statusLabel.Text = $"Generating… seed {seedAttempt}/{maxSeeds} · iter {count}/{maxIter} · #{settings.WorldSeed}";
+				var totalRasters = TerrainPreviewMapIterationTracker.TotalCount;
+				_statusLabel.Text = $"Generating… seed {seedAttempt}/{maxSeeds} · tune {count}/{maxIter} · total {totalRasters} · #{settings.WorldSeed}";
 				await Task.Delay( 33 );
 			}
 

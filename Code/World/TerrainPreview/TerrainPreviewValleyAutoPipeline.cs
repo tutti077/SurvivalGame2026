@@ -114,14 +114,12 @@ public static class TerrainPreviewValleyAutoPipeline
 				if ( TerrainPreviewSpawnLandCheck.MeetsAcceptableSpawnTarget( settings, backend ) )
 					landCheckpoint = TerrainPreviewAutoTuneCheckpoint.Capture( settings );
 
-				if ( landCheckpoint.HasValue && !TerrainPreviewMapIterationTracker.IsAbortRequested )
+				if ( landCheckpoint.HasValue && !TerrainPreviewMapIterationTracker.IsAbortRequested
+					&& (settings.EnableInteriorWaterLayer || settings.EnableValleyOceanAutoWeight) )
 				{
-					if ( settings.EnableInteriorWaterLayer )
-						interiorWater = TerrainPreviewValleyInteriorWaterAuto.Apply( settings, backend );
-
-					if ( !TerrainPreviewMapIterationTracker.IsAbortRequested
-						&& settings.EnableValleyOceanAutoWeight )
-						weight = TerrainPreviewValleyOceanAutoWeight.Apply( settings, backend, resetValleyWeight: false );
+					var phase2 = TerrainPreviewValleyPhase2WaterSearch.Search( settings, backend );
+					interiorWater = phase2.InteriorWater;
+					weight = phase2.Weight;
 				}
 			}
 

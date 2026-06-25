@@ -49,7 +49,9 @@ public static class TerrainPreviewValleyAutoRunStats
 		if ( result.SeedsAttempted > 1 )
 			note += $"Seeds tried: {result.SeedsAttempted} (retry +1 until solved)\n";
 		if ( result.SearchIterationCapped )
-			note += "Hit iteration cap\n";
+			note += $"Tune hit iteration cap ({TerrainPreviewMapIterationTracker.MaxIterations})\n";
+		else if ( result.SeedsAttempted > 0 && !result.Solved )
+			note += "Tune stopped early (limit reached)\n";
 		if ( result.SearchTimedOut )
 			note += "Search timed out\n";
 		if ( result.RevertedToLandCheckpoint )
