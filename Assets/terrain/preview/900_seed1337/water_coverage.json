@@ -1,0 +1,15 @@
+{
+  "insideWorldPixels": 823592,
+  "landPixels": 773572,
+  "oceanPixels": 50020,
+  "interiorOceanPixels": 23159,
+  "exteriorOceanPixels": 26861,
+  "landFraction": 0.939266,
+  "oceanFraction": 0.060733955,
+  "interiorOceanFraction": 0.028119506,
+  "exteriorOceanFraction": 0.03261445,
+  "interiorOceanOfOceanFraction": 0.4629948,
+  "interiorZoneRadius": 0.7,
+  "targetInteriorOceanFraction": 0.08,
+  "belowInteriorOceanTarget": true
+}

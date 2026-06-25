@@ -23,6 +23,7 @@
     "CsProjName": "survivalgamebasics",
     "StartupScene": "scenes/testscene1.scene",
     "MapStartupScene": "scenes/testscene1.scene",
+    "DedicatedServerStartupScene": "scenes/testscene1.scene",
     "ProjectTemplate": null,
     "LaunchMode": "Launcher",
     "ControlModes": {

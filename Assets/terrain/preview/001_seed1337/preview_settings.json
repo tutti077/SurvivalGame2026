@@ -1,0 +1,22 @@
+{
+  "iteration": 1,
+  "mode": "HeightMap",
+  "file": "height.png",
+  "backend": "SimpleTerrainPreviewBackend",
+  "WorldDiameterMeters": 20000,
+  "PreviewResolution": 512,
+  "WorldSeed": 1337,
+  "ContinentalFrequency": 1.75,
+  "ContinentalWeight": 0.55,
+  "HillFrequency": 12,
+  "HillWeight": 0.25,
+  "ValleyFrequency": 8,
+  "ValleyWeight": 0.15,
+  "OceanFalloffStrength": 0.32,
+  "MountainThreshold": 0.56,
+  "MountainFrequency": 4,
+  "HeightCurvePower": 1.15,
+  "LandFalloffPlateau01": 0.68,
+  "LandFalloffPlateauFloor": 0.82,
+  "LandFalloffRimPower": 0.92
+}
