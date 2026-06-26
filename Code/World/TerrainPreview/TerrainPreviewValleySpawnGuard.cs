@@ -17,9 +17,12 @@ public static class TerrainPreviewValleySpawnGuard
 	public readonly struct GuardResult
 	{
 		public bool SpawnLandOk { get; init; }
+		public bool SpawnEscapeOk { get; init; }
 		public float SpawnLandFraction01 { get; init; }
+		public float SpawnEscapeBestLandMeters { get; init; }
 		public int FrequencyStepsUp { get; init; }
 		public int WeightStepsDown { get; init; }
+		public int InteriorWaterStepsDown { get; init; }
 		public int HillStepsUp { get; init; }
 		public int ContinentalStepsUp { get; init; }
 		public ValleyAutoLimitHit LimitsHit { get; init; }
@@ -30,29 +33,35 @@ public static class TerrainPreviewValleySpawnGuard
 		backend ??= TerrainPreviewBackendRegistry.Active;
 
 		if ( !settings.EnableValleyLayer )
-			return new GuardResult { SpawnLandOk = true };
+			return new GuardResult { SpawnLandOk = true, SpawnEscapeOk = true };
 
 		var minLand = TerrainPreviewValleyAutoEvaluate.SpawnAcceptableLand( settings );
 		var radius = Math.Max( 5f, settings.ValleySpawnLandRadiusMeters );
 		var spawnLand = TerrainPreviewSpawnLandCheck.Measure( settings, radius, backend );
-		if ( spawnLand.MeetsLandTarget( minLand ) )
+		var spawnEscape = TerrainPreviewSpawnLandEscapeCheck.Measure( settings, backend );
+		if ( spawnLand.MeetsLandTarget( minLand ) && spawnEscape.HasEscape )
 		{
 			return new GuardResult
 			{
 				SpawnLandOk = true,
+				SpawnEscapeOk = true,
 				SpawnLandFraction01 = spawnLand.LandFraction01,
+				SpawnEscapeBestLandMeters = spawnEscape.BestContinuousLandMeters,
 			};
 		}
 
 		var limitsHit = ValleyAutoLimitHit.None;
 		var freqSteps = 0;
 		var weightSteps = 0;
+		var interiorWaterSteps = 0;
 		var hillSteps = 0;
 		var continentalSteps = 0;
 		var freqStep = Math.Max( 0.5f, settings.ValleyAutoFrequencyStep );
 		var weightStep = Math.Max( 0.001f, settings.ValleyOceanWeightStep );
+		var interiorWaterStep = Math.Max( 0.01f, settings.InteriorWaterAutoStep );
 		var frequency = settings.ValleyFrequency;
 		var weight = settings.ValleyWeight;
+		var interiorWaterWeight = settings.InteriorWaterWeight;
 		var hillWeight = settings.HillWeight;
 		var continentalWeight = settings.ContinentalWeight;
 
@@ -62,7 +71,8 @@ public static class TerrainPreviewValleySpawnGuard
 				break;
 
 			spawnLand = TerrainPreviewSpawnLandCheck.Measure( settings, radius, backend );
-			if ( spawnLand.MeetsLandTarget( minLand ) )
+			spawnEscape = TerrainPreviewSpawnLandEscapeCheck.Measure( settings, backend );
+			if ( spawnLand.MeetsLandTarget( minLand ) && spawnEscape.HasEscape )
 				break;
 
 			var progressed = false;
@@ -80,7 +90,8 @@ public static class TerrainPreviewValleySpawnGuard
 			}
 
 			spawnLand = TerrainPreviewSpawnLandCheck.Measure( settings, radius, backend );
-			if ( spawnLand.MeetsLandTarget( minLand ) )
+			spawnEscape = TerrainPreviewSpawnLandEscapeCheck.Measure( settings, backend );
+			if ( spawnLand.MeetsLandTarget( minLand ) && spawnEscape.HasEscape )
 				break;
 
 			if ( weight > MinValleyWeight + 0.0001f )
@@ -96,7 +107,23 @@ public static class TerrainPreviewValleySpawnGuard
 			}
 
 			spawnLand = TerrainPreviewSpawnLandCheck.Measure( settings, radius, backend );
-			if ( spawnLand.MeetsLandTarget( minLand ) )
+			spawnEscape = TerrainPreviewSpawnLandEscapeCheck.Measure( settings, backend );
+			if ( spawnLand.MeetsLandTarget( minLand ) && spawnEscape.HasEscape )
+				break;
+
+			if ( settings.EnableInteriorWaterLayer
+				&& !spawnEscape.HasEscape
+				&& interiorWaterWeight > 0.0001f )
+			{
+				interiorWaterWeight = Math.Max( 0f, interiorWaterWeight - interiorWaterStep );
+				settings.InteriorWaterWeight = interiorWaterWeight;
+				interiorWaterSteps++;
+				progressed = true;
+			}
+
+			spawnLand = TerrainPreviewSpawnLandCheck.Measure( settings, radius, backend );
+			spawnEscape = TerrainPreviewSpawnLandEscapeCheck.Measure( settings, backend );
+			if ( spawnLand.MeetsLandTarget( minLand ) && spawnEscape.HasEscape )
 				break;
 
 			if ( settings.EnableHillLayer && hillWeight < MaxLayerWeight - 0.0001f )
@@ -108,7 +135,8 @@ public static class TerrainPreviewValleySpawnGuard
 			}
 
 			spawnLand = TerrainPreviewSpawnLandCheck.Measure( settings, radius, backend );
-			if ( spawnLand.MeetsLandTarget( minLand ) )
+			spawnEscape = TerrainPreviewSpawnLandEscapeCheck.Measure( settings, backend );
+			if ( spawnLand.MeetsLandTarget( minLand ) && spawnEscape.HasEscape )
 				break;
 
 			if ( settings.EnableContinentalLayer && continentalWeight < MaxLayerWeight - 0.0001f )
@@ -124,15 +152,19 @@ public static class TerrainPreviewValleySpawnGuard
 		}
 
 		spawnLand = TerrainPreviewSpawnLandCheck.Measure( settings, radius, backend );
+		spawnEscape = TerrainPreviewSpawnLandEscapeCheck.Measure( settings, backend );
 		if ( !spawnLand.MeetsLandTarget( minLand ) && limitsHit == ValleyAutoLimitHit.None )
 			limitsHit |= ValleyAutoLimitHit.MaxValleyFrequency;
 
 		return new GuardResult
 		{
 			SpawnLandOk = spawnLand.MeetsLandTarget( minLand ),
+			SpawnEscapeOk = spawnEscape.HasEscape,
 			SpawnLandFraction01 = spawnLand.LandFraction01,
+			SpawnEscapeBestLandMeters = spawnEscape.BestContinuousLandMeters,
 			FrequencyStepsUp = freqSteps,
 			WeightStepsDown = weightSteps,
+			InteriorWaterStepsDown = interiorWaterSteps,
 			HillStepsUp = hillSteps,
 			ContinentalStepsUp = continentalSteps,
 			LimitsHit = limitsHit,
@@ -142,6 +174,7 @@ public static class TerrainPreviewValleySpawnGuard
 	public static string FormatStatus( GuardResult result, float minLandFraction01, float radiusMeters )
 	{
 		if ( result.FrequencyStepsUp == 0 && result.WeightStepsDown == 0
+			&& result.InteriorWaterStepsDown == 0
 			&& result.HillStepsUp == 0 && result.ContinentalStepsUp == 0 )
 			return null;
 
@@ -150,6 +183,8 @@ public static class TerrainPreviewValleySpawnGuard
 			line += $" freq +{result.FrequencyStepsUp}";
 		if ( result.WeightStepsDown > 0 )
 			line += $" weight −{result.WeightStepsDown}";
+		if ( result.InteriorWaterStepsDown > 0 )
+			line += $" interior −{result.InteriorWaterStepsDown}";
 		if ( result.HillStepsUp > 0 )
 			line += $" hills +{result.HillStepsUp}";
 		if ( result.ContinentalStepsUp > 0 )
@@ -158,6 +193,9 @@ public static class TerrainPreviewValleySpawnGuard
 
 		if ( !result.SpawnLandOk )
 			line += $" · need {Math.Clamp( minLandFraction01, 0f, 1f ) * 100f:0.#}% land";
+
+		if ( !result.SpawnEscapeOk )
+			line += $" · escape {result.SpawnEscapeBestLandMeters:0.#}m";
 
 		return line;
 	}

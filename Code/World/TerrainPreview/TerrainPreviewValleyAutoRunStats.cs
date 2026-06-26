@@ -24,6 +24,10 @@ public static class TerrainPreviewValleyAutoRunStats
 		TerrainPreviewWaterCoverageStats coverage )
 	{
 		var spawnPct = result.Snapshot.SpawnLandFraction01 * 100f;
+		var escapeBest = result.Snapshot.SpawnEscapeBestLandMeters;
+		var escapeNeed = settings.SpawnRequireLandEscape
+			? Math.Max( 50f, settings.SpawnEscapeMinDistanceMeters )
+			: 0f;
 		var interiorPct = coverage.InteriorOceanFraction01 * 100f;
 		var exteriorPct = coverage.ExteriorOceanFraction01 * 100f;
 		var totalPct = coverage.OceanFraction01 * 100f;
@@ -61,7 +65,9 @@ public static class TerrainPreviewValleyAutoRunStats
 		{
 			Result = resultLabel,
 			Seed = settings.WorldSeed.ToString(),
-			SpawnLand = $"{spawnPct:0.#}% @ {radius:0.#}m (need ≥{spawnNeed:0.#}%)",
+			SpawnLand = settings.SpawnRequireLandEscape
+				? $"{spawnPct:0.#}% @ {radius:0.#}m (need ≥{spawnNeed:0.#}%) · escape {escapeBest:0.#}m (need ≥{escapeNeed:0.#}m)"
+				: $"{spawnPct:0.#}% @ {radius:0.#}m (need ≥{spawnNeed:0.#}%)",
 			InteriorOcean = $"{interiorPct:0.#}% (need ≥{interiorNeed:0.#}% @ {zone:0.#}% radius)",
 			ExteriorOcean = $"{exteriorPct:0.#}% (max {exteriorMax:0.#}%)",
 			TotalOcean = $"{totalPct:0.#}% (max {totalMax:0.#}%)",

@@ -88,6 +88,17 @@ public static class TerrainPreviewGenerator
 		if ( settings.PreviewMode == TerrainPreviewMode.Water )
 			ApplyWaterZoneColors( colors, ocean, interiorOcean, exteriorOcean, insideWorld );
 
+		if ( settings.ShowPreviewDistanceRings )
+		{
+			TerrainPreviewDistanceRings.Stamp(
+				colors,
+				res,
+				radius,
+				diameter,
+				insideWorld,
+				settings.PreviewDistanceRingIntervalMeters );
+		}
+
 		StampSpawnMarker( colors, res );
 
 		return new TerrainPreviewGenerateResult
@@ -129,6 +140,32 @@ public static class TerrainPreviewGenerator
 		Color[] colors,
 		bool fillColors )
 	{
+		if ( fillColors && settings.PreviewMode == TerrainPreviewMode.Biomes )
+		{
+			for ( var py = 0; py < res; py++ )
+			{
+				for ( var px = 0; px < res; px++ )
+				{
+					var idx = (py * res) + px;
+					var wx = (px + 0.5f) / res * diameter - radius;
+					var wy = (py + 0.5f) / res * diameter - radius;
+					var sample = backend.Sample( settings, wx, wy );
+					insideWorld[idx] = sample.IsInsideWorld;
+					ocean[idx] = sample.IsInsideWorld && sample.OceanHeight01 > 0.5f;
+				}
+			}
+
+			TerrainPreviewBiomeMapRaster.FillBiomeColors(
+				settings,
+				backend,
+				res,
+				radius,
+				diameter,
+				insideWorld,
+				colors );
+			return;
+		}
+
 		for ( var py = 0; py < res; py++ )
 		{
 			for ( var px = 0; px < res; px++ )
@@ -142,7 +179,7 @@ public static class TerrainPreviewGenerator
 				ocean[idx] = sample.IsInsideWorld && sample.OceanHeight01 > 0.5f;
 
 				if ( fillColors )
-					colors[idx] = SampleToColor( settings.PreviewMode, sample );
+					colors[idx] = SampleToColor( settings, sample, wx, wy );
 			}
 		}
 	}
@@ -171,6 +208,7 @@ public static class TerrainPreviewGenerator
 		TerrainPreviewMode.Water => "Water",
 		TerrainPreviewMode.MountainMask => "Mountain Mask",
 		TerrainPreviewMode.MountainFalloff => "Mountain Falloff",
+		TerrainPreviewMode.Biomes => "Biomes",
 		_ => mode.ToString(),
 	};
 
@@ -184,6 +222,7 @@ public static class TerrainPreviewGenerator
 		TerrainPreviewMode.Water => "water",
 		TerrainPreviewMode.MountainMask => "mountain_mask",
 		TerrainPreviewMode.MountainFalloff => "mountain_falloff",
+		TerrainPreviewMode.Biomes => "biomes",
 		_ => "preview",
 	};
 
@@ -196,15 +235,19 @@ public static class TerrainPreviewGenerator
 		"Water" => TerrainPreviewMode.Water,
 		"Mountain Mask" => TerrainPreviewMode.MountainMask,
 		"Mountain Falloff" => TerrainPreviewMode.MountainFalloff,
+		"Biomes" => TerrainPreviewMode.Biomes,
 		_ => TerrainPreviewMode.World,
 	};
 
-	static Color SampleToColor( TerrainPreviewMode mode, TerrainPreviewSample sample )
+	static Color SampleToColor( TerrainPreviewSettings settings, TerrainPreviewSample sample, float worldXMeters, float worldYMeters )
 	{
 		if ( !sample.IsInsideWorld )
 			return Color.Black;
 
-		return mode switch
+		if ( settings.PreviewMode == TerrainPreviewMode.Biomes )
+			return TerrainPreviewBiomeColors.SampleBiomeOverlay( settings, sample, worldXMeters, worldYMeters );
+
+		return settings.PreviewMode switch
 		{
 			TerrainPreviewMode.World => Grayscale( sample.Height01 ),
 			TerrainPreviewMode.Continental => Grayscale( sample.ContinentalNoise01 ),

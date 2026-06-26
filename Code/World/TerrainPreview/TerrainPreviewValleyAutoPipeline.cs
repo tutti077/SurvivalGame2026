@@ -198,10 +198,13 @@ public static class TerrainPreviewValleyAutoPipeline
 		{
 			var radius = Math.Max( 5f, settings.ValleySpawnLandRadiusMeters );
 			var spawnLand = TerrainPreviewSpawnLandCheck.Measure( settings, radius, backend );
+			var spawnEscape = TerrainPreviewSpawnLandEscapeCheck.Measure( settings, backend );
 			return new TerrainPreviewValleySpawnGuard.GuardResult
 			{
 				SpawnLandOk = true,
+				SpawnEscapeOk = true,
 				SpawnLandFraction01 = spawnLand.LandFraction01,
+				SpawnEscapeBestLandMeters = spawnEscape.BestContinuousLandMeters,
 			};
 		}
 

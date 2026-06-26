@@ -11,6 +11,7 @@ public enum ValleyAutoUnmetGoal
 	InnerHalfOcean = 1 << 4,
 	AbsoluteTotalOceanExceeded = 1 << 5,
 	ExteriorOceanExceeded = 1 << 6,
+	SpawnLandlocked = 1 << 7,
 }
 
 [Flags]
@@ -41,6 +42,8 @@ public static class TerrainPreviewValleyAutoLimits
 		var parts = new List<string>( 5 );
 		if ( goals.HasFlag( ValleyAutoUnmetGoal.SpawnLand ) )
 			parts.Add( "spawn below solve threshold" );
+		if ( goals.HasFlag( ValleyAutoUnmetGoal.SpawnLandlocked ) )
+			parts.Add( "spawn surrounded by ocean" );
 		if ( goals.HasFlag( ValleyAutoUnmetGoal.InteriorOcean ) )
 			parts.Add( "interior ocean" );
 		if ( goals.HasFlag( ValleyAutoUnmetGoal.TotalOceanTooHigh ) )

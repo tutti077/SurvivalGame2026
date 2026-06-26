@@ -11,4 +11,5 @@ public enum TerrainPreviewMode
 	Water,
 	MountainMask,
 	MountainFalloff,
+	Biomes,
 }

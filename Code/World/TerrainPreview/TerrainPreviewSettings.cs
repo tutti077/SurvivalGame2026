@@ -25,7 +25,13 @@ public sealed class TerrainPreviewSettings
 	public int ValleyAutoMaxSeedAttempts { get; set; } = 100;
 
 	[Property, Title( "Preview Layer" )]
-	public TerrainPreviewMode PreviewMode { get; set; } = TerrainPreviewMode.World;
+	public TerrainPreviewMode PreviewMode { get; set; } = TerrainPreviewMode.Biomes;
+
+	[Property, Title( "Show Distance Rings" )]
+	public bool ShowPreviewDistanceRings { get; set; }
+
+	[Property, Title( "Distance Ring Interval (m)" ), Range( 250f, 5000f ), Step( 250f )]
+	public float PreviewDistanceRingIntervalMeters { get; set; } = 1000f;
 
 	[Property, Group( "Layers" ), Title( "Continental" )]
 	public bool EnableContinentalLayer { get; set; } = true;
@@ -102,6 +108,12 @@ public sealed class TerrainPreviewSettings
 	[Property, Group( "Valleys" ), Title( "Spawn Land Solve Threshold (0–1)" ), Range( 0.5f, 1f ), Step( 0.01f )]
 	public float ValleySpawnAcceptableLandFraction01 { get; set; } = 0.5f;
 
+	[Property, Group( "Valleys" ), Title( "Require Spawn Land Escape" )]
+	public bool SpawnRequireLandEscape { get; set; } = true;
+
+	[Property, Group( "Valleys" ), Title( "Spawn Escape Min Distance (m)" ), Range( 100f, 2000f ), Step( 25f )]
+	public float SpawnEscapeMinDistanceMeters { get; set; } = 400f;
+
 	[Property, Group( "Valleys" ), Title( "Max Exterior Ocean (0–1)" ), Range( 0.05f, 0.5f ), Step( 0.01f )]
 	public float ValleyOceanMaxExteriorFraction01 { get; set; } = 0.17f;
 
@@ -130,7 +142,7 @@ public sealed class TerrainPreviewSettings
 	public float MountainFrequency { get; set; } = 8f;
 
 	[Property, Group( "Mountains" ), Title( "Inner Radius (0–1 dist)" ), Range( 0f, 0.99f ), Step( 0.01f )]
-	public float MountainInnerRadius01 { get; set; } = 0.3f;
+	public float MountainInnerRadius01 { get; set; } = 0.1f;
 
 	[Property, Group( "Mountains" ), Title( "Outer Radius (0–1 dist)" ), Range( 0.01f, 1f ), Step( 0.01f )]
 	public float MountainOuterRadius01 { get; set; } = 0.85f;
@@ -194,6 +206,120 @@ public sealed class TerrainPreviewSettings
 
 	[Property, Group( "Water" ), Title( "Interior Zone Radius (0–1)" ), Range( 0.1f, 0.95f ), Step( 0.01f )]
 	public float InteriorZoneRadius01 { get; set; } = 0.7f;
+
+	[Property, Group( "Biomes" ), Title( "Overlay Strength (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float BiomeOverlayStrength01 { get; set; } = 0.82f;
+
+	[Property, Group( "Biomes" ), Title( "Shade Noise Frequency" ), Range( 0.5f, 32f ), Step( 0.25f )]
+	public float BiomeNoiseFrequency { get; set; } = 6f;
+
+	[Property, Group( "Biomes" ), Title( "Boundary Noise Frequency" ), Range( 0.5f, 32f ), Step( 0.25f )]
+	public float BiomeBoundaryNoiseFrequency { get; set; } = 8f;
+
+	[Property, Group( "Biomes" ), Title( "Distance Warp (m)" ), Range( 0f, 2500f ), Step( 25f )]
+	public float BiomeDistanceWarpMeters { get; set; } = 0f;
+
+	[Property, Group( "Biomes" ), Title( "Weight Noise Strength (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float BiomeWeightNoiseStrength01 { get; set; } = 0f;
+
+	[Property, Group( "Biomes" ), Title( "Scatter Octaves" ), Range( 1, 6 ), Step( 1 )]
+	public int BiomeScatterOctaves { get; set; } = 5;
+
+	[Property, Group( "Biomes" ), Title( "Picker Octaves" ), Range( 1, 6 ), Step( 1 )]
+	public int BiomePickerOctaves { get; set; } = 5;
+
+	[Property, Group( "Biomes" ), Title( "Patch Frequency" ), Range( 0.5f, 48f ), Step( 0.5f )]
+	public float BiomePickerFrequency { get; set; } = 40f;
+
+	[Property, Group( "Biomes" ), Title( "Distance Influence Scale (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float BiomeDistanceInfluenceScale01 { get; set; } = 0.25f;
+
+	[Property, Group( "Biomes" ), Title( "Merge Small Patches" )]
+	public bool BiomeSpeckFilterEnabled { get; set; } = true;
+
+	[Property, Group( "Biomes" ), Title( "Min Patch Diameter (m)" ), Range( 10f, 500f ), Step( 5f )]
+	public float BiomeMinPatchDiameterMeters { get; set; } = 200f;
+
+	[Property, Group( "Biomes" ), Title( "Mountain Min Height (0–1)" ), Range( 0.2f, 0.95f ), Step( 0.01f )]
+	public float BiomeMountainMinHeight01 { get; set; } = 0.58f;
+
+	[Property, Group( "Biomes" ), Title( "Appear Inner Ramp Power" ), Range( 1f, 4f ), Step( 0.25f )]
+	public float BiomeAppearInnerRampPower { get; set; } = 2.5f;
+
+	[Property, Group( "Biomes" ), Title( "Guarantee Clover In Spawn Band" )]
+	public bool BiomeCloverGuaranteeSpawn { get; set; } = true;
+
+	[Property, Group( "Biomes" ), Title( "Spawn Blend End (m)" ), Range( 150f, 5000f ), Step( 25f )]
+	public float BiomeSpawnBlendEndMeters { get; set; } = 900f;
+
+	[Property, Group( "Biomes" ), Title( "Spawn Clover Blend Boost (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float BiomeSpawnCloverBlendBoost01 { get; set; } = 0.8f;
+
+	[Property, Group( "Biomes" ), Title( "Clover Ramp Full (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeCloverRampFullDistanceMeters { get; set; } = 900f;
+
+	[Property, Group( "Biomes" ), Title( "Clover Map Edge Fade End (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeCloverAppearEndMeters { get; set; } = 20000f;
+
+	[Property, Group( "Biomes" ), Title( "Clover Spawn Band Start (m)" ), Range( 0f, 5000f ), Step( 25f )]
+	public float BiomeCloverPriorityStartMeters { get; set; }
+
+	[Property, Group( "Biomes" ), Title( "Clover Spawn Band End (m)" ), Range( 0f, 5000f ), Step( 25f )]
+	public float BiomeCloverPriorityEndMeters { get; set; } = 150f;
+
+	[Property, Group( "Biomes" ), Title( "Clover Scatter Weight (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float BiomeCloverWeight { get; set; } = 0.55f;
+
+	[Property, Group( "Biomes" ), Title( "Clover Distance Influence Start (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeCloverDistanceInfluenceStartMeters { get; set; } = 150f;
+
+	[Property, Group( "Biomes" ), Title( "Clover Distance Influence End (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeCloverDistanceInfluenceEndMeters { get; set; } = 2000f;
+
+	[Property, Group( "Biomes" ), Title( "Clover Distance Influence (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float BiomeCloverPriorityWeight { get; set; } = 0.4f;
+
+	[Property, Group( "Biomes" ), Title( "Redwood Hard Min Distance (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeRedwoodHardMinDistanceMeters { get; set; } = 400f;
+
+	[Property, Group( "Biomes" ), Title( "Redwood Ramp Full (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeRedwoodRampFullDistanceMeters { get; set; } = 900f;
+
+	[Property, Group( "Biomes" ), Title( "Redwood Map Edge Fade End (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeRedwoodAppearEndMeters { get; set; } = 20000f;
+
+	[Property, Group( "Biomes" ), Title( "Redwood Scatter Weight (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float BiomeRedwoodWeight { get; set; } = 0.48f;
+
+	[Property, Group( "Biomes" ), Title( "Redwood Distance Influence Start (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeRedwoodPriorityStartMeters { get; set; } = 800f;
+
+	[Property, Group( "Biomes" ), Title( "Redwood Distance Influence End (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeRedwoodPriorityEndMeters { get; set; } = 2200f;
+
+	[Property, Group( "Biomes" ), Title( "Redwood Distance Influence (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float BiomeRedwoodPriorityWeight { get; set; } = 0.22f;
+
+	[Property, Group( "Biomes" ), Title( "Amber Hard Min Distance (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeAmberHardMinDistanceMeters { get; set; } = 2000f;
+
+	[Property, Group( "Biomes" ), Title( "Amber Ramp Full (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeAmberRampFullDistanceMeters { get; set; } = 2800f;
+
+	[Property, Group( "Biomes" ), Title( "Amber Map Edge Fade End (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeAmberAppearEndMeters { get; set; } = 20000f;
+
+	[Property, Group( "Biomes" ), Title( "Amber Scatter Weight (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float BiomeAmberWeight { get; set; } = 0.55f;
+
+	[Property, Group( "Biomes" ), Title( "Amber Distance Influence Start (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeAmberPriorityStartMeters { get; set; } = 1500f;
+
+	[Property, Group( "Biomes" ), Title( "Amber Distance Influence End (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BiomeAmberPriorityEndMeters { get; set; } = 2500f;
+
+	[Property, Group( "Biomes" ), Title( "Amber Distance Influence (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float BiomeAmberPriorityWeight { get; set; } = 0.3f;
 
 	public float WorldRadiusMeters => WorldDiameterMeters * 0.5f;
 

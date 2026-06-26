@@ -56,13 +56,19 @@ public static class TerrainPreviewSpawnLandCheck
 	{
 		var radius = Math.Max( 5f, settings.ValleySpawnLandRadiusMeters );
 		var minLand = TerrainPreviewValleyAutoEvaluate.SpawnGuardTargetLand( settings );
-		return Measure( settings, radius, backend ).MeetsLandTarget( minLand );
+		if ( !Measure( settings, radius, backend ).MeetsLandTarget( minLand ) )
+			return false;
+
+		return TerrainPreviewSpawnLandEscapeCheck.MeetsTarget( settings, backend );
 	}
 
 	public static bool MeetsAcceptableSpawnTarget( TerrainPreviewSettings settings, ITerrainPreviewBackend backend = null )
 	{
 		var radius = Math.Max( 5f, settings.ValleySpawnLandRadiusMeters );
 		var minLand = TerrainPreviewValleyAutoEvaluate.SpawnAcceptableLand( settings );
-		return Measure( settings, radius, backend ).MeetsLandTarget( minLand );
+		if ( !Measure( settings, radius, backend ).MeetsLandTarget( minLand ) )
+			return false;
+
+		return TerrainPreviewSpawnLandEscapeCheck.MeetsTarget( settings, backend );
 	}
 }

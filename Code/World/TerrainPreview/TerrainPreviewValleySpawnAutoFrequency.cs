@@ -30,7 +30,7 @@ public static class TerrainPreviewValleySpawnAutoFrequency
 		if ( !settings.EnableValleySpawnAutoFrequency || !settings.EnableValleyLayer )
 		{
 			var snapshot = TerrainPreviewSpawnLandCheck.Measure( settings, radius, backend );
-			return BuildResult( settings.ValleyFrequency, settings.ValleyFrequency, 0, snapshot, minLand, autoSkipped: false, ValleyAutoLimitHit.None );
+			return BuildResult( settings, backend, settings.ValleyFrequency, settings.ValleyFrequency, 0, snapshot, autoSkipped: false, ValleyAutoLimitHit.None );
 		}
 
 		settings.ValleyFrequency = TerrainPreviewValleyDefaults.Frequency;
@@ -45,15 +45,17 @@ public static class TerrainPreviewValleySpawnAutoFrequency
 
 		var limitsHit = ValleyAutoLimitHit.None;
 
-		if ( spawnLand.MeetsLandTarget( minLand ) )
-			return BuildResult( startingFrequency, frequency, 0, spawnLand, minLand, autoSkipped: true, limitsHit );
+		if ( spawnLand.MeetsLandTarget( minLand )
+			&& TerrainPreviewSpawnLandEscapeCheck.MeetsTarget( settings, backend ) )
+			return BuildResult( settings, backend, startingFrequency, frequency, 0, spawnLand, autoSkipped: true, limitsHit );
 
 		for ( var i = 0; i < MaxAdjustIterations; i++ )
 		{
 			if ( TerrainPreviewMapIterationTracker.IsAbortRequested )
 				break;
 
-			if ( spawnLand.MeetsLandTarget( minLand ) )
+			if ( spawnLand.MeetsLandTarget( minLand )
+				&& TerrainPreviewSpawnLandEscapeCheck.MeetsTarget( settings, backend ) )
 				break;
 
 			if ( frequency >= maxFrequency - 0.0001f )
@@ -77,31 +79,35 @@ public static class TerrainPreviewValleySpawnAutoFrequency
 
 		settings.ValleyFrequency = frequency;
 
-		if ( !spawnLand.MeetsLandTarget( minLand ) && limitsHit == ValleyAutoLimitHit.None )
+		if ( !TerrainPreviewSpawnLandCheck.MeetsAcceptableSpawnTarget( settings, backend ) && limitsHit == ValleyAutoLimitHit.None )
 			limitsHit |= ValleyAutoLimitHit.MaxValleyFrequency;
 
-		return BuildResult( startingFrequency, frequency, stepsUp, spawnLand, minLand, autoSkipped: false, limitsHit );
+		return BuildResult( settings, backend, startingFrequency, frequency, stepsUp, spawnLand, autoSkipped: false, limitsHit );
 	}
 
 	static ResolveResult BuildResult(
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
 		float startingFrequency,
 		float resolvedFrequency,
 		int stepsUp,
 		TerrainPreviewSpawnLandCheck.Result spawnLand,
-		float minLand,
 		bool autoSkipped,
 		ValleyAutoLimitHit limitsHit )
-		=> new()
+	{
+		var targetMet = TerrainPreviewSpawnLandCheck.MeetsAcceptableSpawnTarget( settings, backend );
+		return new()
 		{
 			StartingFrequency = startingFrequency,
 			ResolvedFrequency = resolvedFrequency,
 			StepsUp = stepsUp,
 			SpawnLandFraction01 = spawnLand.LandFraction01,
 			AutoSkipped = autoSkipped,
-			TargetMet = spawnLand.MeetsLandTarget( minLand ),
-			UnmetGoals = spawnLand.MeetsLandTarget( minLand ) ? ValleyAutoUnmetGoal.None : ValleyAutoUnmetGoal.SpawnLand,
+			TargetMet = targetMet,
+			UnmetGoals = targetMet ? ValleyAutoUnmetGoal.None : ValleyAutoUnmetGoal.SpawnLand,
 			LimitsHit = limitsHit,
 		};
+	}
 
 	public static string FormatStatus( ResolveResult result, float minLandFraction01, float radiusMeters )
 	{
