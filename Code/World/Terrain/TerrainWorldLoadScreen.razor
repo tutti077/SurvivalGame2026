@@ -1,0 +1,58 @@
+@using Sandbox
+@using Sandbox.UI
+@namespace Survival
+@inherits PanelComponent
+
+<root class="@RootClass">
+	@if ( Visible )
+	{
+		<div class="backdrop">
+			<div class="card">
+				<div class="title">@Title</div>
+				<div class="status">@StatusText</div>
+				<div class="bar-track">
+					<div class="bar-fill" style="width: @FillWidth"></div>
+				</div>
+				<div class="percent">@PercentText</div>
+			</div>
+		</div>
+	}
+</root>
+
+@code
+{
+	public bool Visible { get; set; }
+	public string Title { get; set; } = "Loading World";
+	public string StatusText { get; set; } = "Starting…";
+	public float Progress01 { get; set; }
+
+	string RootClass => Visible ? "visible" : "hidden";
+	string FillWidth => $"{Math.Clamp( Progress01, 0f, 1f ) * 100f:0.0}%";
+	string PercentText => $"{Math.Clamp( Progress01, 0f, 1f ) * 100f:0}%";
+
+	protected override void OnTreeFirstBuilt()
+	{
+		base.OnTreeFirstBuilt();
+		SyncFullscreenBounds();
+	}
+
+	void SyncFullscreenBounds()
+	{
+		if ( Panel is Sandbox.UI.RootPanel root )
+			root.PanelBounds = new Rect( 0, 0, Screen.Width, Screen.Height );
+	}
+
+	public void SetDisplay( bool visible, string title, string status, float progress01 )
+	{
+		Visible = visible;
+		Title = string.IsNullOrWhiteSpace( title ) ? "Loading World" : title;
+		StatusText = status ?? "";
+		Progress01 = Math.Clamp( progress01, 0f, 1f );
+		if ( visible )
+			SyncFullscreenBounds();
+		StateHasChanged();
+	}
+
+	protected override int BuildHash()
+		=> HashCode.Combine( Visible, Title, StatusText, (int)(Progress01 * 10000f) );
+}

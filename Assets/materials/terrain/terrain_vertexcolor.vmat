@@ -1,0 +1,6 @@
+Layer0
+{
+	shader "shaders/vertex_color.shader"
+
+	g_vColorTint "[1.000000 1.000000 1.000000 1.000000]"
+}

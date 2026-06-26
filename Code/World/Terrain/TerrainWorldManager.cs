@@ -1,0 +1,800 @@
+using Game;
+
+namespace Survival;
+
+/// <summary>
+/// Streams procedural terrain chunks around the active camera using the same preview sampler + biome resolver.
+/// </summary>
+[Title( "Terrain World Manager" )]
+public sealed class TerrainWorldManager : Component
+{
+	const float ChunkLoadProgressWeight = 0.75f;
+	const float MapLoadProgressWeight = 0.25f;
+
+	sealed class LoadedChunk
+	{
+		public GameObject GameObject;
+		public ModelCollider Collider;
+		public TerrainChunkCoord Coord;
+	}
+
+	[Property, Group( "World" )] public string WorldName { get; set; } = "TestWorld";
+	[Property, Group( "World" )] public float WorldDiameterMeters { get; set; } = 20000f;
+	[Property, Group( "World" )] public int WorldSeed { get; set; } = 1337;
+	[Property, Group( "World" )] public float MaxTerrainHeightMeters { get; set; } = 6000f;
+
+	[Property, Group( "Chunks" )] public float ChunkSizeMeters { get; set; } = 64f;
+	[Property, Group( "Chunks" )] public int ChunkVerticesPerSide { get; set; } = 17;
+	[Property, Group( "Chunks" ), Title( "Stream Radius (chunks)" ), Range( 0, 16 ), Step( 1 ), Description( "Square fallback when forward cone streaming is off. Radius 2 = 5×5." )]
+	public int StreamRadiusChunks { get; set; } = 2;
+	[Property, Group( "Chunks" ), Title( "Forward Cone Streaming" )]
+	public bool UseForwardConeStreaming { get; set; } = true;
+	[Property, Group( "Chunks" ), Title( "Forward View Radius (chunks)" ), Range( 10, 20 ), Step( 1 ), Description( "How far ahead to stream along look direction." )]
+	public int ForwardViewRadiusChunks { get; set; } = 15;
+	[Property, Group( "Chunks" ), Title( "Forward View Distance (m, 0 = radius × chunk size)" ), Range( 0f, 20000f ), Step( 64f )]
+	public float ViewDistanceMeters { get; set; }
+	[Property, Group( "Chunks" ), Title( "Forward View Cone (deg)" ), Range( 30f, 360f ), Step( 5f )]
+	public float ForwardViewConeDegrees { get; set; } = 120f;
+	[Property, Group( "Chunks" ), Title( "Side/Back Radius (chunks)" ), Range( 0, 8 ), Step( 1 ), Description( "Always-loaded square around the camera. Radius 2 = 5×5." )]
+	public int SideViewRadiusChunks { get; set; } = 2;
+	[Property, Group( "Chunks" ), Title( "Collision Range (m)" ), Range( 64f, 4096f ), Step( 64f )]
+	public float CollisionRangeMeters { get; set; } = 128f;
+	[Property, Group( "Chunks" ), Title( "New Chunks Per Frame" ), Range( 1, 32 ), Step( 1 )]
+	public int ChunksPerFrame { get; set; } = 2;
+
+	[Property, Group( "Preview Map" ), Title( "Meters Per Pixel" ), Range( 1f, 64f ), Step( 1f )]
+	public float BiomePreviewMetersPerPixel { get; set; } = 10f;
+
+	[Property, Group( "Preview Map" ), Title( "Max Map Resolution" ), Range( 512, 8192 ), Step( 256 )]
+	public int BiomePreviewMapMaxResolution { get; set; } = 4096;
+
+	[Property, Group( "Preview Map" ), Title( "Map Rows Per Frame" ), Range( 4, 512 ), Step( 4 )]
+	public int PreviewMapRowsPerFrame { get; set; } = 128;
+
+	[Property, Group( "Preview Map" )] public bool RegeneratePreviewOnStart { get; set; } = true;
+	[Property, Group( "Loading" )] public bool ShowWorldLoadScreen { get; set; } = true;
+	[Property, Group( "Loading" ), ReadOnly] public bool IsWorldLoading { get; private set; }
+	[Property, Group( "Chunks" ), ReadOnly] public int LoadedChunkCount { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly] public bool IsMapGenerating { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly] public float MapGenerationProgress01 { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly] public string MapGenerationStatus { get; private set; } = "";
+	[Property, Group( "Preview Map" ), ReadOnly] public int EffectiveBiomePreviewResolution { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly] public float EffectiveMetersPerPixel { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly] public Texture BiomePreviewMap { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly] public int BiomePreviewMapSeed { get; private set; } = int.MinValue;
+	[Property, Group( "Preview Map" ), ReadOnly] public bool IsBiomePreviewMapStale { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly] public bool HasStreamPosition { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly] public Vector3 StreamWorldPosition { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly] public int StreamChunkX { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly] public int StreamChunkY { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly] public float StreamHeadingDegrees { get; private set; }
+
+	readonly Dictionary<TerrainChunkCoord, LoadedChunk> _loaded = new();
+
+	void UpdateBiomePreviewStaleState()
+	{
+		IsBiomePreviewMapStale = BiomePreviewMap.IsValid()
+			&& BiomePreviewMapSeed != int.MinValue
+			&& BiomePreviewMapSeed != WorldSeed;
+	}
+
+	readonly HashSet<TerrainChunkCoord> _neededScratch = new();
+	readonly Queue<TerrainChunkCoord> _initialChunkQueue = new();
+	ITerrainPreviewBackend _backend;
+	TerrainWorldPreviewJob _previewJob;
+	TerrainWorldLoadScreenHost _loadScreen;
+	TerrainPreviewSettings _loadSettings;
+	Vector3 _loadStreamPos;
+	Rotation _loadViewRotation;
+	int _initialChunksTotal;
+	int _initialChunksLoaded;
+	int _lastPreviewSeed = int.MinValue;
+	float _lastPreviewDiameter = -1f;
+	float _lastPreviewMetersPerPixel = -1f;
+	int _lastChunkSeed = int.MinValue;
+	bool _worldRecipeWritten;
+	bool _isWorldLoading;
+	bool _initialChunksQueued;
+	TerrainChunkCoord _lastStreamChunk = new( int.MinValue, int.MinValue );
+	bool _hasStreamChunk;
+	Rotation _lastStreamViewRotation = Rotation.Identity;
+	bool _hasStreamViewRotation;
+	const float StreamViewRefreshAngleDegrees = 12f;
+
+	protected override void OnStart()
+	{
+		base.OnStart();
+		_backend = TerrainPreviewBackendRegistry.Active;
+		_lastChunkSeed = WorldSeed;
+		TryWriteWorldRecipe();
+		BeginWorldLoad();
+	}
+
+	protected override void OnUpdate()
+	{
+		if ( WorldSeed != _lastChunkSeed )
+		{
+			_lastChunkSeed = WorldSeed;
+			_hasStreamChunk = false;
+			_hasStreamViewRotation = false;
+			UnloadAll();
+			BeginWorldLoad();
+			return;
+		}
+
+		if ( _isWorldLoading )
+		{
+			ProcessWorldLoad();
+			UpdateStreamInspectorState();
+			return;
+		}
+
+		TickMapGeneration();
+		TryRefreshStreamChunks();
+		UpdateBiomePreviewStaleState();
+		UpdateStreamInspectorState();
+	}
+
+	void UpdateStreamInspectorState()
+	{
+		if ( !TryGetStreamTransform( out var worldPos, out var viewRotation ) )
+		{
+			HasStreamPosition = false;
+			return;
+		}
+
+		HasStreamPosition = true;
+		StreamWorldPosition = worldPos;
+
+		var settings = BuildGenerationSettings();
+		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
+		var chunk = TerrainChunkStreaming.WorldToChunkCoord(
+			worldPos.x,
+			worldPos.y,
+			settings.WorldRadiusMeters,
+			chunkSize );
+		StreamChunkX = chunk.X;
+		StreamChunkY = chunk.Y;
+
+		var forward = viewRotation.Forward.WithZ( 0f );
+		StreamHeadingDegrees = forward.LengthSquared > 1e-6f
+			? MathF.Atan2( forward.y, forward.x ) * (180f / MathF.PI)
+			: 0f;
+	}
+
+	void TryRefreshStreamChunks()
+	{
+		if ( !TryGetStreamTransform( out var streamPos, out var viewRotation ) )
+			return;
+
+		var settings = BuildGenerationSettings();
+		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
+		var streamChunk = TerrainChunkStreaming.WorldToChunkCoord(
+			streamPos.x,
+			streamPos.y,
+			settings.WorldRadiusMeters,
+			chunkSize );
+
+		var chunkChanged = !_hasStreamChunk
+			|| streamChunk.X != _lastStreamChunk.X
+			|| streamChunk.Y != _lastStreamChunk.Y;
+		var viewChanged = UseForwardConeStreaming && HasStreamViewRotationChanged( viewRotation );
+
+		if ( !chunkChanged && !viewChanged )
+			return;
+
+		_lastStreamChunk = streamChunk;
+		_hasStreamChunk = true;
+		_lastStreamViewRotation = viewRotation;
+		_hasStreamViewRotation = true;
+		RefreshChunks( streamPos, viewRotation );
+	}
+
+	bool HasStreamViewRotationChanged( Rotation viewRotation )
+	{
+		if ( !_hasStreamViewRotation )
+			return true;
+
+		var oldForward = _lastStreamViewRotation.Forward.WithZ( 0f );
+		var newForward = viewRotation.Forward.WithZ( 0f );
+		if ( oldForward.LengthSquared < 1e-6f || newForward.LengthSquared < 1e-6f )
+			return true;
+
+		oldForward = oldForward.Normal;
+		newForward = newForward.Normal;
+		var dot = Math.Clamp( Vector3.Dot( oldForward, newForward ), -1f, 1f );
+		var threshold = MathF.Cos( StreamViewRefreshAngleDegrees * (MathF.PI / 180f) );
+		return dot < threshold;
+	}
+
+	protected override void OnDestroy()
+	{
+		_previewJob = null;
+		_initialChunkQueue.Clear();
+		HideLoadScreen();
+		SetStreamerInputEnabled( true );
+		UnloadAll();
+		base.OnDestroy();
+	}
+
+	public TerrainPreviewSettings BuildGenerationSettings()
+	{
+		var settings = new TerrainPreviewSettings
+		{
+			WorldDiameterMeters = WorldDiameterMeters,
+			WorldSeed = WorldSeed,
+			PreviewMode = TerrainPreviewMode.Biomes,
+			BiomeOverlayStrength01 = 1f,
+			BiomeSpeckFilterEnabled = false,
+		};
+
+		return settings;
+	}
+
+	public int ComputeBiomePreviewResolution()
+	{
+		var metersPerPixel = Math.Max( 1f, BiomePreviewMetersPerPixel );
+		var resolution = (int)MathF.Ceiling( WorldDiameterMeters / metersPerPixel );
+		var maxResolution = Math.Max( 512, BiomePreviewMapMaxResolution );
+		return Math.Clamp( resolution, 64, maxResolution );
+	}
+
+	public void CancelBiomePreviewMapGeneration()
+	{
+		_previewJob = null;
+		IsMapGenerating = false;
+	}
+
+	public void StartBiomePreviewGeneration()
+	{
+		if ( _previewJob is not null )
+			return;
+
+		var settings = BuildGenerationSettings();
+		var resolution = ComputeBiomePreviewResolution();
+		EffectiveBiomePreviewResolution = resolution;
+		EffectiveMetersPerPixel = WorldDiameterMeters / resolution;
+
+		_previewJob = TerrainWorldPreviewJob.Create(
+			settings,
+			_backend ?? TerrainPreviewBackendRegistry.Active,
+			resolution );
+
+		IsMapGenerating = true;
+		MapGenerationProgress01 = 0f;
+		MapGenerationStatus = $"Biome map {resolution}×{resolution}…";
+	}
+
+	/// <summary>Editor helper — builds the biome map immediately.</summary>
+	public void RegenerateBiomePreviewMap()
+	{
+		CancelBiomePreviewMapGeneration();
+		StartBiomePreviewGeneration();
+
+		while ( _previewJob is not null && !_previewJob.IsComplete )
+			_previewJob.Step( int.MaxValue );
+
+		FinishMapGeneration();
+	}
+
+	void TickMapGeneration()
+	{
+		if ( _previewJob is null )
+			return;
+
+		var rows = Math.Clamp( PreviewMapRowsPerFrame, 4, 512 );
+		_previewJob.Step( rows );
+
+		MapGenerationProgress01 = _previewJob.Progress01;
+		MapGenerationStatus =
+			$"Biome map {_previewJob.RowsCompleted}/{_previewJob.Resolution} rows ({MapGenerationProgress01 * 100f:0}%)";
+
+		if ( !_previewJob.IsComplete )
+			return;
+
+		FinishMapGeneration();
+	}
+
+	void BeginWorldLoad()
+	{
+		_initialChunksQueued = false;
+		_isWorldLoading = true;
+		IsWorldLoading = true;
+		_initialChunkQueue.Clear();
+		_initialChunksTotal = 0;
+		_initialChunksLoaded = 0;
+		_loadSettings = BuildGenerationSettings();
+
+		SetStreamerInputEnabled( false );
+
+		if ( ShowWorldLoadScreen )
+			ShowLoadScreen( "Loading World", "Preparing terrain…", 0f );
+
+		if ( RegeneratePreviewOnStart )
+		{
+			CancelBiomePreviewMapGeneration();
+			StartBiomePreviewGeneration();
+		}
+	}
+
+	void ProcessWorldLoad()
+	{
+		TickMapGeneration();
+
+		ResolveLoadStreamTransform();
+
+		if ( !_initialChunksQueued )
+		{
+			QueueInitialChunks();
+			_initialChunksQueued = true;
+		}
+
+		ProcessInitialChunkQueue();
+
+		UpdateLoadScreenProgress();
+
+		if ( !IsWorldLoadComplete() )
+			return;
+
+		FinishWorldLoad();
+	}
+
+	void ResolveLoadStreamTransform()
+	{
+		var settings = _loadSettings;
+		var sample = _backend.Sample( settings, 0f, 0f );
+		var groundZ = sample.IsInsideWorld ? sample.Height01 * MaxTerrainHeightMeters : 0f;
+		_loadStreamPos = new Vector3( 0f, 0f, groundZ );
+		_loadViewRotation = TryGetStreamTransform( out _, out var viewRotation )
+			? viewRotation
+			: Rotation.Identity;
+	}
+
+	void QueueInitialChunks()
+	{
+		_initialChunkQueue.Clear();
+
+		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
+		CollectStreamChunks( _loadStreamPos, _loadViewRotation, _loadSettings, chunkSize, _neededScratch );
+
+		foreach ( var coord in _neededScratch )
+			_initialChunkQueue.Enqueue( coord );
+
+		if ( _initialChunkQueue.Count == 0 )
+		{
+			TerrainChunkStreaming.CollectSquareChunks(
+				_loadStreamPos,
+				_loadSettings,
+				chunkSize,
+				Math.Max( 1, StreamRadiusChunks ),
+				_neededScratch );
+
+			foreach ( var coord in _neededScratch )
+				_initialChunkQueue.Enqueue( coord );
+		}
+
+		_initialChunksTotal = _initialChunkQueue.Count;
+		_initialChunksLoaded = 0;
+	}
+
+	void CollectStreamChunks(
+		Vector3 streamPos,
+		Rotation viewRotation,
+		TerrainPreviewSettings settings,
+		float chunkSize,
+		HashSet<TerrainChunkCoord> needed )
+	{
+		if ( UseForwardConeStreaming )
+		{
+			var forwardDistance = ResolveForwardViewDistanceMeters( chunkSize );
+			TerrainChunkStreaming.CollectNeededChunks(
+				streamPos,
+				viewRotation,
+				settings,
+				chunkSize,
+				forwardDistance,
+				ForwardViewConeDegrees,
+				SideViewRadiusChunks,
+				needed );
+			return;
+		}
+
+		TerrainChunkStreaming.CollectSquareChunks(
+			streamPos,
+			settings,
+			chunkSize,
+			Math.Max( 1, StreamRadiusChunks ),
+			needed );
+	}
+
+	void ProcessInitialChunkQueue()
+	{
+		var budget = Math.Clamp( ChunksPerFrame, 1, 32 );
+
+		while ( budget-- > 0 && _initialChunkQueue.Count > 0 )
+		{
+			var coord = _initialChunkQueue.Dequeue();
+			if ( _loaded.ContainsKey( coord ) )
+			{
+				_initialChunksLoaded++;
+				continue;
+			}
+
+			LoadChunk( coord, _loadSettings, _loadStreamPos, visible: true );
+			_initialChunksLoaded++;
+		}
+
+		LoadedChunkCount = _loaded.Count;
+		UpdateChunkColliders( _loadStreamPos, _loadSettings, Math.Max( 32f, ChunkSizeMeters ) );
+	}
+
+	bool IsWorldLoadComplete()
+	{
+		if ( !_initialChunksQueued )
+			return false;
+
+		if ( _initialChunkQueue.Count > 0 )
+			return false;
+
+		if ( _initialChunksTotal <= 0 )
+			return false;
+
+		if ( _initialChunksLoaded < _initialChunksTotal )
+			return false;
+
+		return _loaded.Count > 0;
+	}
+
+	void UpdateLoadScreenProgress()
+	{
+		if ( !ShowWorldLoadScreen )
+			return;
+
+		var chunkProgress = _initialChunksTotal > 0
+			? Math.Clamp( (float)_initialChunksLoaded / _initialChunksTotal, 0f, 1f )
+			: 0f;
+		var mapProgress = RegeneratePreviewOnStart ? MapGenerationProgress01 : 1f;
+		var chunksReady = IsWorldLoadComplete();
+		var total = chunksReady
+			? Math.Clamp( (chunkProgress * ChunkLoadProgressWeight) + (mapProgress * MapLoadProgressWeight), 0f, 1f )
+			: (chunkProgress * ChunkLoadProgressWeight) + (mapProgress * MapLoadProgressWeight);
+
+		var status = chunksReady
+			? (RegeneratePreviewOnStart && IsMapGenerating ? "Terrain ready · finishing biome map…" : "Terrain ready")
+			: RegeneratePreviewOnStart && IsMapGenerating
+				? $"Terrain {_initialChunksLoaded}/{_initialChunksTotal} · {MapGenerationStatus}"
+				: $"Terrain {_initialChunksLoaded}/{_initialChunksTotal}";
+
+		ShowLoadScreen( "Loading World", status, total );
+	}
+
+	void FinishWorldLoad()
+	{
+		_isWorldLoading = false;
+		IsWorldLoading = false;
+		_lastChunkSeed = WorldSeed;
+		_hasStreamChunk = false;
+		_hasStreamViewRotation = false;
+
+		SnapStreamerCameraToTerrain();
+		EnsureChunksAroundStream();
+		SetStreamerInputEnabled( true );
+		HideLoadScreen();
+
+		Log.Info( $"[TerrainWorldManager] World ready — {LoadedChunkCount} terrain chunks, seed {WorldSeed}." );
+
+		if ( LoadedChunkCount <= 0 )
+			Log.Warning( "[TerrainWorldManager] No terrain chunks loaded — check stream radius and world seed." );
+	}
+
+	void EnsureChunksAroundStream()
+	{
+		if ( !TryGetStreamTransform( out var streamPos, out var viewRotation ) )
+			return;
+
+		var settings = BuildGenerationSettings();
+		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
+		CollectStreamChunks( streamPos, viewRotation, settings, chunkSize, _neededScratch );
+
+		foreach ( var coord in _neededScratch )
+		{
+			if ( !_loaded.ContainsKey( coord ) )
+				LoadChunk( coord, settings, streamPos, visible: true );
+		}
+
+		var toRemove = _loaded.Keys.Where( c => !_neededScratch.Contains( c ) ).ToList();
+		foreach ( var coord in toRemove )
+			UnloadChunk( coord );
+
+		LoadedChunkCount = _loaded.Count;
+		UpdateChunkColliders( streamPos, settings, chunkSize );
+	}
+
+	void FinishMapGeneration()
+	{
+		if ( _previewJob is null )
+			return;
+
+		var bitmap = _previewJob.FinishBitmap();
+		BiomePreviewMap = bitmap.ToTexture( false );
+		_previewJob = null;
+		BiomePreviewMapSeed = WorldSeed;
+		_lastPreviewSeed = WorldSeed;
+		_lastPreviewDiameter = WorldDiameterMeters;
+		_lastPreviewMetersPerPixel = BiomePreviewMetersPerPixel;
+		IsMapGenerating = false;
+		MapGenerationProgress01 = 1f;
+		MapGenerationStatus = $"Map ready (seed {WorldSeed})";
+		UpdateBiomePreviewStaleState();
+
+		if ( IsWorldAuthority() )
+		{
+			try
+			{
+				WorldSaveIO.WriteBiomeMapPng( WorldName, bitmap );
+			}
+			catch ( Exception e )
+			{
+				Log.Warning( $"[TerrainWorldManager] Failed to write biome map PNG: {e.Message}" );
+			}
+		}
+	}
+
+	void RefreshChunks( Vector3 streamPos, Rotation viewRotation )
+	{
+		if ( _isWorldLoading )
+			return;
+
+		var settings = BuildGenerationSettings();
+		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
+		CollectStreamChunks( streamPos, viewRotation, settings, chunkSize, _neededScratch );
+
+		foreach ( var coord in _neededScratch )
+		{
+			if ( !_loaded.ContainsKey( coord ) )
+				LoadChunk( coord, settings, streamPos, visible: true );
+		}
+
+		var toRemove = _loaded.Keys.Where( c => !_neededScratch.Contains( c ) ).ToList();
+		foreach ( var coord in toRemove )
+			UnloadChunk( coord );
+
+		LoadedChunkCount = _loaded.Count;
+		UpdateChunkColliders( streamPos, settings, chunkSize );
+	}
+
+	float ResolveForwardViewDistanceMeters( float chunkSize )
+	{
+		var fromChunks = Math.Max( 1, ForwardViewRadiusChunks ) * chunkSize;
+		return ViewDistanceMeters > chunkSize ? ViewDistanceMeters : fromChunks;
+	}
+
+	void UpdateChunkColliders( Vector3 streamPos, TerrainPreviewSettings settings, float chunkSize )
+	{
+		var collisionRange = Math.Max( 0f, CollisionRangeMeters );
+		var worldRadius = settings.WorldRadiusMeters;
+
+		foreach ( var entry in _loaded.Values )
+		{
+			if ( entry.Collider is null || !entry.Collider.IsValid() )
+				continue;
+
+			var center = TerrainChunkStreaming.GetChunkCenterWorld( entry.Coord, worldRadius, chunkSize );
+			var distance = new Vector3( center.x - streamPos.x, center.y - streamPos.y, 0f ).Length;
+			entry.Collider.Enabled = distance <= collisionRange + (chunkSize * 0.75f);
+		}
+	}
+
+	bool TryGetStreamTransform( out Vector3 worldPos, out Rotation viewRotation )
+	{
+		worldPos = default;
+		viewRotation = Rotation.Identity;
+
+		var cam = ResolveStreamCamera();
+		if ( cam.IsValid() )
+		{
+			worldPos = cam.WorldPosition;
+			viewRotation = cam.WorldRotation;
+			return true;
+		}
+
+		worldPos = GameObject.WorldPosition;
+		viewRotation = GameObject.WorldRotation;
+		return true;
+	}
+
+	CameraComponent ResolveStreamCamera()
+	{
+		var scene = GameObject.Scene;
+		if ( !scene.IsValid() )
+			return default;
+
+		return scene.Camera;
+	}
+
+	void LoadChunk( TerrainChunkCoord coord, TerrainPreviewSettings settings, Vector3 streamPos, bool visible )
+	{
+		var built = TerrainMeshBuilder.BuildChunk(
+			settings,
+			_backend,
+			coord,
+			ChunkSizeMeters,
+			ChunkVerticesPerSide,
+			MaxTerrainHeightMeters );
+
+		if ( built.Model is null || !built.Model.IsValid )
+		{
+			Log.Warning( $"[TerrainWorldManager] Failed to build terrain mesh for chunk {coord}." );
+			return;
+		}
+
+		var chunkMinX = -settings.WorldRadiusMeters + (coord.X * ChunkSizeMeters);
+		var chunkMinY = -settings.WorldRadiusMeters + (coord.Y * ChunkSizeMeters);
+
+		var go = new GameObject( true, $"TerrainChunk {coord}" );
+		go.Parent = GameObject;
+		go.WorldPosition = new Vector3( chunkMinX, chunkMinY, 0f );
+
+		var renderer = go.Components.Create<ModelRenderer>();
+		renderer.Model = built.Model;
+		renderer.MaterialOverride = built.Material;
+		renderer.Enabled = visible;
+
+		var collider = go.Components.Create<ModelCollider>();
+		collider.Model = built.Model;
+		collider.Static = true;
+
+		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
+		var center = TerrainChunkStreaming.GetChunkCenterWorld( coord, settings.WorldRadiusMeters, chunkSize );
+		var distance = new Vector3( center.x - streamPos.x, center.y - streamPos.y, 0f ).Length;
+		collider.Enabled = distance <= CollisionRangeMeters + (chunkSize * 0.75f);
+
+		_loaded[coord] = new LoadedChunk
+		{
+			GameObject = go,
+			Collider = collider,
+			Coord = coord,
+		};
+
+		LoadedChunkCount = _loaded.Count;
+
+		var chunkBounds = new BBox(
+			new Vector3( chunkMinX, chunkMinY, built.LocalBounds.Mins.z ),
+			new Vector3( chunkMinX + ChunkSizeMeters, chunkMinY + ChunkSizeMeters, built.LocalBounds.Maxs.z ) );
+
+		BuildNavMeshSync.NotifyTerrainChunkLoaded( GameObject.Scene, chunkBounds );
+	}
+
+	void UnloadChunk( TerrainChunkCoord coord )
+	{
+		if ( !_loaded.TryGetValue( coord, out var entry ) )
+			return;
+
+		entry.GameObject.Destroy();
+		_loaded.Remove( coord );
+	}
+
+	void UnloadAll()
+	{
+		foreach ( var entry in _loaded.Values )
+			entry.GameObject.Destroy();
+
+		_loaded.Clear();
+		LoadedChunkCount = 0;
+	}
+
+	void TryWriteWorldRecipe()
+	{
+		if ( _worldRecipeWritten || !IsWorldAuthority() )
+			return;
+
+		try
+		{
+			var recipe = BuildWorldRecipe();
+			WorldSaveIO.WriteRecipe( recipe );
+			_worldRecipeWritten = true;
+		}
+		catch ( Exception e )
+		{
+			Log.Warning( $"[TerrainWorldManager] Failed to write world recipe: {e.Message}" );
+		}
+	}
+
+	WorldSaveRecipe BuildWorldRecipe()
+	{
+		return new WorldSaveRecipe
+		{
+			GameVersion = GameBuildLabel.Display,
+			WorldName = WorldName,
+			WorldSeed = WorldSeed,
+			WorldDiameterMeters = WorldDiameterMeters,
+			MaxTerrainHeightMeters = MaxTerrainHeightMeters,
+			ChunkSizeMeters = ChunkSizeMeters,
+			BiomePreviewMetersPerPixel = BiomePreviewMetersPerPixel,
+			PreviewSettings = BuildGenerationSettings(),
+		};
+	}
+
+	static bool IsWorldAuthority()
+	{
+		var scene = Sandbox.Game.ActiveScene;
+		if ( scene is null || !scene.IsValid() )
+			return true;
+
+		return scene.Network?.Active != true || Networking.IsHost;
+	}
+
+	void SnapStreamerCameraToTerrain()
+	{
+		var cam = ResolveStreamCamera();
+		if ( !cam.IsValid() )
+			return;
+
+		var settings = BuildGenerationSettings();
+		var sample = _backend.Sample( settings, 0f, 0f );
+		var groundZ = sample.IsInsideWorld ? sample.Height01 * MaxTerrainHeightMeters : 0f;
+		var viewHeight = Math.Max( ChunkSizeMeters * 0.75f, 128f );
+		var lookAhead = Math.Max( ChunkSizeMeters * 0.5f, 64f );
+
+		var fly = cam.Components.Get<TerrainTestFlyCamera>();
+		if ( fly is not null && fly.IsValid() )
+		{
+			fly.SnapToTerrainView( groundZ, viewHeight, lookAhead );
+			return;
+		}
+
+		cam.WorldPosition = new Vector3( 0f, -lookAhead * 0.35f, groundZ + viewHeight );
+		var lookTarget = new Vector3( 0f, lookAhead, groundZ );
+		cam.WorldRotation = Rotation.LookAt( (lookTarget - cam.WorldPosition).Normal, Vector3.Up );
+	}
+
+	void SetStreamerInputEnabled( bool enabled )
+	{
+		var cam = ResolveStreamCamera();
+		if ( !cam.IsValid() )
+			return;
+
+		var fly = cam.Components.Get<TerrainTestFlyCamera>();
+		if ( fly is null || !fly.IsValid() )
+			return;
+
+		fly.Enabled = true;
+		fly.SetInputLocked( !enabled );
+	}
+
+	void ShowLoadScreen( string title, string status, float progress01 )
+	{
+		if ( !EnsureLoadScreen() )
+			return;
+
+		_loadScreen.Show( title, status, progress01 );
+	}
+
+	void HideLoadScreen()
+	{
+		if ( _loadScreen is null || !_loadScreen.IsValid() )
+			return;
+
+		_loadScreen.Hide();
+	}
+
+	bool EnsureLoadScreen()
+	{
+		if ( _loadScreen is not null && _loadScreen.IsValid() )
+			return true;
+
+		var scene = GameObject.Scene;
+		if ( !scene.IsValid() )
+			return false;
+
+		var cam = ResolveStreamCamera();
+		if ( !cam.IsValid() )
+			return false;
+
+		_loadScreen = cam.Components.Get<TerrainWorldLoadScreenHost>();
+		if ( _loadScreen is null || !_loadScreen.IsValid() )
+			_loadScreen = cam.Components.Create<TerrainWorldLoadScreenHost>();
+
+		return _loadScreen is not null && _loadScreen.IsValid();
+	}
+}
