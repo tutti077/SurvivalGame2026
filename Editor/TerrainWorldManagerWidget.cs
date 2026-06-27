@@ -21,6 +21,8 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 		nameof( Survival.TerrainWorldManager.SideViewRadiusChunks ),
 		nameof( Survival.TerrainWorldManager.CollisionRangeMeters ),
 		nameof( Survival.TerrainWorldManager.ChunksPerFrame ),
+		nameof( Survival.TerrainWorldManager.MeshBorderPrefetch01 ),
+		nameof( Survival.TerrainWorldManager.MeshedChunkCount ),
 		nameof( Survival.TerrainWorldManager.BiomePreviewMetersPerPixel ),
 		nameof( Survival.TerrainWorldManager.BiomePreviewMapMaxResolution ),
 		nameof( Survival.TerrainWorldManager.PreviewMapRowsPerFrame ),
@@ -37,6 +39,9 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 		nameof( Survival.TerrainWorldManager.IsBiomePreviewMapStale ),
 		nameof( Survival.TerrainWorldManager.HasStreamPosition ),
 		nameof( Survival.TerrainWorldManager.StreamWorldPosition ),
+		nameof( Survival.TerrainWorldManager.StreamXMeters ),
+		nameof( Survival.TerrainWorldManager.StreamYMeters ),
+		nameof( Survival.TerrainWorldManager.StreamElevationMeters ),
 		nameof( Survival.TerrainWorldManager.StreamChunkX ),
 		nameof( Survival.TerrainWorldManager.StreamChunkY ),
 		nameof( Survival.TerrainWorldManager.StreamHeadingDegrees ),
@@ -128,7 +133,7 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 		_lastStreamPositionForStatus = manager.StreamWorldPosition;
 
 		var streamNote = Sandbox.Game.IsPlaying && manager.HasStreamPosition
-			? $" · stream ({manager.StreamWorldPosition.x:0}, {manager.StreamWorldPosition.y:0}) chunk ({manager.StreamChunkX}, {manager.StreamChunkY}) · {manager.LoadedChunkCount} chunks"
+			? $" · {manager.FormatStreamPositionMetersFromCenter()} · chunk ({manager.StreamChunkX}, {manager.StreamChunkY}) · {manager.MeshedChunkCount} meshed / {manager.LoadedChunkCount} stream"
 			: "";
 
 		if ( manager.BiomePreviewMap.IsValid() )

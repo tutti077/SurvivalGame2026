@@ -41,6 +41,8 @@ public sealed class TerrainWorldManager : Component
 	public float CollisionRangeMeters { get; set; } = 128f;
 	[Property, Group( "Chunks" ), Title( "New Chunks Per Frame" ), Range( 1, 32 ), Step( 1 )]
 	public int ChunksPerFrame { get; set; } = 2;
+	[Property, Group( "Chunks" ), Title( "Mesh Border Prefetch" ), Range( 0.05f, 0.5f ), Step( 0.05f ), Description( "Reserved for future border-only mesh LOD (stream cone currently meshes all visible chunks)." )]
+	public float MeshBorderPrefetch01 { get; set; } = 0.35f;
 
 	[Property, Group( "Preview Map" ), Title( "Meters Per Pixel" ), Range( 1f, 64f ), Step( 1f )]
 	public float BiomePreviewMetersPerPixel { get; set; } = 10f;
@@ -55,6 +57,7 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Loading" )] public bool ShowWorldLoadScreen { get; set; } = true;
 	[Property, Group( "Loading" ), ReadOnly] public bool IsWorldLoading { get; private set; }
 	[Property, Group( "Chunks" ), ReadOnly] public int LoadedChunkCount { get; private set; }
+	[Property, Group( "Chunks" ), ReadOnly] public int MeshedChunkCount { get; private set; }
 	[Property, Group( "Preview Map" ), ReadOnly] public bool IsMapGenerating { get; private set; }
 	[Property, Group( "Preview Map" ), ReadOnly] public float MapGenerationProgress01 { get; private set; }
 	[Property, Group( "Preview Map" ), ReadOnly] public string MapGenerationStatus { get; private set; } = "";
@@ -65,9 +68,13 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Preview Map" ), ReadOnly] public bool IsBiomePreviewMapStale { get; private set; }
 	[Property, Group( "Preview Map" ), ReadOnly] public bool HasStreamPosition { get; private set; }
 	[Property, Group( "Preview Map" ), ReadOnly] public Vector3 StreamWorldPosition { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly, Title( "Stream X (m from center)" )] public float StreamXMeters { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly, Title( "Stream Y (m from center)" )] public float StreamYMeters { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly, Title( "Stream Z / elevation (m)" )] public float StreamElevationMeters { get; private set; }
 	[Property, Group( "Preview Map" ), ReadOnly] public int StreamChunkX { get; private set; }
 	[Property, Group( "Preview Map" ), ReadOnly] public int StreamChunkY { get; private set; }
 	[Property, Group( "Preview Map" ), ReadOnly] public float StreamHeadingDegrees { get; private set; }
+	[Property, Group( "Preview Map" ), ReadOnly] public Vector2 StreamLookDirectionMap { get; private set; }
 
 	readonly Dictionary<TerrainChunkCoord, LoadedChunk> _loaded = new();
 
@@ -95,11 +102,6 @@ public sealed class TerrainWorldManager : Component
 	bool _worldRecipeWritten;
 	bool _isWorldLoading;
 	bool _initialChunksQueued;
-	TerrainChunkCoord _lastStreamChunk = new( int.MinValue, int.MinValue );
-	bool _hasStreamChunk;
-	Rotation _lastStreamViewRotation = Rotation.Identity;
-	bool _hasStreamViewRotation;
-	const float StreamViewRefreshAngleDegrees = 12f;
 
 	protected override void OnStart()
 	{
@@ -115,8 +117,6 @@ public sealed class TerrainWorldManager : Component
 		if ( WorldSeed != _lastChunkSeed )
 		{
 			_lastChunkSeed = WorldSeed;
-			_hasStreamChunk = false;
-			_hasStreamViewRotation = false;
 			UnloadAll();
 			BeginWorldLoad();
 			return;
@@ -140,11 +140,17 @@ public sealed class TerrainWorldManager : Component
 		if ( !TryGetStreamTransform( out var worldPos, out var viewRotation ) )
 		{
 			HasStreamPosition = false;
+			StreamXMeters = 0f;
+			StreamYMeters = 0f;
+			StreamElevationMeters = 0f;
 			return;
 		}
 
 		HasStreamPosition = true;
 		StreamWorldPosition = worldPos;
+		StreamXMeters = worldPos.x;
+		StreamYMeters = worldPos.y;
+		StreamElevationMeters = worldPos.z;
 
 		var settings = BuildGenerationSettings();
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
@@ -157,9 +163,17 @@ public sealed class TerrainWorldManager : Component
 		StreamChunkY = chunk.Y;
 
 		var forward = viewRotation.Forward.WithZ( 0f );
-		StreamHeadingDegrees = forward.LengthSquared > 1e-6f
-			? MathF.Atan2( forward.y, forward.x ) * (180f / MathF.PI)
-			: 0f;
+		if ( forward.LengthSquared > 1e-6f )
+		{
+			forward = forward.Normal;
+			StreamHeadingDegrees = MathF.Atan2( forward.y, forward.x ) * (180f / MathF.PI);
+			StreamLookDirectionMap = TerrainBiomeMapCoordinates.WorldForwardToPreviewMapDirection( forward );
+		}
+		else
+		{
+			StreamHeadingDegrees = 0f;
+			StreamLookDirectionMap = Vector2.Zero;
+		}
 	}
 
 	void TryRefreshStreamChunks()
@@ -167,44 +181,7 @@ public sealed class TerrainWorldManager : Component
 		if ( !TryGetStreamTransform( out var streamPos, out var viewRotation ) )
 			return;
 
-		var settings = BuildGenerationSettings();
-		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
-		var streamChunk = TerrainChunkStreaming.WorldToChunkCoord(
-			streamPos.x,
-			streamPos.y,
-			settings.WorldRadiusMeters,
-			chunkSize );
-
-		var chunkChanged = !_hasStreamChunk
-			|| streamChunk.X != _lastStreamChunk.X
-			|| streamChunk.Y != _lastStreamChunk.Y;
-		var viewChanged = UseForwardConeStreaming && HasStreamViewRotationChanged( viewRotation );
-
-		if ( !chunkChanged && !viewChanged )
-			return;
-
-		_lastStreamChunk = streamChunk;
-		_hasStreamChunk = true;
-		_lastStreamViewRotation = viewRotation;
-		_hasStreamViewRotation = true;
 		RefreshChunks( streamPos, viewRotation );
-	}
-
-	bool HasStreamViewRotationChanged( Rotation viewRotation )
-	{
-		if ( !_hasStreamViewRotation )
-			return true;
-
-		var oldForward = _lastStreamViewRotation.Forward.WithZ( 0f );
-		var newForward = viewRotation.Forward.WithZ( 0f );
-		if ( oldForward.LengthSquared < 1e-6f || newForward.LengthSquared < 1e-6f )
-			return true;
-
-		oldForward = oldForward.Normal;
-		newForward = newForward.Normal;
-		var dot = Math.Clamp( Vector3.Dot( oldForward, newForward ), -1f, 1f );
-		var threshold = MathF.Cos( StreamViewRefreshAngleDegrees * (MathF.PI / 180f) );
-		return dot < threshold;
 	}
 
 	protected override void OnDestroy()
@@ -230,6 +207,10 @@ public sealed class TerrainWorldManager : Component
 
 		return settings;
 	}
+
+	/// <summary>Meters from world center (0,0,0); negatives allowed on all axes.</summary>
+	public string FormatStreamPositionMetersFromCenter()
+		=> $"X {StreamXMeters:0.#} m · Y {StreamYMeters:0.#} m · Z {StreamElevationMeters:0.#} m";
 
 	public int ComputeBiomePreviewResolution()
 	{
@@ -425,6 +406,7 @@ public sealed class TerrainWorldManager : Component
 		}
 
 		LoadedChunkCount = _loaded.Count;
+		MeshedChunkCount = _loaded.Count;
 		UpdateChunkColliders( _loadStreamPos, _loadSettings, Math.Max( 32f, ChunkSizeMeters ) );
 	}
 
@@ -473,18 +455,16 @@ public sealed class TerrainWorldManager : Component
 		_isWorldLoading = false;
 		IsWorldLoading = false;
 		_lastChunkSeed = WorldSeed;
-		_hasStreamChunk = false;
-		_hasStreamViewRotation = false;
 
 		SnapStreamerCameraToTerrain();
 		EnsureChunksAroundStream();
 		SetStreamerInputEnabled( true );
 		HideLoadScreen();
 
-		Log.Info( $"[TerrainWorldManager] World ready — {LoadedChunkCount} terrain chunks, seed {WorldSeed}." );
+		Log.Info( $"[TerrainWorldManager] World ready — {MeshedChunkCount} meshed chunks ({LoadedChunkCount} in stream zone), seed {WorldSeed}." );
 
-		if ( LoadedChunkCount <= 0 )
-			Log.Warning( "[TerrainWorldManager] No terrain chunks loaded — check stream radius and world seed." );
+		if ( MeshedChunkCount <= 0 )
+			Log.Warning( "[TerrainWorldManager] No terrain chunks meshed — check stream position and world seed." );
 	}
 
 	void EnsureChunksAroundStream()
@@ -492,22 +472,7 @@ public sealed class TerrainWorldManager : Component
 		if ( !TryGetStreamTransform( out var streamPos, out var viewRotation ) )
 			return;
 
-		var settings = BuildGenerationSettings();
-		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
-		CollectStreamChunks( streamPos, viewRotation, settings, chunkSize, _neededScratch );
-
-		foreach ( var coord in _neededScratch )
-		{
-			if ( !_loaded.ContainsKey( coord ) )
-				LoadChunk( coord, settings, streamPos, visible: true );
-		}
-
-		var toRemove = _loaded.Keys.Where( c => !_neededScratch.Contains( c ) ).ToList();
-		foreach ( var coord in toRemove )
-			UnloadChunk( coord );
-
-		LoadedChunkCount = _loaded.Count;
-		UpdateChunkColliders( streamPos, settings, chunkSize );
+		RefreshChunks( streamPos, viewRotation );
 	}
 
 	void FinishMapGeneration()
@@ -559,7 +524,8 @@ public sealed class TerrainWorldManager : Component
 		foreach ( var coord in toRemove )
 			UnloadChunk( coord );
 
-		LoadedChunkCount = _loaded.Count;
+		LoadedChunkCount = _neededScratch.Count;
+		MeshedChunkCount = _loaded.Count;
 		UpdateChunkColliders( streamPos, settings, chunkSize );
 	}
 
@@ -656,8 +622,6 @@ public sealed class TerrainWorldManager : Component
 			Coord = coord,
 		};
 
-		LoadedChunkCount = _loaded.Count;
-
 		var chunkBounds = new BBox(
 			new Vector3( chunkMinX, chunkMinY, built.LocalBounds.Mins.z ),
 			new Vector3( chunkMinX + ChunkSizeMeters, chunkMinY + ChunkSizeMeters, built.LocalBounds.Maxs.z ) );
@@ -681,6 +645,7 @@ public sealed class TerrainWorldManager : Component
 
 		_loaded.Clear();
 		LoadedChunkCount = 0;
+		MeshedChunkCount = 0;
 	}
 
 	void TryWriteWorldRecipe()

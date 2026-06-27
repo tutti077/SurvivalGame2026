@@ -13,7 +13,7 @@ sealed class TerrainBiomeMapLivePreviewWidget : Widget
 	Pixmap _mapPixmap;
 	Texture _cachedMapPixmapSource;
 	Vector3 _lastStreamPosition;
-	float _lastHeadingDegrees;
+	Vector2 _lastStreamLookDirection;
 	int _lastLoadedChunkCount;
 	bool _lastHasStream;
 
@@ -32,7 +32,7 @@ sealed class TerrainBiomeMapLivePreviewWidget : Widget
 
 		var map = manager.BiomePreviewMap;
 		var streamMoved = manager.HasStreamPosition && manager.StreamWorldPosition != _lastStreamPosition;
-		var headingChanged = MathF.Abs( manager.StreamHeadingDegrees - _lastHeadingDegrees ) > 0.25f;
+		var headingChanged = (manager.StreamLookDirectionMap - _lastStreamLookDirection).LengthSquared > 0.0001f;
 		var chunksChanged = manager.LoadedChunkCount != _lastLoadedChunkCount;
 		var mapChanged = map != _lastMapTexture;
 
@@ -44,7 +44,7 @@ sealed class TerrainBiomeMapLivePreviewWidget : Widget
 
 		_lastMapTexture = map;
 		_lastStreamPosition = manager.StreamWorldPosition;
-		_lastHeadingDegrees = manager.StreamHeadingDegrees;
+		_lastStreamLookDirection = manager.StreamLookDirectionMap;
 		_lastLoadedChunkCount = manager.LoadedChunkCount;
 		_lastHasStream = manager.HasStreamPosition;
 		Update();
@@ -52,13 +52,6 @@ sealed class TerrainBiomeMapLivePreviewWidget : Widget
 
 	protected override void OnPaint()
 	{
-		base.OnPaint();
-
-		Paint.Antialiasing = true;
-		Paint.ClearPen();
-		Paint.SetBrush( Theme.ControlBackground );
-		Paint.DrawRect( LocalRect, Theme.ControlRadius );
-
 		var manager = ResolveManager?.Invoke();
 		if ( manager is null || !manager.IsValid )
 			return;
@@ -71,8 +64,11 @@ sealed class TerrainBiomeMapLivePreviewWidget : Widget
 		if ( _mapPixmap is null )
 			return;
 
+		Paint.Antialiasing = true;
+		Paint.ClearPen();
+
 		var mapRect = TerrainBiomeMapCoordinates.GetAspectContainRect(
-			LocalRect.Shrink( 2f ),
+			LocalRect,
 			_mapPixmap.Width,
 			_mapPixmap.Height );
 		Paint.Draw( mapRect, _mapPixmap );
@@ -81,32 +77,28 @@ sealed class TerrainBiomeMapLivePreviewWidget : Widget
 			return;
 
 		var settings = manager.BuildGenerationSettings();
-		var normalized = TerrainBiomeMapCoordinates.WorldMetersToNormalized(
+		var normalized = TerrainBiomeMapCoordinates.WorldMetersToPreviewNormalized(
 			manager.StreamWorldPosition.x,
 			manager.StreamWorldPosition.y,
 			settings );
 		var marker = TerrainBiomeMapCoordinates.NormalizedToLocalPoint( mapRect, normalized );
 
-		DrawStreamMarker( marker, manager.StreamHeadingDegrees );
+		DrawStreamMarker( marker, manager.StreamLookDirectionMap );
 	}
 
-	static void DrawStreamMarker( Vector2 center, float headingDegrees )
+	static void DrawStreamMarker( Vector2 center, Vector2 mapDirection )
 	{
+		if ( mapDirection.LengthSquared < 1e-8f )
+			return;
+
+		Paint.ClearPen();
 		Paint.SetPen( Color.White.WithAlpha( 0.95f ) );
 		Paint.DrawLine( center - new Vector2( MarkerArmPixels, 0f ), center + new Vector2( MarkerArmPixels, 0f ) );
 		Paint.DrawLine( center - new Vector2( 0f, MarkerArmPixels ), center + new Vector2( 0f, MarkerArmPixels ) );
 
-		var radians = headingDegrees * (MathF.PI / 180f);
-		var headingDir = new Vector2( MathF.Cos( radians ), MathF.Sin( radians ) );
-		var headingEnd = center + (headingDir * HeadingLinePixels);
+		var headingEnd = center + (mapDirection.Normal * HeadingLinePixels);
 		Paint.SetPen( Color.Cyan.WithAlpha( 0.95f ) );
 		Paint.DrawLine( center, headingEnd );
-
-		Paint.SetPen( Color.Black.WithAlpha( 0.85f ) );
-		var dotRect = new Rect( center - new Vector2( 3f, 3f ), center + new Vector2( 3f, 3f ) );
-		Paint.DrawRect( dotRect, 3f );
-		Paint.SetPen( Color.White );
-		Paint.DrawRect( dotRect.Shrink( 1f ), 2f );
 	}
 
 	void InvalidateMapPixmap( Texture map )

@@ -120,6 +120,68 @@ public static class TerrainChunkStreaming
 		return angle <= halfConeDegrees;
 	}
 
+	/// <summary>Mesh only the chunk under the stream position plus neighbors when near a chunk edge.</summary>
+	public static void CollectMeshChunks(
+		Vector3 streamPos,
+		TerrainPreviewSettings settings,
+		float chunkSizeMeters,
+		float borderPrefetch01,
+		HashSet<TerrainChunkCoord> meshNeeded )
+	{
+		meshNeeded.Clear();
+
+		chunkSizeMeters = Math.Max( 16f, chunkSizeMeters );
+		borderPrefetch01 = Math.Clamp( borderPrefetch01, 0.05f, 0.5f );
+
+		var worldRadius = settings.WorldRadiusMeters;
+		var center = WorldToChunkCoord( streamPos.x, streamPos.y, worldRadius, chunkSizeMeters );
+		if ( !IsChunkInsideWorld( center, settings, chunkSizeMeters ) )
+			return;
+
+		meshNeeded.Add( center );
+
+		var chunkMinX = -worldRadius + (center.X * chunkSizeMeters);
+		var chunkMinY = -worldRadius + (center.Y * chunkSizeMeters);
+		var localX = streamPos.x - chunkMinX;
+		var localY = streamPos.y - chunkMinY;
+		var borderDistance = chunkSizeMeters * borderPrefetch01;
+
+		TryAddNeighborMeshChunk( meshNeeded, settings, chunkSizeMeters, center, -1, 0, localX < borderDistance );
+		TryAddNeighborMeshChunk( meshNeeded, settings, chunkSizeMeters, center, 1, 0, localX > chunkSizeMeters - borderDistance );
+		TryAddNeighborMeshChunk( meshNeeded, settings, chunkSizeMeters, center, 0, -1, localY < borderDistance );
+		TryAddNeighborMeshChunk( meshNeeded, settings, chunkSizeMeters, center, 0, 1, localY > chunkSizeMeters - borderDistance );
+
+		var nearWest = localX < borderDistance;
+		var nearEast = localX > chunkSizeMeters - borderDistance;
+		var nearSouth = localY < borderDistance;
+		var nearNorth = localY > chunkSizeMeters - borderDistance;
+		if ( nearWest && nearSouth )
+			TryAddNeighborMeshChunk( meshNeeded, settings, chunkSizeMeters, center, -1, -1, true );
+		if ( nearEast && nearSouth )
+			TryAddNeighborMeshChunk( meshNeeded, settings, chunkSizeMeters, center, 1, -1, true );
+		if ( nearWest && nearNorth )
+			TryAddNeighborMeshChunk( meshNeeded, settings, chunkSizeMeters, center, -1, 1, true );
+		if ( nearEast && nearNorth )
+			TryAddNeighborMeshChunk( meshNeeded, settings, chunkSizeMeters, center, 1, 1, true );
+	}
+
+	static void TryAddNeighborMeshChunk(
+		HashSet<TerrainChunkCoord> meshNeeded,
+		TerrainPreviewSettings settings,
+		float chunkSizeMeters,
+		TerrainChunkCoord center,
+		int deltaX,
+		int deltaY,
+		bool shouldAdd )
+	{
+		if ( !shouldAdd )
+			return;
+
+		var coord = new TerrainChunkCoord( center.X + deltaX, center.Y + deltaY );
+		if ( IsChunkInsideWorld( coord, settings, chunkSizeMeters ) )
+			meshNeeded.Add( coord );
+	}
+
 	public static TerrainChunkCoord WorldToChunkCoord( float worldX, float worldY, float worldRadius, float chunkSize )
 	{
 		var chunkX = (int)MathF.Floor( (worldX + worldRadius) / chunkSize );

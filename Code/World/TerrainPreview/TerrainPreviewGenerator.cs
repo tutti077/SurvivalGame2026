@@ -147,8 +147,14 @@ public static class TerrainPreviewGenerator
 				for ( var px = 0; px < res; px++ )
 				{
 					var idx = (py * res) + px;
-					var wx = (px + 0.5f) / res * diameter - radius;
-					var wy = (py + 0.5f) / res * diameter - radius;
+					TerrainBiomeMapCoordinates.RasterPixelToWorldMeters(
+						px,
+						py,
+						res,
+						radius,
+						diameter,
+						out var wx,
+						out var wy );
 					var sample = backend.Sample( settings, wx, wy );
 					insideWorld[idx] = sample.IsInsideWorld;
 					ocean[idx] = sample.IsInsideWorld && sample.OceanHeight01 > 0.5f;
@@ -171,8 +177,14 @@ public static class TerrainPreviewGenerator
 			for ( var px = 0; px < res; px++ )
 			{
 				var idx = (py * res) + px;
-				var wx = (px + 0.5f) / res * diameter - radius;
-				var wy = (py + 0.5f) / res * diameter - radius;
+				TerrainBiomeMapCoordinates.RasterPixelToWorldMeters(
+					px,
+					py,
+					res,
+					radius,
+					diameter,
+					out var wx,
+					out var wy );
 
 				var sample = backend.Sample( settings, wx, wy );
 				insideWorld[idx] = sample.IsInsideWorld;
