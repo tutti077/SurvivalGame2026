@@ -213,7 +213,7 @@
           "FastMoveMultiplier": 3,
           "InputLocked": false,
           "LookSensitivity": 0.075,
-          "MoveSpeed": 400,
+          "MoveSpeed": 2220,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,

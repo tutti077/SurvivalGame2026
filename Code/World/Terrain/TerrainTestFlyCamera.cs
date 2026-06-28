@@ -4,7 +4,8 @@ namespace Survival;
 [Title( "Terrain Test Fly Camera" )]
 public sealed class TerrainTestFlyCamera : Component
 {
-	[Property] public float MoveSpeed { get; set; } = 400f;
+	/// <summary>Engine units/sec (see <see cref="TerrainWorldUnits.UnitsPerMeter"/>). Default ≈ 55 m/s; shift ≈ 165 m/s (~10 km/min).</summary>
+	[Property] public float MoveSpeed { get; set; } = 2220f;
 	[Property] public float FastMoveMultiplier { get; set; } = 3f;
 	[Property] public float LookSensitivity { get; set; } = 0.075f;
 	[Property, ReadOnly] public bool InputLocked { get; set; }
