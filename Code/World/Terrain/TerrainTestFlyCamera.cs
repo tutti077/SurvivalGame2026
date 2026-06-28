@@ -70,14 +70,18 @@ public sealed class TerrainTestFlyCamera : Component
 		_viewAngles = WorldRotation.Angles();
 	}
 
-	/// <summary>Places the camera above world spawn and looks toward terrain ahead (+Y).</summary>
+	/// <summary>Places the camera above world spawn and looks toward terrain ahead (+Y). Distances are meters.</summary>
 	public void SnapToTerrainView( float groundZMeters, float heightAboveGroundMeters, float lookAheadMeters )
 	{
 		heightAboveGroundMeters = Math.Max( 64f, heightAboveGroundMeters );
 		lookAheadMeters = Math.Max( 32f, lookAheadMeters );
 
-		WorldPosition = new Vector3( 0f, -lookAheadMeters * 0.35f, groundZMeters + heightAboveGroundMeters );
-		SetViewLookAt( new Vector3( 0f, lookAheadMeters, groundZMeters ) );
+		var groundEngine = TerrainWorldUnits.MetersToEngine( groundZMeters );
+		var heightEngine = TerrainWorldUnits.MetersToEngine( heightAboveGroundMeters );
+		var lookAheadEngine = TerrainWorldUnits.MetersToEngine( lookAheadMeters );
+
+		WorldPosition = new Vector3( 0f, -lookAheadEngine * 0.35f, groundEngine + heightEngine );
+		SetViewLookAt( new Vector3( 0f, lookAheadEngine, groundEngine ) );
 	}
 
 	protected override void OnUpdate()

@@ -152,9 +152,9 @@ public sealed class TerrainWorldManager : Component
 
 		HasStreamPosition = true;
 		StreamWorldPosition = worldPos;
-		StreamXMeters = worldPos.x;
-		StreamYMeters = worldPos.y;
-		StreamElevationMeters = worldPos.z;
+		StreamXMeters = TerrainWorldUnits.EngineToMeters( worldPos.x );
+		StreamYMeters = TerrainWorldUnits.EngineToMeters( worldPos.y );
+		StreamElevationMeters = TerrainWorldUnits.EngineToMeters( worldPos.z );
 
 		var settings = BuildGenerationSettings();
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
@@ -182,10 +182,10 @@ public sealed class TerrainWorldManager : Component
 
 	void TryRefreshStreamChunks()
 	{
-		if ( !TryGetStreamTransform( out var streamPos, out var viewRotation ) )
+		if ( !TryGetStreamTransform( out var streamPosEngine, out var viewRotation ) )
 			return;
 
-		RefreshChunks( streamPos, viewRotation );
+		RefreshChunks( TerrainWorldUnits.EngineToMeters( streamPosEngine ), viewRotation );
 	}
 
 	protected override void OnDestroy()
@@ -339,8 +339,8 @@ public sealed class TerrainWorldManager : Component
 	{
 		var settings = _loadSettings;
 		var sample = _backend.Sample( settings, 0f, 0f );
-		var groundZ = sample.IsInsideWorld ? sample.Height01 * MaxTerrainHeightMeters : 0f;
-		_loadStreamPos = new Vector3( 0f, 0f, groundZ );
+		var groundZMeters = sample.IsInsideWorld ? sample.Height01 * MaxTerrainHeightMeters : 0f;
+		_loadStreamPos = new Vector3( 0f, 0f, groundZMeters );
 		_loadViewRotation = TryGetStreamTransform( out _, out var viewRotation )
 			? viewRotation
 			: Rotation.Identity;
@@ -606,10 +606,11 @@ public sealed class TerrainWorldManager : Component
 
 		var chunkMinX = -settings.WorldRadiusMeters + (coord.X * ChunkSizeMeters);
 		var chunkMinY = -settings.WorldRadiusMeters + (coord.Y * ChunkSizeMeters);
+		var chunkOriginEngine = TerrainWorldUnits.MetersToEngine( new Vector3( chunkMinX, chunkMinY, 0f ) );
 
 		var go = new GameObject( true, $"TerrainChunk {coord}" );
 		go.Parent = GameObject;
-		go.WorldPosition = new Vector3( chunkMinX, chunkMinY, 0f );
+		go.WorldPosition = chunkOriginEngine;
 
 		var renderer = go.Components.Create<ModelRenderer>();
 		renderer.Model = built.Model;
@@ -633,8 +634,8 @@ public sealed class TerrainWorldManager : Component
 		};
 
 		var chunkBounds = new BBox(
-			new Vector3( chunkMinX, chunkMinY, built.LocalBounds.Mins.z ),
-			new Vector3( chunkMinX + ChunkSizeMeters, chunkMinY + ChunkSizeMeters, built.LocalBounds.Maxs.z ) );
+			chunkOriginEngine + built.LocalBounds.Mins,
+			chunkOriginEngine + built.LocalBounds.Maxs );
 
 		BuildNavMeshSync.NotifyTerrainChunkLoaded( GameObject.Scene, chunkBounds );
 	}
@@ -707,19 +708,22 @@ public sealed class TerrainWorldManager : Component
 
 		var settings = BuildGenerationSettings();
 		var sample = _backend.Sample( settings, 0f, 0f );
-		var groundZ = sample.IsInsideWorld ? sample.Height01 * MaxTerrainHeightMeters : 0f;
+		var groundZMeters = sample.IsInsideWorld ? sample.Height01 * MaxTerrainHeightMeters : 0f;
 		var viewHeight = Math.Max( ChunkSizeMeters * 0.75f, 128f );
 		var lookAhead = Math.Max( ChunkSizeMeters * 0.5f, 64f );
 
 		var fly = cam.Components.Get<TerrainTestFlyCamera>();
 		if ( fly is not null && fly.IsValid() )
 		{
-			fly.SnapToTerrainView( groundZ, viewHeight, lookAhead );
+			fly.SnapToTerrainView( groundZMeters, viewHeight, lookAhead );
 			return;
 		}
 
-		cam.WorldPosition = new Vector3( 0f, -lookAhead * 0.35f, groundZ + viewHeight );
-		var lookTarget = new Vector3( 0f, lookAhead, groundZ );
+		var groundEngine = TerrainWorldUnits.MetersToEngine( groundZMeters );
+		var viewHeightEngine = TerrainWorldUnits.MetersToEngine( viewHeight );
+		var lookAheadEngine = TerrainWorldUnits.MetersToEngine( lookAhead );
+		cam.WorldPosition = new Vector3( 0f, -lookAheadEngine * 0.35f, groundEngine + viewHeightEngine );
+		var lookTarget = new Vector3( 0f, lookAheadEngine, groundEngine );
 		cam.WorldRotation = Rotation.LookAt( (lookTarget - cam.WorldPosition).Normal, Vector3.Up );
 	}
 

@@ -70,7 +70,7 @@ public static class TerrainMeshBuilder
 
 				vertices[i] = new Vertex
 				{
-					Position = new Vector3( localX, localY, heights[i] ),
+					Position = TerrainWorldUnits.MetersToEngine( new Vector3( localX, localY, heights[i] ) ),
 					Normal = normal,
 					Tangent = ComputeTangent( normal ),
 					TexCoord0 = new Vector2( ix / (float)(verticesPerSide - 1), iy / (float)(verticesPerSide - 1) ),
@@ -102,8 +102,8 @@ public static class TerrainMeshBuilder
 		} );
 
 		var bounds = new BBox(
-			new Vector3( 0f, 0f, 0f ),
-			new Vector3( chunkSizeMeters, chunkSizeMeters, maxTerrainHeightMeters ) );
+			Vector3.Zero,
+			TerrainWorldUnits.MetersToEngine( new Vector3( chunkSizeMeters, chunkSizeMeters, maxTerrainHeightMeters ) ) );
 		mesh.Bounds = bounds;
 
 		var model = new ModelBuilder().AddMesh( mesh ).Create();

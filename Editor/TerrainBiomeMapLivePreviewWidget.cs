@@ -78,8 +78,8 @@ sealed class TerrainBiomeMapLivePreviewWidget : Widget
 
 		var settings = manager.BuildGenerationSettings();
 		var normalized = TerrainBiomeMapCoordinates.WorldMetersToPreviewNormalized(
-			manager.StreamWorldPosition.x,
-			manager.StreamWorldPosition.y,
+			manager.StreamXMeters,
+			manager.StreamYMeters,
 			settings );
 		var marker = TerrainBiomeMapCoordinates.NormalizedToLocalPoint( mapRect, normalized );
 

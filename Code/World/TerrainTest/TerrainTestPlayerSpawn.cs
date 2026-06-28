@@ -66,7 +66,7 @@ public sealed class TerrainTestPlayerSpawn : Component
 		}
 
 		instance.Parent = scene;
-		instance.WorldPosition = view.WorldPosition - (Vector3.Up * SpawnDropDistanceMeters);
+		instance.WorldPosition = view.WorldPosition - (Vector3.Up * TerrainWorldUnits.MetersToEngine( SpawnDropDistanceMeters ));
 		instance.WorldRotation = ResolveSpawnRotation( view );
 
 		ConfigureScaleReferencePawn( instance );
