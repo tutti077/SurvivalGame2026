@@ -101,24 +101,8 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 		if ( !savePng )
 			return;
 
-		try
-		{
-			var settings = manager.BuildGenerationSettings();
-			var job = Survival.TerrainWorldPreviewJob.Create(
-				settings,
-				TerrainPreviewBackendRegistry.Active,
-				manager.ComputeBiomePreviewResolution() );
-			while ( !job.IsComplete )
-				job.Step( int.MaxValue );
-
-			Survival.WorldSaveIO.WriteBiomeMapPng( manager.WorldName, job.FinishBitmap() );
-			_previewStatus.Text =
-				$"Biome map ready — {manager.EffectiveBiomePreviewResolution}px, {manager.EffectiveMetersPerPixel:0.##} m/px (saved WorldSaves/{manager.WorldName}/biome_map.png)";
-		}
-		catch ( Exception e )
-		{
-			_previewStatus.Text = $"Biome map ready — save failed: {e.Message}";
-		}
+		_previewStatus.Text =
+			$"Biome map ready — {manager.EffectiveBiomePreviewResolution}px, {manager.EffectiveMetersPerPixel:0.##} m/px (saved WorldSaves/{manager.WorldName}/biome_map.png)";
 	}
 
 	void RefreshPreview()

@@ -1,6 +1,6 @@
 namespace Survival;
 
-/// <summary>Rasterizes the biome preview map used by <see cref="TerrainWorldManager"/>.</summary>
+/// <summary>Rasterizes the inspector biome map PNG. Display export only — never read back for generation.</summary>
 public static class TerrainWorldPreviewMap
 {
 	public readonly struct Result
@@ -9,15 +9,19 @@ public static class TerrainWorldPreviewMap
 		public int Resolution { get; init; }
 	}
 
-	public static Result Rasterize( TerrainPreviewSettings settings, ITerrainPreviewBackend backend = null, int? resolutionOverride = null )
+	public static Result Rasterize(
+		TerrainPreviewSettings worldSettings,
+		ITerrainPreviewBackend backend = null,
+		TerrainBiomeMapPreviewOptions preview = null,
+		int? resolutionOverride = null )
 	{
 		backend ??= TerrainPreviewBackendRegistry.Active;
-		settings.PreviewMode = TerrainPreviewMode.Biomes;
+		preview ??= TerrainBiomeMapPreviewOptions.FromSettings( worldSettings );
 
-		var res = resolutionOverride ?? settings.ClampedResolution;
+		var res = resolutionOverride ?? worldSettings.ClampedResolution;
 		var colors = new Color[res * res];
-		var radius = settings.WorldRadiusMeters;
-		var diameter = settings.WorldDiameterMeters;
+		var radius = worldSettings.WorldRadiusMeters;
+		var diameter = worldSettings.WorldDiameterMeters;
 		var insideWorld = new bool[res * res];
 
 		for ( var py = 0; py < res; py++ )
@@ -25,19 +29,24 @@ public static class TerrainWorldPreviewMap
 			for ( var px = 0; px < res; px++ )
 			{
 				var idx = (py * res) + px;
-				var wx = (px + 0.5f) / res * diameter - radius;
-				var wy = (py + 0.5f) / res * diameter - radius;
-				var sample = backend.Sample( settings, wx, wy );
+				TerrainBiomeMapCoordinates.RasterPixelToWorldMeters(
+					px,
+					py,
+					res,
+					radius,
+					diameter,
+					out var wx,
+					out var wy );
+				var sample = backend.Sample( worldSettings, wx, wy );
 				insideWorld[idx] = sample.IsInsideWorld;
 			}
 		}
 
-		TerrainPreviewBiomeMapRaster.FillBiomeColors(
-			settings,
+		TerrainBiomeMapPreviewRaster.FillBiomeColors(
+			worldSettings,
 			backend,
+			preview,
 			res,
-			radius,
-			diameter,
 			insideWorld,
 			colors );
 

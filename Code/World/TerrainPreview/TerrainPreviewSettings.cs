@@ -234,10 +234,10 @@ public sealed class TerrainPreviewSettings
 	[Property, Group( "Biomes" ), Title( "Distance Influence Scale (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
 	public float BiomeDistanceInfluenceScale01 { get; set; } = 0.25f;
 
-	[Property, Group( "Biomes" ), Title( "Merge Small Patches" )]
+	[Property, Group( "Biomes" ), Title( "Merge Small Patches (PNG preview only)" ), Description( "Inspector/export biome map cleanup in world meters. Does not change streamed terrain meshes." )]
 	public bool BiomeSpeckFilterEnabled { get; set; } = true;
 
-	[Property, Group( "Biomes" ), Title( "Min Patch Diameter (m)" ), Range( 10f, 500f ), Step( 5f )]
+	[Property, Group( "Biomes" ), Title( "Min Patch Diameter (m, PNG preview only)" ), Range( 10f, 500f ), Step( 5f ), Description( "World-meter speck merge on exported biome map only." )]
 	public float BiomeMinPatchDiameterMeters { get; set; } = 200f;
 
 	[Property, Group( "Biomes" ), Title( "Mountain Min Height (0–1)" ), Range( 0.2f, 0.95f ), Step( 0.01f )]

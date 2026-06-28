@@ -60,6 +60,8 @@ public static class WorldSaveIO
 		if ( string.IsNullOrWhiteSpace( worldName ) || bitmap is null )
 			return;
 
+		// Display export only — generation never reads this file back.
+
 		var path = GetBiomeMapRelativePath( worldName );
 		EnsureWorldDirectory( worldName );
 		FileSystem.Data.WriteAllBytes( path, bitmap.ToPng() );

@@ -1,19 +1,20 @@
 namespace Survival;
 
-/// <summary>Removes tiny land-biome islands by merging them into the dominant neighbor biome.</summary>
+/// <summary>Removes tiny land-biome islands on PNG preview maps (world-meter threshold).</summary>
 public static class TerrainPreviewBiomeSpeckFilter
 {
 	public static void MergeSmallPatches(
 		TerrainPreviewBiomeId[] map,
 		int width,
 		int height,
-		int minPixelArea,
+		float metersPerPixel,
+		float minPatchDiameterMeters,
 		int maxPasses = 2 )
 	{
-		if ( map is null || map.Length != width * height || minPixelArea <= 1 )
+		if ( map is null || map.Length != width * height || metersPerPixel <= 0f )
 			return;
 
-		minPixelArea = Math.Max( 4, minPixelArea );
+		var minDiameterMeters = Math.Max( 8f, minPatchDiameterMeters );
 		var visited = new bool[map.Length];
 		var component = new List<int>( 256 );
 		var componentSet = new HashSet<int>();
@@ -31,7 +32,7 @@ public static class TerrainPreviewBiomeSpeckFilter
 				component.Clear();
 				componentSet.Clear();
 				FloodFill( map, width, height, idx, map[idx], visited, component, componentSet );
-				if ( component.Count >= minPixelArea )
+				if ( ComputeComponentDiameterMeters( width, component, metersPerPixel ) >= minDiameterMeters )
 					continue;
 
 				neighborVotes.Clear();
@@ -47,13 +48,39 @@ public static class TerrainPreviewBiomeSpeckFilter
 		}
 	}
 
-	public static int ComputeMinPatchPixels( TerrainPreviewSettings settings, int resolution )
+	public static void MergeSmallPatches(
+		TerrainPreviewBiomeId[] map,
+		int width,
+		int height,
+		float metersPerPixel,
+		TerrainBiomeMapPreviewOptions preview,
+		int maxPasses = 2 )
 	{
-		resolution = Math.Max( 64, resolution );
-		var metersPerPixel = settings.WorldDiameterMeters / resolution;
-		var diameterMeters = Math.Max( 8f, settings.BiomeMinPatchDiameterMeters );
-		var pixelDiameter = Math.Max( 2, (int)MathF.Ceiling( diameterMeters / Math.Max( 1f, metersPerPixel ) ) );
-		return pixelDiameter * pixelDiameter;
+		if ( preview is null || !preview.SpeckFilterEnabled )
+			return;
+
+		MergeSmallPatches( map, width, height, metersPerPixel, preview.MinPatchDiameterMeters, maxPasses );
+	}
+
+	static float ComputeComponentDiameterMeters( int width, List<int> component, float metersPerPixel )
+	{
+		var minX = int.MaxValue;
+		var maxX = int.MinValue;
+		var minY = int.MaxValue;
+		var maxY = int.MinValue;
+
+		foreach ( var idx in component )
+		{
+			var x = idx % width;
+			var y = idx / width;
+			minX = Math.Min( minX, x );
+			maxX = Math.Max( maxX, x );
+			minY = Math.Min( minY, y );
+			maxY = Math.Max( maxY, y );
+		}
+
+		var spanPixels = Math.Max( maxX - minX + 1, maxY - minY + 1 );
+		return spanPixels * metersPerPixel;
 	}
 
 	static void FloodFill(

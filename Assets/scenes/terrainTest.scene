@@ -105,7 +105,7 @@
           "BiomePreviewMap": null,
           "BiomePreviewMapMaxResolution": 4096,
           "BiomePreviewMapSeed": -2147483648,
-          "BiomePreviewMetersPerPixel": 10,
+          "BiomePreviewMetersPerPixel": 0,
           "ChunkSizeMeters": 64,
           "ChunksPerFrame": 2,
           "ChunkVerticesPerSide": 17,
@@ -137,6 +137,25 @@
           "WorldDiameterMeters": 20000,
           "WorldName": "TestWorld",
           "WorldSeed": 1337
+        },
+        {
+          "__type": "Survival.TerrainTestPlayerSpawn",
+          "__guid": "e1f2a3b4-c5d6-7890-abcd-ef1234567891",
+          "__enabled": true,
+          "Flags": 0,
+          "DisableFallDamage": true,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "PlayerPrefabPath": "prefabs/player/basicplayer.prefab",
+          "SpawnDropDistanceMeters": 128,
+          "ViewCamera": {
+            "_type": "gameobject",
+            "go": "b8c9d0e1-f2a3-4567-1234-678901234567"
+          }
         }
       ],
       "Children": []

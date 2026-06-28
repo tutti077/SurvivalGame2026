@@ -1,6 +1,6 @@
 namespace Survival;
 
-/// <summary>Builds a colored heightfield mesh for one terrain chunk from the preview sampler.</summary>
+/// <summary>Builds a colored heightfield mesh for one terrain chunk — samples world meters, never reads preview PNG.</summary>
 public static class TerrainMeshBuilder
 {
 	static Material _terrainMaterial;
