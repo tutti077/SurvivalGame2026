@@ -83,4 +83,29 @@ static class TerrainPreviewWaterCoverage
 			ExteriorOceanPixels = exterior,
 		};
 	}
+
+	/// <summary>Lake water on land circle — authoritative; matches auto-threshold target.</summary>
+	public static float MeasureLandDiskLakeFraction( TerrainPreviewSettings settings )
+	{
+		if ( !settings.EnableInteriorWaterLayer )
+			return 0f;
+
+		return TerrainPreviewLandDiskFields.GetLakeCoverageOnLand01( settings );
+	}
+}
+
+static class TerrainPreviewWaterCoverageStatsExtensions
+{
+	public static TerrainPreviewWaterCoverageStats WithLandDiskLakeFraction(
+		this TerrainPreviewWaterCoverageStats stats,
+		float landDiskLakeFraction01 )
+		=> new TerrainPreviewWaterCoverageStats
+		{
+			InsideWorldPixels = stats.InsideWorldPixels,
+			LandPixels = stats.LandPixels,
+			OceanPixels = stats.OceanPixels,
+			InteriorOceanPixels = stats.InteriorOceanPixels,
+			ExteriorOceanPixels = stats.ExteriorOceanPixels,
+			LandDiskLakeFraction01 = Math.Clamp( landDiskLakeFraction01, 0f, 1f ),
+		};
 }

@@ -35,3 +35,9 @@ Sword **colliders must not** be the source of HP damage (use them for VFX / clas
 When the Cursor assistant sends a **final** message in this repo, it must end with a short **“What’s needed from you”** section: concrete follow-ups (prefab/scene steps, testing to run, settings to verify, decisions only you can make). If there is genuinely nothing, say **Nothing required on your side for this change.**
 
 This is documented for humans in **`AGENTS.md`** and enforced for the assistant via **`.cursor/rules/build-label-chat-footer.mdc`** (footer order: build label line, then this section).
+
+## Commandment #3 — Deprecate cleanly
+
+When you **replace or remove** behavior, **delete the old path in the same change**: no orphaned facades, dead toggles, or duplicate post-process hooks. Settings that no longer affect output come out of the editor; keys needed only for old JSON live as plain fields in `TerrainPreviewSettings.Legacy.cs` (no `[Property]`).
+
+Enforced via **`.cursor/rules/deprecate-cleanly.mdc`**. Subsystem docs (e.g. **`Code/World/TerrainPreview/docs/TERRAIN_PREVIEW.md`**) must match the code you ship.

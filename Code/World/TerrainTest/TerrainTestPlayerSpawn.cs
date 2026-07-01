@@ -4,8 +4,8 @@ using Sandbox.Movement;
 namespace Survival;
 
 /// <summary>
-/// Terrain-test only: press SpawnPlayer (J) to drop a basic player directly below the fly camera for scale reference.
-/// Fly camera stays active; spawned pawn does not take fall damage.
+/// Terrain-test only: press SpawnPlayer (J) to clone a basic player at the fly camera transform (scale reference).
+/// Fly camera stays active; each press adds another pawn — previous dolls are kept.
 /// </summary>
 [Title( "Terrain Test Player Spawn" )]
 public sealed class TerrainTestPlayerSpawn : Component
@@ -14,12 +14,9 @@ public sealed class TerrainTestPlayerSpawn : Component
 
 	[Property] public string PlayerPrefabPath { get; set; } = "prefabs/player/basicplayer.prefab";
 
-	[Property, Title( "Drop distance below camera (m)" ), Range( 16f, 2000f ), Step( 8f )]
-	public float SpawnDropDistanceMeters { get; set; } = 128f;
-
 	[Property] public bool DisableFallDamage { get; set; } = true;
 
-	GameObject _spawnedPlayer;
+	readonly List<GameObject> _spawnedPlayers = new();
 	CameraComponent _flyCamera;
 
 	protected override void OnUpdate()
@@ -30,16 +27,17 @@ public sealed class TerrainTestPlayerSpawn : Component
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
 			return;
 
-		if ( _spawnedPlayer is { IsValid: true } )
+		PruneDestroyedSpawns();
+		if ( _spawnedPlayers.Count > 0 )
 			MaintainFlyCamera();
 
 		if ( !Input.Pressed( "SpawnPlayer" ) )
 			return;
 
-		SpawnBelowCamera();
+		SpawnAtCamera();
 	}
 
-	void SpawnBelowCamera()
+	void SpawnAtCamera()
 	{
 		var view = ResolveViewCamera();
 		if ( view is null || !view.IsValid() )
@@ -52,12 +50,6 @@ public sealed class TerrainTestPlayerSpawn : Component
 		if ( !scene.IsValid() )
 			return;
 
-		if ( _spawnedPlayer is { IsValid: true } )
-		{
-			_spawnedPlayer.Destroy();
-			_spawnedPlayer = null;
-		}
-
 		var instance = BuildPrefabUtility.GetTemplate( PlayerPrefabPath )?.Clone();
 		if ( instance is null || !instance.IsValid() )
 		{
@@ -66,18 +58,27 @@ public sealed class TerrainTestPlayerSpawn : Component
 		}
 
 		instance.Parent = scene;
-		instance.WorldPosition = view.WorldPosition - (Vector3.Up * TerrainWorldUnits.MetersToEngine( SpawnDropDistanceMeters ));
-		instance.WorldRotation = ResolveSpawnRotation( view );
+		instance.WorldPosition = view.WorldPosition;
+		instance.WorldRotation = view.WorldRotation;
 
 		ConfigureScaleReferencePawn( instance );
 
 		instance.Enabled = true;
-		_spawnedPlayer = instance;
+		_spawnedPlayers.Add( instance );
 
 		_flyCamera = view.Components.Get<CameraComponent>();
 		AssertFlyCameraMain( view );
 
-		Log.Info( $"[TerrainTestPlayerSpawn] Dropped player at {instance.WorldPosition} ({SpawnDropDistanceMeters:0.#} m below camera)." );
+		Log.Info( $"[TerrainTestPlayerSpawn] Spawned player #{_spawnedPlayers.Count} at camera transform {instance.WorldPosition}." );
+	}
+
+	void PruneDestroyedSpawns()
+	{
+		for ( var i = _spawnedPlayers.Count - 1; i >= 0; i-- )
+		{
+			if ( !_spawnedPlayers[i].IsValid() )
+				_spawnedPlayers.RemoveAt( i );
+		}
 	}
 
 	GameObject ResolveViewCamera()
@@ -99,15 +100,6 @@ public sealed class TerrainTestPlayerSpawn : Component
 		}
 
 		return scene.Camera?.GameObject;
-	}
-
-	static Rotation ResolveSpawnRotation( GameObject view )
-	{
-		var flatForward = view.WorldRotation.Forward.WithZ( 0f );
-		if ( flatForward.LengthSquared < 1e-8f )
-			return view.WorldRotation;
-
-		return Rotation.LookAt( flatForward.Normal, Vector3.Up );
 	}
 
 	void ConfigureScaleReferencePawn( GameObject root )

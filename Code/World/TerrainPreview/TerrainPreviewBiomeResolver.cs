@@ -3,6 +3,16 @@ namespace Survival;
 /// <summary>Noise-patch land biomes with optional soft distance falloff and clover spawn guarantee.</summary>
 public static class TerrainPreviewBiomeResolver
 {
+	public readonly struct LandBiomeWeights
+	{
+		public float Clover { get; init; }
+		public float Redwood { get; init; }
+		public float Amber { get; init; }
+		public float Mountain { get; init; }
+
+		public float Total => Clover + Redwood + Amber + Mountain;
+	}
+
 	public readonly struct Result
 	{
 		public TerrainPreviewBiomeId BiomeId { get; init; }
@@ -21,9 +31,70 @@ public static class TerrainPreviewBiomeResolver
 		if ( sample.OceanHeight01 > 0.5f )
 			return new Result { BiomeId = TerrainPreviewBiomeId.Water, Shade01 = 1f };
 
-		var mountainMin = Math.Clamp( settings.BiomeMountainMinHeight01, 0.1f, 0.95f );
-		if ( sample.Height01 >= mountainMin )
+		var weights = sample.HasLandWeights
+			? sample.LandWeights
+			: SampleLandBiomeWeights( settings, sample, worldXMeters, worldYMeters );
+		if ( QualifiesAsMountainBiome( settings, sample, weights ) )
 			return new Result { BiomeId = TerrainPreviewBiomeId.Mountain, Shade01 = ShadeFromHeight( sample.Height01 ) };
+
+		var landBiome = PickLandBiome( weights.Clover, weights.Redwood, weights.Amber );
+		return new Result
+		{
+			BiomeId = landBiome,
+			Shade01 = ShadeFromSample( settings, sample, worldXMeters, worldYMeters ),
+		};
+	}
+
+	/// <summary>Caps picker frequency so noise patches are not narrower than min patch diameter.</summary>
+	public static float GetEffectivePatchFrequency( TerrainPreviewSettings settings )
+	{
+		var minPatch = Math.Max( 20f, settings.BiomeMinPatchDiameterMeters );
+		var maxFrequency = settings.WorldDiameterMeters / minPatch;
+		return Math.Min( Math.Max( 0.5f, settings.BiomePickerFrequency ), maxFrequency );
+	}
+
+	static bool QualifiesAsMountainBiome(
+		TerrainPreviewSettings settings,
+		TerrainPreviewSample sample,
+		LandBiomeWeights weights )
+	{
+		_ = settings;
+		_ = sample;
+		return weights.Mountain >= 0.5f;
+	}
+
+	/// <summary>Binary spawn mask — ridged range field inside falloff band.</summary>
+	public static float SampleMountainSpawnMask01(
+		TerrainPreviewSettings settings,
+		float worldXMeters,
+		float worldYMeters )
+		=> TerrainPreviewMountainSpawnMask.SampleMask01( settings, worldXMeters, worldYMeters );
+
+	static float SampleMountainPlacementWeight(
+		TerrainPreviewSettings settings,
+		float distMeters,
+		float nx,
+		float ny,
+		float baseHeight01,
+		float worldXMeters,
+		float worldYMeters )
+	{
+		_ = distMeters;
+		_ = nx;
+		_ = ny;
+		_ = baseHeight01;
+		return SampleMountainSpawnMask01( settings, worldXMeters, worldYMeters );
+	}
+
+	/// <summary>Patch placement weights from scatter + distance — independent of peak lift (used before biome shaping).</summary>
+	public static LandBiomeWeights SamplePlacementWeights(
+		TerrainPreviewSettings settings,
+		float worldXMeters,
+		float worldYMeters,
+		float baseHeight01 )
+	{
+		if ( settings.WorldRadiusMeters <= 0f )
+			return default;
 
 		var distMeters = MathF.Sqrt( worldXMeters * worldXMeters + worldYMeters * worldYMeters );
 		var diameter = settings.WorldDiameterMeters;
@@ -31,81 +102,105 @@ public static class TerrainPreviewBiomeResolver
 		var nx = (worldXMeters + radius) / diameter;
 		var ny = (worldYMeters + radius) / diameter;
 
+		var cloverW = 0f;
+		var redwoodW = 0f;
+		var amberW = 0f;
+
 		if ( settings.BiomeCloverGuaranteeSpawn
 			&& IsInsidePriorityBand(
 				distMeters,
 				settings.BiomeCloverPriorityStartMeters,
 				settings.BiomeCloverPriorityEndMeters ) )
 		{
-			return new Result
-			{
-				BiomeId = TerrainPreviewBiomeId.CloverHills,
-				Shade01 = ShadeFromSample( settings, sample, worldXMeters, worldYMeters ),
-			};
+			cloverW = 1f;
+		}
+		else
+		{
+			var patchFreq = GetEffectivePatchFrequency( settings );
+			var scatterOctaves = Math.Clamp( settings.BiomeScatterOctaves, 1, 6 );
+			var influenceScale = Math.Clamp( settings.BiomeDistanceInfluenceScale01, 0f, 1f );
+			var cloverRampStart = Math.Max( 0f, settings.BiomeCloverPriorityEndMeters );
+
+			cloverW = ComputeLandWeight(
+				settings, distMeters, nx, ny, patchFreq, scatterOctaves, influenceScale,
+				hardMinMeters: 0f,
+				rampStartMeters: cloverRampStart,
+				rampFullMeters: settings.BiomeCloverRampFullDistanceMeters,
+				appearEndMeters: settings.BiomeCloverAppearEndMeters,
+				skipHardZero: true,
+				settings.BiomeCloverDistanceInfluenceStartMeters,
+				settings.BiomeCloverDistanceInfluenceEndMeters,
+				settings.BiomeCloverWeight,
+				settings.BiomeCloverPriorityWeight,
+				530 );
+
+			redwoodW = ComputeLandWeight(
+				settings, distMeters, nx, ny, patchFreq, scatterOctaves, influenceScale,
+				hardMinMeters: settings.BiomeRedwoodHardMinDistanceMeters,
+				rampStartMeters: settings.BiomeRedwoodHardMinDistanceMeters,
+				rampFullMeters: settings.BiomeRedwoodRampFullDistanceMeters,
+				appearEndMeters: settings.BiomeRedwoodAppearEndMeters,
+				skipHardZero: false,
+				settings.BiomeRedwoodPriorityStartMeters,
+				settings.BiomeRedwoodPriorityEndMeters,
+				settings.BiomeRedwoodWeight,
+				settings.BiomeRedwoodPriorityWeight,
+				531 );
+
+			amberW = ComputeLandWeight(
+				settings, distMeters, nx, ny, patchFreq, scatterOctaves, influenceScale,
+				hardMinMeters: settings.BiomeAmberHardMinDistanceMeters,
+				rampStartMeters: settings.BiomeAmberHardMinDistanceMeters,
+				rampFullMeters: settings.BiomeAmberRampFullDistanceMeters,
+				appearEndMeters: settings.BiomeAmberAppearEndMeters,
+				skipHardZero: false,
+				settings.BiomeAmberPriorityStartMeters,
+				settings.BiomeAmberPriorityEndMeters,
+				settings.BiomeAmberWeight,
+				settings.BiomeAmberPriorityWeight,
+				532 );
+
+			ApplySpawnBlend( settings, distMeters, ref cloverW, ref redwoodW, ref amberW );
 		}
 
-		var patchFreq = Math.Max( 0.5f, settings.BiomePickerFrequency );
-		var scatterOctaves = Math.Clamp( settings.BiomeScatterOctaves, 1, 6 );
-		var influenceScale = Math.Clamp( settings.BiomeDistanceInfluenceScale01, 0f, 1f );
+		var mountainW = SampleMountainPlacementWeight(
+			settings, distMeters, nx, ny, baseHeight01, worldXMeters, worldYMeters );
+		var landScale = 1f - mountainW;
+		cloverW *= landScale;
+		redwoodW *= landScale;
+		amberW *= landScale;
 
-		var cloverRampStart = Math.Max( 0f, settings.BiomeCloverPriorityEndMeters );
-
-		var cloverW = ComputeLandWeight(
-			settings, distMeters, nx, ny, patchFreq, scatterOctaves, influenceScale,
-			hardMinMeters: 0f,
-			rampStartMeters: cloverRampStart,
-			rampFullMeters: settings.BiomeCloverRampFullDistanceMeters,
-			appearEndMeters: settings.BiomeCloverAppearEndMeters,
-			skipHardZero: true,
-			settings.BiomeCloverDistanceInfluenceStartMeters,
-			settings.BiomeCloverDistanceInfluenceEndMeters,
-			settings.BiomeCloverWeight,
-			settings.BiomeCloverPriorityWeight,
-			530 );
-
-		var redwoodW = ComputeLandWeight(
-			settings, distMeters, nx, ny, patchFreq, scatterOctaves, influenceScale,
-			hardMinMeters: settings.BiomeRedwoodHardMinDistanceMeters,
-			rampStartMeters: settings.BiomeRedwoodHardMinDistanceMeters,
-			rampFullMeters: settings.BiomeRedwoodRampFullDistanceMeters,
-			appearEndMeters: settings.BiomeRedwoodAppearEndMeters,
-			skipHardZero: false,
-			settings.BiomeRedwoodPriorityStartMeters,
-			settings.BiomeRedwoodPriorityEndMeters,
-			settings.BiomeRedwoodWeight,
-			settings.BiomeRedwoodPriorityWeight,
-			531 );
-
-		var amberW = ComputeLandWeight(
-			settings, distMeters, nx, ny, patchFreq, scatterOctaves, influenceScale,
-			hardMinMeters: settings.BiomeAmberHardMinDistanceMeters,
-			rampStartMeters: settings.BiomeAmberHardMinDistanceMeters,
-			rampFullMeters: settings.BiomeAmberRampFullDistanceMeters,
-			appearEndMeters: settings.BiomeAmberAppearEndMeters,
-			skipHardZero: false,
-			settings.BiomeAmberPriorityStartMeters,
-			settings.BiomeAmberPriorityEndMeters,
-			settings.BiomeAmberWeight,
-			settings.BiomeAmberPriorityWeight,
-			532 );
-
-		ApplySpawnBlend( settings, distMeters, ref cloverW, ref redwoodW, ref amberW );
-
-		var total = cloverW + redwoodW + amberW;
-		if ( total <= 0.0001f )
+		var landTotal = cloverW + redwoodW + amberW;
+		if ( landTotal <= 0.0001f )
 		{
-			return new Result
-			{
-				BiomeId = TerrainPreviewBiomeId.CloverHills,
-				Shade01 = ShadeFromSample( settings, sample, worldXMeters, worldYMeters ),
-			};
+			cloverW = 1f - mountainW;
+			redwoodW = 0f;
+			amberW = 0f;
 		}
 
-		return new Result
+		return new LandBiomeWeights
 		{
-			BiomeId = PickLandBiome( cloverW, redwoodW, amberW ),
-			Shade01 = ShadeFromSample( settings, sample, worldXMeters, worldYMeters ),
+			Clover = cloverW,
+			Redwood = redwoodW,
+			Amber = amberW,
+			Mountain = mountainW,
 		};
+	}
+
+	/// <summary>Patch weights for land biomes + soft mountain influence (shared by color pick and height blend).</summary>
+	public static LandBiomeWeights SampleLandBiomeWeights(
+		TerrainPreviewSettings settings,
+		TerrainPreviewSample sample,
+		float worldXMeters,
+		float worldYMeters )
+	{
+		if ( !sample.IsInsideWorld || sample.OceanHeight01 > 0.5f )
+			return default;
+
+		if ( sample.HasLandWeights )
+			return sample.LandWeights;
+
+		return SamplePlacementWeights( settings, worldXMeters, worldYMeters, sample.HeightAfterCurve01 );
 	}
 
 	static TerrainPreviewBiomeId PickLandBiome( float cloverW, float redwoodW, float amberW )
@@ -115,6 +210,28 @@ public static class TerrainPreviewBiomeResolver
 		if ( redwoodW >= amberW )
 			return TerrainPreviewBiomeId.RedwoodForest;
 		return TerrainPreviewBiomeId.AmberDunes;
+	}
+
+	/// <summary>Dominant biome from placement weights (mountain when mountain weight ≥ 0.5).</summary>
+	public static TerrainPreviewBiomeId PickDominantPlacementBiome( LandBiomeWeights weights )
+	{
+		if ( weights.Mountain >= 0.5f )
+			return TerrainPreviewBiomeId.Mountain;
+
+		return PickLandBiome( weights.Clover, weights.Redwood, weights.Amber );
+	}
+
+	/// <summary>One-hot weights after speck-filtered biome raster merge.</summary>
+	public static LandBiomeWeights WeightsFromDominantBiome( TerrainPreviewBiomeId biomeId )
+	{
+		return biomeId switch
+		{
+			TerrainPreviewBiomeId.CloverHills => new LandBiomeWeights { Clover = 1f },
+			TerrainPreviewBiomeId.RedwoodForest => new LandBiomeWeights { Redwood = 1f },
+			TerrainPreviewBiomeId.AmberDunes => new LandBiomeWeights { Amber = 1f },
+			TerrainPreviewBiomeId.Mountain => new LandBiomeWeights { Mountain = 1f },
+			_ => new LandBiomeWeights { Clover = 1f },
+		};
 	}
 
 	/// <summary>Noise scatter is primary; distance falloff is a capped soft nudge.</summary>

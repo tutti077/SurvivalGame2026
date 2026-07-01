@@ -120,7 +120,8 @@
           "LoadedChunkCount": 0,
           "MapGenerationProgress01": 0,
           "MapGenerationStatus": "",
-          "MaxTerrainHeightMeters": 6000,
+          "MaxTerrainHeightMeters": 700,
+          "OceanRingWidthMeters": 2500,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
@@ -151,7 +152,6 @@
           "OnComponentStart": null,
           "OnComponentUpdate": null,
           "PlayerPrefabPath": "prefabs/player/basicplayer.prefab",
-          "SpawnDropDistanceMeters": 128,
           "ViewCamera": {
             "_type": "gameobject",
             "go": "b8c9d0e1-f2a3-4567-1234-678901234567"

@@ -9,7 +9,13 @@ public enum TerrainPreviewMode
 	Valleys,
 	HeightCurve,
 	Water,
+	Lakes,
 	MountainMask,
+	MountainField,
 	MountainFalloff,
 	Biomes,
+	BiomeShape,
+	BiomeWeights,
+	Slope,
+	BiomeTransition,
 }

@@ -1,0 +1,42 @@
+---
+description: When deprecating code, delete hooks and toggles in the same change — no orphaned facades or dead settings.
+alwaysApply: true
+---
+
+# Deprecate cleanly (Commandment #3)
+
+When you **replace**, **remove**, or **deprecate** behavior in SurvivalGame2026, finish the job in the **same turn**. Do not leave the old path wired behind a toggle “just in case.”
+
+## Required in the same change
+
+1. **Delete** superseded types and one-line facade wrappers (unless a public API outside this repo still requires a named entry — then migrate callers first, then delete).
+2. **Remove** settings properties, editor tab entries, and `CloneForGenerate` copies that no longer affect output.
+3. **Remove** call sites that only existed for the old path (post-process passes, duplicate speck filters, unused `if (LegacyToggle)` branches).
+4. **Update** `AGENTS.md` / subsystem docs (e.g. `Code/World/TerrainPreview/docs/TERRAIN_PREVIEW.md`) when architecture changes.
+
+## JSON / saved bundles
+
+If old preview JSON may still contain removed keys:
+
+- Keep **plain fields** on `TerrainPreviewSettings` in `TerrainPreviewSettings.Legacy.cs` **without** `[Property]` (deserialize-only, no editor hook).
+- Do **not** keep a designer toggle that no longer runs code.
+
+## Anti-patterns
+
+```csharp
+// ❌ BAD — new path + old toggle + thin wrapper forever
+if ( settings.InlandWaterSpeckFilterEnabled )
+    OldPostProcess.Apply( ... );
+NewLandDiskFields.Apply( ... );
+
+// ✅ GOOD — one authoritative path; min diameter is the knob
+TerrainPreviewLandDiskFields.EnsureBuilt( settings );
+```
+
+## Before closing the task, ask
+
+1. Can I grep the old type name and get **zero** runtime callers?
+2. Does every remaining setting property change something visible in `Sample()` or the editor preview?
+3. Did I remove the property from **Editor** tab hash sets?
+
+See **`AGENTS.md`** Commandment #3.

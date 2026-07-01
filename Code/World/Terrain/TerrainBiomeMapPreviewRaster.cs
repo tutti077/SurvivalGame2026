@@ -9,6 +9,7 @@ public static class TerrainBiomeMapPreviewRaster
 		TerrainBiomeMapPreviewOptions preview,
 		int resolution,
 		bool[] insideWorld,
+		bool[] oceanMask,
 		Color[] colors )
 	{
 		var radius = worldSettings.WorldRadiusMeters;
@@ -17,12 +18,30 @@ public static class TerrainBiomeMapPreviewRaster
 		var biomeMap = new TerrainPreviewBiomeId[res * res];
 		var shadeMap = new float[res * res];
 		var heightMap = new float[res * res];
+		var hasOceanMask = oceanMask is not null && oceanMask.Length == res * res;
 
 		for ( var py = 0; py < res; py++ )
 		{
 			for ( var px = 0; px < res; px++ )
 			{
 				var idx = (py * res) + px;
+				if ( !insideWorld[idx] )
+				{
+					biomeMap[idx] = TerrainPreviewBiomeId.None;
+					shadeMap[idx] = 1f;
+					heightMap[idx] = 0f;
+					continue;
+				}
+
+				if ( hasOceanMask && oceanMask[idx] )
+				{
+					biomeMap[idx] = TerrainPreviewBiomeId.Water;
+					shadeMap[idx] = 1f;
+					heightMap[idx] = TerrainPreviewOceanByHeight.MetersToHeight01(
+						worldSettings, worldSettings.SeaLevelMeters );
+					continue;
+				}
+
 				TerrainBiomeMapCoordinates.RasterPixelToWorldMeters(
 					px,
 					py,
@@ -32,14 +51,6 @@ public static class TerrainBiomeMapPreviewRaster
 					out var wx,
 					out var wy );
 				var sample = backend.Sample( worldSettings, wx, wy );
-
-				if ( !sample.IsInsideWorld )
-				{
-					biomeMap[idx] = TerrainPreviewBiomeId.None;
-					shadeMap[idx] = 1f;
-					heightMap[idx] = 0f;
-					continue;
-				}
 
 				var resolved = TerrainPreviewBiomeResolver.Resolve( worldSettings, sample, wx, wy );
 				biomeMap[idx] = resolved.BiomeId;
@@ -65,6 +76,15 @@ public static class TerrainBiomeMapPreviewRaster
 				heightMap[i] );
 		}
 	}
+
+	public static void FillBiomeColors(
+		TerrainPreviewSettings worldSettings,
+		ITerrainPreviewBackend backend,
+		TerrainBiomeMapPreviewOptions preview,
+		int resolution,
+		bool[] insideWorld,
+		Color[] colors )
+		=> FillBiomeColors( worldSettings, backend, preview, resolution, insideWorld, oceanMask: null, colors );
 
 	internal static void ApplyPreviewSpeckFilter(
 		TerrainPreviewBiomeId[] biomeMap,

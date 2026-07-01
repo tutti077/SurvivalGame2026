@@ -14,6 +14,14 @@ public static class TerrainPreviewMapIterationTracker
 	static int _currentSeedAttempt;
 	static int _maxSeedAttempts;
 
+	static bool _userAbortRequested;
+
+	public static bool UserAbortRequested => _userAbortRequested;
+
+	public static void RequestUserAbort() => _userAbortRequested = true;
+
+	public static void ClearUserAbort() => _userAbortRequested = false;
+
 	public static int Count => _count;
 
 	public static int TotalCount => _totalCount;
@@ -64,9 +72,9 @@ public static class TerrainPreviewMapIterationTracker
 		get
 		{
 			if ( _sessionActive == 0 )
-				return false;
+				return _userAbortRequested;
 
-			if ( _timedOut || _iterationCapped )
+			if ( _userAbortRequested || _timedOut || _iterationCapped )
 				return true;
 
 			if ( _maxIterations > 0 && _count >= _maxIterations )

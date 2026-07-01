@@ -33,10 +33,18 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 	Label _statusLabel;
 	Label _statsLabel;
 	Button _generateButton;
+	Button _cancelButton;
 
 	Texture _liveTexture;
 	bool _isGenerating;
+	bool _livePreviewEnabled = true;
+	int _livePreviewResolution = 512;
+	int _settingsFingerprint;
+	RealTimeSince _liveDebounce;
+	bool _liveRegenScheduled;
+	bool _uiAlive = true;
 	TerrainPreviewWaterCoverageStats _lastWaterCoverage;
+	TerrainPreviewGenerationMetrics _lastMetrics;
 	TerrainPreviewCategoryTabs _tabs;
 
 	public TerrainNoisePreviewWindow() : base( null, "Terrain Noise Preview" )
@@ -48,6 +56,28 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 		Layout.Spacing = 8;
 
 		BuildUi();
+	}
+
+	public override void OnDestroyed()
+	{
+		_uiAlive = false;
+		base.OnDestroyed();
+	}
+
+	void SetStatusText( string text )
+	{
+		if ( !_uiAlive || _statusLabel is null )
+			return;
+
+		_statusLabel.Text = text;
+	}
+
+	void SetStatsText( string text )
+	{
+		if ( !_uiAlive || _statsLabel is null )
+			return;
+
+		_statsLabel.Text = text;
 	}
 
 	void BuildUi()
@@ -72,8 +102,14 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 		tabs.AddPage( "Valleys", "south", CreateSettingsTab( TerrainPreviewControlTabs.Valleys ) );
 		tabs.AddPage( "Height Curve", "show_chart", CreateSettingsTab( TerrainPreviewControlTabs.HeightCurve ) );
 		tabs.AddPage( "Water", "water", CreateSettingsTab( TerrainPreviewControlTabs.Water ) );
+		tabs.AddPage( "Lakes", "waves", CreateSettingsTab( TerrainPreviewControlTabs.Lakes ) );
 		tabs.AddPage( "Biomes", "park", CreateSettingsTab( TerrainPreviewControlTabs.Biomes ) );
+		tabs.AddPage( "Biome Shape", "brush", CreateSettingsTab( TerrainPreviewControlTabs.BiomeTerrain ) );
+		tabs.AddPage( "Biome Weights", "blur_linear", CreateSettingsTab( TerrainPreviewControlTabs.BiomeWeights ) );
+		tabs.AddPage( "Slope", "trending_up", CreateSettingsTab( TerrainPreviewControlTabs.Slope ) );
+		tabs.AddPage( "Biome Transition", "swap_horiz", CreateSettingsTab( TerrainPreviewControlTabs.BiomeTransition ) );
 		tabs.AddPage( "Mountain Mask", "terrain", CreateSettingsTab( TerrainPreviewControlTabs.MountainMask ) );
+		tabs.AddPage( "Mountains", "landscape", CreateSettingsTab( TerrainPreviewControlTabs.Mountains ) );
 		tabs.AddPage( "Mountain Falloff", "donut_large", CreateSettingsTab( TerrainPreviewControlTabs.MountainFalloff ) );
 		tabs.FinishSetup();
 
@@ -83,8 +119,37 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 		{
 			ToolTip = "Re-run preview for the selected preview layer and update PNG + live texture",
 		};
-		_generateButton.Clicked = () => _ = GeneratePreviewAsync();
-		controlsPanel.Layout.Add( _generateButton );
+		_generateButton.Clicked = () => _ = GeneratePreviewAsync( liveOnly: false );
+
+		_cancelButton = new Button( "Cancel", "close" )
+		{
+			ToolTip = "Stop auto-tune / seed search and finish preview with current settings",
+			Enabled = false,
+		};
+		_cancelButton.Clicked = () =>
+		{
+			if ( !_isGenerating )
+				return;
+
+			TerrainPreviewMapIterationTracker.RequestUserAbort();
+			SetStatusText( "Cancelling…" );
+		};
+
+		var actionRow = new Widget( this );
+		actionRow.Layout = Layout.Row();
+		actionRow.Layout.Spacing = 6;
+		actionRow.Layout.Add( _generateButton );
+		actionRow.Layout.Add( _cancelButton );
+		controlsPanel.Layout.Add( actionRow );
+
+		var liveRow = new Widget( this );
+		liveRow.Layout = Layout.Row();
+		liveRow.Layout.Spacing = 6;
+		var liveCheck = new Checkbox( "Live preview on slider change" );
+		liveCheck.Value = _livePreviewEnabled;
+		liveCheck.Toggled = () => _livePreviewEnabled = liveCheck.Value;
+		liveRow.Layout.Add( liveCheck );
+		controlsPanel.Layout.Add( liveRow );
 
 		_statusLabel = new Label( "Press Generate Preview to sample the current settings." );
 		_statusLabel.WordWrap = true;
@@ -97,7 +162,7 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 		previewPanel.Layout.Spacing = 4;
 		previewPanel.MinimumWidth = 520;
 
-		previewPanel.Layout.Add( new Label( "Live Preview" ) { ToolTip = "Updates when you press Generate Preview" } );
+		previewPanel.Layout.Add( new Label( "Live Preview" ) { ToolTip = "Updates on Generate, or automatically ~350ms after slider changes when Live preview is on" } );
 
 		_previewWidget = new TextureWidget
 		{
@@ -144,199 +209,166 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 		return page;
 	}
 
-	async Task GeneratePreviewAsync()
+	[EditorEvent.Frame]
+	void OnLivePreviewFrame()
+	{
+		if ( !_livePreviewEnabled || _isGenerating )
+			return;
+
+		var fingerprint = ComputeSettingsFingerprint();
+		if ( fingerprint != _settingsFingerprint )
+		{
+			_settingsFingerprint = fingerprint;
+			_liveDebounce = 0;
+			_liveRegenScheduled = true;
+		}
+
+		if ( _liveRegenScheduled && _liveDebounce > 0.35f )
+		{
+			_liveRegenScheduled = false;
+			_ = GeneratePreviewAsync( liveOnly: true );
+		}
+	}
+
+	int ComputeSettingsFingerprint()
+	{
+		if ( _serializedSettings is null )
+			return 0;
+
+		var hash = new HashCode();
+		foreach ( var prop in _serializedSettings )
+		{
+			hash.Add( prop.Name, StringComparer.Ordinal );
+			hash.Add( prop.GetValue<object>() );
+		}
+
+		return hash.ToHashCode();
+	}
+
+	async Task GeneratePreviewAsync( bool liveOnly )
 	{
 		if ( _isGenerating )
 			return;
 
 		_isGenerating = true;
 		_generateButton.Enabled = false;
-		_statusLabel.Text = "Generating… 0";
+		_cancelButton.Enabled = !liveOnly;
+		TerrainPreviewGenerateProgress.Reset();
+		SetStatusText( liveOnly ? "Live preview…" : "Generating… starting" );
+		if ( !liveOnly )
+			TerrainPreviewMapIterationTracker.ClearUserAbort();
 
 		Bitmap bitmap = null;
-		TerrainPreviewValleyAutoPipeline.RunResult valleyAuto = default;
+		TerrainPreviewLakeSpawnSolver.RunResult lakeSpawn = default;
 		TerrainPreviewSettings settings = null;
 		try
 		{
-			if ( TerrainPreviewValleyAutoEvaluate.AutoActive( _settings ) )
-				TerrainPreviewValleyDefaults.ResetAutoBaselines( _settings );
-
-			settings = CloneSettings( _settings );
-			if ( _settings.RandomizeSeedOnGenerate )
+			settings = _settings.CloneForGenerate( !liveOnly && _settings.RandomizeSeedOnGenerate );
+			if ( liveOnly )
+				settings.PreviewResolution = Math.Clamp( _livePreviewResolution, 64, settings.PreviewResolution );
+			else if ( _settings.RandomizeSeedOnGenerate )
 				_settings.WorldSeed = settings.WorldSeed;
 
 			var work = Task.Run( () =>
 			{
-				valleyAuto = TerrainPreviewValleyAutoPipeline.Run( settings );
-				var result = TerrainPreviewGenerator.Generate( settings );
+				if ( TerrainPreviewMapIterationTracker.IsAbortRequested )
+					return;
+
+				if ( !liveOnly && settings.EnableLakeSpawnSolveOnGenerate )
+					lakeSpawn = TerrainPreviewLakeSpawnSolver.Run( settings );
+
+				if ( TerrainPreviewMapIterationTracker.IsAbortRequested || lakeSpawn.Cancelled )
+					return;
+
+				var full = TerrainPreviewGenerator.Generate( settings );
+				if ( TerrainPreviewMapIterationTracker.IsAbortRequested || full.Colors is null || full.Colors.Length == 0 )
+					return;
+
 				bitmap = new Bitmap( settings.ClampedResolution, settings.ClampedResolution );
-				bitmap.SetPixels( result.Colors );
-				_lastWaterCoverage = result.WaterCoverage;
+				bitmap.SetPixels( full.Colors );
+				_lastWaterCoverage = full.WaterCoverage;
+				_lastMetrics = full.Metrics;
 			} );
 
 			while ( !work.IsCompleted )
 			{
-				var count = TerrainPreviewMapIterationTracker.Count;
-				var maxIter = Math.Max( 1, settings.ValleyAutoMaxIterationsPerSeed );
-				var seedAttempt = Math.Max( 1, TerrainPreviewMapIterationTracker.CurrentSeedAttempt );
-				var maxSeeds = Math.Max( 1, settings.ValleyAutoMaxSeedAttempts );
-				var totalRasters = TerrainPreviewMapIterationTracker.TotalCount;
-				_statusLabel.Text = $"Generating… seed {seedAttempt}/{maxSeeds} · tune {count}/{maxIter} · total {totalRasters} · #{settings.WorldSeed}";
+				if ( !_uiAlive )
+					return;
+
+				if ( liveOnly )
+				{
+					await Task.Delay( 33 );
+					continue;
+				}
+
+				SetStatusText( TerrainPreviewGenerateProgress.FormatStatusLine( settings.WorldSeed ) );
 				await Task.Delay( 33 );
 			}
 
 			await work;
+			if ( TerrainPreviewMapIterationTracker.UserAbortRequested
+				|| ( !liveOnly && settings.EnableLakeSpawnSolveOnGenerate && lakeSpawn.Cancelled ) )
+			{
+				SetStatusText( "Cancelled." );
+				return;
+			}
+
+			if ( work.IsFaulted )
+				throw work.Exception?.GetBaseException() ?? work.Exception;
 
 			if ( settings.WorldSeed != _settings.WorldSeed )
 				_settings.WorldSeed = settings.WorldSeed;
+			if ( Math.Abs( settings.LakeOffsetXMeters - _settings.LakeOffsetXMeters ) > 0.01f )
+				_settings.LakeOffsetXMeters = settings.LakeOffsetXMeters;
+			if ( Math.Abs( settings.LakeOffsetYMeters - _settings.LakeOffsetYMeters ) > 0.01f )
+				_settings.LakeOffsetYMeters = settings.LakeOffsetYMeters;
+
+			if ( !_uiAlive )
+				return;
 
 			_liveTexture = bitmap.ToTexture( false );
 			_previewWidget.Texture = _liveTexture;
+			_settingsFingerprint = ComputeSettingsFingerprint();
 
-			var statsColumn = TerrainPreviewValleyAutoRunStats.Build( valleyAuto, settings, _lastWaterCoverage );
-			_statsLabel.Text = TerrainPreviewValleyAutoRunStats.FormatColumnText( statsColumn );
+			if ( liveOnly )
+			{
+				SetStatusText( $"Live · {TerrainPreviewGenerator.ModeDisplayName( settings.PreviewMode )} · {settings.ClampedResolution}px · seed {settings.WorldSeed}" );
+				return;
+			}
 
-			if ( valleyAuto.SeedRejected )
-			{
-				_statusLabel.Text = $"Seed rejected — PNG not saved (seed {settings.WorldSeed}).";
-			}
-			else
-			{
-				string pngPath = null;
-				string bundleName = null;
-				await Task.Run( () => pngPath = TerrainPreviewAssetExporter.ExportBitmap( bitmap, settings, out bundleName, _lastWaterCoverage ) );
-				var resultNote = statsColumn.Result switch
-				{
-					"SOLVED" => "Solved",
-					"LAND ONLY" => "Land-only fallback (interior tune failed)",
-					_ => "Generated with unmet targets",
-				};
-				_statusLabel.Text = $"{resultNote} · {TerrainPreviewGenerator.ModeDisplayName( settings.PreviewMode )} · seed {settings.WorldSeed}\nSaved {TerrainPreviewGenerator.ModeFileStem( settings.PreviewMode )}.png → Assets/terrain/preview/{bundleName}/";
-			}
+			var lakeLine = TerrainPreviewLakeSpawnSolver.FormatStatus( lakeSpawn, settings );
+			var waterOnLand = _lastWaterCoverage.LandDiskLakeFraction01 * 100f;
+			var target = settings.TargetLakeCoverageOnLand01 * 100f;
+			SetStatsText(
+				$"{lakeLine}\nWater on land: {waterOnLand:0.#}% (target {target:0.#}%)\n{_lastMetrics.FormatStatsBlock()}\nSaved metrics → generation_metrics.json" );
+
+			var resultNote = lakeSpawn.Solved || !settings.EnableLakeSpawnSolveOnGenerate
+				? "Generated"
+				: "Spawn solve failed — PNG saved anyway";
+
+			string pngPath = null;
+			string bundleName = null;
+			await Task.Run( () => pngPath = TerrainPreviewAssetExporter.ExportBitmap(
+				bitmap, settings, out bundleName, _lastWaterCoverage, _lastMetrics ) );
+			SetStatusText( $"{resultNote} · {TerrainPreviewGenerator.ModeDisplayName( settings.PreviewMode )} · seed {settings.WorldSeed}\nSaved {TerrainPreviewGenerator.ModeFileStem( settings.PreviewMode )}.png → Assets/terrain/preview/{bundleName}/" );
 		}
 		catch ( Exception ex )
 		{
 			Log.Warning( $"Terrain preview generation failed: {ex}" );
-			_statusLabel.Text = $"Preview failed: {ex.Message}";
+			SetStatusText( $"Preview failed: {ex.Message}" );
 		}
 		finally
 		{
 			bitmap?.Dispose();
 			_isGenerating = false;
-			_generateButton.Enabled = true;
+			if ( _uiAlive )
+			{
+				_generateButton.Enabled = true;
+				_cancelButton.Enabled = false;
+			}
+			TerrainPreviewMapIterationTracker.ClearUserAbort();
 		}
 	}
-
-	static TerrainPreviewSettings CloneSettings( TerrainPreviewSettings source ) => new()
-	{
-		WorldDiameterMeters = source.WorldDiameterMeters,
-		PreviewResolution = source.PreviewResolution,
-		WorldSeed = source.RandomizeSeedOnGenerate
-			? Random.Shared.Next( 1, int.MaxValue )
-			: source.WorldSeed,
-		RandomizeSeedOnGenerate = source.RandomizeSeedOnGenerate,
-		RetrySeedsUntilSolved = source.RetrySeedsUntilSolved,
-		ValleyAutoMaxSeedAttempts = source.ValleyAutoMaxSeedAttempts,
-		EnableContinentalLayer = source.EnableContinentalLayer,
-		EnableHillLayer = source.EnableHillLayer,
-		EnableValleyLayer = source.EnableValleyLayer,
-		EnableHeightCurveLayer = source.EnableHeightCurveLayer,
-		EnableMountainLayer = source.EnableMountainLayer,
-		EnableValleyOceanAutoWeight = source.EnableValleyOceanAutoWeight,
-		EnableValleySpawnAutoFrequency = source.EnableValleySpawnAutoFrequency,
-		EnableValleyAutoExhaustiveSearch = source.EnableValleyAutoExhaustiveSearch,
-		RejectSeedOnAutoFailure = source.RejectSeedOnAutoFailure,
-		ValleyAutoSearchTimeoutSeconds = source.ValleyAutoSearchTimeoutSeconds,
-		ValleyAutoMaxIterationsPerSeed = source.ValleyAutoMaxIterationsPerSeed,
-		ValleyAutoTunePreviewResolution = source.ValleyAutoTunePreviewResolution,
-		ContinentalFrequency = source.ContinentalFrequency,
-		ContinentalWeight = source.ContinentalWeight,
-		HillFrequency = source.HillFrequency,
-		HillWeight = source.HillWeight,
-		ValleyFrequency = source.ValleyFrequency,
-		ValleyWeight = source.ValleyWeight,
-		ValleyOceanWeightStep = source.ValleyOceanWeightStep,
-		ValleyOceanAutoMinInteriorFraction01 = source.ValleyOceanAutoMinInteriorFraction01,
-		ValleyOceanAutoMaxTotalFraction01 = source.ValleyOceanAutoMaxTotalFraction01,
-		ValleyOceanAbsoluteMaxTotalFraction01 = source.ValleyOceanAbsoluteMaxTotalFraction01,
-		ValleyOceanMaxExteriorFraction01 = source.ValleyOceanMaxExteriorFraction01,
-		ValleySpawnLandRadiusMeters = source.ValleySpawnLandRadiusMeters,
-		ValleySpawnMinLandFraction01 = source.ValleySpawnMinLandFraction01,
-		ValleySpawnAcceptableLandFraction01 = source.ValleySpawnAcceptableLandFraction01,
-		SpawnRequireLandEscape = source.SpawnRequireLandEscape,
-		SpawnEscapeMinDistanceMeters = source.SpawnEscapeMinDistanceMeters,
-		ValleyAutoFrequencyStep = source.ValleyAutoFrequencyStep,
-		ValleyAutoFrequencyMin = source.ValleyAutoFrequencyMin,
-		ValleyAutoFrequencyMax = source.ValleyAutoFrequencyMax,
-		ValleyNearWaterMaxDistanceMeters = source.ValleyNearWaterMaxDistanceMeters,
-		ValleyInnerHalfRadius01 = source.ValleyInnerHalfRadius01,
-		ValleyInnerHalfMinOceanFraction01 = source.ValleyInnerHalfMinOceanFraction01,
-		MountainThreshold = source.MountainThreshold,
-		MountainFrequency = source.MountainFrequency,
-		MountainInnerRadius01 = source.MountainInnerRadius01,
-		MountainOuterRadius01 = source.MountainOuterRadius01,
-		MountainBandFade01 = source.MountainBandFade01,
-		MountainFalloffRimPower = source.MountainFalloffRimPower,
-		MountainPeakBoost = source.MountainPeakBoost,
-		MountainMinPeakHeight01 = source.MountainMinPeakHeight01,
-		MountainPeakVariationFrequency = source.MountainPeakVariationFrequency,
-		MountainFoothillSpread = source.MountainFoothillSpread,
-		MountainFoothillBoost = source.MountainFoothillBoost,
-		PreviewMode = source.PreviewMode,
-		ShowPreviewDistanceRings = source.ShowPreviewDistanceRings,
-		PreviewDistanceRingIntervalMeters = source.PreviewDistanceRingIntervalMeters,
-		HeightCurvePower = source.HeightCurvePower,
-		EnableInteriorWaterLayer = source.EnableInteriorWaterLayer,
-		InteriorWaterFrequency = source.InteriorWaterFrequency,
-		InteriorWaterWeight = source.InteriorWaterWeight,
-		InteriorWaterAutoStep = source.InteriorWaterAutoStep,
-		InteriorWaterCenterInfluence01 = source.InteriorWaterCenterInfluence01,
-		InteriorWaterFullInfluenceRadius01 = source.InteriorWaterFullInfluenceRadius01,
-		InteriorWaterFalloffPower = source.InteriorWaterFalloffPower,
-		InteriorWaterEdgeFade01 = source.InteriorWaterEdgeFade01,
-		SeaLevelHeight01 = source.SeaLevelHeight01,
-		TargetTotalOceanFraction01 = source.TargetTotalOceanFraction01,
-		TargetInteriorOceanFraction01 = source.TargetInteriorOceanFraction01,
-		InteriorZoneRadius01 = source.InteriorZoneRadius01,
-		BiomeOverlayStrength01 = source.BiomeOverlayStrength01,
-		BiomeNoiseFrequency = source.BiomeNoiseFrequency,
-		BiomeBoundaryNoiseFrequency = source.BiomeBoundaryNoiseFrequency,
-		BiomeDistanceWarpMeters = source.BiomeDistanceWarpMeters,
-		BiomeWeightNoiseStrength01 = source.BiomeWeightNoiseStrength01,
-		BiomeScatterOctaves = source.BiomeScatterOctaves,
-		BiomePickerOctaves = source.BiomePickerOctaves,
-		BiomePickerFrequency = source.BiomePickerFrequency,
-		BiomeDistanceInfluenceScale01 = source.BiomeDistanceInfluenceScale01,
-		BiomeSpeckFilterEnabled = source.BiomeSpeckFilterEnabled,
-		BiomeMinPatchDiameterMeters = source.BiomeMinPatchDiameterMeters,
-		BiomeMountainMinHeight01 = source.BiomeMountainMinHeight01,
-		BiomeAppearInnerRampPower = source.BiomeAppearInnerRampPower,
-		BiomeCloverGuaranteeSpawn = source.BiomeCloverGuaranteeSpawn,
-		BiomeSpawnBlendEndMeters = source.BiomeSpawnBlendEndMeters,
-		BiomeSpawnCloverBlendBoost01 = source.BiomeSpawnCloverBlendBoost01,
-		BiomeCloverRampFullDistanceMeters = source.BiomeCloverRampFullDistanceMeters,
-		BiomeCloverAppearEndMeters = source.BiomeCloverAppearEndMeters,
-		BiomeCloverPriorityStartMeters = source.BiomeCloverPriorityStartMeters,
-		BiomeCloverPriorityEndMeters = source.BiomeCloverPriorityEndMeters,
-		BiomeCloverWeight = source.BiomeCloverWeight,
-		BiomeCloverDistanceInfluenceStartMeters = source.BiomeCloverDistanceInfluenceStartMeters,
-		BiomeCloverDistanceInfluenceEndMeters = source.BiomeCloverDistanceInfluenceEndMeters,
-		BiomeCloverPriorityWeight = source.BiomeCloverPriorityWeight,
-		BiomeRedwoodHardMinDistanceMeters = source.BiomeRedwoodHardMinDistanceMeters,
-		BiomeRedwoodRampFullDistanceMeters = source.BiomeRedwoodRampFullDistanceMeters,
-		BiomeRedwoodAppearEndMeters = source.BiomeRedwoodAppearEndMeters,
-		BiomeRedwoodPriorityStartMeters = source.BiomeRedwoodPriorityStartMeters,
-		BiomeRedwoodPriorityEndMeters = source.BiomeRedwoodPriorityEndMeters,
-		BiomeRedwoodWeight = source.BiomeRedwoodWeight,
-		BiomeRedwoodPriorityWeight = source.BiomeRedwoodPriorityWeight,
-		BiomeAmberHardMinDistanceMeters = source.BiomeAmberHardMinDistanceMeters,
-		BiomeAmberRampFullDistanceMeters = source.BiomeAmberRampFullDistanceMeters,
-		BiomeAmberAppearEndMeters = source.BiomeAmberAppearEndMeters,
-		BiomeAmberPriorityStartMeters = source.BiomeAmberPriorityStartMeters,
-		BiomeAmberPriorityEndMeters = source.BiomeAmberPriorityEndMeters,
-		BiomeAmberWeight = source.BiomeAmberWeight,
-		BiomeAmberPriorityWeight = source.BiomeAmberPriorityWeight,
-	};
 }
 
 /// <summary>Maps preview layers to settings property names for tabbed ControlSheets.</summary>
@@ -348,8 +380,9 @@ static class TerrainPreviewControlTabs
 		nameof( TerrainPreviewSettings.PreviewResolution ),
 		nameof( TerrainPreviewSettings.WorldSeed ),
 		nameof( TerrainPreviewSettings.RandomizeSeedOnGenerate ),
-		nameof( TerrainPreviewSettings.RetrySeedsUntilSolved ),
-		nameof( TerrainPreviewSettings.ValleyAutoMaxSeedAttempts ),
+		nameof( TerrainPreviewSettings.EnableLakeSpawnSolveOnGenerate ),
+		nameof( TerrainPreviewSettings.RetryLakeSeedsUntilSpawn ),
+		nameof( TerrainPreviewSettings.LakeMaxSeedAttempts ),
 		nameof( TerrainPreviewSettings.PreviewMode ),
 		nameof( TerrainPreviewSettings.ShowPreviewDistanceRings ),
 		nameof( TerrainPreviewSettings.PreviewDistanceRingIntervalMeters ),
@@ -358,13 +391,6 @@ static class TerrainPreviewControlTabs
 		nameof( TerrainPreviewSettings.EnableValleyLayer ),
 		nameof( TerrainPreviewSettings.EnableHeightCurveLayer ),
 		nameof( TerrainPreviewSettings.EnableMountainLayer ),
-		nameof( TerrainPreviewSettings.EnableValleyOceanAutoWeight ),
-		nameof( TerrainPreviewSettings.EnableValleySpawnAutoFrequency ),
-		nameof( TerrainPreviewSettings.EnableValleyAutoExhaustiveSearch ),
-		nameof( TerrainPreviewSettings.RejectSeedOnAutoFailure ),
-		nameof( TerrainPreviewSettings.ValleyAutoSearchTimeoutSeconds ),
-		nameof( TerrainPreviewSettings.ValleyAutoMaxIterationsPerSeed ),
-		nameof( TerrainPreviewSettings.ValleyAutoTunePreviewResolution ),
 	};
 
 	public static readonly HashSet<string> Continental = new( StringComparer.Ordinal )
@@ -383,22 +409,6 @@ static class TerrainPreviewControlTabs
 	{
 		nameof( TerrainPreviewSettings.ValleyFrequency ),
 		nameof( TerrainPreviewSettings.ValleyWeight ),
-		nameof( TerrainPreviewSettings.ValleyOceanWeightStep ),
-		nameof( TerrainPreviewSettings.ValleyOceanAutoMinInteriorFraction01 ),
-		nameof( TerrainPreviewSettings.ValleyOceanAutoMaxTotalFraction01 ),
-		nameof( TerrainPreviewSettings.ValleyOceanAbsoluteMaxTotalFraction01 ),
-		nameof( TerrainPreviewSettings.ValleyOceanMaxExteriorFraction01 ),
-		nameof( TerrainPreviewSettings.ValleySpawnLandRadiusMeters ),
-		nameof( TerrainPreviewSettings.ValleySpawnMinLandFraction01 ),
-		nameof( TerrainPreviewSettings.ValleySpawnAcceptableLandFraction01 ),
-		nameof( TerrainPreviewSettings.SpawnRequireLandEscape ),
-		nameof( TerrainPreviewSettings.SpawnEscapeMinDistanceMeters ),
-		nameof( TerrainPreviewSettings.ValleyAutoFrequencyStep ),
-		nameof( TerrainPreviewSettings.ValleyAutoFrequencyMin ),
-		nameof( TerrainPreviewSettings.ValleyAutoFrequencyMax ),
-		nameof( TerrainPreviewSettings.ValleyNearWaterMaxDistanceMeters ),
-		nameof( TerrainPreviewSettings.ValleyInnerHalfRadius01 ),
-		nameof( TerrainPreviewSettings.ValleyInnerHalfMinOceanFraction01 ),
 	};
 
 	public static readonly HashSet<string> HeightCurve = new( StringComparer.Ordinal )
@@ -409,17 +419,26 @@ static class TerrainPreviewControlTabs
 	public static readonly HashSet<string> Water = new( StringComparer.Ordinal )
 	{
 		nameof( TerrainPreviewSettings.EnableInteriorWaterLayer ),
-		nameof( TerrainPreviewSettings.InteriorWaterFrequency ),
-		nameof( TerrainPreviewSettings.InteriorWaterWeight ),
-		nameof( TerrainPreviewSettings.InteriorWaterAutoStep ),
-		nameof( TerrainPreviewSettings.InteriorWaterCenterInfluence01 ),
-		nameof( TerrainPreviewSettings.InteriorWaterFullInfluenceRadius01 ),
-		nameof( TerrainPreviewSettings.InteriorWaterFalloffPower ),
-		nameof( TerrainPreviewSettings.InteriorWaterEdgeFade01 ),
-		nameof( TerrainPreviewSettings.SeaLevelHeight01 ),
-		nameof( TerrainPreviewSettings.TargetTotalOceanFraction01 ),
-		nameof( TerrainPreviewSettings.TargetInteriorOceanFraction01 ),
-		nameof( TerrainPreviewSettings.InteriorZoneRadius01 ),
+		nameof( TerrainPreviewSettings.InlandDryLandSeaMarginMeters ),
+		nameof( TerrainPreviewSettings.SeaLevelMeters ),
+		nameof( TerrainPreviewSettings.SpeckMinPatchDiameterMeters ),
+		nameof( TerrainPreviewSettings.LandSpeckFilterEnabled ),
+	};
+
+	public static readonly HashSet<string> Lakes = new( StringComparer.Ordinal )
+	{
+		nameof( TerrainPreviewSettings.TargetLakeCoverageOnLand01 ),
+		nameof( TerrainPreviewSettings.LakeAutoThreshold ),
+		nameof( TerrainPreviewSettings.LakeMaskThreshold01 ),
+		nameof( TerrainPreviewSettings.LakeMacroFrequency ),
+		nameof( TerrainPreviewSettings.LakeMediumFrequency ),
+		nameof( TerrainPreviewSettings.LakeMacroOctaves ),
+		nameof( TerrainPreviewSettings.LakeShoreDetail01 ),
+		nameof( TerrainPreviewSettings.LakeOffsetXMeters ),
+		nameof( TerrainPreviewSettings.LakeOffsetYMeters ),
+		nameof( TerrainPreviewSettings.LakeMaxOffsetMeters ),
+		nameof( TerrainPreviewSettings.LakeSpawnCheckRadiusMeters ),
+		nameof( TerrainPreviewSettings.LakeSpawnShowcaseWaterRadiusMeters ),
 	};
 
 	public static readonly HashSet<string> Biomes = new( StringComparer.Ordinal )
@@ -464,13 +483,96 @@ static class TerrainPreviewControlTabs
 		nameof( TerrainPreviewSettings.BiomeAmberPriorityWeight ),
 	};
 
+	public static readonly HashSet<string> BiomeTerrain = new( StringComparer.Ordinal )
+	{
+		nameof( TerrainPreviewSettings.EnableBiomeHeightBlend ),
+		nameof( TerrainPreviewSettings.BiomeCloverMaxHeightMeters ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodMaxHeightMeters ),
+		nameof( TerrainPreviewSettings.BiomeAmberMaxHeightMeters ),
+		nameof( TerrainPreviewSettings.BiomeMountainMaxHeightMeters ),
+		nameof( TerrainPreviewSettings.BiomeMountainPlacementStrength01 ),
+		nameof( TerrainPreviewSettings.BiomeCloverRollFrequency ),
+		nameof( TerrainPreviewSettings.BiomeCloverRollAmplitude01 ),
+		nameof( TerrainPreviewSettings.BiomeCloverShapeBlend01 ),
+		nameof( TerrainPreviewSettings.BiomeCloverSlopeSmooth01 ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodHillFrequency ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodHillAmplitude01 ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodRidgeAmplitude01 ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodSlopeSmooth01 ),
+		nameof( TerrainPreviewSettings.BiomeAmberDuneFrequency ),
+		nameof( TerrainPreviewSettings.BiomeAmberDuneFloor01 ),
+		nameof( TerrainPreviewSettings.BiomeAmberDuneAmplitude01 ),
+		nameof( TerrainPreviewSettings.BiomeAmberDuneReshapeBlend01 ),
+		nameof( TerrainPreviewSettings.BiomeAmberSlopeSmooth01 ),
+		nameof( TerrainPreviewSettings.BiomeMountainBaseRuggedAmplitude01 ),
+		nameof( TerrainPreviewSettings.BiomeMountainSlopeSmooth01 ),
+		nameof( TerrainPreviewSettings.BiomeMountainSummitFlattenStart01 ),
+		nameof( TerrainPreviewSettings.BiomeMountainSummitFlattenStrength01 ),
+		nameof( TerrainPreviewSettings.BiomeSlopeDetailGate01 ),
+	};
+
+	public static readonly HashSet<string> BiomeWeights = new( StringComparer.Ordinal )
+	{
+		nameof( TerrainPreviewSettings.PreviewMode ),
+	};
+
+	public static readonly HashSet<string> Slope = new( StringComparer.Ordinal )
+	{
+		nameof( TerrainPreviewSettings.PreviewMode ),
+		nameof( TerrainPreviewSettings.MountainSlopeSampleStepMeters ),
+		nameof( TerrainPreviewSettings.BiomeMountainMinSlopeDegrees ),
+	};
+
+	public static readonly HashSet<string> BiomeTransition = new( StringComparer.Ordinal )
+	{
+		nameof( TerrainPreviewSettings.PreviewMode ),
+		nameof( TerrainPreviewSettings.BiomeHeightCapBorderSharpness ),
+	};
+
 	public static readonly HashSet<string> MountainMask = new( StringComparer.Ordinal )
+	{
+		nameof( TerrainPreviewSettings.EnableMountainLayer ),
+		nameof( TerrainPreviewSettings.PreviewMode ),
+		nameof( TerrainPreviewSettings.BiomeMinMountainMask01 ),
+		nameof( TerrainPreviewSettings.BiomeMountainPlacementStrength01 ),
+		nameof( TerrainPreviewSettings.MountainSpawnMacroWavelengthMeters ),
+		nameof( TerrainPreviewSettings.MountainSpawnMediumWavelengthMeters ),
+		nameof( TerrainPreviewSettings.MountainSpawnRidgeSharpness ),
+		nameof( TerrainPreviewSettings.MountainSpawnFieldFloor01 ),
+		nameof( TerrainPreviewSettings.MountainSpawnMacroOctaves ),
+		nameof( TerrainPreviewSettings.MountainSpawnMediumOctaves ),
+		nameof( TerrainPreviewSettings.MountainSpawnMediumFrequencyScale ),
+		nameof( TerrainPreviewSettings.MountainSpawnMediumMix01 ),
+		nameof( TerrainPreviewSettings.MountainSpawnBreakerFrequencyScale ),
+		nameof( TerrainPreviewSettings.MountainSpawnBreakerMin01 ),
+		nameof( TerrainPreviewSettings.MountainSpawnBreakerSpan01 ),
+		nameof( TerrainPreviewSettings.MountainSpawnBreakerStrength01 ),
+		nameof( TerrainPreviewSettings.MountainSpawnWarpStrength01 ),
+		nameof( TerrainPreviewSettings.MountainSpawnRangeStretch01 ),
+		nameof( TerrainPreviewSettings.MountainSpawnRangePower01 ),
+		nameof( TerrainPreviewSettings.MountainSpawnSpeckFilterEnabled ),
+		nameof( TerrainPreviewSettings.MountainSpawnMinPatchDiameterMeters ),
+		nameof( TerrainPreviewSettings.MountainSpawnMinPatchSupport01 ),
+		nameof( TerrainPreviewSettings.MountainSpawnMinPatchGridSteps ),
+	};
+
+	public static readonly HashSet<string> Mountains = new( StringComparer.Ordinal )
 	{
 		nameof( TerrainPreviewSettings.MountainThreshold ),
 		nameof( TerrainPreviewSettings.MountainFrequency ),
 		nameof( TerrainPreviewSettings.MountainPeakBoost ),
 		nameof( TerrainPreviewSettings.MountainMinPeakHeight01 ),
 		nameof( TerrainPreviewSettings.MountainPeakVariationFrequency ),
+		nameof( TerrainPreviewSettings.MountainPeakRarityPower ),
+		nameof( TerrainPreviewSettings.MountainTypicalPeakMax01 ),
+		nameof( TerrainPreviewSettings.MountainAbsolutePeakMax01 ),
+		nameof( TerrainPreviewSettings.MountainSummitMacroFrequency ),
+		nameof( TerrainPreviewSettings.MountainSummitMacroThreshold01 ),
+		nameof( TerrainPreviewSettings.MountainSummitLocalPeakMin01 ),
+		nameof( TerrainPreviewSettings.MountainPeakBandWidth01 ),
+		nameof( TerrainPreviewSettings.MountainPeakSharpnessPower ),
+		nameof( TerrainPreviewSettings.MountainSummitExtraLift01 ),
+		nameof( TerrainPreviewSettings.MountainSlopeSampleStepMeters ),
 		nameof( TerrainPreviewSettings.MountainFoothillSpread ),
 		nameof( TerrainPreviewSettings.MountainFoothillBoost ),
 	};
@@ -481,5 +583,9 @@ static class TerrainPreviewControlTabs
 		nameof( TerrainPreviewSettings.MountainOuterRadius01 ),
 		nameof( TerrainPreviewSettings.MountainBandFade01 ),
 		nameof( TerrainPreviewSettings.MountainFalloffRimPower ),
+		nameof( TerrainPreviewSettings.MountainMidMapEmphasis01 ),
+		nameof( TerrainPreviewSettings.MountainMidMapRadialPeak01 ),
+		nameof( TerrainPreviewSettings.MountainMidMapRadialSpread01 ),
+		nameof( TerrainPreviewSettings.MountainMidMapRadialFloor01 ),
 	};
 }

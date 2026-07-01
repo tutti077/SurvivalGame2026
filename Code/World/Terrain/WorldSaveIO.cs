@@ -11,7 +11,8 @@ public sealed class WorldSaveRecipe
 	public string WorldName { get; set; } = "DefaultWorld";
 	public int WorldSeed { get; set; } = 1337;
 	public float WorldDiameterMeters { get; set; } = 20000f;
-	public float MaxTerrainHeightMeters { get; set; } = 6000f;
+	public float OceanRingWidthMeters { get; set; } = 2500f;
+	public float MaxTerrainHeightMeters { get; set; } = 700f;
 	public float ChunkSizeMeters { get; set; } = 512f;
 	public float BiomePreviewMetersPerPixel { get; set; } = 10f;
 	public TerrainPreviewSettings PreviewSettings { get; set; } = new();

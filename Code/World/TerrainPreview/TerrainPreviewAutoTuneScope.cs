@@ -13,7 +13,7 @@ public static class TerrainPreviewAutoTuneScope
 
 	public static IDisposable Begin( TerrainPreviewSettings settings )
 	{
-		var tune = Math.Clamp( settings.ValleyAutoTunePreviewResolution, 64, settings.ClampedResolution );
+		var tune = Math.Clamp( 256, 64, settings.ClampedResolution );
 		_active = true;
 		_measureResolution = tune;
 		return new Scope();

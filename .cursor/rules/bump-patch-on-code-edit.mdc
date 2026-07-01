@@ -20,3 +20,5 @@ Do **not** bump for chat-only replies with zero file edits. For a turn that cont
 Before changing **player movement**, **health/stamina/oxygen pools**, or **attacks/blocks**, read **`AGENTS.md`** at the repo root and route design-time parameters and logic through **`PlayerMovement`**, **`PlayerVitals`**, and **`PlayerCombat`** respectively (see full table there).
 
 **Commandment #2:** Final assistant replies in this repo must end with the build-label line and a **What’s needed from you** section — see **`.cursor/rules/build-label-chat-footer.mdc`**.
+
+**Commandment #3:** When deprecating code, remove hooks and toggles in the same turn — see **`.cursor/rules/deprecate-cleanly.mdc`** and **`AGENTS.md`** Commandment #3.

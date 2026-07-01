@@ -5,6 +5,9 @@ public static class TerrainPreviewGenerator
 {
 	public static TerrainPreviewGenerateResult Generate( TerrainPreviewSettings settings, ITerrainPreviewBackend backend = null )
 	{
+		if ( TerrainPreviewMapIterationTracker.IsAbortRequested )
+			return default;
+
 		TerrainPreviewMapIterationTracker.NotifyMapRasterized();
 		backend ??= TerrainPreviewBackendRegistry.Active;
 
@@ -84,6 +87,9 @@ public static class TerrainPreviewGenerator
 			out var exteriorOcean );
 
 		var waterCoverage = TerrainPreviewWaterCoverage.ComputeStats( ocean, interiorOcean, exteriorOcean, insideWorld );
+		waterCoverage = waterCoverage.WithLandDiskLakeFraction(
+			TerrainPreviewWaterCoverage.MeasureLandDiskLakeFraction( settings ) );
+		var metrics = TerrainPreviewGenerationMetrics.Measure( settings );
 
 		if ( settings.PreviewMode == TerrainPreviewMode.Water )
 			ApplyWaterZoneColors( colors, ocean, interiorOcean, exteriorOcean, insideWorld );
@@ -105,6 +111,7 @@ public static class TerrainPreviewGenerator
 		{
 			Colors = colors,
 			WaterCoverage = waterCoverage,
+			Metrics = metrics,
 		};
 	}
 
@@ -126,7 +133,8 @@ public static class TerrainPreviewGenerator
 			out var interiorOcean,
 			out var exteriorOcean );
 
-		return TerrainPreviewWaterCoverage.ComputeStats( ocean, interiorOcean, exteriorOcean, insideWorld );
+		return TerrainPreviewWaterCoverage.ComputeStats( ocean, interiorOcean, exteriorOcean, insideWorld )
+			.WithLandDiskLakeFraction( TerrainPreviewWaterCoverage.MeasureLandDiskLakeFraction( settings ) );
 	}
 
 	static void RasterOcean(
@@ -140,10 +148,22 @@ public static class TerrainPreviewGenerator
 		Color[] colors,
 		bool fillColors )
 	{
+		var metersPerPixel = diameter / res;
+		TerrainPreviewGenerateProgress.SetStage( "Raster preview" );
+		TerrainPreviewLandDiskFields.EnsureReady( settings );
+
+		if ( TerrainPreviewMapIterationTracker.IsAbortRequested )
+			return;
+
 		if ( fillColors && settings.PreviewMode == TerrainPreviewMode.Biomes )
 		{
 			for ( var py = 0; py < res; py++ )
 			{
+				if ( TerrainPreviewMapIterationTracker.IsAbortRequested )
+					return;
+
+				TerrainPreviewGenerateProgress.ReportRaster( py + 1, res );
+
 				for ( var px = 0; px < res; px++ )
 				{
 					var idx = (py * res) + px;
@@ -161,6 +181,14 @@ public static class TerrainPreviewGenerator
 				}
 			}
 
+			TerrainPreviewLandSpeckFilter.ApplyToOceanMask(
+				ocean,
+				insideWorld,
+				res,
+				res,
+				metersPerPixel,
+				settings );
+
 			TerrainPreviewBiomeMapRaster.FillBiomeColors(
 				settings,
 				backend,
@@ -168,12 +196,18 @@ public static class TerrainPreviewGenerator
 				radius,
 				diameter,
 				insideWorld,
+				ocean,
 				colors );
 			return;
 		}
 
 		for ( var py = 0; py < res; py++ )
 		{
+			if ( TerrainPreviewMapIterationTracker.IsAbortRequested )
+				return;
+
+			TerrainPreviewGenerateProgress.ReportRaster( py + 1, res );
+
 			for ( var px = 0; px < res; px++ )
 			{
 				var idx = (py * res) + px;
@@ -194,6 +228,123 @@ public static class TerrainPreviewGenerator
 					colors[idx] = SampleToColor( settings, sample, wx, wy );
 			}
 		}
+
+		TerrainPreviewLandSpeckFilter.ApplyToOceanMask(
+			ocean,
+			insideWorld,
+			res,
+			res,
+			metersPerPixel,
+			settings );
+
+		if ( fillColors && settings.LandSpeckFilterEnabled )
+			RefreshColorsAfterLandSpeck( settings, backend, res, radius, diameter, insideWorld, ocean, colors );
+
+		if ( fillColors
+			&& settings.MountainSpawnSpeckFilterEnabled
+			&& settings.EnableMountainLayer
+			&& settings.PreviewMode == TerrainPreviewMode.MountainMask )
+		{
+			ApplyMountainMaskSpeckFilter( settings, backend, res, radius, diameter, colors );
+		}
+
+		if ( fillColors
+			&& settings.EnableInteriorWaterLayer
+			&& settings.PreviewMode == TerrainPreviewMode.Lakes )
+		{
+			ApplyLakePreviewMask( settings, backend, res, diameter, colors );
+		}
+	}
+
+	static void ApplyLakePreviewMask(
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		int res,
+		float diameter,
+		Color[] colors )
+	{
+		_ = backend;
+		for ( var py = 0; py < res; py++ )
+		{
+			if ( TerrainPreviewMapIterationTracker.IsAbortRequested )
+				return;
+
+			TerrainPreviewGenerateProgress.ReportRaster( py + 1, res );
+
+			for ( var px = 0; px < res; px++ )
+			{
+				var idx = (py * res) + px;
+				TerrainBiomeMapCoordinates.RasterPixelToWorldMeters(
+					px, py, res, settings.WorldRadiusMeters, diameter, out var wx, out var wy );
+				var isWater = TerrainPreviewLandDiskFields.IsOpenWater( settings, wx, wy );
+				colors[idx] = isWater ? Color.White : Color.Black;
+			}
+		}
+	}
+
+	static void RefreshColorsAfterLandSpeck(
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		int res,
+		float radius,
+		float diameter,
+		bool[] insideWorld,
+		bool[] ocean,
+		Color[] colors )
+	{
+		if ( settings.PreviewMode is TerrainPreviewMode.Water or TerrainPreviewMode.Biomes )
+			return;
+
+		var seaColor = TerrainPreviewBiomeColors.PaletteColor( TerrainPreviewBiomeId.Water, 1f );
+		var seaHeight01 = TerrainPreviewOceanByHeight.MetersToHeight01( settings, settings.SeaLevelMeters );
+
+		for ( var idx = 0; idx < ocean.Length; idx++ )
+		{
+			if ( !insideWorld[idx] || !ocean[idx] )
+				continue;
+
+			colors[idx] = settings.PreviewMode switch
+			{
+				TerrainPreviewMode.World => Grayscale( seaHeight01 ),
+				TerrainPreviewMode.HeightCurve => Grayscale( seaHeight01 ),
+				TerrainPreviewMode.BiomeShape => Grayscale( seaHeight01 ),
+				_ => seaColor,
+			};
+		}
+	}
+
+	static void ApplyMountainMaskSpeckFilter(
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		int res,
+		float radius,
+		float diameter,
+		Color[] colors )
+	{
+		var mask = new bool[res * res];
+		for ( var py = 0; py < res; py++ )
+		{
+			if ( TerrainPreviewMapIterationTracker.IsAbortRequested )
+				return;
+
+			TerrainPreviewGenerateProgress.ReportRaster( py + 1, res );
+
+			for ( var px = 0; px < res; px++ )
+			{
+				var idx = (py * res) + px;
+				TerrainBiomeMapCoordinates.RasterPixelToWorldMeters(
+					px, py, res, radius, diameter, out var wx, out var wy );
+				var sample = backend.Sample( settings, wx, wy );
+				mask[idx] = sample.MountainMask01 >= 0.5f;
+			}
+		}
+
+		var metersPerPixel = diameter / res;
+		TerrainPreviewMountainSpeckFilter.RemoveSmallPatches(
+			mask, res, res, metersPerPixel, settings.MountainSpawnMinPatchDiameterMeters );
+
+		for ( var i = 0; i < mask.Length; i++ )
+			colors[i] = mask[i] ? Color.White : Color.Black;
 	}
 
 	public static Color[] GenerateColors( TerrainPreviewSettings settings, ITerrainPreviewBackend backend = null )
@@ -218,9 +369,15 @@ public static class TerrainPreviewGenerator
 		TerrainPreviewMode.Valleys => "Valleys",
 		TerrainPreviewMode.HeightCurve => "Height Curve",
 		TerrainPreviewMode.Water => "Water",
+		TerrainPreviewMode.Lakes => "Lakes",
 		TerrainPreviewMode.MountainMask => "Mountain Mask",
+		TerrainPreviewMode.MountainField => "Mountain Field",
 		TerrainPreviewMode.MountainFalloff => "Mountain Falloff",
 		TerrainPreviewMode.Biomes => "Biomes",
+		TerrainPreviewMode.BiomeShape => "Biome Shape",
+		TerrainPreviewMode.BiomeWeights => "Biome Weights",
+		TerrainPreviewMode.Slope => "Slope",
+		TerrainPreviewMode.BiomeTransition => "Biome Transition",
 		_ => mode.ToString(),
 	};
 
@@ -232,9 +389,15 @@ public static class TerrainPreviewGenerator
 		TerrainPreviewMode.Valleys => "valleys",
 		TerrainPreviewMode.HeightCurve => "height_curve",
 		TerrainPreviewMode.Water => "water",
+		TerrainPreviewMode.Lakes => "lakes",
 		TerrainPreviewMode.MountainMask => "mountain_mask",
+		TerrainPreviewMode.MountainField => "mountain_field",
 		TerrainPreviewMode.MountainFalloff => "mountain_falloff",
 		TerrainPreviewMode.Biomes => "biomes",
+		TerrainPreviewMode.BiomeShape => "biome_shape",
+		TerrainPreviewMode.BiomeWeights => "biome_weights",
+		TerrainPreviewMode.Slope => "slope",
+		TerrainPreviewMode.BiomeTransition => "biome_transition",
 		_ => "preview",
 	};
 
@@ -245,9 +408,15 @@ public static class TerrainPreviewGenerator
 		"Valleys" => TerrainPreviewMode.Valleys,
 		"Height Curve" => TerrainPreviewMode.HeightCurve,
 		"Water" => TerrainPreviewMode.Water,
+		"Lakes" => TerrainPreviewMode.Lakes,
 		"Mountain Mask" => TerrainPreviewMode.MountainMask,
+		"Mountain Field" => TerrainPreviewMode.MountainField,
 		"Mountain Falloff" => TerrainPreviewMode.MountainFalloff,
 		"Biomes" => TerrainPreviewMode.Biomes,
+		"Biome Shape" => TerrainPreviewMode.BiomeShape,
+		"Biome Weights" => TerrainPreviewMode.BiomeWeights,
+		"Slope" => TerrainPreviewMode.Slope,
+		"Biome Transition" => TerrainPreviewMode.BiomeTransition,
 		_ => TerrainPreviewMode.World,
 	};
 
@@ -267,10 +436,38 @@ public static class TerrainPreviewGenerator
 			TerrainPreviewMode.Valleys => Grayscale( sample.ValleysNoise01 ),
 			TerrainPreviewMode.HeightCurve => Grayscale( sample.HeightAfterCurve01 ),
 			TerrainPreviewMode.Water => Color.Black,
-			TerrainPreviewMode.MountainMask => Grayscale( sample.MountainMask01 ),
+			TerrainPreviewMode.Lakes => Grayscale( sample.LakeMask01 ),
+			TerrainPreviewMode.MountainMask => sample.MountainMask01 >= 0.5f ? Color.White : Color.Black,
+			TerrainPreviewMode.MountainField => Grayscale( sample.MountainField01 ),
 			TerrainPreviewMode.MountainFalloff => Grayscale( sample.MountainFalloff01 ),
+			TerrainPreviewMode.BiomeShape => Grayscale( sample.HeightAfterBiomeShape01 ),
+			TerrainPreviewMode.BiomeWeights => BiomeWeightColor( sample.LandWeights ),
+			TerrainPreviewMode.Slope => SlopeColor( sample.MountainSlopeDegrees ),
+			TerrainPreviewMode.BiomeTransition => Grayscale( sample.BiomeTransition01 ),
 			_ => Color.Black,
 		};
+	}
+
+	static Color BiomeWeightColor( TerrainPreviewBiomeResolver.LandBiomeWeights weights )
+	{
+		var total = weights.Total;
+		if ( total <= 0.0001f )
+			return Color.Black;
+
+		var r = weights.Clover / total;
+		var g = weights.Redwood / total;
+		var b = weights.Amber / total;
+		var gray = weights.Mountain / total;
+		return new Color(
+			Math.Clamp( r + (gray * 0.35f), 0f, 1f ),
+			Math.Clamp( g + (gray * 0.35f), 0f, 1f ),
+			Math.Clamp( b + (gray * 0.55f), 0f, 1f ) );
+	}
+
+	static Color SlopeColor( float slopeDegrees )
+	{
+		var t = Math.Clamp( slopeDegrees / 35f, 0f, 1f );
+		return new Color( t, 0.15f, 1f - t );
 	}
 
 	static void ApplyWaterZoneColors(

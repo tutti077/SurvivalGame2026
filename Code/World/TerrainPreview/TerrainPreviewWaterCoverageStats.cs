@@ -1,6 +1,6 @@
 namespace Survival;
 
-/// <summary>Raster summary of land vs ocean, split by interior disk vs exterior rim band.</summary>
+/// <summary>Raster summary of land vs ocean. <see cref="LandDiskLakeFraction01"/> matches Target Lake Coverage.</summary>
 public readonly struct TerrainPreviewWaterCoverageStats
 {
 	public int InsideWorldPixels { get; init; }
@@ -9,8 +9,12 @@ public readonly struct TerrainPreviewWaterCoverageStats
 	public int InteriorOceanPixels { get; init; }
 	public int ExteriorOceanPixels { get; init; }
 
+	/// <summary>Open lake water on the land circle only (0–1). Same metric as Target Lake Coverage.</summary>
+	public float LandDiskLakeFraction01 { get; init; }
+
 	public float LandFraction01 => InsideWorldPixels > 0 ? LandPixels / (float)InsideWorldPixels : 0f;
 
+	/// <summary>All water inside the world square (rim ocean + lakes on land).</summary>
 	public float OceanFraction01 => InsideWorldPixels > 0 ? OceanPixels / (float)InsideWorldPixels : 0f;
 
 	public float InteriorOceanFraction01 => InsideWorldPixels > 0 ? InteriorOceanPixels / (float)InsideWorldPixels : 0f;

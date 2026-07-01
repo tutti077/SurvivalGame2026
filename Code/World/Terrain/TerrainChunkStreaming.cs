@@ -16,7 +16,7 @@ public static class TerrainChunkStreaming
 		chunkSizeMeters = Math.Max( 16f, chunkSizeMeters );
 		radiusChunks = Math.Clamp( radiusChunks, 0, 32 );
 
-		var worldRadius = settings.WorldRadiusMeters;
+		var worldRadius = settings.TotalWorldRadiusMeters;
 		var center = WorldToChunkCoord( streamPos.x, streamPos.y, worldRadius, chunkSizeMeters );
 
 		for ( var dz = -radiusChunks; dz <= radiusChunks; dz++ )
@@ -47,7 +47,7 @@ public static class TerrainChunkStreaming
 		sideViewRadiusChunks = Math.Clamp( sideViewRadiusChunks, 0, 32 );
 		forwardViewConeDegrees = Math.Clamp( forwardViewConeDegrees, 10f, 360f );
 
-		var worldRadius = settings.WorldRadiusMeters;
+		var worldRadius = settings.TotalWorldRadiusMeters;
 		var forward = viewRotation.Forward.WithZ( 0f );
 		if ( forward.LengthSquared < 1e-6f )
 			forward = Vector3.Forward;
@@ -133,7 +133,7 @@ public static class TerrainChunkStreaming
 		chunkSizeMeters = Math.Max( 16f, chunkSizeMeters );
 		borderPrefetch01 = Math.Clamp( borderPrefetch01, 0.05f, 0.5f );
 
-		var worldRadius = settings.WorldRadiusMeters;
+		var worldRadius = settings.TotalWorldRadiusMeters;
 		var center = WorldToChunkCoord( streamPos.x, streamPos.y, worldRadius, chunkSizeMeters );
 		if ( !IsChunkInsideWorld( center, settings, chunkSizeMeters ) )
 			return;
@@ -191,7 +191,7 @@ public static class TerrainChunkStreaming
 
 	public static bool IsChunkInsideWorld( TerrainChunkCoord coord, TerrainPreviewSettings settings, float chunkSize )
 	{
-		var radius = settings.WorldRadiusMeters;
+		var radius = settings.TotalWorldRadiusMeters;
 		var minX = -radius + (coord.X * chunkSize);
 		var minY = -radius + (coord.Y * chunkSize);
 		var maxX = minX + chunkSize;

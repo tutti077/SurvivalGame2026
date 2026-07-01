@@ -10,6 +10,7 @@ public static class TerrainPreviewBiomeMapRaster
 		float radius,
 		float diameter,
 		bool[] insideWorld,
+		bool[] ocean,
 		Color[] colors )
 	{
 		TerrainBiomeMapPreviewRaster.FillBiomeColors(
@@ -18,6 +19,17 @@ public static class TerrainPreviewBiomeMapRaster
 			TerrainBiomeMapPreviewOptions.FromSettings( settings ),
 			res,
 			insideWorld,
+			ocean,
 			colors );
 	}
+
+	public static void FillBiomeColors(
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		int res,
+		float radius,
+		float diameter,
+		bool[] insideWorld,
+		Color[] colors )
+		=> FillBiomeColors( settings, backend, res, radius, diameter, insideWorld, ocean: null, colors );
 }

@@ -1,6 +1,6 @@
 namespace Survival;
 
-/// <summary>Removes tiny land-biome islands on PNG preview maps (world-meter threshold).</summary>
+/// <summary>Single-pass scan: small land-biome patches merge into the most common neighbor biome.</summary>
 public static class TerrainPreviewBiomeSpeckFilter
 {
 	public static void MergeSmallPatches(
@@ -9,7 +9,7 @@ public static class TerrainPreviewBiomeSpeckFilter
 		int height,
 		float metersPerPixel,
 		float minPatchDiameterMeters,
-		int maxPasses = 2 )
+		int maxPasses = 1 )
 	{
 		if ( map is null || map.Length != width * height || metersPerPixel <= 0f )
 			return;
@@ -197,5 +197,6 @@ public static class TerrainPreviewBiomeSpeckFilter
 	static bool IsMergeableLandBiome( TerrainPreviewBiomeId biomeId )
 		=> biomeId is TerrainPreviewBiomeId.CloverHills
 			or TerrainPreviewBiomeId.RedwoodForest
-			or TerrainPreviewBiomeId.AmberDunes;
+			or TerrainPreviewBiomeId.AmberDunes
+			or TerrainPreviewBiomeId.Mountain;
 }

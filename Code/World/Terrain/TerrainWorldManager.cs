@@ -20,8 +20,16 @@ public sealed class TerrainWorldManager : Component
 
 	[Property, Group( "World" )] public string WorldName { get; set; } = "TestWorld";
 	[Property, Group( "World" )] public float WorldDiameterMeters { get; set; } = 20000f;
+	[Property, Group( "World" ), Title( "Ocean Ring Width (m)" ), Description( "Flat water band outside land disk. Total world = land + 2× ring (default 25 km)." )]
+	public float OceanRingWidthMeters { get; set; } = 2500f;
 	[Property, Group( "World" )] public int WorldSeed { get; set; } = 1337;
-	[Property, Group( "World" )] public float MaxTerrainHeightMeters { get; set; } = 6000f;
+	[Property, Group( "World" )] public float MaxTerrainHeightMeters { get; set; } = 700f;
+	[Property, Group( "World" ), Title( "Settings Source" ), Description( "Tuned Preview First = latest editor Generate bundle, then saved world recipe. Uses solved lake offsets from the bundle — no re-solve on play." )]
+	public TerrainWorldSettingsSource SettingsSource { get; set; } = TerrainWorldSettingsSource.TunedPreviewFirst;
+	[Property, Group( "World" ), Title( "Override World Scalars From Component" ), Description( "When off, seed/diameter/height/ocean ring come from the tuned bundle or recipe (matches preview PNG)." )]
+	public bool OverrideWorldScalarsFromComponent { get; set; }
+	[Property, Group( "World" ), Title( "Run Lake Spawn Solve On Load" ), Description( "Only when Settings Source = Component Defaults Only. Re-runs editor lake offset solve on play (slow)." )]
+	public bool RunLakeSpawnSolveOnLoad { get; set; }
 
 	[Property, Group( "Chunks" )] public float ChunkSizeMeters { get; set; } = 64f;
 	[Property, Group( "Chunks" )] public int ChunkVerticesPerSide { get; set; } = 17;
@@ -99,17 +107,25 @@ public sealed class TerrainWorldManager : Component
 	float _lastPreviewDiameter = -1f;
 	float _lastPreviewMetersPerPixel = -1f;
 	int _lastChunkSeed = int.MinValue;
-	bool _worldRecipeWritten;
+	TerrainChunkCoord _lastStreamRefreshChunk;
+	int _lastStreamRefreshHeadingBucket = int.MinValue;
 	bool _isWorldLoading;
 	bool _initialChunksQueued;
 	TerrainPreviewSettings _generationSettings;
 	int _generationSettingsSeed = int.MinValue;
 	float _generationSettingsDiameter = -1f;
+	float _generationSettingsMaxHeight = -1f;
+	float _generationSettingsOceanRing = -1f;
+	bool _generationSettingsRunAutoTune;
+	TerrainWorldSettingsSource _generationSettingsSource;
+	bool _generationSettingsOverrideScalars;
+	bool _worldRecipeWritten;
 
 	protected override void OnStart()
 	{
 		base.OnStart();
 		_backend = TerrainPreviewBackendRegistry.Active;
+		_ = BuildGenerationSettings();
 		_lastChunkSeed = WorldSeed;
 		BeginWorldLoad();
 		TryWriteWorldRecipe();
@@ -158,10 +174,11 @@ public sealed class TerrainWorldManager : Component
 
 		var settings = BuildGenerationSettings();
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
+		var streamPosMeters = TerrainWorldUnits.EngineToMeters( worldPos );
 		var chunk = TerrainChunkStreaming.WorldToChunkCoord(
-			worldPos.x,
-			worldPos.y,
-			settings.WorldRadiusMeters,
+			streamPosMeters.x,
+			streamPosMeters.y,
+			settings.TotalWorldRadiusMeters,
 			chunkSize );
 		StreamChunkX = chunk.X;
 		StreamChunkY = chunk.Y;
@@ -185,7 +202,30 @@ public sealed class TerrainWorldManager : Component
 		if ( !TryGetStreamTransform( out var streamPosEngine, out var viewRotation ) )
 			return;
 
-		RefreshChunks( TerrainWorldUnits.EngineToMeters( streamPosEngine ), viewRotation );
+		var streamPosMeters = TerrainWorldUnits.EngineToMeters( streamPosEngine );
+		var settings = BuildGenerationSettings();
+		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
+		var chunk = TerrainChunkStreaming.WorldToChunkCoord(
+			streamPosMeters.x,
+			streamPosMeters.y,
+			settings.TotalWorldRadiusMeters,
+			chunkSize );
+
+		var forward = viewRotation.Forward.WithZ( 0f );
+		var headingDegrees = 0f;
+		if ( forward.LengthSquared > 1e-6f )
+		{
+			forward = forward.Normal;
+			headingDegrees = MathF.Atan2( forward.y, forward.x ) * (180f / MathF.PI);
+		}
+
+		var headingBucket = (int)MathF.Floor( (headingDegrees + 180f) / 12f );
+		if ( chunk == _lastStreamRefreshChunk && headingBucket == _lastStreamRefreshHeadingBucket )
+			return;
+
+		_lastStreamRefreshChunk = chunk;
+		_lastStreamRefreshHeadingBucket = headingBucket;
+		RefreshChunks( streamPosMeters, viewRotation );
 	}
 
 	protected override void OnDestroy()
@@ -202,15 +242,41 @@ public sealed class TerrainWorldManager : Component
 	{
 		if ( _generationSettings is not null
 			&& _generationSettingsSeed == WorldSeed
-			&& Math.Abs( _generationSettingsDiameter - WorldDiameterMeters ) < 0.01f )
+			&& Math.Abs( _generationSettingsDiameter - WorldDiameterMeters ) < 0.01f
+			&& Math.Abs( _generationSettingsMaxHeight - MaxTerrainHeightMeters ) < 0.01f
+			&& Math.Abs( _generationSettingsOceanRing - OceanRingWidthMeters ) < 0.01f
+			&& _generationSettingsRunAutoTune == RunLakeSpawnSolveOnLoad
+			&& _generationSettingsSource == SettingsSource
+			&& _generationSettingsOverrideScalars == OverrideWorldScalarsFromComponent )
 			return _generationSettings;
 
-		_generationSettings = TerrainPreviewSettingsResolver.ResolveForWorld(
-			WorldSeed,
-			WorldDiameterMeters,
-			_backend ?? TerrainPreviewBackendRegistry.Active );
+		_generationSettings = TerrainPreviewSettingsResolver.ResolveForWorldGeneration( new TerrainWorldGenerationRequest
+		{
+			WorldSeed = WorldSeed,
+			WorldDiameterMeters = WorldDiameterMeters,
+			MaxTerrainHeightMeters = MaxTerrainHeightMeters,
+			OceanRingWidthMeters = OceanRingWidthMeters,
+			WorldName = WorldName,
+			Source = SettingsSource,
+			OverrideWorldScalarsFromComponent = OverrideWorldScalarsFromComponent,
+			RunLakeSpawnSolveOnLoad = RunLakeSpawnSolveOnLoad,
+		} );
+
+		if ( !OverrideWorldScalarsFromComponent )
+		{
+			WorldSeed = _generationSettings.WorldSeed;
+			WorldDiameterMeters = _generationSettings.WorldDiameterMeters;
+			MaxTerrainHeightMeters = _generationSettings.MaxTerrainHeightMeters;
+			OceanRingWidthMeters = _generationSettings.OceanRingWidthMeters;
+		}
+
 		_generationSettingsSeed = WorldSeed;
 		_generationSettingsDiameter = WorldDiameterMeters;
+		_generationSettingsMaxHeight = MaxTerrainHeightMeters;
+		_generationSettingsOceanRing = OceanRingWidthMeters;
+		_generationSettingsRunAutoTune = RunLakeSpawnSolveOnLoad;
+		_generationSettingsSource = SettingsSource;
+		_generationSettingsOverrideScalars = OverrideWorldScalarsFromComponent;
 		return _generationSettings;
 	}
 
@@ -223,6 +289,11 @@ public sealed class TerrainWorldManager : Component
 		_generationSettings = null;
 		_generationSettingsSeed = int.MinValue;
 		_generationSettingsDiameter = -1f;
+		_generationSettingsMaxHeight = -1f;
+		_generationSettingsOceanRing = -1f;
+		_generationSettingsRunAutoTune = false;
+		_generationSettingsSource = SettingsSource;
+		_generationSettingsOverrideScalars = OverrideWorldScalarsFromComponent;
 		_worldRecipeWritten = false;
 	}
 
@@ -548,7 +619,7 @@ public sealed class TerrainWorldManager : Component
 	void UpdateChunkColliders( Vector3 streamPos, TerrainPreviewSettings settings, float chunkSize )
 	{
 		var collisionRange = Math.Max( 0f, CollisionRangeMeters );
-		var worldRadius = settings.WorldRadiusMeters;
+		var worldRadius = settings.TotalWorldRadiusMeters;
 
 		foreach ( var entry in _loaded.Values )
 		{
@@ -604,8 +675,8 @@ public sealed class TerrainWorldManager : Component
 			return;
 		}
 
-		var chunkMinX = -settings.WorldRadiusMeters + (coord.X * ChunkSizeMeters);
-		var chunkMinY = -settings.WorldRadiusMeters + (coord.Y * ChunkSizeMeters);
+		var chunkMinX = -settings.TotalWorldRadiusMeters + (coord.X * ChunkSizeMeters);
+		var chunkMinY = -settings.TotalWorldRadiusMeters + (coord.Y * ChunkSizeMeters);
 		var chunkOriginEngine = TerrainWorldUnits.MetersToEngine( new Vector3( chunkMinX, chunkMinY, 0f ) );
 
 		var go = new GameObject( true, $"TerrainChunk {coord}" );
@@ -622,7 +693,7 @@ public sealed class TerrainWorldManager : Component
 		collider.Static = true;
 
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
-		var center = TerrainChunkStreaming.GetChunkCenterWorld( coord, settings.WorldRadiusMeters, chunkSize );
+		var center = TerrainChunkStreaming.GetChunkCenterWorld( coord, settings.TotalWorldRadiusMeters, chunkSize );
 		var distance = new Vector3( center.x - streamPos.x, center.y - streamPos.y, 0f ).Length;
 		collider.Enabled = distance <= CollisionRangeMeters + (chunkSize * 0.75f);
 
@@ -657,6 +728,7 @@ public sealed class TerrainWorldManager : Component
 		_loaded.Clear();
 		LoadedChunkCount = 0;
 		MeshedChunkCount = 0;
+		_lastStreamRefreshHeadingBucket = int.MinValue;
 	}
 
 	void TryWriteWorldRecipe()
@@ -685,6 +757,7 @@ public sealed class TerrainWorldManager : Component
 			WorldSeed = WorldSeed,
 			WorldDiameterMeters = WorldDiameterMeters,
 			MaxTerrainHeightMeters = MaxTerrainHeightMeters,
+			OceanRingWidthMeters = OceanRingWidthMeters,
 			ChunkSizeMeters = ChunkSizeMeters,
 			BiomePreviewMetersPerPixel = BiomePreviewMetersPerPixel,
 			PreviewSettings = BuildGenerationSettings(),

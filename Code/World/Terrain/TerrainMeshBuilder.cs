@@ -25,10 +25,12 @@ public static class TerrainMeshBuilder
 		chunkSizeMeters = Math.Max( 16f, chunkSizeMeters );
 		maxTerrainHeightMeters = Math.Max( 50f, maxTerrainHeightMeters );
 
-		var worldRadius = settings.WorldRadiusMeters;
+		var worldRadius = settings.TotalWorldRadiusMeters;
 		var chunkMinX = -worldRadius + (coord.X * chunkSizeMeters);
 		var chunkMinY = -worldRadius + (coord.Y * chunkSizeMeters);
 		var step = chunkSizeMeters / (verticesPerSide - 1);
+		var maxHeightMeters = Math.Max( 50f, settings.MaxTerrainHeightMeters );
+		maxTerrainHeightMeters = Math.Max( maxHeightMeters, maxTerrainHeightMeters );
 
 		var vertexCount = verticesPerSide * verticesPerSide;
 		var heights = new float[vertexCount];
@@ -43,12 +45,27 @@ public static class TerrainMeshBuilder
 				var worldY = chunkMinY + (iy * step );
 				var sample = backend.Sample( settings, worldX, worldY );
 
-				var height01 = sample.IsInsideWorld ? sample.Height01 : 0f;
-				heights[idx] = height01 * maxTerrainHeightMeters;
+				var heightMeters = sample.IsInsideWorld
+					? sample.Height01 * maxTerrainHeightMeters
+					: settings.SeaLevelMeters;
+				heights[idx] = heightMeters;
 
-				colors[idx] = sample.IsInsideWorld
-					? TerrainPreviewBiomeColors.SampleBiomeOverlay( settings, sample, worldX, worldY ).WithAlpha( 1f )
-					: Color.Black;
+				colors[idx] = !sample.IsInsideWorld
+					? Color.Black
+					: sample.OceanHeight01 > 0.5f
+						? TerrainPreviewBiomeColors.PaletteColor( TerrainPreviewBiomeId.Water, 1f ).WithAlpha( 1f )
+						: TerrainPreviewBiomeColors.SampleBiomeOverlay( settings, sample, worldX, worldY ).WithAlpha( 1f );
+			}
+		}
+
+		TerrainPreviewLandSpeckFilter.ApplyToHeightGrid(
+			heights, verticesPerSide, step, settings );
+
+		for ( var i = 0; i < vertexCount; i++ )
+		{
+			if ( heights[i] < settings.SeaLevelMeters )
+			{
+				colors[i] = TerrainPreviewBiomeColors.PaletteColor( TerrainPreviewBiomeId.Water, 1f ).WithAlpha( 1f );
 			}
 		}
 

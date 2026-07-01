@@ -1,0 +1,58 @@
+---
+description: Terrain preview tuning loop — knob naming, metrics JSON, PNG review workflow
+globs:
+  - Code/World/TerrainPreview/**
+  - Editor/TerrainNoisePreviewTool.cs
+  - Editor/TerrainPreviewAssetExporter.cs
+  - Assets/terrain/preview/**
+alwaysApply: false
+---
+
+# Terrain preview tuning
+
+## Knob references (chat + docs)
+
+Always cite designer knobs as **`Tab - Knob Name`** using exact Terrain Noise Preview tab titles and property titles, e.g. **Lakes - Shore Detail (0–1)**, **Water - Min Speck Diameter (m)**, **Mountains - Peak Variation Frequency**.
+
+## Automated review loop
+
+Each **Generate Preview** writes a bundle under `Assets/terrain/preview/<NNN>_seed<seed>/`:
+
+| File | Purpose |
+|------|---------|
+| `biomes.png` / `world.png` | Visual review |
+| `generation_metrics.json` | Auto shape stats + pass/fail flags |
+| `preview_settings.json` | Knob snapshot |
+| `water_coverage.json` | Water fractions |
+
+Pointer: `Assets/terrain/preview/.latest_preview.json` → most recent bundle.
+
+## Metrics (read before asking the user to explain)
+
+From `generation_metrics.json`:
+
+- **lakePatchCount** — lower is usually less archipelago (target ≤ 24)
+- **medianLakeDiameterMeters** — higher is usually larger cohesive lakes (target ≥ 600)
+- **lakeArchipelagoScore** — patches per 1% water on land; lower is better (target ≤ 1.6)
+- **mountainLandFraction** — share of dry land in mountain biome (target ≤ 0.38)
+- **lakesLookCohesive** / **mountainsLookReasonable** — quick booleans
+
+When the user says “check the latest generate” or shares an iteration folder, read `.latest_preview.json` or the cited bundle’s PNG + `generation_metrics.json` first.
+
+## Default tuning baseline (v0.6.1523+)
+
+Applied in `TerrainPreviewSettings` defaults:
+
+- **Water - Min Speck Diameter (m)** → 300
+- **Lakes - Shore Detail (0–1)** → 0.10
+- **Lakes - Macro Octaves** → 2
+- **Lakes - Medium Frequency** → 0.4
+- **Lakes - Target Lake Coverage (land disk)** → 0.10
+- **Mountain Falloff - Inner Radius (0–1 dist)** → 0.30
+- **Mountain Mask - Breaker Strength (0–1)** → 0.25
+- **Biomes - Min Patch Diameter (m)** → 200
+- **Biomes - Patch Frequency** → 30
+- **Biomes - Amber Scatter Weight (0–1)** → 0.4
+- **Lakes - Showcase Water Radius (m)** → 300 (spawn solve targets nearby lake)
+
+Adjust from metrics, not subjective re-explanation.
