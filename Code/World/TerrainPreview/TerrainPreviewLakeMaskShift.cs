@@ -196,6 +196,116 @@ static class TerrainPreviewLakeMaskShift
 		return nearest < float.MaxValue;
 	}
 
+	/// <summary>World position of the closest dry land pixel to spawn (mask below threshold at offset 0).</summary>
+	public static bool TryFindNearestDryLandWorld(
+		bool[] landDisk,
+		int res,
+		float radius,
+		float diameter,
+		float[] lakeMaskGrid,
+		float threshold01,
+		float searchRadiusMeters,
+		out float dryWorldX,
+		out float dryWorldY,
+		out float distanceMeters )
+	{
+		dryWorldX = 0f;
+		dryWorldY = 0f;
+		distanceMeters = -1f;
+		searchRadiusMeters = Math.Max( 10f, searchRadiusMeters );
+		var nearest = float.MaxValue;
+
+		for ( var py = 0; py < res; py++ )
+		{
+			for ( var px = 0; px < res; px++ )
+			{
+				var idx = (py * res) + px;
+				if ( !landDisk[idx] )
+					continue;
+
+				TerrainBiomeMapCoordinates.RasterPixelToWorldMeters(
+					px, py, res, radius, diameter, out var wx, out var wy );
+				var dist = MathF.Sqrt( (wx * wx) + (wy * wy ) );
+				if ( dist > searchRadiusMeters )
+					continue;
+
+				if ( lakeMaskGrid[idx] >= threshold01 )
+					continue;
+
+				if ( dist >= nearest )
+					continue;
+
+				nearest = dist;
+				dryWorldX = wx;
+				dryWorldY = wy;
+				distanceMeters = dist;
+			}
+		}
+
+		return nearest < float.MaxValue;
+	}
+
+	/// <summary>Wet-pixel centroid in a spawn check disk (world meters, offset 0 mask sample).</summary>
+	public static bool TryMeasureWetCentroidInDisk(
+		TerrainPreviewSettings settings,
+		bool[] landDisk,
+		int res,
+		float radius,
+		float diameter,
+		float[] lakeMaskGrid,
+		float threshold01,
+		float checkRadiusMeters,
+		out float centroidXMeters,
+		out float centroidYMeters,
+		out float wetFraction01 )
+	{
+		centroidXMeters = 0f;
+		centroidYMeters = 0f;
+		wetFraction01 = 0f;
+		checkRadiusMeters = Math.Max( 5f, checkRadiusMeters );
+		const int grid = 16;
+		var wetMass = 0f;
+		var weightedX = 0f;
+		var weightedY = 0f;
+		var samples = 0;
+
+		for ( var iy = 0; iy < grid; iy++ )
+		{
+			for ( var ix = 0; ix < grid; ix++ )
+			{
+				var ux = ((ix + 0.5f) / grid * 2f) - 1f;
+				var uy = ((iy + 0.5f) / grid * 2f) - 1f;
+				if ( (ux * ux) + (uy * uy ) > 1f )
+					continue;
+
+				var wx = ux * checkRadiusMeters;
+				var wy = uy * checkRadiusMeters;
+				if ( MathF.Sqrt( (wx * wx) + (wy * wy ) ) > settings.LandRadiusMeters )
+					continue;
+
+				samples++;
+				if ( !TrySampleMaskAtWorld( wx, wy, 0f, 0f, landDisk, res, radius, diameter, lakeMaskGrid, out var mask01 ) )
+					continue;
+
+				if ( mask01 < threshold01 )
+					continue;
+
+				var weight = mask01 - threshold01;
+				wetMass += weight;
+				weightedX += wx * weight;
+				weightedY += wy * weight;
+			}
+		}
+
+		if ( wetMass <= 0.0001f || samples <= 0 )
+			return false;
+
+		centroidXMeters = weightedX / wetMass;
+		centroidYMeters = weightedY / wetMass;
+		wetFraction01 = wetMass / samples;
+		return true;
+	}
+
 	static bool TryWorldToRasterIndex(
 		float worldXMeters,
 		float worldYMeters,

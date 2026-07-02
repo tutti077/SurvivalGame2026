@@ -344,7 +344,7 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 
 			var resultNote = lakeSpawn.Solved || !settings.EnableLakeSpawnSolveOnGenerate
 				? "Generated"
-				: "Spawn solve failed — PNG saved anyway";
+				: $"Spawn solve failed — {lakeSpawn.FailureReason ?? lakeSpawn.Status}";
 
 			string pngPath = null;
 			string bundleName = null;

@@ -542,7 +542,7 @@ public sealed partial class TerrainPreviewSettings
 	public float BiomeRedwoodAppearEndMeters { get; set; } = 20000f;
 
 	[Property, Group( "Biomes" ), Title( "Redwood Scatter Weight (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
-	public float BiomeRedwoodWeight { get; set; } = 0.48f;
+	public float BiomeRedwoodWeight { get; set; } = 0.58f;
 
 	[Property, Group( "Biomes" ), Title( "Redwood Distance Influence Start (m)" ), Range( 0f, 20000f ), Step( 50f )]
 	public float BiomeRedwoodPriorityStartMeters { get; set; } = 800f;
