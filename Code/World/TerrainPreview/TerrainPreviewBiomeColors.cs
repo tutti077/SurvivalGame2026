@@ -8,6 +8,9 @@ public static class TerrainPreviewBiomeColors
 		float shade01,
 		float height01 )
 	{
+		if ( biomeId == TerrainPreviewBiomeId.Blackwater )
+			return Color.Black;
+
 		var heightGray = Grayscale( height01 );
 		var biomeColor = PaletteColor( biomeId, shade01 );
 		var overlay = Math.Clamp( settings.BiomeOverlayStrength01, 0f, 1f );
@@ -91,6 +94,8 @@ public static class TerrainPreviewBiomeColors
 			TerrainPreviewBiomeId.RedwoodForest => new Color( 0.45f, 0.12f, 0.18f ),
 			TerrainPreviewBiomeId.AmberDunes => new Color( 0.92f, 0.62f, 0.18f ),
 			TerrainPreviewBiomeId.Mountain => new Color( 0.92f, 0.92f, 0.94f ),
+			TerrainPreviewBiomeId.AzureCoast => new Color( 0.12f, 0.68f, 0.62f ),
+			TerrainPreviewBiomeId.Blackwater => Color.Black,
 			_ => new Color( 0.5f, 0.5f, 0.5f ),
 		};
 

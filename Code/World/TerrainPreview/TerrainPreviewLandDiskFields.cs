@@ -23,15 +23,39 @@ public static class TerrainPreviewLandDiskFields
 	static bool[] _openWater = Array.Empty<bool>();
 	static TerrainPreviewBiomeId[] _rawLandBiomes = Array.Empty<TerrainPreviewBiomeId>();
 	static TerrainPreviewBiomeResolver.LandBiomeWeights[] _placementWeights = Array.Empty<TerrainPreviewBiomeResolver.LandBiomeWeights>();
+	static bool[] _azureCoast = Array.Empty<bool>();
+	static int _azureCoastFingerprint = int.MinValue;
+	static bool[] _blackwater = Array.Empty<bool>();
+	static int _blackwaterFingerprint = int.MinValue;
+	static TerrainPreviewBlackwater.Spot[] _blackwaterSpots = Array.Empty<TerrainPreviewBlackwater.Spot>();
+	static readonly object _buildLock = new();
+
+	static int RasterCellCount( int res ) => Math.Max( 0, res ) * Math.Max( 0, res );
+
+	static bool RasterArraysMatch( int res )
+	{
+		var count = RasterCellCount( res );
+		return count > 0
+			&& _landDisk.Length == count
+			&& _rawLandBiomes.Length == count;
+	}
+
+	static bool WaterRasterReady( int res )
+		=> RasterArraysMatch( res ) && _openWater.Length == RasterCellCount( res );
 
 	public static void InvalidateCache()
 	{
 		_biomePlacementFingerprint = int.MinValue;
 		_waterFingerprint = int.MinValue;
 		_finalizeFingerprint = int.MinValue;
+		_azureCoastFingerprint = int.MinValue;
+		_blackwaterFingerprint = int.MinValue;
 		_isBuilding = false;
 		_landDisk = Array.Empty<bool>();
 		_openWater = Array.Empty<bool>();
+		_azureCoast = Array.Empty<bool>();
+		_blackwater = Array.Empty<bool>();
+		_blackwaterSpots = Array.Empty<TerrainPreviewBlackwater.Spot>();
 		_rawLandBiomes = Array.Empty<TerrainPreviewBiomeId>();
 		_placementWeights = Array.Empty<TerrainPreviewBiomeResolver.LandBiomeWeights>();
 	}
@@ -41,7 +65,12 @@ public static class TerrainPreviewLandDiskFields
 	{
 		_waterFingerprint = int.MinValue;
 		_finalizeFingerprint = int.MinValue;
+		_azureCoastFingerprint = int.MinValue;
+		_blackwaterFingerprint = int.MinValue;
 		_openWater = Array.Empty<bool>();
+		_azureCoast = Array.Empty<bool>();
+		_blackwater = Array.Empty<bool>();
+		_blackwaterSpots = Array.Empty<TerrainPreviewBlackwater.Spot>();
 	}
 
 	/// <summary>Drop biome placement — e.g. when World Seed changes during spawn solve.</summary>
@@ -51,16 +80,24 @@ public static class TerrainPreviewLandDiskFields
 		_finalizeFingerprint = int.MinValue;
 		_rawLandBiomes = Array.Empty<TerrainPreviewBiomeId>();
 		_placementWeights = Array.Empty<TerrainPreviewBiomeResolver.LandBiomeWeights>();
+		_blackwaterFingerprint = int.MinValue;
+		_blackwater = Array.Empty<bool>();
+		_blackwaterSpots = Array.Empty<TerrainPreviewBlackwater.Spot>();
+		_landDisk = Array.Empty<bool>();
 	}
 
 	public static void EnsureReady( TerrainPreviewSettings settings ) => EnsureBuilt( settings );
 
 	public static void EnsureLandBiomesBuilt( TerrainPreviewSettings settings )
 	{
+		var desiredRes = ResolveFieldResolution( settings );
 		if ( _isBuilding )
 			return;
 
-		_fieldResolution = ResolveFieldResolution( settings );
+		_fieldResolution = desiredRes;
+		if ( !RasterArraysMatch( _fieldResolution ) )
+			_biomePlacementFingerprint = int.MinValue;
+
 		EnsureBiomePlacement( settings );
 	}
 
@@ -76,7 +113,7 @@ public static class TerrainPreviewLandDiskFields
 		res = _fieldResolution;
 		radius = settings.WorldRadiusMeters;
 		diameter = settings.WorldDiameterMeters;
-		return landDisk.Length > 0;
+		return RasterArraysMatch( res );
 	}
 
 	public static float GetLakeCoverageOnLand01( TerrainPreviewSettings settings )
@@ -135,11 +172,14 @@ public static class TerrainPreviewLandDiskFields
 		if ( !settings.EnableInteriorWaterLayer )
 			return false;
 
+		if ( _isBuilding && !WaterRasterReady( _fieldResolution ) )
+			return false;
+
 		EnsureBuilt( settings );
 		if ( !TryWorldToIndex( settings, worldXMeters, worldYMeters, out var idx ) )
 			return false;
 
-		return _openWater[idx];
+		return idx < _openWater.Length && _openWater[idx];
 	}
 
 	public static bool IsOnLand( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
@@ -148,7 +188,7 @@ public static class TerrainPreviewLandDiskFields
 		if ( !TryWorldToIndex( settings, worldXMeters, worldYMeters, out var idx ) )
 			return false;
 
-		return _landDisk.Length > idx && _landDisk[idx];
+		return idx < _landDisk.Length && _landDisk[idx];
 	}
 
 	/// <summary>Raster scan — accurate nearest open lake on the land disk from spawn.</summary>
@@ -160,6 +200,9 @@ public static class TerrainPreviewLandDiskFields
 		EnsureBuilt( settings );
 		searchRadiusMeters = Math.Max( 10f, searchRadiusMeters );
 		var res = _fieldResolution;
+		if ( !WaterRasterReady( res ) )
+			return -1f;
+
 		var radius = settings.WorldRadiusMeters;
 		var diameter = settings.WorldDiameterMeters;
 		var nearest = float.MaxValue;
@@ -169,7 +212,7 @@ public static class TerrainPreviewLandDiskFields
 			for ( var px = 0; px < res; px++ )
 			{
 				var idx = (py * res) + px;
-				if ( !_landDisk[idx] || !_openWater[idx] )
+				if ( idx >= _landDisk.Length || idx >= _openWater.Length || !_landDisk[idx] || !_openWater[idx] )
 					continue;
 
 				TerrainBiomeMapCoordinates.RasterPixelToWorldMeters(
@@ -185,6 +228,67 @@ public static class TerrainPreviewLandDiskFields
 		return nearest < float.MaxValue ? nearest : -1f;
 	}
 
+	public static bool IsAzureCoast( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
+	{
+		if ( !settings.EnableAzureCoastBiome )
+			return false;
+
+		EnsureBuilt( settings );
+		if ( !TryWorldToIndex( settings, worldXMeters, worldYMeters, out var idx ) )
+			return false;
+
+		return _azureCoast.Length > idx && _azureCoast[idx];
+	}
+
+	public static bool IsBlackwater( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
+	{
+		if ( !settings.EnableBlackwaterBiome )
+			return false;
+
+		if ( _blackwaterSpots.Length == 0 && !_isBuilding )
+			EnsureBuilt( settings );
+
+		return ContainsBlackwaterAtWorld( settings, worldXMeters, worldYMeters );
+	}
+
+	static bool ContainsBlackwaterAtWorld(
+		TerrainPreviewSettings settings,
+		float worldXMeters,
+		float worldYMeters )
+	{
+		if ( _blackwaterSpots.Length == 0 )
+			return false;
+
+		var insideSpot = false;
+		for ( var i = 0; i < _blackwaterSpots.Length; i++ )
+		{
+			var spot = _blackwaterSpots[i];
+			var dx = worldXMeters - spot.CenterXMeters;
+			var dy = worldYMeters - spot.CenterYMeters;
+			var radiusSqLimit = spot.RadiusMeters * spot.RadiusMeters;
+			if ( (dx * dx) + (dy * dy ) <= radiusSqLimit )
+			{
+				insideSpot = true;
+				break;
+			}
+		}
+
+		if ( !insideSpot )
+			return false;
+
+		var spawnDist = MathF.Sqrt( (worldXMeters * worldXMeters) + (worldYMeters * worldYMeters ) );
+		if ( spawnDist > settings.LandRadiusMeters )
+			return false;
+
+		if ( settings.EnableInteriorWaterLayer
+			&& TryWorldToIndex( settings, worldXMeters, worldYMeters, out var idx )
+			&& _openWater.Length > idx
+			&& _openWater[idx] )
+			return false;
+
+		return true;
+	}
+
 	public static TerrainPreviewBiomeResolver.LandBiomeWeights GetFilteredPlacementWeights(
 		TerrainPreviewSettings settings,
 		float worldXMeters,
@@ -194,7 +298,10 @@ public static class TerrainPreviewLandDiskFields
 		if ( !TryWorldToIndex( settings, worldXMeters, worldYMeters, out var idx ) )
 			return default;
 
-		if ( _openWater[idx] )
+		if ( idx >= _openWater.Length || _openWater[idx] )
+			return default;
+
+		if ( idx >= _placementWeights.Length )
 			return default;
 
 		return _placementWeights[idx];
@@ -202,33 +309,44 @@ public static class TerrainPreviewLandDiskFields
 
 	static void EnsureBuilt( TerrainPreviewSettings settings )
 	{
-		if ( _isBuilding )
-			return;
-
-		_isBuilding = true;
-		try
+		lock ( _buildLock )
 		{
-			_fieldResolution = ResolveFieldResolution( settings );
-			EnsureBiomePlacement( settings );
-			if ( TerrainPreviewGenerateProgress.ShouldAbort() )
+			if ( _isBuilding )
 				return;
 
-			EnsureWaterMask( settings );
-			if ( TerrainPreviewGenerateProgress.ShouldAbort() )
-				return;
+			_isBuilding = true;
+			try
+			{
+				_fieldResolution = ResolveFieldResolution( settings );
+				EnsureBiomePlacement( settings );
+				if ( TerrainPreviewGenerateProgress.ShouldAbort() )
+					return;
 
-			FinalizeDryLandBiomes( settings );
-		}
-		finally
-		{
-			_isBuilding = false;
+				EnsureWaterMask( settings );
+				if ( TerrainPreviewGenerateProgress.ShouldAbort() )
+					return;
+
+				EnsureAzureCoastMask( settings );
+				if ( TerrainPreviewGenerateProgress.ShouldAbort() )
+					return;
+
+				FinalizeDryLandBiomes( settings );
+				if ( TerrainPreviewGenerateProgress.ShouldAbort() )
+					return;
+
+				EnsureBlackwaterMask( settings );
+			}
+			finally
+			{
+				_isBuilding = false;
+			}
 		}
 	}
 
 	static void EnsureBiomePlacement( TerrainPreviewSettings settings )
 	{
 		var fingerprint = ComputeBiomePlacementFingerprint( settings );
-		if ( fingerprint == _biomePlacementFingerprint && _rawLandBiomes.Length > 0 )
+		if ( fingerprint == _biomePlacementFingerprint && RasterArraysMatch( _fieldResolution ) )
 			return;
 
 		TerrainPreviewGenerateProgress.SetStage( "Land biomes" );
@@ -241,7 +359,7 @@ public static class TerrainPreviewLandDiskFields
 	static void EnsureWaterMask( TerrainPreviewSettings settings )
 	{
 		var fingerprint = ComputeWaterFingerprint( settings );
-		if ( fingerprint == _waterFingerprint && _openWater.Length > 0 )
+		if ( fingerprint == _waterFingerprint && WaterRasterReady( _fieldResolution ) )
 			return;
 
 		var res = _fieldResolution;
@@ -271,7 +389,78 @@ public static class TerrainPreviewLandDiskFields
 
 		_waterFingerprint = fingerprint;
 		_finalizeFingerprint = int.MinValue;
+		_azureCoastFingerprint = int.MinValue;
+		_blackwaterFingerprint = int.MinValue;
 	}
+
+	static void EnsureAzureCoastMask( TerrainPreviewSettings settings )
+	{
+		var fingerprint = ComputeAzureCoastFingerprint( settings );
+		if ( fingerprint == _azureCoastFingerprint && _azureCoast.Length > 0 )
+			return;
+
+		TerrainPreviewGenerateProgress.SetStage( "Azure coast" );
+		var res = _fieldResolution;
+		TerrainPreviewAzureCoast.BuildMask(
+			settings,
+			_landDisk,
+			_openWater,
+			res,
+			settings.WorldRadiusMeters,
+			settings.WorldDiameterMeters,
+			out _azureCoast );
+		_azureCoastFingerprint = fingerprint;
+		_finalizeFingerprint = int.MinValue;
+		_blackwaterFingerprint = int.MinValue;
+	}
+
+	static void EnsureBlackwaterMask( TerrainPreviewSettings settings )
+	{
+		var fingerprint = ComputeBlackwaterFingerprint( settings );
+		if ( fingerprint == _blackwaterFingerprint && _blackwater.Length > 0 )
+			return;
+
+		TerrainPreviewGenerateProgress.SetStage( "Blackwater" );
+		var res = _fieldResolution;
+		TerrainPreviewBlackwater.BuildMask(
+			settings,
+			_landDisk,
+			_openWater,
+			res,
+			settings.WorldRadiusMeters,
+			settings.WorldDiameterMeters,
+			out _blackwater,
+			out _blackwaterSpots );
+		_blackwaterFingerprint = fingerprint;
+	}
+
+	static int ComputeBlackwaterFingerprint( TerrainPreviewSettings settings )
+	{
+		var hash = new HashCode();
+		hash.Add( _waterFingerprint );
+		hash.Add( settings.WorldSeed );
+		hash.Add( settings.EnableBlackwaterBiome );
+		TerrainPreviewMountainSpawnMask.AddSettingsFingerprint( hash, settings );
+		hash.Add( settings.BlackwaterSpotCount );
+		hash.Add( settings.BlackwaterMinDiameterMeters );
+		hash.Add( settings.BlackwaterMaxDiameterMeters );
+		hash.Add( settings.BlackwaterMinDistanceFromSpawnMeters );
+		hash.Add( settings.BlackwaterMaxDistanceFromSpawnMeters );
+		hash.Add( settings.BlackwaterMountainClearanceMeters );
+		hash.Add( settings.BlackwaterMinDistanceFromOtherMeters );
+		return hash.ToHashCode();
+	}
+
+	static int ComputeAzureCoastFingerprint( TerrainPreviewSettings settings )
+		=> HashCode.Combine(
+			_waterFingerprint,
+			settings.EnableAzureCoastBiome,
+			settings.AzureCoastIncludeRimOcean,
+			settings.AzureCoastWidthMeters,
+			settings.AzureCoastMinDistanceFromSpawnMeters,
+			settings.AzureCoastTargetRegionCount,
+			settings.AzureCoastAlongShoreRunMeters,
+			settings.AzureCoastAlongShoreRunCutoff01 );
 
 	static void FinalizeDryLandBiomes( TerrainPreviewSettings settings )
 	{
@@ -286,13 +475,23 @@ public static class TerrainPreviewLandDiskFields
 
 		TerrainPreviewGenerateProgress.SetStage( "Biome patch merge" );
 		var res = _fieldResolution;
+		if ( !WaterRasterReady( res ) || _rawLandBiomes.Length != RasterCellCount( res ) )
+		{
+			_waterFingerprint = int.MinValue;
+			EnsureWaterMask( settings );
+		}
+
+		if ( !WaterRasterReady( res ) )
+			return;
+
 		var metersPerPixel = settings.WorldDiameterMeters / Math.Max( 1, res );
-		var dryBiomeMap = new TerrainPreviewBiomeId[res * res];
-		_placementWeights = new TerrainPreviewBiomeResolver.LandBiomeWeights[res * res];
+		var dryBiomeMap = new TerrainPreviewBiomeId[RasterCellCount( res )];
+		_placementWeights = new TerrainPreviewBiomeResolver.LandBiomeWeights[dryBiomeMap.Length];
 
 		for ( var i = 0; i < dryBiomeMap.Length; i++ )
 		{
-			if ( !_landDisk[i] || _openWater[i] )
+			if ( i >= _landDisk.Length || i >= _openWater.Length || i >= _rawLandBiomes.Length
+				|| !_landDisk[i] || _openWater[i] )
 			{
 				dryBiomeMap[i] = TerrainPreviewBiomeId.None;
 				continue;
@@ -309,7 +508,7 @@ public static class TerrainPreviewLandDiskFields
 
 		for ( var i = 0; i < dryBiomeMap.Length; i++ )
 		{
-			if ( !_landDisk[i] || _openWater[i] )
+			if ( i >= _landDisk.Length || i >= _openWater.Length || !_landDisk[i] || _openWater[i] )
 				continue;
 
 			_placementWeights[i] = TerrainPreviewBiomeResolver.WeightsFromDominantBiome( dryBiomeMap[i] );
@@ -423,15 +622,13 @@ public static class TerrainPreviewLandDiskFields
 		hash.Add( settings.ValleyWeight );
 		hash.Add( settings.EnableHeightCurveLayer );
 		hash.Add( settings.HeightCurvePower );
-		hash.Add( settings.EnableMountainLayer );
 		hash.Add( settings.BiomePickerFrequency );
 		hash.Add( settings.BiomeCloverGuaranteeSpawn );
 		hash.Add( settings.BiomeMinPatchDiameterMeters );
 		hash.Add( settings.BiomeAmberWeight );
 		hash.Add( settings.BiomeCloverWeight );
 		hash.Add( settings.BiomeRedwoodWeight );
-		hash.Add( settings.BiomeMountainPlacementStrength01 );
-		hash.Add( settings.BiomeMinMountainMask01 );
+		TerrainPreviewMountainSpawnMask.AddSettingsFingerprint( hash, settings );
 		return hash.ToHashCode();
 	}
 

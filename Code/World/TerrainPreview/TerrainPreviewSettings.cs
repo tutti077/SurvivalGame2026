@@ -43,6 +43,54 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Biomes" ), Title( "Edge Blend Start (0–1)" ), Range( 0.05f, 0.5f ), Step( 0.02f ), Description( "Mixing begins when biome transition exceeds this (higher = narrower border blend)." )]
 	public float BiomeEdgeBlendStart01 { get; set; } = 0.22f;
 
+	[Property, Group( "Biomes" ), Title( "Azure Coast" ), Description( "Teal shoreline strips on inland lakes and outer rim ocean (sparse compass sectors far from spawn)." )]
+	public bool EnableAzureCoastBiome { get; set; } = true;
+
+	[Property, Group( "Biomes" ), Title( "Azure Coast — Rim Ocean" ), Description( "Teal band on dry land facing the outer ocean ring (map edge), not only inland lakes." )]
+	public bool AzureCoastIncludeRimOcean { get; set; } = true;
+
+	[Property, Group( "Biomes" ), Title( "Azure Coast Width (m)" ), Range( 20f, 250f ), Step( 5f ), Description( "Dry land band measured from nearest open water (lake or rim ocean)." )]
+	public float AzureCoastWidthMeters { get; set; } = 200f;
+
+	[Property, Group( "Biomes" ), Title( "Azure Coast Min Distance From Spawn (m)" ), Range( 0f, 15000f ), Step( 100f )]
+	public float AzureCoastMinDistanceFromSpawnMeters { get; set; } = 5500f;
+
+	[Property, Group( "Biomes" ), Title( "Azure Coast Active Sectors (of 24)" ), Range( 4, 20 ), Step( 1 ), Description( "How many compass wedges may host azure coast — spreads N/S/E/W instead of random grid blobs." )]
+	public int AzureCoastTargetRegionCount { get; set; } = 12;
+
+	[Property, Group( "Biomes" ), Title( "Azure Coast Region Cell Size (m)" ), Range( 500f, 6000f ), Step( 100f ), Description( "Coarse cells used to pick which map areas may host azure coast." )]
+	public float AzureCoastRegionCellSizeMeters { get; set; } = 2500f;
+
+	[Property, Group( "Biomes" ), Title( "Azure Coast Along-Shore Run (m)" ), Range( 200f, 1200f ), Step( 25f ), Description( "Noise wavelength for ~400–600 m shoreline strips." )]
+	public float AzureCoastAlongShoreRunMeters { get; set; } = 500f;
+
+	[Property, Group( "Biomes" ), Title( "Azure Coast Along-Shore Run Cutoff (0–1)" ), Range( 0.1f, 0.9f ), Step( 0.02f ), Description( "Higher = shorter / fewer strips along each picked shore." )]
+	public float AzureCoastAlongShoreRunCutoff01 { get; set; } = 0.38f;
+
+	[Property, Group( "Biomes" ), Title( "Blackwater" ), Description( "Named biome only — black circular patches punched over land biomes (not lakes)." )]
+	public bool EnableBlackwaterBiome { get; set; } = true;
+
+	[Property, Group( "Biomes" ), Title( "Blackwater Spot Count" ), Range( 0, 32 ), Step( 1 ), Description( "How many black circles to place per world seed." )]
+	public int BlackwaterSpotCount { get; set; } = 15;
+
+	[Property, Group( "Biomes" ), Title( "Blackwater Min Diameter (m)" ), Range( 40f, 2000f ), Step( 10f )]
+	public float BlackwaterMinDiameterMeters { get; set; } = 300f;
+
+	[Property, Group( "Biomes" ), Title( "Blackwater Max Diameter (m)" ), Range( 40f, 2000f ), Step( 10f )]
+	public float BlackwaterMaxDiameterMeters { get; set; } = 1000f;
+
+	[Property, Group( "Biomes" ), Title( "Blackwater Min Distance From Spawn (m)" ), Range( 0f, 20000f ), Step( 50f )]
+	public float BlackwaterMinDistanceFromSpawnMeters { get; set; } = 5000f;
+
+	[Property, Group( "Biomes" ), Title( "Blackwater Max Distance From Spawn (m)" ), Range( 0f, 20000f ), Step( 50f ), Description( "0 = use full land disk to the edge." )]
+	public float BlackwaterMaxDistanceFromSpawnMeters { get; set; }
+
+	[Property, Group( "Biomes" ), Title( "Blackwater Mountain Clearance (m)" ), Range( 0f, 2000f ), Step( 25f ), Description( "Circles cannot overlap water or sit within this distance of mountain biome." )]
+	public float BlackwaterMountainClearanceMeters { get; set; } = 300f;
+
+	[Property, Group( "Biomes" ), Title( "Blackwater Min Distance From Other (m)" ), Range( 0f, 5000f ), Step( 25f ), Description( "Minimum gap between circle edges — spots closer than this are rejected." )]
+	public float BlackwaterMinDistanceFromOtherMeters { get; set; } = 400f;
+
 	[Property, Title( "Preview Resolution" ), Range( 64, 4096 ), Step( 64 ), Description( "PNG raster size for editor preview only — higher = sharper but slower generate." )]
 	public int PreviewResolution { get; set; } = 1024;
 
@@ -196,17 +244,8 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Mountain Mask" ), Title( "Field Floor (0–1)" ), Range( 0f, 0.45f ), Step( 0.02f ), Description( "Cuts weak gray — raises Min Mountain Mask effect on Mountain Field." )]
 	public float MountainSpawnFieldFloor01 { get; set; } = 0.08f;
 
-	[Property, Group( "Mountain Mask" ), Title( "Range Macro Frequency (legacy)" ), Range( 0.2f, 2.5f ), Step( 0.02f ), Description( "Unused when Macro Wavelength (m) is set." )]
-	public float MountainSpawnMacroFrequency { get; set; } = 0.78f;
-
-	[Property, Group( "Mountain Mask" ), Title( "Medium Frequency Scale" ), Range( 1.2f, 5f ), Step( 0.1f ), Description( "Multiplier on macro for branch ridges." )]
+	[Property, Group( "Mountain Mask" ), Title( "Medium Frequency Scale" ), Range( 1.2f, 5f ), Step( 0.1f ), Description( "Branch ridge scale when Medium Wavelength (m) is unset; otherwise wavelength wins." )]
 	public float MountainSpawnMediumFrequencyScale { get; set; } = 3.4f;
-
-	[Property, Group( "Mountain Mask" ), Title( "Macro Min (legacy)" ), Range( 0.25f, 0.92f ), Step( 0.01f ), Description( "Deprecated — use Field Floor + Min Mountain Mask." )]
-	public float MountainSpawnMacroMin01 { get; set; } = 0.52f;
-
-	[Property, Group( "Mountain Mask" ), Title( "Macro Span (legacy)" ), Range( 0.04f, 0.35f ), Step( 0.01f ), Description( "Deprecated." )]
-	public float MountainSpawnMacroSpan01 { get; set; } = 0.11f;
 
 	[Property, Group( "Mountain Mask" ), Title( "Medium Ridge Mix (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
 	public float MountainSpawnMediumMix01 { get; set; } = 0.62f;

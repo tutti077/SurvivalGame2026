@@ -84,6 +84,25 @@ Biome-specific sculpting (`TerrainPreviewBiomeTerrainShaper`, etc.) runs in the 
 
 **Biome edges:** **Biomes - Continuous Placement At Sample** makes blobby patches. **Biomes - Edge Color Blend (0–1)** (~0.35) softens borders only — interiors stay dominant biome color. Shader splats can replace this later.
 
+**Azure Coast:** **Biomes - Azure Coast** paints teal **Biomes - Azure Coast Width (m)** strips on inland lake shores, **Biomes - Azure Coast Min Distance From Spawn (m)**+ only, ~**Biomes - Azure Coast Target Region Count** sparse regions with **Biomes - Azure Coast Along-Shore Run (m)** strips.
+
+## Mountain mask tab
+
+Ridged-noise ranges inside the inner/outer spawn band (`TerrainPreviewMountainSpawnMask.cs`). Every knob in the tab affects `Sample()` output.
+
+| Knob | Effect |
+|------|--------|
+| Macro / Medium Wavelength (m) | Range patch size and branch detail (meters on world diameter) |
+| Ridge Sharpness | Thinner bright crests on Mountain Field |
+| Field Floor | Cuts weak field values before **Min Mountain Mask** threshold |
+| Breaker * | Ridged gaps that split large masses into separate chains |
+| Min Patch Support + Grid Steps | Sample-time speck filter (disk vote inside patch diameter) |
+| Drop Isolated Specks | Enables sample-time filter; Mountain Mask PNG also runs raster min-diameter pass |
+
+**Min Mountain Mask** lives on the Biomes tab — binary threshold for mountain biome / white mask pixels.
+
+Legacy JSON keys (`MountainSpawnMacroMin01`, spawn-solve offsets, region gate, etc.) deserialize via `TerrainPreviewSettings.Legacy.cs` but do not change output.
+
 ## Generate metrics (tuning loop)
 
 Each PNG export includes `generation_metrics.json` (lake patch count, median diameter, archipelago score, mountain land %). See `.cursor/rules/terrain-preview-tuning.mdc`. Latest bundle: `Assets/terrain/preview/.latest_preview.json`.

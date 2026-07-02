@@ -5,6 +5,35 @@ namespace Survival;
 /// </summary>
 static class TerrainPreviewMountainSpawnMask
 {
+	public static void AddSettingsFingerprint( HashCode hash, TerrainPreviewSettings settings )
+	{
+		hash.Add( settings.EnableMountainLayer );
+		hash.Add( settings.BiomeMinMountainMask01 );
+		hash.Add( settings.BiomeMountainPlacementStrength01 );
+		hash.Add( settings.MountainInnerRadius01 );
+		hash.Add( settings.MountainOuterRadius01 );
+		hash.Add( settings.MountainBandFade01 );
+		hash.Add( settings.MountainSpawnMacroOctaves );
+		hash.Add( settings.MountainSpawnMediumOctaves );
+		hash.Add( settings.MountainSpawnMacroWavelengthMeters );
+		hash.Add( settings.MountainSpawnMediumWavelengthMeters );
+		hash.Add( settings.MountainSpawnRidgeSharpness );
+		hash.Add( settings.MountainSpawnFieldFloor01 );
+		hash.Add( settings.MountainSpawnMediumFrequencyScale );
+		hash.Add( settings.MountainSpawnMediumMix01 );
+		hash.Add( settings.MountainSpawnBreakerFrequencyScale );
+		hash.Add( settings.MountainSpawnBreakerMin01 );
+		hash.Add( settings.MountainSpawnBreakerSpan01 );
+		hash.Add( settings.MountainSpawnBreakerStrength01 );
+		hash.Add( settings.MountainSpawnWarpStrength01 );
+		hash.Add( settings.MountainSpawnRangeStretch01 );
+		hash.Add( settings.MountainSpawnRangePower01 );
+		hash.Add( settings.MountainSpawnSpeckFilterEnabled );
+		hash.Add( settings.MountainSpawnMinPatchDiameterMeters );
+		hash.Add( settings.MountainSpawnMinPatchSupport01 );
+		hash.Add( settings.MountainSpawnMinPatchGridSteps );
+	}
+
 	public static float SampleMask01(
 		TerrainPreviewSettings settings,
 		float worldXMeters,

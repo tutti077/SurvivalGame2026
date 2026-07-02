@@ -354,6 +354,7 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 		}
 		catch ( Exception ex )
 		{
+			TerrainPreviewLandDiskFields.InvalidateCache();
 			Log.Warning( $"Terrain preview generation failed: {ex}" );
 			SetStatusText( $"Preview failed: {ex.Message}" );
 		}
@@ -481,6 +482,25 @@ static class TerrainPreviewControlTabs
 		nameof( TerrainPreviewSettings.BiomeAmberPriorityEndMeters ),
 		nameof( TerrainPreviewSettings.BiomeAmberWeight ),
 		nameof( TerrainPreviewSettings.BiomeAmberPriorityWeight ),
+		nameof( TerrainPreviewSettings.UseContinuousBiomePlacementAtSample ),
+		nameof( TerrainPreviewSettings.BiomeEdgeColorBlend01 ),
+		nameof( TerrainPreviewSettings.BiomeEdgeBlendStart01 ),
+		nameof( TerrainPreviewSettings.EnableAzureCoastBiome ),
+		nameof( TerrainPreviewSettings.AzureCoastIncludeRimOcean ),
+		nameof( TerrainPreviewSettings.AzureCoastWidthMeters ),
+		nameof( TerrainPreviewSettings.AzureCoastMinDistanceFromSpawnMeters ),
+		nameof( TerrainPreviewSettings.AzureCoastTargetRegionCount ),
+		nameof( TerrainPreviewSettings.AzureCoastRegionCellSizeMeters ),
+		nameof( TerrainPreviewSettings.AzureCoastAlongShoreRunMeters ),
+		nameof( TerrainPreviewSettings.AzureCoastAlongShoreRunCutoff01 ),
+		nameof( TerrainPreviewSettings.EnableBlackwaterBiome ),
+		nameof( TerrainPreviewSettings.BlackwaterSpotCount ),
+		nameof( TerrainPreviewSettings.BlackwaterMinDiameterMeters ),
+		nameof( TerrainPreviewSettings.BlackwaterMaxDiameterMeters ),
+		nameof( TerrainPreviewSettings.BlackwaterMinDistanceFromSpawnMeters ),
+		nameof( TerrainPreviewSettings.BlackwaterMaxDistanceFromSpawnMeters ),
+		nameof( TerrainPreviewSettings.BlackwaterMountainClearanceMeters ),
+		nameof( TerrainPreviewSettings.BlackwaterMinDistanceFromOtherMeters ),
 	};
 
 	public static readonly HashSet<string> BiomeTerrain = new( StringComparer.Ordinal )

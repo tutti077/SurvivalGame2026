@@ -60,6 +60,7 @@ public static class TerrainBiomeMapPreviewRaster
 		}
 
 		ApplyPreviewSpeckFilter( biomeMap, res, diameter, preview );
+		ApplyBlackwaterPunch( worldSettings, res, radius, diameter, insideWorld, oceanMask, biomeMap, shadeMap );
 
 		for ( var i = 0; i < colors.Length; i++ )
 		{
@@ -102,5 +103,44 @@ public static class TerrainBiomeMapPreviewRaster
 			resolution,
 			metersPerPixel,
 			preview.MinPatchDiameterMeters );
+	}
+
+	static void ApplyBlackwaterPunch(
+		TerrainPreviewSettings settings,
+		int resolution,
+		float worldRadiusMeters,
+		float worldDiameterMeters,
+		bool[] insideWorld,
+		bool[] oceanMask,
+		TerrainPreviewBiomeId[] biomeMap,
+		float[] shadeMap )
+	{
+		if ( !settings.EnableBlackwaterBiome )
+			return;
+
+		TerrainPreviewLandDiskFields.EnsureReady( settings );
+		var res = resolution;
+		var hasOceanMask = oceanMask is not null && oceanMask.Length == res * res;
+
+		for ( var py = 0; py < res; py++ )
+		{
+			for ( var px = 0; px < res; px++ )
+			{
+				var idx = (py * res) + px;
+				if ( !insideWorld[idx] )
+					continue;
+
+				if ( hasOceanMask && oceanMask[idx] )
+					continue;
+
+				TerrainBiomeMapCoordinates.RasterPixelToWorldMeters(
+					px, py, res, worldRadiusMeters, worldDiameterMeters, out var wx, out var wy );
+				if ( !TerrainPreviewLandDiskFields.IsBlackwater( settings, wx, wy ) )
+					continue;
+
+				biomeMap[idx] = TerrainPreviewBiomeId.Blackwater;
+				shadeMap[idx] = 1f;
+			}
+		}
 	}
 }

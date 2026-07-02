@@ -31,10 +31,22 @@ public static class TerrainPreviewBiomeResolver
 		if ( sample.OceanHeight01 > 0.5f )
 			return new Result { BiomeId = TerrainPreviewBiomeId.Water, Shade01 = 1f };
 
+		if ( TerrainPreviewLandDiskFields.IsAzureCoast( settings, worldXMeters, worldYMeters ) )
+		{
+			return new Result
+			{
+				BiomeId = TerrainPreviewBiomeId.AzureCoast,
+				Shade01 = ShadeFromAzureCoastDistance( settings, worldXMeters, worldYMeters ),
+			};
+		}
+
+		if ( TerrainPreviewLandDiskFields.IsBlackwater( settings, worldXMeters, worldYMeters ) )
+			return new Result { BiomeId = TerrainPreviewBiomeId.Blackwater, Shade01 = 1f };
+
 		var weights = sample.HasLandWeights
 			? sample.LandWeights
 			: SampleLandBiomeWeights( settings, sample, worldXMeters, worldYMeters );
-		if ( QualifiesAsMountainBiome( settings, sample, weights ) )
+		if ( QualifiesAsMountainBiome( weights ) )
 			return new Result { BiomeId = TerrainPreviewBiomeId.Mountain, Shade01 = ShadeFromHeight( sample.Height01 ) };
 
 		var landBiome = PickLandBiome( weights.Clover, weights.Redwood, weights.Amber );
@@ -53,15 +65,8 @@ public static class TerrainPreviewBiomeResolver
 		return Math.Min( Math.Max( 0.5f, settings.BiomePickerFrequency ), maxFrequency );
 	}
 
-	static bool QualifiesAsMountainBiome(
-		TerrainPreviewSettings settings,
-		TerrainPreviewSample sample,
-		LandBiomeWeights weights )
-	{
-		_ = settings;
-		_ = sample;
-		return weights.Mountain >= 0.5f;
-	}
+	static bool QualifiesAsMountainBiome( LandBiomeWeights weights )
+		=> weights.Mountain >= 0.5f;
 
 	/// <summary>Binary spawn mask — ridged range field inside falloff band.</summary>
 	public static float SampleMountainSpawnMask01(
@@ -417,6 +422,17 @@ public static class TerrainPreviewBiomeResolver
 
 	static float ShadeFromHeight( float height01 )
 		=> Math.Clamp( 0.45f + (height01 * 0.55f), 0.35f, 1f );
+
+	static float ShadeFromAzureCoastDistance(
+		TerrainPreviewSettings settings,
+		float worldXMeters,
+		float worldYMeters )
+	{
+		_ = settings;
+		_ = worldXMeters;
+		_ = worldYMeters;
+		return 0.92f;
+	}
 
 	static float ShadeFromSample(
 		TerrainPreviewSettings settings,

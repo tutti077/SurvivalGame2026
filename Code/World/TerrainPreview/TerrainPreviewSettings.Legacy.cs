@@ -68,6 +68,28 @@ public sealed partial class TerrainPreviewSettings
 	public float InteriorLakeMacroMix01 { get; set; } = 0.66f;
 	public float InteriorLakeShoreExpand01 { get; set; } = 0.72f;
 	public float SeaLevelHeight01 { get; set; } = 0.001f;
+
+	// Deprecated mountain mask / spawn-solve fields — old preview JSON only; no runtime effect.
+	public float MountainSpawnMacroFrequency { get; set; } = 0.78f;
+	public float MountainSpawnMacroMin01 { get; set; } = 0.52f;
+	public float MountainSpawnMacroSpan01 { get; set; } = 0.11f;
+	public bool EnableMountainSpawnSolveOnGenerate { get; set; }
+	public float MountainNearSpawnMinMeters { get; set; }
+	public float MountainNearSpawnMaxMeters { get; set; }
+	public float MountainNearSpawnTargetMeters { get; set; }
+	public float MountainOffsetXMeters { get; set; }
+	public float MountainOffsetYMeters { get; set; }
+	public float MountainMaxOffsetMeters { get; set; }
+	public bool MountainSpawnOversizedPatchFilterEnabled { get; set; }
+	public float MountainSpawnMaxPatchDiameterMeters { get; set; }
+	public float MountainSpawnPatchSeparation01 { get; set; }
+	public float MountainSpawnCoastalBandMeters { get; set; }
+	public float MountainSpawnCoastalAlign01 { get; set; }
+	public float MountainSpawnCoastalStretch01 { get; set; }
+	public int MountainSpawnMinNeighborCount { get; set; }
+	public float MountainSpawnRegionFrequencyScale { get; set; }
+	public float MountainSpawnRegionMin01 { get; set; }
+	public float MountainSpawnRegionSpan01 { get; set; }
 	public float LandMinPatchDiameterMeters { get; set; } = 80f;
 	public float InlandWaterMinPatchDiameterMeters { get; set; } = 80f;
 	public bool InlandWaterSpeckFilterEnabled { get; set; } = true;

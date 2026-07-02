@@ -8,4 +8,6 @@ public enum TerrainPreviewBiomeId
 	AmberDunes,
 	Mountain,
 	Water,
+	AzureCoast,
+	Blackwater,
 }
