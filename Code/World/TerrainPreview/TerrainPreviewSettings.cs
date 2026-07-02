@@ -70,7 +70,7 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Biomes" ), Title( "Blackwater" ), Description( "Named biome only — black circular patches punched over land biomes (not lakes)." )]
 	public bool EnableBlackwaterBiome { get; set; } = true;
 
-	[Property, Group( "Biomes" ), Title( "Blackwater Spot Count" ), Range( 0, 32 ), Step( 1 ), Description( "How many black circles to place per world seed." )]
+	[Property, Group( "Biomes" ), Title( "Blackwater Spot Count" ), Range( 0, 32 ), Step( 1 ), Description( "How many black circles to place per world seed. Each spot claims one angular wedge around spawn for even spread." )]
 	public int BlackwaterSpotCount { get; set; } = 15;
 
 	[Property, Group( "Biomes" ), Title( "Blackwater Min Diameter (m)" ), Range( 40f, 2000f ), Step( 10f )]

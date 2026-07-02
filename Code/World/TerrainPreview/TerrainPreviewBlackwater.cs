@@ -2,6 +2,7 @@ namespace Survival;
 
 /// <summary>
 /// Sparse black circular patches punched over land biomes — not water-related; avoids lakes and mountain clearance.
+/// Spots are placed one per angular wedge (seed-shuffled) so they spread around the disk while staying randomized within each wedge.
 /// </summary>
 static class TerrainPreviewBlackwater
 {
@@ -70,14 +71,162 @@ static class TerrainPreviewBlackwater
 			maxSpawn = landRadius;
 
 		var spots = new List<Spot>( target );
+		var sectorCount = target;
+		var sectorWidth = (MathF.PI * 2f) / sectorCount;
+		var sectorOrder = BuildShuffledSectorOrder( seed, sectorCount );
+		var attemptsPerSector = 250;
+		var filledSectors = new bool[sectorCount];
+
+		foreach ( var sectorIndex in sectorOrder )
+		{
+			if ( spots.Count >= target )
+				break;
+
+			var sectorStart = sectorIndex * sectorWidth;
+			if ( TryPlaceSpotInAngularRange(
+				settings,
+				seed,
+				sectorIndex,
+				sectorStart,
+				sectorWidth,
+				0,
+				minDiameter,
+				maxDiameter,
+				minSpawn,
+				maxSpawn,
+				landRadius,
+				clearanceMeters,
+				minSeparationMeters,
+				attemptsPerSector,
+				spots ) )
+			{
+				filledSectors[sectorIndex] = true;
+				continue;
+			}
+
+			// Widen into neighboring wedges when mountains/water block the core sector.
+			var bleed = sectorWidth * 0.35f;
+			if ( TryPlaceSpotInAngularRange(
+				settings,
+				seed,
+				sectorIndex,
+				sectorStart - bleed,
+				sectorWidth + (bleed * 2f),
+				1,
+				minDiameter,
+				maxDiameter,
+				minSpawn,
+				maxSpawn,
+				landRadius,
+				clearanceMeters,
+				minSeparationMeters,
+				attemptsPerSector,
+				spots ) )
+				filledSectors[sectorIndex] = true;
+		}
+
+		// Retry empty wedges before falling back to unconstrained random placement.
+		var maxUnfilledPasses = sectorCount * attemptsPerSector;
+		for ( var pass = 0; pass < maxUnfilledPasses && spots.Count < target; pass++ )
+		{
+			var sectorIndex = sectorOrder[pass % sectorCount];
+			if ( filledSectors[sectorIndex] )
+				continue;
+
+			var sectorStart = sectorIndex * sectorWidth;
+			var bleed = sectorWidth * 0.75f;
+			if ( !TryPlaceSpotInAngularRange(
+				settings,
+				seed,
+				sectorIndex,
+				sectorStart - bleed,
+				sectorWidth + (bleed * 2f),
+				100000 + pass,
+				minDiameter,
+				maxDiameter,
+				minSpawn,
+				maxSpawn,
+				landRadius,
+				clearanceMeters,
+				minSeparationMeters,
+				1,
+				spots ) )
+				continue;
+
+			filledSectors[sectorIndex] = true;
+		}
+
 		var maxAttempts = target * 250;
 		for ( var attempt = 0; attempt < maxAttempts && spots.Count < target; attempt++ )
 		{
-			var spotDiameter = minDiameter + (Hash01( seed + 7013, attempt * 5 ) * (maxDiameter - minDiameter));
+			var sectorIndex = PickUnfilledSectorIndex( seed, attempt, sectorOrder, filledSectors );
+			float angleMin;
+			float angleSpan;
+			if ( sectorIndex >= 0 )
+			{
+				var sectorStart = sectorIndex * sectorWidth;
+				angleMin = sectorStart;
+				angleSpan = sectorWidth;
+			}
+			else
+			{
+				angleMin = 0f;
+				angleSpan = MathF.PI * 2f;
+			}
+
+			if ( !TryPlaceSpotInAngularRange(
+				settings,
+				seed,
+				sectorIndex >= 0 ? sectorIndex : attempt,
+				angleMin,
+				angleSpan,
+				200000 + attempt,
+				minDiameter,
+				maxDiameter,
+				minSpawn,
+				maxSpawn,
+				landRadius,
+				clearanceMeters,
+				minSeparationMeters,
+				1,
+				spots ) )
+				continue;
+
+			if ( sectorIndex >= 0 )
+				filledSectors[sectorIndex] = true;
+		}
+
+		return spots.ToArray();
+	}
+
+	static bool TryPlaceSpotInAngularRange(
+		TerrainPreviewSettings settings,
+		int seed,
+		int sectorIndex,
+		float angleMinRadians,
+		float angleSpanRadians,
+		int saltBase,
+		float minDiameter,
+		float maxDiameter,
+		float minSpawn,
+		float maxSpawn,
+		float landRadius,
+		float clearanceMeters,
+		float minSeparationMeters,
+		int maxAttempts,
+		List<Spot> spots )
+	{
+		if ( angleSpanRadians <= 0f || maxAttempts <= 0 )
+			return false;
+
+		var distSpan = Math.Max( 1f, maxSpawn - minSpawn );
+		for ( var attempt = 0; attempt < maxAttempts; attempt++ )
+		{
+			var salt = saltBase + (sectorIndex * 10007) + (attempt * 5);
+			var spotDiameter = minDiameter + (Hash01( seed + 7013, salt ) * (maxDiameter - minDiameter));
 			var spotRadius = spotDiameter * 0.5f;
-			var angle = Hash01( seed + 7013, (attempt * 5) + 1 ) * MathF.PI * 2f;
-			var distSpan = Math.Max( 1f, maxSpawn - minSpawn );
-			var spawnDist = minSpawn + (Hash01( seed + 7013, (attempt * 5) + 2 ) * distSpan);
+			var angle = angleMinRadians + (Hash01( seed + 7013, salt + 1 ) * angleSpanRadians);
+			var spawnDist = minSpawn + (Hash01( seed + 7013, salt + 2 ) * distSpan);
 			spawnDist = Math.Clamp( spawnDist, minSpawn, landRadius - spotRadius );
 			if ( spawnDist < minSpawn || spawnDist + spotRadius > landRadius )
 				continue;
@@ -98,9 +247,44 @@ static class TerrainPreviewBlackwater
 				continue;
 
 			spots.Add( spot );
+			return true;
 		}
 
-		return spots.ToArray();
+		return false;
+	}
+
+	static int[] BuildShuffledSectorOrder( int seed, int sectorCount )
+	{
+		var order = new int[sectorCount];
+		for ( var i = 0; i < sectorCount; i++ )
+			order[i] = i;
+
+		for ( var i = sectorCount - 1; i > 0; i-- )
+		{
+			var j = (int)(Hash01( seed + 9001, i ) * (i + 1));
+			(order[i], order[j]) = (order[j], order[i]);
+		}
+
+		return order;
+	}
+
+	static int PickUnfilledSectorIndex( int seed, int attempt, int[] sectorOrder, bool[] filledSectors )
+	{
+		var unfilled = new List<int>();
+		for ( var i = 0; i < sectorOrder.Length; i++ )
+		{
+			if ( !filledSectors[sectorOrder[i]] )
+				unfilled.Add( sectorOrder[i] );
+		}
+
+		if ( unfilled.Count == 0 )
+			return -1;
+
+		var pick = (int)(Hash01( seed + 9103, attempt ) * unfilled.Count);
+		if ( pick >= unfilled.Count )
+			pick = unfilled.Count - 1;
+
+		return unfilled[pick];
 	}
 
 	static bool SpotIsValid(
