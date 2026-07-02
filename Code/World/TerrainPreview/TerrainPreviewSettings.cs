@@ -13,26 +13,35 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Title( "Ocean Ring Width (m)" ), Range( 0f, 10000f ), Step( 250f ), Description( "Flat water band on each side; total world = land + 2× ring (default 25 km)." )]
 	public float OceanRingWidthMeters { get; set; } = 2500f;
 
-	[Property, Title( "Max Terrain Height (m)" ), Range( 50f, 10000f ), Step( 50f ), Description( "Mountain / peak ceiling in world meters. Rolling hills use Land Rolling Height Max when normalize is on." )]
+	[Property, Title( "Max Terrain Height (m)" ), Range( 50f, 10000f ), Step( 50f ), Description( "Mountain / peak ceiling in world meters." )]
 	public float MaxTerrainHeightMeters { get; set; } = 700f;
 
-	[Property, Group( "World" ), Title( "Land Rolling Height Max (m)" ), Range( 20f, 2000f ), Step( 10f ), Description( "Macro Perlin ceiling for non-mountain dry land when Normalize Land Rolling Heights is on (default 200 m)." )]
+	[Property, Group( "World" ), Title( "Lowland Height Max (m)" ), Range( 20f, 2000f ), Step( 10f ), Description( "Non-mountain dry land scales sculpted base height to this ceiling (default 200 m). Mountains blend to Max Terrain Height." )]
 	public float LandRollingHeightMaxMeters { get; set; } = 200f;
 
-	[Property, Group( "World" ), Title( "Land Rolling Macro Frequency" ), Range( 0.1f, 4f ), Step( 0.05f ), Description( "Low = large rolling hills across the map (world-normalized coords)." )]
+	[Property, Group( "World" ), Title( "Land Rolling Macro Frequency" ), Range( 0.1f, 4f ), Step( 0.05f ), Description( "Legacy — unused; rolling hills come from continental/hill/valley base noise." )]
 	public float LandRollingMacroFrequency { get; set; } = 0.55f;
 
-	[Property, Group( "World" ), Title( "Land Rolling Macro Octaves" ), Range( 1, 6 ), Step( 1 )]
+	[Property, Group( "World" ), Title( "Land Rolling Macro Octaves" ), Range( 1, 6 ), Step( 1 ), Description( "Legacy — unused." )]
 	public int LandRollingMacroOctaves { get; set; } = 4;
 
-	[Property, Group( "World" ), Title( "Land Rolling Detail Frequency Scale" ), Range( 1f, 6f ), Step( 0.25f )]
+	[Property, Group( "World" ), Title( "Land Rolling Detail Frequency Scale" ), Range( 1f, 6f ), Step( 0.25f ), Description( "Legacy — unused." )]
 	public float LandRollingDetailFrequencyScale { get; set; } = 2.5f;
 
-	[Property, Group( "World" ), Title( "Land Rolling Detail Amplitude (0–1)" ), Range( 0f, 0.3f ), Step( 0.01f )]
+	[Property, Group( "World" ), Title( "Land Rolling Detail Amplitude (0–1)" ), Range( 0f, 0.3f ), Step( 0.01f ), Description( "Legacy — unused." )]
 	public float LandRollingDetailAmplitude01 { get; set; } = 0.12f;
 
-	[Property, Group( "World" ), Title( "Normalize Land Rolling Heights" ), Description( "Dry land uses macro Perlin rolling hills up to Land Rolling Height Max. Mountains blend to sculpted peaks." )]
-	public bool NormalizeLandRollingHeights { get; set; } = true;
+	[Property, Group( "World" ), Title( "Normalize Land Rolling Heights" ), Description( "Legacy — no longer changes output. Lowlands always use sculpted base height capped at Lowland Height Max." )]
+	public bool NormalizeLandRollingHeights { get; set; }
+
+	[Property, Group( "World" ), Title( "Hill Wavelength (m)" ), Range( 80f, 5000f ), Step( 20f ), Description( "Rolling hill size in world meters (~400 m shows relief on 64 m chunks)." )]
+	public float HillWavelengthMeters { get; set; } = 400f;
+
+	[Property, Group( "World" ), Title( "Valley Wavelength (m)" ), Range( 80f, 8000f ), Step( 20f ), Description( "Valley carve size in world meters." )]
+	public float ValleyWavelengthMeters { get; set; } = 550f;
+
+	[Property, Group( "Biome Terrain" ), Title( "Slope Smoothing" ), Description( "Softens high-frequency sculpt detail. Off by default — it was flattening streamed chunks." )]
+	public bool EnableBiomeSlopeSmoothing { get; set; }
 
 	[Property, Group( "Biomes" ), Title( "Continuous Placement At Sample" ), Description( "Blobby biome patches from live noise (not square land-disk cells). Color still uses dominant biome with edge-only soften." )]
 	public bool UseContinuousBiomePlacementAtSample { get; set; } = true;
@@ -139,7 +148,7 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Continental" ), Title( "Weight" ), Range( 0f, 2f ), Step( 0.01f ), Description( "How strongly continental noise affects base height (0 = flat macro shape)." )]
 	public float ContinentalWeight { get; set; } = 0.55f;
 
-	[Property, Group( "Hills" ), Title( "Frequency" ), Range( 0.5f, 64f ), Step( 0.1f ), Description( "Hill wavelength — higher = smaller, busier hills." )]
+	[Property, Group( "Hills" ), Title( "Frequency" ), Range( 0.5f, 64f ), Step( 0.1f ), Description( "Legacy fallback when Hill Wavelength (m) is unset — use World - Hill Wavelength for streamed terrain." )]
 	public float HillFrequency { get; set; } = 12f;
 
 	[Property, Group( "Hills" ), Title( "Weight" ), Range( 0f, 2f ), Step( 0.01f ), Description( "Hill amplitude on base height." )]
@@ -349,7 +358,7 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Coast" ), Title( "Inland Height Margin (0–1)" ), Range( 0.01f, 0.25f ), Step( 0.005f ), Description( "Legacy coastal hint — low land near rim; inland lakes ignore height for water." )]
 	public float CoastalInlandHeightMargin01 { get; set; } = 0.12f;
 
-	[Property, Group( "Coast" ), Title( "Inland Beach Band (m)" ), Range( 80f, 2000f ), Step( 25f ), Description( "Distance inland from rim for gentle beach-style height blend on outer coast only." )]
+	[Property, Group( "Coast" ), Title( "Inland Lake Shore Band (m)" ), Range( 80f, 2000f ), Step( 25f ), Description( "Dry land within this distance of open lake water eases height toward sea level." )]
 	public float CoastalInlandBeachBandMeters { get; set; } = 450f;
 
 	[Property, Group( "Water" ), Title( "Min Speck Diameter (m)" ), Range( 80f, 500f ), Step( 5f ), Description( "Minimum width for lake/water patches and rim-ocean land islands." )]

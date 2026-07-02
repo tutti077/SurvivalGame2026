@@ -18,7 +18,7 @@ public static class TerrainHeightQuery
 		if ( !sample.IsInsideWorld )
 			return false;
 
-		groundZMeters = sample.Height01 * settings.MaxTerrainHeightMeters;
+		groundZMeters = sample.HeightMeters;
 		return true;
 	}
 }

@@ -74,13 +74,10 @@ public static class TerrainPreviewPipeline
 
 
 
-		var continent = TerrainPreviewNoise.Fbm( seed, nx * settings.ContinentalFrequency, ny * settings.ContinentalFrequency, 5 );
-
-		var hills = TerrainPreviewNoise.Fbm( seed + 100, nx * settings.HillFrequency, ny * settings.HillFrequency, 4 );
-
-		var valleys = TerrainPreviewNoise.Fbm( seed + 200, nx * settings.ValleyFrequency, ny * settings.ValleyFrequency, 3 );
-
-		var baseBeforeCurve = BuildBaseHeight01( settings, continent, hills, valleys, out var heightAfterCurve );
+		var baseLayers = TerrainPreviewBaseHeight.Sample(
+			settings, worldXMeters, worldYMeters, nx, ny, seed );
+		var baseBeforeCurve = baseLayers.BeforeCurve01;
+		var heightAfterCurve = baseLayers.AfterCurve01;
 
 
 
@@ -150,24 +147,22 @@ public static class TerrainPreviewPipeline
 
 
 
-		height01 = TerrainPreviewBiomeSlopeSmoothing.Apply01(
-
-			settings, height01, placementWeights, nx, ny, seed, terrainDetail01 );
+		height01 = settings.EnableBiomeSlopeSmoothing
+			? TerrainPreviewBiomeSlopeSmoothing.Apply01(
+				settings, height01, placementWeights, nx, ny, seed, terrainDetail01 )
+			: height01;
 
 
 
 		var dryLandHeightMeters = TerrainPreviewLandHeightDisplay.ApplyDryLandMeters(
 			settings,
-			nx,
-			ny,
-			seed,
+			heightAfterCurve,
 			height01,
 			placementWeights.Mountain,
 			maxHeight );
 
 		dryLandHeightMeters = TerrainPreviewCoastalSmoothing.ApplyMeters(
-
-			settings, dryLandHeightMeters, distMeters, nx, ny, seed );
+			settings, dryLandHeightMeters, worldXMeters, worldYMeters, distMeters, nx, ny, seed );
 
 		dryLandHeightMeters = TerrainPreviewLakeCombine.Apply(
 
@@ -185,13 +180,15 @@ public static class TerrainPreviewPipeline
 
 			Height01 = height01,
 
+			HeightMeters = dryLandHeightMeters,
+
 			OceanHeight01 = 0f,
 
-			ContinentalNoise01 = settings.EnableContinentalLayer ? continent : 0f,
+			ContinentalNoise01 = settings.EnableContinentalLayer ? baseLayers.Continent01 : 0f,
 
-			HillsNoise01 = settings.EnableHillLayer ? hills : 0f,
+			HillsNoise01 = settings.EnableHillLayer ? baseLayers.Hills01 : 0f,
 
-			ValleysNoise01 = settings.EnableValleyLayer ? valleys : 0f,
+			ValleysNoise01 = settings.EnableValleyLayer ? baseLayers.Valleys01 : 0f,
 
 			BaseHeightBeforeCurve01 = baseBeforeCurve,
 
@@ -249,6 +246,8 @@ public static class TerrainPreviewPipeline
 
 			Height01 = seaHeight01,
 
+			HeightMeters = settings.SeaLevelMeters,
+
 			OceanHeight01 = 1f,
 
 			LakeMask01 = rawLakeMask,
@@ -288,46 +287,6 @@ public static class TerrainPreviewPipeline
 			Math.Max( weights.Amber, weights.Mountain ) );
 
 		return Math.Clamp( 1f - (maxW / total), 0f, 1f );
-
-	}
-
-
-
-	static float BuildBaseHeight01(
-
-		TerrainPreviewSettings settings,
-
-		float continent,
-
-		float hills,
-
-		float valleys,
-
-		out float heightAfterCurve )
-
-	{
-
-		var terrain =
-
-			(settings.EnableContinentalLayer ? continent * settings.ContinentalWeight : 0f)
-
-			+ (settings.EnableHillLayer ? hills * settings.HillWeight : 0f)
-
-			- (settings.EnableValleyLayer ? valleys * settings.ValleyWeight : 0f);
-
-
-
-		var baseBeforeCurve = Math.Clamp( terrain, 0f, 1f );
-
-		heightAfterCurve = settings.EnableHeightCurveLayer
-
-			? MathF.Pow( baseBeforeCurve, Math.Clamp( settings.HeightCurvePower, 0.25f, 4f ) )
-
-			: baseBeforeCurve;
-
-
-
-		return baseBeforeCurve;
 
 	}
 

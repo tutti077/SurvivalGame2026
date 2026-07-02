@@ -4,6 +4,8 @@ namespace Survival;
 public readonly struct TerrainPreviewSample
 {
 	public float Height01 { get; init; }
+	/// <summary>Final world-meter elevation after the full pipeline (use for meshes — avoids 01 round-trip).</summary>
+	public float HeightMeters { get; init; }
 	public float OceanHeight01 { get; init; }
 	public float ContinentalNoise01 { get; init; }
 	public float HillsNoise01 { get; init; }

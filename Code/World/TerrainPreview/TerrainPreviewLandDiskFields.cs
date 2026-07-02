@@ -28,6 +28,7 @@ public static class TerrainPreviewLandDiskFields
 	static bool[] _blackwater = Array.Empty<bool>();
 	static int _blackwaterFingerprint = int.MinValue;
 	static TerrainPreviewBlackwater.Spot[] _blackwaterSpots = Array.Empty<TerrainPreviewBlackwater.Spot>();
+	static float[] _distanceToOpenWaterMeters = Array.Empty<float>();
 	static readonly object _buildLock = new();
 
 	static int RasterCellCount( int res ) => Math.Max( 0, res ) * Math.Max( 0, res );
@@ -56,6 +57,7 @@ public static class TerrainPreviewLandDiskFields
 		_azureCoast = Array.Empty<bool>();
 		_blackwater = Array.Empty<bool>();
 		_blackwaterSpots = Array.Empty<TerrainPreviewBlackwater.Spot>();
+		_distanceToOpenWaterMeters = Array.Empty<float>();
 		_rawLandBiomes = Array.Empty<TerrainPreviewBiomeId>();
 		_placementWeights = Array.Empty<TerrainPreviewBiomeResolver.LandBiomeWeights>();
 	}
@@ -71,6 +73,7 @@ public static class TerrainPreviewLandDiskFields
 		_azureCoast = Array.Empty<bool>();
 		_blackwater = Array.Empty<bool>();
 		_blackwaterSpots = Array.Empty<TerrainPreviewBlackwater.Spot>();
+		_distanceToOpenWaterMeters = Array.Empty<float>();
 	}
 
 	/// <summary>Drop biome placement — e.g. when World Seed changes during spawn solve.</summary>
@@ -83,6 +86,7 @@ public static class TerrainPreviewLandDiskFields
 		_blackwaterFingerprint = int.MinValue;
 		_blackwater = Array.Empty<bool>();
 		_blackwaterSpots = Array.Empty<TerrainPreviewBlackwater.Spot>();
+		_distanceToOpenWaterMeters = Array.Empty<float>();
 		_landDisk = Array.Empty<bool>();
 	}
 
@@ -180,6 +184,27 @@ public static class TerrainPreviewLandDiskFields
 			return false;
 
 		return idx < _openWater.Length && _openWater[idx];
+	}
+
+	/// <summary>Distance in meters from dry land to the nearest open lake pixel on the cached land disk.</summary>
+	public static float SampleDistanceToOpenWaterMeters(
+		TerrainPreviewSettings settings,
+		float worldXMeters,
+		float worldYMeters )
+	{
+		if ( !settings.EnableInteriorWaterLayer )
+			return float.MaxValue;
+
+		if ( _isBuilding && !WaterRasterReady( _fieldResolution ) )
+			return float.MaxValue;
+
+		EnsureBuilt( settings );
+		if ( !TryWorldToIndex( settings, worldXMeters, worldYMeters, out var idx ) )
+			return float.MaxValue;
+
+		return idx < _distanceToOpenWaterMeters.Length
+			? _distanceToOpenWaterMeters[idx]
+			: float.MaxValue;
 	}
 
 	public static bool IsOnLand( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
@@ -387,6 +412,8 @@ public static class TerrainPreviewLandDiskFields
 			out _openWater,
 			out _lakeCoverageOnLand01 );
 
+		EnsureWaterDistanceField( settings, res, metersPerPixel );
+
 		_waterFingerprint = fingerprint;
 		_finalizeFingerprint = int.MinValue;
 		_azureCoastFingerprint = int.MinValue;
@@ -432,6 +459,24 @@ public static class TerrainPreviewLandDiskFields
 			out _blackwater,
 			out _blackwaterSpots );
 		_blackwaterFingerprint = fingerprint;
+	}
+
+	static void EnsureWaterDistanceField( TerrainPreviewSettings settings, int res, float metersPerPixel )
+	{
+		var count = RasterCellCount( res );
+		if ( _distanceToOpenWaterMeters.Length == count && _waterFingerprint != int.MinValue )
+			return;
+
+		if ( !WaterRasterReady( res ) )
+			return;
+
+		_distanceToOpenWaterMeters = new float[count];
+		TerrainPreviewOpenWaterDistance.BuildDistanceMeters(
+			_landDisk,
+			_openWater,
+			res,
+			metersPerPixel,
+			_distanceToOpenWaterMeters );
 	}
 
 	static int ComputeBlackwaterFingerprint( TerrainPreviewSettings settings )
@@ -570,7 +615,8 @@ public static class TerrainPreviewLandDiskFields
 					px, py, res, radius, diameter, out var wx, out var wy );
 				var nx = (wx + radius) / diameter;
 				var ny = (wy + radius) / diameter;
-				var heightAfterCurve = TerrainPreviewBaseHeight.SampleAfterCurve01( settings, nx, ny, seed, out _ );
+				var heightAfterCurve = TerrainPreviewBaseHeight.SampleAfterCurve01(
+					settings, wx, wy, nx, ny, seed, out _ );
 				var weights = TerrainPreviewBiomeResolver.SamplePlacementWeights(
 					settings, wx, wy, heightAfterCurve );
 				biomeMap[idx] = TerrainPreviewBiomeResolver.PickDominantPlacementBiome( weights );

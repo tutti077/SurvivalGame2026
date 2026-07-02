@@ -280,6 +280,10 @@ public sealed class TerrainWorldManager : Component
 		return _generationSettings;
 	}
 
+	/// <summary>Ground elevation at world meters — same sampler as chunk meshes.</summary>
+	public bool TrySampleGroundMeters( float worldXMeters, float worldYMeters, out float groundZMeters )
+		=> TerrainHeightQuery.TrySampleGroundMeters( BuildGenerationSettings(), worldXMeters, worldYMeters, out groundZMeters );
+
 	/// <summary>PNG/inspector map post-process only — does not affect streamed meshes.</summary>
 	public TerrainBiomeMapPreviewOptions BuildPreviewMapOptions()
 		=> TerrainBiomeMapPreviewOptions.FromSettings( BuildGenerationSettings() );
@@ -410,7 +414,7 @@ public sealed class TerrainWorldManager : Component
 	{
 		var settings = _loadSettings;
 		var sample = _backend.Sample( settings, 0f, 0f );
-		var groundZMeters = sample.IsInsideWorld ? sample.Height01 * MaxTerrainHeightMeters : 0f;
+		var groundZMeters = sample.IsInsideWorld ? sample.HeightMeters : 0f;
 		_loadStreamPos = new Vector3( 0f, 0f, groundZMeters );
 		_loadViewRotation = TryGetStreamTransform( out _, out var viewRotation )
 			? viewRotation
@@ -535,6 +539,7 @@ public sealed class TerrainWorldManager : Component
 		_lastChunkSeed = WorldSeed;
 
 		SnapStreamerCameraToTerrain();
+		TerrainPreviewHeightDiagnostics.TryLogSpawnPipelineTrace( _loadSettings, 0f, 0f );
 		EnsureChunksAroundStream();
 		SetStreamerInputEnabled( true );
 		HideLoadScreen();
@@ -781,7 +786,7 @@ public sealed class TerrainWorldManager : Component
 
 		var settings = BuildGenerationSettings();
 		var sample = _backend.Sample( settings, 0f, 0f );
-		var groundZMeters = sample.IsInsideWorld ? sample.Height01 * MaxTerrainHeightMeters : 0f;
+		var groundZMeters = sample.IsInsideWorld ? sample.HeightMeters : 0f;
 		var viewHeight = Math.Max( ChunkSizeMeters * 0.75f, 128f );
 		var lookAhead = Math.Max( ChunkSizeMeters * 0.5f, 64f );
 

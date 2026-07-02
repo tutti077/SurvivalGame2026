@@ -80,7 +80,9 @@ Editor **Generate** and runtime meshes share **`TerrainPreviewPipeline.Sample()`
 
 Biome-specific sculpting (`TerrainPreviewBiomeTerrainShaper`, etc.) runs in the shared pipeline — tune under **Biome Terrain** tab; re-Generate, then play.
 
-**Height display:** **World - Normalize Land Rolling Heights** drives macro Perlin rolling hills up to **World - Land Rolling Height Max (m)** (default 200 m). Tune **World - Land Rolling Macro Frequency** (lower = bigger hills).
+**Height (runtime + preview):** base noise uses **world-meter wavelengths** (**World - Hill Wavelength**, default 400 m) so 64 m chunks show rolling relief. Continental macro stays broad; biome sculpt adds on top. **Biome Terrain - Slope Smoothing** is off by default (it was flattening chunks). Shores ease toward sea on rim + lakes. Re-Generate after tuning, then play.
+
+**Playtest (`terrainTest.scene`):** fly camera **Follow terrain height** optional. Press **J** to spawn a scale-reference player at the camera. Chunk meshes run **border-aware land speck** (interior dry islands only — mainland touching chunk edges is kept).
 
 **Biome edges:** **Biomes - Continuous Placement At Sample** makes blobby patches. **Biomes - Edge Color Blend (0–1)** (~0.35) softens borders only — interiors stay dominant biome color. Shader splats can replace this later.
 

@@ -4,6 +4,7 @@ namespace Survival;
 public static class TerrainMeshBuilder
 {
 	static Material _terrainMaterial;
+	static int _heightRangeLogs;
 
 	public readonly struct BuildResult
 	{
@@ -35,6 +36,8 @@ public static class TerrainMeshBuilder
 		var vertexCount = verticesPerSide * verticesPerSide;
 		var heights = new float[vertexCount];
 		var colors = new Color[vertexCount];
+		var minHeight = float.MaxValue;
+		var maxHeightSample = float.MinValue;
 
 		for ( var iy = 0; iy < verticesPerSide; iy++ )
 		{
@@ -46,9 +49,11 @@ public static class TerrainMeshBuilder
 				var sample = backend.Sample( settings, worldX, worldY );
 
 				var heightMeters = sample.IsInsideWorld
-					? sample.Height01 * maxTerrainHeightMeters
+					? sample.HeightMeters
 					: settings.SeaLevelMeters;
 				heights[idx] = heightMeters;
+				minHeight = Math.Min( minHeight, heightMeters );
+				maxHeightSample = Math.Max( maxHeightSample, heightMeters );
 
 				colors[idx] = !sample.IsInsideWorld
 					? Color.Black
@@ -58,8 +63,33 @@ public static class TerrainMeshBuilder
 			}
 		}
 
+		var cornerHeightBeforeSpeck = heights[0];
 		TerrainPreviewLandSpeckFilter.ApplyToHeightGrid(
 			heights, verticesPerSide, step, settings );
+
+		TerrainPreviewHeightDiagnostics.TryLogChunkVertexTrace(
+			settings,
+			coord,
+			chunkMinX,
+			chunkMinY,
+			cornerHeightBeforeSpeck,
+			heights[0],
+			backend );
+
+		var minHeightAfter = float.MaxValue;
+		var maxHeightAfter = float.MinValue;
+		for ( var i = 0; i < vertexCount; i++ )
+		{
+			minHeightAfter = Math.Min( minHeightAfter, heights[i] );
+			maxHeightAfter = Math.Max( maxHeightAfter, heights[i] );
+		}
+
+		if ( _heightRangeLogs < 3 && minHeight < float.MaxValue )
+		{
+			_heightRangeLogs++;
+			Log.Info(
+				$"[TerrainMeshBuilder] Chunk {coord} sampled {minHeight:0.#}…{maxHeightSample:0.#} m → mesh {minHeightAfter:0.#}…{maxHeightAfter:0.#} m (Δ{maxHeightAfter - minHeightAfter:0.#} m / {chunkSizeMeters:0.#} m)." );
+		}
 
 		for ( var i = 0; i < vertexCount; i++ )
 		{
