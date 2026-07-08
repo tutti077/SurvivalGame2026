@@ -19,7 +19,9 @@ public static class TerrainMeshBuilder
 		TerrainChunkCoord coord,
 		float chunkSizeMeters,
 		int verticesPerSide,
-		float maxTerrainHeightMeters )
+		float maxTerrainHeightMeters,
+		int heightSmoothPasses = 1,
+		float heightSmoothStrength01 = 0.38f )
 	{
 		backend ??= TerrainPreviewBackendRegistry.Active;
 		verticesPerSide = Math.Clamp( verticesPerSide, 4, 256 );
@@ -55,17 +57,17 @@ public static class TerrainMeshBuilder
 				minHeight = Math.Min( minHeight, heightMeters );
 				maxHeightSample = Math.Max( maxHeightSample, heightMeters );
 
-				colors[idx] = !sample.IsInsideWorld
-					? Color.Black
-					: sample.OceanHeight01 > 0.5f
-						? TerrainPreviewBiomeColors.PaletteColor( TerrainPreviewBiomeId.Water, 1f ).WithAlpha( 1f )
-						: TerrainPreviewBiomeColors.SampleBiomeOverlay( settings, sample, worldX, worldY ).WithAlpha( 1f );
+				colors[idx] = TerrainPreviewBiomeColors.FastMeshVertexColor( settings, sample ).WithAlpha( 1f );
 			}
 		}
 
+		TerrainPreviewChunkHeightSmooth.ApplyInteriorGrid(
+			heights, verticesPerSide, heightSmoothPasses, heightSmoothStrength01 );
+
 		var cornerHeightBeforeSpeck = heights[0];
-		TerrainPreviewLandSpeckFilter.ApplyToHeightGrid(
-			heights, verticesPerSide, step, settings );
+		if ( settings.LandSpeckFilterEnabled )
+			TerrainPreviewLandSpeckFilter.ApplyToHeightGrid(
+				heights, verticesPerSide, step, settings );
 
 		TerrainPreviewHeightDiagnostics.TryLogChunkVertexTrace(
 			settings,

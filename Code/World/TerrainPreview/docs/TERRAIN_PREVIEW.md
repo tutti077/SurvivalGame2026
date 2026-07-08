@@ -16,6 +16,8 @@ Land height = base noise → biome sculpt → peaks → rim coast
   • dry land clamped ≥ SeaLevel + margin
         ↓
 Open water = exactly SeaLevelMeters (default 0)
+
+**Coastal height:** land near water uses a **soft drain cap** — influence fades in from ~0% at the outer fade edge (2.5× the shore band) to full strength at the water. No hard cutoff at the band radius.
 ```
 
 **Rules**
@@ -71,7 +73,7 @@ Editor **Generate** and runtime meshes share **`TerrainPreviewPipeline.Sample()`
 |------|----------------|
 | 1. Tune | Terrain Preview Tool → **Generate** → bundle under `Assets/terrain/preview/` + `.latest_preview.json` |
 | 2. Play | `TerrainWorldManager` with **World - Settings Source** = **Tuned Preview First** loads `preview_settings.json` (full `generation` block) |
-| 3. Stream | Existing forward-cone + side-square chunk streaming; each vertex calls the backend sampler |
+| 3. Stream | Forward-cone + side-square streaming. **Stream Build Budget (ms)** spreads mesh work per frame; near chunks sync on turn (capped); distant chunks use coarser LOD. |
 | 4. Persist | First play writes `WorldSaves/<WorldName>/world.json` with full `PreviewSettings` |
 
 **World - Override World Scalars From Component** — off (default): seed, diameter, height, ocean ring, and lake offsets match the tuned bundle (same as PNG). Turn on only to force component inspector values.
@@ -80,9 +82,9 @@ Editor **Generate** and runtime meshes share **`TerrainPreviewPipeline.Sample()`
 
 Biome-specific sculpting (`TerrainPreviewBiomeTerrainShaper`, etc.) runs in the shared pipeline — tune under **Biome Terrain** tab; re-Generate, then play.
 
-**Height (runtime + preview):** base noise uses **world-meter wavelengths** (**World - Hill Wavelength**, default 400 m) so 64 m chunks show rolling relief. Continental macro stays broad; biome sculpt adds on top. **Biome Terrain - Slope Smoothing** is off by default (it was flattening chunks). Shores ease toward sea on rim + lakes. Re-Generate after tuning, then play.
+**Mountains:** `lowlandMeters = rolling base + sculpt` → `mountainMeters = lowland + peakBoost × headroom` → **`lerp(a, b, smoothstep(influence))`**. No ridged slope pass. Re-Generate after tuning.
 
-**Playtest (`terrainTest.scene`):** fly camera **Follow terrain height** optional. Press **J** to spawn a scale-reference player at the camera. Chunk meshes run **border-aware land speck** (interior dry islands only — mainland touching chunk edges is kept).
+**Playtest (`terrainTest.scene`):** fly camera **Follow terrain height** optional. Press **J** to spawn a scale-reference player at the camera. Chunk meshes: **33 verts/side** (~2 m on 64 m chunks); **Height Smooth Passes = 0** keeps natural slopes between corners. Shore blend eases land toward sea level near lakes and the outer rim.
 
 **Biome edges:** **Biomes - Continuous Placement At Sample** makes blobby patches. **Biomes - Edge Color Blend (0–1)** (~0.35) softens borders only — interiors stay dominant biome color. Shader splats can replace this later.
 

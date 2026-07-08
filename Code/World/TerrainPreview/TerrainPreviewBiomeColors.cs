@@ -17,6 +17,22 @@ public static class TerrainPreviewBiomeColors
 		return Color.Lerp( heightGray, biomeColor, overlay );
 	}
 
+	/// <summary>Chunk mesh tint — uses weights already on the sample; skips redundant resolver passes.</summary>
+	public static Color FastMeshVertexColor( TerrainPreviewSettings settings, TerrainPreviewSample sample )
+	{
+		if ( !sample.IsInsideWorld )
+			return Color.Black;
+
+		if ( sample.OceanHeight01 > 0.5f )
+			return PaletteColor( TerrainPreviewBiomeId.Water, 1f );
+
+		if ( !sample.HasLandWeights )
+			return Grayscale( sample.Height01 );
+
+		var biome = TerrainPreviewBiomeResolver.PickDominantPlacementBiome( sample.LandWeights );
+		return ColorizeOverlay( settings, biome, 1f, sample.Height01 );
+	}
+
 	public static Color SampleBiomeOverlay(
 		TerrainPreviewSettings settings,
 		TerrainPreviewSample sample,

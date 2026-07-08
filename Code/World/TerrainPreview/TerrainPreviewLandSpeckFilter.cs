@@ -64,7 +64,7 @@ static class TerrainPreviewLandSpeckFilter
 
 		var dry = new bool[count];
 		for ( var i = 0; i < count; i++ )
-			dry[i] = heightsMeters[i] >= sea;
+			dry[i] = heightsMeters[i] > sea + 0.05f;
 
 		var exteriorDry = new bool[count];
 		var queue = new Queue<int>();

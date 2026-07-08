@@ -99,4 +99,22 @@ public sealed partial class TerrainPreviewSettings
 	public float OceanFloorFrequency { get; set; } = 1.5f;
 	public float OceanFloorMaxDepthMeters { get; set; } = 35f;
 	public float InlandLakeMaxDepthMeters { get; set; } = 12f;
+	public float MountainHeightBlendBand01 { get; set; } = 0.14f;
+	public float MountainLowlandSculptDeltaCap01 { get; set; } = 0.16f;
+	public float MountainPeakExcessPower { get; set; } = 1.45f;
+	public float MountainPeakMaxLift01 { get; set; } = 0.82f;
+	public float MountainHeightDisplayBlendSoftness01 { get; set; } = 0.72f;
+	public bool EnableMountainPeakSlopeMask { get; set; } = true;
+	public float MountainPeakBaseSlopeDegrees { get; set; } = 14f;
+	public float MountainPeakTypicalMaxSlopeDegrees { get; set; } = 34f;
+	public float MountainPeakMaxSlopeDegrees { get; set; } = 58f;
+	public float MountainCliffCoverage01 { get; set; } = 0.05f;
+	public float MountainPeakSlopeRampStart01 { get; set; } = 0.25f;
+	public float MountainPeakSlopeRampEnd01 { get; set; } = 0.72f;
+	public float MountainPeakPlateauStart01 { get; set; } = 0.86f;
+	public float MountainPeakPlateauFlatten01 { get; set; } = 0.62f;
+	public float MountainPeakDetailFrequency { get; set; } = 9f;
+	public float MountainPeakDetailAmplitude01 { get; set; } = 0.04f;
+	public float MountainTraverseCorridorFrequency { get; set; } = 2.2f;
+	public float MountainTraverseCorridorStrength01 { get; set; } = 0.55f;
 }

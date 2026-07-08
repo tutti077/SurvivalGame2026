@@ -1,99 +1,100 @@
-namespace Survival;
-
-/// <summary>
-/// Blends dry land height toward sea level near open water — outer ocean rim and inland lakes.
-/// Lake shores ease down to a low bank height, not flat zero across the whole band.
-/// </summary>
-static class TerrainPreviewCoastalSmoothing
-{
-	public static float ApplyMeters(
-		TerrainPreviewSettings settings,
-		float landHeightMeters,
-		float worldXMeters,
-		float worldYMeters,
-		float distFromCenterMeters,
-		float nx,
-		float ny,
-		int seed )
-	{
-		if ( landHeightMeters <= settings.SeaLevelMeters + 0.01f )
-			return landHeightMeters;
-
-		var outerProx = SampleOuterCoastProximity01( settings, distFromCenterMeters );
-		var lakeProx = SampleInlandLakeShoreProximity01( settings, worldXMeters, worldYMeters );
-		if ( outerProx <= 0.0001f && lakeProx <= 0.0001f )
-			return landHeightMeters;
-
-		var sea = settings.SeaLevelMeters;
-		var shoreMax = Math.Max( 1f, settings.CoastalMaxShoreHeightMeters );
-		var result = landHeightMeters;
-
-		if ( lakeProx > 0.0001f )
-		{
-			var bankHeight = sea + (shoreMax * (1f - (lakeProx * 0.65f)));
-			result = Lerp( result, Math.Min( result, bankHeight ), lakeProx );
-		}
-
-		if ( outerProx <= 0.0001f )
-			return result;
-
-		var personality = TerrainPreviewNoise.Fbm(
-			seed + 777,
-			nx * settings.CoastalPersonalityFrequency,
-			ny * settings.CoastalPersonalityFrequency,
-			3 );
-		var isCliff = personality >= settings.CoastalCliffThreshold01;
-
-		if ( isCliff )
-		{
-			var cliffT = MathF.Pow( outerProx, 0.35f );
-			var allowedMax = Lerp( result, sea + shoreMax, cliffT );
-			return Math.Min( result, allowedMax );
-		}
-
-		return Lerp( result, sea, outerProx );
-	}
-
-	static float SampleInlandLakeShoreProximity01(
-		TerrainPreviewSettings settings,
-		float worldXMeters,
-		float worldYMeters )
-	{
-		if ( !settings.EnableInteriorWaterLayer )
-			return 0f;
-
-		var distMeters = TerrainPreviewLandDiskFields.SampleDistanceToOpenWaterMeters(
-			settings, worldXMeters, worldYMeters );
-		if ( !float.IsFinite( distMeters ) || distMeters >= float.MaxValue * 0.5f )
-			return 0f;
-
-		var band = Math.Max( 50f, settings.CoastalInlandBeachBandMeters );
-		if ( distMeters >= band )
-			return 0f;
-
-		return SmoothStep01( 1f - (distMeters / band) );
-	}
-
-	static float SampleOuterCoastProximity01( TerrainPreviewSettings settings, float distFromCenterMeters )
-	{
-		var landRadius = settings.LandRadiusMeters;
-		var distFromLandEdge = landRadius - distFromCenterMeters;
-
-		var beachBand = Math.Max( 50f, settings.CoastalBeachBlendBandMeters );
-		var cliffBand = Math.Max( 25f, settings.CoastalCliffBlendBandMeters );
-		var outerBlendBand = Math.Max( beachBand, cliffBand );
-
-		if ( distFromLandEdge < 0f || distFromLandEdge >= outerBlendBand )
-			return 0f;
-
-		return SmoothStep01( 1f - (distFromLandEdge / outerBlendBand) );
-	}
-
-	static float SmoothStep01( float t )
-	{
-		t = Math.Clamp( t, 0f, 1f );
-		return t * t * (3f - (2f * t ));
-	}
-
-	static float Lerp( float a, float b, float t ) => a + (b - a) * t;
-}
+namespace Survival;
+
+/// <summary>
+/// Blends dry land height toward sea level near open water — outer ocean rim and inland lakes.
+/// Drain influence fades in smoothly from the band edge (near-zero at the outer rim) to full strength at the water.
+/// </summary>
+static class TerrainPreviewCoastalSmoothing
+{
+	const float DrainFadeBandMultiplier = 2.5f;
+
+	public static float ApplyMeters(
+		TerrainPreviewSettings settings,
+		float landHeightMeters,
+		float worldXMeters,
+		float worldYMeters,
+		float distFromCenterMeters,
+		float nx,
+		float ny,
+		int seed )
+	{
+		if ( landHeightMeters <= settings.SeaLevelMeters + 0.01f )
+			return landHeightMeters;
+
+		var sea = settings.SeaLevelMeters;
+		var result = landHeightMeters;
+
+		if ( settings.EnableInteriorWaterLayer )
+		{
+			var waterDist = TerrainPreviewLandDiskFields.SampleDistanceToOpenWaterMetersSmooth(
+				settings, worldXMeters, worldYMeters );
+			var lakeBand = Math.Max( 50f, settings.CoastalInlandBeachBandMeters );
+			if ( float.IsFinite( waterDist ) && waterDist < lakeBand * DrainFadeBandMultiplier )
+			{
+				var shoreMax = Math.Max( 1f, settings.CoastalMaxShoreHeightMeters );
+				var slope = shoreMax / lakeBand;
+				result = ApplyWeightedDrain(
+					result, sea, waterDist, lakeBand, slope );
+			}
+		}
+
+		var landRadius = settings.LandRadiusMeters;
+		var distFromLandEdge = landRadius - distFromCenterMeters;
+		if ( distFromLandEdge > 0f )
+		{
+			var beachBand = Math.Max( 50f, settings.CoastalBeachBlendBandMeters );
+			var cliffBand = Math.Max( 25f, settings.CoastalCliffBlendBandMeters );
+			var personality = TerrainPreviewNoise.Fbm(
+				seed + 777,
+				nx * settings.CoastalPersonalityFrequency,
+				ny * settings.CoastalPersonalityFrequency,
+				3 );
+			var isCliff = personality >= settings.CoastalCliffThreshold01;
+			var outerBand = isCliff ? cliffBand : beachBand;
+			var fadeLimit = outerBand * DrainFadeBandMultiplier;
+			if ( distFromLandEdge < fadeLimit )
+			{
+				var shoreMax = Math.Max( 1f, settings.CoastalMaxShoreHeightMeters );
+				var slope = (isCliff ? shoreMax * 2.2f : shoreMax) / outerBand;
+				result = ApplyWeightedDrain(
+					result, sea, distFromLandEdge, outerBand, slope );
+			}
+		}
+
+		return result;
+	}
+
+	/// <summary>
+	/// Soft drain: at the outer fade edge weight ≈ 0 (terrain barely touched); at water weight = 1 (full cap).
+	/// </summary>
+	static float ApplyWeightedDrain(
+		float landHeightMeters,
+		float seaLevelMeters,
+		float distMeters,
+		float coreBandMeters,
+		float drainSlope )
+	{
+		if ( distMeters <= 0f )
+			return Math.Min( landHeightMeters, seaLevelMeters );
+
+		var fadeBand = Math.Max( coreBandMeters * DrainFadeBandMultiplier, coreBandMeters + 1f );
+		if ( distMeters >= fadeBand )
+			return landHeightMeters;
+
+		var drainedCap = seaLevelMeters + (distMeters * drainSlope);
+		var drainedHeight = Math.Min( landHeightMeters, drainedCap );
+
+		var t = 1f - (distMeters / fadeBand);
+		var weight = SmoothStep01( SmoothStep01( t ) );
+
+		return Lerp( landHeightMeters, drainedHeight, weight );
+	}
+
+	static float SmoothStep01( float t )
+	{
+		t = Math.Clamp( t, 0f, 1f );
+		return t * t * (3f - (2f * t));
+	}
+
+	static float Lerp( float a, float b, float t ) => a + ((b - a) * t);
+}

@@ -207,6 +207,79 @@ public static class TerrainPreviewLandDiskFields
 			: float.MaxValue;
 	}
 
+	/// <summary>Bilinear distance-to-water — smooth in world meters (avoids ~78 m raster steps on the land disk).</summary>
+	public static float SampleDistanceToOpenWaterMetersSmooth(
+		TerrainPreviewSettings settings,
+		float worldXMeters,
+		float worldYMeters )
+	{
+		if ( !settings.EnableInteriorWaterLayer )
+			return float.MaxValue;
+
+		if ( _isBuilding && !WaterRasterReady( _fieldResolution ) )
+			return float.MaxValue;
+
+		EnsureBuilt( settings );
+
+		if ( IsOpenWater( settings, worldXMeters, worldYMeters ) )
+			return 0f;
+
+		var res = _fieldResolution;
+		var radius = settings.WorldRadiusMeters;
+		var diameter = settings.WorldDiameterMeters;
+		if ( diameter <= 0f || res <= 1 )
+			return float.MaxValue;
+
+		var distFromCenter = MathF.Sqrt( (worldXMeters * worldXMeters) + (worldYMeters * worldYMeters) );
+		if ( distFromCenter > settings.LandRadiusMeters )
+			return float.MaxValue;
+
+		var pxMirrorF = ( ((worldXMeters + radius) / diameter) * res ) - 0.5f;
+		var fy = ( ((worldYMeters + radius) / diameter) * res ) - 0.5f;
+		var fx = (res - 1) - pxMirrorF;
+
+		var x0 = (int)MathF.Floor( fx );
+		var y0 = (int)MathF.Floor( fy );
+		var tx = fx - x0;
+		var ty = fy - y0;
+
+		var d00 = SampleDistanceAtRaster( settings, x0, y0 );
+		var d10 = SampleDistanceAtRaster( settings, x0 + 1, y0 );
+		var d01 = SampleDistanceAtRaster( settings, x0, y0 + 1 );
+		var d11 = SampleDistanceAtRaster( settings, x0 + 1, y0 + 1 );
+
+		var d0 = LerpFinite( d00, d10, tx );
+		var d1 = LerpFinite( d01, d11, tx );
+		return LerpFinite( d0, d1, ty );
+	}
+
+	static float SampleDistanceAtRaster( TerrainPreviewSettings settings, int px, int py )
+	{
+		var res = _fieldResolution;
+		if ( px < 0 || py < 0 || px >= res || py >= res )
+			return float.MaxValue;
+
+		var idx = (py * res) + px;
+		if ( idx >= _landDisk.Length || idx >= _openWater.Length || idx >= _distanceToOpenWaterMeters.Length )
+			return float.MaxValue;
+
+		if ( !_landDisk[idx] || _openWater[idx] )
+			return 0f;
+
+		return _distanceToOpenWaterMeters[idx];
+	}
+
+	static float LerpFinite( float a, float b, float t )
+	{
+		if ( !float.IsFinite( a ) || a >= float.MaxValue * 0.5f )
+			return b;
+
+		if ( !float.IsFinite( b ) || b >= float.MaxValue * 0.5f )
+			return a;
+
+		return a + ((b - a) * t);
+	}
+
 	public static bool IsOnLand( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
 	{
 		EnsureBuilt( settings );

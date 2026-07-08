@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Game;
 
 namespace Survival;
@@ -32,13 +33,18 @@ public sealed class TerrainWorldManager : Component
 	public bool RunLakeSpawnSolveOnLoad { get; set; }
 
 	[Property, Group( "Chunks" )] public float ChunkSizeMeters { get; set; } = 64f;
-	[Property, Group( "Chunks" )] public int ChunkVerticesPerSide { get; set; } = 17;
+	[Property, Group( "Chunks" ), Title( "Vertices Per Side" ), Description( "Height grid resolution per chunk. 33 ≈ 2 m spacing on 64 m chunks; higher = smoother slopes, more cost." )]
+	public int ChunkVerticesPerSide { get; set; } = 33;
+	[Property, Group( "Chunks" ), Title( "Height Smooth Passes" ), Range( 0, 3 ), Step( 1 ), Description( "Interior-only Laplacian smooth. 0 = keep natural slope between chunk corners (recommended). >0 can flatten chunks into plateaus." )]
+	public int ChunkHeightSmoothPasses { get; set; }
+	[Property, Group( "Chunks" ), Title( "Height Smooth Strength (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float ChunkHeightSmoothStrength01 { get; set; } = 0.38f;
 	[Property, Group( "Chunks" ), Title( "Stream Radius (chunks)" ), Range( 0, 16 ), Step( 1 ), Description( "Square fallback when forward cone streaming is off. Radius 2 = 5×5." )]
 	public int StreamRadiusChunks { get; set; } = 2;
 	[Property, Group( "Chunks" ), Title( "Forward Cone Streaming" )]
 	public bool UseForwardConeStreaming { get; set; } = true;
-	[Property, Group( "Chunks" ), Title( "Forward View Radius (chunks)" ), Range( 10, 20 ), Step( 1 ), Description( "How far ahead to stream along look direction." )]
-	public int ForwardViewRadiusChunks { get; set; } = 15;
+	[Property, Group( "Chunks" ), Title( "Forward View Radius (chunks)" ), Range( 6, 20 ), Step( 1 ), Description( "How far ahead to stream along look direction (10 × 64 m ≈ 640 m)." )]
+	public int ForwardViewRadiusChunks { get; set; } = 10;
 	[Property, Group( "Chunks" ), Title( "Forward View Distance (m, 0 = radius × chunk size)" ), Range( 0f, 20000f ), Step( 64f )]
 	public float ViewDistanceMeters { get; set; }
 	[Property, Group( "Chunks" ), Title( "Forward View Cone (deg)" ), Range( 30f, 360f ), Step( 5f )]
@@ -47,8 +53,18 @@ public sealed class TerrainWorldManager : Component
 	public int SideViewRadiusChunks { get; set; } = 2;
 	[Property, Group( "Chunks" ), Title( "Collision Range (m)" ), Range( 64f, 4096f ), Step( 64f )]
 	public float CollisionRangeMeters { get; set; } = 128f;
-	[Property, Group( "Chunks" ), Title( "New Chunks Per Frame" ), Range( 1, 32 ), Step( 1 )]
-	public int ChunksPerFrame { get; set; } = 2;
+	[Property, Group( "Chunks" ), Title( "Max Chunks Per Frame" ), Range( 1, 12 ), Step( 1 ), Description( "Hard cap on chunk mesh builds per frame (initial load + streaming)." )]
+	public int ChunksPerFrame { get; set; } = 3;
+	[Property, Group( "Chunks" ), Title( "Stream Build Budget (ms)" ), Range( 4f, 32f ), Step( 1f ), Description( "Milliseconds of mesh work per frame while streaming. Spreads cost without one-chunk-per-frame crawl." )]
+	public float StreamMeshBuildBudgetMs { get; set; } = 10f;
+	[Property, Group( "Chunks" ), Title( "Near Sync Chunks On Refresh" ), Range( 0, 8 ), Step( 1 ), Description( "Missing chunks built immediately when the stream zone updates. 0 = queue only (smoother turns)." )]
+	public int StreamMaxSyncChunksPerRefresh { get; set; }
+	[Property, Group( "Chunks" ), Title( "High-Priority Radius (chunks)" ), Range( 1f, 4f ), Step( 0.25f ), Description( "Chunk centers within this many chunk lengths get near sync + full mesh detail." )]
+	public float StreamHighPriorityRadiusChunks { get; set; } = 2f;
+	[Property, Group( "Chunks" ), Title( "Stream Mesh LOD" ), Description( "Coarser height grid for distant streamed chunks (17 verts = 4 m steps, aligns with 33-vert edges)." )]
+	public bool StreamMeshLodEnabled { get; set; } = true;
+	[Property, Group( "Chunks" ), Title( "Far Stream Vertices Per Side" ), Range( 9, 65 ), Step( 4 ), Description( "Height samples for chunks outside the full-detail radius (17 ≈ 4 m on 64 m chunks)." )]
+	public int StreamFarVerticesPerSide { get; set; } = 17;
 	[Property, Group( "Chunks" ), Title( "Mesh Border Prefetch" ), Range( 0.05f, 0.5f ), Step( 0.05f ), Description( "Reserved for future border-only mesh LOD (stream cone currently meshes all visible chunks)." )]
 	public float MeshBorderPrefetch01 { get; set; } = 0.35f;
 
@@ -94,6 +110,10 @@ public sealed class TerrainWorldManager : Component
 	}
 
 	readonly HashSet<TerrainChunkCoord> _neededScratch = new();
+	readonly HashSet<TerrainChunkCoord> _streamNeeded = new();
+	readonly Queue<TerrainChunkCoord> _streamLoadQueue = new();
+	readonly List<TerrainChunkCoord> _streamSortScratch = new();
+	readonly List<TerrainChunkCoord> _unloadScratch = new();
 	readonly Queue<TerrainChunkCoord> _initialChunkQueue = new();
 	ITerrainPreviewBackend _backend;
 	TerrainWorldPreviewJob _previewJob;
@@ -151,6 +171,7 @@ public sealed class TerrainWorldManager : Component
 
 		TickMapGeneration();
 		TryRefreshStreamChunks();
+		ProcessStreamChunkQueue();
 		UpdateBiomePreviewStaleState();
 		UpdateStreamInspectorState();
 	}
@@ -219,7 +240,7 @@ public sealed class TerrainWorldManager : Component
 			headingDegrees = MathF.Atan2( forward.y, forward.x ) * (180f / MathF.PI);
 		}
 
-		var headingBucket = (int)MathF.Floor( (headingDegrees + 180f) / 12f );
+		var headingBucket = (int)MathF.Floor( (headingDegrees + 180f) / 18f );
 		if ( chunk == _lastStreamRefreshChunk && headingBucket == _lastStreamRefreshHeadingBucket )
 			return;
 
@@ -478,12 +499,122 @@ public sealed class TerrainWorldManager : Component
 			needed );
 	}
 
+	void ProcessStreamChunkQueue()
+	{
+		if ( _isWorldLoading || _streamLoadQueue.Count == 0 )
+			return;
+
+		if ( !TryGetStreamTransform( out var streamPos, out _ ) )
+			return;
+
+		var settings = BuildGenerationSettings();
+		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
+		var maxChunks = Math.Clamp( ChunksPerFrame, 1, 12 );
+		var budgetMs = Math.Clamp( StreamMeshBuildBudgetMs, 4f, 32f );
+		var stopwatch = Stopwatch.StartNew();
+		var built = 0;
+
+		while ( _streamLoadQueue.Count > 0 && built < maxChunks )
+		{
+			if ( built > 0 && stopwatch.Elapsed.TotalMilliseconds >= budgetMs )
+				break;
+
+			var coord = _streamLoadQueue.Dequeue();
+			if ( !_streamNeeded.Contains( coord ) || _loaded.ContainsKey( coord ) )
+				continue;
+
+			LoadChunk( coord, settings, streamPos, visible: true, useStreamLod: true );
+			built++;
+		}
+
+		MeshedChunkCount = _loaded.Count;
+	}
+
+	void RebuildStreamLoadQueue( Vector3 streamPos, TerrainPreviewSettings settings, float chunkSize )
+	{
+		_streamLoadQueue.Clear();
+		_streamSortScratch.Clear();
+
+		var worldRadius = settings.TotalWorldRadiusMeters;
+		foreach ( var coord in _streamNeeded )
+		{
+			if ( !_loaded.ContainsKey( coord ) )
+				_streamSortScratch.Add( coord );
+		}
+
+		_streamSortScratch.Sort( ( a, b ) =>
+		{
+			var da = ChunkDistanceMeters( a, streamPos, worldRadius, chunkSize );
+			var db = ChunkDistanceMeters( b, streamPos, worldRadius, chunkSize );
+			return da.CompareTo( db );
+		} );
+
+		foreach ( var coord in _streamSortScratch )
+			_streamLoadQueue.Enqueue( coord );
+	}
+
+	void LoadNearPriorityChunksSync(
+		Vector3 streamPos,
+		TerrainPreviewSettings settings,
+		float chunkSize )
+	{
+		var syncBudget = Math.Clamp( StreamMaxSyncChunksPerRefresh, 0, 8 );
+		if ( syncBudget <= 0 )
+			return;
+
+		var worldRadius = settings.TotalWorldRadiusMeters;
+		var priorityRadius = chunkSize * Math.Clamp( StreamHighPriorityRadiusChunks, 1f, 4f );
+		_streamSortScratch.Clear();
+
+		foreach ( var coord in _streamNeeded )
+		{
+			if ( _loaded.ContainsKey( coord ) )
+				continue;
+
+			if ( ChunkDistanceMeters( coord, streamPos, worldRadius, chunkSize ) <= priorityRadius )
+				_streamSortScratch.Add( coord );
+		}
+
+		_streamSortScratch.Sort( ( a, b ) =>
+		{
+			var da = ChunkDistanceMeters( a, streamPos, worldRadius, chunkSize );
+			var db = ChunkDistanceMeters( b, streamPos, worldRadius, chunkSize );
+			return da.CompareTo( db );
+		} );
+
+		for ( var i = 0; i < _streamSortScratch.Count && syncBudget > 0; i++ )
+		{
+			var coord = _streamSortScratch[i];
+			if ( !_streamNeeded.Contains( coord ) || _loaded.ContainsKey( coord ) )
+				continue;
+
+			LoadChunk( coord, settings, streamPos, visible: true, useStreamLod: true );
+			syncBudget--;
+		}
+	}
+
+	static float ChunkDistanceMeters(
+		TerrainChunkCoord coord,
+		Vector3 streamPos,
+		float worldRadius,
+		float chunkSize )
+	{
+		var center = TerrainChunkStreaming.GetChunkCenterWorld( coord, worldRadius, chunkSize );
+		return new Vector3( center.x - streamPos.x, center.y - streamPos.y, 0f ).Length;
+	}
+
 	void ProcessInitialChunkQueue()
 	{
-		var budget = Math.Clamp( ChunksPerFrame, 1, 32 );
+		var maxChunks = Math.Clamp( ChunksPerFrame, 1, 12 );
+		var budgetMs = Math.Clamp( StreamMeshBuildBudgetMs, 4f, 32f );
+		var stopwatch = Stopwatch.StartNew();
+		var built = 0;
 
-		while ( budget-- > 0 && _initialChunkQueue.Count > 0 )
+		while ( _initialChunkQueue.Count > 0 && built < maxChunks )
 		{
+			if ( built > 0 && stopwatch.Elapsed.TotalMilliseconds >= budgetMs )
+				break;
+
 			var coord = _initialChunkQueue.Dequeue();
 			if ( _loaded.ContainsKey( coord ) )
 			{
@@ -491,8 +622,9 @@ public sealed class TerrainWorldManager : Component
 				continue;
 			}
 
-			LoadChunk( coord, _loadSettings, _loadStreamPos, visible: true );
+			LoadChunk( coord, _loadSettings, _loadStreamPos, visible: true, useStreamLod: false );
 			_initialChunksLoaded++;
+			built++;
 		}
 
 		LoadedChunkCount = _loaded.Count;
@@ -598,19 +730,22 @@ public sealed class TerrainWorldManager : Component
 
 		var settings = BuildGenerationSettings();
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
-		CollectStreamChunks( streamPos, viewRotation, settings, chunkSize, _neededScratch );
+		CollectStreamChunks( streamPos, viewRotation, settings, chunkSize, _streamNeeded );
 
-		foreach ( var coord in _neededScratch )
+		_unloadScratch.Clear();
+		foreach ( var coord in _loaded.Keys )
 		{
-			if ( !_loaded.ContainsKey( coord ) )
-				LoadChunk( coord, settings, streamPos, visible: true );
+			if ( !_streamNeeded.Contains( coord ) )
+				_unloadScratch.Add( coord );
 		}
 
-		var toRemove = _loaded.Keys.Where( c => !_neededScratch.Contains( c ) ).ToList();
-		foreach ( var coord in toRemove )
+		foreach ( var coord in _unloadScratch )
 			UnloadChunk( coord );
 
-		LoadedChunkCount = _neededScratch.Count;
+		LoadNearPriorityChunksSync( streamPos, settings, chunkSize );
+		RebuildStreamLoadQueue( streamPos, settings, chunkSize );
+
+		LoadedChunkCount = _streamNeeded.Count;
 		MeshedChunkCount = _loaded.Count;
 		UpdateChunkColliders( streamPos, settings, chunkSize );
 	}
@@ -664,15 +799,30 @@ public sealed class TerrainWorldManager : Component
 		return scene.Camera;
 	}
 
-	void LoadChunk( TerrainChunkCoord coord, TerrainPreviewSettings settings, Vector3 streamPos, bool visible )
+	void LoadChunk(
+		TerrainChunkCoord coord,
+		TerrainPreviewSettings settings,
+		Vector3 streamPos,
+		bool visible,
+		bool useStreamLod )
 	{
+		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
+		var worldRadius = settings.TotalWorldRadiusMeters;
+		var distance = ChunkDistanceMeters( coord, streamPos, worldRadius, chunkSize );
+		var verticesPerSide = ResolveChunkVerticesPerSide( distance, chunkSize, useStreamLod );
+		var smoothPasses = useStreamLod && verticesPerSide < ChunkVerticesPerSide
+			? 0
+			: ChunkHeightSmoothPasses;
+
 		var built = TerrainMeshBuilder.BuildChunk(
 			settings,
 			_backend,
 			coord,
 			ChunkSizeMeters,
-			ChunkVerticesPerSide,
-			MaxTerrainHeightMeters );
+			verticesPerSide,
+			MaxTerrainHeightMeters,
+			smoothPasses,
+			ChunkHeightSmoothStrength01 );
 
 		if ( built.Model is null || !built.Model.IsValid )
 		{
@@ -697,9 +847,7 @@ public sealed class TerrainWorldManager : Component
 		collider.Model = built.Model;
 		collider.Static = true;
 
-		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
-		var center = TerrainChunkStreaming.GetChunkCenterWorld( coord, settings.TotalWorldRadiusMeters, chunkSize );
-		var distance = new Vector3( center.x - streamPos.x, center.y - streamPos.y, 0f ).Length;
+		var center = TerrainChunkStreaming.GetChunkCenterWorld( coord, worldRadius, chunkSize );
 		collider.Enabled = distance <= CollisionRangeMeters + (chunkSize * 0.75f);
 
 		_loaded[coord] = new LoadedChunk
@@ -714,6 +862,20 @@ public sealed class TerrainWorldManager : Component
 			chunkOriginEngine + built.LocalBounds.Maxs );
 
 		BuildNavMeshSync.NotifyTerrainChunkLoaded( GameObject.Scene, chunkBounds );
+	}
+
+	int ResolveChunkVerticesPerSide( float distanceMeters, float chunkSize, bool useStreamLod )
+	{
+		var fullDetail = Math.Clamp( ChunkVerticesPerSide, 4, 256 );
+		if ( !useStreamLod || !StreamMeshLodEnabled )
+			return fullDetail;
+
+		var priorityRadius = chunkSize * Math.Clamp( StreamHighPriorityRadiusChunks, 1f, 4f );
+		if ( distanceMeters <= priorityRadius )
+			return fullDetail;
+
+		var farDetail = Math.Clamp( StreamFarVerticesPerSide, 9, fullDetail );
+		return farDetail;
 	}
 
 	void UnloadChunk( TerrainChunkCoord coord )
@@ -731,6 +893,9 @@ public sealed class TerrainWorldManager : Component
 			entry.GameObject.Destroy();
 
 		_loaded.Clear();
+		_streamNeeded.Clear();
+		_streamLoadQueue.Clear();
+		_unloadScratch.Clear();
 		LoadedChunkCount = 0;
 		MeshedChunkCount = 0;
 		_lastStreamRefreshHeadingBucket = int.MinValue;

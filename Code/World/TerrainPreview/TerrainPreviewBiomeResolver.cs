@@ -68,6 +68,22 @@ public static class TerrainPreviewBiomeResolver
 	static bool QualifiesAsMountainBiome( LandBiomeWeights weights )
 		=> weights.Mountain >= 0.5f;
 
+	/// <summary>Land biome weights with mountain removed — used for lowland height before meter lerp.</summary>
+	public static LandBiomeWeights LandWeightsWithoutMountain( LandBiomeWeights weights )
+	{
+		var landSum = weights.Clover + weights.Redwood + weights.Amber;
+		if ( landSum <= 0.0001f )
+			return new LandBiomeWeights { Clover = 1f };
+
+		return new LandBiomeWeights
+		{
+			Clover = weights.Clover / landSum,
+			Redwood = weights.Redwood / landSum,
+			Amber = weights.Amber / landSum,
+			Mountain = 0f,
+		};
+	}
+
 	/// <summary>Binary spawn mask — ridged range field inside falloff band.</summary>
 	public static float SampleMountainSpawnMask01(
 		TerrainPreviewSettings settings,
@@ -88,7 +104,8 @@ public static class TerrainPreviewBiomeResolver
 		_ = nx;
 		_ = ny;
 		_ = baseHeight01;
-		return SampleMountainSpawnMask01( settings, worldXMeters, worldYMeters );
+		return TerrainPreviewMountainSpawnMask.SampleMountainHeightInfluence01(
+			settings, worldXMeters, worldYMeters );
 	}
 
 	/// <summary>Patch placement weights from scatter + distance — independent of peak lift (used before biome shaping).</summary>

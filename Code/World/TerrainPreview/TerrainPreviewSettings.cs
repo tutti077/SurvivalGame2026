@@ -160,8 +160,8 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Valleys" ), Title( "Weight" ), Range( 0f, 2f ), Step( 0.01f ), Description( "How deep valleys cut into base height — does not flood lakes." )]
 	public float ValleyWeight { get; set; } = 0.2f;
 
-	[Property, Group( "Mountains" ), Title( "Threshold" ), Range( 0f, 1f ), Step( 0.01f )]
-	public float MountainThreshold { get; set; } = 0.66f;
+	[Property, Group( "Mountains" ), Title( "Threshold" ), Range( 0f, 1f ), Step( 0.01f ), Description( "Range-field level before peak lift applies." )]
+	public float MountainThreshold { get; set; } = 0.55f;
 
 	[Property, Group( "Mountains" ), Title( "Frequency" ), Range( 0.25f, 32f ), Step( 0.05f )]
 	public float MountainFrequency { get; set; } = 8f;
@@ -191,7 +191,7 @@ public sealed partial class TerrainPreviewSettings
 	public float MountainFalloffRimPower { get; set; } = 1.35f;
 
 	[Property, Group( "Mountains" ), Title( "Peak Boost" ), Range( 0f, 1f ), Step( 0.01f )]
-	public float MountainPeakBoost { get; set; } = 0.88f;
+	public float MountainPeakBoost { get; set; } = 0.62f;
 
 	[Property, Group( "Mountains" ), Title( "Min Peak Height (0–1)" ), Range( 0f, 1f ), Step( 0.01f )]
 	public float MountainMinPeakHeight01 { get; set; } = 0.42f;
@@ -230,10 +230,43 @@ public sealed partial class TerrainPreviewSettings
 	public float MountainSlopeSampleStepMeters { get; set; } = 96f;
 
 	[Property, Group( "Mountains" ), Title( "Foothill Spread" ), Range( 0f, 0.55f ), Step( 0.01f )]
-	public float MountainFoothillSpread { get; set; }
+	public float MountainFoothillSpread { get; set; } = 0.10f;
 
 	[Property, Group( "Mountains" ), Title( "Foothill Boost" ), Range( 0f, 1f ), Step( 0.01f )]
-	public float MountainFoothillBoost { get; set; }
+	public float MountainFoothillBoost { get; set; } = 0.38f;
+
+	[Property, Group( "Mountains" ), Title( "Height Influence Low (0–1 field)" ), Range( 0.02f, 0.45f ), Step( 0.01f ), Description( "Mountain field where foothill lift begins — wide ramp avoids biome-edge cliffs." )]
+	public float MountainHeightInfluenceLow01 { get; set; } = 0.08f;
+
+	[Property, Group( "Mountains" ), Title( "Height Influence High (0–1 field)" ), Range( 0.25f, 0.98f ), Step( 0.01f ), Description( "Mountain field where full peak headroom applies." )]
+	public float MountainHeightInfluenceHigh01 { get; set; } = 0.72f;
+
+	[Property, Group( "Mountains" ), Title( "Peak Lift To Sculpt (0–1)" ), Range( 0.08f, 0.55f ), Step( 0.02f ), Description( "Peak boost strength before meter lerp." )]
+	public float MountainPeakLiftToSculpt01 { get; set; } = 0.28f;
+
+	[Property, Group( "Mountains" ), Title( "Ridge Peak Spacing (m)" ), Range( 120f, 900f ), Step( 25f ), Description( "Summits along streaky mountain ridges." )]
+	public float MountainPeakChainSpacingMeters { get; set; } = 420f;
+
+	[Property, Group( "Mountains" ), Title( "Ridge Peak Cross Tightness" ), Range( 0.12f, 1.5f ), Step( 0.05f )]
+	public float MountainPeakChainCrossTightness { get; set; } = 0.42f;
+
+	[Property, Group( "Mountains" ), Title( "Ridge Peak Cross Falloff" ), Range( 0.8f, 3.5f ), Step( 0.1f )]
+	public float MountainPeakChainCrossFalloff { get; set; } = 1.8f;
+
+	[Property, Group( "Mountains" ), Title( "Chunky Cluster Spacing (m)" ), Range( 160f, 800f ), Step( 25f ), Description( "Peak groups inside blobby (non-streak) mountain patches." )]
+	public float MountainPeakClusterSpacingMeters { get; set; } = 380f;
+
+	[Property, Group( "Mountains" ), Title( "Chunky Cluster Rarity Power" ), Range( 1.1f, 3.5f ), Step( 0.1f ), Description( "Higher = fewer peaks per cluster." )]
+	public float MountainPeakClusterRarityPower { get; set; } = 1.75f;
+
+	[Property, Group( "Mountains" ), Title( "Shape Probe (m)" ), Range( 80f, 500f ), Step( 10f ), Description( "Sample radius for ridge-vs-chunky detection." )]
+	public float MountainPeakShapeProbeMeters { get; set; } = 220f;
+
+	[Property, Group( "Mountains" ), Title( "Ridge Shape Blend Start (0–1)" ), Range( 0.2f, 0.7f ), Step( 0.02f ), Description( "Below = chunky clusters; above = ridge chains." )]
+	public float MountainPeakShapeBlendStart01 { get; set; } = 0.40f;
+
+	[Property, Group( "Mountains" ), Title( "Peak Placement Strength (0–1)" ), Range( 0.35f, 1f ), Step( 0.05f )]
+	public float MountainPeakPlacementStrength01 { get; set; } = 0.92f;
 
 	[Property, Group( "Mountain Mask" ), Title( "Macro Octaves" ), Range( 1, 6 ), Step( 1 )]
 	public int MountainSpawnMacroOctaves { get; set; } = 4;

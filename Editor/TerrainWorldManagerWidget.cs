@@ -13,6 +13,8 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 		nameof( Survival.TerrainWorldManager.MaxTerrainHeightMeters ),
 		nameof( Survival.TerrainWorldManager.ChunkSizeMeters ),
 		nameof( Survival.TerrainWorldManager.ChunkVerticesPerSide ),
+		nameof( Survival.TerrainWorldManager.ChunkHeightSmoothPasses ),
+		nameof( Survival.TerrainWorldManager.ChunkHeightSmoothStrength01 ),
 		nameof( Survival.TerrainWorldManager.StreamRadiusChunks ),
 		nameof( Survival.TerrainWorldManager.UseForwardConeStreaming ),
 		nameof( Survival.TerrainWorldManager.ForwardViewRadiusChunks ),

@@ -87,92 +87,55 @@ public static class TerrainPreviewPipeline
 			: TerrainPreviewLandDiskFields.GetFilteredPlacementWeights(
 				settings, worldXMeters, worldYMeters );
 
-		var mountainSpawnMask = placementWeights.Mountain;
-
-		var mountainField = TerrainPreviewMountainSpawnMask.SamplePlacement01(
-
+		var mountainSpawnMask = TerrainPreviewMountainSpawnMask.SampleMask01(
 			settings, worldXMeters, worldYMeters );
 
+		var mountainField = TerrainPreviewMountainSpawnMask.SamplePlacement01(
+			settings, worldXMeters, worldYMeters );
 
+		var mountainHeightInfluence = TerrainPreviewMountainSpawnMask.SampleMountainHeightInfluence01(
+			settings, worldXMeters, worldYMeters );
 
-		var shaped01 = TerrainPreviewBiomeTerrainShaper.ApplyBlendedShape01(
-
+		var lowlandWeights = TerrainPreviewBiomeResolver.LandWeightsWithoutMountain( placementWeights );
+		var lowlandShaped01 = TerrainPreviewBiomeTerrainShaper.ApplyBlendedShape01(
 			settings,
-
 			heightAfterCurve,
-
-			placementWeights,
-
+			lowlandWeights,
 			nx,
-
 			ny,
-
 			seed,
-
 			maxHeight,
-
 			out var terrainDetail01 );
 
-
-
-		var height01 = TerrainPreviewBiomeMountainPeaks.ApplyPeakLift01(
-
+		var mountainBoost01 = TerrainPreviewBiomeMountainPeaks.SampleBoost01(
 			settings,
-
-			shaped01,
-
-			placementWeights.Mountain,
-
+			mountainHeightInfluence,
 			rawLakeMask,
-
 			distMeters,
-
 			nx,
-
 			ny,
-
 			seed,
-
-			maxHeight,
-
 			out var mountain );
-
-
-
-		var mountainZone = TerrainPreviewMountainFalloff.SampleSpawnBand01( settings, distMeters );
-
-		var slopeDegrees = TerrainPreviewMountainSlope.SampleSlopeDegrees(
-
-			settings, nx, ny, seed, maxHeight, diameter );
-
-
-
-		height01 = settings.EnableBiomeSlopeSmoothing
-			? TerrainPreviewBiomeSlopeSmoothing.Apply01(
-				settings, height01, placementWeights, nx, ny, seed, terrainDetail01 )
-			: height01;
-
-
 
 		var dryLandHeightMeters = TerrainPreviewLandHeightDisplay.ApplyDryLandMeters(
 			settings,
 			heightAfterCurve,
-			height01,
-			placementWeights.Mountain,
+			lowlandShaped01,
+			mountainBoost01,
+			mountainHeightInfluence,
 			maxHeight );
 
 		dryLandHeightMeters = TerrainPreviewCoastalSmoothing.ApplyMeters(
 			settings, dryLandHeightMeters, worldXMeters, worldYMeters, distMeters, nx, ny, seed );
 
 		dryLandHeightMeters = TerrainPreviewLakeCombine.Apply(
-
 			settings, dryLandHeightMeters, isFilteredOpenWater: false ).HeightMeters;
 
+		var height01 = Math.Clamp( dryLandHeightMeters / maxHeight, 0f, 1f );
 
-
-		height01 = Math.Clamp( dryLandHeightMeters / maxHeight, 0f, 1f );
-
-
+		var mountainZone = TerrainPreviewMountainFalloff.SampleSpawnBand01( settings, distMeters );
+		var slopeDegrees = TerrainPreviewMountainSlope.SampleSlopeDegrees(
+			settings, nx, ny, seed, maxHeight, diameter );
 
 		return new TerrainPreviewSample
 
@@ -194,7 +157,7 @@ public static class TerrainPreviewPipeline
 
 			HeightAfterCurve01 = heightAfterCurve,
 
-			HeightAfterBiomeShape01 = shaped01,
+			HeightAfterBiomeShape01 = lowlandShaped01,
 
 			TerrainDetail01 = terrainDetail01,
 
@@ -291,4 +254,3 @@ public static class TerrainPreviewPipeline
 	}
 
 }
-
