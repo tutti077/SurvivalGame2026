@@ -52,29 +52,17 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Biomes" ), Title( "Edge Blend Start (0–1)" ), Range( 0.05f, 0.5f ), Step( 0.02f ), Description( "Mixing begins when biome transition exceeds this (higher = narrower border blend)." )]
 	public float BiomeEdgeBlendStart01 { get; set; } = 0.22f;
 
-	[Property, Group( "Biomes" ), Title( "Azure Coast" ), Description( "Teal shoreline strips on inland lakes and outer rim ocean (sparse compass sectors far from spawn)." )]
+	[Property, Group( "Biomes" ), Title( "Azure Coast" ), Description( "Continuous teal shore band on dry land within Azure Coast Width of rim ocean and inland lakes (far from spawn)." )]
 	public bool EnableAzureCoastBiome { get; set; } = true;
 
 	[Property, Group( "Biomes" ), Title( "Azure Coast — Rim Ocean" ), Description( "Teal band on dry land facing the outer ocean ring (map edge), not only inland lakes." )]
 	public bool AzureCoastIncludeRimOcean { get; set; } = true;
 
-	[Property, Group( "Biomes" ), Title( "Azure Coast Width (m)" ), Range( 20f, 250f ), Step( 5f ), Description( "Dry land band measured from nearest open water (lake or rim ocean)." )]
+	[Property, Group( "Biomes" ), Title( "Azure Coast Width (m)" ), Range( 50f, 500f ), Step( 5f ), Description( "Solid teal band inland from display-water shore (world-meter distance, smooth at sample)." )]
 	public float AzureCoastWidthMeters { get; set; } = 200f;
 
 	[Property, Group( "Biomes" ), Title( "Azure Coast Min Distance From Spawn (m)" ), Range( 0f, 15000f ), Step( 100f )]
 	public float AzureCoastMinDistanceFromSpawnMeters { get; set; } = 5500f;
-
-	[Property, Group( "Biomes" ), Title( "Azure Coast Active Sectors (of 24)" ), Range( 4, 20 ), Step( 1 ), Description( "How many compass wedges may host azure coast — spreads N/S/E/W instead of random grid blobs." )]
-	public int AzureCoastTargetRegionCount { get; set; } = 12;
-
-	[Property, Group( "Biomes" ), Title( "Azure Coast Region Cell Size (m)" ), Range( 500f, 6000f ), Step( 100f ), Description( "Coarse cells used to pick which map areas may host azure coast." )]
-	public float AzureCoastRegionCellSizeMeters { get; set; } = 2500f;
-
-	[Property, Group( "Biomes" ), Title( "Azure Coast Along-Shore Run (m)" ), Range( 200f, 1200f ), Step( 25f ), Description( "Noise wavelength for ~400–600 m shoreline strips." )]
-	public float AzureCoastAlongShoreRunMeters { get; set; } = 500f;
-
-	[Property, Group( "Biomes" ), Title( "Azure Coast Along-Shore Run Cutoff (0–1)" ), Range( 0.1f, 0.9f ), Step( 0.02f ), Description( "Higher = shorter / fewer strips along each picked shore." )]
-	public float AzureCoastAlongShoreRunCutoff01 { get; set; } = 0.38f;
 
 	[Property, Group( "Biomes" ), Title( "Blackwater" ), Description( "Named biome only — black circular patches punched over land biomes (not lakes)." )]
 	public bool EnableBlackwaterBiome { get; set; } = true;

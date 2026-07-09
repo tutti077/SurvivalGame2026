@@ -94,6 +94,11 @@ public sealed partial class TerrainPreviewSettings
 	public float InlandWaterMinPatchDiameterMeters { get; set; } = 80f;
 	public bool InlandWaterSpeckFilterEnabled { get; set; } = true;
 	public float LakeShoreBlendStrength01 { get; set; } = 0.68f;
+	public int AzureCoastTargetRegionCount { get; set; } = 12;
+	public float AzureCoastRegionCellSizeMeters { get; set; } = 2500f;
+	public float AzureCoastAlongShoreRunMeters { get; set; } = 500f;
+	public float AzureCoastAlongShoreRunCutoff01 { get; set; } = 0.38f;
+	public float AzureCoastAlongShoreFadeMeters { get; set; } = 120f;
 	public float SeaLevelSubmergeDepthMeters { get; set; } = 4f;
 	public bool EnableOrganicOceanFloor { get; set; } = true;
 	public float OceanFloorFrequency { get; set; } = 1.5f;

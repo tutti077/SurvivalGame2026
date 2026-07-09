@@ -23,12 +23,13 @@ public static class TerrainPreviewLandDiskFields
 	static bool[] _openWater = Array.Empty<bool>();
 	static TerrainPreviewBiomeId[] _rawLandBiomes = Array.Empty<TerrainPreviewBiomeId>();
 	static TerrainPreviewBiomeResolver.LandBiomeWeights[] _placementWeights = Array.Empty<TerrainPreviewBiomeResolver.LandBiomeWeights>();
-	static bool[] _azureCoast = Array.Empty<bool>();
-	static int _azureCoastFingerprint = int.MinValue;
 	static bool[] _blackwater = Array.Empty<bool>();
 	static int _blackwaterFingerprint = int.MinValue;
 	static TerrainPreviewBlackwater.Spot[] _blackwaterSpots = Array.Empty<TerrainPreviewBlackwater.Spot>();
 	static float[] _distanceToOpenWaterMeters = Array.Empty<float>();
+	static float[] _lakeMaskGrid = Array.Empty<float>();
+	static bool[] _displayLakeWater = Array.Empty<bool>();
+	static float[] _distanceToDisplayLakeMeters = Array.Empty<float>();
 	static readonly object _buildLock = new();
 
 	static int RasterCellCount( int res ) => Math.Max( 0, res ) * Math.Max( 0, res );
@@ -49,15 +50,16 @@ public static class TerrainPreviewLandDiskFields
 		_biomePlacementFingerprint = int.MinValue;
 		_waterFingerprint = int.MinValue;
 		_finalizeFingerprint = int.MinValue;
-		_azureCoastFingerprint = int.MinValue;
 		_blackwaterFingerprint = int.MinValue;
 		_isBuilding = false;
 		_landDisk = Array.Empty<bool>();
 		_openWater = Array.Empty<bool>();
-		_azureCoast = Array.Empty<bool>();
 		_blackwater = Array.Empty<bool>();
 		_blackwaterSpots = Array.Empty<TerrainPreviewBlackwater.Spot>();
 		_distanceToOpenWaterMeters = Array.Empty<float>();
+		_lakeMaskGrid = Array.Empty<float>();
+		_displayLakeWater = Array.Empty<bool>();
+		_distanceToDisplayLakeMeters = Array.Empty<float>();
 		_rawLandBiomes = Array.Empty<TerrainPreviewBiomeId>();
 		_placementWeights = Array.Empty<TerrainPreviewBiomeResolver.LandBiomeWeights>();
 	}
@@ -67,13 +69,14 @@ public static class TerrainPreviewLandDiskFields
 	{
 		_waterFingerprint = int.MinValue;
 		_finalizeFingerprint = int.MinValue;
-		_azureCoastFingerprint = int.MinValue;
 		_blackwaterFingerprint = int.MinValue;
 		_openWater = Array.Empty<bool>();
-		_azureCoast = Array.Empty<bool>();
 		_blackwater = Array.Empty<bool>();
 		_blackwaterSpots = Array.Empty<TerrainPreviewBlackwater.Spot>();
 		_distanceToOpenWaterMeters = Array.Empty<float>();
+		_lakeMaskGrid = Array.Empty<float>();
+		_displayLakeWater = Array.Empty<bool>();
+		_distanceToDisplayLakeMeters = Array.Empty<float>();
 	}
 
 	/// <summary>Drop biome placement — e.g. when World Seed changes during spawn solve.</summary>
@@ -327,16 +330,7 @@ public static class TerrainPreviewLandDiskFields
 	}
 
 	public static bool IsAzureCoast( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
-	{
-		if ( !settings.EnableAzureCoastBiome )
-			return false;
-
-		EnsureBuilt( settings );
-		if ( !TryWorldToIndex( settings, worldXMeters, worldYMeters, out var idx ) )
-			return false;
-
-		return _azureCoast.Length > idx && _azureCoast[idx];
-	}
+		=> TerrainPreviewAzureCoast.SampleAtWorldMeters( settings, worldXMeters, worldYMeters );
 
 	public static bool IsBlackwater( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
 	{
@@ -424,10 +418,6 @@ public static class TerrainPreviewLandDiskFields
 				if ( TerrainPreviewGenerateProgress.ShouldAbort() )
 					return;
 
-				EnsureAzureCoastMask( settings );
-				if ( TerrainPreviewGenerateProgress.ShouldAbort() )
-					return;
-
 				FinalizeDryLandBiomes( settings );
 				if ( TerrainPreviewGenerateProgress.ShouldAbort() )
 					return;
@@ -485,31 +475,10 @@ public static class TerrainPreviewLandDiskFields
 			out _openWater,
 			out _lakeCoverageOnLand01 );
 
-		EnsureWaterDistanceField( settings, res, metersPerPixel );
+		EnsureWaterDistanceFields( settings, res, metersPerPixel, lakeMaskGrid );
 
+		_lakeMaskGrid = lakeMaskGrid;
 		_waterFingerprint = fingerprint;
-		_finalizeFingerprint = int.MinValue;
-		_azureCoastFingerprint = int.MinValue;
-		_blackwaterFingerprint = int.MinValue;
-	}
-
-	static void EnsureAzureCoastMask( TerrainPreviewSettings settings )
-	{
-		var fingerprint = ComputeAzureCoastFingerprint( settings );
-		if ( fingerprint == _azureCoastFingerprint && _azureCoast.Length > 0 )
-			return;
-
-		TerrainPreviewGenerateProgress.SetStage( "Azure coast" );
-		var res = _fieldResolution;
-		TerrainPreviewAzureCoast.BuildMask(
-			settings,
-			_landDisk,
-			_openWater,
-			res,
-			settings.WorldRadiusMeters,
-			settings.WorldDiameterMeters,
-			out _azureCoast );
-		_azureCoastFingerprint = fingerprint;
 		_finalizeFingerprint = int.MinValue;
 		_blackwaterFingerprint = int.MinValue;
 	}
@@ -534,10 +503,16 @@ public static class TerrainPreviewLandDiskFields
 		_blackwaterFingerprint = fingerprint;
 	}
 
-	static void EnsureWaterDistanceField( TerrainPreviewSettings settings, int res, float metersPerPixel )
+	static void EnsureWaterDistanceFields(
+		TerrainPreviewSettings settings,
+		int res,
+		float metersPerPixel,
+		float[] lakeMaskGrid )
 	{
 		var count = RasterCellCount( res );
-		if ( _distanceToOpenWaterMeters.Length == count && _waterFingerprint != int.MinValue )
+		if ( _distanceToOpenWaterMeters.Length == count
+			&& _distanceToDisplayLakeMeters.Length == count
+			&& _waterFingerprint != int.MinValue )
 			return;
 
 		if ( !WaterRasterReady( res ) )
@@ -550,6 +525,184 @@ public static class TerrainPreviewLandDiskFields
 			res,
 			metersPerPixel,
 			_distanceToOpenWaterMeters );
+
+		_displayLakeWater = new bool[count];
+		if ( lakeMaskGrid is not null && lakeMaskGrid.Length == count )
+		{
+			for ( var i = 0; i < count; i++ )
+				_displayLakeWater[i] = _landDisk[i] && lakeMaskGrid[i] > _openWaterThreshold01;
+		}
+
+		_distanceToDisplayLakeMeters = new float[count];
+		TerrainPreviewOpenWaterDistance.BuildDistanceMeters(
+			_landDisk,
+			_displayLakeWater,
+			res,
+			metersPerPixel,
+			_distanceToDisplayLakeMeters );
+	}
+
+	static bool LakeMaskGridReady( int res )
+		=> _lakeMaskGrid.Length == RasterCellCount( res );
+
+	/// <summary>Bilinear lake placement mask from the one-time build grid — hot-path safe after <see cref="EnsureReady"/>.</summary>
+	public static bool TrySampleLakeMask01AtWorld(
+		TerrainPreviewSettings settings,
+		float worldXMeters,
+		float worldYMeters,
+		out float mask01 )
+	{
+		mask01 = 0f;
+		if ( settings is null || !settings.EnableInteriorWaterLayer )
+			return false;
+
+		if ( _isBuilding && !LakeMaskGridReady( _fieldResolution ) )
+			return false;
+
+		if ( !LakeMaskGridReady( _fieldResolution ) )
+			return false;
+
+		mask01 = SampleLakeMaskGridBilinear( settings, worldXMeters, worldYMeters );
+		return true;
+	}
+
+	/// <summary>Display lake tint — cached mask vs threshold, not per-sample FBM.</summary>
+	public static bool IsDisplayLakeWaterAtWorld(
+		TerrainPreviewSettings settings,
+		float worldXMeters,
+		float worldYMeters )
+	{
+		if ( settings is null || !settings.EnableInteriorWaterLayer )
+			return false;
+
+		if ( TrySampleLakeMask01AtWorld( settings, worldXMeters, worldYMeters, out var mask ) )
+			return mask > GetOpenWaterThreshold01( settings );
+
+		if ( _isBuilding )
+			return false;
+
+		EnsureBuilt( settings );
+		if ( TrySampleLakeMask01AtWorld( settings, worldXMeters, worldYMeters, out mask ) )
+			return mask > GetOpenWaterThreshold01( settings );
+
+		return TerrainPreviewLakeMap.SampleMaskAtWorldMeters(
+			settings, worldXMeters, worldYMeters, settings.WorldSeed )
+			> GetOpenWaterThreshold01( settings );
+	}
+
+	static float SampleLakeMaskGridBilinear(
+		TerrainPreviewSettings settings,
+		float worldXMeters,
+		float worldYMeters )
+	{
+		var res = _fieldResolution;
+		var radius = settings.WorldRadiusMeters;
+		var diameter = settings.WorldDiameterMeters;
+		if ( diameter <= 0f || res <= 1 || !LakeMaskGridReady( res ) )
+			return 0f;
+
+		WorldMetersToRasterFloat( worldXMeters, worldYMeters, radius, diameter, res, out var fx, out var fy );
+
+		var x0 = (int)MathF.Floor( fx );
+		var y0 = (int)MathF.Floor( fy );
+		var tx = fx - x0;
+		var ty = fy - y0;
+
+		var m00 = SampleLakeMaskAtRaster( x0, y0 );
+		var m10 = SampleLakeMaskAtRaster( x0 + 1, y0 );
+		var m01 = SampleLakeMaskAtRaster( x0, y0 + 1 );
+		var m11 = SampleLakeMaskAtRaster( x0 + 1, y0 + 1 );
+
+		var m0 = m00 + ((m10 - m00) * tx);
+		var m1 = m01 + ((m11 - m01) * tx);
+		return m0 + ((m1 - m0) * ty);
+	}
+
+	static float SampleLakeMaskAtRaster( int px, int py )
+	{
+		var res = _fieldResolution;
+		if ( px < 0 || py < 0 || px >= res || py >= res )
+			return 0f;
+
+		var idx = (py * res) + px;
+		if ( idx >= _lakeMaskGrid.Length )
+			return 0f;
+
+		return _lakeMaskGrid[idx];
+	}
+
+	static void WorldMetersToRasterFloat(
+		float worldXMeters,
+		float worldYMeters,
+		float radius,
+		float diameter,
+		int res,
+		out float fx,
+		out float fy )
+	{
+		var pxMirrorF = ( ((worldXMeters + radius) / diameter) * res ) - 0.5f;
+		fy = ( ((worldYMeters + radius) / diameter) * res ) - 0.5f;
+		fx = (res - 1) - pxMirrorF;
+	}
+
+	/// <summary>Bilinear meters from dry land to nearest display lake (mask &gt; threshold), matching blue water tint.</summary>
+	public static float SampleDistanceToDisplayLakeMetersSmooth(
+		TerrainPreviewSettings settings,
+		float worldXMeters,
+		float worldYMeters )
+	{
+		if ( !settings.EnableInteriorWaterLayer )
+			return float.MaxValue;
+
+		if ( _isBuilding && !WaterRasterReady( _fieldResolution ) )
+			return float.MaxValue;
+
+		EnsureBuilt( settings );
+
+		if ( IsDisplayLakeWaterAtWorld( settings, worldXMeters, worldYMeters ) )
+			return 0f;
+
+		var res = _fieldResolution;
+		var radius = settings.WorldRadiusMeters;
+		var diameter = settings.WorldDiameterMeters;
+		if ( diameter <= 0f || res <= 1 )
+			return float.MaxValue;
+
+		var distFromCenter = MathF.Sqrt( (worldXMeters * worldXMeters) + (worldYMeters * worldYMeters) );
+		if ( distFromCenter > settings.LandRadiusMeters )
+			return float.MaxValue;
+
+		WorldMetersToRasterFloat( worldXMeters, worldYMeters, radius, diameter, res, out var fx, out var fy );
+
+		var x0 = (int)MathF.Floor( fx );
+		var y0 = (int)MathF.Floor( fy );
+		var tx = fx - x0;
+		var ty = fy - y0;
+
+		var d00 = SampleDisplayLakeDistanceAtRaster( x0, y0 );
+		var d10 = SampleDisplayLakeDistanceAtRaster( x0 + 1, y0 );
+		var d01 = SampleDisplayLakeDistanceAtRaster( x0, y0 + 1 );
+		var d11 = SampleDisplayLakeDistanceAtRaster( x0 + 1, y0 + 1 );
+
+		var d0 = LerpFinite( d00, d10, tx );
+		var d1 = LerpFinite( d01, d11, tx );
+		return LerpFinite( d0, d1, ty );
+	}
+
+	static float SampleDisplayLakeDistanceAtRaster( int px, int py )
+	{
+		var res = _fieldResolution;
+		if ( px < 0 || py < 0 || px >= res || py >= res )
+			return float.MaxValue;
+
+		var idx = (py * res) + px;
+		if ( idx >= _landDisk.Length || idx >= _displayLakeWater.Length || idx >= _distanceToDisplayLakeMeters.Length )
+			return float.MaxValue;
+
+		if ( !_landDisk[idx] || _displayLakeWater[idx] )
+			return 0f;
+
+		return _distanceToDisplayLakeMeters[idx];
 	}
 
 	static int ComputeBlackwaterFingerprint( TerrainPreviewSettings settings )
@@ -568,17 +721,6 @@ public static class TerrainPreviewLandDiskFields
 		hash.Add( settings.BlackwaterMinDistanceFromOtherMeters );
 		return hash.ToHashCode();
 	}
-
-	static int ComputeAzureCoastFingerprint( TerrainPreviewSettings settings )
-		=> HashCode.Combine(
-			_waterFingerprint,
-			settings.EnableAzureCoastBiome,
-			settings.AzureCoastIncludeRimOcean,
-			settings.AzureCoastWidthMeters,
-			settings.AzureCoastMinDistanceFromSpawnMeters,
-			settings.AzureCoastTargetRegionCount,
-			settings.AzureCoastAlongShoreRunMeters,
-			settings.AzureCoastAlongShoreRunCutoff01 );
 
 	static void FinalizeDryLandBiomes( TerrainPreviewSettings settings )
 	{

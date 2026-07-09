@@ -60,19 +60,11 @@ public static class TerrainPreviewPipeline
 
 
 
-		var rawLakeMask = TerrainPreviewLakeMap.SampleMaskAtWorldMeters(
-
-			settings, worldXMeters, worldYMeters, seed );
-
-		var isOpenWater = TerrainPreviewLandDiskFields.IsOpenWater( settings, worldXMeters, worldYMeters );
-
-
-
-		if ( isOpenWater )
-
-			return BuildOpenWaterSample( settings, maxHeight, rawLakeMask );
-
-
+		var rawLakeMask = TerrainPreviewLandDiskFields.TrySampleLakeMask01AtWorld(
+			settings, worldXMeters, worldYMeters, out var cachedLakeMask )
+			? cachedLakeMask
+			: TerrainPreviewLakeMap.SampleMaskAtWorldMeters(
+				settings, worldXMeters, worldYMeters, seed );
 
 		var baseLayers = TerrainPreviewBaseHeight.Sample(
 			settings, worldXMeters, worldYMeters, nx, ny, seed );
@@ -128,10 +120,15 @@ public static class TerrainPreviewPipeline
 		dryLandHeightMeters = TerrainPreviewCoastalSmoothing.ApplyMeters(
 			settings, dryLandHeightMeters, worldXMeters, worldYMeters, distMeters, nx, ny, seed );
 
+		dryLandHeightMeters = TerrainPreviewLakeShoreHeight.ApplyDryLandNearLake(
+			settings, dryLandHeightMeters, rawLakeMask );
+
 		dryLandHeightMeters = TerrainPreviewLakeCombine.Apply(
 			settings, dryLandHeightMeters, isFilteredOpenWater: false ).HeightMeters;
 
+		var submerged = TerrainPreviewLakeShoreHeight.IsSubmergedByLakeMask( settings, rawLakeMask );
 		var height01 = Math.Clamp( dryLandHeightMeters / maxHeight, 0f, 1f );
+		var sea = settings.SeaLevelMeters;
 
 		var mountainZone = TerrainPreviewMountainFalloff.SampleSpawnBand01( settings, distMeters );
 		var slopeDegrees = TerrainPreviewMountainSlope.SampleSlopeDegrees(
@@ -145,7 +142,7 @@ public static class TerrainPreviewPipeline
 
 			HeightMeters = dryLandHeightMeters,
 
-			OceanHeight01 = 0f,
+			OceanHeight01 = submerged ? 1f : 0f,
 
 			ContinentalNoise01 = settings.EnableContinentalLayer ? baseLayers.Continent01 : 0f,
 
@@ -179,7 +176,7 @@ public static class TerrainPreviewPipeline
 
 			IsInsideWorld = true,
 
-			IsOnLand = true,
+			IsOnLand = !submerged && dryLandHeightMeters > sea + 0.05f,
 
 			HasLandWeights = true,
 

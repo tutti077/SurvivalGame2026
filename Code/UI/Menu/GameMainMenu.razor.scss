@@ -1,0 +1,198 @@
+GameMainMenu
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: all;
+	z-index: 10000;
+
+	.backdrop
+	{
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		background-color: transparent;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.card
+	{
+		width: 640px;
+		max-width: 92%;
+		padding: 32px 36px;
+		flex-direction: column;
+		gap: 16px;
+		background-color: rgba( 10, 15, 20, 0.78 );
+		border-radius: 8px;
+	}
+
+	.title
+	{
+		font-size: 36px;
+		font-weight: bold;
+		color: #f2f2f2;
+		text-align: center;
+		margin-bottom: 8px;
+	}
+
+	.hint
+	{
+		font-size: 15px;
+		color: #9aa3ad;
+		text-align: center;
+	}
+
+	.button-row
+	{
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.menu-button
+	{
+		padding: 14px 18px;
+		font-size: 18px;
+		font-weight: 600;
+		color: #101010;
+		background-color: #e6e6e6;
+		border-radius: 6px;
+		text-align: center;
+		cursor: pointer;
+
+		&:hover
+		{
+			background-color: #ffffff;
+		}
+
+		&.secondary
+		{
+			color: #d8d8d8;
+			background-color: #2a323c;
+
+			&:hover
+			{
+				background-color: #36404d;
+			}
+		}
+	}
+
+	.save-list
+	{
+		flex-direction: column;
+		gap: 10px;
+		max-height: 360px;
+		overflow: scroll;
+	}
+
+	.save-row
+	{
+		padding: 12px 14px;
+		background-color: #151b22;
+		border: 1px solid #2d3742;
+		border-radius: 6px;
+		flex-direction: column;
+		gap: 4px;
+		cursor: pointer;
+
+		&:hover
+		{
+			background-color: #1c2430;
+			border-color: #4a5a6b;
+		}
+
+		&.selected
+		{
+			background-color: #243044;
+			border-color: #6a9fd4;
+		}
+	}
+
+	.save-name
+	{
+		font-size: 18px;
+		font-weight: 600;
+		color: #f0f0f0;
+	}
+
+	.save-meta
+	{
+		font-size: 13px;
+		color: #9aa3ad;
+	}
+
+	.field-label
+	{
+		font-size: 14px;
+		color: #b8c0c8;
+	}
+
+	.text-field
+	{
+		width: 100%;
+		min-height: 36px;
+		padding: 8px 10px;
+		font-size: 16px;
+		color: #f0f0f0;
+		background-color: #151b22;
+		border: 1px solid #2d3742;
+		border-radius: 4px;
+	}
+
+	.load-actions
+	{
+		flex-direction: column;
+		gap: 10px;
+		margin-top: 4px;
+	}
+
+	.load-actions-secondary
+	{
+		flex-direction: row;
+		gap: 10px;
+	}
+
+	.menu-button.load-primary
+	{
+		font-size: 20px;
+		padding: 16px 18px;
+	}
+
+	.menu-button.action-small
+	{
+		flex: 1;
+		font-size: 15px;
+		padding: 10px 12px;
+	}
+
+	.menu-button.disabled
+	{
+		opacity: 0.45;
+		pointer-events: none;
+	}
+
+	.prompt-panel
+	{
+		flex-direction: column;
+		gap: 10px;
+		padding: 12px 14px;
+		background-color: #121820;
+		border: 1px solid #36404d;
+		border-radius: 6px;
+	}
+
+	.prompt-actions
+	{
+		flex-direction: row;
+		gap: 10px;
+
+		.menu-button
+		{
+			flex: 1;
+		}
+	}
+}

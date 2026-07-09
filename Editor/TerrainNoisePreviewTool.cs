@@ -38,7 +38,6 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 	Texture _liveTexture;
 	bool _isGenerating;
 	bool _livePreviewEnabled = true;
-	int _livePreviewResolution = 512;
 	int _settingsFingerprint;
 	RealTimeSince _liveDebounce;
 	bool _liveRegenScheduled;
@@ -264,9 +263,7 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 		try
 		{
 			settings = _settings.CloneForGenerate( !liveOnly && _settings.RandomizeSeedOnGenerate );
-			if ( liveOnly )
-				settings.PreviewResolution = Math.Clamp( _livePreviewResolution, 64, settings.PreviewResolution );
-			else if ( _settings.RandomizeSeedOnGenerate )
+			if ( !liveOnly && _settings.RandomizeSeedOnGenerate )
 				_settings.WorldSeed = settings.WorldSeed;
 
 			var work = Task.Run( () =>
@@ -489,10 +486,6 @@ static class TerrainPreviewControlTabs
 		nameof( TerrainPreviewSettings.AzureCoastIncludeRimOcean ),
 		nameof( TerrainPreviewSettings.AzureCoastWidthMeters ),
 		nameof( TerrainPreviewSettings.AzureCoastMinDistanceFromSpawnMeters ),
-		nameof( TerrainPreviewSettings.AzureCoastTargetRegionCount ),
-		nameof( TerrainPreviewSettings.AzureCoastRegionCellSizeMeters ),
-		nameof( TerrainPreviewSettings.AzureCoastAlongShoreRunMeters ),
-		nameof( TerrainPreviewSettings.AzureCoastAlongShoreRunCutoff01 ),
 		nameof( TerrainPreviewSettings.EnableBlackwaterBiome ),
 		nameof( TerrainPreviewSettings.BlackwaterSpotCount ),
 		nameof( TerrainPreviewSettings.BlackwaterMinDiameterMeters ),

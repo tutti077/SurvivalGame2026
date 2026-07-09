@@ -1,12 +1,12 @@
 {
   "RootObject": {
-    "__guid": "8ae00320-0e16-40c8-9275-01a362936d1b",
+    "__guid": "e054d124-f2f1-4b1c-ad37-c8cefe29c6e3",
     "__version": 2,
     "Flags": 0,
     "Name": "sampleBush",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
-    "Scale": "1,1,1",
+    "Scale": "0.400000006,0.400000006,0.400000006",
     "Tags": "",
     "Enabled": true,
     "NetworkMode": 1,
@@ -17,16 +17,16 @@
     "Components": [
       {
         "__type": "Sandbox.ModelRenderer",
-        "__guid": "0cc95a3c-e90c-4a6c-ac16-bbd785f7523f",
+        "__guid": "200f0897-ded9-45b9-bedd-7905c5f0b1c0",
         "__enabled": true,
         "Flags": 0,
         "BodyGroups": 18446744073709551615,
         "CreateAttachments": false,
         "LodOverride": null,
         "MaterialGroup": null,
-        "MaterialOverride": "materials/environment/bush.vmat",
+        "MaterialOverride": null,
         "Materials": null,
-        "Model": "models/dev/sphere.vmdl",
+        "Model": "models/8riv_wildbush_b02.vmdl",
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
@@ -44,7 +44,7 @@
       },
       {
         "__type": "Survival.ResourceItemDefinition",
-        "__guid": "f6c07270-df35-42bc-bffd-8f3d65a4db77",
+        "__guid": "7663584e-5da5-4559-80ef-8948aa7bdfee",
         "__enabled": true,
         "Flags": 0,
         "AutoEnsureTraceCollider": false,
@@ -113,6 +113,8 @@
   "MenuPath": null,
   "MenuIcon": null,
   "DontBreakAsTemplate": false,
-  "__references": [],
+  "__references": [
+    "orus.8riv_wildbush_b02#33982"
+  ],
   "__version": 2
 }

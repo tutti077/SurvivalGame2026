@@ -1,0 +1,277 @@
+@using Sandbox
+@using Sandbox.UI
+@namespace Survival
+@inherits PanelComponent
+
+<root>
+	<div class="backdrop" @ref="_backdrop">
+		<div class="card">
+			@if ( Page == MenuPage.Main )
+			{
+				<div class="title">Unnamed Game</div>
+				<div class="button-row">
+					<div class="menu-button" onclick="@ShowLoadPage">Load World</div>
+					<div class="menu-button" onclick="@ShowCreatePage">Create World</div>
+				</div>
+			}
+			else if ( Page == MenuPage.Load )
+			{
+				<div class="title">Load World</div>
+				@if ( SaveEntries.Count == 0 )
+				{
+					<div class="hint">No saves in WorldSaves yet — create a world first.</div>
+				}
+				else
+				{
+					<div class="save-list">
+						@foreach ( var save in SaveEntries )
+						{
+							<div class="save-row @(IsSelected(save.WorldName) ? "selected" : "")"
+								 onclick="@(() => SelectWorld(save.WorldName))">
+								<div class="save-name">@save.WorldName</div>
+								<div class="save-meta">Seed @save.WorldSeed</div>
+								<div class="save-meta">First generated: @FormatTimestamp( save.FirstGeneratedUtc )</div>
+								<div class="save-meta">Last loaded: @FormatTimestamp( save.LastLoadedUtc )</div>
+							</div>
+						}
+					</div>
+				}
+
+				@if ( LoadPrompt != LoadPromptKind.None )
+				{
+					<div class="prompt-panel">
+						<div class="field-label">@PromptTitle</div>
+						<TextEntry class="text-field" Value:bind="@PromptWorldName" Placeholder="World name" />
+						<div class="prompt-actions">
+							<div class="menu-button" onclick="@ConfirmPrompt">Confirm</div>
+							<div class="menu-button secondary" onclick="@CancelPrompt">Cancel</div>
+						</div>
+					</div>
+				}
+
+				<div class="load-actions">
+					<div class="menu-button load-primary @(HasSelection ? "" : "disabled")" onclick="@TryLoadSelected">Load</div>
+					<div class="load-actions-secondary">
+						<div class="menu-button secondary action-small @(HasSelection ? "" : "disabled")" onclick="@TryDeleteSelected">Delete</div>
+						<div class="menu-button secondary action-small @(HasSelection ? "" : "disabled")" onclick="@BeginCopyPrompt">Copy</div>
+						<div class="menu-button secondary action-small @(HasSelection ? "" : "disabled")" onclick="@BeginRenamePrompt">Rename</div>
+					</div>
+					<div class="menu-button secondary" onclick="@ShowMainPage">Back</div>
+				</div>
+			}
+			else
+			{
+				<div class="title">Create World</div>
+				<div class="field-label">World name</div>
+				<TextEntry class="text-field" Value:bind="@NewWorldName" Placeholder="My World" />
+				<div class="field-label">Seed</div>
+				<TextEntry class="text-field" Value:bind="@NewWorldSeedText" Placeholder="1337" />
+				<div class="menu-button" onclick="@CreateWorld">Create</div>
+				<div class="menu-button secondary" onclick="@ShowMainPage">Back</div>
+			}
+		</div>
+	</div>
+</root>
+
+@code
+{
+	public enum MenuPage
+	{
+		Main,
+		Load,
+		Create,
+	}
+
+	public enum LoadPromptKind
+	{
+		None,
+		Rename,
+		Copy,
+	}
+
+	public MenuPage Page { get; set; } = MenuPage.Main;
+	public LoadPromptKind LoadPrompt { get; set; } = LoadPromptKind.None;
+	public List<WorldSaveEntry> SaveEntries { get; set; } = new();
+	public string SelectedWorldName { get; set; } = "";
+	public string PromptWorldName { get; set; } = "";
+	public string NewWorldName { get; set; } = "New World";
+	public string NewWorldSeedText { get; set; } = "1337";
+
+	public Action<string> OnLoadWorld { get; set; }
+	public Action<string> OnDeleteWorld { get; set; }
+	public Action<string, string> OnCopyWorld { get; set; }
+	public Action<string, string> OnRenameWorld { get; set; }
+	public Action<string, int> OnCreateWorld { get; set; }
+	public Action OnRefreshSaves { get; set; }
+
+	Panel _backdrop;
+
+	const string BackgroundImagePath = "ui/menu/mainMenuBackground.png";
+
+	bool HasSelection => !string.IsNullOrWhiteSpace( SelectedWorldName );
+
+	string PromptTitle => LoadPrompt switch
+	{
+		LoadPromptKind.Rename => $"Rename \"{SelectedWorldName}\"",
+		LoadPromptKind.Copy => $"Copy \"{SelectedWorldName}\" to",
+		_ => "",
+	};
+
+	protected override void OnTreeFirstBuilt()
+	{
+		base.OnTreeFirstBuilt();
+		SyncFullscreenBounds();
+		ApplyMenuBackground();
+	}
+
+	void ApplyMenuBackground()
+	{
+		if ( _backdrop is null || !_backdrop.IsValid() )
+			return;
+
+		_backdrop.Style.BackgroundColor = Color.Transparent;
+		_backdrop.Style.Set( "background-size", "cover" );
+		_backdrop.Style.Set( "background-repeat", "no-repeat" );
+		_backdrop.Style.Set( "background-position", "center" );
+
+		if ( MenuUiTextures.MountedPathExists( BackgroundImagePath ) )
+		{
+			_backdrop.Style.SetBackgroundImage( BackgroundImagePath );
+			return;
+		}
+
+		MenuUiTextures.ApplyBackground( _backdrop, BackgroundImagePath );
+	}
+
+	void SyncFullscreenBounds()
+	{
+		if ( Panel is Sandbox.UI.RootPanel root )
+			root.PanelBounds = new Rect( 0, 0, Screen.Width, Screen.Height );
+	}
+
+	void ShowMainPage()
+	{
+		Page = MenuPage.Main;
+		LoadPrompt = LoadPromptKind.None;
+		StateHasChanged();
+	}
+
+	void ShowLoadPage()
+	{
+		OnRefreshSaves?.Invoke();
+		LoadPrompt = LoadPromptKind.None;
+		Page = MenuPage.Load;
+		EnsureSelection();
+		StateHasChanged();
+	}
+
+	void ShowCreatePage()
+	{
+		Page = MenuPage.Create;
+		StateHasChanged();
+	}
+
+	void EnsureSelection()
+	{
+		if ( HasSelection && SaveEntries.Any( s => string.Equals( s.WorldName, SelectedWorldName, StringComparison.OrdinalIgnoreCase ) ) )
+			return;
+
+		SelectedWorldName = SaveEntries.Count > 0 ? SaveEntries[0].WorldName : "";
+	}
+
+	bool IsSelected( string worldName )
+		=> string.Equals( SelectedWorldName, worldName, StringComparison.OrdinalIgnoreCase );
+
+	void SelectWorld( string worldName )
+	{
+		SelectedWorldName = worldName;
+		LoadPrompt = LoadPromptKind.None;
+		StateHasChanged();
+	}
+
+	void TryLoadSelected()
+	{
+		if ( !HasSelection )
+			return;
+
+		OnLoadWorld?.Invoke( SelectedWorldName );
+	}
+
+	void TryDeleteSelected()
+	{
+		if ( !HasSelection )
+			return;
+
+		OnDeleteWorld?.Invoke( SelectedWorldName );
+	}
+
+	void BeginRenamePrompt()
+	{
+		if ( !HasSelection )
+			return;
+
+		LoadPrompt = LoadPromptKind.Rename;
+		PromptWorldName = SelectedWorldName;
+		StateHasChanged();
+	}
+
+	void BeginCopyPrompt()
+	{
+		if ( !HasSelection )
+			return;
+
+		LoadPrompt = LoadPromptKind.Copy;
+		PromptWorldName = $"{SelectedWorldName} Copy";
+		StateHasChanged();
+	}
+
+	void CancelPrompt()
+	{
+		LoadPrompt = LoadPromptKind.None;
+		PromptWorldName = "";
+		StateHasChanged();
+	}
+
+	void ConfirmPrompt()
+	{
+		var newName = PromptWorldName?.Trim();
+		if ( string.IsNullOrWhiteSpace( newName ) || !HasSelection )
+			return;
+
+		switch ( LoadPrompt )
+		{
+			case LoadPromptKind.Rename:
+				OnRenameWorld?.Invoke( SelectedWorldName, newName );
+				break;
+			case LoadPromptKind.Copy:
+				OnCopyWorld?.Invoke( SelectedWorldName, newName );
+				break;
+		}
+
+		LoadPrompt = LoadPromptKind.None;
+		PromptWorldName = "";
+	}
+
+	void CreateWorld()
+	{
+		var name = string.IsNullOrWhiteSpace( NewWorldName ) ? "New World" : NewWorldName.Trim();
+		if ( !int.TryParse( NewWorldSeedText?.Trim(), out var seed ) )
+			seed = 1337;
+
+		OnCreateWorld?.Invoke( name, seed );
+	}
+
+	static string FormatTimestamp( string utc )
+	{
+		if ( string.IsNullOrWhiteSpace( utc ) )
+			return "—";
+
+		if ( !DateTime.TryParse( utc, out var parsed ) )
+			return utc;
+
+		return parsed.ToLocalTime().ToString( "g" );
+	}
+
+	protected override int BuildHash()
+		=> HashCode.Combine( (int)Page, (int)LoadPrompt, SaveEntries.Count, SelectedWorldName, PromptWorldName, NewWorldName, NewWorldSeedText );
+}

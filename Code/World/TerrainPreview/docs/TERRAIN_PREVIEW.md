@@ -88,7 +88,7 @@ Biome-specific sculpting (`TerrainPreviewBiomeTerrainShaper`, etc.) runs in the 
 
 **Biome edges:** **Biomes - Continuous Placement At Sample** makes blobby patches. **Biomes - Edge Color Blend (0–1)** (~0.35) softens borders only — interiors stay dominant biome color. Shader splats can replace this later.
 
-**Azure Coast:** **Biomes - Azure Coast** paints teal **Biomes - Azure Coast Width (m)** strips on inland lake shores, **Biomes - Azure Coast Min Distance From Spawn (m)**+ only, ~**Biomes - Azure Coast Target Region Count** sparse regions with **Biomes - Azure Coast Along-Shore Run (m)** strips.
+**Azure Coast:** **Biomes - Azure Coast** replaces other land biomes with teal on dry land within **Biomes - Azure Coast Width (m)** world meters of display-water shores (blue lakes + rim ocean), **Biomes - Azure Coast Min Distance From Spawn (m)**+ only. Hard biome edge (no coverage fade vs other land); inland band end tapers at ~15° along the coast so tips narrow instead of a blunt 90° cutoff from a constant-width offset.
 
 ## Mountain mask tab
 

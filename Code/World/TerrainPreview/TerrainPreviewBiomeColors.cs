@@ -17,21 +17,13 @@ public static class TerrainPreviewBiomeColors
 		return Color.Lerp( heightGray, biomeColor, overlay );
 	}
 
-	/// <summary>Chunk mesh tint — uses weights already on the sample; skips redundant resolver passes.</summary>
-	public static Color FastMeshVertexColor( TerrainPreviewSettings settings, TerrainPreviewSample sample )
-	{
-		if ( !sample.IsInsideWorld )
-			return Color.Black;
-
-		if ( sample.OceanHeight01 > 0.5f )
-			return PaletteColor( TerrainPreviewBiomeId.Water, 1f );
-
-		if ( !sample.HasLandWeights )
-			return Grayscale( sample.Height01 );
-
-		var biome = TerrainPreviewBiomeResolver.PickDominantPlacementBiome( sample.LandWeights );
-		return ColorizeOverlay( settings, biome, 1f, sample.Height01 );
-	}
+	/// <summary>Shared land tint for preview PNG and streamed chunk meshes — hard water, soft land-biome edges only.</summary>
+	public static Color UnifiedDisplayColor(
+		TerrainPreviewSettings settings,
+		TerrainPreviewSample sample,
+		float worldXMeters,
+		float worldYMeters )
+		=> SampleBiomeOverlay( settings, sample, worldXMeters, worldYMeters );
 
 	public static Color SampleBiomeOverlay(
 		TerrainPreviewSettings settings,
@@ -39,10 +31,27 @@ public static class TerrainPreviewBiomeColors
 		float worldXMeters,
 		float worldYMeters )
 	{
+		var resolved = TerrainPreviewBiomeResolver.Resolve( settings, sample, worldXMeters, worldYMeters );
+		return SampleBiomeOverlay( settings, sample, worldXMeters, worldYMeters, resolved );
+	}
+
+	public static Color SampleBiomeOverlay(
+		TerrainPreviewSettings settings,
+		TerrainPreviewSample sample,
+		float worldXMeters,
+		float worldYMeters,
+		TerrainPreviewBiomeResolver.Result resolved )
+	{
 		if ( !sample.IsInsideWorld )
 			return Color.Black;
 
-		var resolved = TerrainPreviewBiomeResolver.Resolve( settings, sample, worldXMeters, worldYMeters );
+		if ( resolved.BiomeId is TerrainPreviewBiomeId.Water
+			or TerrainPreviewBiomeId.Blackwater )
+			return ColorizeOverlay( settings, resolved.BiomeId, resolved.Shade01, sample.Height01 );
+
+		if ( resolved.BiomeId == TerrainPreviewBiomeId.AzureCoast )
+			return PaletteColor( TerrainPreviewBiomeId.AzureCoast, 1f );
+
 		var dominant = ColorizeOverlay( settings, resolved.BiomeId, resolved.Shade01, sample.Height01 );
 
 		if ( !settings.UseContinuousBiomePlacementAtSample )

@@ -54,6 +54,8 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 	Texture _lastPreviewTexture;
 	int _lastDisplayedSeed = int.MinValue;
 	Vector3 _lastStreamPositionForStatus;
+	float _lastMapProgress01 = -1f;
+	string _lastMapStatus;
 
 	public TerrainWorldManagerWidget( SerializedObject obj ) : base( obj )
 	{
@@ -88,8 +90,28 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 		RefreshPreview();
 	}
 
+	/// <summary>During play, read the live scene instance — not the serialized edit-time component.</summary>
 	Survival.TerrainWorldManager GetManager()
-		=> SerializedObject.Targets.FirstOrDefault() as Survival.TerrainWorldManager;
+	{
+		var edited = SerializedObject.Targets.FirstOrDefault() as Survival.TerrainWorldManager;
+		if ( !Sandbox.Game.IsPlaying )
+			return edited;
+
+		var scene = Sandbox.Game.ActiveScene;
+		if ( !scene.IsValid() )
+			return edited;
+
+		var editedName = edited?.GameObject?.Name;
+		Survival.TerrainWorldManager fallback = null;
+		foreach ( var manager in scene.GetAllComponents<Survival.TerrainWorldManager>() )
+		{
+			fallback ??= manager;
+			if ( string.IsNullOrEmpty( editedName ) || manager.GameObject.Name == editedName )
+				return manager;
+		}
+
+		return fallback ?? edited;
+	}
 
 	void RegeneratePreview( bool savePng )
 	{
@@ -117,6 +139,8 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 		_lastPreviewTexture = manager.BiomePreviewMap;
 		_lastDisplayedSeed = manager.WorldSeed;
 		_lastStreamPositionForStatus = manager.StreamWorldPosition;
+		_lastMapProgress01 = manager.MapGenerationProgress01;
+		_lastMapStatus = manager.MapGenerationStatus;
 
 		var streamNote = Sandbox.Game.IsPlaying && manager.HasStreamPosition
 			? $" · {manager.FormatStreamPositionMetersFromCenter()} · chunk ({manager.StreamChunkX}, {manager.StreamChunkY}) · {manager.MeshedChunkCount} meshed / {manager.LoadedChunkCount} stream"
@@ -132,14 +156,20 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 			_previewStatus.Text =
 				$"Biome map ready — {manager.EffectiveBiomePreviewResolution}px, {manager.EffectiveMetersPerPixel:0.##} m/px, seed {mapSeed}{staleNote}{streamNote}";
 		}
-		else if ( manager.IsMapGenerating )
+		else if ( manager.IsMapGenerating || manager.MapGenerationProgress01 > 0f )
 		{
-			_previewStatus.Text = $"{manager.MapGenerationStatus} ({manager.MapGenerationProgress01 * 100f:0}%){streamNote}";
+			_previewStatus.Text = $"{manager.MapGenerationStatus}{streamNote}";
+		}
+		else if ( !string.IsNullOrWhiteSpace( manager.MapGenerationStatus )
+			&& manager.MapGenerationStatus.StartsWith( "Biome map failed", StringComparison.OrdinalIgnoreCase ) )
+		{
+			_previewStatus.Text = $"{manager.MapGenerationStatus}{streamNote}";
 		}
 		else
 		{
-			_previewStatus.Text =
-				$"No biome map for seed {manager.WorldSeed} — press Regenerate Biome Map or play with Regenerate Preview On Start.";
+			_previewStatus.Text = Sandbox.Game.IsPlaying
+				? $"Waiting for biome map…{streamNote}"
+				: $"No biome map yet — press Play to generate (Regenerate Preview On Start), or Regenerate Biome Map for an editor bake.";
 		}
 	}
 
@@ -155,6 +185,8 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 			|| manager.BiomePreviewMap != _lastPreviewTexture
 			|| manager.WorldSeed != _lastDisplayedSeed
 			|| manager.IsBiomePreviewMapStale
+			|| Math.Abs( manager.MapGenerationProgress01 - _lastMapProgress01 ) > 0.001f
+			|| manager.MapGenerationStatus != _lastMapStatus
 			|| (Sandbox.Game.IsPlaying && manager.HasStreamPosition && manager.StreamWorldPosition != _lastStreamPositionForStatus) )
 			RefreshPreview();
 	}

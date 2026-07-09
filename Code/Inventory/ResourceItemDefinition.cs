@@ -108,6 +108,8 @@ public sealed class ResourceItemDefinition : Component
 			return;
 
 		EnsureTraceCollider();
+		if ( !AutoEnsureTraceCollider )
+			DisableSolidColliders( GameObject );
 		ResetToFull();
 	}
 
@@ -268,13 +270,13 @@ public sealed class ResourceItemDefinition : Component
 
 	void EnsureTraceCollider()
 	{
-		if ( !AutoEnsureTraceCollider || HasSolidCollider( GameObject ) )
+		if ( !AutoEnsureTraceCollider || HasSolidCollider( GameObject ) || HasDisabledSolidColliderOptOut( GameObject ) )
 			return;
 
 		var renderer = Components.Get<ModelRenderer>();
 		if ( renderer?.Model is not null )
 		{
-			var modelCol = Components.Get<ModelCollider>() ?? Components.Create<ModelCollider>();
+			var modelCol = Components.Create<ModelCollider>();
 			modelCol.Model = renderer.Model;
 			modelCol.Static = true;
 			if ( LogHarvest )
@@ -297,6 +299,42 @@ public sealed class ResourceItemDefinition : Component
 		foreach ( var col in root.Components.GetAll<Collider>( FindMode.EverythingInSelfAndDescendants ) )
 		{
 			if ( col is null || !col.Enabled || col.IsTrigger )
+				continue;
+			return true;
+		}
+
+		return false;
+	}
+
+	static void DisableSolidColliders( GameObject root )
+	{
+		if ( !root.IsValid() )
+			return;
+
+		foreach ( var col in root.Components.GetAll<Collider>( FindMode.EverythingInSelfAndDescendants ) )
+		{
+			if ( col is null || col.IsTrigger || !col.Enabled )
+				continue;
+			col.Enabled = false;
+		}
+
+		foreach ( var rb in root.Components.GetAll<Rigidbody>( FindMode.EverythingInSelfAndDescendants ) )
+		{
+			if ( rb is null || !rb.Enabled )
+				continue;
+			rb.Enabled = false;
+		}
+	}
+
+	/// <summary>Disabled non-trigger collider on this object = designer opted out of auto physics.</summary>
+	static bool HasDisabledSolidColliderOptOut( GameObject root )
+	{
+		if ( !root.IsValid() )
+			return false;
+
+		foreach ( var col in root.Components.GetAll<Collider>( FindMode.EverythingInSelf ) )
+		{
+			if ( col is null || col.IsTrigger || col.Enabled )
 				continue;
 			return true;
 		}

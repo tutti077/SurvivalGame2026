@@ -60,6 +60,7 @@
           "__guid": "d3659344-a90d-48fa-927a-095f70fe041f",
           "__enabled": true,
           "Flags": 0,
+          "ContactShadows": true,
           "Contribution": "Diffuse, Specular, Transmissive",
           "FogMode": "Enabled",
           "FogStrength": 1,
@@ -1059,7 +1060,23 @@
               "IdValue": "69f3dff5-c417-479e-b35f-3f458fde47ab"
             },
             "Property": "Rotation",
-            "Value": "0,0,0.278571904,0.960415363"
+            "Value": "0,0,0.986855745,0.161603525"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "69f3dff5-c417-479e-b35f-3f458fde47ab"
+            },
+            "Property": "Scale",
+            "Value": "0.0199999996,0.0299999993,0.0500000007"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "2ef1dedc-283b-4de1-ae0e-170fd228c3c0"
+            },
+            "Property": "Model",
+            "Value": "models/environment/low_poly_stick.vmdl"
           },
           {
             "Target": {
@@ -1083,39 +1100,6 @@
         "69f3dff5-c417-479e-b35f-3f458fde47ab": "d5efd56e-fea7-4716-8ef3-79bbfb718dad",
         "2ef1dedc-283b-4de1-ae0e-170fd228c3c0": "cde107b4-e9ce-4954-b7ec-d8ea9328b8f2",
         "96a36e07-7c92-4778-9238-0b7374e11078": "68923eee-66a8-4fd2-b469-52a0c2936117"
-      }
-    },
-    {
-      "__guid": "6a865fcd-1282-4df8-912f-7212f0c16284",
-      "__version": 2,
-      "__Prefab": "prefabs/environment/bush.prefab",
-      "__PrefabInstancePatch": {
-        "AddedObjects": [],
-        "RemovedObjects": [],
-        "PropertyOverrides": [
-          {
-            "Target": {
-              "Type": "GameObject",
-              "IdValue": "8ae00320-0e16-40c8-9275-01a362936d1b"
-            },
-            "Property": "Name",
-            "Value": "sampleBush"
-          },
-          {
-            "Target": {
-              "Type": "GameObject",
-              "IdValue": "8ae00320-0e16-40c8-9275-01a362936d1b"
-            },
-            "Property": "Position",
-            "Value": "-304.948792,-498.582367,10.1200848"
-          }
-        ],
-        "MovedObjects": []
-      },
-      "__PrefabIdToInstanceId": {
-        "8ae00320-0e16-40c8-9275-01a362936d1b": "6a865fcd-1282-4df8-912f-7212f0c16284",
-        "0cc95a3c-e90c-4a6c-ac16-bbd785f7523f": "8470d91c-053c-439a-babc-8177c7b39a59",
-        "f6c07270-df35-42bc-bffd-8f3d65a4db77": "8c2da473-baaf-4dcf-8419-15620eb749d3"
       }
     },
     {
@@ -1222,6 +1206,31 @@
         "96556e25-a9e9-4bc3-b41c-f82d1f2364f1": "8fa7b183-0ea5-4232-9dca-bea1b437a578",
         "748b321f-ac12-4897-8d88-a0ab22cabc4d": "0a701f08-2ca3-4b1b-b1c0-317f5ad2c7bd",
         "d4c440a9-0bca-4a92-8565-655be7313150": "4785324d-6475-4153-b23e-3c38ce79402c"
+      }
+    },
+    {
+      "__guid": "ea48ae32-e15f-445c-84ab-da472b3642a5",
+      "__version": 2,
+      "__Prefab": "prefabs/environment/samplebush.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "e054d124-f2f1-4b1c-ad37-c8cefe29c6e3"
+            },
+            "Property": "Position",
+            "Value": "-264.917938,-517.369202,0"
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "e054d124-f2f1-4b1c-ad37-c8cefe29c6e3": "ea48ae32-e15f-445c-84ab-da472b3642a5",
+        "7663584e-5da5-4559-80ef-8948aa7bdfee": "9b4450f6-1223-4a56-94c0-89b9d0974b10",
+        "200f0897-ded9-45b9-bedd-7905c5f0b1c0": "88c4eafc-bb8b-8edf-a4ed-7645e7dfc2fd"
       }
     },
     {

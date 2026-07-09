@@ -31,14 +31,41 @@ public static class TerrainPreviewBiomeResolver
 		if ( sample.OceanHeight01 > 0.5f )
 			return new Result { BiomeId = TerrainPreviewBiomeId.Water, Shade01 = 1f };
 
-		if ( TerrainPreviewLandDiskFields.IsAzureCoast( settings, worldXMeters, worldYMeters ) )
+		return ResolveLandOverlay( settings, sample, worldXMeters, worldYMeters );
+	}
+
+	/// <summary>Land/azure/blackwater only — for display when the continuous lake mask says dry but the boolean raster says wet.</summary>
+	public static Result ResolveLandOverlay(
+		TerrainPreviewSettings settings,
+		TerrainPreviewSample sample,
+		float worldXMeters,
+		float worldYMeters )
+	{
+		if ( !sample.IsInsideWorld )
+			return default;
+
+		var azureCoverage = TerrainPreviewAzureCoast.SampleCoverage01( settings, worldXMeters, worldYMeters );
+		if ( azureCoverage > 0.5f )
 		{
 			return new Result
 			{
 				BiomeId = TerrainPreviewBiomeId.AzureCoast,
-				Shade01 = ShadeFromAzureCoastDistance( settings, worldXMeters, worldYMeters ),
+				Shade01 = azureCoverage,
 			};
 		}
+
+		return ResolveUnderAzureCoast( settings, sample, worldXMeters, worldYMeters );
+	}
+
+	/// <summary>Land biome underneath azure — skips azure coast so colors can blend.</summary>
+	public static Result ResolveUnderAzureCoast(
+		TerrainPreviewSettings settings,
+		TerrainPreviewSample sample,
+		float worldXMeters,
+		float worldYMeters )
+	{
+		if ( !sample.IsInsideWorld )
+			return default;
 
 		if ( TerrainPreviewLandDiskFields.IsBlackwater( settings, worldXMeters, worldYMeters ) )
 			return new Result { BiomeId = TerrainPreviewBiomeId.Blackwater, Shade01 = 1f };
@@ -439,17 +466,6 @@ public static class TerrainPreviewBiomeResolver
 
 	static float ShadeFromHeight( float height01 )
 		=> Math.Clamp( 0.45f + (height01 * 0.55f), 0.35f, 1f );
-
-	static float ShadeFromAzureCoastDistance(
-		TerrainPreviewSettings settings,
-		float worldXMeters,
-		float worldYMeters )
-	{
-		_ = settings;
-		_ = worldXMeters;
-		_ = worldYMeters;
-		return 0.92f;
-	}
 
 	static float ShadeFromSample(
 		TerrainPreviewSettings settings,

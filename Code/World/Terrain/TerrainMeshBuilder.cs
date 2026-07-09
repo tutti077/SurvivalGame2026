@@ -37,7 +37,11 @@ public static class TerrainMeshBuilder
 
 		var vertexCount = verticesPerSide * verticesPerSide;
 		var heights = new float[vertexCount];
+		var samples = new TerrainPreviewSample[vertexCount];
 		var colors = new Color[vertexCount];
+		var isWater = new bool[vertexCount];
+		var insideWorld = new bool[vertexCount];
+		var biomeMap = new TerrainPreviewBiomeId[vertexCount];
 		var minHeight = float.MaxValue;
 		var maxHeightSample = float.MinValue;
 
@@ -49,6 +53,7 @@ public static class TerrainMeshBuilder
 				var worldX = chunkMinX + (ix * step);
 				var worldY = chunkMinY + (iy * step );
 				var sample = backend.Sample( settings, worldX, worldY );
+				samples[idx] = sample;
 
 				var heightMeters = sample.IsInsideWorld
 					? sample.HeightMeters
@@ -56,25 +61,32 @@ public static class TerrainMeshBuilder
 				heights[idx] = heightMeters;
 				minHeight = Math.Min( minHeight, heightMeters );
 				maxHeightSample = Math.Max( maxHeightSample, heightMeters );
-
-				colors[idx] = TerrainPreviewBiomeColors.FastMeshVertexColor( settings, sample ).WithAlpha( 1f );
 			}
 		}
 
 		TerrainPreviewChunkHeightSmooth.ApplyInteriorGrid(
 			heights, verticesPerSide, heightSmoothPasses, heightSmoothStrength01 );
 
-		var cornerHeightBeforeSpeck = heights[0];
-		if ( settings.LandSpeckFilterEnabled )
-			TerrainPreviewLandSpeckFilter.ApplyToHeightGrid(
-				heights, verticesPerSide, step, settings );
+		TerrainChunkBiomeDisplay.FillChunkVertexColors(
+			settings,
+			backend,
+			verticesPerSide,
+			verticesPerSide,
+			chunkMinX,
+			chunkMinY,
+			step,
+			insideWorld,
+			isWater,
+			biomeMap,
+			colors,
+			samples );
 
 		TerrainPreviewHeightDiagnostics.TryLogChunkVertexTrace(
 			settings,
 			coord,
 			chunkMinX,
 			chunkMinY,
-			cornerHeightBeforeSpeck,
+			heights[0],
 			heights[0],
 			backend );
 
@@ -94,12 +106,7 @@ public static class TerrainMeshBuilder
 		}
 
 		for ( var i = 0; i < vertexCount; i++ )
-		{
-			if ( heights[i] < settings.SeaLevelMeters )
-			{
-				colors[i] = TerrainPreviewBiomeColors.PaletteColor( TerrainPreviewBiomeId.Water, 1f ).WithAlpha( 1f );
-			}
-		}
+			colors[i] = colors[i].WithAlpha( 1f );
 
 		var indexCount = (verticesPerSide - 1) * (verticesPerSide - 1) * 6;
 		var material = GetTerrainMaterial();

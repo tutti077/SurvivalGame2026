@@ -10,7 +10,8 @@ namespace Survival;
 [Title( "Terrain World Manager" )]
 public sealed class TerrainWorldManager : Component
 {
-	const float ChunkLoadProgressWeight = 1f;
+	const float ChunkLoadProgressWeight = 0.3f;
+	const float MapLoadProgressWeight = 0.7f;
 
 	sealed class LoadedChunk
 	{
@@ -140,10 +141,19 @@ public sealed class TerrainWorldManager : Component
 	TerrainWorldSettingsSource _generationSettingsSource;
 	bool _generationSettingsOverrideScalars;
 	bool _worldRecipeWritten;
+	bool _biomeMapLoadSettled;
 
 	protected override void OnStart()
 	{
 		base.OnStart();
+
+		if ( GameSceneIdentity.IsMainMenu( Scene ) )
+		{
+			Enabled = false;
+			return;
+		}
+
+		WorldSessionState.ApplyTo( this );
 		_backend = TerrainPreviewBackendRegistry.Active;
 		_ = BuildGenerationSettings();
 		_lastChunkSeed = WorldSeed;
@@ -169,7 +179,6 @@ public sealed class TerrainWorldManager : Component
 			return;
 		}
 
-		TickMapGeneration();
 		TryRefreshStreamChunks();
 		ProcessStreamChunkQueue();
 		UpdateBiomePreviewStaleState();
@@ -349,14 +358,18 @@ public sealed class TerrainWorldManager : Component
 		if ( _previewJob is not null )
 			return;
 
+		_backend ??= TerrainPreviewBackendRegistry.Active;
+
 		var settings = BuildGenerationSettings();
 		var resolution = ComputeBiomePreviewResolution();
 		EffectiveBiomePreviewResolution = resolution;
 		EffectiveMetersPerPixel = WorldDiameterMeters / resolution;
 
+		Log.Info( $"[TerrainWorldManager] Biome preview map starting — {resolution}×{resolution}, seed {WorldSeed}." );
+
 		_previewJob = TerrainWorldPreviewJob.Create(
 			settings,
-			_backend ?? TerrainPreviewBackendRegistry.Active,
+			_backend,
 			BuildPreviewMapOptions(),
 			resolution );
 
@@ -368,13 +381,27 @@ public sealed class TerrainWorldManager : Component
 	/// <summary>Editor helper — builds the biome map immediately.</summary>
 	public void RegenerateBiomePreviewMap()
 	{
-		CancelBiomePreviewMapGeneration();
-		StartBiomePreviewGeneration();
+		_backend ??= TerrainPreviewBackendRegistry.Active;
 
-		while ( _previewJob is not null && !_previewJob.IsComplete )
-			_previewJob.Step( int.MaxValue );
+		try
+		{
+			CancelBiomePreviewMapGeneration();
+			var settings = BuildGenerationSettings();
+			TerrainPreviewLandDiskFields.EnsureReady( settings );
+			StartBiomePreviewGeneration();
 
-		FinishMapGeneration();
+			while ( _previewJob is not null && !_previewJob.IsComplete )
+				_previewJob.Step( int.MaxValue );
+
+			FinishMapGeneration();
+		}
+		catch ( Exception e )
+		{
+			_previewJob = null;
+			IsMapGenerating = false;
+			MapGenerationStatus = $"Biome map failed: {e.Message}";
+			Log.Error( $"[TerrainWorldManager] RegenerateBiomePreviewMap failed: {e}" );
+		}
 	}
 
 	void TickMapGeneration()
@@ -387,7 +414,7 @@ public sealed class TerrainWorldManager : Component
 
 		MapGenerationProgress01 = _previewJob.Progress01;
 		MapGenerationStatus =
-			$"Biome map {_previewJob.RowsCompleted}/{_previewJob.Resolution} rows ({MapGenerationProgress01 * 100f:0}%)";
+			$"Biome map {_previewJob.RowsCompleted}/{_previewJob.Resolution} ({MapGenerationProgress01 * 100f:0}%)";
 
 		if ( !_previewJob.IsComplete )
 			return;
@@ -404,11 +431,17 @@ public sealed class TerrainWorldManager : Component
 		_initialChunksTotal = 0;
 		_initialChunksLoaded = 0;
 		_loadSettings = BuildGenerationSettings();
+		_biomeMapLoadSettled = !RegeneratePreviewOnStart;
 
 		SetStreamerInputEnabled( false );
 
 		if ( ShowWorldLoadScreen )
 			ShowLoadScreen( "Loading World", "Preparing terrain…", 0f );
+
+		TerrainPreviewLandDiskFields.EnsureReady( _loadSettings );
+
+		if ( RegeneratePreviewOnStart )
+			StartBiomePreviewGeneration();
 	}
 
 	void ProcessWorldLoad()
@@ -422,6 +455,9 @@ public sealed class TerrainWorldManager : Component
 		}
 
 		ProcessInitialChunkQueue();
+
+		if ( RegeneratePreviewOnStart )
+			TickMapGeneration();
 
 		UpdateLoadScreenProgress();
 
@@ -447,23 +483,16 @@ public sealed class TerrainWorldManager : Component
 		_initialChunkQueue.Clear();
 
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
-		CollectStreamChunks( _loadStreamPos, _loadViewRotation, _loadSettings, chunkSize, _neededScratch );
+		// Near square only at load — full forward cone streams in after the player is spawned.
+		TerrainChunkStreaming.CollectSquareChunks(
+			_loadStreamPos,
+			_loadSettings,
+			chunkSize,
+			Math.Max( 1, SideViewRadiusChunks ),
+			_neededScratch );
 
 		foreach ( var coord in _neededScratch )
 			_initialChunkQueue.Enqueue( coord );
-
-		if ( _initialChunkQueue.Count == 0 )
-		{
-			TerrainChunkStreaming.CollectSquareChunks(
-				_loadStreamPos,
-				_loadSettings,
-				chunkSize,
-				Math.Max( 1, StreamRadiusChunks ),
-				_neededScratch );
-
-			foreach ( var coord in _neededScratch )
-				_initialChunkQueue.Enqueue( coord );
-		}
 
 		_initialChunksTotal = _initialChunkQueue.Count;
 		_initialChunksLoaded = 0;
@@ -646,7 +675,16 @@ public sealed class TerrainWorldManager : Component
 		if ( _initialChunksLoaded < _initialChunksTotal )
 			return false;
 
-		return _loaded.Count > 0;
+		if ( _loaded.Count <= 0 )
+			return false;
+
+		if ( !RegeneratePreviewOnStart )
+			return true;
+
+		if ( !_biomeMapLoadSettled )
+			return false;
+
+		return true;
 	}
 
 	void UpdateLoadScreenProgress()
@@ -656,12 +694,16 @@ public sealed class TerrainWorldManager : Component
 
 		var chunkProgress = _initialChunksTotal > 0
 			? Math.Clamp( (float)_initialChunksLoaded / _initialChunksTotal, 0f, 1f )
-			: 0f;
+			: 1f;
 
-		ShowLoadScreen(
-			"Loading World",
-			$"Terrain {_initialChunksLoaded}/{_initialChunksTotal}",
-			chunkProgress * ChunkLoadProgressWeight );
+		var mapProgress = RegeneratePreviewOnStart ? MapGenerationProgress01 : 1f;
+		var totalProgress = (chunkProgress * ChunkLoadProgressWeight) + (mapProgress * MapLoadProgressWeight);
+
+		var status = RegeneratePreviewOnStart && ( _previewJob is not null || !BiomePreviewMap.IsValid() )
+			? $"Terrain {_initialChunksLoaded}/{_initialChunksTotal} · {MapGenerationStatus}"
+			: $"Terrain {_initialChunksLoaded}/{_initialChunksTotal}";
+
+		ShowLoadScreen( "Loading World", status, totalProgress );
 	}
 
 	void FinishWorldLoad()
@@ -680,9 +722,6 @@ public sealed class TerrainWorldManager : Component
 
 		if ( MeshedChunkCount <= 0 )
 			Log.Warning( "[TerrainWorldManager] No terrain chunks meshed — check stream position and world seed." );
-
-		if ( RegeneratePreviewOnStart )
-			StartBiomePreviewGeneration();
 	}
 
 	void EnsureChunksAroundStream()
@@ -698,8 +737,24 @@ public sealed class TerrainWorldManager : Component
 		if ( _previewJob is null )
 			return;
 
-		var bitmap = _previewJob.FinishBitmap();
-		BiomePreviewMap = bitmap.ToTexture( false );
+		Bitmap bitmap = null;
+		try
+		{
+			bitmap = _previewJob.FinishBitmap();
+			BiomePreviewMap = bitmap.ToTexture( false );
+			if ( !BiomePreviewMap.IsValid() )
+				Log.Warning( "[TerrainWorldManager] Biome preview map texture invalid after rasterize." );
+		}
+		catch ( Exception e )
+		{
+			Log.Error( $"[TerrainWorldManager] Biome preview map finish failed: {e}" );
+			MapGenerationStatus = $"Biome map failed: {e.Message}";
+			_previewJob = null;
+			IsMapGenerating = false;
+			_biomeMapLoadSettled = true;
+			return;
+		}
+
 		_previewJob = null;
 		BiomePreviewMapSeed = WorldSeed;
 		_lastPreviewSeed = WorldSeed;
@@ -707,10 +762,13 @@ public sealed class TerrainWorldManager : Component
 		_lastPreviewMetersPerPixel = BiomePreviewMetersPerPixel;
 		IsMapGenerating = false;
 		MapGenerationProgress01 = 1f;
-		MapGenerationStatus = $"Map ready (seed {WorldSeed})";
+		MapGenerationStatus = BiomePreviewMap.IsValid()
+			? $"Map ready (seed {WorldSeed})"
+			: "Biome map failed (invalid texture)";
+		_biomeMapLoadSettled = true;
 		UpdateBiomePreviewStaleState();
 
-		if ( IsWorldAuthority() )
+		if ( IsWorldAuthority() && bitmap is not null )
 		{
 			try
 			{

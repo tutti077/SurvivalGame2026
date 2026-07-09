@@ -22,7 +22,7 @@ public static class MyEditorMenu
 
 		EditorUtility.DisplayDialog(
 			"Open terrain test scene",
-			"Use File → Open Scene → Assets/scenes/terrainTest.scene.\n\nPlay startup is already set to terrainTest in survivalgamebasics.sbproj.",
+			"Use File → Open Scene → Assets/scenes/terrainTest.scene.\n\nPlay startup is set to mainmenu in survivalgamebasics.sbproj.",
 			"OK" );
 	}
 }

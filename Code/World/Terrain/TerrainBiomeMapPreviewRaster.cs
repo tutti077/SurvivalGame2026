@@ -17,7 +17,6 @@ public static class TerrainBiomeMapPreviewRaster
 		var res = resolution;
 		var biomeMap = new TerrainPreviewBiomeId[res * res];
 		var shadeMap = new float[res * res];
-		var heightMap = new float[res * res];
 		var hasOceanMask = oceanMask is not null && oceanMask.Length == res * res;
 
 		for ( var py = 0; py < res; py++ )
@@ -29,16 +28,6 @@ public static class TerrainBiomeMapPreviewRaster
 				{
 					biomeMap[idx] = TerrainPreviewBiomeId.None;
 					shadeMap[idx] = 1f;
-					heightMap[idx] = 0f;
-					continue;
-				}
-
-				if ( hasOceanMask && oceanMask[idx] )
-				{
-					biomeMap[idx] = TerrainPreviewBiomeId.Water;
-					shadeMap[idx] = 1f;
-					heightMap[idx] = TerrainPreviewOceanByHeight.MetersToHeight01(
-						worldSettings, worldSettings.SeaLevelMeters );
 					continue;
 				}
 
@@ -51,31 +40,61 @@ public static class TerrainBiomeMapPreviewRaster
 					out var wx,
 					out var wy );
 				var sample = backend.Sample( worldSettings, wx, wy );
-
-				var resolved = TerrainPreviewBiomeResolver.Resolve( worldSettings, sample, wx, wy );
-				biomeMap[idx] = resolved.BiomeId;
-				shadeMap[idx] = resolved.Shade01;
-				heightMap[idx] = sample.Height01;
+				var landResolved = TerrainPreviewBiomeResolver.ResolveLandOverlay( worldSettings, sample, wx, wy );
+				biomeMap[idx] = landResolved.BiomeId;
+				shadeMap[idx] = landResolved.Shade01;
 			}
 		}
 
 		ApplyPreviewSpeckFilter( biomeMap, res, diameter, preview );
 		ApplyBlackwaterPunch( worldSettings, res, radius, diameter, insideWorld, oceanMask, biomeMap, shadeMap );
 
+		var isWater = new bool[res * res];
 		for ( var i = 0; i < colors.Length; i++ )
 		{
 			if ( !insideWorld[i] )
 			{
 				colors[i] = Color.Black;
+				isWater[i] = false;
 				continue;
 			}
 
-			colors[i] = TerrainPreviewBiomeColors.ColorizeOverlay(
-				worldSettings,
-				biomeMap[i],
-				shadeMap[i],
-				heightMap[i] );
+			if ( biomeMap[i] == TerrainPreviewBiomeId.Blackwater )
+			{
+				colors[i] = Color.Black;
+				isWater[i] = false;
+				continue;
+			}
+
+			var px = i % res;
+			var py = i / res;
+			TerrainBiomeMapCoordinates.RasterPixelToWorldMeters(
+				px, py, res, radius, diameter, out var wx, out var wy );
+			var sample = backend.Sample( worldSettings, wx, wy );
+			var displayWater = TerrainShorelineDisplay.IsDisplayWaterColor( worldSettings, wx, wy );
+			if ( displayWater )
+			{
+				colors[i] = TerrainPreviewBiomeColors.PaletteColor( TerrainPreviewBiomeId.Water, 1f );
+				biomeMap[i] = TerrainPreviewBiomeId.Water;
+				isWater[i] = true;
+				continue;
+			}
+
+			var landResolved = TerrainPreviewBiomeResolver.ResolveLandOverlay( worldSettings, sample, wx, wy );
+			colors[i] = TerrainPreviewBiomeColors.SampleBiomeOverlay(
+				worldSettings, sample, wx, wy, landResolved );
+			biomeMap[i] = landResolved.BiomeId;
+			isWater[i] = false;
 		}
+
+		TerrainBiomeEdgeDisplay.ApplyShoreAndBiomeEdgeJitter(
+			worldSettings,
+			res,
+			res,
+			insideWorld,
+			isWater,
+			biomeMap,
+			colors );
 	}
 
 	public static void FillBiomeColors(
