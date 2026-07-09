@@ -328,7 +328,7 @@ public sealed class PlayerInventoryInteraction : Component
 
 		if ( _held.IsEmpty )
 		{
-			if ( slot.IsHotbarSlot )
+			if ( slot.IsHotbarSlot && !CanBeginDragFromHotbarSlot( slot ) )
 			{
 				SelectHotbarSlot( slot.SlotIndex );
 				return;
@@ -347,6 +347,17 @@ public sealed class PlayerInventoryInteraction : Component
 			return;
 
 		_hotbar.SetActiveSlot( slotIndex );
+	}
+
+	bool CanBeginDragFromHotbarSlot( InventorySlotPanel slot )
+	{
+		if ( slot?.GridHost is null || slot.GridHost.GridId != "hotbar" )
+			return false;
+
+		if ( !slot.GridHost.GetSlot( slot.SlotIndex ).IsEmpty )
+			return true;
+
+		return _hotbar is not null && !string.IsNullOrWhiteSpace( _hotbar.GetBinding( slot.SlotIndex ) );
 	}
 
 	void ProcessSlotLeftRelease( InventorySlotPanel slot )
