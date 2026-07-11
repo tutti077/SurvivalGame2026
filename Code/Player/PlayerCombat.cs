@@ -971,7 +971,7 @@ public partial class PlayerCombat : Component
 		if ( dLen > 1e-5f )
 			dir /= dLen;
 
-		// ~60% of prior wireframe (18 / 20 / 10 px).
+		// Circular base + directional tip (DrawCircle is a filled box — use a real ring).
 		const float r = 11f;
 		const float tip = 12f;
 		const float triHalf = 6f;
@@ -979,23 +979,32 @@ public partial class PlayerCombat : Component
 		const float fanLineWidth = 2f;
 		var col = Color.White.WithAlpha( 0.95f );
 
-		var baseMid = center + dir * ( r * 0.55f );
+		var rim = center + dir * r;
 		var perp = new Vector2( -dir.y, dir.x );
 		var tipPos = center + dir * ( r + tip );
-		var pLeft = baseMid + perp * triHalf;
-		var pRight = baseMid - perp * triHalf;
+		var pLeft = rim + perp * triHalf;
+		var pRight = rim - perp * triHalf;
 
 		var hud = cam.Overlay;
 
+		// White circle at viewport center.
+		const int circleSegments = 40;
+		var prev = center + new Vector2( r, 0f );
+		for ( var i = 1; i <= circleSegments; i++ )
+		{
+			var a = i * ( MathF.PI * 2f / circleSegments );
+			var next = center + new Vector2( MathF.Cos( a ), MathF.Sin( a ) ) * r;
+			hud.DrawLine( prev, next, fanLineWidth, col );
+			prev = next;
+		}
+
+		// Directional triangle from the circle rim.
 		for ( var i = 0; i <= fanSegments; i++ )
 		{
 			var t = i / (float)fanSegments;
 			var edge = Vector2.Lerp( pLeft, pRight, t );
 			hud.DrawLine( tipPos, edge, fanLineWidth, col );
 		}
-
-		// Filled disc at viewport center (size = diameter in screen pixels).
-		hud.DrawCircle( center, new Vector2( r * 2f, r * 2f ), col );
 	}
 
 	/// <summary>

@@ -156,6 +156,10 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 		if ( WasActionPressed( CraftingMenuAction ) )
 		{
+			// Build snap next is also C while placing — don't open crafting over snap cycle.
+			if ( IsLocalBuildHammerPlacing() )
+				return;
+
 			HandlePageHotkey( MenuPageIds.Crafting );
 			return;
 		}
@@ -487,6 +491,26 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 		return _vitals is not null && _vitals.IsLocalInputOwnedPawn();
 
+	}
+
+	bool IsLocalBuildHammerPlacing()
+	{
+		var equipment = Components.Get<PlayerEquipment>();
+		if ( equipment is null || !equipment.MainHandHasAction( EquippedItemActions.BuildHammer ) )
+			return false;
+
+		foreach ( var hammer in Scene.GetAllComponents<ToolBuildHammer>() )
+		{
+			if ( hammer is null || !hammer.IsValid() )
+				continue;
+
+			if ( hammer.GameObject.Root != GameObject.Root )
+				continue;
+
+			return hammer.IsPlacingPiece;
+		}
+
+		return false;
 	}
 
 }

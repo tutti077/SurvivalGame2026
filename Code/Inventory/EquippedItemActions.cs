@@ -10,4 +10,5 @@ public enum EquippedItemActions
 	PrimaryMelee = 1 << 0,
 	Block = 1 << 1,
 	BuildHammer = 1 << 2,
+	Grapple = 1 << 3,
 }

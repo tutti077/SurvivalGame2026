@@ -35,4 +35,18 @@ public sealed class EquipmentProfileData
 	public string HandDisplayPrefab { get; set; } = string.Empty;
 
 	public int InventorySlotBonus { get; set; }
+
+	/// <summary>Max grapple ray / attach range in meters (converted at runtime).</summary>
+	public float GrappleMaxRangeMeters { get; set; } = 30f;
+
+	/// <summary>Hold-to-shorten rope rate (meters/sec).</summary>
+	public float GrappleRetractMetersPerSecond { get; set; } = 2.5f;
+
+	/// <summary>Hold-to-pay-out rope rate (meters/sec).</summary>
+	public float GrappleDetractMetersPerSecond { get; set; } = 4f;
+
+	public float GrappleAttachStaminaCost { get; set; } = 8f;
+
+	/// <summary>Stamina drained per second while attached and airborne.</summary>
+	public float GrappleAirborneStaminaPerSecond { get; set; } = 1.5f;
 }

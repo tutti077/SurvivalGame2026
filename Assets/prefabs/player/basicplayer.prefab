@@ -37,6 +37,7 @@
         "BodyMass": 500,
         "BodyRadius": 16,
         "BrakePower": 1,
+        "CameraCollisionIgnore": "",
         "CameraOffset": "256,0,12",
         "ColliderObject": {
           "_type": "gameobject",
@@ -354,6 +355,48 @@
         "StaminaRegenDelayOverrideSeconds": -1
       },
       {
+        "__type": "Survival.PlayerGrapple",
+        "__guid": "b7c4e2a1-9f08-4d5e-8c3a-1e6f0d9b2a47",
+        "__enabled": true,
+        "Flags": 0,
+        "AimAssistEnabled": true,
+        "AirborneStaminaPerSecond": 1.5,
+        "AirPushAcceleration": 110,
+        "AssistDistanceBias": 0.05,
+        "AssistLockSmooth": 14,
+        "AssistRadiusPixels": 72,
+        "AssistSampleRings": 3,
+        "AssistSamplesPerRing": 8,
+        "AssistStickBreakPixels": 18,
+        "AttachStaminaCost": 8,
+        "AttachVelocityScale": 1.08,
+        "CrosshairIdleHideSeconds": 10,
+        "DetractAction": "GrappleDetract",
+        "DetractMetersPerSecond": 8,
+        "DrawDebugRope": true,
+        "FightSwingBrakeMult": 1.45,
+        "GrappleAction": "mouse3",
+        "HardMaxLengthMeters": 30,
+        "HoldMaxAngleDegrees": 16,
+        "HoldPushScale": 0.45,
+        "LogGrapple": true,
+        "MaxRangeMeters": 30,
+        "MinLengthMeters": 1,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "PumpMinSpeed": 35,
+        "PumpSpeedSoften": 1100,
+        "PumpWithArcMult": 3.2,
+        "RetractAction": "GrappleRetract",
+        "RetractMetersPerSecond": 2.5,
+        "SwingCoastDamping": 0.18,
+        "SwingSpeedSoften": 260
+      },
+      {
         "__type": "Survival.PlayerVitals",
         "__guid": "4785e803-a655-4137-8dc0-d456a8086f19",
         "__enabled": true,
@@ -494,7 +537,9 @@
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null,
-        "PawnEyeHeight": 64
+        "PawnEyeHeight": 64,
+        "WalkOverPickupRadiusMeters": 0.55,
+        "WalkOverScanIntervalSeconds": 0.15
       },
       {
         "__type": "Survival.PlayerEquippedItem",
@@ -584,7 +629,77 @@
             "UseAnimGraph": true
           }
         ],
-        "Children": []
+        "Children": [
+          {
+            "__guid": "8f2abedf-c831-8342-8fbb-8c579a16b8b4",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Clothing - y_front_pants_white",
+            "Position": "0,0,0",
+            "Rotation": "0,0,0,1",
+            "Scale": "1,1,1",
+            "Tags": "clothing",
+            "Enabled": true,
+            "NetworkMode": 2,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.SkinnedModelRenderer",
+                "__guid": "713990ce-9e41-8c95-beaa-1d4cd5fc379b",
+                "__enabled": true,
+                "Flags": 0,
+                "AnimationGraph": null,
+                "BodyGroups": 18446744073709551615,
+                "BoneMergeTarget": {
+                  "_type": "component",
+                  "component_id": "48bb4076-d3c6-455e-99c1-98e9ff82c2c4",
+                  "go": "86859f44-e8df-4009-90a2-8ca9b4dc36cc",
+                  "component_type": "SkinnedModelRenderer"
+                },
+                "CreateAttachments": false,
+                "CreateBoneObjects": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": null,
+                "Materials": null,
+                "Model": "models/citizen_clothes/underwear/y_front_pants/models/y_front_pants_m_human.vmdl",
+                "Morphs": {},
+                "OnComponentDestroy": null,
+                "OnComponentDisabled": null,
+                "OnComponentEnabled": null,
+                "OnComponentFixedUpdate": null,
+                "OnComponentStart": null,
+                "OnComponentUpdate": null,
+                "Parameters": {
+                  "bools": {},
+                  "ints": {},
+                  "floats": {},
+                  "vectors": {},
+                  "rotations": {}
+                },
+                "PlaybackRate": 1,
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Sequence": {
+                  "Name": null,
+                  "Looping": true,
+                  "Blending": false
+                },
+                "Tint": "1,1,1,1",
+                "UseAnimGraph": true
+              }
+            ],
+            "Children": []
+          }
+        ]
       },
       {
         "__guid": "22adeaa4-3eff-455e-b0ad-8186e47120c5",

@@ -19,7 +19,13 @@ public static class ResourceCatalog
 		new( System.StringComparer.OrdinalIgnoreCase );
 
 	static readonly Dictionary<string, string> KnownIconPaths =
-		new( System.StringComparer.OrdinalIgnoreCase );
+		new( System.StringComparer.OrdinalIgnoreCase )
+		{
+			["basic_hook"] = "ui/items/item_hook.png",
+			["hook"] = "ui/items/item_hook.png",
+			["sword"] = "ui/items/item_sword.png",
+			["building_hammer"] = "ui/items/item_build_hammer.png",
+		};
 
 	/// <summary>Maps old/sample resource ids to current catalog ids.</summary>
 	static readonly Dictionary<string, string> LegacyResourceAliases =
@@ -30,6 +36,7 @@ public static class ResourceCatalog
 			["sample_stick"] = "wood",
 			["sample_bush"] = "plant_fiber",
 			["sample_sword"] = "sword",
+			["hook"] = "basic_hook",
 		};
 
 	/// <summary>Returns the canonical resource id used by crafting and the item library.</summary>

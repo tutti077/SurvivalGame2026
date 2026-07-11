@@ -35,6 +35,23 @@
       "stats": [
         { "label": "Type", "value": "Building Tool" }
       ]
+    },
+    {
+      "id": "basic_hook",
+      "displayName": "Basic Hook",
+      "icon": "ui/items/item_hook.png",
+      "unlockId": "",
+      "outputResourceId": "basic_hook",
+      "outputAmount": 1,
+      "maxStack": 1,
+      "numberOfItemsCrafted": 1,
+      "ingredients": [
+        { "resourceId": "wood", "amount": 10 },
+        { "resourceId": "plant_fiber", "amount": 10 }
+      ],
+      "stats": [
+        { "label": "Type", "value": "Basic Grappling Hook" }
+      ]
     }
   ]
 }

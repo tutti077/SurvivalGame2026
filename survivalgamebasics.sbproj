@@ -17,15 +17,15 @@
     "GameNetworkType": "Multiplayer",
     "MapSelect": "Unrestricted",
     "MapList": [
-      "scenes/mainmenu.scene"
+      "scenes/testscene1.scene"
     ],
     "RankType": "None",
     "PerMapRanking": false,
     "LeaderboardType": "None",
     "CsProjName": "survivalgamebasics",
-    "StartupScene": "scenes/mainmenu.scene",
-    "MapStartupScene": "scenes/mainmenu.scene",
-    "DedicatedServerStartupScene": "scenes/mainmenu.scene",
+    "StartupScene": "scenes/testscene1.scene",
+    "MapStartupScene": "scenes/testscene1.scene",
+    "DedicatedServerStartupScene": "scenes/testscene1.scene",
     "ProjectTemplate": null,
     "LaunchMode": "Launcher",
     "ControlModes": {

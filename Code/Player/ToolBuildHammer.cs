@@ -14,6 +14,10 @@ public sealed class ToolBuildHammer : Component
 	[Property, Group( "Input" )] public string PlaceAction { get; set; } = "Attack1";
 	[Property, Group( "Input" )] public string SnapPrevAction { get; set; } = "BuildSnapPrev";
 	[Property, Group( "Input" )] public string SnapNextAction { get; set; } = "BuildSnapNext";
+
+	/// <summary>Hold Attack2 this long while aimed at a piece to demolish. Quick tap/release opens the build menu.</summary>
+	[Property, Group( "Input" ), Title( "Demolish Hold (seconds)" )]
+	public float DemolishHoldSeconds { get; set; } = 0.25f;
 	[Property, Group( "Placement" )] public float BuildRange { get; set; } = 640f;
 	[Property, Group( "Debug" )] public bool FreeBuildEnabled { get; set; } = true;
 	[Property, Group( "Debug" )] public bool ShowSnapDebug { get; set; } = true;
@@ -46,6 +50,10 @@ public sealed class ToolBuildHammer : Component
 	BuildPlacementResult _lastPlacement;
 	BuildSnapCandidate? _activeSnapCandidate;
 	readonly List<BuildSnapPoint> _placingSnaps = new();
+	bool _suppressBuildMenuToggle;
+	bool _openMenuHeld;
+	bool _demolishedThisHold;
+	double _openMenuHoldStarted;
 
 	public void BindPawn( GameObject pawn ) => _pawn = pawn;
 
@@ -188,15 +196,50 @@ public sealed class ToolBuildHammer : Component
 
 	void PollBuildMenuInput()
 	{
-		if ( Input.Released( OpenMenuAction ) )
-			SetBuildMenuOpen( !IsBuildMenuOpen );
+		if ( string.IsNullOrWhiteSpace( OpenMenuAction ) )
+			return;
+
+		// Quick tap/release → build menu. Hold on a piece → demolish (no accidental deletes).
+		if ( Input.Pressed( OpenMenuAction ) )
+		{
+			_openMenuHeld = true;
+			_demolishedThisHold = false;
+			_suppressBuildMenuToggle = false;
+			_openMenuHoldStarted = Time.NowDouble;
+			return;
+		}
+
+		if ( _openMenuHeld && Input.Down( OpenMenuAction ) )
+		{
+			if ( !_demolishedThisHold
+			     && !IsBuildMenuOpen
+			     && (Time.NowDouble - _openMenuHoldStarted) >= Math.Max( 0.05f, DemolishHoldSeconds )
+			     && TryDeleteLookedAtBuildPiece() )
+			{
+				_demolishedThisHold = true;
+				_suppressBuildMenuToggle = true;
+			}
+
+			return;
+		}
+
+		if ( !_openMenuHeld && !Input.Released( OpenMenuAction ) )
+			return;
+
+		_openMenuHeld = false;
+
+		if ( _suppressBuildMenuToggle || _demolishedThisHold )
+		{
+			_suppressBuildMenuToggle = false;
+			_demolishedThisHold = false;
+			return;
+		}
+
+		SetBuildMenuOpen( !IsBuildMenuOpen );
 	}
 
 	void PollHammerInput()
 	{
-		if ( Input.Pressed( "mouse3" ) )
-			TryDeleteLookedAtBuildPiece();
-
 		if ( !IsPlacingPiece )
 			return;
 
@@ -407,22 +450,23 @@ public sealed class ToolBuildHammer : Component
 		RpcRequestRepairBuildPiece( piece.GameObject.Id );
 	}
 
-	void TryDeleteLookedAtBuildPiece()
+	bool TryDeleteLookedAtBuildPiece()
 	{
 		if ( !BuildPlacementUtility.TryGetViewRay( Pawn, out var origin, out var direction ) )
-			return;
+			return false;
 
 		var scene = ResolveScene();
 		if ( !BuildPlacementUtility.TryTraceBuildPiece( scene, Pawn, _previewRoot, origin, direction, BuildRange, out var piece ) )
-			return;
+			return false;
 
 		if ( Pawn.Network is not { Active: true } || Networking.IsHost )
 		{
 			BuildAuthority.TryDestroyBuildPiece( Pawn, piece );
-			return;
+			return true;
 		}
 
 		RpcRequestDestroyBuildPiece( piece.GameObject.Id );
+		return true;
 	}
 
 	[Rpc.Host]

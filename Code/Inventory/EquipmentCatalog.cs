@@ -216,6 +216,21 @@ public static class EquipmentCatalog
 			HotbarEquipable = true,
 			ToolPrefab = "prefabs/tools/build_hammer_tool.prefab",
 		};
+
+		yield return new EquipmentProfileData
+		{
+			ResourceId = "basic_hook",
+			DisplayName = "Basic Hook",
+			Slot = "grapple",
+			AllowedSlots = { "grapple" },
+			Actions = { "Grapple" },
+			HotbarEquipable = false,
+			GrappleMaxRangeMeters = 30f,
+			GrappleRetractMetersPerSecond = 2.5f,
+			GrappleDetractMetersPerSecond = 4f,
+			GrappleAttachStaminaCost = 8f,
+			GrappleAirborneStaminaPerSecond = 1.5f,
+		};
 	}
 
 	static readonly JsonSerializerOptions JsonOptions = new()
