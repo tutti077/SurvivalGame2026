@@ -554,7 +554,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _promptRoot is null )
 			return;
 
-		var show = _handHarvest is not null && _handHarvest.FocusedNode is not null;
+		var showHarvest = _handHarvest?.FocusedNode is not null;
+		var show = showHarvest;
 		if ( _promptLabel is not null )
 			_promptLabel.Text = DefaultHarvestPromptText;
 

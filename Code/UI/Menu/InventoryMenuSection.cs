@@ -60,6 +60,28 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 		_grid.Style.Width = Length.Pixels( gridWidth );
 		_grid.Style.Set( "align-self", "center" );
 
+		var dropZone = new InventoryPlayerDropZonePanel( _interaction ) { Parent = _sectionRoot };
+		dropZone.Style.Width = Length.Pixels( gridWidth );
+		dropZone.Style.Height = Length.Pixels( 52f * Scale );
+		dropZone.Style.Set( "flex-shrink", "0" );
+		dropZone.Style.Set( "align-self", "center" );
+		dropZone.Style.Set( "justify-content", "center" );
+		dropZone.Style.Set( "align-items", "center" );
+		dropZone.Style.Set( "border-width", "2px" );
+		dropZone.Style.Set( "border-style", "dashed" );
+		dropZone.Style.Set( "border-radius", "6px" );
+		dropZone.Style.Set( "pointer-events", "auto" );
+		dropZone.Style.Set( "display", "none" );
+		dropZone.SetHighlighted( false );
+
+		var dropLabel = new Label { Parent = dropZone, Text = "Drop item" };
+		dropLabel.Style.FontColor = new Color( 0.82f, 0.76f, 0.64f );
+		dropLabel.Style.FontSize = Length.Pixels( 14f * Scale );
+		dropLabel.Style.Set( "text-shadow", "1px 1px 2px rgba(0,0,0,0.85)" );
+		dropLabel.Style.Set( "pointer-events", "none" );
+
+		_interaction?.RegisterPlayerDropZone( dropZone );
+
 		_slotUi.Clear();
 		var slotIndex = 0;
 		for ( var row = 0; row < rows; row++ )

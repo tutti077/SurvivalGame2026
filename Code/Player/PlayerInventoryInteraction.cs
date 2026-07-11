@@ -36,6 +36,8 @@ public sealed class PlayerInventoryInteraction : Component
 	IInventoryGridHost _dragSourceHost;
 	int _dragSourceSlot = -1;
 	InventorySlotPanel _dropHoverSlot;
+	InventoryPlayerDropZonePanel _playerDropZone;
+	bool _playerDropZoneHighlighted;
 	bool _hotbarHudDisplayed = true;
 	double _lastRightPressTime = -1;
 
@@ -89,6 +91,67 @@ public sealed class PlayerInventoryInteraction : Component
 		if ( grid is null || _grids.Contains( grid ) )
 			return;
 		_grids.Add( grid );
+	}
+
+	public void RegisterPlayerDropZone( InventoryPlayerDropZonePanel zone ) => _playerDropZone = zone;
+
+	public bool IsOverPlayerDropZone( Vector2 screenPosition ) =>
+		_playerDropZone is not null
+		&& _playerDropZone.IsValid()
+		&& _playerDropZone.IsDisplayed
+		&& PanelContainsScreenPoint( _playerDropZone, screenPosition );
+
+	public void NotifyPlayerDropZoneHover( InventoryPlayerDropZonePanel zone )
+	{
+		if ( zone is null || zone != _playerDropZone || _held.IsEmpty || _dragBindingOnly )
+			return;
+
+		_playerDropZoneHighlighted = PanelContainsScreenPoint( zone, GetDropProbeScreenPosition() );
+		zone.SetHighlighted( _playerDropZoneHighlighted );
+	}
+
+	public void TryReleaseOnPlayerDropZone()
+	{
+		if ( _held.IsEmpty || _dragBindingOnly || !IsOverPlayerDropZone( Mouse.Position ) )
+			return;
+
+		var sourceHost = _dragSourceHost;
+		var sourceSlot = _dragSourceSlot;
+		_leftDragActive = false;
+
+		if ( !TryPlayerDropHeld( sourceHost, sourceSlot, ref _held ) )
+			return;
+
+		_dragSourceHost = null;
+		_dragSourceSlot = -1;
+		_dropHoverSlot = null;
+
+		if ( _held.IsEmpty )
+			ClearHeldVisualState();
+		else
+			RefreshHeldCursorVisual();
+	}
+
+	public void TryReleaseOneOnPlayerDropZone()
+	{
+		if ( _held.IsEmpty || _dragBindingOnly || !IsOverPlayerDropZone( Mouse.Position ) )
+			return;
+
+		if ( !TryPlayerDropHeld( _dragSourceHost, _dragSourceSlot, ref _held, dropCount: 1 ) )
+			return;
+
+		if ( _held.IsEmpty )
+		{
+			_leftDragActive = false;
+			_dragSourceHost = null;
+			_dragSourceSlot = -1;
+			_dropHoverSlot = null;
+			ClearHeldVisualState();
+		}
+		else
+		{
+			RefreshHeldCursorVisual();
+		}
 	}
 
 	public void RegisterSlot( InventorySlotPanel slot )
@@ -164,12 +227,16 @@ public sealed class PlayerInventoryInteraction : Component
 			return;
 
 		PollHotbarPointerInput();
+		UpdatePlayerDropZone();
 
 		if ( _leftDragActive && Input.Released( "Attack1" ) )
 			FinishActiveDrag( ResolveDropTargetSlot() );
 
 		if ( _held.IsEmpty )
+		{
+			_playerDropZoneHighlighted = false;
 			return;
+		}
 
 		RefreshHeldCursorVisual();
 		if ( _leftDragActive )
@@ -617,8 +684,20 @@ public sealed class PlayerInventoryInteraction : Component
 		_dragSourceSlot = -1;
 		_dropHoverSlot = null;
 
+		if ( TryPlayerDropHeld( sourceHost, sourceSlot, ref _held ) )
+		{
+			RefreshHeldCursorVisual();
+			return;
+		}
+
 		if ( targetSlot is null || targetSlot.GridHost is null )
 		{
+			if ( TryWorldDropFromDrag( sourceHost, sourceSlot, ref _held ) )
+			{
+				RefreshHeldCursorVisual();
+				return;
+			}
+
 			ReturnHeldToSourceSlot( sourceHost, sourceSlot );
 			RefreshHeldCursorVisual();
 			return;
@@ -641,6 +720,116 @@ public sealed class PlayerInventoryInteraction : Component
 
 		_held = heldCopy;
 		RefreshHeldCursorVisual();
+	}
+
+	bool TryPlayerDropHeld( IInventoryGridHost sourceHost, int sourceSlot, ref InventoryCursorStack held, int dropCount = -1 )
+	{
+		if ( held.IsEmpty || _dragBindingOnly || !IsOverPlayerDropZone( GetDropProbeScreenPosition() ) )
+			return false;
+
+		if ( dropCount < 0 )
+			dropCount = held.Count;
+		else
+			dropCount = Math.Clamp( dropCount, 1, held.Count );
+
+		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
+			return HeldStackWorldDrop.TryDropAtPlayer( GameObject, ref held, dropCount );
+
+		RpcRequestPlayerWorldDrop( sourceHost?.GridId ?? string.Empty, sourceSlot, held.ResourceId, dropCount );
+		held.Count -= dropCount;
+		if ( held.Count <= 0 )
+			held.Clear();
+		return true;
+	}
+
+	[Rpc.Host]
+	void RpcRequestPlayerWorldDrop( string sourceGridId, int sourceSlot, string resourceId, int count )
+	{
+		if ( !Networking.IsHost )
+			return;
+
+		var held = new InventoryCursorStack();
+		held.Set( resourceId, count );
+		if ( HeldStackWorldDrop.TryDropAtPlayer( GameObject, ref held, count ) )
+			return;
+
+		RestoreHeldAfterFailedDrop( sourceGridId, sourceSlot, ref held );
+	}
+
+	void RestoreHeldAfterFailedDrop( string sourceGridId, int sourceSlot, ref InventoryCursorStack held )
+	{
+		if ( held.IsEmpty )
+			return;
+
+		if ( string.Equals( sourceGridId, "hotbar", StringComparison.OrdinalIgnoreCase ) )
+		{
+			var hotbar = Components.Get<PlayerHotbar>();
+			if ( hotbar is not null && sourceSlot >= 0 )
+				hotbar.HostTryPlaceHeld( sourceSlot, ref held );
+			return;
+		}
+
+		if ( string.Equals( sourceGridId, "player", StringComparison.OrdinalIgnoreCase ) )
+		{
+			var inventory = Components.Get<PlayerInventory>();
+			if ( inventory is not null && sourceSlot >= 0 )
+			{
+				var host = new PlayerInventoryGridHost( "player", inventory );
+				host.OwnerTryPlaceHeld( sourceSlot, ref held );
+			}
+		}
+	}
+
+	void UpdatePlayerDropZone()
+	{
+		if ( _playerDropZone is null || !_playerDropZone.IsValid() )
+			return;
+
+		if ( _menu is null )
+			_menu = Components.Get<PlayerGameMenuController>();
+
+		var show = !_held.IsEmpty
+		           && !_dragBindingOnly
+		           && _menu is not null
+		           && _menu.IsMenuOpen
+		           && IsBagPanelVisible( _menu.VisiblePanels );
+
+		_playerDropZone.SetDisplayed( show );
+		if ( !show )
+		{
+			_playerDropZoneHighlighted = false;
+			_playerDropZone.SetHighlighted( false );
+		}
+	}
+
+	bool TryWorldDropFromDrag( IInventoryGridHost sourceHost, int sourceSlot, ref InventoryCursorStack held )
+	{
+		if ( sourceHost?.GridId != "hotbar" || held.IsEmpty )
+			return false;
+
+		if ( FindSlotAtScreenPosition( GetDropProbeScreenPosition() ) is not null )
+			return false;
+
+		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
+			return HeldStackWorldDrop.TryDrop( GameObject, ref held, GetDropProbeScreenPosition() );
+
+		RpcRequestHotbarWorldDrop( sourceSlot, held.ResourceId, held.Count, GetDropProbeScreenPosition() );
+		held.Clear();
+		return true;
+	}
+
+	[Rpc.Host]
+	void RpcRequestHotbarWorldDrop( int sourceSlot, string resourceId, int count, Vector2 screenPosition )
+	{
+		if ( !Networking.IsHost )
+			return;
+
+		var held = new InventoryCursorStack();
+		held.Set( resourceId, count );
+		if ( HeldStackWorldDrop.TryDrop( GameObject, ref held, screenPosition ) )
+			return;
+
+		RestoreHeldAfterFailedDrop( "hotbar", sourceSlot, ref held );
 	}
 
 	void FinishBindingDrag()
@@ -908,6 +1097,12 @@ public sealed class PlayerInventoryInteraction : Component
 
 	void UpdateDropHoverSlot()
 	{
+		if ( IsOverPlayerDropZone( GetDropProbeScreenPosition() ) )
+		{
+			_dropHoverSlot = null;
+			return;
+		}
+
 		var hover = FindSlotAtScreenPosition( GetDropProbeScreenPosition() );
 		if ( hover is not null )
 			_dropHoverSlot = hover;
@@ -915,6 +1110,9 @@ public sealed class PlayerInventoryInteraction : Component
 
 	InventorySlotPanel ResolveDropTargetSlot()
 	{
+		if ( IsOverPlayerDropZone( GetDropProbeScreenPosition() ) )
+			return null;
+
 		var hit = FindSlotAtScreenPosition( GetDropProbeScreenPosition() );
 		if ( hit is not null )
 			return hit;
@@ -939,15 +1137,18 @@ public sealed class PlayerInventoryInteraction : Component
 		return null;
 	}
 
-	static bool SlotContainsScreenPoint( InventorySlotPanel slot, Vector2 screenPosition )
+	static bool SlotContainsScreenPoint( InventorySlotPanel slot, Vector2 screenPosition ) =>
+		PanelContainsScreenPoint( slot, screenPosition, GetSlotScreenSize( slot ) );
+
+	static bool PanelContainsScreenPoint( Panel panel, Vector2 screenPosition, Vector2? sizeOverride = null )
 	{
-		if ( !slot.IsValid() )
+		if ( panel is null || !panel.IsValid() )
 			return false;
 
-		var size = GetSlotScreenSize( slot );
+		var size = sizeOverride ?? GetPanelScreenSize( panel );
 
-		var topLeft = slot.PanelPositionToScreenPosition( Vector2.Zero );
-		var bottomRight = slot.PanelPositionToScreenPosition( size );
+		var topLeft = panel.PanelPositionToScreenPosition( Vector2.Zero );
+		var bottomRight = panel.PanelPositionToScreenPosition( size );
 
 		if ( bottomRight.x > topLeft.x && bottomRight.y > topLeft.y )
 		{
@@ -956,15 +1157,30 @@ public sealed class PlayerInventoryInteraction : Component
 				return true;
 		}
 
-		if ( slot.IsInside( screenPosition ) )
+		if ( panel.IsInside( screenPosition ) )
 			return true;
 
-		var rect = slot.Box.Rect;
+		var rect = panel.Box.Rect;
 		if ( rect.Width <= 0f || rect.Height <= 0f )
 			return false;
 
 		return screenPosition.x >= rect.Left && screenPosition.x <= rect.Right
 		       && screenPosition.y >= rect.Top && screenPosition.y <= rect.Bottom;
+	}
+
+	static Vector2 GetPanelScreenSize( Panel panel )
+	{
+		var rect = panel.Box.Rect;
+		var w = rect.Right - rect.Left;
+		var h = rect.Bottom - rect.Top;
+		if ( w > 0f && h > 0f )
+			return new Vector2( w, h );
+
+		var scale = panel.ScaleToScreen;
+		if ( scale > 0.001f )
+			return new Vector2( 64f * scale, 64f * scale );
+
+		return new Vector2( 64f, 64f );
 	}
 
 	static Vector2 GetSlotScreenSize( InventorySlotPanel slot )

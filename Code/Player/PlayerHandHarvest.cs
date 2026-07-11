@@ -6,7 +6,8 @@ namespace Survival;
 
 /// <summary>
 /// Local pawn: hand harvest on <see cref="ResourceItemDefinition"/> within range while looking at it.
-/// Press <see cref="HandHarvestInputAction"/> (default F) while the prompt is shown.
+/// Press <see cref="HandHarvestInputAction"/> (default F) while the harvest prompt is shown.
+/// World drops are picked up automatically when the pawn walks over them.
 /// </summary>
 [Title( "Player Hand Harvest" )]
 public sealed class PlayerHandHarvest : Component
@@ -23,6 +24,12 @@ public sealed class PlayerHandHarvest : Component
 	[Property, Group( "Interaction" ), Title( "Focus Scan Interval (seconds)" )]
 	public float FocusScanIntervalSeconds { get; set; } = 0.2f;
 
+	[Property, Group( "World Pickup" ), Title( "Walk-over Radius (meters)" )]
+	public float WalkOverPickupRadiusMeters { get; set; } = 0.55f;
+
+	[Property, Group( "World Pickup" ), Title( "Walk-over Scan Interval (seconds)" )]
+	public float WalkOverScanIntervalSeconds { get; set; } = 0.15f;
+
 	[Property, Group( "Debug" )]
 	public bool LogHandHarvest { get; set; }
 
@@ -33,6 +40,7 @@ public sealed class PlayerHandHarvest : Component
 
 	PlayerVitals _vitals;
 	double _nextFocusScanAt;
+	double _nextWalkOverScanAt;
 	readonly List<(string ResourceId, int Amount)> _capacityScratch = new();
 
 	protected override void OnStart()
@@ -75,6 +83,61 @@ public sealed class PlayerHandHarvest : Component
 		}
 
 		RequestHandHarvest( FocusedNode );
+	}
+
+	protected override void OnFixedUpdate()
+	{
+		base.OnFixedUpdate();
+
+		if ( _vitals is null )
+			_vitals = Components.Get<PlayerVitals>();
+
+		if ( _vitals is null || !_vitals.IsLocalInputOwnedPawn() )
+			return;
+
+		var menu = Components.Get<PlayerGameMenuController>();
+		if ( menu is not null && menu.IsMenuOpen )
+			return;
+
+		if ( Time.NowDouble < _nextWalkOverScanAt )
+			return;
+
+		_nextWalkOverScanAt = Time.NowDouble + Math.Max( 0.05, WalkOverScanIntervalSeconds );
+		TryWalkOverWorldDropPickup();
+	}
+
+	void TryWalkOverWorldDropPickup()
+	{
+		var inventory = Components.Get<PlayerInventory>();
+		if ( inventory is null )
+			return;
+
+		var radius = TerrainWorldUnits.MetersToEngine( Math.Max( 0.1f, WalkOverPickupRadiusMeters ) );
+		var pawnPos = GameObject.WorldPosition;
+
+		WorldDroppedResource best = null;
+		var bestDist = float.MaxValue;
+
+		foreach ( var candidate in WorldDroppedResourceRegistry.Drops )
+		{
+			if ( candidate is null || !candidate.IsAvailable )
+				continue;
+
+			if ( !candidate.CanPickupInto( inventory ) )
+				continue;
+
+			var dist = HorizontalDistanceBetween( pawnPos, candidate.GameObject.WorldPosition );
+			if ( dist > radius || dist >= bestDist )
+				continue;
+
+			best = candidate;
+			bestDist = dist;
+		}
+
+		if ( best is null )
+			return;
+
+		RequestWorldDropPickup( best );
 	}
 
 	void UpdateFocusedNode()
@@ -145,6 +208,79 @@ public sealed class PlayerHandHarvest : Component
 
 		FocusedNode = node;
 		FocusedNodeChanged?.Invoke();
+	}
+
+	void RequestWorldDropPickup( WorldDroppedResource drop )
+	{
+		if ( drop is null || !drop.GameObject.IsValid() )
+			return;
+
+		var dropId = drop.GameObject.Id;
+
+		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
+		{
+			ServerTryWorldDropPickup( dropId );
+			return;
+		}
+
+		RpcRequestWorldDropPickup( dropId );
+	}
+
+	[Rpc.Host]
+	void RpcRequestWorldDropPickup( Guid dropRootId )
+	{
+		if ( !Networking.IsHost || !GameObject.IsValid() )
+			return;
+
+		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
+		     && !ConnectionIdentity.SameClient( caller, owner ) )
+			return;
+
+		ServerTryWorldDropPickup( dropRootId );
+	}
+
+	void ServerTryWorldDropPickup( Guid dropRootId )
+	{
+		if ( !TryResolveWorldDrop( dropRootId, out var drop ) )
+		{
+			if ( LogHandHarvest )
+				Log.Warning( $"[PlayerHandHarvest] {GameObject.Name}: world drop {dropRootId} not found." );
+			return;
+		}
+
+		var inventory = Components.Get<PlayerInventory>();
+		if ( inventory is null )
+		{
+			if ( LogHandHarvest )
+				Log.Info( $"[PlayerHandHarvest] {GameObject.Name}: world pickup rejected — no inventory." );
+			return;
+		}
+
+		if ( !drop.TryPickup( inventory ) && LogHandHarvest )
+			Log.Info( $"[PlayerHandHarvest] {GameObject.Name}: world pickup rejected — inventory full or blocked." );
+	}
+
+	static bool TryResolveWorldDrop( Guid dropRootId, out WorldDroppedResource drop )
+	{
+		drop = null;
+
+		foreach ( var candidate in WorldDroppedResourceRegistry.Drops )
+		{
+			if ( candidate is null || !candidate.GameObject.IsValid() || candidate.GameObject.Id != dropRootId )
+				continue;
+
+			drop = candidate;
+			return true;
+		}
+
+		return false;
+	}
+
+	static float HorizontalDistanceBetween( Vector3 a, Vector3 b )
+	{
+		var dx = a.x - b.x;
+		var dy = a.y - b.y;
+		return MathF.Sqrt( dx * dx + dy * dy );
 	}
 
 	bool TryFindFocusedNodeFromRay( Scene scene, Vector3 eye, Vector3 dir, out ResourceItemDefinition node )

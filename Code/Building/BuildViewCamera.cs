@@ -101,6 +101,37 @@ public static class BuildViewCamera
 		return cam.IsValid() && IsFirstPersonViewCamera( pawn, cam );
 	}
 
+	/// <summary>
+	/// World-space horizontal forward for where the pawn is visually facing.
+	/// Prefers camera yaw (third-person body aim) over physics-root rotation, which may stay locked.
+	/// </summary>
+	public static bool TryGetHorizontalFacingForward( GameObject pawn, out Vector3 forward )
+	{
+		forward = default;
+		if ( !pawn.IsValid() )
+			return false;
+
+		var cam = Resolve( pawn );
+		if ( cam.IsValid() )
+		{
+			var yaw = cam.WorldRotation.Angles().yaw;
+			forward = new Angles( 0f, yaw, 0f ).ToRotation().Forward;
+			if ( forward.LengthSquared > 1e-8f )
+				return true;
+		}
+
+		var pc = pawn.Components.Get<PlayerController>();
+		if ( pc?.Renderer is { IsValid: true } renderer && renderer.GameObject.IsValid() )
+		{
+			forward = renderer.GameObject.WorldRotation.Forward.WithZ( 0 ).Normal;
+			if ( forward.LengthSquared > 1e-8f )
+				return true;
+		}
+
+		forward = pawn.WorldRotation.Forward.WithZ( 0 ).Normal;
+		return forward.LengthSquared > 1e-8f;
+	}
+
 	static bool TryFindFirstCameraInHierarchy( GameObject go, out CameraComponent cam )
 	{
 		cam = default;
