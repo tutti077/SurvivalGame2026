@@ -23,6 +23,10 @@ static class BuildSnapCandidateGrouper
 				continue;
 
 			var key = GetGroupKey( candidate );
+			if ( candidate.TargetSnapIndex < 0
+			     || candidate.TargetSnapIndex >= candidate.TargetPiece.SnapPoints.Count )
+				continue;
+
 			var anchorRole = GetAnchorRole( placingSnaps, candidate.AnchorSnapIndex );
 			var targetRole = candidate.TargetPiece.SnapPoints[candidate.TargetSnapIndex].Role;
 			var priorityIndex = BuildSnapAutoRules.GetAnchorPriorityIndex(
@@ -95,7 +99,16 @@ static class BuildSnapCandidateGrouper
 		var bestGroup = candidates[0].GroupKey;
 		var bestScore = candidates[0].Score;
 
+		// Occupied / overlapping snaps stay in the list for aiming, but never beat a valid mate.
+		if ( !GroupHasValid( candidates, bestGroup )
+		     && TryGetBestValidGroup( candidates, out var validGroup, out var validScore ) )
+		{
+			bestGroup = validGroup;
+			bestScore = validScore;
+		}
+
 		if ( lockedGroup is { } locked
+		     && GroupHasValid( candidates, locked )
 		     && TryGetGroupBestScore( candidates, locked, out var lockedScore )
 		     && ShouldKeepLockedGroup(
 			     candidates,
@@ -179,6 +192,39 @@ static class BuildSnapCandidateGrouper
 				continue;
 
 			bestScore = System.Math.Min( bestScore, candidates[i].Score );
+			found = true;
+		}
+
+		return found;
+	}
+
+	static bool GroupHasValid( IReadOnlyList<BuildSnapCandidate> candidates, BuildSnapGroupKey group )
+	{
+		for ( var i = 0; i < candidates.Count; i++ )
+		{
+			if ( candidates[i].GroupKey.Equals( group ) && candidates[i].IsValid )
+				return true;
+		}
+
+		return false;
+	}
+
+	static bool TryGetBestValidGroup(
+		IReadOnlyList<BuildSnapCandidate> candidates,
+		out BuildSnapGroupKey group,
+		out float bestScore )
+	{
+		group = default;
+		bestScore = float.MaxValue;
+		var found = false;
+		for ( var i = 0; i < candidates.Count; i++ )
+		{
+			var candidate = candidates[i];
+			if ( !candidate.IsValid || candidate.Score >= bestScore )
+				continue;
+
+			bestScore = candidate.Score;
+			group = candidate.GroupKey;
 			found = true;
 		}
 

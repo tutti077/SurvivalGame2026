@@ -11,6 +11,8 @@ static class BuildSnapAlignment
 		|| ( IsFloor( placingPieceId ) && IsWall( targetPieceId ) )
 		|| ( IsRoof( placingPieceId ) && IsWall( targetPieceId ) )
 		|| ( IsWall( placingPieceId ) && IsRoof( targetPieceId ) )
+		|| ( IsRoof( placingPieceId ) && IsFloor( targetPieceId ) )
+		|| ( IsFloor( placingPieceId ) && IsRoof( targetPieceId ) )
 		|| IsSameEdgeFamily( placingPieceId, targetPieceId );
 
 	public static Rotation GetEdgeSnapYaw( BuildPiece targetPiece, float scrollYawDegrees )

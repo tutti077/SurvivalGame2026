@@ -2,8 +2,10 @@ namespace Survival;
 
 /// <summary>
 /// Strict build piece sizes in literal meters (X, Y, Z). Z-up.
-/// <see cref="models/dev/box.vmdl"/> is 1 m per edge at scale 1 — prefab scale equals meters on each axis.
-/// Placement/overlap uses <see cref="UnitsPerMeter"/> to convert into game units.
+/// Prefab <see cref="BuildColliderSnap.PrefabColliderSize"/> is 50³ at scale 1; piece
+/// <see cref="DevBoxScale"/> is meters on each axis. Snap/overlap world sizes must use
+/// collider×scale (not <see cref="UnitsPerMeter"/>), or interior seams falsely collide /
+/// fall outside snap reach.
 /// </summary>
 public static class BuildModuleDimensions
 {
@@ -19,6 +21,14 @@ public static class BuildModuleDimensions
 	public const float ModuleHalfUnits = ModuleUnits * 0.5f;
 	public const float ThinHalfUnits = ThinUnits * 0.5f;
 
+	/// <summary>Half module in snap/collider world units (50×ModuleMeters/2).</summary>
+	public static float SnapModuleHalfUnits =>
+		BuildColliderSnap.PrefabColliderSize.x * 0.5f * ModuleMeters;
+
+	/// <summary>Half thin axis in snap/collider world units.</summary>
+	public static float SnapThinHalfUnits =>
+		BuildColliderSnap.PrefabColliderSize.x * 0.5f * ThinMeters;
+
 	/// <summary>Tiny lift so pieces sit on the surface instead of clipping through.</summary>
 	public const float SurfaceContactBias = 0.25f;
 
@@ -26,15 +36,18 @@ public static class BuildModuleDimensions
 
 	public static Vector3 FloorSizeMeters => new( ModuleMeters, ModuleMeters, ThinMeters );
 
-	public static Vector3 FloorHalfExtents => FloorSizeMeters * 0.5f * UnitsPerMeter;
+	public static Vector3 FloorHalfExtents =>
+		new( SnapModuleHalfUnits, SnapModuleHalfUnits, SnapThinHalfUnits );
 
 	public static Vector3 WallSizeMeters => new( ModuleMeters, ThinMeters, ModuleMeters );
 
-	public static Vector3 WallHalfExtents => WallSizeMeters * 0.5f * UnitsPerMeter;
+	public static Vector3 WallHalfExtents =>
+		new( SnapModuleHalfUnits, SnapThinHalfUnits, SnapModuleHalfUnits );
 
 	public static Vector3 RoofSizeMeters => new( ModuleMeters, ModuleMeters, ThinMeters );
 
-	public static Vector3 RoofHalfExtents => RoofSizeMeters * 0.5f * UnitsPerMeter;
+	public static Vector3 RoofHalfExtents =>
+		new( SnapModuleHalfUnits, SnapModuleHalfUnits, SnapThinHalfUnits );
 
 	public static bool TryGetHalfExtents( string pieceId, out Vector3 halfExtents )
 	{

@@ -24,7 +24,11 @@ static class BuildSnapCompatibility
 	}
 
 	public static bool PrefersEdgeOnly( string placingPieceId, string targetPieceId ) =>
-		IsRoof( placingPieceId ) && IsRoof( targetPieceId );
+		( IsRoof( placingPieceId ) && IsRoof( targetPieceId ) )
+		|| ( IsWall( placingPieceId ) && IsFloor( targetPieceId ) )
+		|| ( IsFloor( placingPieceId ) && IsWall( targetPieceId ) )
+		|| ( IsRoof( placingPieceId ) && IsFloor( targetPieceId ) )
+		|| ( IsFloor( placingPieceId ) && IsRoof( targetPieceId ) );
 
 	public static IReadOnlyList<SnapEdgeId> GetPlacingEdgesForTarget(
 		string placingPieceId,
@@ -55,7 +59,11 @@ static class BuildSnapCompatibility
 		}
 
 		if ( IsRoof( placingPieceId ) && IsFloor( targetPieceId ) )
-			return new[] { BuildSnapEdge.GetOpposite( targetEdge ) };
+		{
+			// Pitch makes North/South the level lips and East/West the slope. Always mate a
+			// level lip; yaw rotates it onto whichever floor edge you're aiming at.
+			return new[] { SnapEdgeId.North, SnapEdgeId.South };
+		}
 
 		if ( IsWall( placingPieceId ) && IsRoof( targetPieceId ) )
 			return new[] { BuildSnapEdge.GetOpposite( targetEdge ) };
@@ -76,6 +84,9 @@ static class BuildSnapCompatibility
 		if ( IsWall( placingPieceId ) && IsFloor( targetPieceId ) )
 			return targetEdge == SnapEdgeId.South && placingEdge == SnapEdgeId.South;
 
+		if ( IsRoof( placingPieceId ) && IsFloor( targetPieceId ) )
+			return false;
+
 		return IsRoof( placingPieceId )
 		       && IsWall( targetPieceId )
 		       && targetEdge == SnapEdgeId.North
@@ -88,7 +99,86 @@ static class BuildSnapCompatibility
 		SnapEdge placingEdge,
 		SnapEdge targetEdge,
 		Transform placement,
-		BuildPiece targetPiece ) => true;
+		BuildPiece targetPiece )
+	{
+		if ( IsRoof( placingPieceId ) && IsFloor( targetPieceId ) )
+			return IsRoofMostlyAboveTarget( placingPieceId, placement, targetPiece );
+
+		return true;
+	}
+
+	/// <summary>
+	/// 45° roofs can mate a floor edge on the raised lip so the plate hangs below ground.
+	/// Require the roof center and average snap height to sit at/above the floor deck.
+	/// </summary>
+	public static bool IsRoofMostlyAboveTarget(
+		string roofPieceId,
+		Transform roofPlacement,
+		BuildPiece targetPiece )
+	{
+		if ( targetPiece is null || !targetPiece.IsValid() )
+			return false;
+
+		var floorZ = targetPiece.GameObject.WorldPosition.z;
+		var centerZ = roofPlacement.Position.z;
+		var avgZ = GetSnapCornersAverageWorldZ( roofPieceId, roofPlacement );
+
+		// Center below the deck ⇒ the raised lip was mated (hangs into the ground).
+		if ( centerZ < floorZ - BuildModuleDimensions.SnapThinHalfUnits )
+			return false;
+
+		if ( avgZ < floorZ - BuildModuleDimensions.SnapThinHalfUnits )
+			return false;
+
+		return true;
+	}
+
+	/// <summary>Lower is better — used to pick among several yaw fits that all mate an edge.</summary>
+	public static float ScoreRoofElevation(
+		string roofPieceId,
+		Transform roofPlacement,
+		BuildPiece targetPiece )
+	{
+		if ( targetPiece is null || !targetPiece.IsValid() )
+			return 0f;
+
+		var floorZ = targetPiece.GameObject.WorldPosition.z;
+		var centerZ = roofPlacement.Position.z;
+		var avgZ = GetSnapCornersAverageWorldZ( roofPieceId, roofPlacement );
+		// Strongly prefer center above the floor; then prefer higher average.
+		var belowPenalty = centerZ < floorZ ? 500f : 0f;
+		return belowPenalty - ( avgZ - floorZ ) - ( centerZ - floorZ );
+	}
+
+	public static float GetSnapCornersAverageWorldZ( string pieceId, Transform placement )
+	{
+		var sum = 0f;
+		var count = 0;
+		foreach ( var role in CornerRoles )
+		{
+			sum += GetCornerWorldZ( pieceId, placement, role );
+			count++;
+		}
+
+		return count > 0 ? sum / count : placement.Position.z;
+	}
+
+	static readonly BuildSnapRole[] CornerRoles =
+	{
+		BuildSnapRole.CornerNorthEast,
+		BuildSnapRole.CornerNorthWest,
+		BuildSnapRole.CornerSouthEast,
+		BuildSnapRole.CornerSouthWest,
+	};
+
+	static float GetCornerWorldZ( string pieceId, Transform placement, BuildSnapRole role )
+	{
+		var orientedRot = placement.Rotation * BuildModuleDimensions.GetPrefabLocalRotation( pieceId );
+		var scale = BuildModuleDimensions.GetPieceLocalScale( pieceId );
+		var half = BuildColliderSnap.PrefabColliderSize * 0.5f;
+		return placement.Position.z
+		       + BuildColliderSnap.GetCornerSnapWorldOffset( pieceId, role, orientedRot, scale, half ).z;
+	}
 
 	public static SnapEdgeId GetPreferredRoofOnWallPlacingEdge(
 		BuildPiece wall,

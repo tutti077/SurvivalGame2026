@@ -181,6 +181,15 @@ static class BuildSnapPlacement
 					};
 				}
 
+				if ( IsRoof( placingData.Id ) && IsFloor( targetPiece.PieceId ) )
+				{
+					var elev = BuildSnapCompatibility.ScoreRoofElevation(
+						placingData.Id,
+						placement,
+						targetPiece );
+					score = score with { Combined = score.Combined + elev };
+				}
+
 				TryAddCandidate(
 					placingData.Id,
 					scene,
@@ -276,28 +285,28 @@ static class BuildSnapPlacement
 		bool isEdgeSnap,
 		SnapEdgeId targetEdge )
 	{
-		var valid = !BuildPlacementUtility.OverlapsExistingPieces(
-			scene,
-			ignorePreview,
-			placement.Position,
-			placement.Rotation,
-			BuildModuleDimensions.GetHalfExtents( placingPieceId ),
-			targetPiece.GameObject );
-
+		// Snap points are never consumed — multiple pieces may mate to the same built snaps.
+		// Overlap is not used to void snap candidates (ground placement still checks overlap).
 		var anchorIndex = FindSnapIndex( placingSnaps, anchorRole );
 		var targetIndex = FindSnapIndex( targetPiece.SnapPoints, targetRole );
 
-		const float InvalidOverlapPenalty = 1000f;
+		// Prefer floor mates when placing walls so perimeter wall tops don't steal interior seams.
+		var scoreBias = 0f;
+		if ( IsWall( placingPieceId ) && IsFloor( targetPiece.PieceId ) )
+			scoreBias -= 25f;
+		else if ( IsWall( placingPieceId ) && IsWall( targetPiece.PieceId ) )
+			scoreBias += 40f;
+
 		CandidateScratch.Add( new BuildSnapCandidate
 		{
-			IsValid = valid,
+			IsValid = true,
 			IsEdgeSnap = isEdgeSnap,
 			TargetEdgeId = targetEdge,
 			Placement = placement,
 			TargetPiece = targetPiece,
 			TargetSnapIndex = targetIndex,
 			AnchorSnapIndex = anchorIndex,
-			Score = rayScore.Combined + ( valid ? 0f : InvalidOverlapPenalty ),
+			Score = rayScore.Combined + scoreBias,
 			RayScore = rayScore,
 		} );
 	}
@@ -442,8 +451,23 @@ static class BuildSnapPlacement
 				count++;
 		}
 
-		if ( count == _cachedPieceRevision && PieceScratch.Count > 0 )
-			return;
+		// Count-only revision misses demolish+place swaps; always rebuild when count changes
+		// or cache was explicitly invalidated.
+		if ( count == _cachedPieceRevision && PieceScratch.Count == count && count > 0 )
+		{
+			var allValid = true;
+			for ( var i = 0; i < PieceScratch.Count; i++ )
+			{
+				if ( PieceScratch[i] is null || !PieceScratch[i].IsValid() )
+				{
+					allValid = false;
+					break;
+				}
+			}
+
+			if ( allValid )
+				return;
+		}
 
 		_cachedPieceRevision = count;
 		PieceScratch.Clear();
@@ -472,7 +496,8 @@ static class BuildSnapPlacement
 			return false;
 
 		var wallOnFloor = IsWall( placingPieceId ) && IsFloor( targetPiece.PieceId );
-		if ( !wallOnFloor )
+		var roofOnFloor = IsRoof( placingPieceId ) && IsFloor( targetPiece.PieceId );
+		if ( !wallOnFloor && !roofOnFloor )
 		{
 			if ( !sameEdgeAlignment && placingEdge.Id != BuildSnapEdge.GetOpposite( targetEdge.Id ) )
 				return false;
@@ -481,16 +506,58 @@ static class BuildSnapPlacement
 				return false;
 		}
 
-		var alignedYaw = BuildSnapAlignment.UsesEdgeRelativeYaw( placingPieceId, targetPiece.PieceId )
-			? BuildSnapAlignment.GetEdgeSnapYaw( targetPiece, yawDegrees )
-			: GetPlacementYaw( yawDegrees );
+		if ( BuildSnapAlignment.UsesEdgeRelativeYaw( placingPieceId, targetPiece.PieceId ) )
+		{
+			// Edge direction defines orientation — try all 90° steps so interior E/W seams
+			// still fit when scroll yaw was left on a N/S wall (and vice versa).
+			// When several yaws fit (common for pitched roofs), keep the one that sits above
+			// the target instead of the first geometric match (often underground).
+			var baseYaw = BuildSnapAlignment.GetEdgeSnapYaw( targetPiece, yawDegrees );
+			var found = false;
+			var bestScore = float.MaxValue;
+			for ( var step = 0; step < 4; step++ )
+			{
+				var alignedYaw = Rotation.FromYaw( baseYaw.Angles().yaw + step * 90f );
+				if ( !BuildSnapAlignment.TryFitEdge(
+					     placingPieceId,
+					     placingEdge,
+					     targetWorldA,
+					     targetWorldB,
+					     alignedYaw,
+					     out var candidate ) )
+					continue;
+
+				if ( !BuildSnapCompatibility.IsValidEdgePlacement(
+					     placingPieceId,
+					     targetPiece.PieceId,
+					     placingEdge,
+					     targetEdge,
+					     candidate,
+					     targetPiece ) )
+					continue;
+
+				var elev = IsRoof( placingPieceId )
+					? BuildSnapCompatibility.ScoreRoofElevation( placingPieceId, candidate, targetPiece )
+					: 0f;
+				// Prefer the scroll-aligned step when elevation ties.
+				var score = elev + step * 0.01f;
+				if ( !found || score < bestScore )
+				{
+					placement = candidate;
+					bestScore = score;
+					found = true;
+				}
+			}
+
+			return found;
+		}
 
 		return BuildSnapAlignment.TryFitEdge(
 			placingPieceId,
 			placingEdge,
 			targetWorldA,
 			targetWorldB,
-			alignedYaw,
+			GetPlacementYaw( yawDegrees ),
 			out placement );
 	}
 

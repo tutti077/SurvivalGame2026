@@ -11,8 +11,9 @@ public static class BuildSnapCrosshair
 	/// <summary>Tiebreaker only — ray perpendicular distance is the primary rank.</summary>
 	public const float CameraDistanceWeight = 0.002f;
 
-	/// <summary>Half module size — ray must pass within this distance (50% of 1.5 m piece).</summary>
-	public static float SnapReachRadius => BuildModuleDimensions.ModuleHalfUnits;
+	/// <summary>Full module reach so aiming near tile centers still finds neighboring seams.</summary>
+	public static float SnapReachRadius =>
+		BuildModuleDimensions.SnapModuleHalfUnits * 2f;
 
 	public readonly struct RayTargetScore
 	{
@@ -65,22 +66,105 @@ public static class BuildSnapCrosshair
 		Vector3 worldB,
 		float maxRange )
 	{
-		var best = new RayTargetScore { Combined = float.MaxValue, Perpendicular = float.MaxValue };
-		for ( var t = 0f; t <= 1.001f; t += 0.125f )
-		{
-			var sample = ScorePoint( rayOrigin, rayDirection, Vector3.Lerp( worldA, worldB, t, false ), maxRange );
-			if ( !sample.IsValid )
-				continue;
+		var invalid = new RayTargetScore { Combined = float.MaxValue, Perpendicular = float.MaxValue };
+		var dir = rayDirection.Normal;
+		if ( dir.LengthSquared < 1e-8f )
+			return invalid;
 
-			if ( sample.Perpendicular < best.Perpendicular - 0.01f
-			     || ( Math.Abs( sample.Perpendicular - best.Perpendicular ) <= 0.01f
-			          && sample.Combined < best.Combined ) )
+		if ( !TryClosestPointsRaySegment(
+			     rayOrigin,
+			     dir,
+			     worldA,
+			     worldB,
+			     out var pointOnRay,
+			     out var pointOnSeg,
+			     out var along ) )
+			return invalid;
+
+		if ( along < MinAlongRay || along > maxRange )
+			return invalid;
+
+		var perp = Vector3.DistanceBetween( pointOnRay, pointOnSeg );
+		if ( perp > SnapReachRadius )
+			return invalid;
+
+		var camDist = Vector3.DistanceBetween( rayOrigin, pointOnSeg );
+		return new RayTargetScore
+		{
+			Perpendicular = perp,
+			AlongRay = along,
+			CameraDistance = camDist,
+			Combined = perp + along * AlongRayWeight + camDist * CameraDistanceWeight,
+			PointOnRay = pointOnRay,
+			ClosestOnTarget = pointOnSeg,
+			IsValid = true,
+		};
+	}
+
+	/// <summary>Closest points between an infinite-capped ray and a finite segment.</summary>
+	static bool TryClosestPointsRaySegment(
+		Vector3 rayOrigin,
+		Vector3 rayDir,
+		Vector3 segA,
+		Vector3 segB,
+		out Vector3 pointOnRay,
+		out Vector3 pointOnSeg,
+		out float along )
+	{
+		pointOnRay = default;
+		pointOnSeg = default;
+		along = 0f;
+
+		var seg = segB - segA;
+		var segLenSq = seg.LengthSquared;
+		if ( segLenSq < 1e-8f )
+		{
+			along = Vector3.Dot( segA - rayOrigin, rayDir );
+			pointOnRay = rayOrigin + rayDir * Math.Max( 0f, along );
+			pointOnSeg = segA;
+			along = Math.Max( 0f, along );
+			return true;
+		}
+
+		var r = rayOrigin - segA;
+		var rdSeg = Vector3.Dot( rayDir, seg );
+		var rr = 1f; // rayDir is unit
+		var ss = segLenSq;
+		var rDir = Vector3.Dot( r, rayDir );
+		var rSeg = Vector3.Dot( r, seg );
+
+		var denom = rr * ss - rdSeg * rdSeg;
+		float t;
+		float u;
+		if ( Math.Abs( denom ) < 1e-8f )
+		{
+			// Parallel — clamp segment param from ray origin projection.
+			u = Math.Clamp( rSeg / ss, 0f, 1f );
+			t = Vector3.Dot( segA + seg * u - rayOrigin, rayDir );
+		}
+		else
+		{
+			t = ( rdSeg * rSeg - ss * rDir ) / denom;
+			u = ( rr * rSeg - rdSeg * rDir ) / denom;
+			if ( u < 0f )
 			{
-				best = sample with { ClosestOnTarget = Vector3.Lerp( worldA, worldB, t, false ) };
+				u = 0f;
+				t = Vector3.Dot( segA - rayOrigin, rayDir );
+			}
+			else if ( u > 1f )
+			{
+				u = 1f;
+				t = Vector3.Dot( segB - rayOrigin, rayDir );
 			}
 		}
 
-		return best;
+		if ( t < 0f )
+			t = 0f;
+
+		along = t;
+		pointOnRay = rayOrigin + rayDir * t;
+		pointOnSeg = segA + seg * u;
+		return true;
 	}
 
 	public static bool IsInReach(

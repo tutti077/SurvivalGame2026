@@ -7,7 +7,7 @@ namespace Survival;
 /// <summary>Snap marker positions (drawn from a Component via single-frame overlay).</summary>
 static class BuildSnapDebug
 {
-	public static float SphereRadius => BuildModuleDimensions.ThinHalfUnits;
+	public static float SphereRadius => BuildModuleDimensions.SnapThinHalfUnits;
 
 	public static readonly Color DefaultColor = new( 0.2f, 0.85f, 1f, 0.9f );
 	public static readonly Color ActiveColor = new( 1f, 0.92f, 0.15f, 1f );

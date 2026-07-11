@@ -49,6 +49,12 @@ public sealed class BuildPiece : Component
 		if ( IsPreviewGhost || string.IsNullOrWhiteSpace( PieceId ) )
 			return;
 
+		if ( BuildModuleDimensions.TryGetHalfExtents( PieceId, out var half ) )
+			_halfExtents = half;
+
+		if ( _snapPoints.Count == 0 )
+			RefreshSnapPoints();
+
 		EnsureWalkColliders( PieceId );
 	}
 

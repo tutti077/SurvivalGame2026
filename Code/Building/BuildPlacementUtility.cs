@@ -346,11 +346,21 @@ public static class BuildPlacementUtility
 		return false;
 	}
 
+	/// <summary>
+	/// Thin-half skin so flush coplanar mates (floor beside floor) are not treated as solid hits.
+	/// Must stay below two thin-halves combined or wall-vs-wall thin-axis tests go inert.
+	/// </summary>
+	static float OverlapContactSkin => BuildModuleDimensions.SnapThinHalfUnits;
+
 	static bool Overlaps( Transform a, Vector3 halfA, Transform b, Vector3 halfB )
 	{
 		var delta = a.Rotation.Inverse * (b.Position - a.Position);
-		return Math.Abs( delta.x ) < halfA.x + halfB.x
-		       && Math.Abs( delta.y ) < halfA.y + halfB.y
-		       && Math.Abs( delta.z ) < halfA.z + halfB.z;
+		var skin = OverlapContactSkin;
+		var sx = halfA.x + halfB.x - skin;
+		var sy = halfA.y + halfB.y - skin;
+		var sz = halfA.z + halfB.z - skin;
+		return Math.Abs( delta.x ) < sx
+		       && Math.Abs( delta.y ) < sy
+		       && Math.Abs( delta.z ) < sz;
 	}
 }
