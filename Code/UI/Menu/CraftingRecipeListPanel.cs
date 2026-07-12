@@ -102,7 +102,11 @@ public sealed class CraftingRecipeListPanel : Panel
 
 		var rowH = CraftingMenuSection.RecipeRowHeight;
 		var gap = CraftingMenuSection.RecipeRowGap;
-		return rowCount * rowH + ( rowCount - 1 ) * gap;
+		var rowsHeight = rowCount * rowH + ( rowCount - 1 ) * gap;
+
+		// One wheel-notch of empty space under the last recipe so a final scroll can
+		// fully reveal it (shows blank slots where there is no recipe).
+		return rowsHeight + GetNotchStep();
 	}
 
 	public static float GetRowStride() =>
@@ -228,7 +232,9 @@ public sealed class CraftingRecipeListPanel : Panel
 		if ( !IsValid )
 			return false;
 
-		var pad = 6f * MathF.Max( 1f, ScaleToScreen );
+		// Keep the hit strip close to the visible track — a wide strip was stealing recipe-row clicks
+		// and made thumb drag feel broken.
+		var pad = 4f * MathF.Max( 1f, ScaleToScreen );
 
 		if ( _scrollTrack is not null && _scrollTrack.IsValid() )
 		{
@@ -247,7 +253,7 @@ public sealed class CraftingRecipeListPanel : Panel
 		if ( list.Width <= 1f || list.Height <= 1f )
 			return false;
 
-		var hitWidth = MathF.Max( ScrollBarWidth, 28f ) * MathF.Max( 1f, ScaleToScreen );
+		var hitWidth = ScrollBarWidth * MathF.Max( 1f, ScaleToScreen );
 		left = list.Right - hitWidth - pad;
 		right = list.Right + pad;
 		top = list.Top - pad;
@@ -298,23 +304,29 @@ public sealed class CraftingRecipeListPanel : Panel
 
 	void JumpToTrackAtScreenY( float screenY )
 	{
-		if ( !CanScroll() || !TryGetTrackScreenMetrics( out var trackTop, out var trackH, out var thumbH ) )
+		if ( !CanScroll() )
 			return;
 
+		var scale = MathF.Max( 0.001f, ScaleToScreen );
+		var trackH = GetTrackHeightStyle();
+		var thumbH = GetThumbHeightStyle();
 		var travel = Math.Max( 1f, trackH - thumbH );
-		var localY = screenY - trackTop - thumbH * 0.5f;
-		var t = Math.Clamp( localY / travel, 0f, 1f );
+
+		float trackTopScreen;
+		if ( !TryGetTrackScreenMetrics( out trackTopScreen, out _, out _ ) )
+			trackTopScreen = Box.Rect.Top;
+
+		var localYStyle = ( screenY - trackTopScreen ) / scale - thumbH * 0.5f;
+		var t = Math.Clamp( localYStyle / travel, 0f, 1f );
 		SetScrollNormalized( t );
 	}
 
 	void UpdateDragFromScreenY( float screenY )
 	{
-		if ( !TryGetTrackScreenMetrics( out _, out var trackH, out var thumbH ) )
-			return;
-
-		var travel = Math.Max( 1f, trackH - thumbH );
-		var dy = screenY - _dragStartMouseY;
-		SetScrollY( _dragStartScrollY + dy / travel * GetMaxScrollY() );
+		var scale = MathF.Max( 0.001f, ScaleToScreen );
+		var travelStyle = Math.Max( 1f, GetTrackHeightStyle() - GetThumbHeightStyle() );
+		var dyStyle = ( screenY - _dragStartMouseY ) / scale;
+		SetScrollY( _dragStartScrollY + dyStyle / travelStyle * GetMaxScrollY() );
 	}
 
 	bool TryGetTrackScreenMetrics( out float trackTop, out float trackH, out float thumbH )

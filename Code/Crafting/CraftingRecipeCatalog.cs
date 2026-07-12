@@ -13,6 +13,10 @@ public static class CraftingRecipeCatalog
 	static readonly List<CraftingRecipe> Recipes = new();
 	static bool _loaded;
 	static int _loadedJsonHash;
+	static bool _isFallbackOnly;
+	static string _sourceJson = string.Empty;
+	static int _contentVersion;
+	static float _lastFallbackRetryTime = -100f;
 
 	public static IReadOnlyList<CraftingRecipe> All
 	{
@@ -23,11 +27,75 @@ public static class CraftingRecipeCatalog
 		}
 	}
 
+	/// <summary>True when only the built-in sword recipe is present (JSON load failed).</summary>
+	public static bool IsFallbackOnly
+	{
+		get
+		{
+			EnsureLoaded();
+			return _isFallbackOnly;
+		}
+	}
+
+	/// <summary>Bumps when the recipe list is replaced — UI rebuilds when this changes.</summary>
+	public static int ContentVersion
+	{
+		get
+		{
+			EnsureLoaded();
+			return _contentVersion;
+		}
+	}
+
 	public static void ForceReload()
 	{
 		_loaded = false;
 		_loadedJsonHash = 0;
 		ReloadFromDisk();
+	}
+
+	/// <summary>Host-exported JSON for joining clients (empty if nothing loaded yet).</summary>
+	public static string ExportSourceJson()
+	{
+		EnsureLoaded();
+		if ( !string.IsNullOrWhiteSpace( _sourceJson ) )
+			return _sourceJson;
+
+		foreach ( var path in GetPathCandidates() )
+		{
+			try
+			{
+				var json = FileSystem.Mounted.ReadAllText( path );
+				if ( !string.IsNullOrWhiteSpace( json ) )
+					return json;
+			}
+			catch
+			{
+				// try next
+			}
+		}
+
+		return string.Empty;
+	}
+
+	/// <summary>Replace local catalog from host-provided JSON (joining clients).</summary>
+	public static bool ReplaceFromJson( string json )
+	{
+		if ( string.IsNullOrWhiteSpace( json ) )
+			return false;
+
+		if ( !TryParseRecipes( json, out var parsed ) || parsed.Count == 0 )
+			return false;
+
+		Recipes.Clear();
+		Recipes.AddRange( parsed );
+		_sourceJson = json;
+		_loadedJsonHash = StringComparer.Ordinal.GetHashCode( json );
+		_isFallbackOnly = false;
+		_loaded = true;
+		_contentVersion++;
+		Log.Info( $"[CraftingRecipeCatalog] Applied host recipe catalog ({Recipes.Count} recipes)." );
+		return true;
 	}
 
 	/// <summary>Icon for crafting UI: recipe icon, then catalog path for <see cref="CraftingRecipe.Id"/>.</summary>
@@ -36,17 +104,17 @@ public static class CraftingRecipeCatalog
 		if ( recipe is null )
 			return null;
 
-		if ( !string.IsNullOrWhiteSpace( recipe.Icon ) && MenuUiTextures.MountedPathExists( recipe.Icon ) )
+		if ( !string.IsNullOrWhiteSpace( recipe.Icon ) )
 			return recipe.Icon;
 
 		if ( !string.IsNullOrWhiteSpace( recipe.Id ) )
 		{
 			var outputIcon = ResourceCatalog.GetIconPath( recipe.Id );
-			if ( MenuUiTextures.MountedPathExists( outputIcon ) )
+			if ( !string.IsNullOrWhiteSpace( outputIcon ) )
 				return outputIcon;
 		}
 
-		return recipe.Icon;
+		return null;
 	}
 
 	/// <summary>Recipe whose <see cref="CraftingRecipe.Id"/> matches (crafted-only items).</summary>
@@ -103,60 +171,105 @@ public static class CraftingRecipeCatalog
 	public static void EnsureLoaded()
 	{
 		if ( _loaded )
+		{
+			// Joining clients often hit FileExists too early — retry while stuck on sword-only fallback.
+			if ( _isFallbackOnly )
+				TryReloadIfFallback();
 			return;
+		}
 
 		ReloadFromDisk();
 	}
 
-	static void ReloadFromDisk()
+	static void TryReloadIfFallback()
 	{
-		var jsonHash = TryReadRecipeJsonHash();
-		_loaded = true;
-		_loadedJsonHash = jsonHash;
-		Recipes.Clear();
-
-		if ( TryLoadFromFile() )
+		// Avoid hammering mounts every EnsureLoaded/TickMenu call.
+		if ( Time.Now - _lastFallbackRetryTime < 1f )
 			return;
 
-		Recipes.Add( CreateFallbackSword() );
-		Log.Warning( "[CraftingRecipeCatalog] Using built-in fallback recipes (json missing or invalid)." );
+		_lastFallbackRetryTime = Time.Now;
+		if ( TryLoadFromFile() )
+		{
+			_isFallbackOnly = false;
+			_contentVersion++;
+			Log.Info( $"[CraftingRecipeCatalog] Recovered full recipe list ({Recipes.Count} recipes)." );
+		}
 	}
 
-	static int TryReadRecipeJsonHash()
+	static void ReloadFromDisk()
 	{
-		try
-		{
-			if ( !FileSystem.Mounted.FileExists( RecipeFilePath ) )
-				return 0;
+		Recipes.Clear();
+		_sourceJson = string.Empty;
+		_isFallbackOnly = false;
 
-			return StringComparer.Ordinal.GetHashCode( FileSystem.Mounted.ReadAllText( RecipeFilePath ) );
-		}
-		catch
+		if ( TryLoadFromFile() )
 		{
-			return 0;
+			_loaded = true;
+			_contentVersion++;
+			return;
 		}
+
+		Recipes.Add( CreateFallbackSword() );
+		_isFallbackOnly = true;
+		_loaded = true;
+		_loadedJsonHash = 0;
+		_contentVersion++;
+		Log.Warning( "[CraftingRecipeCatalog] Using built-in fallback recipes (json missing or invalid)." );
 	}
 
 	static bool TryLoadFromFile()
 	{
+		foreach ( var path in GetPathCandidates() )
+		{
+			try
+			{
+				// Do NOT gate on FileExists — it returns false on joining clients while ReadAllText still works.
+				var json = FileSystem.Mounted.ReadAllText( path );
+				if ( string.IsNullOrWhiteSpace( json ) )
+					continue;
+
+				if ( !TryParseRecipes( json, out var parsed ) || parsed.Count == 0 )
+					continue;
+
+				Recipes.Clear();
+				Recipes.AddRange( parsed );
+				_sourceJson = json;
+				_loadedJsonHash = StringComparer.Ordinal.GetHashCode( json );
+				return true;
+			}
+			catch ( Exception ex )
+			{
+				Log.Warning( $"[CraftingRecipeCatalog] Failed to load '{path}': {ex.Message}" );
+			}
+		}
+
+		return false;
+	}
+
+	static bool TryParseRecipes( string json, out List<CraftingRecipe> parsed )
+	{
+		parsed = null;
 		try
 		{
-			if ( !FileSystem.Mounted.FileExists( RecipeFilePath ) )
-				return false;
-
-			var json = FileSystem.Mounted.ReadAllText( RecipeFilePath );
 			var file = JsonSerializer.Deserialize<CraftingRecipesFile>( json, JsonOptions );
 			if ( file?.Recipes is null || file.Recipes.Count == 0 )
 				return false;
 
-			Recipes.AddRange( file.Recipes );
+			parsed = file.Recipes;
 			return true;
 		}
 		catch ( Exception ex )
 		{
-			Log.Warning( $"[CraftingRecipeCatalog] Failed to load {RecipeFilePath}: {ex.Message}" );
+			Log.Warning( $"[CraftingRecipeCatalog] JSON parse failed: {ex.Message}" );
 			return false;
 		}
+	}
+
+	static IEnumerable<string> GetPathCandidates()
+	{
+		yield return RecipeFilePath;
+		yield return "assets/data/crafting_recipes.json";
+		yield return "/data/crafting_recipes.json";
 	}
 
 	static CraftingRecipe CreateFallbackSword() => new()

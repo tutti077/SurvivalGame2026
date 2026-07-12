@@ -5,6 +5,7 @@ namespace Survival;
 
 /// <summary>
 /// Orchestrates paperdoll slots, aggregated stats, tool prefab spawning, and combat enable/disable.
+/// Paperdoll slots are host-authoritative (same pattern as bag/hotbar) so remote clients' Hook equip reaches grapple validation.
 /// </summary>
 [Title( "Player Equipment" )]
 public sealed class PlayerEquipment : Component
@@ -13,7 +14,7 @@ public sealed class PlayerEquipment : Component
 
 	public event Action EquipmentChanged;
 
-	readonly InventorySlot[] _slots = new InventorySlot[SlotCount];
+	InventorySlot[] _slots = new InventorySlot[SlotCount];
 
 	GameObject _toolsRoot;
 	GameObject _activeToolInstance;
@@ -21,6 +22,9 @@ public sealed class PlayerEquipment : Component
 
 	PlayerHotbar _hotbar;
 	PlayerCombat _combat;
+
+	public bool HasHostAuthority =>
+		GameObject.Network is not { Active: true } || Networking.IsHost;
 
 	public EquippedItemActions MainHandActions =>
 		EquipmentCatalog.GetActions( GetSlotResourceId( EquipmentSlot.MainHand ) );
@@ -56,6 +60,17 @@ public sealed class PlayerEquipment : Component
 
 		DestroyActiveTool();
 		base.OnDestroy();
+	}
+
+	public bool IsLocalManagingClient()
+	{
+		if ( GameObject.Network is not { Active: true } )
+			return true;
+
+		if ( GameObject.Network.Owner is not { } owner )
+			return Networking.IsHost;
+
+		return ConnectionIdentity.SameClient( owner, Connection.Local );
 	}
 
 	public InventorySlot GetSlot( EquipmentSlot slot )
@@ -98,15 +113,18 @@ public sealed class PlayerEquipment : Component
 
 		if ( !TryResolveHotbarEquipResourceId( hotbarIndex, out var resourceId ) )
 		{
-			SetSlot( EquipmentSlot.MainHand, InventorySlot.Empty );
+			OwnerSetSlot( EquipmentSlot.MainHand, InventorySlot.Empty );
 			return;
 		}
 
-		if ( !EquipmentCatalog.TryGet( resourceId, out var profile ) || !profile.HotbarEquipable )
+		if ( !EquipmentCatalog.TryGet( resourceId, out var profile ) || !EquipmentCatalog.IsHotbarMainHandItem( profile ) )
+		{
+			OwnerSetSlot( EquipmentSlot.MainHand, InventorySlot.Empty );
 			return;
+		}
 
-		var target = EquipmentCatalog.GetPrimarySlot( profile );
-		SetSlot( target, CreateEquippedStack( resourceId ) );
+		// MainHand mirrors the selected hotbar slot — not an independent equip destination.
+		OwnerSetSlot( EquipmentSlot.MainHand, CreateEquippedStack( resourceId ) );
 	}
 
 	bool TryResolveHotbarEquipResourceId( int hotbarIndex, out string resourceId )
@@ -141,21 +159,35 @@ public sealed class PlayerEquipment : Component
 	public bool OwnerTryPickupFromSlot( EquipmentSlot slot, out InventorySlot picked )
 	{
 		picked = InventorySlot.Empty;
+		if ( !IsLocalManagingClient() )
+			return false;
+
+		// MainHand is hotbar-driven display only — never inventory storage.
+		if ( slot == EquipmentSlot.MainHand )
+			return false;
+
 		var current = GetSlot( slot );
 		if ( current.IsEmpty )
 			return false;
 
 		picked = current;
-		SetSlot( slot, InventorySlot.Empty );
+		OwnerSetSlot( slot, InventorySlot.Empty );
 		return true;
 	}
 
 	public bool OwnerTryPlaceIntoSlot( EquipmentSlot slot, ref InventoryCursorStack held )
 	{
-		if ( held.IsEmpty )
+		if ( held.IsEmpty || !IsLocalManagingClient() )
+			return false;
+
+		if ( slot == EquipmentSlot.MainHand )
 			return false;
 
 		if ( !EquipmentCatalog.TryGet( held.ResourceId, out var profile ) )
+			return false;
+
+		// Hotbar MainHand weapons/tools are not paperdoll storage (hook/armor still are).
+		if ( EquipmentCatalog.IsHotbarMainHandItem( profile ) )
 			return false;
 
 		if ( !EquipmentCatalog.IsSlotAllowed( profile, slot ) )
@@ -163,7 +195,7 @@ public sealed class PlayerEquipment : Component
 
 		var incoming = CreateEquippedStack( held.ResourceId );
 		var previous = GetSlot( slot );
-		SetSlot( slot, incoming );
+		OwnerSetSlot( slot, incoming );
 
 		held.Count--;
 		if ( held.Count <= 0 )
@@ -182,7 +214,13 @@ public sealed class PlayerEquipment : Component
 
 	public bool OwnerTryFinishDragDrop( EquipmentSlot sourceSlot, EquipmentSlot targetSlot, ref InventoryCursorStack held )
 	{
+		if ( !IsLocalManagingClient() )
+			return false;
+
 		if ( sourceSlot == targetSlot )
+			return false;
+
+		if ( sourceSlot == EquipmentSlot.MainHand || targetSlot == EquipmentSlot.MainHand )
 			return false;
 
 		var sourceStack = GetSlot( sourceSlot );
@@ -195,12 +233,15 @@ public sealed class PlayerEquipment : Component
 		if ( !EquipmentCatalog.TryGet( sourceStack.ResourceId, out var profile ) )
 			return false;
 
+		if ( EquipmentCatalog.IsHotbarMainHandItem( profile ) )
+			return false;
+
 		if ( !EquipmentCatalog.IsSlotAllowed( profile, targetSlot ) )
 			return false;
 
 		var targetStack = GetSlot( targetSlot );
-		SetSlot( targetSlot, sourceStack );
-		SetSlot( sourceSlot, targetStack );
+		OwnerSetSlot( targetSlot, sourceStack );
+		OwnerSetSlot( sourceSlot, targetStack );
 		return true;
 	}
 
@@ -213,10 +254,14 @@ public sealed class PlayerEquipment : Component
 		if ( !EquipmentCatalog.TryGet( resourceId, out var profile ) )
 			return false;
 
+		// Weapons/tools belong on the hotbar, not paperdoll storage.
+		if ( EquipmentCatalog.IsHotbarMainHandItem( profile ) )
+			return false;
+
 		for ( var i = 0; i < SlotCount; i++ )
 		{
 			var slot = (EquipmentSlot)i;
-			if ( slot == fromSlot )
+			if ( slot == fromSlot || slot == EquipmentSlot.MainHand )
 				continue;
 
 			if ( !EquipmentCatalog.IsSlotAllowed( profile, slot ) )
@@ -232,7 +277,24 @@ public sealed class PlayerEquipment : Component
 		return false;
 	}
 
-	void SetSlot( EquipmentSlot slot, InventorySlot stack )
+	/// <summary>Owner/host mutation: apply locally and replicate to host (or owner from host).</summary>
+	void OwnerSetSlot( EquipmentSlot slot, InventorySlot stack )
+	{
+		ApplySlotLocal( slot, stack );
+
+		if ( HasHostAuthority )
+		{
+			PushEquipmentToOwner();
+			return;
+		}
+
+		if ( !IsLocalManagingClient() )
+			return;
+
+		RpcHostSetEquipmentSlot( (int)slot, stack.ResourceId ?? string.Empty, stack.Count );
+	}
+
+	void ApplySlotLocal( EquipmentSlot slot, InventorySlot stack )
 	{
 		var index = (int)slot;
 		if ( index < 0 || index >= SlotCount )
@@ -247,6 +309,126 @@ public sealed class PlayerEquipment : Component
 
 		if ( previous.ResourceId == stack.ResourceId && previous.Count == stack.Count )
 			return;
+
+		RefreshDerivedState();
+		EquipmentChanged?.Invoke();
+	}
+
+	void PushEquipmentToOwner()
+	{
+		if ( GameObject.Network is not { Active: true } || !Networking.IsHost )
+			return;
+
+		if ( GameObject.Network.Owner is not { } owner )
+			return;
+
+		if ( ConnectionIdentity.SameClient( owner, Connection.Local ) )
+			return;
+
+		var ids = new string[SlotCount];
+		var counts = new int[SlotCount];
+		for ( var i = 0; i < SlotCount; i++ )
+		{
+			ids[i] = _slots[i].ResourceId ?? string.Empty;
+			counts[i] = _slots[i].Count;
+		}
+
+		RpcOwnerEquipmentSync( ids, counts );
+	}
+
+	[Rpc.Host]
+	void RpcHostSetEquipmentSlot( int slotIndex, string resourceId, int count )
+	{
+		if ( !Networking.IsHost || !GameObject.IsValid() )
+			return;
+
+		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
+		     && !ConnectionIdentity.SameClient( caller, owner ) )
+			return;
+
+		if ( slotIndex < 0 || slotIndex >= SlotCount )
+			return;
+
+		var stack = string.IsNullOrWhiteSpace( resourceId ) || count <= 0
+			? InventorySlot.Empty
+			: new InventorySlot
+			{
+				ResourceId = ResourceCatalog.NormalizeResourceId( resourceId ),
+				Count = Math.Max( 1, count ),
+			};
+
+		ApplySlotLocal( (EquipmentSlot)slotIndex, stack );
+	}
+
+	/// <summary>
+	/// Host: accept a client-reported Grapple equip during attach validation when paperdoll RPC lagged.
+	/// </summary>
+	public bool HostAcceptClientGrappleEquip( string resourceId )
+	{
+		if ( !HasHostAuthority )
+			return false;
+
+		if ( string.IsNullOrWhiteSpace( resourceId ) )
+			return false;
+
+		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
+		if ( !EquipmentCatalog.TryGet( resourceId, out var profile ) || profile is null )
+			return false;
+
+		if ( !IsGrappleProfile( profile ) )
+			return false;
+
+		ApplySlotLocal( EquipmentSlot.Grapple, CreateEquippedStack( resourceId ) );
+		return true;
+	}
+
+	static bool IsGrappleProfile( EquipmentProfileData profile )
+	{
+		if ( profile is null )
+			return false;
+
+		if ( string.Equals( profile.Slot, "grapple", StringComparison.OrdinalIgnoreCase ) )
+			return true;
+
+		if ( profile.AllowedSlots is not null )
+		{
+			for ( var i = 0; i < profile.AllowedSlots.Count; i++ )
+			{
+				if ( string.Equals( profile.AllowedSlots[i], "grapple", StringComparison.OrdinalIgnoreCase ) )
+					return true;
+			}
+		}
+
+		if ( profile.Actions is not null )
+		{
+			for ( var i = 0; i < profile.Actions.Count; i++ )
+			{
+				if ( string.Equals( profile.Actions[i], "Grapple", StringComparison.OrdinalIgnoreCase ) )
+					return true;
+			}
+		}
+
+		return false;
+	}
+
+	[Rpc.Owner]
+	void RpcOwnerEquipmentSync( string[] resourceIds, int[] counts )
+	{
+		if ( resourceIds is null || counts is null )
+			return;
+
+		if ( !IsLocalManagingClient() )
+			return;
+
+		var n = Math.Min( SlotCount, Math.Min( resourceIds.Length, counts.Length ) );
+		for ( var i = 0; i < n; i++ )
+		{
+			var id = resourceIds[i];
+			var c = counts[i];
+			_slots[i] = string.IsNullOrWhiteSpace( id ) || c <= 0
+				? InventorySlot.Empty
+				: new InventorySlot { ResourceId = id, Count = c };
+		}
 
 		RefreshDerivedState();
 		EquipmentChanged?.Invoke();

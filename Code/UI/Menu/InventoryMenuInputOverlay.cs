@@ -58,6 +58,8 @@ public sealed class InventoryMenuInputOverlay : Panel
 		AcceptsFocus = false;
 		_softCursorReady = false;
 		_craftingScrollbarDragging = false;
+		if ( !open )
+			InventoryScreenPointer.SetSoftCursor( default, active: false );
 
 		if ( _softCursor is not null && _softCursor.IsValid() )
 			_softCursor.Style.Set( "display", open ? "flex" : "none" );
@@ -101,6 +103,7 @@ public sealed class InventoryMenuInputOverlay : Panel
 
 		_softCursorReady = true;
 		Mouse.Position = _softCursorPos;
+		InventoryScreenPointer.SetSoftCursor( _softCursorPos, active: true );
 	}
 
 	void TickSoftCursor()
@@ -122,8 +125,9 @@ public sealed class InventoryMenuInputOverlay : Panel
 				_softCursorPos.y.Clamp( 0f, Math.Max( 0f, size.y - 1f ) ) );
 		}
 
-		// Authoritative hit-test position for slots / scrollbar / tabs.
+		// Authoritative hit-test position for slots / scrollbar / tabs / drag ghost.
 		Mouse.Position = _softCursorPos;
+		InventoryScreenPointer.SetSoftCursor( _softCursorPos, active: true );
 		ApplySoftCursorVisual();
 	}
 
@@ -220,7 +224,28 @@ public sealed class InventoryMenuInputOverlay : Panel
 			_craftingCraftPointer?.Invoke( pos, false );
 
 			if ( _inventoryInteraction is not null && _inventoryInteraction.IsDragging )
+			{
+				var dropTarget = _inventoryInteraction.FindHotbarSlotAtScreenPosition( pos )
+					?? _inventoryInteraction.FindPlayerBagSlotAtScreenPosition( pos );
+
+				if ( dropTarget is not null )
+				{
+					_inventoryInteraction.ProcessSlotPress( dropTarget, "Attack1", pressed: false );
+					_menuGlobalMouseUp?.Invoke();
+					return;
+				}
+
+				if ( TryForwardPlayerDropZoneAttack1() )
+				{
+					_menuGlobalMouseUp?.Invoke();
+					return;
+				}
+
+				// Released over empty space — return held to source.
 				_inventoryInteraction.ProcessSlotPress( null, "Attack1", pressed: false );
+				_menuGlobalMouseUp?.Invoke();
+				return;
+			}
 
 			if ( TryForwardPlayerDropZoneAttack1() )
 			{
@@ -279,12 +304,6 @@ public sealed class InventoryMenuInputOverlay : Panel
 	{
 		if ( _inventoryInteraction is null )
 			return false;
-
-		if ( !pressed && _inventoryInteraction.IsDragging )
-		{
-			_inventoryInteraction.ProcessSlotPress( null, "Attack1", pressed: false );
-			return true;
-		}
 
 		var slot = _inventoryInteraction.FindHotbarSlotAtScreenPosition( _softCursorPos );
 		if ( slot is null )

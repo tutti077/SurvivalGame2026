@@ -5,6 +5,25 @@ namespace Survival;
 /// <summary>Screen pointer helpers aligned with the combat teardrop crosshair (<see cref="PlayerCombat"/> viewport).</summary>
 public static class InventoryScreenPointer
 {
+	static bool _softCursorActive;
+	static Vector2 _softCursorScreen;
+
+	/// <summary>True while the inventory soft cursor is driving menu hit-tests.</summary>
+	public static bool SoftCursorActive => _softCursorActive;
+
+	/// <summary>Menu soft-cursor screen position (valid when <see cref="SoftCursorActive"/>).</summary>
+	public static Vector2 SoftCursorScreen => _softCursorScreen;
+
+	public static void SetSoftCursor( Vector2 screenPosition, bool active )
+	{
+		_softCursorActive = active;
+		_softCursorScreen = screenPosition;
+	}
+
+	/// <summary>Soft cursor while the menu is open; otherwise OS <see cref="Mouse.Position"/>.</summary>
+	public static Vector2 GetMenuOrMousePosition() =>
+		_softCursorActive ? _softCursorScreen : Mouse.Position;
+
 	public static Vector2 GetCrosshairScreenPosition( GameObject from )
 	{
 		if ( TryGetViewScreenRect( from, out var left, out var top, out var right, out var bottom ) )

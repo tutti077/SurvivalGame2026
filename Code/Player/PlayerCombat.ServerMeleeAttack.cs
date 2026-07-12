@@ -243,21 +243,36 @@ public partial class PlayerCombat
 			_clientSwingTracePlayback = null;
 	}
 
-	void TickAllRemoteCombatVisualizationsInScene()
+	/// <summary>
+	/// Advances client-only swing path overlays (and remote block/windup draws) for every pawn.
+	/// Called from <see cref="CombatAuthority"/> so proxy pawns still animate when their OnUpdate is skipped.
+	/// </summary>
+	public static void TickSceneCombatVisualizations( Scene scene )
 	{
-		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
-		if ( !scene.IsValid() )
+		if ( scene is null || !scene.IsValid() )
 			return;
 
 		foreach ( var pc in scene.GetAllComponents<PlayerCombat>() )
 		{
-			if ( pc is null || !pc.GameObject.IsValid() || pc == this || pc.IsLocalCombatDriver() )
+			if ( pc is null || !pc.GameObject.IsValid() )
 				continue;
 
-			pc.TickClientSwingTracePlaybackOnly( scene );
+			// Owned pawns already tick their own playback in MaybeTickServerMeleeAttackAction — avoid double-speed.
+			if ( !pc.IsLocalCombatDriver() )
+				pc.TickClientSwingTracePlaybackOnly( scene );
+
+			if ( pc.IsLocalCombatDriver() )
+				continue;
+
 			pc.DrawRemoteBlockVisualizationIfNeeded();
 			pc.DrawWindupTelegraphIfNeeded();
 		}
+	}
+
+	void TickAllRemoteCombatVisualizationsInScene()
+	{
+		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+		TickSceneCombatVisualizations( scene );
 	}
 
 	/// <summary>Core attack-path sampling every frame; optional overlay when <see cref="MeleeDebugDrawEnabled"/>.</summary>

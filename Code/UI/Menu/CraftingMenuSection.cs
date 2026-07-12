@@ -65,6 +65,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	bool _craftHoldCompleted;
 	float _craftHoldElapsed;
 	bool _craftButtonPressedVisual;
+	int _builtRecipeContentVersion = -1;
 
 	static readonly Color CraftButtonColor = new( 0.22f, 0.45f, 0.28f, 0.95f );
 	static readonly Color CraftButtonPressedColor = new( 0.14f, 0.32f, 0.18f, 0.98f );
@@ -226,6 +227,18 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_recipeList.Style.Set( "pointer-events", "auto" );
 
 		var rowParent = listPanel.Content;
+		PopulateRecipeRows( rowParent );
+	}
+
+	void PopulateRecipeRows( Panel rowParent )
+	{
+		if ( rowParent is null || !rowParent.IsValid() )
+			return;
+
+		CraftingRecipeCatalog.EnsureLoaded();
+		ResourceDefinitionCatalog.EnsureLoaded();
+
+		rowParent.DeleteChildren();
 		_rows.Clear();
 		foreach ( var recipe in CraftingRecipeCatalog.All )
 		{
@@ -288,12 +301,37 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( _rows.Count > 0 )
 			_rows[^1].Root.Style.MarginBottom = Length.Pixels( 0f );
 
-		listPanel.SetRowCount( _rows.Count );
+		_recipeListPanel?.SetRowCount( _rows.Count );
+		_builtRecipeContentVersion = CraftingRecipeCatalog.ContentVersion
+			^ (ResourceDefinitionCatalog.ContentVersion << 16);
 
-		if ( CraftingRecipeCatalog.All.Count > 0 )
-			SelectRecipe( CraftingRecipeCatalog.All[0].Id );
+		var keepSelection = !string.IsNullOrWhiteSpace( _selectedRecipeId )
+			&& CraftingRecipeCatalog.Get( _selectedRecipeId ) is not null;
+
+		if ( keepSelection )
+			SelectRecipe( _selectedRecipeId );
+		else if ( _rows.Count > 0 )
+			SelectRecipe( _rows[0].RecipeId );
 		else
 			RefreshSelectedDetail();
+	}
+
+	/// <summary>Rebuild list when host catalog sync or fallback recovery changes recipe content.</summary>
+	void RebuildRecipeRowsIfNeeded()
+	{
+		CraftingRecipeCatalog.EnsureLoaded();
+		ResourceDefinitionCatalog.EnsureLoaded();
+
+		var version = CraftingRecipeCatalog.ContentVersion
+			^ (ResourceDefinitionCatalog.ContentVersion << 16);
+		if ( version == _builtRecipeContentVersion )
+			return;
+
+		var content = _recipeListPanel?.Content;
+		if ( content is null || !content.IsValid() )
+			return;
+
+		PopulateRecipeRows( content );
 	}
 
 	public void ApplyRecipeListWheel( Vector2 wheel )
@@ -451,6 +489,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		{
 			CraftingRecipeCatalog.EnsureLoaded();
 			ResourceDefinitionCatalog.EnsureLoaded();
+			RebuildRecipeRowsIfNeeded();
 			Refresh();
 		}
 		else
@@ -558,6 +597,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( !menuOpen || !IsScrollTargetActive )
 			return;
 
+		RebuildRecipeRowsIfNeeded();
 		_recipeListPanel?.PollWheelWhileOpen();
 	}
 

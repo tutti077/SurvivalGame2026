@@ -131,14 +131,14 @@ public sealed class PlayerGrapple : Component
 	[Property, Group( "Debug" )]
 	public bool LogGrapple { get; set; }
 
-	/// <summary>Host-synced: rope currently attached.</summary>
-	[Sync] public bool IsAttached { get; private set; }
+	/// <summary>Host-synced: rope currently attached. <see cref="SyncFlags.FromHost"/> — default Sync is owner-authored and host writes on client pawns never reach the owner.</summary>
+	[Sync( SyncFlags.FromHost )] public bool IsAttached { get; private set; }
 
 	/// <summary>Host-synced world attach point (static for v1).</summary>
-	[Sync] public Vector3 AttachWorldPoint { get; private set; }
+	[Sync( SyncFlags.FromHost )] public Vector3 AttachWorldPoint { get; private set; }
 
 	/// <summary>Host-synced current rope length in engine units.</summary>
-	[Sync] public float RopeLengthEngine { get; private set; }
+	[Sync( SyncFlags.FromHost )] public float RopeLengthEngine { get; private set; }
 
 	/// <summary>Local aim UI: crosshair should draw.</summary>
 	public bool IsAimHudActive { get; private set; }
@@ -832,8 +832,8 @@ public sealed class PlayerGrapple : Component
 	}
 
 	/// <summary>
-	/// Host check: client snap must be in range, in the assist cone, and on a tagged surface.
-	/// Uses the same closest-to-ray resolve as the client (not a strict camera→point face hit).
+	/// Host check: client snap must be in range on a tagged surface.
+	/// Avoids host-camera aim (scene.Camera is the host view for remote pawns).
 	/// </summary>
 	bool TryValidateAttachPoint( Vector3 clientHitPoint, out Vector3 validatedPoint, out float length )
 	{
@@ -843,25 +843,29 @@ public sealed class PlayerGrapple : Component
 		if ( !IsWithinGrappleRange( clientHitPoint ) )
 			return false;
 
-		if ( !TryGetAimRayFromPlayer( out var eyeOrigin, out var look ) )
-			return false;
-
-		var cam = BuildViewCamera.Resolve( GameObject );
-		var rayOrigin = cam.IsValid() ? cam.WorldPosition : eyeOrigin;
-		var toClient = clientHitPoint - rayOrigin;
-		var rayDist = toClient.Length;
-		if ( rayDist < 1e-3f )
-			return false;
-
-		var dir = toClient / rayDist;
-		var maxAngleDeg = GetAssistMaxAngleDegrees() + 4f;
-		if ( Vector3.GetAngle( look, dir ) > maxAngleDeg )
-			return false;
-
 		var surfaceSlack = TerrainWorldUnits.MetersToEngine( 3f );
 
-		// Same resolve path as the aim HUD — accept if client matches host snap.
-		if ( TryTraceGrappleAim( out var hostPoint, out _, out var hostLen, out _, out _, out _ ) )
+		if ( TryFindTaggedRootNearPoint( clientHitPoint, surfaceSlack, out var nearRoot ) )
+		{
+			if ( TryConfirmPointOnGrappleObject( nearRoot, clientHitPoint ) )
+			{
+				validatedPoint = clientHitPoint;
+				length = Vector3.DistanceBetween( GameObject.WorldPosition, clientHitPoint );
+				return true;
+			}
+
+			if ( TryResolveClosestPointOnObject( nearRoot, clientHitPoint, out var resolved )
+			     && IsWithinGrappleRange( resolved )
+			     && Vector3.DistanceBetween( resolved, clientHitPoint ) <= surfaceSlack )
+			{
+				validatedPoint = resolved;
+				length = Vector3.DistanceBetween( GameObject.WorldPosition, resolved );
+				return true;
+			}
+		}
+
+		// Local/host play: still allow the richer aim-trace path when this pawn owns the view.
+		if ( IsLocalDriver() && TryTraceGrappleAim( out var hostPoint, out _, out var hostLen, out _, out _, out _ ) )
 		{
 			if ( Vector3.DistanceBetween( hostPoint, clientHitPoint ) <= surfaceSlack && IsWithinGrappleRange( hostPoint ) )
 			{
@@ -871,53 +875,33 @@ public sealed class PlayerGrapple : Component
 			}
 		}
 
-		// Fallback: confirm a tagged surface near the client point, then snap with closest-to-ray.
-		var tr = TraceAimRay( rayOrigin, dir, rayDist + TerrainWorldUnits.MetersToEngine( 1f ) );
-		if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() || !HasGrappleTag( tr ) )
-		{
-			// Point may sit on a side face the center ray misses — probe colliders near the client point.
-			if ( !TryFindTaggedRootNearPoint( clientHitPoint, surfaceSlack, out var nearRoot ) )
-				return false;
-
-			if ( !TryResolveAimPointOnObject( nearRoot, out var resolved, out _, out _ ) || !IsWithinGrappleRange( resolved ) )
-				return false;
-
-			if ( Vector3.DistanceBetween( resolved, clientHitPoint ) > surfaceSlack )
-			{
-				// Still accept the client point if it lies on that object's collider.
-				if ( !TryConfirmPointOnGrappleObject( nearRoot, clientHitPoint ) )
-					return false;
-
-				validatedPoint = clientHitPoint;
-				length = Vector3.DistanceBetween( GameObject.WorldPosition, clientHitPoint );
-				return true;
-			}
-
-			validatedPoint = resolved;
-			length = Vector3.DistanceBetween( GameObject.WorldPosition, resolved );
-			return true;
-		}
-
-		var root = ResolveGrappleRoot( tr.GameObject );
-		if ( TryResolveAimPointOnObject( root, out var snap, out _, out _ ) && IsWithinGrappleRange( snap ) )
-		{
-			if ( Vector3.DistanceBetween( snap, clientHitPoint ) <= surfaceSlack
-			     || TryConfirmPointOnGrappleObject( root, clientHitPoint ) )
-			{
-				validatedPoint = snap;
-				length = Vector3.DistanceBetween( GameObject.WorldPosition, snap );
-				return true;
-			}
-		}
-
-		if ( Vector3.DistanceBetween( tr.HitPosition, clientHitPoint ) <= surfaceSlack && IsWithinGrappleRange( tr.HitPosition ) )
-		{
-			validatedPoint = tr.HitPosition;
-			length = Vector3.DistanceBetween( GameObject.WorldPosition, tr.HitPosition );
-			return true;
-		}
-
 		return false;
+	}
+
+	bool TryResolveClosestPointOnObject( GameObject root, Vector3 point, out Vector3 closest )
+	{
+		closest = default;
+		if ( root is null || !root.IsValid() )
+			return false;
+
+		var bestDist = float.MaxValue;
+		var found = false;
+		foreach ( var col in root.Components.GetAll<Collider>( FindMode.EverythingInSelfAndDescendants ) )
+		{
+			if ( col is null || !col.IsValid() )
+				continue;
+
+			var p = col.FindClosestPoint( point );
+			var d = Vector3.DistanceBetween( p, point );
+			if ( d >= bestDist )
+				continue;
+
+			bestDist = d;
+			closest = p;
+			found = true;
+		}
+
+		return found;
 	}
 
 	bool TryConfirmPointOnGrappleObject( GameObject root, Vector3 point )
@@ -945,29 +929,39 @@ public sealed class PlayerGrapple : Component
 		if ( !scene.IsValid() )
 			return false;
 
-		// Short probe through the point along look so we can pick up side-face snaps.
-		if ( !TryGetAimRayFromPlayer( out _, out var look ) )
-			look = GameObject.WorldRotation.Forward;
-
-		var a = point - look.Normal * radius;
-		var b = point + look.Normal * radius;
-		var tr = scene.Trace.Ray( a, b )
-			.IgnoreGameObjectHierarchy( GameObject )
-			.Run();
-
-		if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() || !HasGrappleTag( tr ) )
+		// Omnidirectional probes — do not depend on host look/camera.
+		Vector3[] axes =
 		{
-			tr = scene.Trace.Ray( a, b )
+			Vector3.Forward, Vector3.Backward,
+			Vector3.Left, Vector3.Right,
+			Vector3.Up, Vector3.Down,
+		};
+
+		foreach ( var axis in axes )
+		{
+			var a = point - axis * radius;
+			var b = point + axis * radius;
+			var tr = scene.Trace.Ray( a, b )
 				.IgnoreGameObjectHierarchy( GameObject )
-				.UseHitboxes()
 				.Run();
+
+			if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() || !HasGrappleTag( tr ) )
+			{
+				tr = scene.Trace.Ray( a, b )
+					.IgnoreGameObjectHierarchy( GameObject )
+					.UseHitboxes()
+					.Run();
+			}
+
+			if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() || !HasGrappleTag( tr ) )
+				continue;
+
+			root = ResolveGrappleRoot( tr.GameObject );
+			if ( root.IsValid() )
+				return true;
 		}
 
-		if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() || !HasGrappleTag( tr ) )
-			return false;
-
-		root = ResolveGrappleRoot( tr.GameObject );
-		return root.IsValid();
+		return false;
 	}
 
 	float GetAssistMaxAngleDegrees()
@@ -1163,13 +1157,15 @@ public sealed class PlayerGrapple : Component
 			return;
 		}
 
+		var grappleId = _equipment?.GetSlotResourceId( EquipmentSlot.Grapple ) ?? string.Empty;
+
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
 		{
-			ServerTryAttach( hitPoint );
+			ServerTryAttach( hitPoint, grappleId );
 			return;
 		}
 
-		RpcRequestAttach( hitPoint );
+		RpcRequestAttach( hitPoint, grappleId );
 	}
 
 	void RequestDetach()
@@ -1195,7 +1191,7 @@ public sealed class PlayerGrapple : Component
 	}
 
 	[Rpc.Host]
-	void RpcRequestAttach( Vector3 hitPoint )
+	void RpcRequestAttach( Vector3 hitPoint, string clientGrappleResourceId )
 	{
 		if ( !Networking.IsHost || !GameObject.IsValid() )
 			return;
@@ -1204,7 +1200,7 @@ public sealed class PlayerGrapple : Component
 		     && !ConnectionIdentity.SameClient( caller, owner ) )
 			return;
 
-		ServerTryAttach( hitPoint );
+		ServerTryAttach( hitPoint, clientGrappleResourceId );
 	}
 
 	[Rpc.Host]
@@ -1233,16 +1229,26 @@ public sealed class PlayerGrapple : Component
 		ServerAdjustLength( deltaEngine );
 	}
 
-	void ServerTryAttach( Vector3 clientHitPoint )
+	void ServerTryAttach( Vector3 clientHitPoint, string clientGrappleResourceId = null )
 	{
 		if ( IsAttached )
 			return;
 
 		if ( !HasGrappleEquipped() )
 		{
+			// Paperdoll RPC can lag behind the client's local equip — accept a valid client-reported hook.
+			if ( _equipment is null )
+				_equipment = Components.Get<PlayerEquipment>();
+
+			if ( _equipment is null || !_equipment.HostAcceptClientGrappleEquip( clientGrappleResourceId ) )
+			{
+				if ( LogGrapple )
+					Log.Info( $"[PlayerGrapple] {GameObject.Name}: host rejected attach — no grapple equipped." );
+				return;
+			}
+
 			if ( LogGrapple )
-				Log.Info( $"[PlayerGrapple] {GameObject.Name}: host rejected attach — no grapple equipped." );
-			return;
+				Log.Info( $"[PlayerGrapple] {GameObject.Name}: host mirrored client grapple '{clientGrappleResourceId}'." );
 		}
 
 		if ( !TryValidateAttachPoint( clientHitPoint, out var validatedPoint, out var length ) )
@@ -1252,17 +1258,11 @@ public sealed class PlayerGrapple : Component
 			return;
 		}
 
-		if ( AttachStaminaCost > 0f )
+		if ( !HostTrySpendAttachStamina() )
 		{
-			if ( _vitals is null )
-				_vitals = Components.Get<PlayerVitals>();
-
-			if ( _vitals is not null && !_vitals.TrySpendStamina( AttachStaminaCost ) )
-			{
-				if ( LogGrapple )
-					Log.Info( $"[PlayerGrapple] {GameObject.Name}: host attach stamina reject." );
-				return;
-			}
+			if ( LogGrapple )
+				Log.Info( $"[PlayerGrapple] {GameObject.Name}: host attach stamina reject." );
+			return;
 		}
 
 		IsAttached = true;
@@ -1271,6 +1271,33 @@ public sealed class PlayerGrapple : Component
 
 		if ( LogGrapple )
 			Log.Info( $"[PlayerGrapple] {GameObject.Name}: attached len={TerrainWorldUnits.EngineToMeters( length ):0.##}m" );
+	}
+
+	/// <summary>
+	/// Host attach cost. Must not use <see cref="PlayerVitals.TrySpendStamina"/> — that refuses
+	/// <see cref="GameObject.IsProxy"/> pawns (joining clients), so attach never set <see cref="IsAttached"/>.
+	/// Match combat: spend through <see cref="VitalsAuthority.TryApplyDeltas"/>.
+	/// </summary>
+	bool HostTrySpendAttachStamina()
+	{
+		if ( AttachStaminaCost <= 0f )
+			return true;
+
+		_vitals ??= Components.Get<PlayerVitals>();
+		if ( _vitals is null )
+			return true;
+
+		if ( _vitals.InfiniteStaminaDebug )
+			return true;
+
+		if ( !_vitals.HasStaminaFor( AttachStaminaCost ) )
+			return false;
+
+		if ( VitalsAuthority.Instance is { } auth )
+			return auth.TryApplyDeltas( GameObject, 0f, -AttachStaminaCost, _vitals );
+
+		// Offline / no authority: TrySpendStamina only works for non-proxy (host's own pawn).
+		return _vitals.TrySpendStamina( AttachStaminaCost );
 	}
 
 	void ServerDetach( string reason )

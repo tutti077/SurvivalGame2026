@@ -1335,7 +1335,7 @@ public sealed class PlayerInventory : Component
 			return TryCraftRecipeOnHost( recipeId );
 
 		RpcHostCraftRecipe( recipeId );
-		return false;
+		return true;
 	}
 
 	bool TryCraftRecipeOnHost( string recipeId )

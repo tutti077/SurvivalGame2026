@@ -729,71 +729,6 @@
       "Children": []
     },
     {
-      "__guid": "39e068df-5dfa-45db-b9f3-a77027242e06",
-      "__version": 2,
-      "__Prefab": "prefabs/player/basicplayer.prefab",
-      "__PrefabInstancePatch": {
-        "AddedObjects": [],
-        "RemovedObjects": [
-          {
-            "Id": {
-              "Type": "GameObject",
-              "IdValue": "8f2abedf-c831-8342-8fbb-8c579a16b8b4"
-            }
-          },
-          {
-            "Id": {
-              "Type": "Component",
-              "IdValue": "713990ce-9e41-8c95-beaa-1d4cd5fc379b"
-            }
-          }
-        ],
-        "PropertyOverrides": [
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "b7c4e2a1-9f08-4d5e-8c3a-1e6f0d9b2a47"
-            },
-            "Property": "ShowSpeedDebug",
-            "Value": true
-          }
-        ],
-        "MovedObjects": []
-      },
-      "__PrefabIdToInstanceId": {
-        "34f86831-46d4-4318-9329-45b347826dea": "39e068df-5dfa-45db-b9f3-a77027242e06",
-        "06640ac9-a851-43bf-b35b-42e2be0fdca6": "43c56482-ccd8-4a51-a721-74ce2e5a541c",
-        "db2ec2d8-edd9-4812-b3b7-ad8ddf316d21": "6040dbc9-0ce2-4464-8e17-be53b7eda6b5",
-        "e1a0945b-44d2-4cc6-a897-c7931851924d": "978770b6-5a79-4967-98b8-a550cdcd0c14",
-        "ded41f18-ffe7-4185-ab1c-9616122dc6f0": "dc838cca-3925-4160-a957-20f046b79f3a",
-        "bce430cc-f569-4381-9ec0-f2d872648efc": "e06538d6-75a2-4ff5-ae33-ba41dd06b563",
-        "0a11b2aa-5b15-493c-81ee-367859dc63ff": "4d3879ae-b2a4-42de-9a86-0310ad0ac128",
-        "a334750f-a7f9-4e36-9c2d-563b96bda182": "75f5c604-7ddc-4f09-9125-3f15cb090ed4",
-        "f4c3d2e1-b0a9-8c7d-6e5f-4a3b2c1d0e9f": "5f15ce22-6cfa-4ac7-942e-75f8bd80310a",
-        "4785e803-a655-4137-8dc0-d456a8086f19": "10c99103-9e0e-4d1f-80c0-fab8b78829aa",
-        "563539eb-c977-45a3-92f0-e25aa1211547": "06a44474-4594-4b8c-8349-95fd246b72b7",
-        "86859f44-e8df-4009-90a2-8ca9b4dc36cc": "73a897dc-0168-4ff0-b5b2-5dbe019832ad",
-        "48bb4076-d3c6-455e-99c1-98e9ff82c2c4": "924eb568-7e4c-447f-8d7b-770dbfab6fc7",
-        "22adeaa4-3eff-455e-b0ad-8186e47120c5": "6248d7ab-f248-4381-a4bd-c0d74f692f36",
-        "f334590a-a6d7-44af-98bd-14ec93294ec7": "731c3429-0b8e-4199-85c3-fadb789fce28",
-        "4d8ed045-4f00-411d-9d8e-42b4f855dc9b": "86dc9574-88cd-455a-bb43-fda1b9d1be86",
-        "25dd5bed-58eb-4648-bd3b-0de6ea746503": "bd4785b3-cd24-4388-9229-fc154ca44dcb",
-        "e7a1b2c3-4d5e-6f70-8192-a3b4c5d6e7f8": "100f1556-ec8c-47b2-969f-ec16145ee020",
-        "a1b2c3d4-e5f6-7890-abcd-ef1234567890": "d4e5f6a7-b8c9-4012-d3e4-f5a6b7c8d9e0",
-        "b2c3d4e5-f6a7-8901-bcde-f12345678901": "e5f6a7b8-c9d0-4123-e4f5-a6b7c8d9e0f1",
-        "c8b5a3d1-3afe-4693-9f5e-57b86c57b6a2": "fdbf69e5-6623-4258-b621-25a989ae7036",
-        "d4e5f6a7-b8c9-0123-def4-567890abcdef": "381a6891-f81c-4543-b177-d7e8775dda3f",
-        "c1a2f3e4-d5b6-7890-cdef-123456789abc": "14dff6e5-739f-4491-9eae-d0289d382221",
-        "f1e2d3c4-b5a6-7890-fedc-ba9876543210": "ed3c51a4-66b9-4155-b5ac-2aedf6ed763c",
-        "a9b8c7d6-e5f4-3210-abcd-ef0123456789": "be49c427-186a-4327-8122-0daf5ee2d2aa",
-        "f8b2c3d4-e5f6-7890-abcd-ef012345678a": "fb7882be-6a12-4809-a517-c766de01310e",
-        "c2d3e4f5-a6b7-8901-cdef-123456789def": "205226ff-10ed-4106-85a8-6461ec6fe86c",
-        "b7c4e2a1-9f08-4d5e-8c3a-1e6f0d9b2a47": "14f990aa-eb93-823a-aa65-e80e8110f30c",
-        "8f2abedf-c831-8342-8fbb-8c579a16b8b4": "7757b1b9-5007-4ced-828e-955eb6c201b5",
-        "713990ce-9e41-8c95-beaa-1d4cd5fc379b": "b6b6b074-24b4-4e39-a58b-2bd924205d53"
-      }
-    },
-    {
       "__guid": "ba430c2f-612b-4125-a64d-ba0f058d3eb8",
       "__version": 2,
       "Flags": 0,
@@ -1247,7 +1182,7 @@
               "IdValue": "e054d124-f2f1-4b1c-ad37-c8cefe29c6e3"
             },
             "Property": "Position",
-            "Value": "-264.917938,-517.369202,0"
+            "Value": "-288,-517.369202,0"
           }
         ],
         "MovedObjects": []

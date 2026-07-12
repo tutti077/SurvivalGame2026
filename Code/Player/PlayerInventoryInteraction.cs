@@ -112,7 +112,7 @@ public sealed class PlayerInventoryInteraction : Component
 
 	public void TryReleaseOnPlayerDropZone()
 	{
-		if ( _held.IsEmpty || _dragBindingOnly || !IsOverPlayerDropZone( Mouse.Position ) )
+		if ( _held.IsEmpty || _dragBindingOnly || !IsOverPlayerDropZone( InventoryScreenPointer.GetMenuOrMousePosition() ) )
 			return;
 
 		var sourceHost = _dragSourceHost;
@@ -134,7 +134,7 @@ public sealed class PlayerInventoryInteraction : Component
 
 	public void TryReleaseOneOnPlayerDropZone()
 	{
-		if ( _held.IsEmpty || _dragBindingOnly || !IsOverPlayerDropZone( Mouse.Position ) )
+		if ( _held.IsEmpty || _dragBindingOnly || !IsOverPlayerDropZone( InventoryScreenPointer.GetMenuOrMousePosition() ) )
 			return;
 
 		if ( !TryPlayerDropHeld( _dragSourceHost, _dragSourceSlot, ref _held, dropCount: 1 ) )
@@ -229,7 +229,10 @@ public sealed class PlayerInventoryInteraction : Component
 		PollHotbarPointerInput();
 		UpdatePlayerDropZone();
 
-		if ( _leftDragActive && Input.Released( "Attack1" ) )
+		// While the game menu is open, Attack1 drag finish is owned by InventoryMenuInputOverlay
+		// (soft cursor). Finishing here with Mouse.Position cancels bag→hotbar drops.
+		var menuOpen = _menu is not null && _menu.IsMenuOpen;
+		if ( !menuOpen && _leftDragActive && Input.Released( "Attack1" ) )
 			FinishActiveDrag( ResolveDropTargetSlot() );
 
 		if ( _held.IsEmpty )
@@ -433,9 +436,14 @@ public sealed class PlayerInventoryInteraction : Component
 			return;
 
 		if ( _dragBindingOnly )
+		{
 			FinishActiveDrag( null );
-		else
-			FinishActiveDrag( ResolveDropTargetSlot() ?? slot );
+			return;
+		}
+
+		// Prefer the slot under the soft cursor. ResolveDropTargetSlot() can hit stale/hidden bag rects
+		// and was overriding a valid hotbar target — bag→hotbar drops then bounced back.
+		FinishActiveDrag( slot ?? ResolveDropTargetSlot() );
 	}
 
 	void ProcessSlotRightPress( InventorySlotPanel slot )
@@ -499,13 +507,16 @@ public sealed class PlayerInventoryInteraction : Component
 		return false;
 	}
 
-	/// <summary>Player bag slots only (not hotbar).</summary>
+	/// <summary>Player bag / paperdoll slots (not hotbar). MainHand is display-only and skipped.</summary>
 	public InventorySlotPanel FindPlayerBagSlotAtScreenPosition( Vector2 screenPosition )
 	{
 		for ( var i = _slots.Count - 1; i >= 0; i-- )
 		{
 			var slot = _slots[i];
 			if ( slot is null || !slot.IsValid() || slot.IsHotbarSlot )
+				continue;
+
+			if ( slot.GridHost?.GridId == "paperdoll" && slot.SlotIndex == (int)EquipmentSlot.MainHand )
 				continue;
 
 			if ( SlotContainsScreenPoint( slot, screenPosition ) )
@@ -523,22 +534,12 @@ public sealed class PlayerInventoryInteraction : Component
 		if ( _menu is null || !_menu.IsMenuOpen )
 			return;
 
-		var bagSlot = FindPlayerBagSlotAtScreenPosition( Mouse.Position );
+		// Attack1 while menu open is owned by InventoryMenuInputOverlay. Handling Pressed
+		// here same-frame after BeginDragFromSlot places the stack back and kills soft-cursor drags.
+		var bagSlot = FindPlayerBagSlotAtScreenPosition( InventoryScreenPointer.GetMenuOrMousePosition() );
 
 		if ( _leftDragActive && Input.Released( "Attack2" ) && bagSlot is not null )
-		{
 			ProcessSlotRightClick( bagSlot );
-			return;
-		}
-
-		if ( _held.IsEmpty )
-			return;
-
-		if ( bagSlot is null )
-			return;
-
-		if ( WasPrimaryMousePressed() )
-			ProcessSlotLeftPress( bagSlot );
 	}
 
 	void PollHotbarPointerInput()
@@ -551,15 +552,19 @@ public sealed class PlayerInventoryInteraction : Component
 			return;
 
 		var menuBlocksPress = _menu is not null && _menu.IsMenuOpen;
-		var slot = FindHotbarSlotAtScreenPosition( Mouse.Position );
+		// Menu soft-cursor overlay owns Attack1 press/release while open — do not cancel drags with null.
+		if ( menuBlocksPress )
+			return;
 
-		if ( !menuBlocksPress && WasPrimaryMousePressed() && slot is not null )
+		var slot = FindHotbarSlotAtScreenPosition( InventoryScreenPointer.GetMenuOrMousePosition() );
+
+		if ( WasPrimaryMousePressed() && slot is not null )
 			ProcessSlotLeftPress( slot );
 
 		if ( Input.Released( "Attack1" ) && _leftDragActive )
-			FinishActiveDrag( menuBlocksPress ? null : ResolveDropTargetSlot() ?? slot );
+			FinishActiveDrag( ResolveDropTargetSlot() ?? slot );
 
-		if ( !menuBlocksPress && Input.Released( "Attack2" ) && slot is not null )
+		if ( Input.Released( "Attack2" ) && slot is not null )
 			ProcessSlotRightClick( slot );
 	}
 
@@ -686,41 +691,42 @@ public sealed class PlayerInventoryInteraction : Component
 		_dragSourceSlot = -1;
 		_dropHoverSlot = null;
 
+		// Explicit bag/hotbar target wins over the "Drop item" zone.
+		if ( targetSlot is not null && targetSlot.GridHost is not null )
+		{
+			var destHost = targetSlot.GridHost;
+			var destSlot = targetSlot.SlotIndex;
+
+			var heldCopy = _held;
+			var ok = sourceHost is not null && sourceHost.GridId == destHost.GridId
+				? sourceHost.OwnerTryFinishDragDrop( sourceSlot, destSlot, ref heldCopy )
+				: TryCrossGridDrop( sourceHost, sourceSlot, destHost, destSlot, ref heldCopy );
+
+			if ( !ok )
+			{
+				ReturnHeldToSourceSlot( sourceHost, sourceSlot );
+				RefreshHeldCursorVisual();
+				return;
+			}
+
+			_held = heldCopy;
+			RefreshHeldCursorVisual();
+			return;
+		}
+
 		if ( TryPlayerDropHeld( sourceHost, sourceSlot, ref _held ) )
 		{
 			RefreshHeldCursorVisual();
 			return;
 		}
 
-		if ( targetSlot is null || targetSlot.GridHost is null )
+		if ( TryWorldDropFromDrag( sourceHost, sourceSlot, ref _held ) )
 		{
-			if ( TryWorldDropFromDrag( sourceHost, sourceSlot, ref _held ) )
-			{
-				RefreshHeldCursorVisual();
-				return;
-			}
-
-			ReturnHeldToSourceSlot( sourceHost, sourceSlot );
 			RefreshHeldCursorVisual();
 			return;
 		}
 
-		var destHost = targetSlot.GridHost;
-		var destSlot = targetSlot.SlotIndex;
-
-		var heldCopy = _held;
-		var ok = sourceHost is not null && sourceHost.GridId == destHost.GridId
-			? sourceHost.OwnerTryFinishDragDrop( sourceSlot, destSlot, ref heldCopy )
-			: TryCrossGridDrop( sourceHost, sourceSlot, destHost, destSlot, ref heldCopy );
-
-		if ( !ok )
-		{
-			ReturnHeldToSourceSlot( sourceHost, sourceSlot );
-			RefreshHeldCursorVisual();
-			return;
-		}
-
-		_held = heldCopy;
+		ReturnHeldToSourceSlot( sourceHost, sourceSlot );
 		RefreshHeldCursorVisual();
 	}
 
@@ -1034,7 +1040,10 @@ public sealed class PlayerInventoryInteraction : Component
 		RefreshHeldCursorVisual();
 	}
 
-	/// <summary>Shift+click transfer into a separate storage grid (chest, etc.) — not player bag / hotbar shuffles.</summary>
+	/// <summary>
+	/// Shift+click: hotbar-equipable (weapons/tools) bag↔hotbar; armor/etc → paperdoll; chests last.
+	/// MainHand is not a storage destination — it mirrors the selected hotbar slot.
+	/// </summary>
 	void TryQuickMoveToExternalStorage( InventorySlotPanel fromSlot )
 	{
 		if ( fromSlot?.GridHost is null )
@@ -1042,8 +1051,18 @@ public sealed class PlayerInventoryInteraction : Component
 
 		var fromHost = fromSlot.GridHost;
 		var fromIndex = fromSlot.SlotIndex;
-		if ( fromHost.GetSlot( fromIndex ).IsEmpty )
+		var source = fromHost.GetSlot( fromIndex );
+		if ( source.IsEmpty )
 			return;
+
+		var hotbarEquipable = EquipmentCatalog.TryGet( source.ResourceId, out var profile )
+			&& EquipmentCatalog.IsHotbarMainHandItem( profile );
+
+		if ( hotbarEquipable )
+		{
+			TryQuickMoveHotbarEquipable( fromHost, fromIndex );
+			return;
+		}
 
 		foreach ( var grid in _grids )
 		{
@@ -1052,6 +1071,51 @@ public sealed class PlayerInventoryInteraction : Component
 
 			if ( TryCrossGridQuickMove( fromHost, fromIndex, grid ) )
 				return;
+		}
+
+		// Paperdoll / chest → bag
+		if ( fromHost.GridId is not "player" )
+		{
+			for ( var i = 0; i < _grids.Count; i++ )
+			{
+				var grid = _grids[i];
+				if ( grid is null || grid.GridId is not "player" )
+					continue;
+
+				if ( TryCrossGridQuickMove( fromHost, fromIndex, grid ) )
+					return;
+			}
+		}
+	}
+
+	void TryQuickMoveHotbarEquipable( IInventoryGridHost fromHost, int fromIndex )
+	{
+		if ( fromHost.GridId == "hotbar" )
+		{
+			for ( var i = 0; i < _grids.Count; i++ )
+			{
+				var grid = _grids[i];
+				if ( grid is null || grid.GridId is not "player" )
+					continue;
+
+				TryCrossGridQuickMove( fromHost, fromIndex, grid );
+				return;
+			}
+
+			return;
+		}
+
+		if ( fromHost.GridId == "player" )
+		{
+			for ( var i = 0; i < _grids.Count; i++ )
+			{
+				var grid = _grids[i];
+				if ( grid is null || grid.GridId is not "hotbar" )
+					continue;
+
+				TryCrossGridQuickMove( fromHost, fromIndex, grid );
+				return;
+			}
 		}
 	}
 
@@ -1122,7 +1186,7 @@ public sealed class PlayerInventoryInteraction : Component
 		return _dropHoverSlot;
 	}
 
-	Vector2 GetDropProbeScreenPosition() => Mouse.Position;
+	Vector2 GetDropProbeScreenPosition() => InventoryScreenPointer.GetMenuOrMousePosition();
 
 	InventorySlotPanel FindSlotAtScreenPosition( Vector2 screenPosition )
 	{
@@ -1132,6 +1196,9 @@ public sealed class PlayerInventoryInteraction : Component
 			if ( slot is null || !slot.IsValid() )
 				continue;
 
+			if ( slot.GridHost?.GridId == "paperdoll" && slot.SlotIndex == (int)EquipmentSlot.MainHand )
+				continue;
+
 			if ( SlotContainsScreenPoint( slot, screenPosition ) )
 				return slot;
 		}
@@ -1139,31 +1206,67 @@ public sealed class PlayerInventoryInteraction : Component
 		return null;
 	}
 
-	static bool SlotContainsScreenPoint( InventorySlotPanel slot, Vector2 screenPosition ) =>
-		PanelContainsScreenPoint( slot, screenPosition, GetSlotScreenSize( slot ) );
+	static bool SlotContainsScreenPoint( InventorySlotPanel slot, Vector2 screenPosition )
+	{
+		if ( slot is null || !slot.IsValid() )
+			return false;
+
+		// Panel-local designer size — avoids empty Box.Rect rejecting soft-cursor pickups.
+		var local = ResolveSlotDesignerSize( slot );
+		return PanelContainsScreenPointLocal( slot, screenPosition, new Vector2( local, local ) );
+	}
+
+	static float ResolveSlotDesignerSize( InventorySlotPanel slot )
+	{
+		if ( slot.IsHotbarSlot )
+			return HotbarHud.SlotSize;
+
+		if ( slot.GridHost?.GridId == "paperdoll" )
+			return EquipmentPaperdollSection.SlotSize;
+
+		return InventoryMenuSection.SlotSize;
+	}
 
 	static bool PanelContainsScreenPoint( Panel panel, Vector2 screenPosition, Vector2? sizeOverride = null )
 	{
 		if ( panel is null || !panel.IsValid() )
 			return false;
 
-		var size = sizeOverride ?? GetPanelScreenSize( panel );
-
-		var topLeft = panel.PanelPositionToScreenPosition( Vector2.Zero );
-		var bottomRight = panel.PanelPositionToScreenPosition( size );
-
-		if ( bottomRight.x > topLeft.x && bottomRight.y > topLeft.y )
+		var scale = MathF.Max( 0.001f, panel.ScaleToScreen );
+		Vector2 localSize;
+		if ( sizeOverride is { } sized && sized.x > 0f && sized.y > 0f )
+			localSize = new Vector2( sized.x / scale, sized.y / scale );
+		else
 		{
-			if ( screenPosition.x >= topLeft.x && screenPosition.x <= bottomRight.x
-			     && screenPosition.y >= topLeft.y && screenPosition.y <= bottomRight.y )
-				return true;
+			var rect = panel.Box.Rect;
+			localSize = rect.Width > 1f && rect.Height > 1f
+				? new Vector2( rect.Width / scale, rect.Height / scale )
+				: new Vector2( InventoryMenuSection.SlotSize, InventoryMenuSection.SlotSize );
 		}
 
-		if ( panel.IsInside( screenPosition ) )
+		return PanelContainsScreenPointLocal( panel, screenPosition, localSize );
+	}
+
+	static bool PanelContainsScreenPointLocal( Panel panel, Vector2 screenPosition, Vector2 localSize )
+	{
+		if ( panel is null || !panel.IsValid() )
+			return false;
+
+		var topLeft = panel.PanelPositionToScreenPosition( Vector2.Zero );
+		var bottomRight = panel.PanelPositionToScreenPosition( localSize );
+
+		if ( bottomRight.x < topLeft.x )
+			(topLeft.x, bottomRight.x) = (bottomRight.x, topLeft.x);
+		if ( bottomRight.y < topLeft.y )
+			(topLeft.y, bottomRight.y) = (bottomRight.y, topLeft.y);
+
+		if ( bottomRight.x - topLeft.x > 1f && bottomRight.y - topLeft.y > 1f
+		     && screenPosition.x >= topLeft.x && screenPosition.x <= bottomRight.x
+		     && screenPosition.y >= topLeft.y && screenPosition.y <= bottomRight.y )
 			return true;
 
 		var rect = panel.Box.Rect;
-		if ( rect.Width <= 0f || rect.Height <= 0f )
+		if ( rect.Width <= 1f || rect.Height <= 1f )
 			return false;
 
 		return screenPosition.x >= rect.Left && screenPosition.x <= rect.Right
@@ -1300,7 +1403,7 @@ public sealed class PlayerInventoryInteraction : Component
 		if ( _dragGhost is null || _held.IsEmpty )
 			return;
 
-		var ghostTopLeftScreen = Mouse.Position - _grabOffset;
+		var ghostTopLeftScreen = InventoryScreenPointer.GetMenuOrMousePosition() - _grabOffset;
 		var layerPos = ScreenToDragLayerLocal( ghostTopLeftScreen );
 
 		_dragGhost.Style.Left = Length.Pixels( layerPos.x );
@@ -1328,6 +1431,10 @@ public sealed class PlayerInventoryInteraction : Component
 	bool CanInteractSlot( InventorySlotPanel slot )
 	{
 		if ( slot?.GridHost is null )
+			return false;
+
+		// MainHand is display-only (mirrors selected hotbar). Not a drag/place destination.
+		if ( slot.GridHost.GridId == "paperdoll" && slot.SlotIndex == (int)EquipmentSlot.MainHand )
 			return false;
 
 		if ( _vitals is null )

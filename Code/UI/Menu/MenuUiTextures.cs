@@ -26,12 +26,9 @@ public static class MenuUiTextures
 		EnsureBackgroundLayout( panel );
 
 		if ( TryApplyPath( panel, projectRelativePath ) )
-			return true;
-
-		var texture = TryLoadTexture( projectRelativePath );
-		if ( texture is not null )
 		{
-			panel.Style.SetBackgroundImage( texture );
+			// Still kick async — joining clients often resolve textures one frame late.
+			TryApplyPathAsync( panel, projectRelativePath );
 			return true;
 		}
 
@@ -55,11 +52,46 @@ public static class MenuUiTextures
 	{
 		foreach ( var path in GetUiPathCandidates( projectRelativePath ) )
 		{
-			if ( !MountedFileExists( path ) )
-				continue;
+			var mounted = NormalizeMountedPath( path );
 
-			panel.Style.SetBackgroundImage( path );
-			return true;
+			var synced = SyncedUiContent.TryLoadTexture( mounted );
+			if ( synced is not null )
+			{
+				panel.Style.SetBackgroundImage( synced );
+				EnsureBackgroundLayout( panel );
+				return true;
+			}
+
+			var texture = TryLoadPath( mounted );
+			if ( texture is not null )
+			{
+				panel.Style.SetBackgroundImage( texture );
+				EnsureBackgroundLayout( panel );
+				return true;
+			}
+
+			// Do NOT gate on FileExists — false on many joining clients while path apply still works.
+			try
+			{
+				panel.Style.SetBackgroundImage( mounted );
+				EnsureBackgroundLayout( panel );
+				return true;
+			}
+			catch
+			{
+				// try next candidate
+			}
+
+			try
+			{
+				panel.Style.Set( "background-image", $"url( {mounted} )" );
+				EnsureBackgroundLayout( panel );
+				return true;
+			}
+			catch
+			{
+				// try next candidate
+			}
 		}
 
 		return false;
@@ -69,12 +101,22 @@ public static class MenuUiTextures
 	{
 		foreach ( var path in GetUiPathCandidates( projectRelativePath ) )
 		{
-			if ( !MountedFileExists( path ) )
-				continue;
+			var mounted = NormalizeMountedPath( path );
+
+			var synced = SyncedUiContent.TryLoadTexture( mounted );
+			if ( synced is not null )
+			{
+				if ( panel is not { IsValid: true } )
+					return;
+
+				panel.Style.SetBackgroundImage( synced );
+				EnsureBackgroundLayout( panel );
+				return;
+			}
 
 			try
 			{
-				await panel.Style.SetBackgroundImageAsync( path );
+				await panel.Style.SetBackgroundImageAsync( mounted );
 				if ( panel is not { IsValid: true } )
 					return;
 
@@ -86,6 +128,24 @@ public static class MenuUiTextures
 				// try next candidate
 			}
 		}
+
+		// Host sync may finish after the first paint — retry when the bundle lands.
+		if ( !SyncedUiContent.IsReady )
+			ScheduleApplyWhenSynced( panel, projectRelativePath );
+	}
+
+	static void ScheduleApplyWhenSynced( Panel panel, string projectRelativePath )
+	{
+		void OnReady()
+		{
+			SyncedUiContent.Ready -= OnReady;
+			if ( panel is not { IsValid: true } )
+				return;
+
+			TryApplyPath( panel, projectRelativePath );
+		}
+
+		SyncedUiContent.Ready += OnReady;
 	}
 
 	static Texture TryLoadTexture( string projectRelativePath )
@@ -95,6 +155,10 @@ public static class MenuUiTextures
 
 		foreach ( var path in GetPathCandidates( projectRelativePath ) )
 		{
+			var synced = SyncedUiContent.TryLoadTexture( path );
+			if ( synced is not null )
+				return synced;
+
 			var texture = TryLoadPath( path );
 			if ( texture is not null )
 				return texture;
@@ -137,11 +201,14 @@ public static class MenuUiTextures
 			yield break;
 
 		yield return path;
+		yield return "/" + path;
 
-		if ( !path.StartsWith( "/" ) )
-			yield return "/" + path;
-
-		if ( path.StartsWith( "assets/", StringComparison.OrdinalIgnoreCase ) )
+		if ( !path.StartsWith( "assets/", StringComparison.OrdinalIgnoreCase ) )
+		{
+			yield return "assets/" + path;
+			yield return "/assets/" + path;
+		}
+		else
 		{
 			var trimmed = path[7..];
 			yield return trimmed;
@@ -152,12 +219,7 @@ public static class MenuUiTextures
 	static IEnumerable<string> GetPathCandidates( string path )
 	{
 		foreach ( var uiPath in GetUiPathCandidates( path ) )
-		{
 			yield return NormalizeMountedPath( uiPath );
-
-			if ( !uiPath.StartsWith( "assets/", StringComparison.OrdinalIgnoreCase ) )
-				yield return "assets/" + uiPath.TrimStart( '/' );
-		}
 	}
 
 	static string NormalizePath( string path )
@@ -212,6 +274,7 @@ public static class MenuUiTextures
 			return;
 
 		var exists = MountedFileExists( path );
-		Log.Warning( $"[MenuUiTextures] Icon not applied for '{path}' (mounted file exists: {exists})." );
+		var synced = SyncedUiContent.HasFile( path );
+		Log.Warning( $"[MenuUiTextures] Icon not applied for '{path}' (mounted={exists}, synced={synced}, syncReady={SyncedUiContent.IsReady})." );
 	}
 }

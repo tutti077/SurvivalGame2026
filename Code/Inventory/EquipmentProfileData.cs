@@ -26,6 +26,7 @@ public sealed class EquipmentProfileData
 
 	public bool TwoHanded { get; set; }
 
+	[JsonPropertyName( "hotbarEquipable" )]
 	public bool HotbarEquipable { get; set; } = true;
 
 	public EquipmentStatModifiersData StatModifiers { get; set; } = new();

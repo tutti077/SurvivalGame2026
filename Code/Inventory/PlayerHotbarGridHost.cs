@@ -81,24 +81,30 @@ public sealed class PlayerHotbarGridHost : IInventoryGridHost
 		if ( Hotbar is null || stack.IsEmpty )
 			return false;
 
+		// Prefer merge into an existing stack of the same resource.
 		for ( var i = 0; i < SlotCount; i++ )
 		{
 			if ( i == fromSlotIndex )
 				continue;
 
 			var slot = Hotbar.GetSlot( i );
-			if ( !slot.IsEmpty )
-			{
-				if ( !string.Equals( slot.ResourceId, stack.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-					continue;
+			if ( slot.IsEmpty )
+				continue;
 
-				targetSlotIndex = i;
-				return true;
-			}
+			if ( !string.Equals( slot.ResourceId, stack.ResourceId, StringComparison.OrdinalIgnoreCase ) )
+				continue;
 
-			var binding = Hotbar.GetBinding( i );
-			if ( string.IsNullOrWhiteSpace( binding )
-			     || !string.Equals( binding, stack.ResourceId, StringComparison.OrdinalIgnoreCase ) )
+			targetSlotIndex = i;
+			return true;
+		}
+
+		// Then any empty slot (bindings do not block placing a stack).
+		for ( var i = 0; i < SlotCount; i++ )
+		{
+			if ( i == fromSlotIndex )
+				continue;
+
+			if ( !Hotbar.GetSlot( i ).IsEmpty )
 				continue;
 
 			targetSlotIndex = i;

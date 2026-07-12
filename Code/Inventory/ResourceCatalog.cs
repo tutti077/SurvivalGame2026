@@ -47,7 +47,8 @@ public static class ResourceCatalog
 			["flint"] = "resource_flint",
 			["femur"] = "resource_femur",
 			["hide"] = "resource_hide",
-			["animal_fat"] = "resource_animal_fat",
+			["animal_fat"] = "resource_animalFat",
+			["resource_animal_fat"] = "resource_animalFat",
 			["leather"] = "resource_leather",
 			["feathers"] = "resource_feathers",
 			["vines"] = "resource_vines",
@@ -56,6 +57,8 @@ public static class ResourceCatalog
 			["item_sword"] = "basic_sword",
 			["building_hammer"] = "build_hammer",
 			["item_build_hammer"] = "build_hammer",
+			["item_building_hammer"] = "build_hammer",
+			["buildhammer"] = "build_hammer",
 			["item_hook"] = "basic_hook",
 			["hook"] = "basic_hook",
 			["torch"] = "light_torch",
@@ -158,6 +161,7 @@ public static class ResourceCatalog
 
 		resourceId = NormalizeResourceId( resourceId );
 
+		// Prefer catalog paths without FileExists — existence checks are flaky on joining clients.
 		if ( Definitions.TryGetValue( resourceId, out var def ) && def.IsValid() && !string.IsNullOrWhiteSpace( def.Icon ) )
 			return def.Icon;
 
@@ -172,26 +176,33 @@ public static class ResourceCatalog
 		if ( KnownIconPaths.TryGetValue( resourceId, out var knownPath ) )
 			return knownPath;
 
-		if ( MountedIconExists( $"{resourceId}.png" ) )
-			return $"ui/items/{resourceId}.png";
-
-		if ( MountedIconExists( $"{resourceId}.jpg" ) )
-			return $"ui/items/{resourceId}.jpg";
+		if ( LegacyIconPaths.TryGetValue( resourceId, out var legacyPath ) )
+			return legacyPath;
 
 		return $"ui/items/{resourceId}.png";
 	}
 
-	static bool MountedIconExists( string fileName )
-	{
-		try
+	/// <summary>Pre-rename filenames still present on disk — used when JSON/catalog paths miss on clients.</summary>
+	static readonly Dictionary<string, string> LegacyIconPaths =
+		new( StringComparer.OrdinalIgnoreCase )
 		{
-			return FileSystem.Mounted.FileExists( $"ui/items/{fileName}" );
-		}
-		catch
-		{
-			return false;
-		}
-	}
+			["resource_stone"] = "ui/items/rock.jpg",
+			["resource_plantFiber"] = "ui/items/plant_fiber.png",
+			["resource_woodBasic"] = "ui/items/wood.png",
+			["resource_sand"] = "ui/items/sand.png",
+			["resource_clay"] = "ui/items/clay.png",
+			["resource_resin"] = "ui/items/sap.png",
+			["resource_flint"] = "ui/items/flint.png",
+			["resource_femur"] = "ui/items/femur.png",
+			["resource_hide"] = "ui/items/hide.png",
+			["resource_animalFat"] = "ui/items/animal_fat.png",
+			["resource_leather"] = "ui/items/leather.png",
+			["resource_feathers"] = "ui/items/feathers.png",
+			["resource_vines"] = "ui/items/vines.png",
+			["basic_sword"] = "ui/items/item_sword.png",
+			["build_hammer"] = "ui/items/item_build_hammer.png",
+			["basic_hook"] = "ui/items/item_hook.png",
+		};
 
 	public static Texture GetCachedIcon( string resourceId )
 	{
@@ -208,9 +219,14 @@ public static class ResourceCatalog
 		else
 			cached = MenuUiTextures.TryLoadForResourceId( resourceId );
 
-		IconCache[resourceId] = cached;
+		// Don't cache misses until host UI sync finishes — joiners resolve icons late.
+		if ( cached is not null || SyncedUiContent.IsReady )
+			IconCache[resourceId] = cached;
+
 		return cached;
 	}
+
+	public static void ClearIconCache() => IconCache.Clear();
 
 	static string FormatDisplayName( string resourceId )
 	{

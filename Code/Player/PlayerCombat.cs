@@ -373,6 +373,8 @@ public partial class PlayerCombat : Component
 	string _combatNetDiag = "—";
 
 	bool _combatAuthorityDiagComplete;
+	AttackReleaseIntent _pendingSwingVisualIntent;
+	bool _hasPendingSwingVisualIntent;
 
 	/// <summary>
 	/// Per-hold sum of raw <see cref="Input.MouseDelta"/> (screen pixels) while attack / block buttons are down.
@@ -438,8 +440,16 @@ public partial class PlayerCombat : Component
 		if ( GameObject.IsProxy )
 			return false;
 
-		if ( GameObject.Network is { Active: true } n && !n.IsOwner )
-			return false;
+		if ( GameObject.Network is { Active: true } n )
+		{
+			if ( n.Owner is null )
+			{
+				if ( !Networking.IsHost )
+					return false;
+			}
+			else if ( !n.IsOwner )
+				return false;
+		}
 
 		// Only pawns with an enabled PlayerController read global Input (not training dummies / combat-only props).
 		var controller = GameObject.Components.Get<PlayerController>();
@@ -1347,6 +1357,8 @@ public partial class PlayerCombat : Component
 
 		_combatNetDiag = Networking.IsHost ? "host→Rpc.Host (single server pass)" : "RPC->host sent (await result)";
 		LogCombatDiag( "CLIENT (dispatch)", "RpcSubmitPrimaryAttackRelease -> host (see editor Output)" );
+		_pendingSwingVisualIntent = intent;
+		_hasPendingSwingVisualIntent = true;
 		RpcSubmitPrimaryAttackRelease( intent );
 	}
 
@@ -1360,6 +1372,7 @@ public partial class PlayerCombat : Component
 		if ( Networking.IsHost && ServerHasActiveMeleeAttackAction )
 			return;
 
+		_hasPendingSwingVisualIntent = false;
 		StartClientMeleeSwingTracePlayback( intent );
 	}
 
@@ -1415,6 +1428,18 @@ public partial class PlayerCombat : Component
 		LastServerAttackResult = result;
 		_combatNetDiag = $"rpc owner: acc={result.Accepted} hit={result.Hit} dmg={result.DamageDealt:0.#}";
 		LogCombatDiag( "CLIENT (Rpc.Owner)", FormatAttackResultLog( result ) );
+
+		// Backup: if HostOnly broadcast was missed, still show the local slash path on the attacking client.
+		if ( result.Accepted
+		     && _hasPendingSwingVisualIntent
+		     && !Networking.IsHost
+		     && MeleeDebugDrawEnabled
+		     && ClientMeleeSwingTraceDebug )
+		{
+			StartClientMeleeSwingTracePlayback( _pendingSwingVisualIntent );
+		}
+
+		_hasPendingSwingVisualIntent = false;
 	}
 
 	[Rpc.Owner]

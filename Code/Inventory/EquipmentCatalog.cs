@@ -54,6 +54,7 @@ public static class EquipmentCatalog
 
 		Profiles.AddRange( CreateFallbackProfiles() );
 		RebuildLookup();
+		EnsureRequiredMainHandProfiles();
 		Log.Warning( "[EquipmentCatalog] Using built-in fallback equipment profiles." );
 	}
 
@@ -97,8 +98,60 @@ public static class EquipmentCatalog
 		if ( string.IsNullOrWhiteSpace( value ) )
 			return false;
 
-		return Enum.TryParse( value, ignoreCase: true, out slot );
+		value = value.Trim();
+		if ( Enum.TryParse( value, ignoreCase: true, out slot ) )
+			return true;
+
+		// equipment_profiles.json uses camelCase ("mainHand") — keep an explicit map so tools
+		// are never dropped as "not a MainHand item" if Enum.TryParse quirks show up.
+		switch ( value.Replace( "_", string.Empty ).ToLowerInvariant() )
+		{
+			case "mainhand":
+			case "main":
+				slot = EquipmentSlot.MainHand;
+				return true;
+			case "offhand":
+			case "off":
+				slot = EquipmentSlot.OffHand;
+				return true;
+			case "head":
+				slot = EquipmentSlot.Head;
+				return true;
+			case "chest":
+				slot = EquipmentSlot.Chest;
+				return true;
+			case "arms":
+				slot = EquipmentSlot.Arms;
+				return true;
+			case "hands":
+				slot = EquipmentSlot.Hands;
+				return true;
+			case "legs":
+				slot = EquipmentSlot.Legs;
+				return true;
+			case "feet":
+				slot = EquipmentSlot.Feet;
+				return true;
+			case "backpack":
+			case "pack":
+				slot = EquipmentSlot.Backpack;
+				return true;
+			case "grapple":
+			case "hook":
+				slot = EquipmentSlot.Grapple;
+				return true;
+			case "wingsuit":
+			case "wing":
+				slot = EquipmentSlot.Wingsuit;
+				return true;
+			default:
+				return false;
+		}
 	}
+
+	/// <summary>Weapons/tools that live on the hotbar and mirror into MainHand — not paperdoll storage.</summary>
+	public static bool IsHotbarMainHandItem( EquipmentProfileData profile ) =>
+		profile is not null && IsSlotAllowed( profile, EquipmentSlot.MainHand );
 
 	public static EquipmentSlot GetPrimarySlot( EquipmentProfileData profile )
 	{
@@ -177,6 +230,7 @@ public static class EquipmentCatalog
 				return false;
 
 			RebuildLookup();
+			EnsureRequiredMainHandProfiles();
 			return true;
 		}
 		catch ( Exception ex )
@@ -195,7 +249,50 @@ public static class EquipmentCatalog
 			if ( entry is null || string.IsNullOrWhiteSpace( entry.ResourceId ) )
 				continue;
 
-			ByResourceId[ResourceCatalog.NormalizeResourceId( entry.ResourceId )] = entry;
+			entry.ResourceId = ResourceCatalog.NormalizeResourceId( entry.ResourceId );
+			ByResourceId[entry.ResourceId] = entry;
+
+			// MainHand tools must stay selectable from the hotbar even if JSON omitted the flag.
+			if ( IsSlotAllowed( entry, EquipmentSlot.MainHand ) )
+				entry.HotbarEquipable = true;
+			else if ( GetPrimarySlot( entry ) == EquipmentSlot.Grapple )
+				entry.HotbarEquipable = false;
+		}
+	}
+
+	/// <summary>Upsert built-in MainHand tools so craft ids like build_hammer always resolve.</summary>
+	static void EnsureRequiredMainHandProfiles()
+	{
+		foreach ( var fallback in CreateFallbackProfiles() )
+		{
+			if ( fallback is null || string.IsNullOrWhiteSpace( fallback.ResourceId ) )
+				continue;
+
+			// Never rewrite Grapple/armor profiles here — that was forcing the hook HotbarEquipable
+			// and blocking paperdoll equip.
+			if ( !IsSlotAllowed( fallback, EquipmentSlot.MainHand )
+			     && GetPrimarySlot( fallback ) != EquipmentSlot.MainHand )
+				continue;
+
+			var id = ResourceCatalog.NormalizeResourceId( fallback.ResourceId );
+			fallback.ResourceId = id;
+
+			if ( ByResourceId.TryGetValue( id, out var existing ) && existing is not null )
+			{
+				existing.HotbarEquipable = true;
+				if ( string.IsNullOrWhiteSpace( existing.Slot ) )
+					existing.Slot = fallback.Slot;
+				if ( existing.AllowedSlots is null || existing.AllowedSlots.Count == 0 )
+					existing.AllowedSlots = fallback.AllowedSlots;
+				if ( existing.Actions is null || existing.Actions.Count == 0 )
+					existing.Actions = fallback.Actions;
+				if ( string.IsNullOrWhiteSpace( existing.ToolPrefab ) )
+					existing.ToolPrefab = fallback.ToolPrefab;
+				continue;
+			}
+
+			Profiles.Add( fallback );
+			ByResourceId[id] = fallback;
 		}
 	}
 

@@ -21,7 +21,7 @@ public sealed class EquipmentPaperdollSection : IPlayerMenuSection
 	{
 		(EquipmentSlot.Head, "Head"),
 		(EquipmentSlot.Chest, "Chest"),
-		(EquipmentSlot.MainHand, "Main"),
+		(EquipmentSlot.MainHand, "Active"),
 		(EquipmentSlot.OffHand, "Off"),
 		(EquipmentSlot.Arms, "Arms"),
 		(EquipmentSlot.Hands, "Hands"),

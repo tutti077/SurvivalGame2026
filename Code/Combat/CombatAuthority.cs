@@ -39,6 +39,12 @@ public sealed class CombatAuthority : Component
 			Instance = null;
 	}
 
+	protected override void OnUpdate()
+	{
+		// Proxy PlayerCombat often skips OnUpdate — tick swing overlays / block viz for every peer from here.
+		PlayerCombat.TickSceneCombatVisualizations( Scene.IsValid() ? Scene : Sandbox.Game.ActiveScene );
+	}
+
 	/// <summary>Host-only: validate intent against <paramref name="attacker"/> root and apply damage. Caller must be the attacker owner when networked.</summary>
 	public AttackReleaseResult ValidateAndApplyPrimaryMelee( GameObject attacker, AttackReleaseIntent intent )
 	{

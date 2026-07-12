@@ -69,10 +69,13 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		if ( GameObject.IsProxy )
 			return false;
 
-		if ( GameObject.Network is { Active: true } n && !n.IsOwner )
-			return false;
+		if ( GameObject.Network is not { Active: true } n )
+			return true;
 
-		return true;
+		if ( n.Owner is null )
+			return Networking.IsHost;
+
+		return n.IsOwner;
 	}
 
 	/// <summary>Pulls accumulated sprint preview debt and clears it. Merged into negative stamina on <see cref="PlayerVitals.RequestVitalsDelta"/> / <see cref="VitalsAuthority.TryApplyDeltas"/>.</summary>

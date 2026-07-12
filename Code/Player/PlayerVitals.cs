@@ -252,10 +252,15 @@ public sealed class PlayerVitals : Component
 		if ( GameObject.IsProxy )
 			return false;
 
-		if ( GameObject.Network is { Active: true } n && !n.IsOwner )
-			return false;
+		if ( GameObject.Network is not { Active: true } n )
+			return true;
 
-		return true;
+		// NetworkSpawn can briefly (or, with bad NetworkMode, persistently) leave Owner unset.
+		// Match inventory: host may drive; remote clients must not.
+		if ( n.Owner is null )
+			return Networking.IsHost;
+
+		return n.IsOwner;
 	}
 
 	/// <summary>

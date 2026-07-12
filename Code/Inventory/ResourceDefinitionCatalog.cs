@@ -16,6 +16,9 @@ public static class ResourceDefinitionCatalog
 
 	static bool _loaded;
 	static int _loadedJsonHash;
+	static bool _isFallbackOnly;
+	static string _sourceJson = string.Empty;
+	static int _contentVersion;
 
 	public static IReadOnlyList<ResourceDefinitionData> All
 	{
@@ -35,6 +38,24 @@ public static class ResourceDefinitionCatalog
 		}
 	}
 
+	public static bool IsFallbackOnly
+	{
+		get
+		{
+			EnsureLoaded();
+			return _isFallbackOnly;
+		}
+	}
+
+	public static int ContentVersion
+	{
+		get
+		{
+			EnsureLoaded();
+			return _contentVersion;
+		}
+	}
+
 	public static void ForceReload()
 	{
 		_loaded = false;
@@ -42,27 +63,91 @@ public static class ResourceDefinitionCatalog
 		ReloadFromDisk();
 	}
 
+	public static string ExportSourceJson()
+	{
+		EnsureLoaded();
+		if ( !string.IsNullOrWhiteSpace( _sourceJson ) )
+			return _sourceJson;
+
+		foreach ( var path in GetPathCandidates() )
+		{
+			try
+			{
+				var json = FileSystem.Mounted.ReadAllText( path );
+				if ( !string.IsNullOrWhiteSpace( json ) )
+					return json;
+			}
+			catch
+			{
+				// try next
+			}
+		}
+
+		return string.Empty;
+	}
+
+	public static bool ReplaceFromJson( string json )
+	{
+		if ( string.IsNullOrWhiteSpace( json ) )
+			return false;
+
+		if ( !TryParseResources( json, out var parsed ) || parsed.Count == 0 )
+			return false;
+
+		Resources.Clear();
+		Resources.AddRange( parsed );
+		RebuildLookup();
+		_sourceJson = json;
+		_loadedJsonHash = StringComparer.Ordinal.GetHashCode( json );
+		_isFallbackOnly = false;
+		_loaded = true;
+		_contentVersion++;
+		Log.Info( $"[ResourceDefinitionCatalog] Applied host resource catalog ({Resources.Count} resources)." );
+		return true;
+	}
+
 	public static void EnsureLoaded()
 	{
 		if ( _loaded )
+		{
+			if ( _isFallbackOnly )
+				TryReloadIfFallback();
 			return;
+		}
 
 		ReloadFromDisk();
 	}
 
+	static void TryReloadIfFallback()
+	{
+		if ( !TryLoadFromFile() )
+			return;
+
+		_isFallbackOnly = false;
+		_contentVersion++;
+		Log.Info( $"[ResourceDefinitionCatalog] Recovered full resource list ({Resources.Count} resources)." );
+	}
+
 	static void ReloadFromDisk()
 	{
-		var jsonHash = TryReadJsonHash();
-		_loaded = true;
-		_loadedJsonHash = jsonHash;
 		Resources.Clear();
 		ById.Clear();
+		_sourceJson = string.Empty;
+		_isFallbackOnly = false;
 
 		if ( TryLoadFromFile() )
+		{
+			_loaded = true;
+			_contentVersion++;
 			return;
+		}
 
 		Resources.AddRange( CreateFallbackResources() );
 		RebuildLookup();
+		_isFallbackOnly = true;
+		_loaded = true;
+		_loadedJsonHash = 0;
+		_contentVersion++;
 		Log.Warning( "[ResourceDefinitionCatalog] Using built-in fallback resources (json missing or invalid)." );
 	}
 
@@ -144,53 +229,68 @@ public static class ResourceDefinitionCatalog
 		return new Color( r, g, b, a );
 	}
 
-	static int TryReadJsonHash()
-	{
-		try
-		{
-			if ( !FileSystem.Mounted.FileExists( ResourceFilePath ) )
-				return 0;
-
-			return StringComparer.Ordinal.GetHashCode( FileSystem.Mounted.ReadAllText( ResourceFilePath ) );
-		}
-		catch
-		{
-			return 0;
-		}
-	}
-
 	static bool TryLoadFromFile()
 	{
+		foreach ( var path in GetPathCandidates() )
+		{
+			try
+			{
+				var json = FileSystem.Mounted.ReadAllText( path );
+				if ( string.IsNullOrWhiteSpace( json ) )
+					continue;
+
+				if ( !TryParseResources( json, out var parsed ) || parsed.Count == 0 )
+					continue;
+
+				Resources.Clear();
+				Resources.AddRange( parsed );
+				RebuildLookup();
+				_sourceJson = json;
+				_loadedJsonHash = StringComparer.Ordinal.GetHashCode( json );
+				return true;
+			}
+			catch ( Exception ex )
+			{
+				Log.Warning( $"[ResourceDefinitionCatalog] Failed to load '{path}': {ex.Message}" );
+			}
+		}
+
+		return false;
+	}
+
+	static bool TryParseResources( string json, out List<ResourceDefinitionData> parsed )
+	{
+		parsed = null;
 		try
 		{
-			if ( !FileSystem.Mounted.FileExists( ResourceFilePath ) )
-				return false;
-
-			var json = FileSystem.Mounted.ReadAllText( ResourceFilePath );
 			var file = JsonSerializer.Deserialize<ResourceDefinitionsFile>( json, JsonOptions );
 			if ( file?.Resources is null || file.Resources.Count == 0 )
 				return false;
 
+			parsed = new List<ResourceDefinitionData>();
 			for ( var i = 0; i < file.Resources.Count; i++ )
 			{
 				var entry = file.Resources[i];
 				if ( entry is null || string.IsNullOrWhiteSpace( entry.Id ) )
 					continue;
 
-				Resources.Add( entry );
+				parsed.Add( entry );
 			}
 
-			if ( Resources.Count == 0 )
-				return false;
-
-			RebuildLookup();
-			return true;
+			return parsed.Count > 0;
 		}
 		catch ( Exception ex )
 		{
-			Log.Warning( $"[ResourceDefinitionCatalog] Failed to load {ResourceFilePath}: {ex.Message}" );
+			Log.Warning( $"[ResourceDefinitionCatalog] JSON parse failed: {ex.Message}" );
 			return false;
 		}
+	}
+
+	static IEnumerable<string> GetPathCandidates()
+	{
+		yield return ResourceFilePath;
+		yield return "assets/data/resources.json";
+		yield return "/data/resources.json";
 	}
 
 	static void RebuildLookup()
