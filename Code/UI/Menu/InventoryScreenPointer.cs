@@ -24,7 +24,13 @@ public static class InventoryScreenPointer
 
 	public static void ClampMouseToView( GameObject from )
 	{
-		Mouse.Position = ClampToView( Mouse.Position, from );
+		var current = Mouse.Position;
+		var clamped = ClampToView( current, from );
+		// Only write when outside the view — rewriting every frame fights the OS cursor and feels like a snap-back.
+		if ( ( clamped - current ).LengthSquared < 0.25f )
+			return;
+
+		Mouse.Position = clamped;
 	}
 
 	public static Vector2 ClampToView( Vector2 screenPosition, GameObject from )

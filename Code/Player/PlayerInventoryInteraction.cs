@@ -563,7 +563,9 @@ public sealed class PlayerInventoryInteraction : Component
 			ProcessSlotRightClick( slot );
 	}
 
-	static bool IsHotbarPointerUnlocked() => Mouse.Visibility != MouseVisibility.Hidden;
+	bool IsHotbarPointerUnlocked() =>
+		Mouse.Visibility != MouseVisibility.Hidden
+		|| ( _menu is not null && _menu.IsMenuOpen );
 
 	public void PollInventoryInput( MenuPanelFlags visiblePanels )
 	{

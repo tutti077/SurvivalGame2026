@@ -1,8 +1,13 @@
+using System;
 using Sandbox;
 
 namespace Survival;
 
-/// <summary>Number keys always; scroll swaps hotbar unless a build piece preview owns scroll.</summary>
+/// <summary>
+/// Number keys always (including while the game menu is open).
+/// Mouse wheel swaps hotbar in gameplay only. While the menu is open, wheel is captured in
+/// <see cref="PlayerGameMenuController.PreInput"/> and flushed to the crafting list.
+/// </summary>
 [Title( "Player Hotbar Controller" )]
 public sealed class PlayerHotbarController : Component
 {
@@ -32,15 +37,15 @@ public sealed class PlayerHotbarController : Component
 		if ( !CanControl() || _hotbar is null )
 			return;
 
+		PollSlotKeys();
+
 		if ( _menu is not null && _menu.IsMenuOpen )
 			return;
-
-		PollSlotKeys();
 
 		if ( IsBuildPreviewOwningScroll() )
 			return;
 
-		PollMouseWheel();
+		PollHotbarMouseWheel();
 	}
 
 	bool CanControl()
@@ -51,6 +56,8 @@ public sealed class PlayerHotbarController : Component
 			_hotbar = Components.Get<PlayerHotbar>();
 		if ( _equipment is null )
 			_equipment = Components.Get<PlayerEquipment>();
+		if ( _menu is null )
+			_menu = Components.Get<PlayerGameMenuController>();
 
 		return _vitals is not null && _vitals.IsLocalInputOwnedPawn()
 		       && _hotbar is not null && _hotbar.IsLocalManagingClient();
@@ -86,7 +93,7 @@ public sealed class PlayerHotbarController : Component
 		return hammer is not null && hammer.IsPreviewingPlacePiece;
 	}
 
-	void PollMouseWheel()
+	void PollHotbarMouseWheel()
 	{
 		var scroll = Input.MouseWheel.y;
 		if ( scroll > 0.01f )

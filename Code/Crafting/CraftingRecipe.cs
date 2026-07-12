@@ -18,6 +18,7 @@ public sealed class CraftingStatLine
 
 public sealed class CraftingRecipe
 {
+	/// <summary>Canonical crafted item id (inventory / equipment / recipe lookup).</summary>
 	public string Id { get; set; } = string.Empty;
 	public string DisplayName { get; set; } = string.Empty;
 	[JsonPropertyName( "icon" )]
@@ -25,12 +26,10 @@ public sealed class CraftingRecipe
 
 	public string UnlockId { get; set; } = string.Empty;
 	public List<CraftingIngredient> Ingredients { get; set; } = new();
-	public string OutputResourceId { get; set; } = string.Empty;
-	public int OutputAmount { get; set; } = 1;
 
-	/// <summary>How many finished items one craft action produces (e.g. 5 bandages). Ingredients scale with this.</summary>
-	[JsonPropertyName( "numberOfItemsCrafted" )]
-	public int NumberOfItemsCrafted { get; set; } = 1;
+	/// <summary>How many finished items one craft produces (inventory grant). Ingredient amounts are the cost for that craft.</summary>
+	[JsonPropertyName( "outputAmount" )]
+	public int OutputAmount { get; set; } = 1;
 
 	public List<CraftingStatLine> Stats { get; set; } = new();
 
@@ -38,9 +37,8 @@ public sealed class CraftingRecipe
 	[JsonPropertyName( "maxStack" )]
 	public int MaxStack { get; set; }
 
-	public int CraftBatchCount => Math.Max( 1, NumberOfItemsCrafted );
-
-	public int TotalOutputAmount => Math.Max( 1, OutputAmount ) * CraftBatchCount;
+	/// <summary>Items granted / space required for one craft.</summary>
+	public int TotalOutputAmount => Math.Max( 1, OutputAmount );
 
 	/// <summary>How many output items fit in one inventory stack after crafting.</summary>
 	public int ResolvedMaxStack => MaxStack > 0 ? MaxStack : 1;

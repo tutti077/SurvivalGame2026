@@ -27,7 +27,7 @@ public static class QuestCatalog
 	{
 		_loaded = false;
 		_loadedJsonHash = 0;
-		EnsureLoaded();
+		ReloadFromDisk();
 	}
 
 	public static QuestDefinition Get( string questId )
@@ -47,10 +47,15 @@ public static class QuestCatalog
 
 	public static void EnsureLoaded()
 	{
-		var jsonHash = TryReadJsonHash();
-		if ( _loaded && jsonHash == _loadedJsonHash )
+		if ( _loaded )
 			return;
 
+		ReloadFromDisk();
+	}
+
+	static void ReloadFromDisk()
+	{
+		var jsonHash = TryReadJsonHash();
 		_loaded = true;
 		_loadedJsonHash = jsonHash;
 		Quests.Clear();

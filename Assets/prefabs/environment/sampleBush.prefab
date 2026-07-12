@@ -57,20 +57,20 @@
         "HarvestTicksUntilGone": 5,
         "HarvestYields": [
           {
-            "ResourceId": "plant_fiber",
+            "ResourceId": "resource_plantFiber",
             "AmountLow": 10,
             "AmountHigh": 20,
             "ChancePercent": 100
           },
           {
-            "ResourceId": "wood",
+            "ResourceId": "resource_woodBasic",
             "AmountLow": 1,
             "AmountHigh": 5,
             "ChancePercent": 25
           }
         ],
         "HideModelWhenDepleted": true,
-        "Icon": "ui/items/plant_fiber.png",
+        "Icon": "ui/items/resource_plantFiber.png",
         "LogHarvest": false,
         "MaxStack": 64,
         "MinimumToolTier": 0,

@@ -748,7 +748,16 @@
             }
           }
         ],
-        "PropertyOverrides": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "b7c4e2a1-9f08-4d5e-8c3a-1e6f0d9b2a47"
+            },
+            "Property": "ShowSpeedDebug",
+            "Value": true
+          }
+        ],
         "MovedObjects": []
       },
       "__PrefabIdToInstanceId": {
@@ -1102,7 +1111,7 @@
             "Property": "HarvestYields",
             "Value": [
               {
-                "ResourceId": "wood",
+                "ResourceId": "resource_woodBasic",
                 "AmountLow": 1,
                 "AmountHigh": 20,
                 "ChancePercent": 100

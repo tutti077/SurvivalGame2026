@@ -21,22 +21,45 @@ public static class ResourceCatalog
 	static readonly Dictionary<string, string> KnownIconPaths =
 		new( System.StringComparer.OrdinalIgnoreCase )
 		{
-			["basic_hook"] = "ui/items/item_hook.png",
-			["hook"] = "ui/items/item_hook.png",
-			["sword"] = "ui/items/item_sword.png",
-			["building_hammer"] = "ui/items/item_build_hammer.png",
+			["basic_hook"] = "ui/items/basic_hook.png",
+			["basic_sword"] = "ui/items/basic_sword.png",
+			["build_hammer"] = "ui/items/build_hammer.png",
+			["light_torch"] = "ui/items/light_torch.png",
+			["light_lantern"] = "ui/items/light_lantern.png",
+			["axe_stone"] = "ui/items/axe_stone.png",
 		};
 
 	/// <summary>Maps old/sample resource ids to current catalog ids.</summary>
 	static readonly Dictionary<string, string> LegacyResourceAliases =
 		new( System.StringComparer.OrdinalIgnoreCase )
 		{
-			["stone"] = "rock",
-			["sample_rock"] = "rock",
-			["sample_stick"] = "wood",
-			["sample_bush"] = "plant_fiber",
-			["sample_sword"] = "sword",
+			["rock"] = "resource_stone",
+			["stone"] = "resource_stone",
+			["sample_rock"] = "resource_stone",
+			["plant_fiber"] = "resource_plantFiber",
+			["sample_bush"] = "resource_plantFiber",
+			["wood"] = "resource_woodBasic",
+			["resource_wood"] = "resource_woodBasic",
+			["sample_stick"] = "resource_woodBasic",
+			["sand"] = "resource_sand",
+			["clay"] = "resource_clay",
+			["sap"] = "resource_resin",
+			["flint"] = "resource_flint",
+			["femur"] = "resource_femur",
+			["hide"] = "resource_hide",
+			["animal_fat"] = "resource_animal_fat",
+			["leather"] = "resource_leather",
+			["feathers"] = "resource_feathers",
+			["vines"] = "resource_vines",
+			["sword"] = "basic_sword",
+			["sample_sword"] = "basic_sword",
+			["item_sword"] = "basic_sword",
+			["building_hammer"] = "build_hammer",
+			["item_build_hammer"] = "build_hammer",
+			["item_hook"] = "basic_hook",
 			["hook"] = "basic_hook",
+			["torch"] = "light_torch",
+			["item_torch"] = "light_torch",
 		};
 
 	/// <summary>Returns the canonical resource id used by crafting and the item library.</summary>

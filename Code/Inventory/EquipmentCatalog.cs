@@ -30,15 +30,20 @@ public static class EquipmentCatalog
 	{
 		_loaded = false;
 		_loadedJsonHash = 0;
-		EnsureLoaded();
+		ReloadFromDisk();
 	}
 
 	public static void EnsureLoaded()
 	{
-		var jsonHash = TryReadJsonHash();
-		if ( _loaded && jsonHash == _loadedJsonHash )
+		if ( _loaded )
 			return;
 
+		ReloadFromDisk();
+	}
+
+	static void ReloadFromDisk()
+	{
+		var jsonHash = TryReadJsonHash();
 		_loaded = true;
 		_loadedJsonHash = jsonHash;
 		Profiles.Clear();
@@ -198,7 +203,7 @@ public static class EquipmentCatalog
 	{
 		yield return new EquipmentProfileData
 		{
-			ResourceId = "sword",
+			ResourceId = "basic_sword",
 			DisplayName = "Sword",
 			Slot = "mainHand",
 			AllowedSlots = { "mainHand" },
@@ -208,7 +213,7 @@ public static class EquipmentCatalog
 
 		yield return new EquipmentProfileData
 		{
-			ResourceId = "building_hammer",
+			ResourceId = "build_hammer",
 			DisplayName = "Building Hammer",
 			Slot = "mainHand",
 			AllowedSlots = { "mainHand" },
@@ -230,6 +235,16 @@ public static class EquipmentCatalog
 			GrappleDetractMetersPerSecond = 4f,
 			GrappleAttachStaminaCost = 8f,
 			GrappleAirborneStaminaPerSecond = 1.5f,
+		};
+
+		yield return new EquipmentProfileData
+		{
+			ResourceId = "axe_stone",
+			DisplayName = "Stone Axe",
+			Slot = "mainHand",
+			AllowedSlots = { "mainHand" },
+			Actions = { "PrimaryMelee" },
+			HotbarEquipable = true,
 		};
 	}
 

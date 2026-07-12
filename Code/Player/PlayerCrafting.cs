@@ -48,7 +48,7 @@ public sealed class PlayerCrafting : Component
 			return false;
 		}
 
-		var scaledIngredients = BuildScaledIngredients( recipe );
+		var scaledIngredients = BuildIngredients( recipe );
 		var outputTotal = recipe.TotalOutputAmount;
 
 		if ( !_inventory.HasResources( scaledIngredients ) )
@@ -58,17 +58,17 @@ public sealed class PlayerCrafting : Component
 			return false;
 		}
 
-		if ( !_inventory.HostCanFitResource( recipe.OutputResourceId, outputTotal ) )
+		if ( !_inventory.HostCanFitResource( recipe.Id, outputTotal ) )
 		{
 			if ( LogCrafting )
-				Log.Info( $"[PlayerCrafting] {GameObject.Name}: no room for craft output '{recipe.OutputResourceId}' x{outputTotal}." );
+				Log.Info( $"[PlayerCrafting] {GameObject.Name}: no room for craft output '{recipe.Id}' x{outputTotal}." );
 			return false;
 		}
 
 		if ( !_inventory.HostTryConsumeResources( scaledIngredients ) )
 			return false;
 
-		if ( !_inventory.HostTryAddResource( recipe.OutputResourceId, outputTotal ) )
+		if ( !_inventory.HostTryAddResource( recipe.Id, outputTotal ) )
 		{
 			if ( LogCrafting )
 				Log.Warning( $"[PlayerCrafting] {GameObject.Name}: crafted '{recipeId}' but inventory could not fit output." );
@@ -76,14 +76,13 @@ public sealed class PlayerCrafting : Component
 		}
 
 		if ( LogCrafting )
-			Log.Info( $"[PlayerCrafting] {GameObject.Name}: crafted {outputTotal} {recipe.OutputResourceId}." );
+			Log.Info( $"[PlayerCrafting] {GameObject.Name}: crafted {outputTotal} {recipe.Id}." );
 
 		return true;
 	}
 
-	static List<CraftingIngredient> BuildScaledIngredients( CraftingRecipe recipe )
+	static List<CraftingIngredient> BuildIngredients( CraftingRecipe recipe )
 	{
-		var batch = recipe.CraftBatchCount;
 		var list = new List<CraftingIngredient>();
 		if ( recipe.Ingredients is null )
 			return list;
@@ -97,7 +96,7 @@ public sealed class PlayerCrafting : Component
 			list.Add( new CraftingIngredient
 			{
 				ResourceId = ing.ResourceId,
-				Amount = ing.Amount * batch
+				Amount = Math.Max( 1, ing.Amount ),
 			} );
 		}
 

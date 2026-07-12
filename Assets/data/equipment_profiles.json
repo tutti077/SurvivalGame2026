@@ -1,7 +1,7 @@
 {
   "profiles": [
     {
-      "resourceId": "sword",
+      "resourceId": "basic_sword",
       "displayName": "Sword",
       "slot": "mainHand",
       "allowedSlots": ["mainHand"],
@@ -11,7 +11,7 @@
       "statModifiers": { "armor": 0, "damage": 8, "speed": 0 }
     },
     {
-      "resourceId": "building_hammer",
+      "resourceId": "build_hammer",
       "displayName": "Building Hammer",
       "slot": "mainHand",
       "allowedSlots": ["mainHand"],
@@ -35,6 +35,16 @@
       "grappleDetractMetersPerSecond": 4,
       "grappleAttachStaminaCost": 8,
       "grappleAirborneStaminaPerSecond": 1.5
+    },
+    {
+      "resourceId": "axe_stone",
+      "displayName": "Stone Axe",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": ["PrimaryMelee"],
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "statModifiers": { "armor": 0, "damage": 4, "speed": 0 }
     }
   ]
 }

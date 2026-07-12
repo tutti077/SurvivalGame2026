@@ -80,9 +80,9 @@ public sealed class PlayerGrapple : Component
 	[Property, Group( "Swing" ), Title( "Swing Speed Soften (u/s)" )]
 	public float SwingSpeedSoften { get; set; } = 260f;
 
-	/// <summary>Softer falloff for with-arc pumps so late pumps still add speed.</summary>
+	/// <summary>Softer falloff for with-arc pumps so repeated pumps keep building speed.</summary>
 	[Property, Group( "Swing" ), Title( "Pump Speed Soften (u/s)" )]
-	public float PumpSpeedSoften { get; set; } = 1100f;
+	public float PumpSpeedSoften { get; set; } = 2800f;
 
 	/// <summary>Light tangential damping while no WASD (settles toward hang).</summary>
 	[Property, Group( "Swing" ), Title( "Coast Damping (1/s)" )]
@@ -123,6 +123,10 @@ public sealed class PlayerGrapple : Component
 
 	[Property, Group( "Visual" )]
 	public bool DrawDebugRope { get; set; } = true;
+
+	/// <summary>On-screen swing speed / velocity while attached (local driver).</summary>
+	[Property, Group( "Debug" ), Title( "Show Speed Overlay" )]
+	public bool ShowSpeedDebug { get; set; } = true;
 
 	[Property, Group( "Debug" )]
 	public bool LogGrapple { get; set; }
@@ -225,6 +229,7 @@ public sealed class PlayerGrapple : Component
 		UpdateAimHudVisibility( forceHide: false );
 		UpdatePressingOverride( IsAttached );
 		DrawRopeIfNeeded();
+		DrawSpeedDebugIfNeeded();
 	}
 
 	protected override void OnPreRender()
@@ -1295,16 +1300,7 @@ public sealed class PlayerGrapple : Component
 
 		var min = GetMinLengthEngine();
 		var max = GetHardMaxLengthEngine();
-		var previous = RopeLengthEngine;
 		RopeLengthEngine = Math.Clamp( RopeLengthEngine + deltaEngine, min, max );
-
-		if ( LogGrapple && MathF.Abs( RopeLengthEngine - previous ) > 1e-3f )
-		{
-			Log.Info(
-				$"[PlayerGrapple] {GameObject.Name}: rope length " +
-				$"{TerrainWorldUnits.EngineToMeters( previous ):0.##}m → {TerrainWorldUnits.EngineToMeters( RopeLengthEngine ):0.##}m " +
-				$"(max {TerrainWorldUnits.EngineToMeters( max ):0.#}m)" );
-		}
 	}
 
 	Vector3 ResolveEyePosition()
@@ -1435,6 +1431,57 @@ public sealed class PlayerGrapple : Component
 
 		var from = ResolveLeftArmWorldPoint();
 		DebugOverlay.Line( from, AttachWorldPoint, Color.Black, 0f );
+	}
+
+	void DrawSpeedDebugIfNeeded()
+	{
+		if ( !ShowSpeedDebug || !IsAttached )
+			return;
+
+		if ( _controller is null )
+			_controller = Components.Get<PlayerController>();
+
+		var body = _controller?.Body;
+		if ( body is null || !body.IsValid() )
+			body = Components.Get<Rigidbody>();
+
+		if ( body is null || !body.IsValid() )
+			return;
+
+		var vel = body.Velocity;
+		var speed = vel.Length;
+		var horizontal = vel.WithZ( 0f );
+		var hSpeed = horizontal.Length;
+
+		var attach = AttachWorldPoint;
+		var toPlayer = GameObject.WorldPosition - attach;
+		var dist = toPlayer.Length;
+		var tanSpeed = 0f;
+		if ( dist > 1e-4f )
+		{
+			var radial = toPlayer / dist;
+			var vRad = Vector3.Dot( vel, radial );
+			tanSpeed = ( vel - radial * vRad ).Length;
+		}
+
+		var speedMs = TerrainWorldUnits.EngineToMeters( speed );
+		var hMs = TerrainWorldUnits.EngineToMeters( hSpeed );
+		var tanMs = TerrainWorldUnits.EngineToMeters( tanSpeed );
+
+		var x = 24f;
+		var y = 220f;
+		DebugOverlay.ScreenText( new Vector2( x, y ), "[ Grapple ]", size: 12f );
+		y += 16f;
+		DebugOverlay.ScreenText( new Vector2( x, y ), $"speed  {speed:0} u/s  ({speedMs:0.00} m/s)", size: 14f );
+		y += 16f;
+		DebugOverlay.ScreenText( new Vector2( x, y ), $"horiz  {hSpeed:0} u/s  ({hMs:0.00} m/s)", size: 14f );
+		y += 16f;
+		DebugOverlay.ScreenText( new Vector2( x, y ), $"tangent {tanSpeed:0} u/s  ({tanMs:0.00} m/s)", size: 14f );
+		y += 16f;
+		DebugOverlay.ScreenText(
+			new Vector2( x, y ),
+			$"vel ({vel.x:0}, {vel.y:0}, {vel.z:0})",
+			size: 12f );
 	}
 
 	Vector3 ResolveLeftArmWorldPoint()

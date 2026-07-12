@@ -1,57 +1,527 @@
 {
   "recipes": [
-    {
-      "id": "sword",
-      "displayName": "Sword",
-      "icon": "ui/items/item_sword.png",
-      "unlockId": "",
-      "outputResourceId": "sword",
-      "outputAmount": 1,
-      "maxStack": 1,
-      "numberOfItemsCrafted": 1,
-      "ingredients": [
-        { "resourceId": "rock", "amount": 3 },
-        { "resourceId": "wood", "amount": 2 },
-        { "resourceId": "plant_fiber", "amount": 5 }
-      ],
-      "stats": [
-        { "label": "Damage", "value": "12" },
-        { "label": "Speed", "value": "1.0" }
-      ]
-    },
-    {
-      "id": "building_hammer",
-      "displayName": "Building Hammer",
-      "icon": "ui/items/item_build_hammer.png",
-      "unlockId": "",
-      "outputResourceId": "building_hammer",
-      "outputAmount": 1,
-      "maxStack": 1,
-      "numberOfItemsCrafted": 1,
-      "ingredients": [
-        { "resourceId": "wood", "amount": 10 },
-        { "resourceId": "plant_fiber", "amount": 10 }
-      ],
-      "stats": [
-        { "label": "Type", "value": "Building Tool" }
-      ]
-    },
-    {
-      "id": "basic_hook",
-      "displayName": "Basic Hook",
-      "icon": "ui/items/item_hook.png",
-      "unlockId": "",
-      "outputResourceId": "basic_hook",
-      "outputAmount": 1,
-      "maxStack": 1,
-      "numberOfItemsCrafted": 1,
-      "ingredients": [
-        { "resourceId": "wood", "amount": 10 },
-        { "resourceId": "plant_fiber", "amount": 10 }
-      ],
-      "stats": [
-        { "label": "Type", "value": "Basic Grappling Hook" }
-      ]
-    }
+/*grappling*/ {
+                "id": "basic_hook",
+                "displayName": "Basic Hook",
+                "icon": "ui/items/basic_hook.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 10 },
+                  { "resourceId": "resource_stone", "amount": 3 },
+                  { "resourceId": "crafted_rope", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "GLHF" },
+                  { "label": "Type", "value": "Grappling Hook" }
+                ]
+              },
+/*tools*/     {
+                "id": "axe_stone",
+                "displayName": "Stone Axe",
+                "icon": "ui/items/axe_stone.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "crafted_rope", "amount": 1 },
+                  { "resourceId": "resource_woodBasic", "amount": 5 },
+                  { "resourceId": "resource_stone", "amount": 5 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Basic Axe" },
+                  { "label": "Type", "value": "One Handed" },
+                  { "label": "Damage", "value": "4" },
+                  { "label": "Speed", "value": "1.0" }
+                ]
+              },
+              {
+                "id": "build_hammer",
+                "displayName": "Building Hammer",
+                "icon": "ui/items/build_hammer.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 10 },
+                  { "resourceId": "resource_plantFiber", "amount": 10 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Build Hammer for all construction" },
+                  { "label": "Type", "value": "One Handed" },
+                ]
+              },
+              {
+                "id": "light_torch",
+                "displayName": "Torch",
+                "icon": "ui/items/light_torch.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 },
+                  { "resourceId": "resource_resin", "amount": 1 },
+                  { "resourceId": "resource_plantFiber", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Basic Torch for lighting the way!" },
+                  { "label": "Type", "value": "One Handed" },
+                ]
+              },
+              {
+                "id": "light_lantern",
+                "displayName": "Lantern",
+                "icon": "ui/items/light_lantern.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "crafted_ingotIron", "amount": 2 },
+                  { "resourceId": "crafted_glass", "amount": 4 },
+                  { "resourceId": "resource_lightningBug", "amount": 10 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "See further with this bright upgrade" },
+                  { "label": "Type", "value": "One Handed" },
+                ]
+              },
+/*weapons*/   {
+                "id": "basic_sword",
+                "displayName": "Sword",
+                "icon": "ui/items/basic_sword.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_stone", "amount": 3 },
+                  { "resourceId": "resource_woodBasic", "amount": 2 },
+                  { "resourceId": "resource_plantFiber", "amount": 5 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Basic Sword c'mere" },
+                  { "label": "Type", "value": "One Handed" },
+                  { "label": "Damage", "value": "12" },
+                  { "label": "Speed", "value": "1.0" }
+                ]
+              },
+/*resources*/ {
+                "id": "crafted_rope",
+                "displayName": "Rope",
+                "icon": "ui/items/crafted_rope.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_plantFiber", "amount": 5 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Rope for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_boneGlue",
+                "displayName": "Bone Glue",
+                "icon": "ui/items/crafted_boneGlue.png",
+                "unlockId": "",
+                "outputAmount": 2,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_femur", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Bone Glue for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_leather",
+                "displayName": "Leather",
+                "icon": "ui/items/crafted_leather.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_hide", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Leather for crafting" },
+                  { "label": "Type", "value": "Resource" },
+                  { "label": "Time", "value": "300" },
+
+                ]
+              },
+              {
+                "id": "crafted_charcoal",
+                "displayName": "Charcoal",
+                "icon": "ui/items/crafted_charcoal.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Charcoal for crafting" },
+                  { "label": "Type", "value": "Resource" },
+                  { "label": "Time", "value": "60" }
+
+                ]
+              },
+              {
+                "id": "crafted_clayBricks",
+                "displayName": "Clay Bricks",
+                "icon": "ui/items/crafted_clayBricks.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_clay", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Clay Bricks for crafting" },
+                  { "label": "Type", "value": "Resource" },
+                  { "label": "Time", "value": "300" }
+                ]
+              },
+              {
+                "id": "crafted_glass",
+                "displayName": "Glass",
+                "icon": "ui/items/crafted_glass.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_sand", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Glass for crafting" },
+                  { "label": "Type", "value": "Resource" },
+                  { "label": "Time", "value": "30" }
+                ]
+              },
+              {
+                "id": "crafted_silicaIngot",
+                "displayName": "Silica Ingot",
+                "icon": "ui/items/crafted_silicaIngot.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_silica", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Silica Ingot for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_scrapWire",
+                "displayName": "Scrap Wire",
+                "icon": "ui/items/crafted_scrapWire.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_scrap", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Scrap Wire for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_scrapPipe",
+                "displayName": "Scrap Pipe",
+                "icon": "ui/items/crafted_scrapPipe.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_scrap", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Scrap Pipe for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_ingotIron",
+                "displayName": "Iron Ingot",
+                "icon": "ui/items/crafted_ingotIron.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_oreIron", "amount": 3 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Iron Ingot for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_ingotCopper",
+                "displayName": "Copper Ingot",
+                "icon": "ui/items/crafted_ingotCopper.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_oreCopper", "amount": 3 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Copper Ingot for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_ingotSteel",
+                "displayName": "Steel Ingot",
+                "icon": "ui/items/crafted_ingotSteel.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "crafted_ingotIron", "amount": 1 },
+                  { "resourceId": "resource_woodBasic", "amount": 3 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Steel Ingot for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_ingotTitanium",
+                "displayName": "Titanium Ingot",
+                "icon": "ui/items/crafted_ingotTitanium.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_oreTitanium", "amount": 3 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Titanium Ingot for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_chains",
+                "displayName": "Chains",
+                "icon": "ui/items/crafted_chains.png",
+                "unlockId": "",
+                "outputAmount": 2,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "crafted_ingotIron", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Chains for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_nails",
+                "displayName": "Nails",
+                "icon": "ui/items/crafted_nails.png",
+                "unlockId": "",
+                "outputAmount": 5,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "crafted_ingotIron", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Nails for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_hydraulicParts",
+                "displayName": "Hydraulic Parts",
+                "icon": "ui/items/crafted_hydraulicParts.png",
+                "unlockId": "",
+                "outputAmount": 2,
+                "maxStack": 10,
+                "ingredients": [
+                  { "resourceId": "crafted_ingotSteel", "amount": 2 },
+                  { "resourceId": "crafted_syntheticRubber", "amount": 2 }
+
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Hydraulic Parts for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_microchips",
+                "displayName": "Microchips",
+                "icon": "ui/items/crafted_microchips.png",
+                "unlockId": "",
+                "outputAmount": 2,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "crafted_ingotCopper", "amount": 1 },
+                  { "resourceId": "crafted_silicaIngot", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Microchips for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_wiringHarness",
+                "displayName": "Wiring Harness",
+                "icon": "ui/items/crafted_wiringHarness.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "crafted_ingotCopper", "amount": 2 },
+                  { "resourceId": "crafted_syntheticRubber", "amount": 2 }
+
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Wiring Harness for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_plastics",
+                "displayName": "Plastics",
+                "icon": "ui/items/crafted_plastics.png",
+                "unlockId": "",
+                "outputAmount": 4,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_crudeOil", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Plastics for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_fuel",
+                "displayName": "Fuel",
+                "icon": "ui/items/crafted_fuel.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 5,
+                "ingredients": [
+                  { "resourceId": "resource_crudeOil", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Fuel for crafting or machines" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_vinyl",
+                "displayName": "Vinyl",
+                "icon": "ui/items/crafted_vinyl.png",
+                "unlockId": "",
+                "outputAmount": 3,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "crafted_chlorine", "amount": 1 },
+                  { "resourceId": "resource_crudeOil", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Vinyl for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_syntheticRubber",
+                "displayName": "Synthetic Rubber",
+                "icon": "ui/items/crafted_syntheticRubber.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 3,
+                "ingredients": [
+                  { "resourceId": "resource_crudeOil", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Synthetic Rubber for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_lubricant",
+                "displayName": "Lubricant",
+                "icon": "ui/items/crafted_lubricant.png",
+                "unlockId": "",
+                "outputAmount": 4,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_crudeOil", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Lubricant for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_chlorine",
+                "displayName": "Chlorine",
+                "icon": "ui/items/crafted_chlorine.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_salt", "amount": 5 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Chlorine for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_springs",
+                "displayName": "Springs",
+                "icon": "ui/items/crafted_springs.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "crafted_ingotIron", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Springs for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_gears",
+                "displayName": "Gears",
+                "icon": "ui/items/crafted_gears.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "crafted_ingotIron", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Gears for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_pipes",
+                "displayName": "Pipes",
+                "icon": "ui/items/crafted_pipes.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "crafted_ingotIron", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Pipes for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              }
   ]
 }

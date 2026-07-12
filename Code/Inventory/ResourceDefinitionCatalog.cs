@@ -39,15 +39,20 @@ public static class ResourceDefinitionCatalog
 	{
 		_loaded = false;
 		_loadedJsonHash = 0;
-		EnsureLoaded();
+		ReloadFromDisk();
 	}
 
 	public static void EnsureLoaded()
 	{
-		var jsonHash = TryReadJsonHash();
-		if ( _loaded && jsonHash == _loadedJsonHash )
+		if ( _loaded )
 			return;
 
+		ReloadFromDisk();
+	}
+
+	static void ReloadFromDisk()
+	{
+		var jsonHash = TryReadJsonHash();
 		_loaded = true;
 		_loadedJsonHash = jsonHash;
 		Resources.Clear();
@@ -205,25 +210,25 @@ public static class ResourceDefinitionCatalog
 	{
 		yield return new ResourceDefinitionData
 		{
-			Id = "rock",
-			DisplayName = "Rock",
-			Icon = "ui/items/rock.jpg",
+			Id = "resource_stone",
+			DisplayName = "Stone",
+			Icon = "ui/items/resource_stone.jpg",
 			MaxStack = 20,
 			FallbackColor = "0.58,0.5,0.42,1",
 		};
 		yield return new ResourceDefinitionData
 		{
-			Id = "plant_fiber",
+			Id = "resource_plantFiber",
 			DisplayName = "Plant Fiber",
-			Icon = "ui/items/plant_fiber.png",
+			Icon = "ui/items/resource_plantFiber.png",
 			MaxStack = 20,
 			FallbackColor = "0.28,0.48,0.22,1",
 		};
 		yield return new ResourceDefinitionData
 		{
-			Id = "wood",
+			Id = "resource_woodBasic",
 			DisplayName = "Wood",
-			Icon = "ui/items/wood.png",
+			Icon = "ui/items/resource_woodBasic.png",
 			MaxStack = 20,
 			FallbackColor = "0.45,0.32,0.18,1",
 		};

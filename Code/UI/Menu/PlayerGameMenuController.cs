@@ -56,7 +56,56 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 	public event Action MenuLayoutChanged;
 
+	/// <summary>
+	/// Receives mouse wheel while the menu is open. Prefer values captured in <see cref="PreInput"/>
+	/// before UI clears <see cref="Input.MouseWheel"/>.
+	/// </summary>
+	public Action<Vector2> MenuMouseWheelSink { get; set; }
 
+	Vector2 _preInputMouseWheel;
+
+	/// <summary>
+	/// Apply wheel for the open menu. Reads PreInput capture, live <see cref="Input.MouseWheel"/>,
+	/// and optional MouseWheelUp/Down action bindings (nothing should WantsMouseInput while menu is open).
+	/// </summary>
+	public void FlushCapturedMenuMouseWheel()
+	{
+		if ( !IsMenuOpen || MenuMouseWheelSink is null )
+		{
+			_preInputMouseWheel = default;
+			return;
+		}
+
+		var scroll = _preInputMouseWheel;
+		_preInputMouseWheel = default;
+
+		if ( MathF.Abs( scroll.y ) < 0.01f && MathF.Abs( scroll.x ) < 0.01f )
+			scroll = Input.MouseWheel;
+
+		var fromMenuScrollAction = false;
+		if ( MathF.Abs( scroll.y ) < 0.01f && MathF.Abs( scroll.x ) < 0.01f )
+		{
+			if ( Input.Pressed( "MenuScrollUp" ) )
+			{
+				scroll = new Vector2( 0f, -1f ); // panel convention: negative = up
+				fromMenuScrollAction = true;
+			}
+			else if ( Input.Pressed( "MenuScrollDown" ) )
+			{
+				scroll = new Vector2( 0f, 1f );
+				fromMenuScrollAction = true;
+			}
+		}
+
+		if ( MathF.Abs( scroll.y ) < 0.01f && MathF.Abs( scroll.x ) < 0.01f )
+			return;
+
+		// Gameplay Input.MouseWheel: positive Y = wheel up (hotbar). Panel: positive = down.
+		if ( !fromMenuScrollAction )
+			scroll = new Vector2( scroll.x, -scroll.y );
+
+		MenuMouseWheelSink.Invoke( scroll );
+	}
 
 	PlayerVitals _vitals;
 
@@ -103,21 +152,17 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 
 	public void PreInput()
-
 	{
-
 		if ( !IsMenuOpen || !IsLocalInputOwnedPawn() )
-
 			return;
 
-
+		// Capture before UI PanelInput consumes/clears Input.MouseWheel (visible cursor mode).
+		_preInputMouseWheel = Input.MouseWheel;
 
 		ResolveController();
 
 		if ( _controller is not null )
-
 			_controller.UseLookControls = false;
-
 	}
 
 
@@ -137,19 +182,15 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 
 		if ( !IsLocalInputOwnedPawn() )
-
 			return;
 
-
+		if ( IsMenuOpen )
+			FlushCapturedMenuMouseWheel();
 
 		if ( IsMenuOpen && Input.EscapePressed )
-
 		{
-
 			SetMenuOpen( false );
-
 			return;
-
 		}
 
 
@@ -226,19 +267,13 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 
 		if ( open )
-
 		{
-
 			_savedMouseVisibility = Mouse.Visibility;
-
-			Mouse.Visibility = MouseVisibility.Auto;
-
+			// Hidden so Input.MouseWheel works (Visible cursor mode swallows the wheel). Soft cursor is drawn by the overlay.
+			Mouse.Visibility = MouseVisibility.Hidden;
 			InventoryScreenPointer.ClampMouseToView( GameObject );
-
 		}
-
 		else
-
 			Mouse.Visibility = MouseVisibility.Hidden;
 
 

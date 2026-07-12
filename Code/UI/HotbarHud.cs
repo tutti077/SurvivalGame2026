@@ -47,7 +47,7 @@ public sealed class HotbarHud
 		_host.Style.Set( "align-items", "center" );
 		_host.Style.Set( "justify-content", "center" );
 		_host.Style.Set( "pointer-events", "none" );
-		_host.Style.Set( "z-index", "4000" );
+		_host.Style.Set( "z-index", "2000" );
 
 		_slots.Clear();
 		for ( var i = 0; i < PlayerHotbar.SlotCount; i++ )

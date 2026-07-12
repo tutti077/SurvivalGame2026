@@ -269,10 +269,7 @@ public sealed class SkillsMenuSection : IPlayerMenuSection
 	{
 		_menuOpen = isOpen;
 		if ( isOpen )
-		{
-			SkillCatalog.ForceReload();
-			BuildWeb();
-		}
+			SkillCatalog.EnsureLoaded();
 
 		UpdateVisibility();
 	}

@@ -241,6 +241,7 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		// Length winch runs in FixedUpdate only — applying it here too caused E/Q bobble.
 		// Only catch large over-length desync after MoveModeWalk moves us.
 		ApplyGrappleOverLengthCatchup();
+		ApplyGrappleSwingPushAfterWalk( Time.Delta );
 	}
 
 	protected override void OnFixedUpdate()
@@ -364,7 +365,7 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		}
 
 		_grapplePrevRopeLength = maxLen;
-		ApplyPendulumSwingPush( body, radial, dt );
+		// Push runs in OnUpdate after MoveModeWalk so walk air-control does not eat the accel.
 	}
 
 	static void ClampTangentialSpeed( ref Vector3 vTan, float maxSpeed )
@@ -372,6 +373,31 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		var speed = vTan.Length;
 		if ( speed > maxSpeed && speed > 1e-4f )
 			vTan *= maxSpeed / speed;
+	}
+
+	/// <summary>WASD swing thrust — call after the controller moves so velocity sticks.</summary>
+	public void ApplyGrappleSwingPushAfterWalk( float dt )
+	{
+		if ( !IsLocalMovementDriver() )
+			return;
+
+		if ( _grapple is null )
+			_grapple = Components.Get<PlayerGrapple>();
+
+		if ( _grapple is null || !_grapple.IsAttached || _grapple.RopeLengthEngine <= 1e-3f )
+			return;
+
+		var body = ResolveGrappleBody();
+		if ( body is null )
+			return;
+
+		var attach = _grapple.AttachWorldPoint;
+		var toPlayer = GameObject.WorldPosition - attach;
+		var dist = toPlayer.Length;
+		if ( dist < 1e-4f )
+			return;
+
+		ApplyPendulumSwingPush( body, toPlayer / dist, Math.Max( 1e-4f, dt ) );
 	}
 
 	void ApplyPendulumSwingPush( Rigidbody body, Vector3 radial, float dt )

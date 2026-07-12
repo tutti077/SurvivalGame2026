@@ -57,14 +57,14 @@
         "HarvestTicksUntilGone": 10,
         "HarvestYields": [
           {
-            "ResourceId": "feathers",
+            "ResourceId": "resource_feathers",
             "AmountLow": 1,
             "AmountHigh": 1,
             "ChancePercent": 100
           }
         ],
         "HideModelWhenDepleted": true,
-        "Icon": "ui/items/feathers.png",
+        "Icon": "ui/items/resource_feathers.png",
         "LogHarvest": true,
         "MaxStack": 50,
         "MinimumToolTier": 0,
@@ -74,7 +74,7 @@
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null,
-        "ResourceId": "feathers",
+        "ResourceId": "resource_feathers",
         "RespawnRateSeconds": 60,
         "ToolTypeRequired": "Hand"
       }

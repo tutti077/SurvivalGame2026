@@ -55,7 +55,7 @@
             "AmountHigh": 1,
             "AmountLow": 1,
             "ChancePercent": 100,
-            "ResourceId": "wood"
+            "ResourceId": "resource_woodBasic"
           }
         ],
         "DisplayName": "Stick",
@@ -64,7 +64,7 @@
         "Harvestable": true,
         "HarvestTicksUntilGone": 3,
         "HideModelWhenDepleted": true,
-        "Icon": "ui/items/wood.png",
+        "Icon": "ui/items/resource_woodBasic.png",
         "LogHarvest": false,
         "MaxStack": 32,
         "MinimumToolTier": 0,

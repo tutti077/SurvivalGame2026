@@ -103,4 +103,30 @@ public sealed class MenuPageNavigator
 				: new Color( 0.34f, 0.36f, 0.40f, 0.96f );
 		}
 	}
+
+	/// <summary>Attack1 hit-test while the OS cursor is Hidden (software cursor mode).</summary>
+	public bool TrySelectTabAtScreen( Vector2 screenPos )
+	{
+		if ( _menuController is null )
+			return false;
+
+		for ( var i = 0; i < _tabs.Length; i++ )
+		{
+			var tab = _tabs[i];
+			if ( tab is null || !tab.IsValid() )
+				continue;
+
+			var rect = tab.Box.Rect;
+			var hit = tab.IsInside( screenPos )
+			          || ( rect.Width > 0f && screenPos.x >= rect.Left && screenPos.x <= rect.Right
+			               && screenPos.y >= rect.Top && screenPos.y <= rect.Bottom );
+			if ( !hit )
+				continue;
+
+			_menuController.SetActivePage( tab.PageId );
+			return true;
+		}
+
+		return false;
+	}
 }

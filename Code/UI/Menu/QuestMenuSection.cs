@@ -163,8 +163,9 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 		_menuOpen = isOpen;
 		if ( isOpen )
 		{
-			QuestCatalog.ForceReload();
-			BuildQuestRows();
+			QuestCatalog.EnsureLoaded();
+			if ( _rows.Count == 0 )
+				BuildQuestRows();
 			if ( QuestCatalog.All.Count > 0 && string.IsNullOrWhiteSpace( _selectedQuestId ) )
 				SelectQuest( QuestCatalog.All[0].Id );
 			else

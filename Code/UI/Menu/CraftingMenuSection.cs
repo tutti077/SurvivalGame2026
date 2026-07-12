@@ -12,15 +12,28 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	public const float LengthScale = 2f;
 	public const float TextScale = 1.4f;
 	public const float LayoutScale = 1.25f;
+	/// <summary>Recipe list row size vs the original oversized rows.</summary>
+	public const float RecipeListItemScale = 0.5f;
 
-	public const float RowIconSize = 48f * WidthScale;
+	public const float RowIconSize = 48f * WidthScale * RecipeListItemScale;
 	public const float DetailIconSize = 80f * WidthScale;
 	public const float MinSectionHeight = 420f * LengthScale;
 	public const float RecipeListMaxHeight = 220f * LengthScale;
 	public const float DetailAreaMaxHeight = MinSectionHeight - RecipeListMaxHeight - 80f * LayoutScale;
+	public const float RecipeRowGap = 3f;
+	/// <summary>
+	/// Exact Style.Height for each recipe row (border-box). Scroll range uses this — keep in sync.
+	/// </summary>
+	public const float RecipeRowHeight = 44f;
+	public const float RecipeRowBorder = 1f;
+	/// <summary>Readable list names (not scaled as hard as the 50% row shrink).</summary>
+	public const float RecipeListRowFontSize = 14f * TextScale * 0.85f;
+	/// <summary>One physical mouse-wheel notch reveals this many recipe rows.</summary>
+	public const float WheelItemsPerNotch = 4.5f;
 
 	public const float CraftingTitleFontSize = 24f * TextScale;
 	public const float ItemNameFontSize = 20f * TextScale;
+	public const float ItemDescriptionFontSize = 12f * TextScale;
 	public const float SectionHeaderFontSize = 17f * TextScale;
 	public const float SectionEntryFontSize = 14f * TextScale;
 	public const float CraftHoldSeconds = 1f;
@@ -38,9 +51,12 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	Label _craftButtonLabel;
 	Panel _detailIcon;
 	Label _detailName;
+	Label _detailDescription;
 	Panel _requirementsEntries;
 	Panel _statsEntries;
+	string _detailIconPathApplied;
 	Panel _recipeList;
+	CraftingRecipeListPanel _recipeListPanel;
 
 	string _selectedRecipeId;
 	bool _menuOpen;
@@ -52,6 +68,9 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 	static readonly Color CraftButtonColor = new( 0.22f, 0.45f, 0.28f, 0.95f );
 	static readonly Color CraftButtonPressedColor = new( 0.14f, 0.32f, 0.18f, 0.98f );
+
+	/// <summary>True when the crafting page is open and this panel is shown — recipe list owns mouse wheel.</summary>
+	public bool IsScrollTargetActive => _menuOpen && _panelVisible;
 
 	public CraftingMenuSection( PlayerInventory inventory, PlayerCrafting crafting )
 	{
@@ -72,6 +91,9 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_sectionRoot.Style.Set( "gap", $"{10f * LayoutScale}px" );
 		_sectionRoot.Style.Width = Length.Percent( 100 );
 		_sectionRoot.Style.MinHeight = Length.Pixels( MinSectionHeight );
+		_sectionRoot.Style.MaxHeight = Length.Pixels( MinSectionHeight );
+		_sectionRoot.Style.Set( "overflow", "hidden" );
+		_sectionRoot.Style.Set( "flex-shrink", "0" );
 
 		var header = new Panel { Parent = _sectionRoot };
 		header.Style.Set( "flex-direction", "row" );
@@ -83,10 +105,13 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		var title = new Label { Parent = header, Text = "Crafting" };
 		title.Style.FontColor = Color.White;
 		title.Style.FontSize = Length.Pixels( CraftingTitleFontSize );
+		title.Style.Set( "flex-shrink", "0" );
+		title.Style.Set( "white-space", "nowrap" );
 
 		var craftWrap = new Panel { Parent = header };
 		craftWrap.Style.Set( "position", "relative" );
-		craftWrap.Style.Set( "flex-shrink", "0" );
+		craftWrap.Style.Set( "flex-shrink", "1" );
+		craftWrap.Style.Set( "min-width", "0" );
 
 		_craftOutline = new Panel { Parent = craftWrap };
 		_craftOutline.Style.Set( "position", "absolute" );
@@ -132,6 +157,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_craftButtonLabel.Style.Set( "pointer-events", "none" );
 		_craftButtonLabel.Style.Set( "position", "relative" );
 		_craftButtonLabel.Style.Set( "z-index", "2" );
+		_craftButtonLabel.Style.Set( "white-space", "nowrap" );
 
 		var detail = new Panel { Parent = _sectionRoot };
 		detail.Style.Set( "flex-direction", "column" );
@@ -141,6 +167,10 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		detail.Style.PaddingBottom = Length.Pixels( 8f * LayoutScale );
 		detail.Style.Set( "border-bottom-width", "1px" );
 		detail.Style.Set( "border-bottom-color", "#383d47" );
+		detail.Style.Set( "flex-shrink", "1" );
+		detail.Style.Set( "min-height", "0" );
+		detail.Style.Set( "max-height", $"{DetailAreaMaxHeight}px" );
+		detail.Style.Set( "overflow-y", "scroll" );
 
 		var detailRow = new Panel { Parent = detail };
 		detailRow.Style.Set( "flex-direction", "row" );
@@ -160,11 +190,23 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_detailIcon.Style.Set( "background-repeat", "no-repeat" );
 		_detailIcon.Style.Set( "background-position", "center" );
 
-		_detailName = new Label { Parent = detailRow, Text = "Select a recipe" };
-		_detailName.Style.Set( "flex-grow", "1" );
+		var detailText = new Panel { Parent = detailRow };
+		detailText.Style.Set( "flex-direction", "column" );
+		detailText.Style.Set( "align-items", "stretch" );
+		detailText.Style.Set( "gap", $"{4f * LayoutScale}px" );
+		detailText.Style.Set( "flex-grow", "1" );
+		detailText.Style.Set( "min-width", "0" );
+
+		_detailName = new Label { Parent = detailText, Text = "Select a recipe" };
 		_detailName.Style.FontColor = Color.White;
 		_detailName.Style.FontSize = Length.Pixels( ItemNameFontSize );
 		_detailName.Style.Set( "white-space", "normal" );
+
+		_detailDescription = new Label { Parent = detailText, Text = "" };
+		_detailDescription.Style.FontColor = new Color( 0.72f, 0.74f, 0.78f );
+		_detailDescription.Style.FontSize = Length.Pixels( ItemDescriptionFontSize );
+		_detailDescription.Style.Set( "white-space", "normal" );
+		_detailDescription.Style.Set( "display", "none" );
 
 		var requirementsBlock = CreateDetailListBlock( detail, "Requirements", out _requirementsEntries );
 		_ = requirementsBlock;
@@ -172,13 +214,18 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		var statsBlock = CreateDetailListBlock( detail, "Stats", out _statsEntries );
 		_ = statsBlock;
 
-		_recipeList = new Panel { Parent = _sectionRoot };
-		_recipeList.Style.Set( "flex-direction", "column" );
-		_recipeList.Style.Set( "gap", $"{4f * LayoutScale}px" );
+		var listPanel = new CraftingRecipeListPanel { Parent = _sectionRoot };
+		listPanel.Bind( this );
+		listPanel.BuildChrome();
+		_recipeListPanel = listPanel;
+		_recipeList = listPanel;
 		_recipeList.Style.Set( "width", "100%" );
-		_recipeList.Style.Set( "overflow-y", "scroll" );
-		_recipeList.Style.Set( "max-height", $"{RecipeListMaxHeight}px" );
+		_recipeList.Style.Height = Length.Pixels( RecipeListMaxHeight );
+		_recipeList.Style.Set( "flex-shrink", "0" );
+		_recipeList.Style.Set( "flex-grow", "0" );
+		_recipeList.Style.Set( "pointer-events", "auto" );
 
+		var rowParent = listPanel.Content;
 		_rows.Clear();
 		foreach ( var recipe in CraftingRecipeCatalog.All )
 		{
@@ -190,28 +237,40 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 			var row = new CraftingRecipeRowPanel
 			{
-				Parent = _recipeList,
+				Parent = rowParent,
 				Section = this,
 				RecipeId = recipe.Id
 			};
 			row.Style.Set( "flex-direction", "row" );
 			row.Style.Set( "align-items", "center" );
-			row.Style.Set( "gap", $"{8f * LayoutScale}px" );
+			row.Style.Set( "justify-content", "flex-start" );
+			row.Style.Set( "gap", $"{8f * LayoutScale * RecipeListItemScale}px" );
 			row.Style.Set( "width", "100%" );
-			row.Style.PaddingTop = Length.Pixels( 4f * LayoutScale );
-			row.Style.PaddingBottom = Length.Pixels( 4f * LayoutScale );
-			row.Style.PaddingLeft = Length.Pixels( 6f * LayoutScale );
-			row.Style.PaddingRight = Length.Pixels( 6f * LayoutScale );
+			row.Style.Height = Length.Pixels( RecipeRowHeight );
+			row.Style.MinHeight = Length.Pixels( RecipeRowHeight );
+			row.Style.MaxHeight = Length.Pixels( RecipeRowHeight );
+			row.Style.Set( "flex-shrink", "0" );
+			row.Style.Set( "flex-grow", "0" );
+			row.Style.PaddingTop = Length.Pixels( 0f );
+			row.Style.PaddingBottom = Length.Pixels( 0f );
+			row.Style.PaddingLeft = Length.Pixels( 8f );
+			row.Style.PaddingRight = Length.Pixels( 8f );
+			row.Style.MarginTop = Length.Pixels( 0f );
+			row.Style.MarginBottom = Length.Pixels( RecipeRowGap );
 			row.Style.BackgroundColor = new Color( 0.10f, 0.11f, 0.13f, 0.9f );
-			row.Style.Set( "border-width", "1px" );
+			row.Style.Set( "border-width", $"{RecipeRowBorder}px" );
 			row.Style.Set( "border-color", "#383d47" );
-			row.Style.Set( "border-radius", "4px" );
-			row.Style.Set( "pointer-events", "auto" );
+			row.Style.Set( "border-radius", "3px" );
+			row.Style.Set( "pointer-events", "all" );
+			row.Style.Set( "overflow", "hidden" );
+			row.Style.Set( "box-sizing", "border-box" );
+			row.ButtonInput = PanelInputType.UI;
 
 			var icon = new Panel { Parent = row };
 			icon.Style.Width = Length.Pixels( RowIconSize );
 			icon.Style.Height = Length.Pixels( RowIconSize );
 			icon.Style.Set( "flex-shrink", "0" );
+			icon.Style.Set( "pointer-events", "none" );
 			icon.Style.Set( "background-size", "contain" );
 			icon.Style.Set( "background-repeat", "no-repeat" );
 			icon.Style.Set( "background-position", "center" );
@@ -219,59 +278,170 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 			var name = new Label { Parent = row, Text = recipe.DisplayName };
 			name.Style.FontColor = Color.White;
-			name.Style.FontSize = Length.Pixels( 14f * TextScale );
+			name.Style.FontSize = Length.Pixels( RecipeListRowFontSize );
 			name.Style.Set( "pointer-events", "none" );
+			name.Style.Set( "white-space", "nowrap" );
 
 			_rows.Add( new RowUi( row, icon, recipe.Id ) );
 		}
 
+		if ( _rows.Count > 0 )
+			_rows[^1].Root.Style.MarginBottom = Length.Pixels( 0f );
+
+		listPanel.SetRowCount( _rows.Count );
+
 		if ( CraftingRecipeCatalog.All.Count > 0 )
 			SelectRecipe( CraftingRecipeCatalog.All[0].Id );
+		else
+			RefreshSelectedDetail();
+	}
 
-		Refresh();
+	public void ApplyRecipeListWheel( Vector2 wheel )
+	{
+		if ( !IsScrollTargetActive )
+			return;
+
+		_recipeListPanel?.ApplyWheel( wheel );
+	}
+
+	public bool TryHandleScrollbarPointer( Vector2 screenPos, bool pressed )
+	{
+		if ( !IsScrollTargetActive && !( _recipeListPanel?.IsDraggingThumb ?? false ) )
+			return false;
+
+		return _recipeListPanel?.TryHandlePointer( screenPos, pressed ) ?? false;
+	}
+
+	public bool TrySelectRecipeAtScreen( Vector2 screenPos )
+	{
+		if ( !IsScrollTargetActive )
+			return false;
+
+		if ( _recipeListPanel is not null
+		     && _recipeListPanel.TryPickRowIndexAtScreen( screenPos, out var index )
+		     && index >= 0 && index < _rows.Count )
+		{
+			SelectRecipe( _rows[index].RecipeId );
+			return true;
+		}
+
+		for ( var i = 0; i < _rows.Count; i++ )
+		{
+			var row = _rows[i].Root;
+			if ( row is null || !row.IsValid() )
+				continue;
+
+			if ( !IsScreenPosInsidePanel( row, screenPos ) )
+				continue;
+
+			SelectRecipe( _rows[i].RecipeId );
+			return true;
+		}
+
+		return false;
+	}
+
+	public bool TryCraftPointerAtScreen( Vector2 screenPos, bool pressed )
+	{
+		if ( !IsScrollTargetActive )
+			return false;
+
+		var over = _craftButton is not null && _craftButton.IsValid()
+		           && IsScreenPosInsidePanel( _craftButton, screenPos );
+
+		if ( pressed )
+		{
+			if ( !over )
+				return false;
+
+			SetButtonPressedVisual( true );
+			BeginCraftHold();
+			return true;
+		}
+
+		if ( _craftHoldActive || _craftButtonPressedVisual )
+		{
+			EndCraftHoldFromButtonRelease();
+			return true;
+		}
+
+		return false;
+	}
+
+	static bool IsScreenPosInsidePanel( Panel panel, Vector2 screenPos )
+	{
+		if ( panel is null || !panel.IsValid() )
+			return false;
+
+		if ( panel.IsInside( screenPos ) )
+			return true;
+
+		var rect = panel.Box.Rect;
+		if ( rect.Width <= 0f || rect.Height <= 0f )
+			return false;
+
+		return screenPos.x >= rect.Left && screenPos.x <= rect.Right
+		       && screenPos.y >= rect.Top && screenPos.y <= rect.Bottom;
 	}
 
 	public void SelectRecipe( string recipeId )
 	{
+		if ( string.IsNullOrWhiteSpace( recipeId ) )
+			return;
+
 		_selectedRecipeId = recipeId;
-		Refresh();
+		// Highlight first — full Refresh can hitch on icon loads and looked like a delayed select.
+		UpdateRowHighlights();
+		RefreshSelectedDetail();
 	}
 
 	public void Refresh()
 	{
 		CraftingRecipeCatalog.EnsureLoaded();
+		ResourceDefinitionCatalog.EnsureLoaded();
+		RefreshSelectedDetail();
+		UpdateRowHighlights();
+	}
 
+	void RefreshSelectedDetail()
+	{
 		var recipe = CraftingRecipeCatalog.Get( _selectedRecipeId );
 		if ( recipe is null )
 		{
 			_detailName.Text = "Select a recipe";
+			SetDetailDescription( null );
 			PopulateEntryList( _requirementsEntries, Array.Empty<string>() );
 			PopulateEntryList( _statsEntries, Array.Empty<string>() );
-			MenuUiTextures.ApplyBackground( _detailIcon, null );
+			ApplyDetailIcon( null );
 			UpdateCraftButton( false );
-			UpdateRowHighlights();
 			return;
 		}
 
 		_detailName.Text = recipe.DisplayName;
+		SetDetailDescription( ExtractDescription( recipe ) );
 		PopulateEntryList( _requirementsEntries, BuildRequirementLines( recipe ) );
 		PopulateEntryList( _statsEntries, BuildStatLines( recipe ) );
-		MenuUiTextures.ApplyBackground( _detailIcon, CraftingRecipeCatalog.ResolveIconPath( recipe ) );
-
-		var canCraft = CanCraftRecipe( recipe );
-		UpdateCraftButton( canCraft );
-		UpdateRowHighlights();
-		RefreshRowIcons();
+		ApplyDetailIcon( CraftingRecipeCatalog.ResolveIconPath( recipe ) );
+		UpdateCraftButton( CanCraftRecipe( recipe ) );
 	}
 
-	void RefreshRowIcons()
+	void ApplyDetailIcon( string iconPath )
 	{
-		for ( var i = 0; i < _rows.Count; i++ )
-		{
-			var row = _rows[i];
-			var recipe = CraftingRecipeCatalog.Get( row.RecipeId );
-			MenuUiTextures.ApplyBackground( row.IconPanel, CraftingRecipeCatalog.ResolveIconPath( recipe ) );
-		}
+		if ( string.Equals( _detailIconPathApplied, iconPath ?? string.Empty, StringComparison.OrdinalIgnoreCase ) )
+			return;
+
+		_detailIconPathApplied = iconPath ?? string.Empty;
+		MenuUiTextures.ApplyBackground( _detailIcon, iconPath );
+	}
+
+	void SetDetailDescription( string description )
+	{
+		if ( _detailDescription is null )
+			return;
+
+		var hasText = !string.IsNullOrWhiteSpace( description );
+		_detailDescription.Text = hasText ? description : "";
+		_detailDescription.Style.Set( "display", hasText ? "flex" : "none" );
 	}
 
 	public void SetMenuOpen( bool isOpen )
@@ -279,9 +449,8 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_menuOpen = isOpen;
 		if ( isOpen )
 		{
-			ResourceDefinitionCatalog.ForceReload();
-			ResourceItemLibraryHost.ForceReload();
-			CraftingRecipeCatalog.ForceReload();
+			CraftingRecipeCatalog.EnsureLoaded();
+			ResourceDefinitionCatalog.EnsureLoaded();
 			Refresh();
 		}
 		else
@@ -386,10 +555,15 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 	public void TickMenu( bool menuOpen )
 	{
+		if ( !menuOpen || !IsScrollTargetActive )
+			return;
+
+		_recipeListPanel?.PollWheelWhileOpen();
 	}
 
 	public void OnMenuGlobalMouseUp()
 	{
+		_recipeListPanel?.EndThumbDrag();
 	}
 
 	void SetCraftHoldVisual( float progress )
@@ -436,7 +610,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( !HasScaledResources( recipe ) )
 			return false;
 
-		return _inventory.CanFitResource( recipe.OutputResourceId, recipe.TotalOutputAmount );
+		return _inventory.CanFitResource( recipe.Id, recipe.TotalOutputAmount );
 	}
 
 	bool HasScaledResources( CraftingRecipe recipe )
@@ -444,14 +618,13 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( _inventory is null || recipe.Ingredients is null )
 			return false;
 
-		var batch = recipe.CraftBatchCount;
 		for ( var i = 0; i < recipe.Ingredients.Count; i++ )
 		{
 			var ing = recipe.Ingredients[i];
 			if ( ing is null )
 				continue;
 
-			if ( _inventory.CountResource( ing.ResourceId ) < ing.Amount * batch )
+			if ( _inventory.CountResource( ing.ResourceId ) < Math.Max( 1, ing.Amount ) )
 				return false;
 		}
 
@@ -505,6 +678,9 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 			var selected = string.Equals( _rows[i].RecipeId, _selectedRecipeId, StringComparison.OrdinalIgnoreCase );
 			row.Style.Set( "border-color", selected ? "#8ab4f8" : "#383d47" );
+			row.Style.BackgroundColor = selected
+				? new Color( 0.16f, 0.22f, 0.32f, 0.95f )
+				: new Color( 0.10f, 0.11f, 0.13f, 0.9f );
 		}
 	}
 
@@ -559,7 +735,6 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( recipe.Ingredients is null || recipe.Ingredients.Count == 0 )
 			return lines;
 
-		var batch = recipe.CraftBatchCount;
 		for ( var i = 0; i < recipe.Ingredients.Count; i++ )
 		{
 			var ing = recipe.Ingredients[i];
@@ -568,7 +743,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 			var def = ResourceCatalog.Resolve( ing.ResourceId );
 			var have = _inventory?.CountResource( ing.ResourceId ) ?? 0;
-			var need = ing.Amount * batch;
+			var need = Math.Max( 1, ing.Amount );
 			lines.Add( $"{have}/{need} {def.DisplayName}" );
 		}
 
@@ -587,10 +762,42 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 			if ( line is null )
 				continue;
 
+			// Description lives under the display name beside the icon — not in Stats.
+			if ( string.Equals( line.Label, "Description", StringComparison.OrdinalIgnoreCase ) )
+				continue;
+
+			// Type is a tag — show the value alone (not "Type: …").
+			if ( string.Equals( line.Label, "Type", StringComparison.OrdinalIgnoreCase ) )
+			{
+				if ( !string.IsNullOrWhiteSpace( line.Value ) )
+					lines.Add( line.Value );
+				continue;
+			}
+
 			lines.Add( $"{line.Label}: {line.Value}" );
 		}
 
 		return lines;
+	}
+
+	static string ExtractDescription( CraftingRecipe recipe )
+	{
+		if ( recipe?.Stats is null )
+			return null;
+
+		for ( var i = 0; i < recipe.Stats.Count; i++ )
+		{
+			var line = recipe.Stats[i];
+			if ( line is null )
+				continue;
+
+			if ( !string.Equals( line.Label, "Description", StringComparison.OrdinalIgnoreCase ) )
+				continue;
+
+			return string.IsNullOrWhiteSpace( line.Value ) ? null : line.Value.Trim();
+		}
+
+		return null;
 	}
 
 	sealed class CraftButtonPanel : Panel

@@ -27,10 +27,10 @@ public static class CraftingRecipeCatalog
 	{
 		_loaded = false;
 		_loadedJsonHash = 0;
-		EnsureLoaded();
+		ReloadFromDisk();
 	}
 
-	/// <summary>Icon for crafting UI: recipe icon, then resource/crafted output catalog paths.</summary>
+	/// <summary>Icon for crafting UI: recipe icon, then catalog path for <see cref="CraftingRecipe.Id"/>.</summary>
 	public static string ResolveIconPath( CraftingRecipe recipe )
 	{
 		if ( recipe is null )
@@ -39,9 +39,9 @@ public static class CraftingRecipeCatalog
 		if ( !string.IsNullOrWhiteSpace( recipe.Icon ) && MenuUiTextures.MountedPathExists( recipe.Icon ) )
 			return recipe.Icon;
 
-		if ( !string.IsNullOrWhiteSpace( recipe.OutputResourceId ) )
+		if ( !string.IsNullOrWhiteSpace( recipe.Id ) )
 		{
-			var outputIcon = ResourceCatalog.GetIconPath( recipe.OutputResourceId );
+			var outputIcon = ResourceCatalog.GetIconPath( recipe.Id );
 			if ( MenuUiTextures.MountedPathExists( outputIcon ) )
 				return outputIcon;
 		}
@@ -49,29 +49,11 @@ public static class CraftingRecipeCatalog
 		return recipe.Icon;
 	}
 
-	/// <summary>Recipe whose <see cref="CraftingRecipe.OutputResourceId"/> matches (crafted-only items).</summary>
+	/// <summary>Recipe whose <see cref="CraftingRecipe.Id"/> matches (crafted-only items).</summary>
 	public static bool TryGetRecipeByOutput( string outputResourceId, out CraftingRecipe recipe )
 	{
-		EnsureLoaded();
-		recipe = null;
-		if ( string.IsNullOrWhiteSpace( outputResourceId ) )
-			return false;
-
-		outputResourceId = ResourceCatalog.NormalizeResourceId( outputResourceId );
-		for ( var i = 0; i < Recipes.Count; i++ )
-		{
-			var candidate = Recipes[i];
-			if ( string.Equals(
-				    ResourceCatalog.NormalizeResourceId( candidate.OutputResourceId ),
-				    outputResourceId,
-				    StringComparison.OrdinalIgnoreCase ) )
-			{
-				recipe = candidate;
-				return true;
-			}
-		}
-
-		return false;
+		recipe = Get( outputResourceId );
+		return recipe is not null;
 	}
 
 	public static string GetOutputIconPath( string outputResourceId )
@@ -105,9 +87,13 @@ public static class CraftingRecipeCatalog
 		if ( string.IsNullOrWhiteSpace( recipeId ) )
 			return null;
 
+		recipeId = ResourceCatalog.NormalizeResourceId( recipeId );
 		for ( var i = 0; i < Recipes.Count; i++ )
 		{
-			if ( string.Equals( Recipes[i].Id, recipeId, StringComparison.OrdinalIgnoreCase ) )
+			if ( string.Equals(
+				    ResourceCatalog.NormalizeResourceId( Recipes[i].Id ),
+				    recipeId,
+				    StringComparison.OrdinalIgnoreCase ) )
 				return Recipes[i];
 		}
 
@@ -116,10 +102,15 @@ public static class CraftingRecipeCatalog
 
 	public static void EnsureLoaded()
 	{
-		var jsonHash = TryReadRecipeJsonHash();
-		if ( _loaded && jsonHash == _loadedJsonHash )
+		if ( _loaded )
 			return;
 
+		ReloadFromDisk();
+	}
+
+	static void ReloadFromDisk()
+	{
+		var jsonHash = TryReadRecipeJsonHash();
 		_loaded = true;
 		_loadedJsonHash = jsonHash;
 		Recipes.Clear();
@@ -170,19 +161,17 @@ public static class CraftingRecipeCatalog
 
 	static CraftingRecipe CreateFallbackSword() => new()
 	{
-		Id = "sword",
+		Id = "basic_sword",
 		DisplayName = "Sword",
-		Icon = "ui/items/item_sword.png",
+		Icon = "ui/items/basic_sword.png",
 		Ingredients =
 		{
-			new CraftingIngredient { ResourceId = "rock", Amount = 3 },
-			new CraftingIngredient { ResourceId = "wood", Amount = 2 },
-			new CraftingIngredient { ResourceId = "plant_fiber", Amount = 5 },
+			new CraftingIngredient { ResourceId = "resource_stone", Amount = 3 },
+			new CraftingIngredient { ResourceId = "resource_woodBasic", Amount = 2 },
+			new CraftingIngredient { ResourceId = "resource_plantFiber", Amount = 5 },
 		},
-		OutputResourceId = "sword",
 		OutputAmount = 1,
 		MaxStack = 1,
-		NumberOfItemsCrafted = 1,
 		Stats =
 		{
 			new CraftingStatLine { Label = "Damage", Value = "12" },

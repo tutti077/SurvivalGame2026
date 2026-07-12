@@ -10,7 +10,7 @@
       "halfHeight": 30,
       "halfDepth": 1.2,
       "costs": [
-        { "resourceId": "wood", "amount": 5 }
+        { "resourceId": "resource_woodBasic", "amount": 5 }
       ]
     },
     {
@@ -23,7 +23,7 @@
       "halfHeight": 1.2,
       "halfDepth": 30,
       "costs": [
-        { "resourceId": "wood", "amount": 3 }
+        { "resourceId": "resource_woodBasic", "amount": 3 }
       ]
     },
     {
@@ -36,7 +36,7 @@
       "halfHeight": 30,
       "halfDepth": 1.2,
       "costs": [
-        { "resourceId": "wood", "amount": 2 }
+        { "resourceId": "resource_woodBasic", "amount": 2 }
       ]
     },
     {
@@ -48,7 +48,7 @@
       "allowTerrainPlacement": false,
       "fallbackColor": "0.72,0.58,0.28,1",
       "costs": [
-        { "resourceId": "wood", "amount": 1 }
+        { "resourceId": "resource_woodBasic", "amount": 1 }
       ]
     }
   ]

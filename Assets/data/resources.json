@@ -1,94 +1,192 @@
 {
   "resources": [
     {
-      "id": "rock",
-      "displayName": "Rock",
-      "icon": "ui/items/rock.jpg",
+      "id": "resource_stone",
+      "displayName": "Stone",
+      "icon": "ui/items/resource_stone.jpg",
       "maxStack": 20,
       "fallbackColor": "0.58,0.5,0.42,1"
     },
     {
-      "id": "plant_fiber",
+      "id": "resource_plantFiber",
       "displayName": "Plant Fiber",
-      "icon": "ui/items/plant_fiber.png",
+      "icon": "ui/items/resource_plantFiber.png",
       "maxStack": 20,
       "fallbackColor": "0.28,0.48,0.22,1"
     },
     {
-      "id": "wood",
+      "id": "resource_woodBasic",
       "displayName": "Wood",
-      "icon": "ui/items/wood.png",
+      "icon": "ui/items/resource_woodBasic.png",
       "maxStack": 20,
       "fallbackColor": "0.45,0.32,0.18,1"
     },
     {
-      "id": "sand",
+      "id": "resource_sand",
       "displayName": "Sand",
-      "icon": "ui/items/sand.png",
+      "icon": "ui/items/resource_sand.png",
       "maxStack": 50,
       "fallbackColor": "0.85,0.80,0.45,1"
     },
     {
-      "id": "clay",
+      "id": "resource_clay",
       "displayName": "Clay",
-      "icon": "ui/items/clay.png",
+      "icon": "ui/items/resource_clay.png",
       "maxStack": 50,
       "fallbackColor": "0.80,0.60,0.20,1"
     },
     {
-      "id": "sap",
-      "displayName": "Sap",
-      "icon": "ui/items/sap.png",
+      "id": "resource_resin",
+      "displayName": "Resin",
+      "icon": "ui/items/resource_resin.png",
       "maxStack": 20,
       "fallbackColor": "0.83,0.39,0.13,1"
     },
     {
-      "id": "flint",
+      "id": "resource_flint",
       "displayName": "Flint",
-      "icon": "ui/items/flint.png",
-      "maxStack": 50,
+      "icon": "ui/items/resource_flint.png",
+      "maxStack": 20,
       "fallbackColor": "0.74,0.74,0.74,1"
     },
     {
-      "id": "femur",
+      "id": "resource_femur",
       "displayName": "Femur",
-      "icon": "ui/items/femur.png",
-      "maxStack": 50,
+      "icon": "ui/items/resource_femur.png",
+      "maxStack": 20,
       "fallbackColor": "0.9,0.9,0.9,1"
     },
     {
-      "id": "hide",
+      "id": "resource_hide",
       "displayName": "Hide",
-      "icon": "ui/items/hide.png",
-      "maxStack": 50,
+      "icon": "ui/items/resource_hide.png",
+      "maxStack": 20,
       "fallbackColor": "0.5,0.04,0.04,1"
     },
     {
-      "id": "animal_fat",
+      "id": "resource_animal_fat",
       "displayName": "Animal Fat",
-      "icon": "ui/items/animal_fat.png",
-      "maxStack": 50,
+      "icon": "ui/items/resource_animalFat.png",
+      "maxStack": 20,
       "fallbackColor": "0.9,0.9,0.9,1"
     },
     {
-      "id": "leather",
+      "id": "resource_leather",
       "displayName": "Leather",
-      "icon": "ui/items/leather.png",
-      "maxStack": 50,
+      "icon": "ui/items/resource_leather.png",
+      "maxStack": 20,
       "fallbackColor": "0.5,0.04,0.04,1"
     },
     {
-      "id": "feathers",
+      "id": "resource_feathers",
       "displayName": "Feathers",
-      "icon": "ui/items/feathers.png",
+      "icon": "ui/items/resource_feathers.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_vines",
+      "displayName": "Vines",
+      "icon": "ui/items/resource_vines.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_scrap",
+      "displayName": "Scrap",
+      "icon": "ui/items/resource_scrap.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_silica",
+      "displayName": "Silica",
+      "icon": "ui/items/resource_silica.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_oreIron",
+      "displayName": "Iron Ore",
+      "icon": "ui/items/resource_oreIron.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_oreCopper",
+      "displayName": "Copper Ore",
+      "icon": "ui/items/resource_oreCopper.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_oreTin",
+      "displayName": "Tin Ore",
+      "icon": "ui/items/resource_oreTin.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_oreTitanium",
+      "displayName": "Titanium Ore",
+      "icon": "ui/items/resource_oreTitanium.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_crudeOil",
+      "displayName": "Crude Oil",
+      "icon": "ui/items/resource_crudeOil.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_lithium",
+      "displayName": "Lithium",
+      "icon": "ui/items/resource_lithium.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_salt",
+      "displayName": "Salt",
+      "icon": "ui/items/resource_salt.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_sulfur",
+      "displayName": "Sulfur",
+      "icon": "ui/items/resource_sulfur.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_foxPelt",
+      "displayName": "Fox Pelt",
+      "icon": "ui/items/resource_foxPelt.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_obsidian",
+      "displayName": "Obsidian",
+      "icon": "ui/items/resource_obsidian.png",
+      "maxStack": 20,
+      "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "resource_worms",
+      "displayName": "Worms",
+      "icon": "ui/items/resource_worms.png",
       "maxStack": 50,
       "fallbackColor": "0.95,0.87,0.87,1"
     },
     {
-      "id": "vines",
-      "displayName": "Vines",
-      "icon": "ui/items/vines.png",
-      "maxStack": 50,
+      "id": "resource_lightningBug",
+      "displayName": "Lightning Bug",
+      "icon": "ui/items/resource_lightningBug.png",
+      "maxStack": 20,
       "fallbackColor": "0.95,0.87,0.87,1"
     }
   ]

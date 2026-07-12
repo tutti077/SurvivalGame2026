@@ -30,16 +30,21 @@ public static class BuildPieceCatalog
 	{
 		_loaded = false;
 		_loadedJsonHash = 0;
-		EnsureLoaded();
+		ReloadFromDisk();
 		BuildSnapPlacement.InvalidatePieceCache();
 	}
 
 	public static void EnsureLoaded()
 	{
-		var jsonHash = TryReadJsonHash();
-		if ( _loaded && jsonHash == _loadedJsonHash )
+		if ( _loaded )
 			return;
 
+		ReloadFromDisk();
+	}
+
+	static void ReloadFromDisk()
+	{
+		var jsonHash = TryReadJsonHash();
 		_loaded = true;
 		_loadedJsonHash = jsonHash;
 		Pieces.Clear();
@@ -180,7 +185,7 @@ public static class BuildPieceCatalog
 			HalfHeight = floorHalf.y,
 			HalfDepth = floorHalf.z,
 			FallbackColor = "0.52,0.48,0.42,1",
-			Costs = { new BuildPieceCost { ResourceId = "wood", Amount = 5 } },
+			Costs = { new BuildPieceCost { ResourceId = "resource_woodBasic", Amount = 5 } },
 		};
 		var wallHalf = BuildModuleDimensions.WallHalfExtents;
 		yield return new BuildPieceData
@@ -193,7 +198,7 @@ public static class BuildPieceCatalog
 			HalfHeight = wallHalf.y,
 			HalfDepth = wallHalf.z,
 			FallbackColor = "0.62,0.58,0.52,1",
-			Costs = { new BuildPieceCost { ResourceId = "wood", Amount = 3 } },
+			Costs = { new BuildPieceCost { ResourceId = "resource_woodBasic", Amount = 3 } },
 		};
 		var roofHalf = BuildModuleDimensions.RoofHalfExtents;
 		yield return new BuildPieceData
@@ -206,7 +211,7 @@ public static class BuildPieceCatalog
 			HalfHeight = roofHalf.y,
 			HalfDepth = roofHalf.z,
 			FallbackColor = "0.48,0.36,0.28,1",
-			Costs = { new BuildPieceCost { ResourceId = "wood", Amount = 2 } },
+			Costs = { new BuildPieceCost { ResourceId = "resource_woodBasic", Amount = 2 } },
 		};
 		yield return new BuildPieceData
 		{
@@ -216,7 +221,7 @@ public static class BuildPieceCatalog
 			FallbackColor = "0.72,0.58,0.28,1",
 			IsRepairTool = true,
 			AllowTerrainPlacement = false,
-			Costs = { new BuildPieceCost { ResourceId = "wood", Amount = 1 } },
+			Costs = { new BuildPieceCost { ResourceId = "resource_woodBasic", Amount = 1 } },
 		};
 	}
 

@@ -27,7 +27,7 @@ public static class SkillCatalog
 	{
 		_loaded = false;
 		_loadedJsonHash = 0;
-		EnsureLoaded();
+		ReloadFromDisk();
 	}
 
 	public static SkillDefinition Get( string skillId )
@@ -47,10 +47,15 @@ public static class SkillCatalog
 
 	public static void EnsureLoaded()
 	{
-		var jsonHash = TryReadJsonHash();
-		if ( _loaded && jsonHash == _loadedJsonHash )
+		if ( _loaded )
 			return;
 
+		ReloadFromDisk();
+	}
+
+	static void ReloadFromDisk()
+	{
+		var jsonHash = TryReadJsonHash();
 		_loaded = true;
 		_loadedJsonHash = jsonHash;
 		Skills.Clear();
@@ -99,7 +104,7 @@ public static class SkillCatalog
 			Id = "survival_core",
 			DisplayName = "Survival Core",
 			Description = "Foundation of wilderness survival. Unlocks basic gathering instincts.",
-			Icon = "ui/items/rock.jpg",
+			Icon = "ui/items/resource_stone.jpg",
 			X = 0.5f,
 			Y = 0.5f,
 			Children = new List<string> { "forager", "stone_breaker" }
@@ -109,7 +114,7 @@ public static class SkillCatalog
 			Id = "forager",
 			DisplayName = "Forager",
 			Description = "Hand harvesting yields slightly more resources from plants and loose nodes.",
-			Icon = "ui/items/plant_fiber.png",
+			Icon = "ui/items/resource_plantFiber.png",
 			X = 0.32f,
 			Y = 0.28f,
 			Parents = new List<string> { "survival_core" },
@@ -120,7 +125,7 @@ public static class SkillCatalog
 			Id = "stone_breaker",
 			DisplayName = "Stone Breaker",
 			Description = "Improved efficiency when harvesting rock nodes.",
-			Icon = "ui/items/rock.jpg",
+			Icon = "ui/items/resource_stone.jpg",
 			X = 0.68f,
 			Y = 0.28f,
 			Parents = new List<string> { "survival_core" },
@@ -131,7 +136,7 @@ public static class SkillCatalog
 			Id = "crafting_focus",
 			DisplayName = "Crafting Focus",
 			Description = "Hold-to-craft completes slightly faster (future tuning hook).",
-			Icon = "ui/items/wood.png",
+			Icon = "ui/items/resource_woodBasic.png",
 			X = 0.22f,
 			Y = 0.52f,
 			Parents = new List<string> { "forager" },
@@ -153,7 +158,7 @@ public static class SkillCatalog
 			Id = "blade_training",
 			DisplayName = "Blade Training",
 			Description = "Melee attacks cost less stamina on light swings (future tuning hook).",
-			Icon = "ui/items/item_sword.png",
+			Icon = "ui/items/basic_sword.png",
 			X = 0.38f,
 			Y = 0.76f,
 			Parents = new List<string> { "crafting_focus" }
@@ -173,7 +178,7 @@ public static class SkillCatalog
 			Id = "pathfinder",
 			DisplayName = "Pathfinder",
 			Description = "Sprint drains stamina more slowly while exploring (future tuning hook).",
-			Icon = "ui/items/rock.jpg",
+			Icon = "ui/items/resource_woodBasic.png",
 			X = 0.5f,
 			Y = 0.14f,
 			Parents = new List<string> { "forager", "stone_breaker" }

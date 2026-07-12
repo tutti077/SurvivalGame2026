@@ -55,7 +55,7 @@
             "AmountHigh": 20,
             "AmountLow": 1,
             "ChancePercent": 100,
-            "ResourceId": "rock"
+            "ResourceId": "resource_stone"
           }
         ],
         "DisplayName": "Rock",
@@ -64,7 +64,7 @@
         "Harvestable": true,
         "HarvestTicksUntilGone": 5,
         "HideModelWhenDepleted": true,
-        "Icon": "ui/items/rock.jpg",
+        "Icon": "ui/items/resource_stone.jpg",
         "LogHarvest": true,
         "MaxStack": 20,
         "MinimumToolTier": 0,

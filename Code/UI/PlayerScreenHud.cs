@@ -16,7 +16,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	const float BarHeight = 22f;
 	const float BarGap = 6f;
 	const float InventoryMenuColumnWidth = 400f;
-	const float CraftingMenuColumnWidth = 455f;
+	const float CraftingMenuColumnWidth = 470f;
 	const string DefaultHarvestPromptText = "Harvest";
 	const int ZGameMenu = 2500;
 
@@ -72,6 +72,23 @@ public sealed class PlayerScreenHud : PanelComponent
 		TryBuildHud();
 	}
 
+	/// <summary>
+	/// While crafting is open, any wheel over the HUD scrolls the recipe list.
+	/// Prefer this over <see cref="Input.MouseWheel"/> — that signal is cleared when the cursor is visible.
+	/// </summary>
+	protected override void OnMouseWheel( Vector2 value )
+	{
+		if ( _menuController is not null && _menuController.IsMenuOpen
+		     && string.Equals( _menuController.ActivePageId, MenuPageIds.Crafting, StringComparison.OrdinalIgnoreCase )
+		     && _craftingSection is not null )
+		{
+			_craftingSection.ApplyRecipeListWheel( value );
+			return;
+		}
+
+		base.OnMouseWheel( value );
+	}
+
 	protected override void OnUpdate()
 	{
 		base.OnUpdate();
@@ -80,6 +97,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		if ( _menuController is not null && _menuController.IsMenuOpen )
 		{
+			_menuInputOverlay?.PollMenuPointer();
 			for ( var i = 0; i < _sections.Count; i++ )
 				_sections[i].TickMenu( true );
 
@@ -381,6 +399,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_menuInputOverlay = new InventoryMenuInputOverlay { Parent = Panel };
 		_menuInputOverlay.BindMenuController( _menuController );
 		_menuInputOverlay.BindInventoryInteraction( _inventoryInteraction );
+		_menuInputOverlay.BindMenuGlobalMouseUp( OnMenuGlobalMouseUp );
 		_menuInputOverlay.ButtonInput = PanelInputType.UI;
 		_menuInputOverlay.Style.Set( "position", "absolute" );
 		_menuInputOverlay.Style.Set( "left", "0" );
@@ -430,6 +449,12 @@ public sealed class PlayerScreenHud : PanelComponent
 		_craftingSection = new CraftingMenuSection( _inventory, _crafting );
 		_sections.Add( _craftingSection );
 		_craftingSection.Build( _leftMenuColumn );
+		_menuInputOverlay.BindCraftingWheel( _craftingSection.ApplyRecipeListWheel );
+		_menuInputOverlay.BindCraftingScrollbar( _craftingSection.TryHandleScrollbarPointer );
+		_menuInputOverlay.BindCraftingRecipeSelect( _craftingSection.TrySelectRecipeAtScreen );
+		_menuInputOverlay.BindCraftingCraftPointer( _craftingSection.TryCraftPointerAtScreen );
+		_menuInputOverlay.BindTabSelect( _pageNavigator.TrySelectTabAtScreen );
+		_menuController.MenuMouseWheelSink = OnMenuMouseWheel;
 
 		_questsSection = new QuestMenuSection();
 		_sections.Add( _questsSection );
@@ -599,7 +624,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		_pageNavigator?.SetMenuOpen( isOpen );
 
 		_menuRoot.Style.Set( "display", isOpen ? "flex" : "none" );
-		_menuRoot.Style.Set( "pointer-events", isOpen ? "auto" : "none" );
+		// Keep none so empty areas don't eat wheel/clicks; interactive children still use pointer-events: auto.
+		_menuRoot.Style.Set( "pointer-events", "none" );
 
 		foreach ( var section in _sections )
 			section.SetMenuOpen( isOpen );
@@ -694,6 +720,17 @@ public sealed class PlayerScreenHud : PanelComponent
 	{
 		foreach ( var section in _sections )
 			section.Refresh();
+	}
+
+	void OnMenuMouseWheel( Vector2 wheel )
+	{
+		if ( _menuController is null || _craftingSection is null )
+			return;
+
+		if ( !string.Equals( _menuController.ActivePageId, MenuPageIds.Crafting, StringComparison.OrdinalIgnoreCase ) )
+			return;
+
+		_craftingSection.ApplyRecipeListWheel( wheel );
 	}
 
 	void OnMenuGlobalMouseUp()

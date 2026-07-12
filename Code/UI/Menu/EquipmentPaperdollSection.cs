@@ -130,7 +130,7 @@ public sealed class EquipmentPaperdollSection : IPlayerMenuSection
 		_menuOpen = isOpen;
 		if ( isOpen )
 		{
-			EquipmentCatalog.ForceReload();
+			EquipmentCatalog.EnsureLoaded();
 			Refresh();
 		}
 
