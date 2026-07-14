@@ -2,7 +2,7 @@ using Sandbox.UI;
 
 namespace Survival;
 
-/// <summary>One clickable node in the skills web.</summary>
+/// <summary>One skill node — clicks come from soft-cursor Attack1, not OS mouse.</summary>
 public sealed class SkillNodePanel : Panel
 {
 	public string SkillId { get; }
@@ -15,13 +15,4 @@ public sealed class SkillNodePanel : Panel
 	}
 
 	public override bool WantsMouseInput() => false;
-
-	protected override void OnMouseDown( MousePanelEvent e )
-	{
-		base.OnMouseDown( e );
-		if ( e.Button != "mouseleft" )
-			return;
-
-		Section?.SelectSkill( SkillId );
-	}
 }

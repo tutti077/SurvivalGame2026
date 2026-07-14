@@ -2,17 +2,11 @@ using Sandbox.UI;
 
 namespace Survival;
 
+/// <summary>Settings root action row — invoked via soft-cursor Attack1, not OS mouse.</summary>
 public sealed class SettingsMenuButtonPanel : Panel
 {
 	public GameSettingsMenuSection Section { get; init; }
 	public string ActionId { get; init; }
 
-	protected override void OnMouseDown( MousePanelEvent e )
-	{
-		base.OnMouseDown( e );
-		if ( e.Button != "mouseleft" || Section is null )
-			return;
-
-		Section.InvokeAction( ActionId );
-	}
+	public override bool WantsMouseInput() => false;
 }

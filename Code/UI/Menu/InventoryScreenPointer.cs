@@ -1,4 +1,5 @@
 using Sandbox;
+using Sandbox.UI;
 
 namespace Survival;
 
@@ -23,6 +24,26 @@ public static class InventoryScreenPointer
 	/// <summary>Soft cursor while the menu is open; otherwise OS <see cref="Mouse.Position"/>.</summary>
 	public static Vector2 GetMenuOrMousePosition() =>
 		_softCursorActive ? _softCursorScreen : Mouse.Position;
+
+	/// <summary>
+	/// Screen-space contain using layout <see cref="Panel.Box"/>. Prefer this over CSS-transform
+	/// parents (<c>translateX(-50%)</c>) with <see cref="Panel.PanelPositionToScreenPosition"/> —
+	/// transforms do not affect those layout APIs and cause click offset.
+	/// </summary>
+	public static bool PanelBoxContainsScreen( Panel panel, Vector2 screenPos )
+	{
+		if ( panel is null || !panel.IsValid() )
+			return false;
+
+		var rect = panel.Box.Rect;
+		if ( rect.Width > 1f && rect.Height > 1f )
+		{
+			return screenPos.x >= rect.Left && screenPos.x <= rect.Right
+			       && screenPos.y >= rect.Top && screenPos.y <= rect.Bottom;
+		}
+
+		return panel.IsInside( screenPos );
+	}
 
 	public static Vector2 GetCrosshairScreenPosition( GameObject from )
 	{

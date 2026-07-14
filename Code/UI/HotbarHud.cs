@@ -34,14 +34,11 @@ public sealed class HotbarHud
 		_interaction = interaction;
 		_gridHost = new PlayerHotbarGridHost( hotbar );
 
-		var totalWidth = PlayerHotbar.SlotCount * SlotSize + (PlayerHotbar.SlotCount - 1) * SlotGap;
-
 		_host = new HotbarHostPanel { Parent = root };
 		_host.Style.Set( "position", "absolute" );
-		_host.Style.Set( "left", "50%" );
+		_host.Style.Set( "left", "0" );
+		_host.Style.Set( "right", "0" );
 		_host.Style.Set( "bottom", "18px" );
-		_host.Style.Set( "transform", "translateX(-50%)" );
-		_host.Style.Width = Length.Pixels( totalWidth );
 		_host.Style.Set( "flex-direction", "row" );
 		_host.Style.Set( "gap", $"{SlotGap}px" );
 		_host.Style.Set( "align-items", "center" );

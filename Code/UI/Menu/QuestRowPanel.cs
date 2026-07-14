@@ -2,17 +2,11 @@ using Sandbox.UI;
 
 namespace Survival;
 
+/// <summary>Quest list row — selection is via soft-cursor Attack1, not OS mouse.</summary>
 public sealed class QuestRowPanel : Panel
 {
 	public QuestMenuSection Section { get; init; }
 	public string QuestId { get; init; }
 
-	protected override void OnMouseDown( MousePanelEvent e )
-	{
-		base.OnMouseDown( e );
-		if ( e.Button != "mouseleft" || Section is null )
-			return;
-
-		Section.SelectQuest( QuestId );
-	}
+	public override bool WantsMouseInput() => false;
 }

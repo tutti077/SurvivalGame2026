@@ -33,6 +33,8 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 	Label _buildLabel;
 
 	readonly Dictionary<string, Panel> _subPageById = new();
+	readonly List<SettingsMenuButtonPanel> _rootButtons = new();
+	SettingsMenuBackButtonPanel _backButton;
 	string _activeSubPageId;
 
 	bool _menuOpen;
@@ -93,14 +95,14 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		_subHeaderTitle.Style.Set( "text-align", "center" );
 
 		var subBack = new SettingsMenuBackButtonPanel { Parent = _subHeader, Section = this };
+		_backButton = subBack;
 		subBack.Style.Set( "position", "absolute" );
 		subBack.Style.Set( "left", "0" );
 		subBack.Style.Set( "top", "0" );
 		subBack.Style.Set( "z-index", "2" );
 		subBack.Style.Set( "flex-direction", "row" );
 		subBack.Style.Set( "align-items", "center" );
-		subBack.Style.Set( "pointer-events", "auto" );
-		subBack.Style.Set( "cursor", "pointer" );
+		subBack.Style.Set( "pointer-events", "none" );
 		subBack.Style.PaddingTop = Length.Pixels( 6f );
 		subBack.Style.PaddingBottom = Length.Pixels( 6f );
 		subBack.Style.PaddingLeft = Length.Pixels( 12f );
@@ -138,6 +140,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		buttonColumn.Style.Set( "gap", $"{ButtonGap}px" );
 		buttonColumn.Style.Width = Length.Pixels( ButtonWidth );
 
+		_rootButtons.Clear();
 		AddMenuButton( buttonColumn, "game_settings", "Game settings" );
 		AddMenuButton( buttonColumn, "controls", "Controls" );
 		AddMenuButton( buttonColumn, "audio", "Audio" );
@@ -215,6 +218,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 			ActionId = actionId
 		};
 		StyleMenuButton( row );
+		_rootButtons.Add( row );
 
 		var label = new Label { Parent = row, Text = labelText };
 		label.Style.FontColor = Color.White;
@@ -236,8 +240,42 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		row.Style.Set( "border-width", "1px" );
 		row.Style.Set( "border-color", "#454c58" );
 		row.Style.Set( "border-radius", "6px" );
-		row.Style.Set( "pointer-events", "auto" );
-		row.Style.Set( "cursor", "pointer" );
+		row.Style.Set( "pointer-events", "none" );
+	}
+
+	/// <summary>Soft-cursor Attack1 — OS mouse is Hidden while the menu is open.</summary>
+	public bool TryInvokeAtScreen( Vector2 screenPos )
+	{
+		if ( !_menuOpen || !_panelVisible )
+			return false;
+
+		var onRoot = string.IsNullOrEmpty( _activeSubPageId );
+		if ( !onRoot )
+		{
+			if ( _backButton is not null && _backButton.IsValid()
+			     && InventoryScreenPointer.PanelBoxContainsScreen( _backButton, screenPos ) )
+			{
+				NavigateToRoot();
+				return true;
+			}
+
+			return false;
+		}
+
+		for ( var i = 0; i < _rootButtons.Count; i++ )
+		{
+			var button = _rootButtons[i];
+			if ( button is null || !button.IsValid() )
+				continue;
+
+			if ( !InventoryScreenPointer.PanelBoxContainsScreen( button, screenPos ) )
+				continue;
+
+			InvokeAction( button.ActionId );
+			return true;
+		}
+
+		return false;
 	}
 
 	public void InvokeAction( string actionId )

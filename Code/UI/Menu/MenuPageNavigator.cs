@@ -14,6 +14,7 @@ public sealed class MenuPageNavigator
 	readonly MenuPageTabPanel[] _tabs = new MenuPageTabPanel[MenuPageRegistry.Pages.Length];
 
 	Panel _root;
+	Panel _chip;
 
 	public MenuPageNavigator( PlayerGameMenuController menuController )
 	{
@@ -22,28 +23,36 @@ public sealed class MenuPageNavigator
 
 	public void Build( Panel overlay )
 	{
+		// Full-width row + justify-content center — avoid left:50%/translateX(-50%), which
+		// paints centered but leaves layout hit-rects offset to the right.
 		_root = new Panel { Parent = overlay };
 		_root.Style.Set( "position", "absolute" );
-		_root.Style.Set( "left", "50%" );
+		_root.Style.Set( "left", "0" );
+		_root.Style.Set( "right", "0" );
 		_root.Style.Set( "top", "12px" );
-		_root.Style.Set( "transform", "translateX(-50%)" );
 		_root.Style.Set( "display", "none" );
 		_root.Style.Set( "flex-direction", "row" );
-		_root.Style.Set( "gap", $"{TabGap}px" );
-		_root.Style.Set( "align-items", "center" );
 		_root.Style.Set( "justify-content", "center" );
+		_root.Style.Set( "align-items", "center" );
 		_root.Style.Set( "pointer-events", "none" );
 		_root.Style.Set( "z-index", "3000" );
-		_root.Style.Set( "padding", "10px 14px" );
-		_root.Style.Set( "border-radius", "8px" );
-		_root.Style.BackgroundColor = new Color( 0.24f, 0.26f, 0.30f, 0.92f );
-		_root.Style.Set( "border-width", "1px" );
-		_root.Style.Set( "border-color", "#5c6470" );
+
+		_chip = new Panel { Parent = _root };
+		_chip.Style.Set( "flex-direction", "row" );
+		_chip.Style.Set( "gap", $"{TabGap}px" );
+		_chip.Style.Set( "align-items", "center" );
+		_chip.Style.Set( "justify-content", "center" );
+		_chip.Style.Set( "pointer-events", "none" );
+		_chip.Style.Set( "padding", "10px 14px" );
+		_chip.Style.Set( "border-radius", "8px" );
+		_chip.Style.BackgroundColor = new Color( 0.24f, 0.26f, 0.30f, 0.92f );
+		_chip.Style.Set( "border-width", "1px" );
+		_chip.Style.Set( "border-color", "#5c6470" );
 
 		for ( var i = 0; i < MenuPageRegistry.Pages.Length; i++ )
 		{
 			var page = MenuPageRegistry.Pages[i];
-			var tab = new MenuPageTabPanel( page.PageId, _menuController ) { Parent = _root };
+			var tab = new MenuPageTabPanel( page.PageId, _menuController ) { Parent = _chip };
 			tab.Style.Width = Length.Pixels( TabSize );
 			tab.Style.Height = Length.Pixels( TabSize );
 			tab.Style.Set( "flex-shrink", "0" );
@@ -54,7 +63,6 @@ public sealed class MenuPageNavigator
 			tab.Style.Set( "border-color", "#6a7280" );
 			tab.Style.Set( "border-radius", "4px" );
 			tab.Style.Set( "overflow", "hidden" );
-			// Soft-cursor Attack1 hit-tests tabs — OS mouse is Hidden while the menu is open.
 			tab.Style.Set( "pointer-events", "none" );
 
 			var icon = new Panel { Parent = tab };
@@ -118,7 +126,7 @@ public sealed class MenuPageNavigator
 			if ( tab is null || !tab.IsValid() )
 				continue;
 
-			if ( !TabContainsScreenPoint( tab, screenPos ) )
+			if ( !InventoryScreenPointer.PanelBoxContainsScreen( tab, screenPos ) )
 				continue;
 
 			_menuController.SetActivePage( tab.PageId );
@@ -126,43 +134,5 @@ public sealed class MenuPageNavigator
 		}
 
 		return false;
-	}
-
-	/// <summary>
-	/// Same screen→panel mapping as inventory slots / soft-cursor draw (not raw Box.Rect alone).
-	/// </summary>
-	static bool TabContainsScreenPoint( Panel tab, Vector2 screenPos )
-	{
-		if ( tab is null || !tab.IsValid() )
-			return false;
-
-		if ( tab.IsInside( screenPos ) )
-			return true;
-
-		var scale = MathF.Max( 0.001f, tab.ScaleToScreen );
-		var localSize = new Vector2( TabSize, TabSize );
-		var rect = tab.Box.Rect;
-		if ( rect.Width > 1f && rect.Height > 1f )
-			localSize = new Vector2( rect.Width / scale, rect.Height / scale );
-
-		var topLeft = tab.PanelPositionToScreenPosition( Vector2.Zero );
-		var bottomRight = tab.PanelPositionToScreenPosition( localSize );
-
-		if ( bottomRight.x < topLeft.x )
-			( topLeft.x, bottomRight.x ) = ( bottomRight.x, topLeft.x );
-		if ( bottomRight.y < topLeft.y )
-			( topLeft.y, bottomRight.y ) = ( bottomRight.y, topLeft.y );
-
-		if ( bottomRight.x - topLeft.x > 1f && bottomRight.y - topLeft.y > 1f
-		     && screenPos.x >= topLeft.x && screenPos.x <= bottomRight.x
-		     && screenPos.y >= topLeft.y && screenPos.y <= bottomRight.y )
-			return true;
-
-		// Fallback: Box.Rect reported in screen pixels.
-		if ( rect.Width <= 1f || rect.Height <= 1f )
-			return false;
-
-		return screenPos.x >= rect.Left && screenPos.x <= rect.Right
-		       && screenPos.y >= rect.Top && screenPos.y <= rect.Bottom;
 	}
 }

@@ -113,7 +113,7 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 			row.Style.Set( "border-width", "1px" );
 			row.Style.Set( "border-color", "#383d47" );
 			row.Style.Set( "border-radius", "4px" );
-			row.Style.Set( "pointer-events", "auto" );
+			row.Style.Set( "pointer-events", "none" );
 
 			var name = new Label { Parent = row, Text = quest.DisplayName };
 			name.Style.FontColor = Color.White;
@@ -129,6 +129,28 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 	{
 		_selectedQuestId = questId;
 		Refresh();
+	}
+
+	/// <summary>Soft-cursor Attack1 — OS mouse is Hidden while the menu is open.</summary>
+	public bool TrySelectQuestAtScreen( Vector2 screenPos )
+	{
+		if ( !_menuOpen || !_panelVisible )
+			return false;
+
+		for ( var i = 0; i < _rows.Count; i++ )
+		{
+			var row = _rows[i];
+			if ( row is null || !row.IsValid() )
+				continue;
+
+			if ( !InventoryScreenPointer.PanelBoxContainsScreen( row, screenPos ) )
+				continue;
+
+			SelectQuest( row.QuestId );
+			return true;
+		}
+
+		return false;
 	}
 
 	public void Refresh()

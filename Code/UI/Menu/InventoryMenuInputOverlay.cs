@@ -22,6 +22,7 @@ public sealed class InventoryMenuInputOverlay : Panel
 	Func<Vector2, bool> _craftingRecipeSelect;
 	Func<Vector2, bool, bool> _craftingCraftPointer;
 	Func<Vector2, bool> _tabSelect;
+	Func<Vector2, bool> _pageContentSelect;
 	Action _menuGlobalMouseUp;
 	bool _isOpen;
 
@@ -42,6 +43,8 @@ public sealed class InventoryMenuInputOverlay : Panel
 	public void BindCraftingCraftPointer( Func<Vector2, bool, bool> handler ) => _craftingCraftPointer = handler;
 
 	public void BindTabSelect( Func<Vector2, bool> handler ) => _tabSelect = handler;
+
+	public void BindPageContentSelect( Func<Vector2, bool> handler ) => _pageContentSelect = handler;
 
 	public void BindMenuGlobalMouseUp( Action handler ) => _menuGlobalMouseUp = handler;
 
@@ -184,6 +187,9 @@ public sealed class InventoryMenuInputOverlay : Panel
 		if ( Input.Pressed( "Attack1" ) )
 		{
 			if ( _tabSelect is not null && _tabSelect.Invoke( pos ) )
+				return;
+
+			if ( _pageContentSelect is not null && _pageContentSelect.Invoke( pos ) )
 				return;
 
 			if ( _craftingScrollbarPointer is not null && _craftingScrollbarPointer.Invoke( pos, true ) )

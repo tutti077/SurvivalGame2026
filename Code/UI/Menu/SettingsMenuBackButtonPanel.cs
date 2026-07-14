@@ -2,16 +2,10 @@ using Sandbox.UI;
 
 namespace Survival;
 
+/// <summary>Settings sub-page back control — invoked via soft-cursor Attack1, not OS mouse.</summary>
 public sealed class SettingsMenuBackButtonPanel : Panel
 {
 	public GameSettingsMenuSection Section { get; init; }
 
-	protected override void OnMouseDown( MousePanelEvent e )
-	{
-		base.OnMouseDown( e );
-		if ( e.Button != "mouseleft" || Section is null )
-			return;
-
-		Section.NavigateToRoot();
-	}
+	public override bool WantsMouseInput() => false;
 }

@@ -177,7 +177,7 @@ public sealed class SkillsMenuSection : IPlayerMenuSection
 		node.Style.Set( "left", $"{skill.X * 100f}%" );
 		node.Style.Set( "top", $"{skill.Y * 100f}%" );
 		node.Style.Set( "z-index", "4" );
-		node.Style.Set( "pointer-events", "auto" );
+		node.Style.Set( "pointer-events", "none" );
 		node.Style.Set( "box-sizing", "border-box" );
 		node.Style.BackgroundColor = new Color( 0.14f, 0.16f, 0.20f, 0.95f );
 		node.Style.Set( "border-width", "2px" );
@@ -204,6 +204,28 @@ public sealed class SkillsMenuSection : IPlayerMenuSection
 	{
 		_selectedSkillId = skillId;
 		Refresh();
+	}
+
+	/// <summary>Soft-cursor Attack1 — OS mouse is Hidden while the menu is open.</summary>
+	public bool TrySelectNodeAtScreen( Vector2 screenPos )
+	{
+		if ( !_menuOpen || !_panelVisible )
+			return false;
+
+		foreach ( var pair in _nodes )
+		{
+			var node = pair.Value;
+			if ( node is null || !node.IsValid() )
+				continue;
+
+			if ( !InventoryScreenPointer.PanelBoxContainsScreen( node, screenPos ) )
+				continue;
+
+			SelectSkill( pair.Key );
+			return true;
+		}
+
+		return false;
 	}
 
 	public void Refresh()

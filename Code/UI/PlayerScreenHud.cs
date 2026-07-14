@@ -454,6 +454,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_menuInputOverlay.BindCraftingRecipeSelect( _craftingSection.TrySelectRecipeAtScreen );
 		_menuInputOverlay.BindCraftingCraftPointer( _craftingSection.TryCraftPointerAtScreen );
 		_menuInputOverlay.BindTabSelect( _pageNavigator.TrySelectTabAtScreen );
+		_menuInputOverlay.BindPageContentSelect( TryMenuPageContentAtScreen );
 		_menuController.MenuMouseWheelSink = OnMenuMouseWheel;
 
 		_questsSection = new QuestMenuSection();
@@ -731,6 +732,25 @@ public sealed class PlayerScreenHud : PanelComponent
 			return;
 
 		_craftingSection.ApplyRecipeListWheel( wheel );
+	}
+
+	/// <summary>Soft-cursor Attack1 for skills / quests / settings (crafting has its own binds).</summary>
+	bool TryMenuPageContentAtScreen( Vector2 screenPos )
+	{
+		if ( _menuController is null )
+			return false;
+
+		var page = _menuController.ActivePageId;
+		if ( string.Equals( page, MenuPageIds.Skills, StringComparison.OrdinalIgnoreCase ) )
+			return _skillsSection?.TrySelectNodeAtScreen( screenPos ) ?? false;
+
+		if ( string.Equals( page, MenuPageIds.Quests, StringComparison.OrdinalIgnoreCase ) )
+			return _questsSection?.TrySelectQuestAtScreen( screenPos ) ?? false;
+
+		if ( string.Equals( page, MenuPageIds.Settings, StringComparison.OrdinalIgnoreCase ) )
+			return _settingsSection?.TryInvokeAtScreen( screenPos ) ?? false;
+
+		return false;
 	}
 
 	void OnMenuGlobalMouseUp()
