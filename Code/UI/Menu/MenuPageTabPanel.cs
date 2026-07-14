@@ -14,12 +14,6 @@ public sealed class MenuPageTabPanel : Panel
 		MenuController = menuController;
 	}
 
-	protected override void OnMouseDown( MousePanelEvent e )
-	{
-		base.OnMouseDown( e );
-		if ( e.Button != "mouseleft" || MenuController is null )
-			return;
-
-		MenuController.SetActivePage( PageId );
-	}
+	/// <summary>OS mouse is Hidden while the menu uses the soft cursor — Attack1 hit-tests select pages.</summary>
+	public override bool WantsMouseInput() => false;
 }

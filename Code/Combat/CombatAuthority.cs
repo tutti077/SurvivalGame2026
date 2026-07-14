@@ -41,8 +41,14 @@ public sealed class CombatAuthority : Component
 
 	protected override void OnUpdate()
 	{
+		var scene = Scene.IsValid() ? Scene : Sandbox.Game.ActiveScene;
+
 		// Proxy PlayerCombat often skips OnUpdate — tick swing overlays / block viz for every peer from here.
-		PlayerCombat.TickSceneCombatVisualizations( Scene.IsValid() ? Scene : Sandbox.Game.ActiveScene );
+		// driveHostProxyAuthority: also advance host sweeps on remote-owned pawns.
+		PlayerCombat.TickSceneCombatVisualizations( scene, driveHostProxyAuthority: true );
+
+		// After Rpc.Host stacks unwind — push path overlays with a static Broadcast (reaches clients for host swings).
+		PlayerCombat.FlushDeferredSwingVisualBroadcasts( scene );
 	}
 
 	/// <summary>Host-only: validate intent against <paramref name="attacker"/> root and apply damage. Caller must be the attacker owner when networked.</summary>

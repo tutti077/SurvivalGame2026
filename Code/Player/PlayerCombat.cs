@@ -460,12 +460,16 @@ public partial class PlayerCombat : Component
 	{
 		if ( GameObject.IsValid() )
 		{
-			MaybeTickServerMeleeAttackAction();
+			// Proxy pawns on the listen server are driven by CombatAuthority.TickSceneCombatVisualizations
+			// (avoids double-ticking when both run). Local / offline pawns tick here.
+			if ( !GameObject.IsProxy || !Networking.IsActive )
+				MaybeTickServerMeleeAttackAction();
+
 			if ( IsLocalCombatDriver() )
-		{
-			TickAllRemoteCombatVisualizationsInScene();
-			TickWindupTelegraphNetworkState();
-		}
+			{
+				TickAllRemoteCombatVisualizationsInScene();
+				TickWindupTelegraphNetworkState();
+			}
 		}
 
 		if ( !Active || !GameObject.IsValid() )
@@ -1362,18 +1366,15 @@ public partial class PlayerCombat : Component
 		RpcSubmitPrimaryAttackRelease( intent );
 	}
 
-	[Rpc.Broadcast( NetFlags.HostOnly )]
+	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable | NetFlags.SendImmediate )]
 	public void RpcBroadcastMeleeSwingTraceDebug( AttackReleaseIntent intent )
 	{
+		// Prefer <see cref="RpcStaticBroadcastMeleeSwingTraceDebug"/> (deferred/static). Kept for local backup.
 		if ( !MeleeDebugDrawEnabled || !ClientMeleeSwingTraceDebug )
 			return;
 
-		// Host already draws via the authoritative server runtime when one is running on this machine.
-		if ( Networking.IsHost && ServerHasActiveMeleeAttackAction )
-			return;
-
-		_hasPendingSwingVisualIntent = false;
 		StartClientMeleeSwingTracePlayback( intent );
+		_hasPendingSwingVisualIntent = false;
 	}
 
 	[Rpc.Host]
@@ -1432,7 +1433,6 @@ public partial class PlayerCombat : Component
 		// Backup: if HostOnly broadcast was missed, still show the local slash path on the attacking client.
 		if ( result.Accepted
 		     && _hasPendingSwingVisualIntent
-		     && !Networking.IsHost
 		     && MeleeDebugDrawEnabled
 		     && ClientMeleeSwingTraceDebug )
 		{

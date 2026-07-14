@@ -176,8 +176,62 @@ public partial class PlayerCombat
 
 		_serverMeleeAttack = new ServerMeleeAttackRuntime( this, intent, holdSeconds, isHeavy, swingLogNote );
 
+		// Don't Broadcast inside Rpc.Host handling of the attacker pawn — nested HostOnly broadcasts on a
+		// host-owned object often never reach joining clients (host still runs it locally → host sees clients).
 		if ( GameObject.Network is { Active: true } && Networking.IsHost && ClientMeleeSwingTraceDebug )
-			RpcBroadcastMeleeSwingTraceDebug( intent );
+		{
+			_deferredSwingVisualIntent = intent;
+			_deferSwingVisualBroadcast = true;
+		}
+	}
+
+	AttackReleaseIntent _deferredSwingVisualIntent;
+	bool _deferSwingVisualBroadcast;
+
+	/// <summary>
+	/// Host: flush deferred path-overlay broadcasts after the Rpc.Host call stack unwinds.
+	/// Uses a static Broadcast so delivery isn't tied to the attacker object's ownership.
+	/// </summary>
+	public static void FlushDeferredSwingVisualBroadcasts( Scene scene )
+	{
+		if ( !Networking.IsHost || scene is null || !scene.IsValid() )
+			return;
+
+		foreach ( var pc in scene.GetAllComponents<PlayerCombat>() )
+		{
+			if ( pc is null || !pc.GameObject.IsValid() || !pc._deferSwingVisualBroadcast )
+				continue;
+
+			pc._deferSwingVisualBroadcast = false;
+			if ( !pc.ClientMeleeSwingTraceDebug || !pc.MeleeDebugDrawEnabled )
+				continue;
+
+			RpcStaticBroadcastMeleeSwingTraceDebug( pc.GameObject.Id, pc._deferredSwingVisualIntent );
+		}
+	}
+
+	/// <summary>Host→all peers: start local DebugOverlay replay for the named attacker.</summary>
+	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable | NetFlags.SendImmediate )]
+	public static void RpcStaticBroadcastMeleeSwingTraceDebug( Guid attackerRootId, AttackReleaseIntent intent )
+	{
+		var scene = Sandbox.Game.ActiveScene;
+		if ( scene is null || !scene.IsValid() )
+			return;
+
+		foreach ( var pc in scene.GetAllComponents<PlayerCombat>() )
+		{
+			if ( pc is null || !pc.GameObject.IsValid() )
+				continue;
+			if ( pc.GameObject.Id != attackerRootId )
+				continue;
+
+			if ( !pc.MeleeDebugDrawEnabled || !pc.ClientMeleeSwingTraceDebug )
+				return;
+
+			pc.StartClientMeleeSwingTracePlayback( intent );
+			pc._hasPendingSwingVisualIntent = false;
+			return;
+		}
 	}
 
 	public void ServerCancelMeleeAttack()
@@ -225,7 +279,9 @@ public partial class PlayerCombat
 
 	void StartClientMeleeSwingTracePlayback( in AttackReleaseIntent intent )
 	{
-		if ( _clientSwingTracePlayback is not null || _serverMeleeAttack is not null )
+		// Allow a visual companion alongside host authority — DebugOverlay is local-only, so the
+		// host also needs this playback to see remote (and own) attack lines when testing MP.
+		if ( _clientSwingTracePlayback is not null )
 			return;
 
 		var hold = Math.Max( 0f, (float)( intent.ReleasedGlobalSeconds - intent.PressedGlobalSeconds ) );
@@ -246,8 +302,9 @@ public partial class PlayerCombat
 	/// <summary>
 	/// Advances client-only swing path overlays (and remote block/windup draws) for every pawn.
 	/// Called from <see cref="CombatAuthority"/> so proxy pawns still animate when their OnUpdate is skipped.
+	/// Host also ticks authoritative melee on remote-owned (proxy) pawns when <paramref name="driveHostProxyAuthority"/> is true.
 	/// </summary>
-	public static void TickSceneCombatVisualizations( Scene scene )
+	public static void TickSceneCombatVisualizations( Scene scene, bool driveHostProxyAuthority = false )
 	{
 		if ( scene is null || !scene.IsValid() )
 			return;
@@ -257,9 +314,17 @@ public partial class PlayerCombat
 			if ( pc is null || !pc.GameObject.IsValid() )
 				continue;
 
-			// Owned pawns already tick their own playback in MaybeTickServerMeleeAttackAction — avoid double-speed.
-			if ( !pc.IsLocalCombatDriver() )
+			var isHostProxy = Networking.IsHost && pc.GameObject.IsProxy;
+
+			// Listen-server: proxy pawns may skip OnUpdate — CombatAuthority drives sweep + draw companion once.
+			if ( driveHostProxyAuthority && isHostProxy )
+			{
+				pc.MaybeTickServerMeleeAttackAction();
+			}
+			else if ( !pc.IsLocalCombatDriver() && !isHostProxy )
+			{
 				pc.TickClientSwingTracePlaybackOnly( scene );
+			}
 
 			if ( pc.IsLocalCombatDriver() )
 				continue;
@@ -281,7 +346,8 @@ public partial class PlayerCombat
 		float activeProgress01,
 		byte attackState,
 		float currentBasisYaw,
-		ref MeleeAttackDebugDrawScratch scratch )
+		ref MeleeAttackDebugDrawScratch scratch,
+		bool allowDebugOverlay = true )
 	{
 		if ( !GameObject.IsValid() )
 			return;
@@ -296,7 +362,7 @@ public partial class PlayerCombat
 		if ( attackState == MeleeAttackStates.Recovery )
 			return;
 
-		var drawOverlay = MeleeDebugDrawEnabled;
+		var drawOverlay = allowDebugOverlay && MeleeDebugDrawEnabled;
 		var overlayDuration = GetMeleeDebugOverlayDrawDuration();
 		var degreeStep = GetMeleeAttackArcDegreeStep();
 
@@ -794,10 +860,16 @@ public partial class PlayerCombat
 			var activeEnd = windEnd + _active;
 			var totalEnd = activeEnd + _recovery;
 
+			// When clients replicate path overlay is on, only the visual-only runtime draws DebugOverlay
+			// (avoids double lines on the listen-server host that also has the authoritative sweep).
+			var allowOverlay = _visualOnly
+			                   || !_pc.ClientMeleeSwingTraceDebug
+			                   || _pc.GameObject.Network is not { Active: true };
+
 			if ( elapsed < windEnd )
 			{
 				_pc.AdvanceAttackPath( _attackType, 0f, MeleeAttackStates.Windup,
-					_pc.GetMeleeCombatBasisYaw( _attackType ), ref _debugDrawScratch );
+					_pc.GetMeleeCombatBasisYaw( _attackType ), ref _debugDrawScratch, allowOverlay );
 				return true;
 			}
 
@@ -822,7 +894,7 @@ public partial class PlayerCombat
 			if ( MeleeAttackStates.DealsDamage( segState ) )
 			{
 				_pc.AdvanceAttackPath( _attackType, activeT01, segState, _pc.GetMeleeCombatBasisYaw( _attackType ),
-					ref _debugDrawScratch );
+					ref _debugDrawScratch, allowOverlay );
 			}
 
 			if ( !_havePrevSample )

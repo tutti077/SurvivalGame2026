@@ -115,15 +115,11 @@ public sealed class InventoryMenuInputOverlay : Panel
 
 		_softCursorPos += ReadSoftCursorDelta();
 
-		if ( _menuController is not null && _menuController.GameObject.IsValid() )
-			_softCursorPos = InventoryScreenPointer.ClampToView( _softCursorPos, _menuController.GameObject );
-		else
-		{
-			var size = Screen.Size;
-			_softCursorPos = new Vector2(
-				_softCursorPos.x.Clamp( 0f, Math.Max( 0f, size.x - 1f ) ),
-				_softCursorPos.y.Clamp( 0f, Math.Max( 0f, size.y - 1f ) ) );
-		}
+		// Full screen — camera ScreenRect clamping kept the soft cursor out of the top tab strip.
+		var size = Screen.Size;
+		_softCursorPos = new Vector2(
+			_softCursorPos.x.Clamp( 0f, Math.Max( 0f, size.x - 1f ) ),
+			_softCursorPos.y.Clamp( 0f, Math.Max( 0f, size.y - 1f ) ) );
 
 		// Authoritative hit-test position for slots / scrollbar / tabs / drag ghost.
 		Mouse.Position = _softCursorPos;
