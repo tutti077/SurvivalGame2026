@@ -4,7 +4,9 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Host-only: spread NetworkHelper spawns that share one SpawnPoint, and cull unowned duplicate pawns.
+/// Spread NetworkHelper spawns that share one SpawnPoint, and cull duplicate / ghost pawns.
+/// Host culls networked-unowned pawns; every peer also destroys orphan citizen Body meshes
+/// that are not under a PlayerController (Object-mode child desync leftover).
 /// </summary>
 [Title( "Player Spawn Separation" )]
 public sealed class PlayerSpawnSeparation : Component
@@ -13,15 +15,19 @@ public sealed class PlayerSpawnSeparation : Component
 	[Property] public float UnownedDestroyDelaySeconds { get; set; } = 2.5f;
 
 	TimeUntil _unownedCheck;
+	bool _didSeparate;
 
 	protected override void OnStart()
 	{
 		base.OnStart();
 
-		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
-			return;
+		// Offset only on the host spawn path (or offline). Proxies receive the host transform.
+		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
+		{
+			SeparateByConnectionIndex();
+			_didSeparate = true;
+		}
 
-		SeparateByConnectionIndex();
 		_unownedCheck = UnownedDestroyDelaySeconds;
 	}
 
@@ -29,14 +35,20 @@ public sealed class PlayerSpawnSeparation : Component
 	{
 		base.OnUpdate();
 
-		if ( !Networking.IsHost )
-			return;
+		if ( !_didSeparate
+		     && GameObject.Network is { Active: true }
+		     && Networking.IsHost )
+		{
+			SeparateByConnectionIndex();
+			_didSeparate = true;
+		}
 
 		if ( _unownedCheck > 0f )
 			return;
 
 		_unownedCheck = UnownedDestroyDelaySeconds;
-		DestroyUnownedDuplicatePawns();
+		DestroyDuplicatePawns();
+		DestroyOrphanCitizenBodies();
 	}
 
 	void SeparateByConnectionIndex()
@@ -73,8 +85,11 @@ public sealed class PlayerSpawnSeparation : Component
 		return 0;
 	}
 
-	void DestroyUnownedDuplicatePawns()
+	void DestroyDuplicatePawns()
 	{
+		if ( !Networking.IsActive )
+			return;
+
 		var scene = Scene.IsValid() ? Scene : Sandbox.Game.ActiveScene;
 		if ( !scene.IsValid() )
 			return;
@@ -88,18 +103,84 @@ public sealed class PlayerSpawnSeparation : Component
 			if ( go == GameObject )
 				continue;
 
-			// Only networked player roots — never touch scene props / NetworkManager.
+			// Only player roots — never scene props / NetworkManager / dummies without a controller.
 			if ( go.Components.Get<PlayerController>() is null )
 				continue;
 
-			if ( go.Network is not { Active: true } )
+			var net = go.Network;
+
+			// Local leftover: cloned without NetworkSpawn. Only that peer sees it; stays undressed.
+			if ( net is not { Active: true } )
+			{
+				Log.Warning( $"[PlayerSpawnSeparation] Destroying non-networked ghost pawn '{go.Name}'." );
+				go.Destroy();
+				continue;
+			}
+
+			// Networked but never owned — host authority only.
+			if ( Networking.IsHost && net.Owner is null )
+			{
+				Log.Warning( $"[PlayerSpawnSeparation] Destroying unowned duplicate pawn '{go.Name}'." );
+				go.Destroy();
+			}
+		}
+	}
+
+	/// <summary>
+	/// Object-mode Body children under Object roots can deserialize as stray citizen meshes on
+	/// the joining client (no PlayerController ancestor). Destroy those only — never walk to scene root.
+	/// Skips enemy/scav citizen bodies (EntityBrain).
+	/// </summary>
+	void DestroyOrphanCitizenBodies()
+	{
+		if ( !Networking.IsActive )
+			return;
+
+		var scene = Scene.IsValid() ? Scene : Sandbox.Game.ActiveScene;
+		if ( !scene.IsValid() )
+			return;
+
+		foreach ( var renderer in scene.GetAllComponents<SkinnedModelRenderer>() )
+		{
+			if ( renderer is null || !renderer.IsValid() || !renderer.GameObject.IsValid() )
 				continue;
 
-			if ( go.Network.Owner is not null )
+			var model = renderer.Model;
+			if ( model is null || !model.IsValid )
 				continue;
 
-			Log.Warning( $"[PlayerSpawnSeparation] Destroying unowned duplicate pawn '{go.Name}'." );
+			var path = model.ResourcePath ?? model.Name ?? string.Empty;
+			if ( !path.Contains( "citizen/citizen", StringComparison.OrdinalIgnoreCase ) )
+				continue;
+
+			var go = renderer.GameObject;
+			if ( !IsPlayerBodyOrphan( go ) )
+				continue;
+
+			Log.Warning( $"[PlayerSpawnSeparation] Destroying orphan citizen body '{go.Name}'." );
 			go.Destroy();
 		}
+	}
+
+	static bool IsPlayerBodyOrphan( GameObject go )
+	{
+		// Must look like the player Body child (name), not a random prop.
+		if ( !string.Equals( go.Name, "Body", StringComparison.OrdinalIgnoreCase ) )
+			return false;
+
+		for ( var walk = go; walk is not null && walk.IsValid(); walk = walk.Parent )
+		{
+			if ( walk.Components.Get<PlayerController>() is not null )
+				return false;
+
+			if ( walk.Components.Get<EntityBrain>() is not null )
+				return false;
+
+			if ( walk.Components.Get<PlayerVitals>() is not null )
+				return false;
+		}
+
+		// Detached Body at/near scene root — not under any pawn or enemy.
+		return true;
 	}
 }

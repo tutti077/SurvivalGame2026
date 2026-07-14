@@ -169,32 +169,6 @@
         "Speed": 1
       },
       {
-        "__type": "Sandbox.Dresser",
-        "__guid": "0a11b2aa-5b15-493c-81ee-367859dc63ff",
-        "__enabled": true,
-        "Flags": 0,
-        "ApplyHeightScale": true,
-        "BodyTarget": {
-          "_type": "component",
-          "component_id": "48bb4076-d3c6-455e-99c1-98e9ff82c2c4",
-          "go": "86859f44-e8df-4009-90a2-8ca9b4dc36cc",
-          "component_type": "SkinnedModelRenderer"
-        },
-        "Clothing": [],
-        "ManualAge": 0.5,
-        "ManualHeight": 0.5,
-        "ManualTint": 0.5,
-        "OnComponentDestroy": null,
-        "OnComponentDisabled": null,
-        "OnComponentEnabled": null,
-        "OnComponentFixedUpdate": null,
-        "OnComponentStart": null,
-        "OnComponentUpdate": null,
-        "RemoveUnownedItems": true,
-        "Source": "OwnerConnection",
-        "WorkshopItems": []
-      },
-      {
         "__type": "Sandbox.ScreenPanel",
         "__guid": "563539eb-c977-45a3-92f0-e25aa1211547",
         "__enabled": true,
@@ -603,7 +577,7 @@
         "Scale": "1,1,1",
         "Tags": "",
         "Enabled": true,
-        "NetworkMode": 1,
+        "NetworkMode": 2,
         "NetworkFlags": 0,
         "NetworkOrphaned": 0,
         "NetworkTransmit": true,
@@ -655,77 +629,7 @@
             "UseAnimGraph": true
           }
         ],
-        "Children": [
-          {
-            "__guid": "8f2abedf-c831-8342-8fbb-8c579a16b8b4",
-            "__version": 2,
-            "Flags": 0,
-            "Name": "Clothing - y_front_pants_white",
-            "Position": "0,0,0",
-            "Rotation": "0,0,0,1",
-            "Scale": "1,1,1",
-            "Tags": "clothing",
-            "Enabled": true,
-            "NetworkMode": 1,
-            "NetworkFlags": 0,
-            "NetworkOrphaned": 0,
-            "NetworkTransmit": true,
-            "OwnerTransfer": 1,
-            "Components": [
-              {
-                "__type": "Sandbox.SkinnedModelRenderer",
-                "__guid": "713990ce-9e41-8c95-beaa-1d4cd5fc379b",
-                "__enabled": true,
-                "Flags": 0,
-                "AnimationGraph": null,
-                "BodyGroups": 18446744073709551615,
-                "BoneMergeTarget": {
-                  "_type": "component",
-                  "component_id": "48bb4076-d3c6-455e-99c1-98e9ff82c2c4",
-                  "go": "86859f44-e8df-4009-90a2-8ca9b4dc36cc",
-                  "component_type": "SkinnedModelRenderer"
-                },
-                "CreateAttachments": false,
-                "CreateBoneObjects": false,
-                "LodOverride": null,
-                "MaterialGroup": null,
-                "MaterialOverride": null,
-                "Materials": null,
-                "Model": "models/citizen_clothes/underwear/y_front_pants/models/y_front_pants_m_human.vmdl",
-                "Morphs": {},
-                "OnComponentDestroy": null,
-                "OnComponentDisabled": null,
-                "OnComponentEnabled": null,
-                "OnComponentFixedUpdate": null,
-                "OnComponentStart": null,
-                "OnComponentUpdate": null,
-                "Parameters": {
-                  "bools": {},
-                  "ints": {},
-                  "floats": {},
-                  "vectors": {},
-                  "rotations": {}
-                },
-                "PlaybackRate": 1,
-                "RenderOptions": {
-                  "GameLayer": true,
-                  "OverlayLayer": false,
-                  "BloomLayer": false,
-                  "AfterUILayer": false
-                },
-                "RenderType": "On",
-                "Sequence": {
-                  "Name": null,
-                  "Looping": true,
-                  "Blending": false
-                },
-                "Tint": "1,1,1,1",
-                "UseAnimGraph": true
-              }
-            ],
-            "Children": []
-          }
-        ]
+        "Children": []
       },
       {
         "__guid": "22adeaa4-3eff-455e-b0ad-8186e47120c5",
@@ -737,7 +641,7 @@
         "Scale": "1,1,1",
         "Tags": "",
         "Enabled": true,
-        "NetworkMode": 1,
+        "NetworkMode": 2,
         "NetworkFlags": 0,
         "NetworkOrphaned": 0,
         "NetworkTransmit": true,
