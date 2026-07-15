@@ -30,6 +30,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	PlayerHotbar _hotbar;
 	PlayerInventoryInteraction _inventoryInteraction;
 	HotbarHud _hotbarHud;
+	TerrainMinimapHud _minimapHud;
 	PlayerCrafting _crafting;
 	InventoryMenuInputOverlay _menuInputOverlay;
 	MenuPageNavigator _pageNavigator;
@@ -105,6 +106,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		}
 
 		_pickupNotifications?.Tick();
+		_minimapHud?.Tick();
 
 		if ( !_deferScreenPanelCamera || _hudScreen is null || !_hudScreen.IsValid() )
 			return;
@@ -179,6 +181,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		BuildVitals( Panel );
 		BuildHarvestPrompt( Panel );
 		BuildPickupNotifications( Panel );
+		BuildMinimap( Panel );
 		BuildGameMenu( Panel );
 		BuildHotbar( Panel );
 		BuildBuildMenu( Panel );
@@ -343,6 +346,13 @@ public sealed class PlayerScreenHud : PanelComponent
 	}
 
 	void OnResourcePickedUp( ResourcePickupNotice notice ) => _pickupNotifications?.Enqueue( notice );
+
+	void BuildMinimap( Panel root )
+	{
+		_minimapHud = new TerrainMinimapHud();
+		_minimapHud.Build( root );
+		UpdateMinimapVisibility();
+	}
 
 	void BuildHotbar( Panel root )
 	{
@@ -632,6 +642,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			section.SetMenuOpen( isOpen );
 
 		UpdateHotbarVisibility();
+		UpdateMinimapVisibility();
 
 		if ( isOpen )
 		{
@@ -699,6 +710,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_pageNavigator?.RefreshHighlight();
 		UpdateHotbarVisibility();
+		UpdateMinimapVisibility();
 	}
 
 	void UpdateHotbarVisibility()
@@ -715,6 +727,22 @@ public sealed class PlayerScreenHud : PanelComponent
 		var panels = _menuController.VisiblePanels;
 		var hideForFullscreen = (panels & MenuPanelFlags.Map) != 0 || (panels & MenuPanelFlags.Settings) != 0;
 		_hotbarHud.SetVisible( !hideForFullscreen );
+	}
+
+	void UpdateMinimapVisibility()
+	{
+		if ( _minimapHud is null )
+			return;
+
+		if ( _menuController is null || !_menuController.IsMenuOpen )
+		{
+			_minimapHud.SetVisible( true );
+			return;
+		}
+
+		var panels = _menuController.VisiblePanels;
+		var hideForFullscreen = (panels & MenuPanelFlags.Map) != 0 || (panels & MenuPanelFlags.Settings) != 0;
+		_minimapHud.SetVisible( !hideForFullscreen );
 	}
 
 	void RefreshAllSections()

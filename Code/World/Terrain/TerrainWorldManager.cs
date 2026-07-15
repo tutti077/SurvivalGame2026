@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 using Game;
 
@@ -89,6 +90,8 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Preview Map" ), ReadOnly] public int EffectiveBiomePreviewResolution { get; private set; }
 	[Property, Group( "Preview Map" ), ReadOnly] public float EffectiveMetersPerPixel { get; private set; }
 	[Property, Group( "Preview Map" ), ReadOnly, Title( "Biome Preview Map (display only)" )] public Texture BiomePreviewMap { get; private set; }
+	/// <summary>File-backed texture for HUD/UI. <see cref="BiomePreviewMap"/> from Bitmap.ToTexture is inspector-oriented.</summary>
+	public Texture HudBiomeMapTexture { get; private set; }
 	[Property, Group( "Preview Map" ), ReadOnly] public int BiomePreviewMapSeed { get; private set; } = int.MinValue;
 	[Property, Group( "Preview Map" ), ReadOnly] public bool IsBiomePreviewMapStale { get; private set; }
 	[Property, Group( "Preview Map" ), ReadOnly] public bool HasStreamPosition { get; private set; }
@@ -119,6 +122,9 @@ public sealed class TerrainWorldManager : Component
 	ITerrainPreviewBackend _backend;
 	TerrainWorldPreviewJob _previewJob;
 	TerrainWorldLoadScreenHost _loadScreen;
+	TerrainMinimapScreenHost _minimapScreen;
+	GameObject _minimapCameraObject;
+	int _hudBiomeMapSeed = int.MinValue;
 	TerrainPreviewSettings _loadSettings;
 	Vector3 _loadStreamPos;
 	Rotation _loadViewRotation;
@@ -176,6 +182,7 @@ public sealed class TerrainWorldManager : Component
 		{
 			ProcessWorldLoad();
 			UpdateStreamInspectorState();
+			EnsureMinimapScreen();
 			return;
 		}
 
@@ -183,6 +190,7 @@ public sealed class TerrainWorldManager : Component
 		ProcessStreamChunkQueue();
 		UpdateBiomePreviewStaleState();
 		UpdateStreamInspectorState();
+		EnsureMinimapScreen();
 	}
 
 	void UpdateStreamInspectorState()
@@ -768,10 +776,11 @@ public sealed class TerrainWorldManager : Component
 		_biomeMapLoadSettled = true;
 		UpdateBiomePreviewStaleState();
 
-		if ( IsWorldAuthority() && bitmap is not null )
+		if ( bitmap is not null )
 		{
 			try
 			{
+				// Local write so HUD can LoadFromFileSystem (UI-friendly). Not only authority.
 				WorldSaveIO.WriteBiomeMapPng( WorldName, bitmap );
 			}
 			catch ( Exception e )
@@ -779,6 +788,8 @@ public sealed class TerrainWorldManager : Component
 				Log.Warning( $"[TerrainWorldManager] Failed to write biome map PNG: {e.Message}" );
 			}
 		}
+
+		RefreshHudBiomeMapTexture( forceReload: true );
 	}
 
 	void RefreshChunks( Vector3 streamPos, Rotation viewRotation )
@@ -1076,5 +1087,97 @@ public sealed class TerrainWorldManager : Component
 			_loadScreen = cam.Components.Create<TerrainWorldLoadScreenHost>();
 
 		return _loadScreen is not null && _loadScreen.IsValid();
+	}
+
+	/// <summary>Texture safe to bind on Panels / Image (PNG reload preferred).</summary>
+	public Texture GetHudBiomeMapTexture()
+	{
+		RefreshHudBiomeMapTexture( forceReload: false );
+		if ( HudBiomeMapTexture is not null && HudBiomeMapTexture.IsValid() )
+			return HudBiomeMapTexture;
+
+		return BiomePreviewMap is not null && BiomePreviewMap.IsValid() ? BiomePreviewMap : null;
+	}
+
+	void RefreshHudBiomeMapTexture( bool forceReload )
+	{
+		if ( !forceReload
+		     && HudBiomeMapTexture is not null
+		     && HudBiomeMapTexture.IsValid()
+		     && _hudBiomeMapSeed == WorldSeed )
+			return;
+
+		_hudBiomeMapSeed = WorldSeed;
+		HudBiomeMapTexture = null;
+
+		try
+		{
+			var path = WorldSaveIO.GetBiomeMapRelativePath( WorldName );
+			if ( FileSystem.Data.FileExists( path ) )
+			{
+				var loaded = Texture.LoadFromFileSystem( path, FileSystem.Data, warnOnMissing: false );
+				if ( loaded is not null && loaded.IsValid() )
+				{
+					HudBiomeMapTexture = loaded;
+					return;
+				}
+			}
+		}
+		catch ( Exception e )
+		{
+			Log.Warning( $"[TerrainWorldManager] HUD biome map load failed: {e.Message}" );
+		}
+
+		if ( BiomePreviewMap is not null && BiomePreviewMap.IsValid() )
+			HudBiomeMapTexture = BiomePreviewMap;
+	}
+
+	bool EnsureMinimapScreen()
+	{
+		// Player HUD owns the minimap when a local pawn ScreenPanel is present.
+		if ( HasLocalPlayerMinimapHost() )
+			return true;
+
+		var scene = GameObject.Scene;
+		if ( !scene.IsValid() )
+			return false;
+
+		var cam = ResolveStreamCamera();
+		if ( !cam.IsValid() )
+			return false;
+
+		if ( _minimapScreen is not null && _minimapScreen.IsValid()
+		     && _minimapCameraObject is not null && _minimapCameraObject.IsValid()
+		     && _minimapCameraObject == cam.GameObject )
+			return _minimapScreen.EnsureScreen();
+
+		if ( _minimapScreen is not null && _minimapScreen.IsValid() )
+			_minimapScreen.Destroy();
+
+		_minimapScreen = cam.Components.Get<TerrainMinimapScreenHost>();
+		if ( _minimapScreen is null || !_minimapScreen.IsValid() )
+			_minimapScreen = cam.Components.Create<TerrainMinimapScreenHost>();
+
+		_minimapCameraObject = cam.GameObject;
+		return _minimapScreen is not null && _minimapScreen.IsValid() && _minimapScreen.EnsureScreen();
+	}
+
+	bool HasLocalPlayerMinimapHost()
+	{
+		var scene = GameObject.Scene;
+		if ( !scene.IsValid() )
+			return false;
+
+		foreach ( var hud in scene.GetAllComponents<PlayerScreenHud>() )
+		{
+			if ( hud is null || !hud.IsValid() )
+				continue;
+
+			var vitals = hud.Components.Get<PlayerVitals>( FindMode.EverythingInSelfAndAncestors );
+			if ( vitals is not null && vitals.IsLocalInputOwnedPawn() )
+				return true;
+		}
+
+		return false;
 	}
 }

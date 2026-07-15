@@ -3,14 +3,13 @@ using Sandbox.UI;
 
 namespace Survival;
 
-/// <summary>Centered world map panel (placeholder image until exploration is implemented).</summary>
+/// <summary>Centered world map panel — TerrainWorld biome preview + stream marker.</summary>
 public sealed class MapMenuSection : IPlayerMenuSection
 {
 	public string SectionId => "map";
 
+	readonly TerrainWorldMapFace _face = new();
 	Panel _sectionRoot;
-	Panel _mapImage;
-	Label _placeholderLabel;
 	bool _menuOpen;
 	bool _panelVisible;
 
@@ -44,48 +43,12 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		title.Style.FontColor = Color.White;
 		title.Style.FontSize = Length.Pixels( CraftingMenuSection.CraftingTitleFontSize );
 
-		var hint = new Label { Parent = header, Text = "Exploration coming soon" };
+		var hint = new Label { Parent = header, Text = "World stream position" };
 		hint.Style.FontColor = new Color( 0.55f, 0.58f, 0.64f );
 		hint.Style.FontSize = Length.Pixels( 13f );
 
-		_mapImage = new Panel { Parent = _sectionRoot };
-		_mapImage.Style.Set( "position", "relative" );
-		_mapImage.Style.Set( "flex-grow", "1" );
-		_mapImage.Style.Width = Length.Percent( 100 );
-		_mapImage.Style.Set( "min-height", "280px" );
-		_mapImage.Style.Set( "overflow", "hidden" );
-		_mapImage.Style.Set( "border-radius", "6px" );
-		_mapImage.Style.Set( "border-width", "1px" );
-		_mapImage.Style.Set( "border-color", "#2e3540" );
-		_mapImage.Style.BackgroundColor = new Color( 0.12f, 0.22f, 0.32f, 1f );
-		_mapImage.Style.Set( "background-size", "cover" );
-		_mapImage.Style.Set( "background-repeat", "no-repeat" );
-		_mapImage.Style.Set( "background-position", "center" );
-
-		_placeholderLabel = new Label { Parent = _mapImage, Text = "World Map" };
-		_placeholderLabel.Style.Set( "position", "absolute" );
-		_placeholderLabel.Style.Set( "width", "100%" );
-		_placeholderLabel.Style.Set( "height", "100%" );
-		_placeholderLabel.Style.Set( "align-items", "center" );
-		_placeholderLabel.Style.Set( "justify-content", "center" );
-		_placeholderLabel.Style.FontColor = new Color( 0.75f, 0.78f, 0.82f, 0.35f );
-		_placeholderLabel.Style.FontSize = Length.Pixels( 28f );
-		_placeholderLabel.Style.Set( "pointer-events", "none" );
-
-		ApplyMapImage();
+		_face.Build( _sectionRoot, sizePixels: 0f, fillParent: true );
 		UpdateVisibility();
-	}
-
-	void ApplyMapImage()
-	{
-		if ( _mapImage is null )
-			return;
-
-		_mapImage.Style.BackgroundImage = null;
-		_mapImage.Style.Set( "background-image", "none" );
-
-		if ( _placeholderLabel is not null )
-			_placeholderLabel.Style.Set( "display", "flex" );
 	}
 
 	public void Refresh() { }
@@ -93,9 +56,6 @@ public sealed class MapMenuSection : IPlayerMenuSection
 	public void SetMenuOpen( bool isOpen )
 	{
 		_menuOpen = isOpen;
-		if ( isOpen )
-			ApplyMapImage();
-
 		UpdateVisibility();
 	}
 
@@ -105,7 +65,13 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		UpdateVisibility();
 	}
 
-	public void TickMenu( bool menuOpen ) { }
+	public void TickMenu( bool menuOpen )
+	{
+		if ( !menuOpen || !_panelVisible )
+			return;
+
+		_face.Tick();
+	}
 
 	public void OnMenuGlobalMouseUp() { }
 
