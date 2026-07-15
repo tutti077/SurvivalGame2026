@@ -13,6 +13,7 @@ public sealed class TerrainWorldMapFace
 	public const float DefaultMinimapSize = 180f;
 
 	Panel _host;
+	Panel _zoomStage;
 	Image _mapImage;
 	Panel _mapFallback;
 	Label _placeholder;
@@ -21,6 +22,8 @@ public sealed class TerrainWorldMapFace
 	Panel _heading;
 	TerrainWorldManager _manager;
 	Texture _boundTexture;
+	float _appliedZoom = -1f;
+	Vector2 _lastFocusUv = new( -1f, -1f );
 
 	public Panel Host => _host;
 
@@ -49,18 +52,25 @@ public sealed class TerrainWorldMapFace
 		_host.Style.Set( "border-color", "#3a4250" );
 		_host.Style.BackgroundColor = new Color( 0.06f, 0.08f, 0.10f, 0.92f );
 
-		_mapFallback = new Panel { Parent = _host };
+		_zoomStage = new Panel { Parent = _host };
+		_zoomStage.Style.Set( "position", "absolute" );
+		_zoomStage.Style.Set( "left", "0" );
+		_zoomStage.Style.Set( "top", "0" );
+		_zoomStage.Style.Set( "overflow", "visible" );
+		_zoomStage.Style.Set( "pointer-events", "none" );
+
+		_mapFallback = new Panel { Parent = _zoomStage };
 		FillAbsolute( _mapFallback );
-		_mapFallback.Style.Set( "background-size", "contain" );
+		_mapFallback.Style.Set( "background-size", "100% 100%" );
 		_mapFallback.Style.Set( "background-repeat", "no-repeat" );
 		_mapFallback.Style.Set( "background-position", "center" );
 
-		_mapImage = new Image { Parent = _host };
+		_mapImage = new Image { Parent = _zoomStage };
 		FillAbsolute( _mapImage );
-		_mapImage.Style.Set( "background-size", "contain" );
+		_mapImage.Style.Set( "background-size", "100% 100%" );
 		_mapImage.Style.Set( "background-repeat", "no-repeat" );
 		_mapImage.Style.Set( "background-position", "center" );
-		_mapImage.Style.Set( "object-fit", "contain" );
+		_mapImage.Style.Set( "object-fit", "fill" );
 
 		_placeholder = new Label { Parent = _host, Text = "Generating map…" };
 		FillAbsolute( _placeholder );
@@ -73,7 +83,7 @@ public sealed class TerrainWorldMapFace
 
 		_markerCrossH = CreateMarkerBar( horizontal: true );
 		_markerCrossV = CreateMarkerBar( horizontal: false );
-		_heading = new Panel { Parent = _host };
+		_heading = new Panel { Parent = _zoomStage };
 		_heading.Style.Set( "position", "absolute" );
 		_heading.Style.Width = Length.Pixels( 2f );
 		_heading.Style.Height = Length.Pixels( 16f );
@@ -82,6 +92,8 @@ public sealed class TerrainWorldMapFace
 		_heading.Style.Set( "pointer-events", "none" );
 		_heading.Style.Set( "display", "none" );
 		_heading.Style.Set( "z-index", "4" );
+
+		ApplyZoomLayout( focusUv: new Vector2( 0.5f, 0.5f ), force: true );
 	}
 
 	static void FillAbsolute( Panel panel )
@@ -95,7 +107,7 @@ public sealed class TerrainWorldMapFace
 
 	Panel CreateMarkerBar( bool horizontal )
 	{
-		var bar = new Panel { Parent = _host };
+		var bar = new Panel { Parent = _zoomStage };
 		bar.Style.Set( "position", "absolute" );
 		if ( horizontal )
 		{
@@ -122,7 +134,7 @@ public sealed class TerrainWorldMapFace
 
 		EnsureManager();
 		BindMapTexture();
-		UpdateMarker();
+		UpdateMarkerAndZoom();
 	}
 
 	void EnsureManager()
@@ -166,7 +178,7 @@ public sealed class TerrainWorldMapFace
 			if ( _mapFallback is not null )
 			{
 				_mapFallback.Style.SetBackgroundImage( map );
-				_mapFallback.Style.Set( "background-size", "contain" );
+				_mapFallback.Style.Set( "background-size", "100% 100%" );
 				_mapFallback.Style.Set( "background-repeat", "no-repeat" );
 				_mapFallback.Style.Set( "background-position", "center" );
 			}
@@ -200,37 +212,42 @@ public sealed class TerrainWorldMapFace
 		}
 	}
 
-	void UpdateMarker()
+	void UpdateMarkerAndZoom()
 	{
-		if ( _manager is null || !_manager.IsValid()
-		     || !_manager.HasStreamPosition
-		     || _boundTexture is null )
+		var focusUv = new Vector2( 0.5f, 0.5f );
+		var hasStream = false;
+
+		if ( _manager is not null && _manager.IsValid() && _manager.HasStreamPosition )
+		{
+			var settings = _manager.BuildGenerationSettings();
+			if ( settings is not null )
+			{
+				focusUv = TerrainBiomeMapCoordinates.WorldMetersToPreviewNormalized(
+					_manager.StreamXMeters,
+					_manager.StreamYMeters,
+					settings );
+				hasStream = true;
+			}
+		}
+
+		ApplyZoomLayout( focusUv, force: false );
+
+		if ( !hasStream || _boundTexture is null )
 		{
 			SetMarkerVisible( false );
 			return;
 		}
 
-		var settings = _manager.BuildGenerationSettings();
-		if ( settings is null )
-		{
-			SetMarkerVisible( false );
-			return;
-		}
-
-		var uv = TerrainBiomeMapCoordinates.WorldMetersToPreviewNormalized(
-			_manager.StreamXMeters,
-			_manager.StreamYMeters,
-			settings );
-
-		PlaceCenter( _markerCrossH, uv, -6f, -1f );
-		PlaceCenter( _markerCrossV, uv, -1f, -6f );
+		// Markers live on the zoom stage in full-map UV space (0–100%).
+		PlaceCenter( _markerCrossH, focusUv, -6f, -1f );
+		PlaceCenter( _markerCrossV, focusUv, -1f, -6f );
 
 		var dir = _manager.StreamLookDirectionMap;
 		if ( dir.LengthSquared > 1e-8f )
 		{
 			dir = dir.Normal;
 			var deg = MathF.Atan2( dir.x, -dir.y ) * (180f / MathF.PI);
-			PlaceCenter( _heading, uv, -1f, -16f );
+			PlaceCenter( _heading, focusUv, -1f, -16f );
 			_heading.Style.Set( "transform", $"rotate({deg:0.##}deg)" );
 			_heading.Style.Set( "display", "flex" );
 		}
@@ -240,6 +257,31 @@ public sealed class TerrainWorldMapFace
 		}
 
 		SetMarkerVisible( true );
+	}
+
+	void ApplyZoomLayout( Vector2 focusUv, bool force )
+	{
+		if ( _zoomStage is null || !_zoomStage.IsValid() )
+			return;
+
+		var zoom = TerrainMinimapZoom.Level;
+		if ( !force
+		     && Math.Abs( zoom - _appliedZoom ) < 0.001f
+		     && (focusUv - _lastFocusUv).LengthSquared < 1e-8f )
+			return;
+
+		_appliedZoom = zoom;
+		_lastFocusUv = focusUv;
+
+		var view = 1f / zoom;
+		var leftUv = Math.Clamp( focusUv.x - view * 0.5f, 0f, 1f - view );
+		var topUv = Math.Clamp( focusUv.y - view * 0.5f, 0f, 1f - view );
+
+		var sizePct = zoom * 100f;
+		_zoomStage.Style.Width = Length.Percent( sizePct );
+		_zoomStage.Style.Height = Length.Percent( sizePct );
+		_zoomStage.Style.Left = Length.Percent( -leftUv * sizePct );
+		_zoomStage.Style.Top = Length.Percent( -topUv * sizePct );
 	}
 
 	static void PlaceCenter( Panel panel, Vector2 uv01, float offsetXPx, float offsetYPx )
