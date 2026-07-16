@@ -53,11 +53,44 @@ public static class TerrainPreviewBiomeColors
 			return PaletteColor( TerrainPreviewBiomeId.AzureCoast, 1f );
 
 		var dominant = ColorizeOverlay( settings, resolved.BiomeId, resolved.Shade01, sample.Height01 );
+		if ( resolved.BiomeId == TerrainPreviewBiomeId.CloverHills )
+			dominant = ApplyCloverGrassTint( settings, sample, worldXMeters, worldYMeters, dominant );
 
 		if ( !settings.UseContinuousBiomePlacementAtSample )
 			return dominant;
 
 		return SoftenBiomeEdgeColor( settings, sample, worldXMeters, worldYMeters, dominant );
+	}
+
+	/// <summary>Readable grass mottling on Clover (preview stamp + chunk vertex colors).</summary>
+	public static Color ApplyCloverGrassTint(
+		TerrainPreviewSettings settings,
+		TerrainPreviewSample sample,
+		float worldXMeters,
+		float worldYMeters,
+		Color baseColor )
+	{
+		var strength = Math.Clamp( settings.BiomeCloverGrassTintStrength01, 0f, 1f );
+		if ( strength <= 0.001f )
+			return baseColor;
+
+		var seed = settings.WorldSeed;
+		var patch = TerrainPreviewNoise.Fbm( seed + 920, worldXMeters / 48f, worldYMeters / 48f, 3 );
+		var fine = TerrainPreviewNoise.Fbm( seed + 921, worldXMeters / 16f, worldYMeters / 16f, 2 );
+		var lush = new Color( 0.14f, 0.82f, 0.24f );
+		var meadow = new Color( 0.28f, 0.68f, 0.18f );
+		var dry = new Color( 0.46f, 0.58f, 0.16f );
+		var soil = new Color( 0.38f, 0.32f, 0.18f );
+
+		var grass = Color.Lerp( meadow, lush, patch );
+		grass = Color.Lerp( grass, dry, Math.Clamp( (fine - 0.55f) * 1.8f, 0f, 0.45f ) );
+		grass = Color.Lerp( grass, soil, Math.Clamp( (fine - 0.72f) * 2.2f, 0f, 0.28f ) );
+
+		// Slight height darkening so hills/plateaus read without needing a second material.
+		var heightShade = Math.Clamp( (sample.Height01 - 0.15f) * 0.55f, 0f, 0.4f );
+		grass = Color.Lerp( grass, grass * 0.72f, heightShade );
+
+		return Color.Lerp( baseColor, grass, strength );
 	}
 
 	static Color SoftenBiomeEdgeColor(
@@ -115,7 +148,7 @@ public static class TerrainPreviewBiomeColors
 		var baseColor = biomeId switch
 		{
 			TerrainPreviewBiomeId.Water => new Color( 0.12f, 0.38f, 0.92f ),
-			TerrainPreviewBiomeId.CloverHills => new Color( 0.18f, 0.72f, 0.22f ),
+			TerrainPreviewBiomeId.CloverHills => new Color( 0.16f, 0.78f, 0.24f ),
 			TerrainPreviewBiomeId.RedwoodForest => new Color( 0.45f, 0.12f, 0.18f ),
 			TerrainPreviewBiomeId.AmberDunes => new Color( 0.92f, 0.62f, 0.18f ),
 			TerrainPreviewBiomeId.Mountain => new Color( 0.92f, 0.92f, 0.94f ),

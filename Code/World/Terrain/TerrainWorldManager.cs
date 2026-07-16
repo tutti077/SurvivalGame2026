@@ -19,6 +19,8 @@ public sealed class TerrainWorldManager : Component
 		public GameObject GameObject;
 		public ModelCollider Collider;
 		public TerrainChunkCoord Coord;
+		public int VerticesPerSide;
+		public bool HasVegetation;
 	}
 
 	[Property, Group( "World" )] public string WorldName { get; set; } = "TestWorld";
@@ -51,8 +53,8 @@ public sealed class TerrainWorldManager : Component
 	public float ViewDistanceMeters { get; set; }
 	[Property, Group( "Chunks" ), Title( "Forward View Cone (deg)" ), Range( 30f, 360f ), Step( 5f )]
 	public float ForwardViewConeDegrees { get; set; } = 120f;
-	[Property, Group( "Chunks" ), Title( "Side/Back Radius (chunks)" ), Range( 0, 8 ), Step( 1 ), Description( "Always-loaded square around the camera. Radius 2 = 5×5." )]
-	public int SideViewRadiusChunks { get; set; } = 2;
+	[Property, Group( "Chunks" ), Title( "Side/Back Radius (chunks)" ), Range( 0, 12 ), Step( 1 ), Description( "Always-loaded square around the camera. Radius 4 = 9×9 (~512 m)." )]
+	public int SideViewRadiusChunks { get; set; } = 4;
 	[Property, Group( "Chunks" ), Title( "Collision Range (m)" ), Range( 64f, 4096f ), Step( 64f )]
 	public float CollisionRangeMeters { get; set; } = 128f;
 	[Property, Group( "Chunks" ), Title( "Max Chunks Per Frame" ), Range( 1, 12 ), Step( 1 ), Description( "Hard cap on chunk mesh builds per frame (initial load + streaming)." )]
@@ -79,7 +81,45 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Preview Map" ), Title( "Map Rows Per Frame" ), Range( 4, 512 ), Step( 4 )]
 	public int PreviewMapRowsPerFrame { get; set; } = 128;
 
-	[Property, Group( "Preview Map" )] public bool RegeneratePreviewOnStart { get; set; } = true;
+	[Property, Group( "Preview Map" ), Title( "Regenerate Biome Map On Play" ), Description( "OFF = reuse saved/HUD biome PNG and only rebuild chunk heights from Sample() (fast sculpt iteration). ON = full biome-map raster every Play (slow)." )]
+	public bool RegeneratePreviewOnStart { get; set; } = false;
+
+	[Property, Group( "Vegetation" ), Title( "Scatter Trees" )]
+	public bool VegetationScatterEnabled { get; set; } = true;
+
+	[Property, Group( "Vegetation" ), Title( "Tree Prefab A" )]
+	public string VegetationPrefabA { get; set; } = "prefabs/environment/temp_tree_3.prefab";
+
+	[Property, Group( "Vegetation" ), Title( "Tree Prefab B" )]
+	public string VegetationPrefabB { get; set; } = "prefabs/environment/propertree.prefab";
+
+	[Property, Group( "Vegetation" ), Title( "Forest Patch Wavelength (m)" ), Range( 64f, 1200f ), Step( 16f ), Description( "Large noise for forest belts vs clearings. Trees only spawn in Clover Hills." )]
+	public float VegetationPatchWavelengthMeters { get; set; } = 380f;
+
+	[Property, Group( "Vegetation" ), Title( "Forest Patch Threshold (0–1)" ), Range( 0.15f, 0.85f ), Step( 0.05f ), Description( "Higher = more empty clearings / less forest cover. FBM mean is ~0.5 — stay near 0.42–0.48." )]
+	public float VegetationPatchThreshold01 { get; set; } = 0.46f;
+
+	[Property, Group( "Vegetation" ), Title( "Tree Cell Spacing (m)" ), Range( 4f, 24f ), Step( 1f ), Description( "Lower = thicker packed forest cores." )]
+	public float VegetationCellSpacingMeters { get; set; } = 5f;
+
+	[Property, Group( "Vegetation" ), Title( "Spawn Chance In Forest (0–1)" ), Range( 0.1f, 1f ), Step( 0.05f ), Description( "Per-cell chance inside forest; grove cores auto-fill above this." )]
+	public float VegetationSpawnChance01 { get; set; } = 0.98f;
+
+	[Property, Group( "Vegetation" ), Title( "Prefab A Weight (0–1)" ), Range( 0f, 1f ), Step( 0.05f ), Description( "Chance to pick A when both exist; rest use B." )]
+	public float VegetationPrefabAWeight01 { get; set; } = 0.55f;
+
+	[Property, Group( "Vegetation" ), Title( "Max Trees Per Chunk" ), Range( 4, 128 ), Step( 1 )]
+	public int VegetationMaxTreesPerChunk { get; set; } = 96;
+
+	[Property, Group( "Vegetation" ), Title( "Scale Min (multiplier)" ), Range( 0.5f, 1.5f ), Step( 0.05f ), Description( "Multiplies each prefab's authored scale (temp_tree_3=1, ProperTree=0.25)." )]
+	public float VegetationScaleMin { get; set; } = 0.9f;
+
+	[Property, Group( "Vegetation" ), Title( "Scale Max (multiplier)" ), Range( 0.5f, 2f ), Step( 0.05f )]
+	public float VegetationScaleMax { get; set; } = 1.15f;
+
+	[Property, Group( "Vegetation" ), Title( "Skip Far LOD Chunks" ), Description( "Off = full tree set on all streamed terrain (recommended). On = only ~High-Priority radius (~128 m)." )]
+	public bool VegetationSkipFarLodChunks { get; set; } = false;
+
 	[Property, Group( "Loading" )] public bool ShowWorldLoadScreen { get; set; } = true;
 	[Property, Group( "Loading" ), ReadOnly] public bool IsWorldLoading { get; private set; }
 	[Property, Group( "Chunks" ), ReadOnly] public int LoadedChunkCount { get; private set; }
@@ -541,9 +581,10 @@ public sealed class TerrainWorldManager : Component
 		if ( _isWorldLoading || _streamLoadQueue.Count == 0 )
 			return;
 
-		if ( !TryGetStreamTransform( out var streamPos, out _ ) )
+		if ( !TryGetStreamTransform( out var streamPosEngine, out _ ) )
 			return;
 
+		var streamPosMeters = TerrainWorldUnits.EngineToMeters( streamPosEngine );
 		var settings = BuildGenerationSettings();
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
 		var maxChunks = Math.Clamp( ChunksPerFrame, 1, 12 );
@@ -560,7 +601,7 @@ public sealed class TerrainWorldManager : Component
 			if ( !_streamNeeded.Contains( coord ) || _loaded.ContainsKey( coord ) )
 				continue;
 
-			LoadChunk( coord, settings, streamPos, visible: true, useStreamLod: true );
+			LoadChunk( coord, settings, streamPosMeters, visible: true, useStreamLod: true );
 			built++;
 		}
 
@@ -726,7 +767,7 @@ public sealed class TerrainWorldManager : Component
 		SetStreamerInputEnabled( true );
 		HideLoadScreen();
 
-		Log.Info( $"[TerrainWorldManager] World ready — {MeshedChunkCount} meshed chunks ({LoadedChunkCount} in stream zone), seed {WorldSeed}." );
+		Log.Info( $"[TerrainWorldManager] World ready — {MeshedChunkCount} meshed chunks ({LoadedChunkCount} needed in stream zone), seed {WorldSeed}." );
 
 		if ( MeshedChunkCount <= 0 )
 			Log.Warning( "[TerrainWorldManager] No terrain chunks meshed — check stream position and world seed." );
@@ -734,10 +775,12 @@ public sealed class TerrainWorldManager : Component
 
 	void EnsureChunksAroundStream()
 	{
-		if ( !TryGetStreamTransform( out var streamPos, out var viewRotation ) )
+		if ( !TryGetStreamTransform( out var streamPosEngine, out var viewRotation ) )
 			return;
 
-		RefreshChunks( streamPos, viewRotation );
+		// Camera is engine units; chunk streaming / LoadChunk distances are meters.
+		var streamPosMeters = TerrainWorldUnits.EngineToMeters( streamPosEngine );
+		RefreshChunks( streamPosMeters, viewRotation );
 	}
 
 	void FinishMapGeneration()
@@ -811,12 +854,84 @@ public sealed class TerrainWorldManager : Component
 		foreach ( var coord in _unloadScratch )
 			UnloadChunk( coord );
 
+		// Far-LOD chunks loaded without trees (or wrong mesh detail) must rebuild when you arrive.
+		QueueStaleChunkReloads( streamPos, settings, chunkSize );
+
 		LoadNearPriorityChunksSync( streamPos, settings, chunkSize );
 		RebuildStreamLoadQueue( streamPos, settings, chunkSize );
 
 		LoadedChunkCount = _streamNeeded.Count;
 		MeshedChunkCount = _loaded.Count;
 		UpdateChunkColliders( streamPos, settings, chunkSize );
+	}
+
+	/// <summary>
+	/// Unload loaded chunks whose mesh LOD or vegetation no longer matches the camera distance
+	/// so <see cref="LoadChunk"/> runs again with the right detail + scatter.
+	/// </summary>
+	void QueueStaleChunkReloads( Vector3 streamPosMeters, TerrainPreviewSettings settings, float chunkSize )
+	{
+		var worldRadius = settings.TotalWorldRadiusMeters;
+
+		foreach ( var entry in _loaded.Values )
+		{
+			if ( !_streamNeeded.Contains( entry.Coord ) )
+				continue;
+
+			if ( entry.GameObject is null || !entry.GameObject.IsValid() )
+				continue;
+
+			var distance = ChunkDistanceMeters( entry.Coord, streamPosMeters, worldRadius, chunkSize );
+			var desiredVerts = ResolveChunkVerticesPerSide( distance, chunkSize, useStreamLod: true );
+			var wantVegetation = ShouldScatterVegetation( desiredVerts );
+
+			// Remesh in place — never destroy/respawn trees when LOD changes (that was the "2nd layer").
+			if ( entry.VerticesPerSide != desiredVerts )
+				RemeshChunkLod( entry, settings, streamPosMeters, desiredVerts, distance );
+
+			if ( wantVegetation && !entry.HasVegetation )
+			{
+				ScatterVegetationOnChunk( entry.GameObject, entry.Coord, settings, desiredVerts );
+				entry.HasVegetation = true;
+			}
+		}
+	}
+
+	void RemeshChunkLod(
+		LoadedChunk entry,
+		TerrainPreviewSettings settings,
+		Vector3 streamPos,
+		int verticesPerSide,
+		float distance )
+	{
+		var smoothPasses = verticesPerSide < ChunkVerticesPerSide ? 0 : ChunkHeightSmoothPasses;
+		var built = TerrainMeshBuilder.BuildChunk(
+			settings,
+			_backend,
+			entry.Coord,
+			ChunkSizeMeters,
+			verticesPerSide,
+			MaxTerrainHeightMeters,
+			smoothPasses,
+			ChunkHeightSmoothStrength01 );
+
+		if ( built.Model is null || !built.Model.IsValid )
+			return;
+
+		var renderer = entry.GameObject.Components.Get<ModelRenderer>();
+		if ( renderer is not null && renderer.IsValid() )
+		{
+			renderer.Model = built.Model;
+			renderer.MaterialOverride = built.Material;
+		}
+
+		if ( entry.Collider is not null && entry.Collider.IsValid() )
+		{
+			entry.Collider.Model = built.Model;
+			entry.Collider.Enabled = distance <= CollisionRangeMeters + (ChunkSizeMeters * 0.75f);
+		}
+
+		entry.VerticesPerSide = verticesPerSide;
 	}
 
 	float ResolveForwardViewDistanceMeters( float chunkSize )
@@ -919,18 +1034,70 @@ public sealed class TerrainWorldManager : Component
 		var center = TerrainChunkStreaming.GetChunkCenterWorld( coord, worldRadius, chunkSize );
 		collider.Enabled = distance <= CollisionRangeMeters + (chunkSize * 0.75f);
 
+		var chunkBounds = new BBox(
+			chunkOriginEngine + built.LocalBounds.Mins,
+			chunkOriginEngine + built.LocalBounds.Maxs );
+		BuildNavMeshSync.NotifyTerrainChunkLoaded( GameObject.Scene, chunkBounds );
+
+		var shouldScatter = ShouldScatterVegetation( verticesPerSide );
+		var hasVegetation = false;
+		if ( shouldScatter )
+		{
+			ScatterVegetationOnChunk( go, coord, settings, verticesPerSide );
+			hasVegetation = true;
+		}
+
 		_loaded[coord] = new LoadedChunk
 		{
 			GameObject = go,
 			Collider = collider,
 			Coord = coord,
+			VerticesPerSide = verticesPerSide,
+			HasVegetation = hasVegetation,
 		};
+	}
 
-		var chunkBounds = new BBox(
-			chunkOriginEngine + built.LocalBounds.Mins,
-			chunkOriginEngine + built.LocalBounds.Maxs );
+	void ScatterVegetationOnChunk(
+		GameObject chunkRoot,
+		TerrainChunkCoord coord,
+		TerrainPreviewSettings settings,
+		int verticesPerSide )
+	{
+		TerrainVegetationScatter.PopulateChunk(
+			chunkRoot,
+			coord,
+			settings,
+			_backend,
+			ChunkSizeMeters,
+			verticesPerSide,
+			ChunkVerticesPerSide,
+			new TerrainVegetationScatter.Options
+			{
+				Enabled = true,
+				PrefabA = VegetationPrefabA,
+				PrefabB = VegetationPrefabB,
+				PatchWavelengthMeters = VegetationPatchWavelengthMeters,
+				PatchThreshold01 = VegetationPatchThreshold01,
+				CellSpacingMeters = VegetationCellSpacingMeters,
+				SpawnChanceInPatch01 = VegetationSpawnChance01,
+				PrefabAWeight01 = VegetationPrefabAWeight01,
+				YawJitterDegrees = 360f,
+				ScaleMin = VegetationScaleMin,
+				ScaleMax = VegetationScaleMax,
+				MaxTreesPerChunk = VegetationMaxTreesPerChunk,
+				SkipFarLodChunks = VegetationSkipFarLodChunks,
+			} );
+	}
 
-		BuildNavMeshSync.NotifyTerrainChunkLoaded( GameObject.Scene, chunkBounds );
+	bool ShouldScatterVegetation( int verticesPerSide )
+	{
+		if ( !VegetationScatterEnabled || !IsWorldAuthority() )
+			return false;
+
+		if ( VegetationSkipFarLodChunks && verticesPerSide < ChunkVerticesPerSide )
+			return false;
+
+		return true;
 	}
 
 	int ResolveChunkVerticesPerSide( float distanceMeters, float chunkSize, bool useStreamLod )

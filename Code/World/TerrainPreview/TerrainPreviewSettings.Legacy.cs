@@ -122,4 +122,8 @@ public sealed partial class TerrainPreviewSettings
 	public float MountainPeakDetailAmplitude01 { get; set; } = 0.04f;
 	public float MountainTraverseCorridorFrequency { get; set; } = 2.2f;
 	public float MountainTraverseCorridorStrength01 { get; set; } = 0.55f;
+
+	/// <summary>Old Clover gentle-roll knobs — superseded by Voronoi hill spacing / micro meters.</summary>
+	public float BiomeCloverRollFrequency { get; set; } = 4.5f;
+	public float BiomeCloverRollAmplitude01 { get; set; } = 0.09f;
 }

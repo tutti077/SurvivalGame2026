@@ -3,6 +3,65 @@ namespace Survival;
 /// <summary>Deterministic value noise + FBM for terrain preview (no engine deps).</summary>
 static class TerrainPreviewNoise
 {
+	public readonly struct VoronoiSample
+	{
+		public readonly float F1;
+		public readonly float F2;
+		public readonly float CellHash;
+		public readonly int CellX;
+		public readonly int CellY;
+
+		public VoronoiSample( float f1, float f2, float cellHash, int cellX, int cellY )
+		{
+			F1 = f1;
+			F2 = f2;
+			CellHash = cellHash;
+			CellX = cellX;
+			CellY = cellY;
+		}
+	}
+
+	/// <summary>2D Voronoi (F1/F2 + cell hash). <paramref name="x"/>/<paramref name="y"/> in cell units.</summary>
+	public static VoronoiSample SampleVoronoi( int seed, float x, float y )
+	{
+		var x0 = (int)MathF.Floor( x );
+		var y0 = (int)MathF.Floor( y );
+		var bestD = float.MaxValue;
+		var secondD = float.MaxValue;
+		var bestHash = 0f;
+		var bestCx = x0;
+		var bestCy = y0;
+
+		for ( var oy = -1; oy <= 1; oy++ )
+		{
+			for ( var ox = -1; ox <= 1; ox++ )
+			{
+				var cx = x0 + ox;
+				var cy = y0 + oy;
+				var px = cx + Hash01( seed + 19, cx, cy );
+				var py = cy + Hash01( seed + 91, cx, cy );
+				var dx = px - x;
+				var dy = py - y;
+				var d = MathF.Sqrt( (dx * dx) + (dy * dy) );
+				var h = Hash01( seed + 17, cx, cy );
+				if ( d < bestD )
+				{
+					secondD = bestD;
+					bestD = d;
+					bestHash = h;
+					bestCx = cx;
+					bestCy = cy;
+				}
+				else if ( d < secondD )
+				{
+					secondD = d;
+				}
+			}
+		}
+
+		return new VoronoiSample( bestD, secondD, bestHash, bestCx, bestCy );
+	}
+
 	public static float Fbm( int seed, float x, float y, int octaves, float lacunarity = 2f, float gain = 0.5f )
 	{
 		var sum = 0f;
@@ -61,7 +120,7 @@ static class TerrainPreviewNoise
 		return Lerp( nx0, nx1, sy );
 	}
 
-	static float Hash01( int seed, int x, int y )
+	public static float Hash01( int seed, int x, int y )
 	{
 		unchecked
 		{

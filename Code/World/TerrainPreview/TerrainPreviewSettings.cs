@@ -394,17 +394,47 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Biomes" ), Title( "Mountain Placement Strength (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
 	public float BiomeMountainPlacementStrength01 { get; set; } = 1f;
 
-	[Property, Group( "Biome Terrain" ), Title( "Clover Roll Frequency" ), Range( 1f, 12f ), Step( 0.5f )]
-	public float BiomeCloverRollFrequency { get; set; } = 4.5f;
+	[Property, Group( "Biome Terrain" ), Title( "Clover Hill Spacing (m)" ), Range( 250f, 400f ), Step( 10f ), Description( "Voronoi cell size — hill centers about this far apart (400 m = large rolling rises)." )]
+	public float BiomeCloverHillSpacingMeters { get; set; } = 400f;
 
-	[Property, Group( "Biome Terrain" ), Title( "Clover Roll Amplitude (0–1)" ), Range( 0.02f, 0.18f ), Step( 0.01f )]
-	public float BiomeCloverRollAmplitude01 { get; set; } = 0.09f;
+	[Property, Group( "Biome Terrain" ), Title( "Clover Hill Density (0–1)" ), Range( 0.15f, 1f ), Step( 0.05f ), Description( "Fraction of Voronoi cells that become big hills. Others stay low plateaus / gaps (seeded skip)." )]
+	public float BiomeCloverHillDensity01 { get; set; } = 0.4f;
+
+	[Property, Group( "Biome Terrain" ), Title( "Clover Gap Floor Min (0–1 of clover max)" ), Range( 0.05f, 0.5f ), Step( 0.05f ), Description( "Height when a cell is skipped (low plateau between hills)." )]
+	public float BiomeCloverGapFloorMin01 { get; set; } = 0.1f;
+
+	[Property, Group( "Biome Terrain" ), Title( "Clover Gap Floor Max (0–1 of clover max)" ), Range( 0.08f, 0.55f ), Step( 0.05f )]
+	public float BiomeCloverGapFloorMax01 { get; set; } = 0.26f;
+
+	[Property, Group( "Biome Terrain" ), Title( "Clover Plateau Height Min (0–1 of clover max)" ), Range( 0.15f, 0.8f ), Step( 0.05f )]
+	public float BiomeCloverPlateauHeightMin01 { get; set; } = 0.45f;
+
+	[Property, Group( "Biome Terrain" ), Title( "Clover Plateau Height Max (0–1 of clover max)" ), Range( 0.25f, 1f ), Step( 0.05f )]
+	public float BiomeCloverPlateauHeightMax01 { get; set; } = 1f;
+
+	[Property, Group( "Biome Terrain" ), Title( "Clover Plateau Radius (cells)" ), Range( 0.08f, 0.55f ), Step( 0.02f ), Description( "Flat-ish top of each hill (fraction of a Voronoi cell)." )]
+	public float BiomeCloverPlateauRadius01 { get; set; } = 0.34f;
+
+	[Property, Group( "Biome Terrain" ), Title( "Clover Hill Falloff Radius (cells)" ), Range( 0.4f, 1.45f ), Step( 0.05f ), Description( "How far the skirt reaches — higher = gentler low→high across the cell." )]
+	public float BiomeCloverHillFalloffRadius01 { get; set; } = 1.2f;
+
+	[Property, Group( "Biome Terrain" ), Title( "Clover Hill Warp Amp (0–1 of clover max)" ), Range( 0.02f, 0.2f ), Step( 0.01f ), Description( "Extra FBM so hills aren't perfect radial dishes." )]
+	public float BiomeCloverHillWarpAmplitude01 { get; set; } = 0.08f;
+
+	[Property, Group( "Biome Terrain" ), Title( "Clover Micro Wavelength (m)" ), Range( 2.5f, 40f ), Step( 0.5f ), Description( "Tiny grit cell size. ~4 m reads on 2 m verts. 0 in old bundles → default 4." )]
+	public float BiomeCloverMicroWavelengthMeters { get; set; } = 4f;
+
+	[Property, Group( "Biome Terrain" ), Title( "Clover Micro Amplitude (m)" ), Range( 0.5f, 12f ), Step( 0.25f ), Description( "Surface grit height (±meters). Loud on purpose. 0 in old bundles → default 6." )]
+	public float BiomeCloverMicroAmplitudeMeters { get; set; } = 6f;
 
 	[Property, Group( "Biome Terrain" ), Title( "Clover Shape Blend (0–1)" ), Range( 0.25f, 1f ), Step( 0.05f )]
-	public float BiomeCloverShapeBlend01 { get; set; } = 0.72f;
+	public float BiomeCloverShapeBlend01 { get; set; } = 0.95f;
 
-	[Property, Group( "Biome Terrain" ), Title( "Clover Slope Smooth (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
-	public float BiomeCloverSlopeSmooth01 { get; set; } = 0.72f;
+	[Property, Group( "Biome Terrain" ), Title( "Clover Slope Smooth (0–1)" ), Range( 0f, 1f ), Step( 0.05f ), Description( "Widens skirts + flatter ease curve so 400 m cells don't read as steep cones." )]
+	public float BiomeCloverSlopeSmooth01 { get; set; } = 0.85f;
+
+	[Property, Group( "Biome Terrain" ), Title( "Clover Grass Tint Strength (0–1)" ), Range( 0f, 1f ), Step( 0.05f ), Description( "Vertex-color grass mottling so Clover reads clearly on the mesh/stamp." )]
+	public float BiomeCloverGrassTintStrength01 { get; set; } = 0.9f;
 
 	[Property, Group( "Biome Terrain" ), Title( "Redwood Hill Frequency" ), Range( 1.5f, 14f ), Step( 0.5f )]
 	public float BiomeRedwoodHillFrequency { get; set; } = 6f;
@@ -448,8 +478,8 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Biome Terrain" ), Title( "Slope Detail Gate (0–1)" ), Range( 0.03f, 0.35f ), Step( 0.01f )]
 	public float BiomeSlopeDetailGate01 { get; set; } = 0.12f;
 
-	[Property, Group( "Biomes" ), Title( "Clover Max Height (m)" ), Range( 50f, 800f ), Step( 10f )]
-	public float BiomeCloverMaxHeightMeters { get; set; } = 200f;
+	[Property, Group( "Biomes" ), Title( "Clover Max Height (m)" ), Range( 20f, 100f ), Step( 5f ), Description( "Hard ceiling for Clover hills (0–100 m)." )]
+	public float BiomeCloverMaxHeightMeters { get; set; } = 100f;
 
 	[Property, Group( "Biomes" ), Title( "Redwood Max Height (m)" ), Range( 50f, 1000f ), Step( 10f )]
 	public float BiomeRedwoodMaxHeightMeters { get; set; } = 300f;

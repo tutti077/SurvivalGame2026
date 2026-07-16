@@ -65,7 +65,7 @@ On **Generate** when **World - Solve Spawn On Generate** is on:
 
 When replacing behavior, delete old types, toggles, and post-process hooks in the **same change**. See `AGENTS.md` and `.cursor/rules/deprecate-cleanly.mdc`.
 
-## Runtime world generation (`terrainTest.scene`)
+## Runtime world generation (`terraintest.scene`)
 
 Editor **Generate** and runtime meshes share **`TerrainPreviewPipeline.Sample()`** — no PNG is read back for height.
 
@@ -82,9 +82,15 @@ Editor **Generate** and runtime meshes share **`TerrainPreviewPipeline.Sample()`
 
 Biome-specific sculpting (`TerrainPreviewBiomeTerrainShaper`, etc.) runs in the shared pipeline — tune under **Biome Terrain** tab; re-Generate, then play.
 
+**Clover Hills (current):** Voronoi cells (~**400 m** spacing) pick candidate centers. **Hill Density** decides which cells become big hills (seeded); skipped cells form **low plateau / gap floors**. Peaks SoftCap at **`BiomeCloverMaxHeightMeters`** (default **100 m**). **Surface grit is applied after SoftCap** (and land-display ceiling includes micro headroom) so bumps are not clipped off plateaus — default ~**±6 m** at ~**4 m** wavelength (old JSON 0 → those defaults). Console logs one `[CloverMicro] probe …` line on first Clover sample so you can confirm grit ≠ 0.
+
+**Fast sculpt iteration:** Chunk meshes call **`Sample()`** for height — the biome PNG is **display-only**. Leave **Regenerate Biome Map On Play** off on `TerrainWorldManager` so Play only builds nearby chunks with current math (reuse saved HUD/biome PNG). Re-run editor **Generate** only when biome *placement*/lakes/seed must change; sculpt-only tweaks do not need a full Generate for playtest.
+
 **Mountains:** `lowlandMeters = rolling base + sculpt` → `mountainMeters = lowland + peakBoost × headroom` → **`lerp(a, b, smoothstep(influence))`**. No ridged slope pass. Re-Generate after tuning.
 
-**Playtest (`terrainTest.scene`):** fly camera **Follow terrain height** optional. Press **J** to spawn a scale-reference player at the camera. Chunk meshes: **33 verts/side** (~2 m on 64 m chunks); **Height Smooth Passes = 0** keeps natural slopes between corners. Shore blend eases land toward sea level near lakes and the outer rim.
+**Playtest (`terraintest.scene`):** fly camera **Follow terrain height** optional. Press **J** to spawn a scale-reference player at the camera. Chunk meshes: **33 verts/side** (~2 m on 64 m chunks); **Height Smooth Passes = 0** keeps natural slopes between corners. Shore blend eases land toward sea level near lakes and the outer rim.
+
+**Vegetation (trees):** `TerrainVegetationScatter` runs once when a chunk loads (parented under the chunk GO; local meters match mesh verts). Large FBM picks **forest vs clearing**; inside forest, hash picks **Prefab A** (`temp_tree_3`) or **Prefab B** (`propertree`). Stream camera positions must be converted engine→meters before `RefreshChunks` (same as `TryRefreshStreamChunks`) or FinishWorldLoad will unload every chunk and wipe trees.
 
 **Biome edges:** **Biomes - Continuous Placement At Sample** makes blobby patches. **Biomes - Edge Color Blend (0–1)** (~0.35) softens borders only — interiors stay dominant biome color. Shader splats can replace this later.
 
