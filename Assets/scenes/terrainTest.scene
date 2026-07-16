@@ -163,6 +163,7 @@
           "VegetationPrefabA": "prefabs/environment/temp_tree_3.prefab",
           "VegetationPrefabAWeight01": 0.55,
           "VegetationPrefabB": "prefabs/environment/propertree.prefab",
+          "VegetationRedwoodPrefab": "prefabs/environment/temp_tree_2.prefab",
           "VegetationScaleMax": 1.15,
           "VegetationScaleMin": 0.9,
           "VegetationScatterEnabled": true,

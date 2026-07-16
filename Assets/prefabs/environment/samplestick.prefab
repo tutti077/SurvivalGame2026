@@ -1,12 +1,12 @@
 {
   "RootObject": {
-    "__guid": "69f3dff5-c417-479e-b35f-3f458fde47ab",
+    "__guid": "a1c4e8f2-3b7d-4a91-9e56-2d8f0c1b4a77",
     "__version": 2,
     "Flags": 0,
-    "Name": "stick",
+    "Name": "sampleStick",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
-    "Scale": "1,1,1",
+    "Scale": "0.0199999996,0.0299999993,0.0500000007",
     "Tags": "",
     "Enabled": true,
     "NetworkMode": 1,
@@ -17,7 +17,7 @@
     "Components": [
       {
         "__type": "Sandbox.ModelRenderer",
-        "__guid": "2ef1dedc-283b-4de1-ae0e-170fd228c3c0",
+        "__guid": "b2d5f9a3-4c8e-5b02-af67-3e901d2c5b88",
         "__enabled": true,
         "Flags": 0,
         "BodyGroups": 18446744073709551615,
@@ -44,7 +44,7 @@
       },
       {
         "__type": "Survival.ResourceItemDefinition",
-        "__guid": "96a36e07-7c92-4778-9238-0b7374e11078",
+        "__guid": "c3e6a0b4-5d9f-6c13-b078-4f0a2e3d6c99",
         "__enabled": true,
         "Flags": 0,
         "AutoEnsureTraceCollider": false,
@@ -52,7 +52,7 @@
         "BaseYieldPerTickLow": 1,
         "HarvestYields": [
           {
-            "AmountHigh": 1,
+            "AmountHigh": 20,
             "AmountLow": 1,
             "ChancePercent": 100,
             "ResourceId": "resource_woodBasic"

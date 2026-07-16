@@ -1,12 +1,12 @@
 {
   "RootObject": {
-    "__guid": "275a6811-0700-4908-8be2-5a3460a6efd4",
+    "__guid": "b9922455-2136-42af-82de-26a6eead2dda",
     "__version": 2,
     "Flags": 0,
-    "Name": "temp_tree_2",
+    "Name": "temp_tree_4",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
-    "Scale": "1,1,1",
+    "Scale": "0.25,0.25,0.25",
     "Tags": "",
     "Enabled": true,
     "NetworkMode": 2,
@@ -17,7 +17,7 @@
     "Components": [
       {
         "__type": "Sandbox.Prop",
-        "__guid": "737a9f92-5eb6-48ec-a1dc-a96f8ff28e73",
+        "__guid": "aa402a11-4ea2-42d2-896b-0136705cb446",
         "__enabled": true,
         "Flags": 0,
         "BodyGroups": 18446744073709551615,
@@ -38,7 +38,7 @@
       },
       {
         "__type": "Sandbox.ModelRenderer",
-        "__guid": "46da6ad7-bc6d-4379-8aaf-606e9e4703be",
+        "__guid": "32963f0b-0c2a-46ce-b5a3-f3acdd382524",
         "__enabled": true,
         "Flags": 0,
         "BodyGroups": 18446744073709551615,
@@ -65,7 +65,7 @@
       },
       {
         "__type": "Sandbox.ModelCollider",
-        "__guid": "de2760b4-b79b-4426-b207-fdb4e5e4dace",
+        "__guid": "64b17888-f306-45ea-a6ab-c66ffeab0470",
         "__enabled": true,
         "Flags": 0,
         "ColliderFlags": 0,
@@ -90,7 +90,7 @@
       },
       {
         "__type": "Sandbox.Rigidbody",
-        "__guid": "ebc444d0-c6ba-4eec-a1d5-170f7e21cb2d",
+        "__guid": "5a23649a-b702-4fbd-9dcc-7f32c8fa0bd9",
         "__enabled": true,
         "Flags": 0,
         "AngularDamping": 0,
@@ -124,28 +124,7 @@
         "StartAsleep": false
       }
     ],
-    "Children": [],
-    "__properties": {
-      "NetworkInterpolation": true,
-      "TimeScale": 1,
-      "WantsSystemScene": true,
-      "Metadata": {},
-      "NavMesh": {
-        "Enabled": false,
-        "IncludeStaticBodies": true,
-        "IncludeKeyframedBodies": true,
-        "EditorAutoUpdate": false,
-        "AgentHeight": 64,
-        "AgentRadius": 16,
-        "AgentStepSize": 18,
-        "AgentMaxSlope": 40,
-        "ExcludedBodies": "",
-        "IncludedBodies": "",
-        "DeferGeneration": false,
-        "CustomBounds": false
-      }
-    },
-    "__variables": []
+    "Children": []
   },
   "ResourceVersion": 2,
   "ShowInMenu": false,

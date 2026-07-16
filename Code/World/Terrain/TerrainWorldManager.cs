@@ -87,13 +87,70 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Scatter Trees" )]
 	public bool VegetationScatterEnabled { get; set; } = true;
 
-	[Property, Group( "Vegetation" ), Title( "Tree Prefab A" )]
+	[Property, Group( "Vegetation" ), Title( "Clover — Tree Prefab A" )]
 	public string VegetationPrefabA { get; set; } = "prefabs/environment/temp_tree_3.prefab";
 
-	[Property, Group( "Vegetation" ), Title( "Tree Prefab B" )]
+	[Property, Group( "Vegetation" ), Title( "Clover — Tree Prefab B" )]
 	public string VegetationPrefabB { get; set; } = "prefabs/environment/propertree.prefab";
 
-	[Property, Group( "Vegetation" ), Title( "Forest Patch Wavelength (m)" ), Range( 64f, 1200f ), Step( 16f ), Description( "Large noise for forest belts vs clearings. Trees only spawn in Clover Hills." )]
+	[Property, Group( "Vegetation" ), Title( "Clover — Prefab A Weight (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float VegetationPrefabAWeight01 { get; set; } = 0.55f;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Rock Prefab" )]
+	public string VegetationCloverRockPrefab { get; set; } = "prefabs/environment/rock.prefab";
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Scatter Rocks" )]
+	public bool VegetationCloverRocksEnabled { get; set; } = true;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Rock Cluster Spacing (m)" ), Range( 8f, 64f ), Step( 1f ), Description( "Average distance between rock cluster centers. Strong random jitter so it does not look gridded." )]
+	public float VegetationCloverRockSpacingMeters { get; set; } = 50f;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Rock Cluster Chance (0–1)" ), Range( 0.1f, 1f ), Step( 0.05f ), Description( "Chance a spacing cell becomes a cluster (lower = scarcer / more irregular)." )]
+	public float VegetationCloverRockChance01 { get; set; } = 0.7f;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Rocks Per Cluster Min" ), Range( 1, 8 ), Step( 1 )]
+	public int VegetationCloverRockClusterMin { get; set; } = 2;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Rocks Per Cluster Max" ), Range( 1, 8 ), Step( 1 )]
+	public int VegetationCloverRockClusterMax { get; set; } = 5;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Rock Cluster Radius (m)" ), Range( 0.5f, 8f ), Step( 0.25f )]
+	public float VegetationCloverRockClusterRadiusMeters { get; set; } = 3f;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Stick Prefab" )]
+	public string VegetationCloverStickPrefab { get; set; } = "prefabs/environment/samplestick.prefab";
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Scatter Sticks" )]
+	public bool VegetationCloverSticksEnabled { get; set; } = true;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Stick Cluster Spacing (m)" ), Range( 8f, 64f ), Step( 1f )]
+	public float VegetationCloverStickSpacingMeters { get; set; } = 50f;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Stick Cluster Chance (0–1)" ), Range( 0.1f, 1f ), Step( 0.05f )]
+	public float VegetationCloverStickChance01 { get; set; } = 0.7f;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Sticks Per Cluster Min" ), Range( 1, 4 ), Step( 1 )]
+	public int VegetationCloverStickClusterMin { get; set; } = 1;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Sticks Per Cluster Max" ), Range( 1, 4 ), Step( 1 )]
+	public int VegetationCloverStickClusterMax { get; set; } = 2;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Stick Cluster Radius (m)" ), Range( 0.25f, 4f ), Step( 0.25f )]
+	public float VegetationCloverStickClusterRadiusMeters { get; set; } = 1.5f;
+
+	[Property, Group( "Vegetation" ), Title( "Redwood — Tree Prefab A" )]
+	public string VegetationRedwoodPrefab { get; set; } = "prefabs/environment/temp_tree_2.prefab";
+
+	[Property, Group( "Vegetation" ), Title( "Redwood — Tree Prefab B" )]
+	public string VegetationRedwoodPrefabB { get; set; } = "prefabs/environment/temp_tree_4.prefab";
+
+	[Property, Group( "Vegetation" ), Title( "Redwood — Prefab A Weight (0–1)" ), Range( 0f, 1f ), Step( 0.05f ), Description( "Chance to pick Prefab A (temp_tree_2) vs B (temp_tree_4)." )]
+	public float VegetationRedwoodPrefabAWeight01 { get; set; } = 0.5f;
+
+	[Property, Group( "Vegetation" ), Title( "Redwood — Density (0–1)" ), Range( 0.05f, 1f ), Step( 0.05f ), Description( "Fraction of shared forest density for Redwood only. Redwood ignores hard forest patches, so low values still cover the whole biome sparsely." )]
+	public float VegetationRedwoodDensity01 { get; set; } = 0.1f;
+
+	[Property, Group( "Vegetation" ), Title( "Forest Patch Wavelength (m)" ), Range( 64f, 1200f ), Step( 16f ), Description( "Shared forest/clearing noise for Clover Hills and Redwood Forest." )]
 	public float VegetationPatchWavelengthMeters { get; set; } = 380f;
 
 	[Property, Group( "Vegetation" ), Title( "Forest Patch Threshold (0–1)" ), Range( 0.15f, 0.85f ), Step( 0.05f ), Description( "Higher = more empty clearings / less forest cover. FBM mean is ~0.5 — stay near 0.42–0.48." )]
@@ -104,9 +161,6 @@ public sealed class TerrainWorldManager : Component
 
 	[Property, Group( "Vegetation" ), Title( "Spawn Chance In Forest (0–1)" ), Range( 0.1f, 1f ), Step( 0.05f ), Description( "Per-cell chance inside forest; grove cores auto-fill above this." )]
 	public float VegetationSpawnChance01 { get; set; } = 0.98f;
-
-	[Property, Group( "Vegetation" ), Title( "Prefab A Weight (0–1)" ), Range( 0f, 1f ), Step( 0.05f ), Description( "Chance to pick A when both exist; rest use B." )]
-	public float VegetationPrefabAWeight01 { get; set; } = 0.55f;
 
 	[Property, Group( "Vegetation" ), Title( "Max Trees Per Chunk" ), Range( 4, 128 ), Step( 1 )]
 	public int VegetationMaxTreesPerChunk { get; set; } = 96;
@@ -1074,18 +1128,76 @@ public sealed class TerrainWorldManager : Component
 			new TerrainVegetationScatter.Options
 			{
 				Enabled = true,
-				PrefabA = VegetationPrefabA,
-				PrefabB = VegetationPrefabB,
+				Profiles =
+				[
+					new TerrainVegetationScatter.BiomeScatterProfile
+					{
+						BiomeId = TerrainPreviewBiomeId.CloverHills,
+						PrefabA = VegetationPrefabA,
+						PrefabB = VegetationPrefabB,
+						PrefabAWeight01 = VegetationPrefabAWeight01,
+						NoiseSeedSalt = 0,
+						InstancePrefix = "veg_clover",
+						Density01 = 1f,
+					},
+					new TerrainVegetationScatter.BiomeScatterProfile
+					{
+						BiomeId = TerrainPreviewBiomeId.RedwoodForest,
+						PrefabA = VegetationRedwoodPrefab,
+						PrefabB = VegetationRedwoodPrefabB,
+						PrefabAWeight01 = VegetationRedwoodPrefabAWeight01,
+						NoiseSeedSalt = 5000,
+						InstancePrefix = "veg_redwood",
+						Density01 = VegetationRedwoodDensity01,
+						IgnoreForestPatches = true,
+					},
+				],
 				PatchWavelengthMeters = VegetationPatchWavelengthMeters,
 				PatchThreshold01 = VegetationPatchThreshold01,
 				CellSpacingMeters = VegetationCellSpacingMeters,
 				SpawnChanceInPatch01 = VegetationSpawnChance01,
-				PrefabAWeight01 = VegetationPrefabAWeight01,
 				YawJitterDegrees = 360f,
 				ScaleMin = VegetationScaleMin,
 				ScaleMax = VegetationScaleMax,
 				MaxTreesPerChunk = VegetationMaxTreesPerChunk,
 				SkipFarLodChunks = VegetationSkipFarLodChunks,
+				PropClusters =
+				[
+					new TerrainVegetationScatter.PropClusterOptions
+					{
+						Enabled = VegetationCloverRocksEnabled,
+						BiomeId = TerrainPreviewBiomeId.CloverHills,
+						Prefab = VegetationCloverRockPrefab,
+						InstancePrefix = "veg_rock",
+						KindLabel = "rock",
+						NoiseSeedSalt = 7000,
+						ClusterSpacingMeters = VegetationCloverRockSpacingMeters,
+						ClusterChance01 = VegetationCloverRockChance01,
+						ClusterSizeMin = VegetationCloverRockClusterMin,
+						ClusterSizeMax = VegetationCloverRockClusterMax,
+						ClusterRadiusMeters = VegetationCloverRockClusterRadiusMeters,
+						ScaleMin = 0.85f,
+						ScaleMax = 1.2f,
+						MaxPerChunk = 48,
+					},
+					new TerrainVegetationScatter.PropClusterOptions
+					{
+						Enabled = VegetationCloverSticksEnabled,
+						BiomeId = TerrainPreviewBiomeId.CloverHills,
+						Prefab = VegetationCloverStickPrefab,
+						InstancePrefix = "veg_stick",
+						KindLabel = "stick",
+						NoiseSeedSalt = 9100,
+						ClusterSpacingMeters = VegetationCloverStickSpacingMeters,
+						ClusterChance01 = VegetationCloverStickChance01,
+						ClusterSizeMin = VegetationCloverStickClusterMin,
+						ClusterSizeMax = VegetationCloverStickClusterMax,
+						ClusterRadiusMeters = VegetationCloverStickClusterRadiusMeters,
+						ScaleMin = 0.85f,
+						ScaleMax = 1.15f,
+						MaxPerChunk = 24,
+					},
+				],
 			} );
 	}
 
