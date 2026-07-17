@@ -81,6 +81,15 @@ public static class TerrainMeshBuilder
 			colors,
 			samples );
 
+		TerrainCloverGroundTexture.ApplyToChunkColors(
+			settings,
+			colors,
+			biomeMap,
+			chunkMinX,
+			chunkMinY,
+			step,
+			verticesPerSide );
+
 		TerrainPreviewHeightDiagnostics.TryLogChunkVertexTrace(
 			settings,
 			coord,

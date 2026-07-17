@@ -518,6 +518,8 @@ static class TerrainPreviewControlTabs
 		nameof( TerrainPreviewSettings.BiomeCloverShapeBlend01 ),
 		nameof( TerrainPreviewSettings.BiomeCloverSlopeSmooth01 ),
 		nameof( TerrainPreviewSettings.BiomeCloverGrassTintStrength01 ),
+		nameof( TerrainPreviewSettings.BiomeCloverGroundTextureStrength01 ),
+		nameof( TerrainPreviewSettings.BiomeCloverGroundTextureTileMeters ),
 		nameof( TerrainPreviewSettings.BiomeRedwoodHillFrequency ),
 		nameof( TerrainPreviewSettings.BiomeRedwoodHillAmplitude01 ),
 		nameof( TerrainPreviewSettings.BiomeRedwoodRidgeAmplitude01 ),

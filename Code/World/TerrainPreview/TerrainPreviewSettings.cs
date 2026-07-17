@@ -436,6 +436,12 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Biome Terrain" ), Title( "Clover Grass Tint Strength (0–1)" ), Range( 0f, 1f ), Step( 0.05f ), Description( "Vertex-color grass mottling so Clover reads clearly on the mesh/stamp." )]
 	public float BiomeCloverGrassTintStrength01 { get; set; } = 0.9f;
 
+	[Property, Group( "Biome Terrain" ), Title( "Clover Ground Texture Strength (0–1)" ), Range( 0f, 1f ), Step( 0.05f ), Description( "How strongly bush.png modulates Clover Hills chunk vertex colors (streamed terrain only)." )]
+	public float BiomeCloverGroundTextureStrength01 { get; set; } = 0.85f;
+
+	[Property, Group( "Biome Terrain" ), Title( "Clover Ground Texture Tile (m)" ), Range( 4f, 64f ), Step( 1f ), Description( "World meters per bush.png tile on Clover ground." )]
+	public float BiomeCloverGroundTextureTileMeters { get; set; } = 12f;
+
 	[Property, Group( "Biome Terrain" ), Title( "Redwood Hill Frequency" ), Range( 1.5f, 14f ), Step( 0.5f )]
 	public float BiomeRedwoodHillFrequency { get; set; } = 6f;
 
