@@ -43,9 +43,23 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 	/// </summary>
 	[Property, Group( "Stamina - Regen" )] public float StaminaRegenDelayOverrideSeconds { get; set; } = -1f;
 
+	[Property, Group( "Camera" ), Title( "Scroll wheel zoom" ), Description( "Mouse wheel steps third-person CameraOffset.x in/out. Skipped while the game menu is open or build placement owns the wheel." )]
+	public bool CameraScrollZoomEnabled { get; set; } = true;
+
+	[Property, Group( "Camera" ), Title( "Zoom min distance" ), Range( 32f, 512f ), Step( 8f )]
+	public float CameraZoomMinDistance { get; set; } = 96f;
+
+	[Property, Group( "Camera" ), Title( "Zoom max distance" ), Range( 64f, 1600f ), Step( 8f )]
+	public float CameraZoomMaxDistance { get; set; } = 800f;
+
+	[Property, Group( "Camera" ), Title( "Zoom step" ), Range( 8f, 128f ), Step( 8f ), Description( "Distance change per wheel notch." )]
+	public float CameraZoomStep { get; set; } = 48f;
+
 	PlayerVitals _vitals;
 	PlayerGrapple _grapple;
 	PlayerController _controller;
+	/// <summary>Authoritative stepped zoom distance (-1 until first poll).</summary>
+	float _cameraZoomDistance = -1f;
 	bool _sprintWasDown;
 	float _sprintDebtPending;
 	double _nextRunNoiseAt;
@@ -292,6 +306,25 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		_vitals.OnControllerLandedForJumpStaminaFromMovement( distance, impactVelocity );
 	}
 
+	/// <summary>
+	/// After the built-in third-person camera (and its wall-trace ease), hard-place at our stepped zoom
+	/// so zoom-out snaps the same way zoom-in does.
+	/// </summary>
+	void PlayerController.IEvents.PostCameraSetup( CameraComponent camera )
+	{
+		if ( !IsLocalMovementDriver() || !CameraScrollZoomEnabled || _cameraZoomDistance < 0f )
+			return;
+
+		_controller ??= Components.Get<PlayerController>();
+		if ( _controller is null || !_controller.IsValid() || !_controller.ThirdPerson )
+			return;
+
+		if ( !camera.IsValid() )
+			return;
+
+		SnapThirdPersonCameraToZoomDistance( camera );
+	}
+
 	protected override void OnUpdate()
 	{
 		base.OnUpdate();
@@ -310,6 +343,8 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() )
 			return;
 
+		PollCameraScrollZoom();
+
 		// Keep Run suppressed for the whole airborne/dangling frame (controller may re-read input after PreInput).
 		if ( !string.IsNullOrWhiteSpace( SprintInputAction ) && IsSprintBlocked()
 		     && (Input.Down( SprintInputAction ) || Input.Pressed( SprintInputAction )) )
@@ -319,6 +354,92 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		// Only catch large over-length desync after MoveModeWalk moves us.
 		ApplyGrappleOverLengthCatchup();
 		ApplyGrappleSwingPushAfterWalk( Time.Delta );
+	}
+
+	void PollCameraScrollZoom()
+	{
+		if ( !CameraScrollZoomEnabled )
+			return;
+
+		_controller ??= Components.Get<PlayerController>();
+		if ( _controller is null || !_controller.IsValid() || !_controller.ThirdPerson )
+			return;
+
+		if ( Components.Get<PlayerGameMenuController>() is { IsMenuOpen: true } )
+			return;
+
+		var hammer = Components.Get<PlayerEquipment>()?.GetActiveTool<ToolBuildHammer>();
+		if ( hammer is not null && hammer.IsPreviewingPlacePiece )
+			return;
+
+		var min = MathF.Min( CameraZoomMinDistance, CameraZoomMaxDistance );
+		var max = MathF.Max( CameraZoomMinDistance, CameraZoomMaxDistance );
+		var step = MathF.Max( 1f, CameraZoomStep );
+
+		if ( _cameraZoomDistance < 0f )
+		{
+			var start = Math.Clamp( _controller.CameraOffset.x, min, max );
+			var startNotch = (float)Math.Round( (start - min) / step );
+			_cameraZoomDistance = Math.Clamp( min + startNotch * step, min, max );
+			ApplyCameraZoomDistance( snapView: false );
+		}
+
+		var scroll = Input.MouseWheel.y;
+		if ( MathF.Abs( scroll ) <= 0.01f )
+			return;
+
+		var notch = (float)Math.Round( (_cameraZoomDistance - min) / step );
+		if ( scroll > 0f )
+			notch -= 1f; // wheel up → zoom in (closer)
+		else
+			notch += 1f;
+
+		var next = Math.Clamp( min + notch * step, min, max );
+		_cameraZoomDistance = next;
+		// Hard-place the camera so zoom-out does not ease via the controller's wall-trace recovery.
+		ApplyCameraZoomDistance( snapView: true );
+	}
+
+	void ApplyCameraZoomDistance( bool snapView )
+	{
+		if ( _controller is null || !_controller.IsValid() || _cameraZoomDistance < 0f )
+			return;
+
+		var offset = _controller.CameraOffset;
+		if ( MathF.Abs( offset.x - _cameraZoomDistance ) > 0.01f )
+			_controller.CameraOffset = new Vector3( _cameraZoomDistance, offset.y, offset.z );
+
+		if ( snapView )
+			SnapThirdPersonCameraToZoomDistance( null );
+	}
+
+	/// <summary>
+	/// Instantly place the view camera at the stepped distance (hard wall clamp, no ease-out).
+	/// </summary>
+	void SnapThirdPersonCameraToZoomDistance( CameraComponent cam )
+	{
+		cam ??= BuildViewCamera.Resolve( GameObject );
+		if ( cam is null || !cam.IsValid() || !Scene.IsValid() || _controller is null )
+			return;
+
+		var eye = GameObject.WorldPosition
+		          + Vector3.Up * Math.Max( 8f, _controller.BodyHeight - _controller.EyeDistanceFromTop );
+		var rot = cam.WorldRotation;
+		var offset = _controller.CameraOffset;
+		// Prefab CameraOffset is (back, height, side) — x is pull-back distance.
+		var target = eye
+		             - rot.Forward * _cameraZoomDistance
+		             + Vector3.Up * offset.y
+		             + rot.Right * offset.z;
+
+		var tr = Scene.Trace.Ray( eye, target )
+			.IgnoreGameObjectHierarchy( GameObject )
+			.WithoutTags( "player", "trigger" )
+			.Run();
+
+		cam.WorldPosition = tr.Hit
+			? tr.HitPosition + tr.Normal * 2f
+			: target;
 	}
 
 	void TickRunNoiseForEntities()

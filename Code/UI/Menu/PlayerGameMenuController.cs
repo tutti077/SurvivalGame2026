@@ -100,7 +100,7 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 		if ( MathF.Abs( scroll.y ) < 0.01f && MathF.Abs( scroll.x ) < 0.01f )
 			return;
 
-		// Gameplay Input.MouseWheel: positive Y = wheel up (hotbar). Panel: positive = down.
+		// Gameplay Input.MouseWheel: positive Y = wheel up (camera zoom). Panel: positive = down.
 		if ( !fromMenuScrollAction )
 			scroll = new Vector2( scroll.x, -scroll.y );
 
