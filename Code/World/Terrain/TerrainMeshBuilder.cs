@@ -1,5 +1,7 @@
 namespace Survival;
 
+using System.Collections.Generic;
+
 /// <summary>Builds a colored heightfield mesh for one terrain chunk — samples world meters, never reads preview PNG.</summary>
 public static class TerrainMeshBuilder
 {
@@ -123,6 +125,9 @@ public static class TerrainMeshBuilder
 		mesh.CreateVertexBuffer<Vertex>( vertexCount );
 		mesh.CreateIndexBuffer( indexCount );
 
+		var collisionPositions = new List<Vector3>( vertexCount );
+		var collisionIndices = new List<int>( indexCount );
+
 		mesh.LockVertexBuffer<Vertex>( vertices =>
 		{
 			for ( var i = 0; i < vertexCount; i++ )
@@ -132,10 +137,12 @@ public static class TerrainMeshBuilder
 				var localX = ix * step;
 				var localY = iy * step;
 				var normal = ComputeNormal( heights, verticesPerSide, i, step );
+				var position = TerrainWorldUnits.MetersToEngine( new Vector3( localX, localY, heights[i] ) );
 
+				collisionPositions.Add( position );
 				vertices[i] = new Vertex
 				{
-					Position = TerrainWorldUnits.MetersToEngine( new Vector3( localX, localY, heights[i] ) ),
+					Position = position,
 					Normal = normal,
 					Tangent = ComputeTangent( normal ),
 					TexCoord0 = new Vector2( ix / (float)(verticesPerSide - 1), iy / (float)(verticesPerSide - 1) ),
@@ -144,26 +151,28 @@ public static class TerrainMeshBuilder
 			}
 		} );
 
+		for ( var iy = 0; iy < verticesPerSide - 1; iy++ )
+		{
+			for ( var ix = 0; ix < verticesPerSide - 1; ix++ )
+			{
+				var i0 = (iy * verticesPerSide) + ix;
+				var i1 = i0 + 1;
+				var i2 = i0 + verticesPerSide;
+				var i3 = i2 + 1;
+
+				collisionIndices.Add( i0 );
+				collisionIndices.Add( i1 );
+				collisionIndices.Add( i3 );
+				collisionIndices.Add( i0 );
+				collisionIndices.Add( i3 );
+				collisionIndices.Add( i2 );
+			}
+		}
+
 		mesh.LockIndexBuffer( indices =>
 		{
-			var write = 0;
-			for ( var iy = 0; iy < verticesPerSide - 1; iy++ )
-			{
-				for ( var ix = 0; ix < verticesPerSide - 1; ix++ )
-				{
-					var i0 = (iy * verticesPerSide) + ix;
-					var i1 = i0 + 1;
-					var i2 = i0 + verticesPerSide;
-					var i3 = i2 + 1;
-
-					indices[write++] = i0;
-					indices[write++] = i1;
-					indices[write++] = i3;
-					indices[write++] = i0;
-					indices[write++] = i3;
-					indices[write++] = i2;
-				}
-			}
+			for ( var i = 0; i < indexCount; i++ )
+				indices[i] = collisionIndices[i];
 		} );
 
 		var bounds = new BBox(
@@ -171,7 +180,11 @@ public static class TerrainMeshBuilder
 			TerrainWorldUnits.MetersToEngine( new Vector3( chunkSizeMeters, chunkSizeMeters, maxTerrainHeightMeters ) ) );
 		mesh.Bounds = bounds;
 
-		var model = new ModelBuilder().AddMesh( mesh ).Create();
+		var model = new ModelBuilder()
+			.AddMesh( mesh )
+			.AddCollisionMesh( collisionPositions, collisionIndices )
+			.AddTraceMesh( collisionPositions, collisionIndices )
+			.Create();
 
 		return new BuildResult
 		{

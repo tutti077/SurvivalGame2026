@@ -1,0 +1,28 @@
+{
+  "outcomes": {
+    "lightBlock": {
+      "tier": "Light",
+      "durationSeconds": 0.35,
+      "healthDamage": 0,
+      "staminaCost": 8
+    },
+    "lightParry": {
+      "tier": "Light",
+      "durationSeconds": 0,
+      "healthDamage": 0,
+      "staminaCost": 0
+    },
+    "heavyBlock": {
+      "tier": "Light",
+      "durationSeconds": 0.55,
+      "healthDamage": 2,
+      "staminaCost": 12
+    },
+    "heavyParry": {
+      "tier": "Light",
+      "durationSeconds": 0.25,
+      "healthDamage": 1,
+      "staminaCost": 6
+    }
+  }
+}

@@ -90,7 +90,7 @@ Biome-specific sculpting (`TerrainPreviewBiomeTerrainShaper`, etc.) runs in the 
 
 **Playtest (`terraintest.scene`):** fly camera **Follow terrain height** optional. Press **J** to spawn a scale-reference player at the camera. Chunk meshes: **33 verts/side** (~2 m on 64 m chunks); **Height Smooth Passes = 0** keeps natural slopes between corners. Shore blend eases land toward sea level near lakes and the outer rim.
 
-**Vegetation (trees):** `TerrainVegetationScatter` runs once when a chunk loads (parented under the chunk GO; local meters match mesh verts). Large FBM picks **forest vs clearing**; inside forest, hash picks **Prefab A** (`temp_tree_3`) or **Prefab B** (`propertree`). Stream camera positions must be converted engine→meters before `RefreshChunks` (same as `TryRefreshStreamChunks`) or FinishWorldLoad will unload every chunk and wipe trees.
+**Vegetation (trees):** `TerrainVegetationScatter` runs once when a chunk loads (parented under the chunk GO; local meters match mesh verts). Large FBM picks **forest vs clearing**; inside forest, hash picks **Prefab A** (`temp_tree_3`, large) or **Prefab B** (`propertree`). Clover also scatters rock/stick **clusters**, plus a tunable chance (default **5%**) to place one stick in open ground beside each Prefab A tree. Stream camera positions must be converted engine→meters before `RefreshChunks` (same as `TryRefreshStreamChunks`) or FinishWorldLoad will unload every chunk and wipe trees.
 
 **Biome edges:** **Biomes - Continuous Placement At Sample** makes blobby patches. **Biomes - Edge Color Blend (0–1)** (~0.35) softens borders only — interiors stay dominant biome color. Shader splats can replace this later.
 

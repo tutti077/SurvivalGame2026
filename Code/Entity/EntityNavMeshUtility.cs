@@ -20,43 +20,6 @@ static class EntityNavMeshUtility
 	static readonly float[] HeightOffsets = { 0f, 32f, 64f, 96f, 128f, -32f, -64f };
 	static readonly float[] FastHeightOffsets = { 0f, 32f, -32f };
 
-	/// <summary>Only for walkable build pieces — not world/spawn queries.</summary>
-	public static void RequestBuildNavTiles( Scene scene, BBox bounds )
-	{
-		if ( !scene.IsValid() )
-			return;
-
-		var navMesh = scene.NavMesh;
-		if ( navMesh is null || !navMesh.IsEnabled )
-			return;
-
-		navMesh.RequestTilesGeneration( bounds );
-	}
-
-	/// <summary>
-	/// Runtime tile generation from physics — use only when placing stairs/ramps etc.
-	/// Do not call at enemy spawn: scenes with <c>BakedDataPath</c> already have nav; GenerateTiles
-	/// rebuilds from non-static colliders and can wipe the baked mesh.
-	/// </summary>
-	public static void GenerateBuildNavTiles( Scene scene, BBox bounds )
-	{
-		if ( !scene.IsValid() )
-			return;
-
-		var navMesh = scene.NavMesh;
-		if ( navMesh is null || !navMesh.IsEnabled )
-			return;
-
-		var physics = scene.PhysicsWorld;
-		if ( physics is null )
-		{
-			RequestBuildNavTiles( scene, bounds );
-			return;
-		}
-
-		navMesh.GenerateTiles( physics, bounds );
-	}
-
 	public static bool TryProjectToNavMesh( Scene scene, Vector3 near, out Vector3 onNav, NavProjectTier tier = NavProjectTier.Full, float maxRadius = 1024f )
 	{
 		onNav = default;

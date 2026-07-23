@@ -176,6 +176,8 @@ public partial class PlayerCombat
 
 		_serverMeleeAttack = new ServerMeleeAttackRuntime( this, intent, holdSeconds, isHeavy, swingLogNote );
 
+		EmitSwingNoiseIfPlayer();
+
 		// Don't Broadcast inside Rpc.Host handling of the attacker pawn — nested HostOnly broadcasts on a
 		// host-owned object often never reach joining clients (host still runs it locally → host sees clients).
 		if ( GameObject.Network is { Active: true } && Networking.IsHost && ClientMeleeSwingTraceDebug )
@@ -183,6 +185,17 @@ public partial class PlayerCombat
 			_deferredSwingVisualIntent = intent;
 			_deferSwingVisualBroadcast = true;
 		}
+	}
+
+	void EmitSwingNoiseIfPlayer()
+	{
+		if ( Components.Get<EntityBrain>() is not null )
+			return;
+
+		if ( Components.Get<PlayerController>() is null )
+			return;
+
+		EntityNoiseBus.Emit( GameObject.Scene, GameObject.WorldPosition, EntityNoiseKind.Swing, GameObject );
 	}
 
 	AttackReleaseIntent _deferredSwingVisualIntent;

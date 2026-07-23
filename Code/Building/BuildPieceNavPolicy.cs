@@ -2,19 +2,19 @@ using System;
 
 namespace Survival;
 
-/// <summary>How a build piece affects nav — blocking uses physics only; walkable pieces may trigger local rebake.</summary>
+/// <summary>How a build piece affects nav after a local tile rebake.</summary>
 public enum BuildNavCategory
 {
-	/// <summary>Walls, floors, roofs, chests — dynamic blockers, no nav rebake.</summary>
+	/// <summary>Walls, roofs, chests — carve holes / block traversal on the mesh.</summary>
 	Blocking = 0,
 
-	/// <summary>Stairs, ramps, bridges — may mark a small local nav area dirty.</summary>
+	/// <summary>Stairs, ramps, bridges — reshape walkable surfaces on rebake.</summary>
 	WalkablePath = 1
 }
 
 public static class BuildPieceNavPolicy
 {
-	const float LocalBakePadding = 128f;
+	const float LocalBakePadding = 160f;
 
 	public static BuildNavCategory GetCategory( string pieceId )
 	{

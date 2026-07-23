@@ -6,7 +6,7 @@
     "Name": "scavt1",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
-    "Scale": "1,1,1",
+    "Scale": "0.85,0.85,0.85",
     "Tags": "enemy",
     "Enabled": false,
     "NetworkMode": 0,

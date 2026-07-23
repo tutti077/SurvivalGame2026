@@ -17,57 +17,35 @@ public partial class PlayerCombat
 	[Property, Group( "Combat — Block" ), Title( "Block sample sphere radius" )]
 	public float BlockSampleSphereRadius { get; set; } = 2f;
 
-	[Property, Group( "Combat — Block" ), Title( "Block line length" )]
-	public float BlockLineLength { get; set; } = 62f;
-
-	[Property, Group( "Combat — Block" ), Title( "Guard reach (edge of arc → line center)" )]
-	public float BlockGuardReach { get; set; } = 20f;
-
 	[Property, Group( "Combat — Block" ), Title( "Block guard sample count" )]
 	public float BlockGuardSampleCount { get; set; } = 24f;
 
-	[Property, Group( "Combat — Block" ), Title( "Lateral block arc (° total, half each side)" )]
-	public float MeleeBlockLateralArcDegrees { get; set; } = 150f;
+	[Property, Group( "Combat — Block" ), Title( "Front block arc (° total)" ), Range( 90f, 360f ), Step( 5f ), Description( "Facing coverage while blocking. 270° = ±135° from look yaw. Teardrop does not change this." )]
+	public float MeleeBlockFrontArcDegrees { get; set; } = 270f;
 
-	[Property, Group( "Combat — Block" ), Title( "Overhead block arc (° total, ±half from center)" )]
-	public float MeleeBlockOverheadArcDegrees { get; set; } = 50f;
+	[Property, Group( "Combat — Block" ), Title( "Block body radius" ), Range( 4f, 48f ), Step( 1f ), Description( "Horizontal radius of the block shell around the pawn (body coverage, not an extended guard arc)." )]
+	public float MeleeBlockBodyRadius { get; set; } = 18f;
 
-	[Property, Group( "Combat — Block" ), Title( "Ground arc radius at feet" )]
-	public float BlockGroundArcRadius { get; set; } = 48f;
+	[Property, Group( "Combat — Block" ), Title( "Block shell height padding" ), Range( 0f, 24f ), Step( 1f ), Description( "Extra height above eye height for the block shell." )]
+	public float BlockShellHeightPadding { get; set; } = 8f;
 
 	[Property, Group( "Combat — Block" ), Title( "Ground arc height offset" )]
 	public float BlockGroundArcHeightOffset { get; set; } = 2f;
 
+	[Property, Group( "Combat — Block" ), Title( "Parry window (s)" ), Range( 0f, 0.5f ), Step( 0.01f ), Description( "Block started within this many seconds of the hit = perfect parry. Block viz lines are white during this window." )]
+	public float MeleeBlockParryWindowSeconds { get; set; } = 0.2f;
+
 	[Property, Group( "Combat — Block" ), Title( "Log rejected blocks to console" )]
 	public bool LogMeleeBlockRejectionsToConsole { get; set; }
-
-	[Property, Group( "Combat — Block" ), Title( "Overhead block up (above chest)" )]
-	public float BlockOverheadUpOffset { get; set; } = 12f;
-
-	[Property, Group( "Combat — Block" ), Title( "Overhead block forward offset" )]
-	public float BlockOverheadForwardOffset { get; set; } = 14f;
 
 	[Property, Group( "Combat — Block" ), Title( "Block debug color" )]
 	public Color BlockDebugColor { get; set; } = new( 0.22f, 0.92f, 0.38f, 0.92f );
 
-	[Property, Group( "Combat — Block" ), Title( "Light attack block stamina cost" )]
-	public float LightAttackBlockStaminaCost { get; set; } = 10f;
-
-	[Property, Group( "Combat — Block" ), Title( "Heavy attack block stamina cost" )]
-	public float HeavyAttackBlockStaminaCost { get; set; } = 15f;
-
-	[Property, Group( "Combat — Block" ), Title( "Blocked damage multiplier" )]
-	public float MeleeBlockedDamageMultiplier { get; set; } = 0f;
-
-	[Property, Group( "Combat — Block" ), Title( "Blocked victim stagger multiplier" )]
-	public float MeleeBlockedStaggerMultiplier { get; set; } = 0.35f;
+	[Property, Group( "Combat — Block" ), Title( "Parry window color" ), Description( "Block guard lines while still inside the perfect-parry timing window." )]
+	public Color BlockParryWindowColor { get; set; } = Color.White;
 
 	[Property, Group( "Combat — Block" ), Title( "Post-block recovery (s)" )]
 	public float PostBlockRecoveryDuration { get; set; } = 0.35f;
-
-	public float MeleeBlockLateralHalfArcDegrees => Math.Max( 1f, MeleeBlockLateralArcDegrees ) * 0.5f;
-
-	public float MeleeBlockOverheadHalfArcDegrees => Math.Max( 1f, MeleeBlockOverheadArcDegrees ) * 0.5f;
 
 	bool _authoritativeMeleeBlockActive;
 	byte _authoritativeMeleeBlockDirection = SwingDirs.Up;
@@ -110,6 +88,8 @@ public partial class PlayerCombat
 
 	double _serverBlockStartedAtSandbox;
 	double _serverBlockLastDirectionChangeAtSandbox;
+	double _localBlockVizStartedAt;
+	bool _localBlockInputWasActive;
 
 	bool _blockDirectionChangedThisFrame;
 
@@ -125,8 +105,11 @@ public partial class PlayerCombat
 
 	public bool BlockDirectionChangedThisFrame => _blockDirectionChangedThisFrame;
 
-	public float GetMeleeBlockStaminaCost( bool attackWasHeavy ) =>
-		Math.Max( 0f, attackWasHeavy ? HeavyAttackBlockStaminaCost : LightAttackBlockStaminaCost );
+	public float GetMeleeBlockStaminaCost( bool attackWasHeavy )
+	{
+		var outcome = MeleeBlockStaggerCatalog.Resolve( attackWasHeavy, perfectParry: false );
+		return Math.Max( 0f, outcome.StaminaCost );
+	}
 
 	internal int GetBlockGuardSampleCount() =>
 		(int)Math.Clamp( BlockGuardSampleCount, 4f, 48f );
@@ -241,6 +224,10 @@ public partial class PlayerCombat
 		var dir = GetBlockGuardDirection();
 		var prevDir = _authoritativeMeleeBlockDirection;
 
+		if ( active && !_localBlockInputWasActive )
+			_localBlockVizStartedAt = _block.Snapshot.PressedSandboxTimeNowDouble ?? Time.NowDouble;
+		_localBlockInputWasActive = active;
+
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
 			MaybeSendMeleeBlockStateRpc( active, dir );
 		else if ( IsServerSideForMeleeAuthority() )
@@ -303,17 +290,19 @@ public partial class PlayerCombat
 		if ( Networking.IsHost )
 			return;
 
-		_authoritativeMeleeBlockActive = active;
-		if ( direction is SwingDirs.Left or SwingDirs.Right or SwingDirs.Up )
-			_authoritativeMeleeBlockDirection = direction;
-
 		if ( active )
 		{
+			if ( !_authoritativeMeleeBlockActive )
+				_serverBlockStartedAtSandbox = Time.NowDouble;
 			_remoteBlockBasisYaw = basisYaw;
 			_remoteBlockBasisYawValid = true;
 		}
 		else
 			_remoteBlockBasisYawValid = false;
+
+		_authoritativeMeleeBlockActive = active;
+		if ( direction is SwingDirs.Left or SwingDirs.Right or SwingDirs.Up )
+			_authoritativeMeleeBlockDirection = direction;
 	}
 
 	void MaybeSendMeleeBlockStateRpc( bool active, byte direction )
@@ -369,11 +358,8 @@ public partial class PlayerCombat
 		if ( !IsServerSideForMeleeAuthority() )
 			return;
 
-		var cost = GetMeleeBlockStaminaCost( attackWasHeavy );
-		var vitals = Components.Get<PlayerVitals>();
-		if ( vitals is not null && cost > 0f )
-			vitals.TrySpendStamina( cost );
-
+		// Stamina for the block outcome is applied in ServerApplyBlockOutcome (JSON). This only ends the hold.
+		_ = attackWasHeavy;
 		SetAuthoritativeMeleeBlockState( false, _authoritativeMeleeBlockDirection );
 		_postBlockRecoveryRemaining = Math.Max( 0f, PostBlockRecoveryDuration );
 
@@ -406,21 +392,17 @@ public partial class PlayerCombat
 	internal bool TryServerResolveBlock(
 		in MeleeBlockContact contact,
 		bool logRejections,
-		out float damageMultiplier,
-		out float staggerMultiplier,
+		out MeleeBlockOutcome outcome,
 		out MeleeBlockRejectReason rejectReason ) =>
-		MeleeBlockResolution.TryResolve( this, in contact, logRejections, out damageMultiplier, out staggerMultiplier,
-			out rejectReason );
+		MeleeBlockResolution.TryResolve( this, in contact, logRejections, out outcome, out rejectReason );
 
 	internal bool TryServerResolveBlock(
 		in MeleeBlockContact contact,
 		bool logRejections,
-		out float damageMultiplier,
-		out float staggerMultiplier,
+		out MeleeBlockOutcome outcome,
 		out MeleeBlockRejectReason rejectReason,
 		out MeleeBlockValidationTrace trace ) =>
-		MeleeBlockResolution.TryResolve( this, in contact, logRejections, out damageMultiplier, out staggerMultiplier,
-			out rejectReason, out trace );
+		MeleeBlockResolution.TryResolve( this, in contact, logRejections, out outcome, out rejectReason, out trace );
 
 	internal void DrawRemoteBlockVisualizationIfNeeded()
 	{
@@ -433,16 +415,12 @@ public partial class PlayerCombat
 		if ( !ShouldDrawMeleeBlockVisualization() || !GameObject.IsValid() )
 			return;
 
-		var dir = GetBlockGuardDirection();
-		if ( dir is not (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) )
-			dir = SwingDirs.Up;
-
 		var drawDuration = MathF.Max( 0.016f, Time.Delta * 1.5f );
-		var lineColor = BlockDebugColor;
+		var lineColor = GetBlockVisualizationColor();
 
 		var sampleCount = GetBlockGuardSampleCount();
 		Span<Vector3> samples = stackalloc Vector3[48];
-		var count = MeleeBlockPath.BuildGuardSamples( this, dir, sampleCount, samples );
+		var count = MeleeBlockPath.BuildGuardSamples( this, GetBlockGuardDirection(), sampleCount, samples );
 
 		if ( count >= 2 )
 		{
@@ -455,19 +433,45 @@ public partial class PlayerCombat
 				DebugOverlay.Sphere( new Sphere( samples[i], hitRadius ), sphereColor, drawDuration );
 		}
 
-		MeleeBlockPath.EnumerateGroundArcSegments( this, dir, 32, ( p0, p1 ) =>
+		MeleeBlockPath.EnumerateGroundArcSegments( this, GetBlockGuardDirection(), 32, ( p0, p1 ) =>
 			DebugOverlay.Line( p0, p1, lineColor.WithAlpha( 0.85f ), drawDuration ) );
 
 		if ( ShowBlockFootprintVolume )
-			DrawBlockFootprintSolidFill( dir );
+			DrawBlockFootprintSolidFill( GetBlockGuardDirection() );
+	}
+
+	Color GetBlockVisualizationColor()
+	{
+		if ( IsInsidePerfectParryWindow() )
+			return BlockParryWindowColor;
+
+		return BlockDebugColor;
+	}
+
+	/// <summary>True while block age is still within <see cref="MeleeBlockParryWindowSeconds"/>.</summary>
+	bool IsInsidePerfectParryWindow()
+	{
+		var window = Math.Max( 0f, MeleeBlockParryWindowSeconds );
+		if ( window <= 0f )
+			return false;
+
+		if ( !IsAuthoritativeMeleeBlocking && !LocalBlockInputActive() )
+			return false;
+
+		var started = _serverBlockStartedAtSandbox;
+		if ( IsLocalCombatDriver() && LocalBlockInputActive() && _localBlockVizStartedAt > 0d )
+			started = _localBlockVizStartedAt;
+
+		if ( started <= 0d )
+			return false;
+
+		var age = Time.NowDouble - started;
+		return age >= 0d && age <= window;
 	}
 
 	void DrawBlockFootprintSolidFill( byte blockDir )
 	{
-		if ( blockDir is not (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) )
-			return;
-
-		Gizmo.Draw.Color = BlockDebugColor.WithAlpha( Math.Clamp( BlockFootprintFillAlpha, 0.02f, 0.35f ) );
+		Gizmo.Draw.Color = GetBlockVisualizationColor().WithAlpha( Math.Clamp( BlockFootprintFillAlpha, 0.02f, 0.35f ) );
 		MeleeBlockPath.EnumerateFootprintSolidTriangles( this, blockDir,
 			( a, b, c ) => Gizmo.Draw.SolidTriangle( a, b, c ) );
 	}
@@ -480,11 +484,7 @@ public partial class PlayerCombat
 		if ( !ShouldDrawMeleeBlockVisualization() )
 			return;
 
-		var dir = GetBlockGuardDirection();
-		if ( dir is not (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) )
-			dir = SwingDirs.Up;
-
-		DrawBlockFootprintSolidFill( dir );
+		DrawBlockFootprintSolidFill( GetBlockGuardDirection() );
 	}
 
 	bool ShouldDrawMeleeBlockVisualization()

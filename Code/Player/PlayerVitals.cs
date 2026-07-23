@@ -45,14 +45,14 @@ public sealed class PlayerVitals : Component
 	public double LastStaminaDrainArmedAtRealtime { get; private set; }
 	public float LastStaminaRegenDelayResolvedSeconds { get; private set; }
 
-	/// <summary>Last melee stagger amount applied by the host (hook for future hit reactions).</summary>
+	/// <summary>Last melee stagger duration applied by the host (seconds; for HUD / debug).</summary>
 	public float LastMeleeStaggerApplied { get; private set; }
 
-	public void ApplyMeleeStagger( float amount )
+	public void ApplyMeleeStagger( float durationSeconds )
 	{
-		if ( amount <= 1e-4f )
+		if ( durationSeconds <= 1e-4f )
 			return;
-		LastMeleeStaggerApplied = amount;
+		LastMeleeStaggerApplied = durationSeconds;
 	}
 	public float LastStaminaDrainAmount { get; private set; }
 

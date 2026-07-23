@@ -66,6 +66,7 @@ public static class MeleeAttackSweep
 		PlayerCombat blockFirstDefender = null;
 		var blockFirstDist = float.MaxValue;
 		var blockFirstPos = tip;
+		var blockFirstOutcome = default( MeleeBlockOutcome );
 		foreach ( var defender in scene.GetAllComponents<PlayerCombat>() )
 		{
 			if ( defender is null || defender == attackerCombat || !defender.Enabled || !defender.GameObject.IsValid() )
@@ -92,15 +93,16 @@ public static class MeleeAttackSweep
 				AttackRayGeometryValidated = true
 			};
 			if ( !defender.TryServerResolveBlock( in contact, defender.LogMeleeBlockRejectionsToConsole,
-				     out var guardBlockMul, out _, out _, out _ ) || guardBlockMul > 0.999f )
+				     out var outcome, out _, out _ ) )
 				continue;
 
 			blockFirstDefender = defender;
 			blockFirstDist = guardDist;
 			blockFirstPos = guardPos;
+			blockFirstOutcome = outcome;
 		}
 
-		// Active guard line hit before body => block wins.
+		// Body-shell hit before body => block intercept (JSON HP / stamina / stagger).
 		if ( blockFirstDefender is not null && blockFirstDist <= bodyHitDist + 1e-4f )
 		{
 			var dedupId = blockFirstDefender.GameObject.Id;
@@ -108,7 +110,7 @@ public static class MeleeAttackSweep
 				return false;
 
 			blockFirstDefender.NotifyAuthoritativeMeleeBlockIntercepted();
-			blockFirstDefender.ConsumeAuthoritativeMeleeBlock( isHeavy );
+			blockFirstDefender.ServerApplyBlockOutcome( in blockFirstOutcome, attackerCombat );
 			targetsHitCount++;
 
 			onHitReported?.Invoke( new MeleeHitResult
@@ -120,21 +122,19 @@ public static class MeleeAttackSweep
 				IsHeavy = isHeavy,
 				AttackState = attackState,
 				HitPosition = blockFirstPos,
-				DamageApplied = 0f,
-				StaggerApplied = 0f,
+				DamageApplied = blockFirstOutcome.HealthDamage,
+				StaggerApplied = blockFirstOutcome.DurationSeconds,
 				TargetsHitCount = targetsHitCount,
 				TargetWasAlreadyHit = false,
 				WasBlocked = true,
-				IncomingAngleDegrees = MeleeBlockResolution.ComputeIncomingHitAngleDegrees(
-					blockFirstDefender.GameObject.WorldPosition,
-					blockFirstDefender.GetBlockCombatBasisYaw(),
-					blockFirstPos )
+				IncomingAngleDegrees = MeleeBlockResolution.ComputeIncomingAngleFromAttacker(
+					blockFirstDefender, attackerRoot.WorldPosition )
 			} );
 
 			if ( logHits )
 			{
 				Log.Info(
-					$"[PlayerCombat/MeleeSweepRay] {MeleeAttackTypes.Label( attackType )} {MeleeAttackStates.Label( attackState )} heavy={isHeavy} BLOCKED by {blockFirstDefender.GameObject.Name} targets={targetsHitCount}{swingLogNote}" );
+					$"[PlayerCombat/MeleeSweepRay] {MeleeAttackTypes.Label( attackType )} {MeleeAttackStates.Label( attackState )} heavy={isHeavy} BLOCKED by {blockFirstDefender.GameObject.Name} outcome={blockFirstOutcome.OutcomeId} hp={blockFirstOutcome.HealthDamage:0.#} stam={blockFirstOutcome.StaminaCost:0.#} stagger={blockFirstOutcome.DurationSeconds:0.###}s targets={targetsHitCount}{swingLogNote}" );
 			}
 
 			return true;
@@ -150,28 +150,51 @@ public static class MeleeAttackSweep
 		if ( !hitVictimRootIds.Add( dedupBodyId ) )
 			return false;
 
-		var dmgAmount = damage;
-		var stMul = 1f;
+		var bodyDmgAmount = damage;
+		var bodyStaggerApplied = stagger;
 		var wasBlocked = false;
 		var incomingAngle = 0f;
 		PlayerCombat blockingCombat = null;
-		if ( MeleeAttackResolution.TryGetBlockDamageMultiplier( attackerRoot, bodyReceiver, bodyHitPos, attackType,
-			     attackSwingDir, isHeavy, origin, tip, rayThickness, out var blockMul, out var blockStMul,
-			     out blockingCombat, out var blockTrace ) )
+		if ( MeleeAttackResolution.TryGetBlockOutcome( attackerRoot, bodyReceiver, bodyHitPos, attackType,
+			     attackSwingDir, isHeavy, origin, tip, rayThickness, out var blockOutcome, out blockingCombat,
+			     out var blockTrace ) )
 		{
-			dmgAmount *= blockMul;
-			stMul *= blockStMul;
-			wasBlocked = blockMul <= 1e-4f;
+			wasBlocked = true;
 			incomingAngle = blockTrace.IncomingAngleDegrees;
 			blockingCombat?.NotifyAuthoritativeMeleeBlockIntercepted();
-			if ( wasBlocked )
-				blockingCombat?.ConsumeAuthoritativeMeleeBlock( isHeavy );
+			blockingCombat?.ServerApplyBlockOutcome( in blockOutcome, attackerCombat );
+			bodyDmgAmount = 0f;
+			bodyStaggerApplied = blockOutcome.DurationSeconds;
+
+			onHitReported?.Invoke( new MeleeHitResult
+			{
+				AttackerId = attackerRoot.Id,
+				TargetId = dedupBodyId,
+				AttackInstanceId = attackInstanceId,
+				AttackType = attackType,
+				IsHeavy = isHeavy,
+				AttackState = attackState,
+				HitPosition = bodyHitPos,
+				DamageApplied = blockOutcome.HealthDamage,
+				StaggerApplied = blockOutcome.DurationSeconds,
+				TargetsHitCount = ++targetsHitCount,
+				TargetWasAlreadyHit = false,
+				WasBlocked = true,
+				IncomingAngleDegrees = incomingAngle
+			} );
+
+			if ( logHits )
+			{
+				Log.Info(
+					$"[PlayerCombat/MeleeSweepRay] {MeleeAttackTypes.Label( attackType )} {MeleeAttackStates.Label( attackState )} heavy={isHeavy} BLOCKED body-path {bodyReceiver.GameObject.Name} outcome={blockOutcome.OutcomeId} hp={blockOutcome.HealthDamage:0.#} stagger={blockOutcome.DurationSeconds:0.###}s targets={targetsHitCount}{swingLogNote}" );
+			}
+
+			return true;
 		}
 
-		var dealt = bodyReceiver.TakeDamage( dmgAmount, attackerCombat );
-		var staggerApplied = stagger * stMul;
-		var vitals = CombatAuthority.ResolvePlayerVitalsForDamageReceiver( bodyReceiver );
-		attackerCombat.ApplyMeleeStaggerToVictim( vitals, staggerApplied );
+		var bodyDealt = bodyReceiver.TakeDamage( bodyDmgAmount, attackerCombat );
+		var bodyVitals = CombatAuthority.ResolvePlayerVitalsForDamageReceiver( bodyReceiver );
+		attackerCombat.ApplyMeleeStaggerToVictim( bodyVitals, bodyStaggerApplied );
 		targetsHitCount++;
 
 		onHitReported?.Invoke( new MeleeHitResult
@@ -183,8 +206,8 @@ public static class MeleeAttackSweep
 			IsHeavy = isHeavy,
 			AttackState = attackState,
 			HitPosition = bodyHitPos,
-			DamageApplied = dealt,
-			StaggerApplied = staggerApplied,
+			DamageApplied = bodyDealt,
+			StaggerApplied = bodyStaggerApplied,
 			TargetsHitCount = targetsHitCount,
 			TargetWasAlreadyHit = false,
 			WasBlocked = wasBlocked,
@@ -193,9 +216,8 @@ public static class MeleeAttackSweep
 
 		if ( logHits )
 		{
-			var blockNote = wasBlocked ? " BLOCKED" : "";
 			Log.Info(
-				$"[PlayerCombat/MeleeSweepRay] {MeleeAttackTypes.Label( attackType )} {MeleeAttackStates.Label( attackState )} heavy={isHeavy} hit {bodyReceiver.GameObject.Name} dmg={dealt:0.#} stagger={staggerApplied:0.#} angle={incomingAngle:0.#}°{blockNote} targets={targetsHitCount}{swingLogNote}" );
+				$"[PlayerCombat/MeleeSweepRay] {MeleeAttackTypes.Label( attackType )} {MeleeAttackStates.Label( attackState )} heavy={isHeavy} hit {bodyReceiver.GameObject.Name} dmg={bodyDealt:0.#} stagger={bodyStaggerApplied:0.#} angle={incomingAngle:0.#}° targets={targetsHitCount}{swingLogNote}" );
 		}
 
 		return true;
@@ -348,28 +370,50 @@ public static class MeleeAttackSweep
 			return false;
 
 		var dmgAmount = damage;
-		var stMul = 1f;
+		var staggerAppliedAmount = stagger;
 		var wasBlocked = false;
 		var incomingAngle = 0f;
 		PlayerCombat blockingCombat = null;
 
-		if ( MeleeAttackResolution.TryGetBlockDamageMultiplier( attackerRoot, dmg, tr.HitPosition, attackType,
+		if ( MeleeAttackResolution.TryGetBlockOutcome( attackerRoot, dmg, tr.HitPosition, attackType,
 			     attackSwingDir: 0, isHeavy, segA, segB, Math.Max( 2f, attackerCombat.MeleeHitVolumeThickness ),
-			     out var blockMul, out var blockStMul, out blockingCombat, out var blockTrace ) )
+			     out var blockOutcome, out blockingCombat, out var blockTrace ) )
 		{
-			dmgAmount *= blockMul;
-			stMul *= blockStMul;
-			wasBlocked = blockMul <= 1e-4f;
+			wasBlocked = true;
 			incomingAngle = blockTrace.IncomingAngleDegrees;
 			blockingCombat?.NotifyAuthoritativeMeleeBlockIntercepted();
-			if ( wasBlocked )
-				blockingCombat?.ConsumeAuthoritativeMeleeBlock( isHeavy );
+			blockingCombat?.ServerApplyBlockOutcome( in blockOutcome, attackerCombat );
+			targetsHitCount++;
+
+			onHitReported?.Invoke( new MeleeHitResult
+			{
+				AttackerId = attackerRoot.Id,
+				TargetId = dedupId,
+				AttackInstanceId = attackInstanceId,
+				AttackType = attackType,
+				IsHeavy = isHeavy,
+				AttackState = attackState,
+				HitPosition = tr.HitPosition,
+				DamageApplied = blockOutcome.HealthDamage,
+				StaggerApplied = blockOutcome.DurationSeconds,
+				TargetsHitCount = targetsHitCount,
+				TargetWasAlreadyHit = false,
+				WasBlocked = true,
+				IncomingAngleDegrees = incomingAngle
+			} );
+
+			if ( logHits )
+			{
+				Log.Info(
+					$"[PlayerCombat/MeleeSweep] {MeleeAttackTypes.Label( attackType )} {MeleeAttackStates.Label( attackState )} heavy={isHeavy} BLOCKED {dmg.GameObject.Name} outcome={blockOutcome.OutcomeId} hp={blockOutcome.HealthDamage:0.#} stagger={blockOutcome.DurationSeconds:0.###}s targets={targetsHitCount}{swingLogNote}" );
+			}
+
+			return true;
 		}
 
 		var dealt = dmg.TakeDamage( dmgAmount, attackerCombat );
-		var staggerApplied = stagger * stMul;
 		var vitals = CombatAuthority.ResolvePlayerVitalsForDamageReceiver( dmg );
-		attackerCombat.ApplyMeleeStaggerToVictim( vitals, staggerApplied );
+		attackerCombat.ApplyMeleeStaggerToVictim( vitals, staggerAppliedAmount );
 
 		targetsHitCount++;
 
@@ -383,7 +427,7 @@ public static class MeleeAttackSweep
 			AttackState = attackState,
 			HitPosition = tr.HitPosition,
 			DamageApplied = dealt,
-			StaggerApplied = staggerApplied,
+			StaggerApplied = staggerAppliedAmount,
 			TargetsHitCount = targetsHitCount,
 			TargetWasAlreadyHit = false,
 			WasBlocked = wasBlocked,
@@ -392,9 +436,8 @@ public static class MeleeAttackSweep
 
 		if ( logHits )
 		{
-			var blockNote = wasBlocked ? " BLOCKED" : "";
 			Log.Info(
-				$"[PlayerCombat/MeleeSweep] {MeleeAttackTypes.Label( attackType )} {MeleeAttackStates.Label( attackState )} heavy={isHeavy} hit {dmg.GameObject.Name} dmg={dealt:0.#} stagger={staggerApplied:0.#} angle={incomingAngle:0.#}°{blockNote} targets={targetsHitCount}{swingLogNote}" );
+				$"[PlayerCombat/MeleeSweep] {MeleeAttackTypes.Label( attackType )} {MeleeAttackStates.Label( attackState )} heavy={isHeavy} hit {dmg.GameObject.Name} dmg={dealt:0.#} stagger={staggerAppliedAmount:0.#} angle={incomingAngle:0.#}° targets={targetsHitCount}{swingLogNote}" );
 		}
 
 		return true;

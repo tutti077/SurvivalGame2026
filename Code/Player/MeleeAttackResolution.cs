@@ -8,21 +8,20 @@ namespace Survival;
 /// </summary>
 public static class MeleeAttackResolution
 {
-	public static bool TryGetBlockDamageMultiplier(
+	public static bool TryGetBlockOutcome(
 		GameObject attackerRoot,
 		DamageReceiver victimReceiver,
 		Vector3 hitPosition,
 		byte attackType,
 		bool attackWasHeavy,
-		out float damageMultiplier,
-		out float victimStaminaDrainMultiplier,
+		out MeleeBlockOutcome outcome,
 		out PlayerCombat blockingCombat,
 		out MeleeBlockValidationTrace blockTrace ) =>
-		TryGetBlockDamageMultiplier( attackerRoot, victimReceiver, hitPosition, attackType, attackSwingDir: 0,
-			attackWasHeavy, blockRayOrigin: null, blockRayEnd: null, extraRayThickness: 0f, out damageMultiplier,
-			out victimStaminaDrainMultiplier, out blockingCombat, out blockTrace );
+		TryGetBlockOutcome( attackerRoot, victimReceiver, hitPosition, attackType, attackSwingDir: 0,
+			attackWasHeavy, blockRayOrigin: null, blockRayEnd: null, extraRayThickness: 0f, out outcome,
+			out blockingCombat, out blockTrace );
 
-	public static bool TryGetBlockDamageMultiplier(
+	public static bool TryGetBlockOutcome(
 		GameObject attackerRoot,
 		DamageReceiver victimReceiver,
 		Vector3 hitPosition,
@@ -32,13 +31,11 @@ public static class MeleeAttackResolution
 		Vector3? blockRayOrigin,
 		Vector3? blockRayEnd,
 		float extraRayThickness,
-		out float damageMultiplier,
-		out float victimStaminaDrainMultiplier,
+		out MeleeBlockOutcome outcome,
 		out PlayerCombat blockingCombat,
 		out MeleeBlockValidationTrace blockTrace )
 	{
-		damageMultiplier = 1f;
-		victimStaminaDrainMultiplier = 1f;
+		outcome = default;
 		blockingCombat = null;
 		blockTrace = default;
 
@@ -83,10 +80,7 @@ public static class MeleeAttackResolution
 			AttackRayGeometryValidated = attackRayGeometryValidated
 		};
 
-		if ( !defender.TryServerResolveBlock( in contact, defender.LogMeleeBlockRejectionsToConsole, out damageMultiplier,
-			     out victimStaminaDrainMultiplier, out _, out blockTrace ) )
-			return false;
-
-		return damageMultiplier < 0.999f;
+		return defender.TryServerResolveBlock( in contact, defender.LogMeleeBlockRejectionsToConsole, out outcome,
+			out _, out blockTrace );
 	}
 }

@@ -4,10 +4,9 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Server-authoritative directional block: attack ray must enter the held block region (footprint / guard)
-/// before the defender body. Left teardrop = left-side region; right teardrop = right-side region.
-/// Lateral holds may block left or right attacks when geometry passes and the attacker is in that teardrop's front arc
-/// (blocks behind the defender or on the wrong flank fail even if the wide arc is along the ray).
+/// Server-authoritative block: hold Attack2 to cover a front facing arc (± half of <see cref="PlayerCombat.MeleeBlockFrontArcDegrees"/>).
+/// Teardrop L/R/U is input/HUD only and does not gate success. Confirm with a body-radius shell ray hit before the body.
+/// Outcomes (duration / HP / stamina) come from <see cref="MeleeBlockStaggerCatalog"/>.
 /// </summary>
 public static class MeleeBlockResolution
 {
@@ -28,9 +27,7 @@ public static class MeleeBlockResolution
 		if ( defender is null || !defender.GameObject.IsValid() )
 			return 0f;
 
-		var yaw = defender.IsAuthoritativeMeleeBlocking
-			? defender.GetBlockCombatBasisYaw()
-			: defender.GetMeleeCombatBasisRotation().Angles().yaw;
+		var yaw = GetFacingYawDegrees( defender );
 		var angleFromHit = ComputeIncomingHitAngleDegrees( defender.GameObject.WorldPosition, yaw, hitPos );
 		if ( MathF.Abs( angleFromHit ) > 1e-3f )
 			return angleFromHit;
@@ -38,41 +35,42 @@ public static class MeleeBlockResolution
 		return ComputeIncomingHitAngleDegrees( defender.GameObject.WorldPosition, yaw, attackerPos );
 	}
 
-	public static bool IsInLateralBackArc( PlayerCombat pc, float angleDegrees ) =>
-		MathF.Abs( angleDegrees ) > pc.MeleeBlockLateralHalfArcDegrees + 1e-4f;
+	public static float GetFacingYawDegrees( PlayerCombat defender )
+	{
+		if ( defender is null || !defender.GameObject.IsValid() )
+			return 0f;
 
-	public static bool IsInOverheadBackArc( PlayerCombat pc, float angleDegrees ) =>
-		MathF.Abs( angleDegrees ) > pc.MeleeBlockOverheadHalfArcDegrees + 1e-4f;
+		return defender.IsAuthoritativeMeleeBlocking
+			? defender.GetBlockCombatBasisYaw()
+			: defender.GetMeleeCombatBasisRotation().Angles().yaw;
+	}
 
-	public static bool IsInLeftBlockZone( PlayerCombat pc, float angleDegrees ) =>
-		angleDegrees >= -pc.MeleeBlockLateralHalfArcDegrees - 1e-4f && angleDegrees <= 0f + 1e-4f;
+	public static float GetFrontHalfArcDegrees( PlayerCombat pc ) =>
+		Math.Max( 1f, pc.MeleeBlockFrontArcDegrees ) * 0.5f;
 
-	public static bool IsInRightBlockZone( PlayerCombat pc, float angleDegrees ) =>
-		angleDegrees >= 0f - 1e-4f && angleDegrees <= pc.MeleeBlockLateralHalfArcDegrees + 1e-4f;
+	public static bool IsOutsideFrontArc( PlayerCombat pc, float angleDegrees ) =>
+		MathF.Abs( angleDegrees ) > GetFrontHalfArcDegrees( pc ) + 1e-4f;
 
-	public static bool IsInOverheadBlockZone( PlayerCombat pc, float angleDegrees ) =>
-		MathF.Abs( angleDegrees ) <= pc.MeleeBlockOverheadHalfArcDegrees + 1e-4f;
+	public static bool IsInsideFrontArc( PlayerCombat pc, float angleDegrees ) =>
+		!IsOutsideFrontArc( pc, angleDegrees );
 
 	public static bool TryResolve(
 		PlayerCombat defender,
 		in MeleeBlockContact contact,
 		bool logRejections,
-		out float damageMultiplier,
-		out float staggerMultiplier,
+		out MeleeBlockOutcome outcome,
 		out MeleeBlockRejectReason rejectReason ) =>
-		TryResolve( defender, in contact, logRejections, out damageMultiplier, out staggerMultiplier, out rejectReason, out _ );
+		TryResolve( defender, in contact, logRejections, out outcome, out rejectReason, out _ );
 
 	public static bool TryResolve(
 		PlayerCombat defender,
 		in MeleeBlockContact contact,
 		bool logRejections,
-		out float damageMultiplier,
-		out float staggerMultiplier,
+		out MeleeBlockOutcome outcome,
 		out MeleeBlockRejectReason rejectReason,
 		out MeleeBlockValidationTrace trace )
 	{
-		damageMultiplier = 1f;
-		staggerMultiplier = 1f;
+		outcome = default;
 		rejectReason = MeleeBlockRejectReason.None;
 		trace = default;
 
@@ -103,38 +101,22 @@ public static class MeleeBlockResolution
 			return false;
 		}
 
-		var blockDir = defender.AuthoritativeMeleeBlockDirection;
 		var angle = ComputeIncomingAngleFromAttacker( defender, contact.AttackerPosition );
+		var blockDir = defender.AuthoritativeMeleeBlockDirection;
+		var perfectParry = IsPerfectParry( defender, contact.HitSandboxTime );
 		trace = new MeleeBlockValidationTrace
 		{
 			IncomingAngleDegrees = angle,
 			BlockDirection = blockDir,
-			WasBlocking = true
+			WasBlocking = true,
+			WasPerfectParry = perfectParry
 		};
 
-		if ( blockDir is not (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) )
+		if ( IsOutsideFrontArc( defender, angle ) )
 		{
-			rejectReason = MeleeBlockRejectReason.InvalidBlockDirection;
+			rejectReason = MeleeBlockRejectReason.IncomingFromBackArc;
 			trace = trace with { RejectReason = rejectReason };
-			return false;
-		}
-
-		var overheadAttack = IsOverheadAttack( in contact );
-		if ( overheadAttack )
-		{
-			if ( blockDir != SwingDirs.Up )
-			{
-				rejectReason = MeleeBlockRejectReason.WrongBlockForAttackType;
-				trace = trace with { RejectReason = rejectReason };
-				LogReject( defender, contact, logRejections, rejectReason, angle, blockDir );
-				return false;
-			}
-		}
-		else if ( blockDir == SwingDirs.Up )
-		{
-			rejectReason = MeleeBlockRejectReason.WrongBlockForAttackType;
-			trace = trace with { RejectReason = rejectReason };
-			LogReject( defender, contact, logRejections, rejectReason, angle, blockDir );
+			LogReject( defender, contact, logRejections, rejectReason, angle, blockDir, perfectParry );
 			return false;
 		}
 
@@ -142,93 +124,54 @@ public static class MeleeBlockResolution
 		{
 			rejectReason = MeleeBlockRejectReason.RayMissedBlockRegion;
 			trace = trace with { RejectReason = rejectReason };
-			LogReject( defender, contact, logRejections, rejectReason, angle, blockDir );
+			LogReject( defender, contact, logRejections, rejectReason, angle, blockDir, perfectParry );
 			return false;
 		}
 
-		if ( !HeldBlockFacesIncomingAttack( defender, blockDir, overheadAttack, angle, out rejectReason ) )
-		{
-			trace = trace with { RejectReason = rejectReason };
-			LogReject( defender, contact, logRejections, rejectReason, angle, blockDir );
-			return false;
-		}
-
+		outcome = MeleeBlockStaggerCatalog.Resolve( contact.AttackWasHeavy, perfectParry );
 		rejectReason = MeleeBlockRejectReason.None;
-		trace = trace with { RejectReason = rejectReason };
-		damageMultiplier = Math.Clamp( defender.MeleeBlockedDamageMultiplier, 0f, 1f );
-		staggerMultiplier = Math.Clamp( defender.MeleeBlockedStaggerMultiplier, 0f, 1f );
+		trace = trace with
+		{
+			RejectReason = rejectReason,
+			OutcomeId = outcome.OutcomeId,
+			StaggerDurationSeconds = outcome.DurationSeconds,
+			HealthDamage = outcome.HealthDamage,
+			StaminaCost = outcome.StaminaCost
+		};
+
+		if ( perfectParry )
+		{
+			Log.Info(
+				$"[MeleeBlock] PARRY {defender.GameObject.Name}: {outcome.OutcomeId} heavy={contact.AttackWasHeavy} "
+				+ $"angle={angle:0.#}° duration={outcome.DurationSeconds:0.###}s hp={outcome.HealthDamage:0.#} stam={outcome.StaminaCost:0.#} "
+				+ $"from {contact.AttackerRoot?.Name}" );
+		}
+
 		return true;
 	}
 
-	public static bool IsOverheadAttack( in MeleeBlockContact contact )
+	public static bool IsPerfectParry( PlayerCombat defender, double hitSandboxTime )
 	{
-		if ( contact.AttackSwingDir == SwingDirs.Up )
-			return true;
+		if ( defender is null )
+			return false;
 
-		return contact.AttackType == MeleeAttackTypes.Forward;
+		var window = Math.Max( 0f, defender.MeleeBlockParryWindowSeconds );
+		if ( window <= 1e-6f )
+			return false;
+
+		var blockAge = hitSandboxTime - defender.ServerBlockStartedAtSandbox;
+		return blockAge >= -1e-4 && blockAge <= window + 1e-4;
 	}
 
-	/// <summary>Incoming angle from attacker root vs block look yaw (0° ahead, − = left, + = right).</summary>
 	public static float ComputeIncomingAngleFromAttacker( PlayerCombat defender, Vector3 attackerPosition )
 	{
 		if ( defender is null || !defender.GameObject.IsValid() )
 			return 0f;
 
-		var yaw = defender.IsAuthoritativeMeleeBlocking
-			? defender.GetBlockCombatBasisYaw()
-			: defender.GetMeleeCombatBasisRotation().Angles().yaw;
-		return ComputeIncomingHitAngleDegrees( defender.GameObject.WorldPosition, yaw, attackerPosition );
-	}
-
-	/// <summary>
-	/// Wide block arcs can sit along the ray before the torso center; require the attacker to be in the held teardrop's front wedge.
-	/// </summary>
-	public static bool HeldBlockFacesIncomingAttack(
-		PlayerCombat pc,
-		byte blockDir,
-		bool overheadAttack,
-		float incomingAngleDegrees,
-		out MeleeBlockRejectReason reason )
-	{
-		reason = MeleeBlockRejectReason.None;
-
-		if ( overheadAttack )
-		{
-			if ( IsInOverheadBackArc( pc, incomingAngleDegrees ) )
-			{
-				reason = MeleeBlockRejectReason.IncomingFromBackArc;
-				return false;
-			}
-
-			if ( !IsInOverheadBlockZone( pc, incomingAngleDegrees ) )
-			{
-				reason = MeleeBlockRejectReason.WrongBlockForAngle;
-				return false;
-			}
-
-			return true;
-		}
-
-		if ( IsInLateralBackArc( pc, incomingAngleDegrees ) )
-		{
-			reason = MeleeBlockRejectReason.IncomingFromBackArc;
-			return false;
-		}
-
-		var inHeldZone = blockDir switch
-		{
-			SwingDirs.Left => IsInLeftBlockZone( pc, incomingAngleDegrees ),
-			SwingDirs.Right => IsInRightBlockZone( pc, incomingAngleDegrees ),
-			_ => false
-		};
-
-		if ( !inHeldZone )
-		{
-			reason = MeleeBlockRejectReason.WrongBlockForAngle;
-			return false;
-		}
-
-		return true;
+		return ComputeIncomingHitAngleDegrees(
+			defender.GameObject.WorldPosition,
+			GetFacingYawDegrees( defender ),
+			attackerPosition );
 	}
 
 	static void LogReject(
@@ -237,13 +180,16 @@ public static class MeleeBlockResolution
 		bool logRejections,
 		MeleeBlockRejectReason rejectReason,
 		float angle,
-		byte blockDir )
+		byte blockDir,
+		bool perfectParry )
 	{
 		if ( !logRejections || rejectReason == MeleeBlockRejectReason.None || !defender.LogMeleeBlockRejectionsToConsole )
 			return;
 
 		Log.Info(
-			$"[MeleeBlock] reject {defender.GameObject.Name}: {rejectReason} angle={angle:0.#}° block={SwingDirs.Letter( blockDir )} swing={SwingDirs.Letter( contact.AttackSwingDir )} attack={MeleeAttackTypes.Label( contact.AttackType )} from {contact.AttackerRoot?.Name}" );
+			$"[MeleeBlock] reject {defender.GameObject.Name}: {rejectReason} angle={angle:0.#}° "
+			+ $"teardrop={SwingDirs.Letter( blockDir )} (hud-only) heavy={contact.AttackWasHeavy} parryCandidate={perfectParry} "
+			+ $"swing={SwingDirs.Letter( contact.AttackSwingDir )} from {contact.AttackerRoot?.Name}" );
 	}
 
 	public static PlayerCombat FindDefenderCombat( DamageReceiver receiver )

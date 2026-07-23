@@ -29,6 +29,14 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 	/// </summary>
 	[Property, Group( "Stamina - Sprint" )] public float ExhaustedStaminaEpsilon { get; set; } = 0.25f;
 
+	/// <summary>Hold to sneak (quieter footsteps, slower approach). Default matches s&amp;box Duck.</summary>
+	[Property, Group( "Stamina - Sneak" )] public string SneakInputAction { get; set; } = "Duck";
+
+	[Property, Group( "Stamina - Sneak" )] public float SneakStaminaPerSecond { get; set; } = 1.25f;
+
+	[Property, Group( "Debug" ), Title( "Log noise/actions (10ms)" )]
+	public bool LogEntityNoiseDebug { get; set; } = false;
+
 	/// <summary>
 	/// Optional per-player stamina regen delay override in seconds. Use a value >= 0 to override
 	/// <see cref="VitalsAuthority.StaminaRegenDelaySeconds"/> for this pawn; negative values use authority default.
@@ -40,6 +48,12 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 	PlayerController _controller;
 	bool _sprintWasDown;
 	float _sprintDebtPending;
+	double _nextRunNoiseAt;
+	double _nextFootstepNoiseAt;
+	bool _sneakWasDown;
+	float _sneakDebtPending;
+	bool _sneakHeldReportedOnHost;
+	bool _sneakHeldReportedToHostLast;
 	bool _grappleWasAttached;
 	float _grapplePrevRopeLength;
 
@@ -78,25 +92,65 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		return n.IsOwner;
 	}
 
-	/// <summary>Pulls accumulated sprint preview debt and clears it. Merged into negative stamina on <see cref="PlayerVitals.RequestVitalsDelta"/> / <see cref="VitalsAuthority.TryApplyDeltas"/>.</summary>
+	/// <summary>Pulls accumulated sprint/sneak preview debt and clears it. Merged into negative stamina on <see cref="PlayerVitals.RequestVitalsDelta"/> / <see cref="VitalsAuthority.TryApplyDeltas"/>.</summary>
 	public float TakePendingSprintStaminaDebt()
 	{
-		var d = _sprintDebtPending;
+		var d = _sprintDebtPending + _sneakDebtPending;
 		_sprintDebtPending = 0f;
+		_sneakDebtPending = 0f;
 		return d;
 	}
 
-	/// <summary>Unsynced sprint preview total (authority pool estimate ≈ <see cref="PlayerVitals.CurrentStamina"/> + this).</summary>
-	public float PeekPendingSprintStaminaDebt() => _sprintDebtPending;
+	/// <summary>Unsynced sprint/sneak preview total (authority pool estimate ≈ <see cref="PlayerVitals.CurrentStamina"/> + this).</summary>
+	public float PeekPendingSprintStaminaDebt() => _sprintDebtPending + _sneakDebtPending;
 
-	/// <summary>Stamina regen on the host must not run while this pawn is sprinting here — authority stamina can lag behind preview until sprint flush / merged spends.</summary>
+	/// <summary>Stamina regen on the host must not run while this pawn is sprinting or sneaking here — authority stamina can lag behind preview until flush / merged spends.</summary>
 	public bool ShouldBlockStaminaRegenForAuthority()
 	{
-		if ( string.IsNullOrWhiteSpace( SprintInputAction ) || SprintStaminaPerSecond <= 0f || _vitals is null )
+		if ( _vitals is null )
 			return false;
+
+		if ( !string.IsNullOrWhiteSpace( SprintInputAction ) && SprintStaminaPerSecond > 0f )
+		{
+			if ( IsLocalMovementDriver() ? WantsSprintStaminaSpend() : _sprintHeldReportedOnHost )
+				return true;
+		}
+
+		if ( !string.IsNullOrWhiteSpace( SneakInputAction ) && SneakStaminaPerSecond > 0f )
+		{
+			if ( IsLocalMovementDriver() ? WantsSneakStaminaSpend() : _sneakHeldReportedOnHost )
+				return true;
+		}
+
+		return false;
+	}
+
+	/// <summary>True while Duck/sneak is held and the pawn is trying to move (local or host-reported).</summary>
+	public bool IsSneakingForNoise()
+	{
 		if ( IsLocalMovementDriver() )
-			return WantsSprintStaminaSpend();
+			return _sneakWasDown;
+		return _sneakHeldReportedOnHost;
+	}
+
+	/// <summary>True while sprint is held (local or host-reported). Used by entity ambient alert bands.</summary>
+	public bool IsSprintingForNoise()
+	{
+		if ( IsLocalMovementDriver() )
+			return _sprintWasDown;
 		return _sprintHeldReportedOnHost;
+	}
+
+	/// <summary>True while moving without sprint (walk intent). Sneak does not count.</summary>
+	public bool IsWalkingForNoise()
+	{
+		if ( IsSprintingForNoise() || IsSneakingForNoise() )
+			return false;
+
+		if ( IsLocalMovementDriver() )
+			return HasMovementSprintIntent();
+
+		return IsMovingEnoughForFootsteps();
 	}
 
 	/// <summary>Owner-side attach impulse — called when local <see cref="PlayerGrapple.IsAttached"/> rises.</summary>
@@ -159,6 +213,21 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		|| Input.Down( "Backward" )
 		|| Input.Down( "Left" )
 		|| Input.Down( "Right" );
+
+	bool WantsSneakStaminaSpend()
+	{
+		if ( _vitals is null || string.IsNullOrWhiteSpace( SneakInputAction ) )
+			return false;
+
+		if ( !Input.Down( SneakInputAction ) || _vitals.IsStaminaExhausted( ExhaustedStaminaEpsilon ) )
+			return false;
+
+		// Sneaking while sprinting doesn't stack — run wins for noise + stamina.
+		if ( WantsSprintStaminaSpend() )
+			return false;
+
+		return HasMovementSprintIntent();
+	}
 
 	public void PreInput()
 	{
@@ -227,14 +296,19 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 	{
 		base.OnUpdate();
 
-		if ( !IsLocalMovementDriver() )
-			return;
-
-		if ( _vitals is not null )
+		if ( IsLocalMovementDriver() && _vitals is not null )
 		{
 			UpdateSprintStaminaHoldAndFlushOnRelease();
+			UpdateSneakStaminaHoldAndFlushOnRelease();
 			DetectGrappleAttachEdge();
 		}
+
+		TickRunNoiseForEntities();
+		TickFootstepNoiseForEntities();
+		TickPlayerActionDebug();
+
+		if ( !IsLocalMovementDriver() )
+			return;
 
 		// Keep Run suppressed for the whole airborne/dangling frame (controller may re-read input after PreInput).
 		if ( !string.IsNullOrWhiteSpace( SprintInputAction ) && IsSprintBlocked()
@@ -245,6 +319,157 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		// Only catch large over-length desync after MoveModeWalk moves us.
 		ApplyGrappleOverLengthCatchup();
 		ApplyGrappleSwingPushAfterWalk( Time.Delta );
+	}
+
+	void TickRunNoiseForEntities()
+	{
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
+			return;
+
+		if ( Components.Get<EntityBrain>() is not null )
+			return;
+
+		var sprinting = IsLocalMovementDriver() ? _sprintWasDown : _sprintHeldReportedOnHost;
+		if ( !sprinting )
+			return;
+
+		if ( Time.NowDouble < _nextRunNoiseAt )
+			return;
+
+		_nextRunNoiseAt = Time.NowDouble + 0.35;
+		EntityNoiseBus.Emit( Scene, GameObject.WorldPosition, EntityNoiseKind.Run, GameObject );
+	}
+
+	void TickFootstepNoiseForEntities()
+	{
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
+			return;
+
+		if ( Components.Get<EntityBrain>() is not null )
+			return;
+
+		// Sprint already emits Run at longer range — skip overlapping footsteps.
+		var sprinting = IsLocalMovementDriver() ? _sprintWasDown : _sprintHeldReportedOnHost;
+		if ( sprinting )
+			return;
+
+		// Prefer WASD intent — PlayerController often has near-zero Rigidbody speed while walking.
+		var walking = IsLocalMovementDriver()
+			? HasMovementSprintIntent()
+			: IsMovingEnoughForFootsteps();
+		if ( !walking )
+			return;
+
+		if ( Time.NowDouble < _nextFootstepNoiseAt )
+			return;
+
+		_nextFootstepNoiseAt = Time.NowDouble + 0.4;
+		var sneak = IsSneakingForNoise();
+		EntityNoiseBus.Emit(
+			Scene,
+			GameObject.WorldPosition,
+			sneak ? EntityNoiseKind.SneakFootstep : EntityNoiseKind.Footstep,
+			GameObject );
+	}
+
+	void TickPlayerActionDebug()
+	{
+		EntityPerceptionDebug.Enabled = LogEntityNoiseDebug || EntityPerceptionDebug.Enabled;
+		if ( !LogEntityNoiseDebug )
+			return;
+
+		_controller ??= Components.Get<PlayerController>();
+		var body = _controller?.Body ?? Components.Get<Rigidbody>();
+		var speed = body is { IsValid: true } ? body.Velocity.WithZ( 0f ).Length : 0f;
+		var speedM = TerrainWorldUnits.EngineToMeters( speed );
+		var sprinting = IsLocalMovementDriver() ? _sprintWasDown : _sprintHeldReportedOnHost;
+		var sneak = IsSneakingForNoise();
+		var moving = IsMovingEnoughForFootsteps();
+
+		var action = "idle";
+		if ( sprinting )
+			action = "run";
+		else if ( sneak && moving )
+			action = "sneak";
+		else if ( moving )
+			action = "walk";
+
+		var nearestEnemyM = -1f;
+		if ( Scene.IsValid() )
+		{
+			var best = float.MaxValue;
+			foreach ( var brain in Scene.GetAllComponents<EntityBrain>() )
+			{
+				if ( brain is null || !brain.IsValid() )
+					continue;
+				var d = Vector3.DistanceBetween( GameObject.WorldPosition, brain.GameObject.WorldPosition );
+				if ( d < best )
+					best = d;
+			}
+
+			if ( best < float.MaxValue )
+				nearestEnemyM = TerrainWorldUnits.EngineToMeters( best );
+		}
+
+		EntityPerceptionDebug.LogPlayer(
+			$"{GameObject.Name} action={action} speed={speedM:0.00}m/s sneak={sneak} sprint={sprinting} " +
+			$"enemyDist={nearestEnemyM:0.00}m" );
+	}
+
+	bool IsMovingEnoughForFootsteps()
+	{
+		_controller ??= Components.Get<PlayerController>();
+		var body = _controller?.Body ?? Components.Get<Rigidbody>();
+		if ( body is null || !body.IsValid() )
+			return IsLocalMovementDriver() && HasMovementSprintIntent();
+
+		var flat = body.Velocity.WithZ( 0f );
+		// Lower threshold so slow walks still emit footsteps for AI hearing.
+		return flat.Length >= TerrainWorldUnits.MetersToEngine( 0.15f );
+	}
+
+	void UpdateSneakStaminaHoldAndFlushOnRelease()
+	{
+		if ( string.IsNullOrWhiteSpace( SneakInputAction ) || SneakStaminaPerSecond <= 0f )
+		{
+			if ( GameObject.Network is { Active: true } && !Networking.IsHost && _sneakHeldReportedToHostLast )
+			{
+				_sneakHeldReportedToHostLast = false;
+				RpcSneakHeldForRegen( false );
+			}
+
+			if ( _sneakWasDown )
+				FlushSneakStaminaDebt( "sneak action cleared" );
+			_sneakWasDown = false;
+			return;
+		}
+
+		var sneakAllowed = WantsSneakStaminaSpend();
+		var reportHeld = sneakAllowed;
+
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost && reportHeld != _sneakHeldReportedToHostLast )
+		{
+			_sneakHeldReportedToHostLast = reportHeld;
+			RpcSneakHeldForRegen( reportHeld );
+		}
+
+		if ( !sneakAllowed )
+		{
+			if ( _sneakWasDown )
+				FlushSneakStaminaDebt( "sneak released" );
+			_sneakWasDown = false;
+			return;
+		}
+
+		var d = SneakStaminaPerSecond * Time.Delta;
+		var applied = Math.Min( d, Math.Max( 0f, _vitals.CurrentStamina ) );
+		if ( applied > 1e-6f )
+		{
+			_sneakDebtPending += applied;
+			_vitals.ApplyLocalStaminaSprintPreviewSpend( applied );
+		}
+
+		_sneakWasDown = true;
 	}
 
 	protected override void OnFixedUpdate()
@@ -583,6 +808,48 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		_sprintHeldReportedOnHost = sprintHeld;
 	}
 
+	[Rpc.Host]
+	void RpcSneakHeldForRegen( bool sneakHeld )
+	{
+		if ( !Networking.IsHost || !GameObject.IsValid() )
+			return;
+
+		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller && !ConnectionIdentity.SameClient( caller, owner ) )
+			return;
+
+		_sneakHeldReportedOnHost = sneakHeld;
+	}
+
+	void FlushSneakStaminaDebt( string reason )
+	{
+		if ( _sneakDebtPending <= 1e-6f )
+		{
+			_sneakDebtPending = 0f;
+			return;
+		}
+
+		var debt = _sneakDebtPending;
+
+		if ( !_vitals.MayIssueVitalsDelta() )
+		{
+			_sneakDebtPending = 0f;
+			return;
+		}
+
+		_sneakDebtPending = 0f;
+
+		if ( !_vitals.RequestVitalsDelta( 0f, -debt, mergePendingSprintDebt: false ) )
+		{
+			_vitals.RestoreLocalStaminaAfterFailedSprintSpend( debt );
+			if ( _vitals.LogVitalsNetworking )
+				Log.Warning( $"[PlayerMovement|{PlayerVitals.GetVitalsProcessRoleTag( GameObject )}] {GameObject.Name}: {reason} — sneak stamina −{debt:0.###} rejected by authority (restored preview)" );
+			return;
+		}
+
+		if ( _vitals.LogVitalsNetworking )
+			Log.Info( $"[PlayerMovement|{PlayerVitals.GetVitalsProcessRoleTag( GameObject )}] {GameObject.Name}: {reason} — synced sneak stamina −{debt:0.###} → ST={_vitals.CurrentStamina:0.#}/{_vitals.CurrentStaminaMax:0.#}" );
+	}
+
 	void FlushSprintStaminaDebt( string reason )
 	{
 		if ( _sprintDebtPending <= 1e-6f )
@@ -618,6 +885,8 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 	{
 		if ( _vitals is not null && ( _sprintWasDown || _sprintDebtPending > 1e-6f ) )
 			FlushSprintStaminaDebt( "destroyed" );
+		if ( _vitals is not null && ( _sneakWasDown || _sneakDebtPending > 1e-6f ) )
+			FlushSneakStaminaDebt( "destroyed" );
 		base.OnDestroy();
 	}
 }

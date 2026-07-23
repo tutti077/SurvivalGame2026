@@ -10,7 +10,6 @@ public static class EntityArchetype
 		public float MaxHealth { get; init; }
 		public float ArmorFlat { get; init; }
 		public float MoveSpeed { get; init; }
-		public float StandOffDistance { get; init; }
 		public float TelegraphSeconds { get; init; }
 		public float RecoverySeconds { get; init; }
 		public float AttackHoldSeconds { get; init; }
@@ -23,7 +22,6 @@ public static class EntityArchetype
 			MaxHealth = 160f,
 			ArmorFlat = 6f,
 			MoveSpeed = 180f,
-			StandOffDistance = 82f,
 			TelegraphSeconds = 1.0f,
 			RecoverySeconds = 1f,
 			AttackHoldSeconds = 0.14f
@@ -33,7 +31,6 @@ public static class EntityArchetype
 			MaxHealth = 95f,
 			ArmorFlat = 1f,
 			MoveSpeed = 260f,
-			StandOffDistance = 78f,
 			TelegraphSeconds = 0.7f,
 			RecoverySeconds = 0.75f,
 			AttackHoldSeconds = 0.1f
@@ -43,7 +40,6 @@ public static class EntityArchetype
 			MaxHealth = 80f,
 			ArmorFlat = 0f,
 			MoveSpeed = 220f,
-			StandOffDistance = 84f,
 			TelegraphSeconds = 0.85f,
 			RecoverySeconds = 1f,
 			AttackHoldSeconds = 0.12f
@@ -81,8 +77,8 @@ public static class EntityArchetype
 
 		var profile = Get( type );
 		brain.AttackRange = 110f;
-		brain.ChaseStandOff = Math.Min( profile.StandOffDistance, 56f );
 		brain.WanderMoveSpeed = Math.Max( 72f, profile.MoveSpeed * 0.4f );
+		brain.ChaseMoveSpeed = Math.Max( 160f, profile.MoveSpeed );
 	}
 
 	public static void ApplyToAgent( NavMeshAgent agent, EnemyType type )

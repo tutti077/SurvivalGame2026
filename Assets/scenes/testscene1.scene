@@ -756,18 +756,12 @@
           "BlockDebugColor": "0.22,0.92,0.38,0.92",
           "BlockFootprintFillAlpha": 0.09,
           "BlockGroundArcHeightOffset": 2,
-          "BlockGroundArcRadius": 48,
-          "BlockGuardReach": 20,
           "BlockGuardSampleCount": 24,
-          "BlockLineLength": 62,
-          "BlockOverheadForwardOffset": 14,
-          "BlockOverheadUpOffset": 12,
           "BlockSampleSphereRadius": 2,
+          "BlockShellHeightPadding": 8,
           "ClientMeleeSwingTraceDebug": true,
           "EnableServerPrimaryAttackValidation": true,
-          "HeavyAttackBlockStaminaCost": 15,
           "HostCombatAuthority": null,
-          "LightAttackBlockStaminaCost": 10,
           "LogAttackStaminaDebug": true,
           "LogCombatNetworkingToConsole": true,
           "LogMeleeBlockRejectionsToConsole": true,
@@ -808,10 +802,9 @@
           "MeleeBladeHeel": null,
           "MeleeBladeHeelFraction": 0.22,
           "MeleeBladeTip": null,
-          "MeleeBlockedDamageMultiplier": 0,
-          "MeleeBlockedStaggerMultiplier": 0.35,
-          "MeleeBlockLateralArcDegrees": 150,
-          "MeleeBlockOverheadArcDegrees": 50,
+          "MeleeBlockBodyRadius": 18,
+          "MeleeBlockFrontArcDegrees": 270,
+          "MeleeBlockParryWindowSeconds": 0.12,
           "MeleeDebugDrawEnabled": true,
           "MeleeDebugDrawRotationSpokes": false,
           "MeleeDebugDrawSamplePointsEnabled": true,
@@ -852,6 +845,7 @@
           "ShowMeleeAttackWindupTelegraph": true,
           "ShowSwingDirectionCrosshair": true,
           "SouthpawSwing": false,
+          "StaggerPlayFallingPose": true,
           "SwingAxisDeadzone": 0.02,
           "SwingDamageWindowSeconds": 0.12,
           "SwingDragGoodPixels": 48,
@@ -977,14 +971,6 @@
             },
             "Property": "Scale",
             "Value": "0.0199999996,0.0299999993,0.0500000007"
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "2ef1dedc-283b-4de1-ae0e-170fd228c3c0"
-            },
-            "Property": "Model",
-            "Value": "models/environment/low_poly_stick.vmdl"
           },
           {
             "Target": {
@@ -1267,7 +1253,7 @@
           "OnTriggerExit": null,
           "RollingResistance": null,
           "Scale": "50,50,50",
-          "Static": false,
+          "Static": true,
           "Surface": null,
           "SurfaceVelocity": "0,0,0"
         }
@@ -1339,7 +1325,7 @@
           "OnTriggerExit": null,
           "RollingResistance": null,
           "Scale": "50,50,50",
-          "Static": false,
+          "Static": true,
           "Surface": null,
           "SurfaceVelocity": "0,0,0"
         }
@@ -1411,7 +1397,7 @@
           "OnTriggerExit": null,
           "RollingResistance": null,
           "Scale": "50,50,50",
-          "Static": false,
+          "Static": true,
           "Surface": null,
           "SurfaceVelocity": "0,0,0"
         }
@@ -7824,7 +7810,7 @@
                   "__version": 2,
                   "Flags": 0,
                   "Name": "Cube (5)",
-                  "Position": "0,0,-1000.00012",
+                  "Position": "0,0,-1808.00024",
                   "Rotation": "0,0,0,1",
                   "Scale": "0.0250000004,1,40",
                   "Tags": "",
@@ -94090,6 +94076,7 @@
           "OnComponentFixedUpdate": null,
           "OnComponentStart": null,
           "OnComponentUpdate": null,
+          "OnGibsCreated": null,
           "OnPropBreak": null,
           "OnPropTakeDamage": null,
           "StartAsleep": false,
@@ -94327,6 +94314,7 @@
           "OnComponentFixedUpdate": null,
           "OnComponentStart": null,
           "OnComponentUpdate": null,
+          "OnGibsCreated": null,
           "OnPropBreak": null,
           "OnPropTakeDamage": null,
           "StartAsleep": false,
@@ -94535,6 +94523,102 @@
         "64b17888-f306-45ea-a6ab-c66ffeab0470": "1760b833-7277-4380-b4ee-27590e9a6488",
         "5a23649a-b702-4fbd-9dcc-7f32c8fa0bd9": "b28fac2c-99ce-494a-8541-46d51e41fca9"
       }
+    },
+    {
+      "__guid": "b7dc81b8-7dda-4008-987b-e3e462b174d9",
+      "__version": 2,
+      "__Prefab": "prefabs/entity/fox.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "c38d434a-c528-4a1d-8885-6b4f3e0cfded"
+            },
+            "Property": "Position",
+            "Value": "-2.49072456,65.1285248,25"
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "c38d434a-c528-4a1d-8885-6b4f3e0cfded": "b7dc81b8-7dda-4008-987b-e3e462b174d9",
+        "c8bdf57c-bfc9-4f8a-89f2-580e0e2a1298": "50c66d49-44f1-4b10-b2c9-af14afd9904e"
+      }
+    },
+    {
+      "__guid": "959ff68f-b657-4b71-9645-53db218334a4",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "Cube",
+      "Position": "700.980347,831.434631,64",
+      "Rotation": "0,0,0,1",
+      "Scale": "3,3,3",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Sandbox.ModelRenderer",
+          "__guid": "955978c6-8862-401a-acd5-64fc523e85e7",
+          "__enabled": true,
+          "Flags": 0,
+          "BodyGroups": 18446744073709551615,
+          "CreateAttachments": false,
+          "LodOverride": null,
+          "MaterialGroup": null,
+          "MaterialOverride": null,
+          "Materials": null,
+          "Model": "models/dev/box.vmdl",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "RenderOptions": {
+            "GameLayer": true,
+            "OverlayLayer": false,
+            "BloomLayer": false,
+            "AfterUILayer": false
+          },
+          "RenderType": "On",
+          "Tint": "1,1,1,1"
+        },
+        {
+          "__type": "Sandbox.BoxCollider",
+          "__guid": "73da8223-d203-497a-bfa7-08f860b317d1",
+          "__enabled": true,
+          "Flags": 0,
+          "Center": "0,0,0",
+          "ColliderFlags": 0,
+          "Elasticity": null,
+          "Friction": null,
+          "IsTrigger": false,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "OnObjectTriggerEnter": null,
+          "OnObjectTriggerExit": null,
+          "OnTriggerEnter": null,
+          "OnTriggerExit": null,
+          "RollingResistance": null,
+          "Scale": "50,50,50",
+          "Static": true,
+          "Surface": null,
+          "SurfaceVelocity": "0,0,0"
+        }
+      ],
+      "Children": []
     }
   ],
   "SceneProperties": {
@@ -94550,7 +94634,7 @@
     "NavMesh": {
       "Enabled": true,
       "IncludeStaticBodies": true,
-      "IncludeKeyframedBodies": false,
+      "IncludeKeyframedBodies": true,
       "EditorAutoUpdate": false,
       "AgentHeight": 64,
       "AgentRadius": 16,
@@ -94560,10 +94644,7 @@
       "IncludedBodies": "",
       "DeferGeneration": false,
       "CustomBounds": false,
-      "BakedDataPath": {
-        "$reference_type": "filereference",
-        "path": "scenes/testscene1_scene_data/navmesh/baked.navdata"
-      }
+      "BakedDataPath": null
     },
     "GameObjectSystems": {
       "Sandbox.Clutter.ClutterGridSystem": {

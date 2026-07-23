@@ -478,7 +478,12 @@ public partial class PlayerCombat : Component
 		MaybeWarnCombatAuthorityMisconfigured();
 
 		if ( IsServerSideForMeleeAuthority() && !GameObject.IsProxy )
+		{
 			ServerTickMeleeBlockTimers();
+			ServerTickMeleeStagger();
+		}
+
+		TickLocalMeleeStaggerPresentation();
 
 		if ( IsServerSideForMeleeAuthority() && !IsLocalCombatDriver() && !( GameObject.IsProxy && !Networking.IsHost ) )
 			TickAuthoritativeMeleeBlockState();
@@ -702,10 +707,13 @@ public partial class PlayerCombat : Component
 		DispatchPrimaryAttackReleaseToAuthority( sent );
 	}
 
-	protected virtual bool CanStartPrimaryAttack() => CanAffordPrimaryAttackOnPress();
+	protected virtual bool CanStartPrimaryAttack() => !IsStaggered && CanAffordPrimaryAttackOnPress();
 
 	protected virtual bool CanContinuePrimaryAttack()
 	{
+		if ( IsStaggered )
+			return false;
+
 		var vitals = Components.Get<PlayerVitals>();
 		if ( vitals is null )
 			return false;
@@ -714,7 +722,7 @@ public partial class PlayerCombat : Component
 		return vitals.CanAffordStamina( GetPrimaryAttackStaminaCostForHoldDuration( hold ) );
 	}
 
-	protected virtual bool CanStartBlock() => _postBlockRecoveryRemaining <= 0.001f;
+	protected virtual bool CanStartBlock() => !IsStaggered && _postBlockRecoveryRemaining <= 0.001f;
 
 	protected virtual bool CanContinueBlock() => !_meleeBlockConsumedAwaitingRelease;
 

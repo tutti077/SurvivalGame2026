@@ -21,6 +21,7 @@ public sealed class TerrainWorldManager : Component
 		public TerrainChunkCoord Coord;
 		public int VerticesPerSide;
 		public bool HasVegetation;
+		public bool HasEntityPopulation;
 	}
 
 	[Property, Group( "World" )] public string WorldName { get; set; } = "TestWorld";
@@ -43,20 +44,22 @@ public sealed class TerrainWorldManager : Component
 	public int ChunkHeightSmoothPasses { get; set; }
 	[Property, Group( "Chunks" ), Title( "Height Smooth Strength (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
 	public float ChunkHeightSmoothStrength01 { get; set; } = 0.38f;
-	[Property, Group( "Chunks" ), Title( "Stream Radius (chunks)" ), Range( 0, 16 ), Step( 1 ), Description( "Square fallback when forward cone streaming is off. Radius 2 = 5×5." )]
-	public int StreamRadiusChunks { get; set; } = 2;
-	[Property, Group( "Chunks" ), Title( "Forward Cone Streaming" )]
-	public bool UseForwardConeStreaming { get; set; } = true;
-	[Property, Group( "Chunks" ), Title( "Forward View Radius (chunks)" ), Range( 6, 20 ), Step( 1 ), Description( "How far ahead to stream along look direction (10 × 64 m ≈ 640 m)." )]
+	[Property, Group( "Chunks" ), Title( "Stream Radius (chunks)" ), Range( 0, 16 ), Step( 1 ), Description( "Uniform square around the camera when forward-cone streaming is off. Radius 8 = 17×17 (~512 m). Matches former forward view distance." )]
+	public int StreamRadiusChunks { get; set; } = 8;
+	[Property, Group( "Chunks" ), Title( "Unload Margin (chunks)" ), Range( 0, 4 ), Step( 1 ), Description( "Keep chunks until outside Stream Radius + this margin. Load and unload use different distances so they never thrash at the same edge." )]
+	public int StreamUnloadMarginChunks { get; set; } = 2;
+	[Property, Group( "Chunks" ), Title( "Forward Cone Streaming" ), Description( "OFF = same radius in all directions (no look pop-in). ON = far cone ahead + smaller side/back square." )]
+	public bool UseForwardConeStreaming { get; set; }
+	[Property, Group( "Chunks" ), Title( "Forward View Radius (chunks)" ), Range( 6, 20 ), Step( 1 ), Description( "Only when Forward Cone Streaming is on. How far ahead to stream along look direction." )]
 	public int ForwardViewRadiusChunks { get; set; } = 10;
 	[Property, Group( "Chunks" ), Title( "Forward View Distance (m, 0 = radius × chunk size)" ), Range( 0f, 20000f ), Step( 64f )]
 	public float ViewDistanceMeters { get; set; }
 	[Property, Group( "Chunks" ), Title( "Forward View Cone (deg)" ), Range( 30f, 360f ), Step( 5f )]
 	public float ForwardViewConeDegrees { get; set; } = 120f;
-	[Property, Group( "Chunks" ), Title( "Side/Back Radius (chunks)" ), Range( 0, 12 ), Step( 1 ), Description( "Always-loaded square around the camera. Radius 4 = 9×9 (~512 m)." )]
+	[Property, Group( "Chunks" ), Title( "Side/Back Radius (chunks)" ), Range( 0, 12 ), Step( 1 ), Description( "Only when Forward Cone Streaming is on. Always-loaded square around the camera." )]
 	public int SideViewRadiusChunks { get; set; } = 4;
-	[Property, Group( "Chunks" ), Title( "Collision Range (m)" ), Range( 64f, 4096f ), Step( 64f )]
-	public float CollisionRangeMeters { get; set; } = 128f;
+	[Property, Group( "Chunks" ), Title( "Collision Range (m)" ), Range( 64f, 4096f ), Step( 64f ), Description( "Terrain physics + entity population. Scavs only spawn inside this range (after colliders are on)." )]
+	public float CollisionRangeMeters { get; set; } = 192f;
 	[Property, Group( "Chunks" ), Title( "Max Chunks Per Frame" ), Range( 1, 12 ), Step( 1 ), Description( "Hard cap on chunk mesh builds per frame (initial load + streaming)." )]
 	public int ChunksPerFrame { get; set; } = 3;
 	[Property, Group( "Chunks" ), Title( "Stream Build Budget (ms)" ), Range( 4f, 32f ), Step( 1f ), Description( "Milliseconds of mesh work per frame while streaming. Spreads cost without one-chunk-per-frame crawl." )]
@@ -69,7 +72,7 @@ public sealed class TerrainWorldManager : Component
 	public bool StreamMeshLodEnabled { get; set; } = true;
 	[Property, Group( "Chunks" ), Title( "Far Stream Vertices Per Side" ), Range( 9, 65 ), Step( 4 ), Description( "Height samples for chunks outside the full-detail radius (17 ≈ 4 m on 64 m chunks)." )]
 	public int StreamFarVerticesPerSide { get; set; } = 17;
-	[Property, Group( "Chunks" ), Title( "Mesh Border Prefetch" ), Range( 0.05f, 0.5f ), Step( 0.05f ), Description( "Reserved for future border-only mesh LOD (stream cone currently meshes all visible chunks)." )]
+	[Property, Group( "Chunks" ), Title( "Mesh Border Prefetch" ), Range( 0.05f, 0.5f ), Step( 0.05f ), Description( "Reserved for future border-only mesh LOD." )]
 	public float MeshBorderPrefetch01 { get; set; } = 0.35f;
 
 	[Property, Group( "Preview Map" ), Title( "Meters Per Pixel" ), Range( 0f, 64f ), Step( 1f ), Description( "0 = match Terrain Preview Tool resolution (Preview Resolution on solved settings, default 1024)." )]
@@ -138,6 +141,18 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Clover — Stick Cluster Radius (m)" ), Range( 0.25f, 4f ), Step( 0.25f )]
 	public float VegetationCloverStickClusterRadiusMeters { get; set; } = 1.5f;
 
+	[Property, Group( "Vegetation" ), Title( "Clover — Stick Near Large Tree" ), Description( "Extra sticks beside Prefab A (large) Clover trees. Prefab C / 3rd tree type not wired yet." )]
+	public bool VegetationCloverStickNearLargeTreeEnabled { get; set; } = true;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Stick Near Large Tree Chance (0–1)" ), Range( 0f, 1f ), Step( 0.01f ), Description( "Chance per large tree to place one stick in open ground beside the trunk." )]
+	public float VegetationCloverStickNearLargeTreeChance01 { get; set; } = 0.05f;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Stick Near Large Tree Min Radius (m)" ), Range( 1f, 12f ), Step( 0.25f )]
+	public float VegetationCloverStickNearLargeTreeMinRadiusMeters { get; set; } = 2.5f;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Stick Near Large Tree Max Radius (m)" ), Range( 1.5f, 16f ), Step( 0.25f )]
+	public float VegetationCloverStickNearLargeTreeMaxRadiusMeters { get; set; } = 6f;
+
 	[Property, Group( "Vegetation" ), Title( "Redwood — Tree Prefab A" )]
 	public string VegetationRedwoodPrefab { get; set; } = "prefabs/environment/temp_tree_2.prefab";
 
@@ -174,6 +189,9 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Skip Far LOD Chunks" ), Description( "Off = full tree set on all streamed terrain (recommended). On = only ~High-Priority radius (~128 m)." )]
 	public bool VegetationSkipFarLodChunks { get; set; } = false;
 
+	[Property, Group( "Entity Population" ), Title( "Scatter Entities" ), Description( "Spawn biome population from data/biome_population.json (host only)." )]
+	public bool EntityPopulationEnabled { get; set; } = true;
+
 	[Property, Group( "Loading" )] public bool ShowWorldLoadScreen { get; set; } = true;
 	[Property, Group( "Loading" ), ReadOnly] public bool IsWorldLoading { get; private set; }
 	[Property, Group( "Chunks" ), ReadOnly] public int LoadedChunkCount { get; private set; }
@@ -209,6 +227,7 @@ public sealed class TerrainWorldManager : Component
 
 	readonly HashSet<TerrainChunkCoord> _neededScratch = new();
 	readonly HashSet<TerrainChunkCoord> _streamNeeded = new();
+	readonly HashSet<TerrainChunkCoord> _streamKeep = new();
 	readonly Queue<TerrainChunkCoord> _streamLoadQueue = new();
 	readonly List<TerrainChunkCoord> _streamSortScratch = new();
 	readonly List<TerrainChunkCoord> _unloadScratch = new();
@@ -253,6 +272,7 @@ public sealed class TerrainWorldManager : Component
 			return;
 		}
 
+		EnsureSceneAuthorities();
 		WorldSessionState.ApplyTo( this );
 		_backend = TerrainPreviewBackendRegistry.Active;
 		_ = BuildGenerationSettings();
@@ -277,14 +297,60 @@ public sealed class TerrainWorldManager : Component
 			ProcessWorldLoad();
 			UpdateStreamInspectorState();
 			EnsureMinimapScreen();
+			BuildNavMeshSync.TickPendingLocalBakes( Scene );
 			return;
 		}
 
 		TryRefreshStreamChunks();
 		ProcessStreamChunkQueue();
+		if ( IsWorldAuthority() && EntityPopulationEnabled )
+			BiomePopulationRespawnQueue.Tick();
 		UpdateBiomePreviewStaleState();
 		UpdateStreamInspectorState();
 		EnsureMinimapScreen();
+		BuildNavMeshSync.TickPendingLocalBakes( Scene );
+	}
+
+	/// <summary>
+	/// terrainTest (and similar) has no NetworkManager — spawn Combat/Vitals authority so scavs and pawns resolve one.
+	/// </summary>
+	void EnsureSceneAuthorities()
+	{
+		var scene = Scene;
+		if ( !scene.IsValid() )
+			return;
+
+		var hasCombat = false;
+		foreach ( var auth in scene.GetAllComponents<CombatAuthority>() )
+		{
+			if ( auth is not null && auth.IsValid() && auth.Enabled )
+			{
+				hasCombat = true;
+				break;
+			}
+		}
+
+		var hasVitals = false;
+		foreach ( var auth in scene.GetAllComponents<VitalsAuthority>() )
+		{
+			if ( auth is not null && auth.IsValid() && auth.Enabled )
+			{
+				hasVitals = true;
+				break;
+			}
+		}
+
+		if ( hasCombat && hasVitals )
+			return;
+
+		var go = new GameObject( true, "RuntimeAuthorities" );
+		go.Parent = GameObject;
+
+		if ( !hasCombat )
+			go.Components.Create<CombatAuthority>();
+
+		if ( !hasVitals )
+			go.Components.Create<VitalsAuthority>();
 	}
 
 	void UpdateStreamInspectorState()
@@ -343,6 +409,18 @@ public sealed class TerrainWorldManager : Component
 			settings.TotalWorldRadiusMeters,
 			chunkSize );
 
+		// Uniform radius: only refresh when the player moves to a new chunk (look direction irrelevant).
+		if ( !UseForwardConeStreaming )
+		{
+			if ( chunk == _lastStreamRefreshChunk )
+				return;
+
+			_lastStreamRefreshChunk = chunk;
+			_lastStreamRefreshHeadingBucket = int.MinValue;
+			RefreshChunks( streamPosMeters, viewRotation );
+			return;
+		}
+
 		var forward = viewRotation.Forward.WithZ( 0f );
 		var headingDegrees = 0f;
 		if ( forward.LengthSquared > 1e-6f )
@@ -351,7 +429,8 @@ public sealed class TerrainWorldManager : Component
 			headingDegrees = MathF.Atan2( forward.y, forward.x ) * (180f / MathF.PI);
 		}
 
-		var headingBucket = (int)MathF.Floor( (headingDegrees + 180f) / 18f );
+		// Cone mode: ~60° buckets so looking around does not thrash every few degrees.
+		var headingBucket = (int)MathF.Floor( (headingDegrees + 180f) / 60f );
 		if ( chunk == _lastStreamRefreshChunk && headingBucket == _lastStreamRefreshHeadingBucket )
 			return;
 
@@ -585,12 +664,12 @@ public sealed class TerrainWorldManager : Component
 		_initialChunkQueue.Clear();
 
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
-		// Near square only at load — full forward cone streams in after the player is spawned.
+		// Initial load uses the same uniform radius (or side square when cone mode is on).
 		TerrainChunkStreaming.CollectSquareChunks(
 			_loadStreamPos,
 			_loadSettings,
 			chunkSize,
-			Math.Max( 1, SideViewRadiusChunks ),
+			ResolveInitialStreamRadiusChunks(),
 			_neededScratch );
 
 		foreach ( var coord in _neededScratch )
@@ -628,6 +707,45 @@ public sealed class TerrainWorldManager : Component
 			chunkSize,
 			Math.Max( 1, StreamRadiusChunks ),
 			needed );
+	}
+
+	void CollectStreamKeepChunks(
+		Vector3 streamPos,
+		Rotation viewRotation,
+		TerrainPreviewSettings settings,
+		float chunkSize,
+		HashSet<TerrainChunkCoord> keep )
+	{
+		if ( UseForwardConeStreaming )
+		{
+			var forwardDistance = ResolveForwardViewDistanceMeters( chunkSize )
+				+ Math.Max( 0, StreamUnloadMarginChunks ) * chunkSize;
+			TerrainChunkStreaming.CollectNeededChunks(
+				streamPos,
+				viewRotation,
+				settings,
+				chunkSize,
+				forwardDistance,
+				ForwardViewConeDegrees,
+				SideViewRadiusChunks + Math.Max( 0, StreamUnloadMarginChunks ),
+				keep );
+			return;
+		}
+
+		TerrainChunkStreaming.CollectSquareChunks(
+			streamPos,
+			settings,
+			chunkSize,
+			Math.Max( 1, StreamRadiusChunks ) + Math.Max( 0, StreamUnloadMarginChunks ),
+			keep );
+	}
+
+	int ResolveInitialStreamRadiusChunks()
+	{
+		if ( UseForwardConeStreaming )
+			return Math.Max( 1, SideViewRadiusChunks );
+
+		return Math.Max( 1, StreamRadiusChunks );
 	}
 
 	void ProcessStreamChunkQueue()
@@ -897,11 +1015,13 @@ public sealed class TerrainWorldManager : Component
 		var settings = BuildGenerationSettings();
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
 		CollectStreamChunks( streamPos, viewRotation, settings, chunkSize, _streamNeeded );
+		CollectStreamKeepChunks( streamPos, viewRotation, settings, chunkSize, _streamKeep );
 
 		_unloadScratch.Clear();
 		foreach ( var coord in _loaded.Keys )
 		{
-			if ( !_streamNeeded.Contains( coord ) )
+			// Unload only outside the keep ring (radius + margin) — load uses the tighter needed set.
+			if ( !_streamKeep.Contains( coord ) )
 				_unloadScratch.Add( coord );
 		}
 
@@ -948,7 +1068,49 @@ public sealed class TerrainWorldManager : Component
 				ScatterVegetationOnChunk( entry.GameObject, entry.Coord, settings, desiredVerts );
 				entry.HasVegetation = true;
 			}
+
+			if ( ShouldScatterEntityPopulation( desiredVerts, distance, chunkSize ) && !entry.HasEntityPopulation )
+			{
+				TryPopulateEntitiesOnChunk( entry, settings, distance, chunkSize );
+			}
 		}
+	}
+
+	void TryPopulateEntitiesOnChunk(
+		LoadedChunk entry,
+		TerrainPreviewSettings settings,
+		float distanceMeters,
+		float chunkSize )
+	{
+		if ( entry.HasEntityPopulation )
+			return;
+
+		if ( !ShouldScatterEntityPopulation( entry.VerticesPerSide, distanceMeters, chunkSize ) )
+			return;
+
+		// Only after terrain collision is live — scavs must not appear on render-only far chunks.
+		if ( entry.Collider is null || !entry.Collider.IsValid() || !entry.Collider.Enabled )
+			return;
+
+		PrepareChunkColliderForEntityPopulation( entry );
+		ScatterEntityPopulationOnChunk( entry.GameObject, entry.Coord, settings );
+		entry.HasEntityPopulation = true;
+	}
+
+	void PrepareChunkColliderForEntityPopulation( LoadedChunk entry )
+	{
+		if ( entry.Collider is null || !entry.Collider.IsValid() )
+			return;
+
+		var wasEnabled = entry.Collider.Enabled;
+		entry.Collider.Enabled = true;
+		if ( wasEnabled || !entry.GameObject.IsValid() )
+			return;
+
+		var bounds = entry.GameObject.GetBounds();
+		if ( bounds.Size.LengthSquared < 1f )
+			bounds = BBox.FromPositionAndSize( entry.GameObject.WorldPosition, ChunkSizeMeters * 50f );
+		BuildNavMeshSync.NotifyTerrainChunkLoaded( GameObject.Scene, bounds );
 	}
 
 	void RemeshChunkLod(
@@ -982,7 +1144,8 @@ public sealed class TerrainWorldManager : Component
 		if ( entry.Collider is not null && entry.Collider.IsValid() )
 		{
 			entry.Collider.Model = built.Model;
-			entry.Collider.Enabled = distance <= CollisionRangeMeters + (ChunkSizeMeters * 0.75f);
+			entry.Collider.Static = true;
+			entry.Collider.Enabled = ShouldKeepChunkColliderEnabled( entry, distance, ChunkSizeMeters );
 		}
 
 		entry.VerticesPerSide = verticesPerSide;
@@ -996,7 +1159,6 @@ public sealed class TerrainWorldManager : Component
 
 	void UpdateChunkColliders( Vector3 streamPos, TerrainPreviewSettings settings, float chunkSize )
 	{
-		var collisionRange = Math.Max( 0f, CollisionRangeMeters );
 		var worldRadius = settings.TotalWorldRadiusMeters;
 
 		foreach ( var entry in _loaded.Values )
@@ -1006,9 +1168,27 @@ public sealed class TerrainWorldManager : Component
 
 			var center = TerrainChunkStreaming.GetChunkCenterWorld( entry.Coord, worldRadius, chunkSize );
 			var distance = new Vector3( center.x - streamPos.x, center.y - streamPos.y, 0f ).Length;
-			entry.Collider.Enabled = distance <= collisionRange + (chunkSize * 0.75f);
+			var wantEnabled = ShouldKeepChunkColliderEnabled( entry, distance, chunkSize );
+			var wasEnabled = entry.Collider.Enabled;
+			entry.Collider.Enabled = wantEnabled;
+
+			// Terrain collision just came online — bake nav, then spawn scavs (after terrain).
+			if ( !wasEnabled && wantEnabled && entry.GameObject.IsValid() )
+			{
+				var bounds = entry.GameObject.GetBounds();
+				if ( bounds.Size.LengthSquared < 1f )
+					bounds = BBox.FromPositionAndSize( entry.GameObject.WorldPosition, chunkSize * 50f );
+				BuildNavMeshSync.NotifyTerrainChunkLoaded( GameObject.Scene, bounds );
+				TryPopulateEntitiesOnChunk( entry, settings, distance, chunkSize );
+			}
 		}
 	}
+
+	bool IsChunkInCollisionRange( float distanceMeters, float chunkSize ) =>
+		distanceMeters <= Math.Max( 0f, CollisionRangeMeters ) + (chunkSize * 0.75f);
+
+	bool ShouldKeepChunkColliderEnabled( LoadedChunk entry, float distanceMeters, float chunkSize ) =>
+		entry.HasEntityPopulation || IsChunkInCollisionRange( distanceMeters, chunkSize );
 
 	bool TryGetStreamTransform( out Vector3 worldPos, out Rotation viewRotation )
 	{
@@ -1084,18 +1264,15 @@ public sealed class TerrainWorldManager : Component
 		var collider = go.Components.Create<ModelCollider>();
 		collider.Model = built.Model;
 		collider.Static = true;
-
-		var center = TerrainChunkStreaming.GetChunkCenterWorld( coord, worldRadius, chunkSize );
-		collider.Enabled = distance <= CollisionRangeMeters + (chunkSize * 0.75f);
+		collider.Enabled = IsChunkInCollisionRange( distance, chunkSize );
 
 		var chunkBounds = new BBox(
 			chunkOriginEngine + built.LocalBounds.Mins,
 			chunkOriginEngine + built.LocalBounds.Maxs );
 		BuildNavMeshSync.NotifyTerrainChunkLoaded( GameObject.Scene, chunkBounds );
 
-		var shouldScatter = ShouldScatterVegetation( verticesPerSide );
 		var hasVegetation = false;
-		if ( shouldScatter )
+		if ( ShouldScatterVegetation( verticesPerSide ) )
 		{
 			ScatterVegetationOnChunk( go, coord, settings, verticesPerSide );
 			hasVegetation = true;
@@ -1108,7 +1285,26 @@ public sealed class TerrainWorldManager : Component
 			Coord = coord,
 			VerticesPerSide = verticesPerSide,
 			HasVegetation = hasVegetation,
+			HasEntityPopulation = false,
 		};
+
+		// Scavs only after terrain collision is on (not on far render-only chunks).
+		if ( collider.Enabled )
+			TryPopulateEntitiesOnChunk( _loaded[coord], settings, distance, chunkSize );
+	}
+
+	void ScatterEntityPopulationOnChunk(
+		GameObject chunkRoot,
+		TerrainChunkCoord coord,
+		TerrainPreviewSettings settings )
+	{
+		BiomePopulationScatter.PopulateChunk(
+			chunkRoot,
+			coord,
+			settings,
+			_backend,
+			ChunkSizeMeters,
+			settings.WorldSeed );
 	}
 
 	void ScatterVegetationOnChunk(
@@ -1161,6 +1357,11 @@ public sealed class TerrainWorldManager : Component
 				ScaleMax = VegetationScaleMax,
 				MaxTreesPerChunk = VegetationMaxTreesPerChunk,
 				SkipFarLodChunks = VegetationSkipFarLodChunks,
+				NearLargeTreeSticksEnabled = VegetationCloverSticksEnabled && VegetationCloverStickNearLargeTreeEnabled,
+				NearLargeTreeStickPrefab = VegetationCloverStickPrefab,
+				NearLargeTreeStickChance01 = VegetationCloverStickNearLargeTreeChance01,
+				NearLargeTreeStickMinRadiusMeters = VegetationCloverStickNearLargeTreeMinRadiusMeters,
+				NearLargeTreeStickMaxRadiusMeters = VegetationCloverStickNearLargeTreeMaxRadiusMeters,
 				PropClusters =
 				[
 					new TerrainVegetationScatter.PropClusterOptions
@@ -1212,6 +1413,19 @@ public sealed class TerrainWorldManager : Component
 		return true;
 	}
 
+	bool ShouldScatterEntityPopulation( int verticesPerSide, float distanceMeters, float chunkSize )
+	{
+		if ( !EntityPopulationEnabled || !IsWorldAuthority() )
+			return false;
+
+		// Match vegetation far-LOD skip so sparse AI only lives on detailed chunks.
+		if ( VegetationSkipFarLodChunks && verticesPerSide < ChunkVerticesPerSide )
+			return false;
+
+		// Never spawn scavs outside collision range — far mesh is render-only.
+		return IsChunkInCollisionRange( distanceMeters, chunkSize );
+	}
+
 	int ResolveChunkVerticesPerSide( float distanceMeters, float chunkSize, bool useStreamLod )
 	{
 		var fullDetail = Math.Clamp( ChunkVerticesPerSide, 4, 256 );
@@ -1242,11 +1456,14 @@ public sealed class TerrainWorldManager : Component
 
 		_loaded.Clear();
 		_streamNeeded.Clear();
+		_streamKeep.Clear();
 		_streamLoadQueue.Clear();
 		_unloadScratch.Clear();
 		LoadedChunkCount = 0;
 		MeshedChunkCount = 0;
 		_lastStreamRefreshHeadingBucket = int.MinValue;
+		BiomePopulationRegistry.Clear();
+		BiomePopulationRespawnQueue.Clear();
 	}
 
 	void TryWriteWorldRecipe()

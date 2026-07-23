@@ -390,7 +390,10 @@ public sealed class PlayerHandHarvest : Component
 
 		var result = node.TryPerformHarvestTick( HarvestToolType.Hand, 0 );
 		if ( result.Success )
+		{
 			TryDepositHarvest( result );
+			EmitHarvestNoise( node );
+		}
 
 		if ( LogHandHarvest )
 		{
@@ -399,6 +402,29 @@ public sealed class PlayerHandHarvest : Component
 			else
 				Log.Info( $"[PlayerHandHarvest] {GameObject.Name}: harvest failed — {result.FailReason}." );
 		}
+	}
+
+	void EmitHarvestNoise( ResourceItemDefinition node )
+	{
+		if ( node is null )
+			return;
+
+		// Chop / axe nodes use the longer hear range; soft hand-only gather stays quiet for now.
+		if ( node.ToolTypeRequired != HarvestToolType.Axe && !LooksLikeTree( node ) )
+			return;
+
+		EntityNoiseBus.Emit( GameObject.Scene, GameObject.WorldPosition, EntityNoiseKind.ChopTree, GameObject );
+	}
+
+	static bool LooksLikeTree( ResourceItemDefinition node )
+	{
+		var id = node.ResourceId ?? string.Empty;
+		var name = node.DisplayName ?? string.Empty;
+		return id.Contains( "tree", StringComparison.OrdinalIgnoreCase )
+		       || id.Contains( "wood", StringComparison.OrdinalIgnoreCase )
+		       || id.Contains( "log", StringComparison.OrdinalIgnoreCase )
+		       || name.Contains( "tree", StringComparison.OrdinalIgnoreCase )
+		       || name.Contains( "wood", StringComparison.OrdinalIgnoreCase );
 	}
 
 	static string FormatLootLog( HarvestLootItem[] loot )

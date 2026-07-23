@@ -1,0 +1,19 @@
+{
+  "biomes": {
+    "CloverHills": {
+      "entries": [
+        {
+          "entityId": "scavT1",
+          "prefab": "prefabs/entity/scavT1.prefab",
+          "enemyType": "Scav",
+          "tier": 1,
+          "spacingMeters": 250,
+          "spawnWeight": 1.0,
+          "respawn": true,
+          "respawnDelaySeconds": 90,
+          "near": null
+        }
+      ]
+    }
+  }
+}

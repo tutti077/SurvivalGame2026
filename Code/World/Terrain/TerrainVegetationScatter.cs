@@ -4,7 +4,8 @@ namespace Survival;
 
 /// <summary>
 /// Deterministic per-chunk vegetation scatter per land biome.
-/// Trees: forest/clearing patches + clump noise. Clover props: sparse random clusters (rocks, sticks).
+/// Trees: forest/clearing patches + clump noise. Clover props: sparse random clusters (rocks, sticks)
+/// plus optional sticks beside large Clover trees (Prefab A).
 /// Runs once on chunk load (not per frame).
 /// </summary>
 public static class TerrainVegetationScatter
@@ -56,6 +57,15 @@ public static class TerrainVegetationScatter
 		public int MaxTreesPerChunk { get; init; }
 		public bool SkipFarLodChunks { get; init; }
 		public PropClusterOptions[] PropClusters { get; init; }
+		/// <summary>
+		/// Clover Hills only: after each large tree (Prefab A), roll this chance to drop one stick
+		/// in open ground beside the trunk. Prefab C (3rd tree type) is not wired yet.
+		/// </summary>
+		public bool NearLargeTreeSticksEnabled { get; init; }
+		public string NearLargeTreeStickPrefab { get; init; }
+		public float NearLargeTreeStickChance01 { get; init; }
+		public float NearLargeTreeStickMinRadiusMeters { get; init; }
+		public float NearLargeTreeStickMaxRadiusMeters { get; init; }
 	}
 
 	sealed class ResolvedProfile
@@ -72,7 +82,6 @@ public static class TerrainVegetationScatter
 		public bool IgnoreForestPatches;
 	}
 
-	static int _diagChunks;
 	static bool _loggedFirstTree;
 	static bool _loggedFirstRock;
 	static bool _loggedFirstStick;
@@ -175,11 +184,6 @@ public static class TerrainVegetationScatter
 
 		var cells = Math.Max( 1, (int)MathF.Floor( chunkSize / cell ) );
 		var spawned = 0;
-		var rejectedPatch = 0;
-		var rejectedChance = 0;
-		var rejectedLand = 0;
-		var rejectedBiome = 0;
-		var rejectedClone = 0;
 
 		for ( var iy = 0; iy < cells && spawned < maxTrees; iy++ )
 		{
@@ -191,34 +195,22 @@ public static class TerrainVegetationScatter
 				var wy = chunkMinY + ((iy + 0.5f) * cell) + jitterY;
 
 				if ( !IsInsideLandDisk( settings, wx, wy ) )
-				{
-					rejectedLand++;
 					continue;
-				}
 
 				var sample = backend.Sample( settings, wx, wy );
 				if ( !sample.IsInsideWorld || !sample.IsOnLand || sample.OceanHeight01 > 0.5f )
-				{
-					rejectedLand++;
 					continue;
-				}
 
 				var biome = TerrainPreviewBiomeResolver.ResolveLandOverlay( settings, sample, wx, wy );
 				var profile = FindProfile( profiles, biome.BiomeId );
 				if ( profile is null )
-				{
-					rejectedBiome++;
 					continue;
-				}
 
 				var noiseSeed = seed + profile.NoiseSalt;
 
 				var patch = TerrainPreviewNoise.Fbm( noiseSeed + 910, wx / patchWave, wy / patchWave, 4, 2.05f, 0.5f );
 				if ( !profile.IgnoreForestPatches && patch < patchThreshold )
-				{
-					rejectedPatch++;
 					continue;
-				}
 
 				var forestT = profile.IgnoreForestPatches
 					? Math.Clamp( patch, 0f, 1f )
@@ -242,10 +234,7 @@ public static class TerrainVegetationScatter
 				// Dense grove cores skip the chance roll only at full density; thinned biomes always roll.
 				var denseCore = !profile.IgnoreForestPatches && density >= 0.999f && forestT > 0.55f && clump > 0.58f;
 				if ( !denseCore && densify > localChance )
-				{
-					rejectedChance++;
 					continue;
-				}
 
 				var preferA = TerrainPreviewNoise.Hash01( noiseSeed + 930, coord.X * 256 + ix, coord.Y * 256 + iy ) < profile.AWeight;
 				var path = preferA
@@ -273,23 +262,102 @@ public static class TerrainVegetationScatter
 					    scaleMax,
 					    ref _loggedFirstTree,
 					    "tree" ) )
-				{
-					rejectedClone++;
 					continue;
-				}
 
 				spawned++;
+
+				// Clover Prefab A = large tree for now (Prefab C / 3rd type later).
+				if ( profile.BiomeId == TerrainPreviewBiomeId.CloverHills
+				     && string.Equals( variant, "a", StringComparison.Ordinal )
+				     && options.NearLargeTreeSticksEnabled )
+				{
+					TrySpawnStickNearLargeTree(
+						chunkRoot,
+						coord,
+						settings,
+						backend,
+						chunkMinX,
+						chunkMinY,
+						wx,
+						wy,
+						noiseSeed,
+						ix,
+						iy,
+						options );
+				}
 			}
 		}
+	}
 
-		_diagChunks++;
-		if ( _diagChunks <= 12 || spawned > 0 )
-		{
-			Log.Info(
-				$"[Vegetation] chunk {coord} trees={spawned} "
-				+ $"skipPatch={rejectedPatch} skipChance={rejectedChance} skipLand={rejectedLand} "
-				+ $"skipBiome={rejectedBiome} skipClone={rejectedClone}" );
-		}
+	/// <summary>
+	/// ~5% (tunable) chance: one stick on open ground in a ring around a large Clover tree.
+	/// </summary>
+	static void TrySpawnStickNearLargeTree(
+		GameObject chunkRoot,
+		TerrainChunkCoord coord,
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		float chunkMinX,
+		float chunkMinY,
+		float treeWx,
+		float treeWy,
+		int noiseSeed,
+		int ix,
+		int iy,
+		Options options )
+	{
+		var stickPath = NormalizePrefabPath( options.NearLargeTreeStickPrefab );
+		if ( !PrefabPathResolves( stickPath ) )
+			return;
+
+		var chance = Math.Clamp( options.NearLargeTreeStickChance01, 0f, 1f );
+		if ( chance <= 1e-6f )
+			return;
+
+		var roll = TerrainPreviewNoise.Hash01( noiseSeed + 960, coord.X * 384 + ix, coord.Y * 384 + iy );
+		if ( roll > chance )
+			return;
+
+		var minR = Math.Clamp( options.NearLargeTreeStickMinRadiusMeters, 1f, 24f );
+		var maxR = Math.Max( minR + 0.25f, Math.Clamp( options.NearLargeTreeStickMaxRadiusMeters, 1.5f, 32f ) );
+		var angle01 = TerrainPreviewNoise.Hash01( noiseSeed + 961, coord.X * 400 + ix, coord.Y * 400 + iy );
+		var radius01 = TerrainPreviewNoise.Hash01( noiseSeed + 962, coord.X * 416 + ix, coord.Y * 416 + iy );
+		var yaw = angle01 * MathF.Tau;
+		var radius = minR + ((maxR - minR) * radius01);
+		var stickWx = treeWx + (MathF.Cos( yaw ) * radius);
+		var stickWy = treeWy + (MathF.Sin( yaw ) * radius);
+
+		if ( !IsInsideLandDisk( settings, stickWx, stickWy ) )
+			return;
+
+		var sample = backend.Sample( settings, stickWx, stickWy );
+		if ( !sample.IsInsideWorld || !sample.IsOnLand || sample.OceanHeight01 > 0.5f )
+			return;
+
+		var biome = TerrainPreviewBiomeResolver.ResolveLandOverlay( settings, sample, stickWx, stickWy );
+		if ( biome.BiomeId != TerrainPreviewBiomeId.CloverHills )
+			return;
+
+		TrySpawnInstance(
+			chunkRoot,
+			stickPath,
+			"veg_stick_near",
+			"a",
+			chunkMinX,
+			chunkMinY,
+			stickWx,
+			stickWy,
+			sample.HeightMeters,
+			noiseSeed,
+			coord,
+			ix,
+			iy,
+			1,
+			360f,
+			0.85f,
+			1.15f,
+			ref _loggedFirstStick,
+			"stick" );
 	}
 
 	static void ScatterPropClusters(
@@ -327,7 +395,6 @@ public static class TerrainVegetationScatter
 		var prefix = string.IsNullOrWhiteSpace( props.InstancePrefix ) ? "veg_prop" : props.InstancePrefix.Trim();
 		var kind = string.IsNullOrWhiteSpace( props.KindLabel ) ? "prop" : props.KindLabel.Trim();
 		var spawned = 0;
-		var clusters = 0;
 
 		for ( var iy = 0; iy < cells && spawned < maxPerChunk; iy++ )
 		{
@@ -356,7 +423,6 @@ public static class TerrainVegetationScatter
 
 				var countRoll = TerrainPreviewNoise.Hash01( noiseSeed + 30, coord.X * 112 + ix, coord.Y * 112 + iy );
 				var count = Math.Clamp( sizeMin + (int)(countRoll * (sizeMax - sizeMin + 1)), sizeMin, sizeMax );
-				var clusterSpawned = 0;
 
 				for ( var r = 0; r < count && spawned < maxPerChunk; r++ )
 				{
@@ -401,17 +467,8 @@ public static class TerrainVegetationScatter
 						continue;
 
 					spawned++;
-					clusterSpawned++;
 				}
-
-				if ( clusterSpawned > 0 )
-					clusters++;
 			}
-		}
-
-		if ( clusters > 0 || spawned > 0 )
-		{
-			Log.Info( $"[Vegetation] chunk {coord} {kind}Clusters={clusters} {kind}s={spawned}" );
 		}
 	}
 
@@ -486,6 +543,9 @@ public static class TerrainVegetationScatter
 		ref bool loggedFirst,
 		string kindLabel )
 	{
+		_ = loggedFirst;
+		_ = kindLabel;
+
 		var instance = ClonePrefab( path );
 		if ( instance is null || !instance.IsValid() )
 			return false;
@@ -517,15 +577,6 @@ public static class TerrainVegetationScatter
 		instance.LocalScale = authored * mul;
 
 		instance.Enabled = true;
-
-		if ( !loggedFirst )
-		{
-			loggedFirst = true;
-			Log.Info(
-				$"[Vegetation] first {kindLabel} '{instance.Name}' localMeters=({localMeters.x:0.#},{localMeters.y:0.#},{localMeters.z:0.#}) "
-				+ $"localUnits={instance.LocalPosition} world={instance.WorldPosition} "
-				+ $"authored={authored} ×{mul:0.##} path={path}" );
-		}
 
 		return true;
 	}

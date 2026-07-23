@@ -3,10 +3,10 @@ using Sandbox;
 
 namespace Survival;
 
-/// <summary>
-/// Host-only enemy attacks: random L/R/U telegraph (same as training dummy), aimed at the current target.
-/// One attack per approach — after swing + recovery the brain must chase back into range.
-/// </summary>
+	/// <summary>
+	/// Host-only enemy attacks: random L/R/U telegraph (same as training dummy), aimed at the current target.
+	/// Between swings the body turns toward the target at locomotion turn rate (no snap); yaw locks for telegraph→recovery.
+	/// </summary>
 [Title( "Entity Combat" )]
 public sealed class EntityCombat : Component
 {
@@ -112,6 +112,7 @@ public sealed class EntityCombat : Component
 
 		if ( _waitingForSwingEnd )
 		{
+			GameObject.WorldRotation = _lockedAttackRotation;
 			if ( Combat is not null && Combat.ServerHasActiveMeleeAttackAction )
 				return;
 
@@ -137,7 +138,17 @@ public sealed class EntityCombat : Component
 		else if ( _attackTarget is { IsValid: true } )
 			UpdateAttackRotation();
 
-		GameObject.WorldRotation = _attackRotation;
+		// Hold yaw rigid only while telegraph / swing / wait — never snap between cycles.
+		if ( _telegraphActive || _rotationLocked || _waitingForSwingEnd )
+		{
+			GameObject.WorldRotation = _lockedAttackRotation;
+		}
+		else if ( _engaged && _attackTarget is { IsValid: true } )
+		{
+			// Between swings: turn toward the player at turn rate, then lock when aligned.
+			SmoothFaceTowardAttackRotation();
+		}
+
 		ApplyAttackPathVerticalOffset();
 
 		if ( ShowTelegraphDebug && _telegraphActive )
@@ -152,12 +163,15 @@ public sealed class EntityCombat : Component
 			return;
 		}
 
-		if ( !_rotationLocked && _engaged )
+		if ( !_rotationLocked && _engaged && IsFacingAttackAim() )
 			QueueNextAttack();
 	}
 
 	void TickRecovery()
 	{
+		// Keep facing locked through recovery so the brain cannot spin them mid-cycle.
+		GameObject.WorldRotation = _lockedAttackRotation;
+
 		if ( Time.NowDouble < _phaseEndsAt )
 			return;
 
@@ -173,21 +187,63 @@ public sealed class EntityCombat : Component
 		_engaged = false;
 		_telegraphActive = false;
 		_hasQueuedAttack = false;
-		_rotationLocked = false;
+		_rotationLocked = true;
 		_phaseEndsAt = Time.NowDouble + Math.Max( 0.05f, RecoverySeconds );
 	}
 
 	void UpdateAttackRotation()
 	{
-		var toTarget = _attackTarget.WorldPosition - GameObject.WorldPosition;
-		toTarget = toTarget.WithZ( 0f );
+		if ( _attackTarget is null || !_attackTarget.IsValid() )
+			return;
+
+		// Aim at body center so the player sits in the middle of forward LOS (not feet).
+		var aimPoint = GetTargetAimPoint( _attackTarget );
+		var toTarget = (aimPoint - GameObject.WorldPosition).WithZ( 0f );
 		if ( toTarget.LengthSquared > 1f )
 			_attackRotation = Rotation.LookAt( toTarget.Normal, Vector3.Up );
+	}
+
+	static Vector3 GetTargetAimPoint( GameObject target )
+	{
+		var bounds = target.GetBounds();
+		if ( bounds.Size.LengthSquared > 1f )
+			return bounds.Center;
+
+		return target.WorldPosition + Vector3.Up * 40f;
+	}
+
+	void SmoothFaceTowardAttackRotation()
+	{
+		var loco = Components.Get<EntityLocomotion>();
+		var degPerSec = loco is not null ? Math.Max( 90f, loco.TurnDegreesPerSecond ) : 200f;
+		const float hitchCapSeconds = 0.05f;
+		var currentYaw = GameObject.WorldRotation.Angles().yaw;
+		var targetYaw = _attackRotation.Angles().yaw;
+		var delta = Angles.NormalizeAngle( targetYaw - currentYaw );
+		var frameBudget = degPerSec * Math.Min( Math.Max( Time.Delta, 1e-4f ), hitchCapSeconds );
+		var step = Math.Clamp( delta, -frameBudget, frameBudget );
+		if ( MathF.Abs( step ) < 0.01f )
+		{
+			GameObject.WorldRotation = _attackRotation;
+			return;
+		}
+
+		GameObject.WorldRotation = Rotation.FromYaw( currentYaw + step );
+	}
+
+	bool IsFacingAttackAim()
+	{
+		var delta = Angles.NormalizeAngle(
+			_attackRotation.Angles().yaw - GameObject.WorldRotation.Angles().yaw );
+		// Player centered in forward LOS (±3°) before the swing locks.
+		return MathF.Abs( delta ) <= 3f;
 	}
 
 	void QueueNextAttack()
 	{
 		UpdateAttackRotation();
+		// Exact center lock — only reached after smooth turn has centered the player.
+		GameObject.WorldRotation = _attackRotation;
 		_lockedAttackRotation = _attackRotation;
 		_rotationLocked = true;
 
@@ -209,7 +265,6 @@ public sealed class EntityCombat : Component
 		}
 
 		GameObject.WorldRotation = _lockedAttackRotation;
-
 		_intentSequence++;
 		var basisRot = _lockedAttackRotation;
 		var view = basisRot.Forward.Normal;
@@ -250,7 +305,7 @@ public sealed class EntityCombat : Component
 
 		_telegraphActive = false;
 		_hasQueuedAttack = false;
-		_rotationLocked = false;
+		_rotationLocked = true; // keep yaw frozen through the swing
 		_engaged = false;
 		_waitingForSwingEnd = true;
 	}
