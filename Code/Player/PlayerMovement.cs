@@ -204,18 +204,11 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 	}
 
 	/// <summary>
-	/// Sprint must not boost speed while airborne or while the rope is attached.
-	/// Clears Run input and clamps <see cref="PlayerController.RunSpeed"/> to walk so air-control
-	/// cannot accelerate toward sprint speed (which then compounded with swing pumps).
+	/// Sprint only with feet on the ground. Mid-air (with or without rope) cannot Run —
+	/// that was inventing foot propulsion while dangling. Grappled + grounded is allowed.
 	/// </summary>
 	bool IsSprintBlocked()
 	{
-		if ( _grapple is null )
-			_grapple = Components.Get<PlayerGrapple>();
-
-		if ( _grapple is { IsAttached: true } )
-			return true;
-
 		if ( _controller is null )
 			_controller = Components.Get<PlayerController>();
 
@@ -250,8 +243,9 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 
 	/// <summary>
 	/// Even if Run input leaks past <see cref="SuppressBlockedSprintInput"/>, wish speed cannot
-	/// sprint. While dangling on the rope, mute walk wish entirely so MoveModeWalk does not
-	/// brake a fast swing back toward WalkSpeed.
+	/// sprint while airborne. While dangling mid-air, mute walk+run wish so MoveModeWalk air-control
+	/// cannot invent foot propulsion — swing speed then only comes from rope pumps / prior ground run.
+	/// Grappled + grounded leaves walk/run alone so feet can sprint and walk normally.
 	/// </summary>
 	void ApplyBlockedSprintRunSpeedOverride()
 	{
@@ -359,7 +353,7 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		if ( _grapple is null )
 			_grapple = Components.Get<PlayerGrapple>();
 
-		// Airborne while grappling: jump does nothing (ground + slack still allows jump).
+		// Jump while grappled: feet on ground only (same as sprint — no mid-air hop off the rope).
 		if ( _grapple is { IsAttached: true } )
 		{
 			if ( _controller is null )
