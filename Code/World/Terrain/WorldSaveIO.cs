@@ -18,6 +18,8 @@ public sealed class WorldSaveRecipe
 	public float BiomePreviewMetersPerPixel { get; set; } = 10f;
 	public string FirstGeneratedUtc { get; set; } = "";
 	public string LastLoadedUtc { get; set; } = "";
+	/// <summary>In-world calendar day. Starts at 1; increments each dawn.</summary>
+	public int DayNumber { get; set; } = 1;
 	public TerrainPreviewSettings PreviewSettings { get; set; } = new();
 
 	[JsonIgnore]
@@ -71,6 +73,7 @@ public static class WorldSaveIO
 			WorldSeed = worldSeed,
 			FirstGeneratedUtc = now,
 			LastLoadedUtc = now,
+			DayNumber = 1,
 			PreviewSettings = new TerrainPreviewSettings
 			{
 				WorldSeed = worldSeed,
@@ -88,6 +91,7 @@ public static class WorldSaveIO
 			return;
 
 		recipe.WorldName = SanitizeWorldName( recipe.WorldName );
+		recipe.DayNumber = NormalizeDayNumber( recipe.DayNumber );
 		var path = GetRecipeRelativePath( recipe.WorldName );
 		EnsureWorldDirectory( recipe.WorldName );
 		var json = JsonSerializer.Serialize( recipe, WorldSaveRecipe.JsonOptions );
@@ -95,6 +99,34 @@ public static class WorldSaveIO
 		WriteSeedText( recipe.WorldName, recipe.WorldSeed );
 		RegisterWorldInIndex( recipe.WorldName );
 	}
+
+	/// <summary>Calendar day from <c>world.json</c> (defaults to 1 for missing/legacy saves).</summary>
+	public static int GetDayNumber( string worldName )
+	{
+		var recipe = TryReadRecipe( SanitizeWorldName( worldName ) );
+		return recipe is null ? 1 : NormalizeDayNumber( recipe.DayNumber );
+	}
+
+	/// <summary>
+	/// Dawn broke — bump <see cref="WorldSaveRecipe.DayNumber"/> and rewrite <c>world.json</c>.
+	/// Returns false if there is no recipe yet (nothing to update).
+	/// </summary>
+	public static bool TryIncrementDayNumber( string worldName, out int newDayNumber )
+	{
+		newDayNumber = 1;
+		var sanitized = SanitizeWorldName( worldName );
+		var recipe = TryReadRecipe( sanitized );
+		if ( recipe is null )
+			return false;
+
+		recipe.DayNumber = NormalizeDayNumber( recipe.DayNumber ) + 1;
+		WriteRecipe( recipe );
+		newDayNumber = recipe.DayNumber;
+		return true;
+	}
+
+	public static int NormalizeDayNumber( int dayNumber )
+		=> dayNumber < 1 ? 1 : dayNumber;
 
 	public static void TouchLastLoaded( string worldName )
 	{

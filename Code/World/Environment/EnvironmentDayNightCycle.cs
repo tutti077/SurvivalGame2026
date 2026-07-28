@@ -121,6 +121,12 @@ public sealed class EnvironmentDayNightCycle : Component
 	[Property, Group( "Debug" ), Title( "Log phase changes" )]
 	public bool LogPhaseChanges { get; set; }
 
+	[Property, Group( "Calendar" ), Title( "World save name" ), Description( "Optional override for world.json. Empty = TerrainWorldManager / menu session world." )]
+	public string WorldSaveName { get; set; } = "";
+
+	[Property, Group( "Calendar" ), ReadOnly, Title( "Day number" ), Description( "Persisted as dayNumber in WorldSaves/<world>/world.json. +1 each dawn." )]
+	public int DayNumber { get; private set; } = 1;
+
 	[Property, Group( "Debug" ), ReadOnly, Title( "Phase" )]
 	public CyclePhase Phase { get; private set; }
 
@@ -132,6 +138,8 @@ public sealed class EnvironmentDayNightCycle : Component
 
 	float _cycleLength;
 	CyclePhase _loggedPhase = (CyclePhase)255;
+	CyclePhase _previousPhase = (CyclePhase)255;
+	bool _calendarReady;
 
 	protected override void OnStart()
 	{
@@ -144,6 +152,11 @@ public sealed class EnvironmentDayNightCycle : Component
 		EnsureDiskVisualOnly( MoonDisk );
 		RecalculateCycleLength();
 		CycleTimeSeconds = StartAtNight ? DaySeconds + TransitionSeconds : 0f;
+		LoadDayNumberFromWorldSave();
+		EvaluatePhase( out var startPhase, out _, out _, out _ );
+		Phase = startPhase;
+		_previousPhase = startPhase;
+		_calendarReady = true;
 		ApplyVisuals( force: true );
 
 		foreach ( var fly in Scene.GetAllComponents<TerrainTestFlyCamera>() )
@@ -250,16 +263,73 @@ public sealed class EnvironmentDayNightCycle : Component
 		Phase = phase;
 		DayWeight = dayWeight;
 
+		if ( _calendarReady && phase != _previousPhase )
+		{
+			if ( phase == CyclePhase.Dawn )
+				OnDawnBreaks();
+			_previousPhase = phase;
+		}
+
 		if ( LogPhaseChanges && phase != _loggedPhase )
 		{
 			_loggedPhase = phase;
-			Log.Info( $"[EnvironmentDayNight] phase={phase} dayWeight={dayWeight:0.00} t={CycleTimeSeconds:0.0}s" );
+			Log.Info( $"[EnvironmentDayNight] phase={phase} day={DayNumber} dayWeight={dayWeight:0.00} t={CycleTimeSeconds:0.0}s" );
 		}
 
 		UpdateCelestial( SunLight, SunDisk, sunElev01, isSun: true, dayWeight );
 		UpdateCelestial( MoonLight, MoonDisk, moonElev01, isSun: false, dayWeight );
 		UpdateSkyColor( phase, dayWeight, sunElev01 );
 		UpdateStars( dayWeight );
+	}
+
+	void LoadDayNumberFromWorldSave()
+	{
+		var worldName = ResolveWorldSaveName();
+		DayNumber = WorldSaveIO.GetDayNumber( worldName );
+	}
+
+	void OnDawnBreaks()
+	{
+		if ( !IsWorldAuthority() )
+			return;
+
+		var worldName = ResolveWorldSaveName();
+		if ( WorldSaveIO.TryIncrementDayNumber( worldName, out var newDay ) )
+		{
+			DayNumber = newDay;
+			Log.Info( $"[EnvironmentDayNight] dawn — day {DayNumber} saved to WorldSaves/{worldName}/world.json" );
+			return;
+		}
+
+		// No world.json yet (e.g. bare environmentTest) — keep an in-memory tally.
+		DayNumber = WorldSaveIO.NormalizeDayNumber( DayNumber ) + 1;
+		Log.Info( $"[EnvironmentDayNight] dawn — day {DayNumber} (no world.json for '{worldName}' yet)" );
+	}
+
+	string ResolveWorldSaveName()
+	{
+		if ( !string.IsNullOrWhiteSpace( WorldSaveName ) )
+			return WorldSaveName.Trim();
+
+		if ( Scene is not null && Scene.IsValid() )
+		{
+			foreach ( var manager in Scene.GetAllComponents<TerrainWorldManager>() )
+			{
+				if ( manager is not null && manager.IsValid() && !string.IsNullOrWhiteSpace( manager.WorldName ) )
+					return manager.WorldName;
+			}
+		}
+
+		return WorldSessionState.ActiveWorldName;
+	}
+
+	static bool IsWorldAuthority()
+	{
+		var scene = Sandbox.Game.ActiveScene;
+		if ( scene is null || !scene.IsValid() )
+			return true;
+
+		return scene.Network?.Active != true || Networking.IsHost;
 	}
 
 	void EvaluatePhase( out CyclePhase phase, out float dayWeight, out float sunElev01, out float moonElev01 )

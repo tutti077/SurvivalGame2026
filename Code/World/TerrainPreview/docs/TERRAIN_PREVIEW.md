@@ -74,7 +74,7 @@ Editor **Generate** and runtime meshes share **`TerrainPreviewPipeline.Sample()`
 | 1. Tune | Terrain Preview Tool → **Generate** → bundle under `Assets/terrain/preview/` + `.latest_preview.json` |
 | 2. Play | `TerrainWorldManager` with **World - Settings Source** = **Tuned Preview First** loads `preview_settings.json` (full `generation` block) |
 | 3. Stream | Forward-cone + side-square streaming. **Stream Build Budget (ms)** spreads mesh work per frame; near chunks sync on turn (capped); distant chunks use coarser LOD. |
-| 4. Persist | First play writes `WorldSaves/<WorldName>/world.json` with full `PreviewSettings` |
+| 4. Persist | First play writes `WorldSaves/<WorldName>/world.json` with full `PreviewSettings`. Runtime also stores **`dayNumber`** (starts at 1; +1 each dawn via `EnvironmentDayNightCycle`). |
 
 **World - Override World Scalars From Component** — off (default): seed, diameter, height, ocean ring, and lake offsets match the tuned bundle (same as PNG). Turn on only to force component inspector values.
 

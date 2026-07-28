@@ -1485,6 +1485,7 @@ public sealed class TerrainWorldManager : Component
 
 	WorldSaveRecipe BuildWorldRecipe()
 	{
+		var existing = WorldSaveIO.TryReadRecipe( WorldName );
 		return new WorldSaveRecipe
 		{
 			GameVersion = GameBuildLabel.Display,
@@ -1495,6 +1496,11 @@ public sealed class TerrainWorldManager : Component
 			OceanRingWidthMeters = OceanRingWidthMeters,
 			ChunkSizeMeters = ChunkSizeMeters,
 			BiomePreviewMetersPerPixel = BiomePreviewMetersPerPixel,
+			FirstGeneratedUtc = existing?.FirstGeneratedUtc ?? "",
+			LastLoadedUtc = existing?.LastLoadedUtc ?? "",
+			DayNumber = existing is not null
+				? WorldSaveIO.NormalizeDayNumber( existing.DayNumber )
+				: 1,
 			PreviewSettings = BuildGenerationSettings(),
 		};
 	}

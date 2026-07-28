@@ -12,6 +12,10 @@ public static class WorldSessionState
 
 	public static bool HasPendingWorld => _hasPendingWorld;
 
+	/// <summary>Last world chosen from the menu (survives after <see cref="ApplyTo"/>).</summary>
+	public static string ActiveWorldName
+		=> string.IsNullOrWhiteSpace( _worldName ) ? "TestWorld" : _worldName;
+
 	public static void BeginNewWorld( string worldName, int worldSeed )
 	{
 		_worldName = worldName;
