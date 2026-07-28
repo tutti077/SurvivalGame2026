@@ -1,0 +1,36 @@
+---
+description: World space uses meters 1:1 — never scale user meter values by UnitsPerMeter
+alwaysApply: true
+---
+
+# Meters = engine units (Commandment #4)
+
+SurvivalGame2026 treats **1 world unit as 1 meter**. When the user says **10m**, **100m**, or **“100×100 plane”**, use **10**, **100**, or scale **(100, 100, …)** in scene transforms, colliders, orbit radii, disk sizes, and designer-facing properties — **not** a converted value.
+
+## Do
+
+- **Literal numbers:** User says `100m` → `100` in `Position`, `Scale`, `ShellRadiusMeters`, `DiskOrbitRadiusMeters`, box collider size, etc.
+- **Labels:** Properties titled or described as `(m)` or “meters” store **engine units** (same number the user would say aloud).
+- **Scenes / prefabs:** `Scale: "100,100,1"` on a 1×1 m dev plane = **100 m × 100 m** footprint.
+- **Before converting:** Grep the call site. If the user gave a meter value for something visible in-editor, **do not** call `TerrainWorldUnits.MetersToEngine` or multiply by `UnitsPerMeter`.
+
+## Do not
+
+- **Do not** treat `BuildModuleDimensions.UnitsPerMeter` (40) as the global world scale for environment, scenes, fly cam, sky, disks, or new features unless that file’s own docs say otherwise for build snap only.
+- **Do not** divide user meter values by 40 (or any factor) “to get engine units” — that produced e.g. a **40×40** plane when the user asked for **100×100**.
+- **Do not** rename user-facing properties to `(u)` when they mean meters; keep **meters** and use 1:1 values.
+
+## Legacy exception (terrain mesh pipeline only)
+
+`TerrainWorldUnits` / `MetersToEngine` exist for **streamed terrain chunk mesh** code paths that historically used a 40× meter→unit factor. When adding **new** world/environment/scene work, default to **1:1**. When editing terrain streaming, read the existing conversion at that boundary — do not spread 40× into unrelated systems.
+
+## Quick check
+
+| User says | Scene / property value |
+|-----------|-------------------------|
+| 10 m disk scale | `10` (or `Scale: 10,10,10`) |
+| 100 m ground | `Scale: 100,100,…` on 1 m base mesh |
+| 1500 m star shell | `1500` in `ShellRadiusMeters` |
+| 5200 m sun ring | `5200` in `DiskOrbitRadiusMeters` |
+
+If unsure whether a subsystem is legacy 40× or 1:1, **ask** or grep for `MetersToEngine` at the boundary before changing numbers.

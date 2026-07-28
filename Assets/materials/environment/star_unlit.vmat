@@ -1,0 +1,7 @@
+Layer0
+{
+	shader "shaders/environment/star_unlit.shader"
+
+	g_flTintColor "[1.000000 1.000000 1.000000 1.000000]"
+	g_flSelfIllumScale "0.000"
+}

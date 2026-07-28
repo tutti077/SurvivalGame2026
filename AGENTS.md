@@ -47,3 +47,19 @@ This is documented for humans in **`AGENTS.md`** and enforced for the assistant 
 When you **replace or remove** behavior, **delete the old path in the same change**: no orphaned facades, dead toggles, or duplicate post-process hooks. Settings that no longer affect output come out of the editor; keys needed only for old JSON live as plain fields in `TerrainPreviewSettings.Legacy.cs` (no `[Property]`).
 
 Enforced via **`.cursor/rules/deprecate-cleanly.mdc`**. Subsystem docs (e.g. **`Code/World/TerrainPreview/docs/TERRAIN_PREVIEW.md`**) must match the code you ship.
+
+## Commandment #4 — Meters are engine units (1:1)
+
+**1 world unit = 1 meter** for design, scenes, and designer-facing properties. When the user says **10m** or **100m**, use **10** or **100** in transforms, scales, radii, and `[Property]` values — **not** a value scaled by `UnitsPerMeter` (40) or `TerrainWorldUnits.MetersToEngine`.
+
+| User says | Use in engine |
+|-----------|----------------|
+| 10 m sun/moon disk | scale / `DiskScale` = **10** |
+| 100×100 m ground | `Scale` **100,100,…** on a 1 m base mesh |
+| 1500 m star shell | `ShellRadiusMeters` = **1500** |
+
+**Do not** divide or multiply user meter numbers “for engine units” on environment, scene, fly-cam, sky, or new world features — that produced wrong sizes (e.g. **40×40** when the user asked for **100×100**).
+
+**Legacy:** `TerrainWorldUnits` / `BuildModuleDimensions.UnitsPerMeter` may still apply only at **terrain chunk mesh** boundaries. Do not spread that conversion into unrelated systems.
+
+Enforced via **`.cursor/rules/meters-are-engine-units.mdc`**.
