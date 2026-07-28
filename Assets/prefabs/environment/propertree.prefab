@@ -6,7 +6,7 @@
     "Name": "ProperTree",
     "Position": "0,0,0",
     "Rotation": "0,0,-2.98023224E-08,1",
-    "Scale": "0.25,0.25,0.25",
+    "Scale": "0.5,0.5,0.5",
     "Tags": "grapple",
     "Enabled": true,
     "NetworkMode": 2,

@@ -168,7 +168,7 @@
           "VegetationScaleMax": 1.15,
           "VegetationScaleMin": 0.9,
           "VegetationScatterEnabled": true,
-          "VegetationSkipFarLodChunks": false,
+          "VegetationSkipFarLodChunks": true,
           "VegetationSpawnChance01": 0.98,
           "ViewDistanceMeters": 0,
           "WorldDiameterMeters": 20000,

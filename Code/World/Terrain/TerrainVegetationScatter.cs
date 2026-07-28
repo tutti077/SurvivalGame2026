@@ -628,26 +628,37 @@ public static class TerrainVegetationScatter
 
 	static void MakeScatterStatic( GameObject root )
 	{
+		if ( root is null || !root.IsValid() )
+			return;
+
+		// Prop + Rigidbody on tree prefabs fight static scatter: destroy Prop entirely so
+		// ModelCollider (static) is the only physics surface. Prefab Tags (e.g. grapple) stay on the clone.
+		var props = new List<Prop>();
+		foreach ( var prop in root.Components.GetAll<Prop>( FindMode.EverythingInSelfAndDescendants ) )
+		{
+			if ( prop is not null && prop.IsValid() )
+				props.Add( prop );
+		}
+
+		for ( var i = 0; i < props.Count; i++ )
+			props[i].Destroy();
+
+		var bodies = new List<Rigidbody>();
 		foreach ( var body in root.Components.GetAll<Rigidbody>( FindMode.EverythingInSelfAndDescendants ) )
 		{
 			if ( body is not null && body.IsValid() )
-				body.Destroy();
+				bodies.Add( body );
 		}
 
-		foreach ( var prop in root.Components.GetAll<Prop>( FindMode.EverythingInSelfAndDescendants ) )
-		{
-			if ( prop is null || !prop.IsValid() )
-				continue;
-
-			prop.IsStatic = true;
-			prop.StartAsleep = true;
-		}
+		for ( var i = 0; i < bodies.Count; i++ )
+			bodies[i].Destroy();
 
 		foreach ( var col in root.Components.GetAll<ModelCollider>( FindMode.EverythingInSelfAndDescendants ) )
 		{
 			if ( col is null || !col.IsValid() )
 				continue;
 
+			col.Enabled = true;
 			col.Static = true;
 		}
 	}

@@ -186,8 +186,8 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Scale Max (multiplier)" ), Range( 0.5f, 2f ), Step( 0.05f )]
 	public float VegetationScaleMax { get; set; } = 1.15f;
 
-	[Property, Group( "Vegetation" ), Title( "Skip Far LOD Chunks" ), Description( "Off = full tree set on all streamed terrain (recommended). On = only ~High-Priority radius (~128 m)." )]
-	public bool VegetationSkipFarLodChunks { get; set; } = false;
+	[Property, Group( "Vegetation" ), Title( "Skip Far LOD Chunks" ), Description( "On = trees only on full-detail chunks (near High-Priority radius) — much cheaper while streaming. Off = scatter trees on every streamed chunk (heavy with Stream Radius 8)." )]
+	public bool VegetationSkipFarLodChunks { get; set; } = true;
 
 	[Property, Group( "Entity Population" ), Title( "Scatter Entities" ), Description( "Spawn biome population from data/biome_population.json (host only)." )]
 	public bool EntityPopulationEnabled { get; set; } = true;
@@ -237,6 +237,8 @@ public sealed class TerrainWorldManager : Component
 	TerrainWorldLoadScreenHost _loadScreen;
 	TerrainMinimapScreenHost _minimapScreen;
 	GameObject _minimapCameraObject;
+	bool _minimapHostResolved;
+	bool _hasLocalPlayerMinimapHost;
 	int _hudBiomeMapSeed = int.MinValue;
 	TerrainPreviewSettings _loadSettings;
 	Vector3 _loadStreamPos;
@@ -1266,11 +1268,6 @@ public sealed class TerrainWorldManager : Component
 		collider.Static = true;
 		collider.Enabled = IsChunkInCollisionRange( distance, chunkSize );
 
-		var chunkBounds = new BBox(
-			chunkOriginEngine + built.LocalBounds.Mins,
-			chunkOriginEngine + built.LocalBounds.Maxs );
-		BuildNavMeshSync.NotifyTerrainChunkLoaded( GameObject.Scene, chunkBounds );
-
 		var hasVegetation = false;
 		if ( ShouldScatterVegetation( verticesPerSide ) )
 		{
@@ -1288,9 +1285,15 @@ public sealed class TerrainWorldManager : Component
 			HasEntityPopulation = false,
 		};
 
-		// Scavs only after terrain collision is on (not on far render-only chunks).
+		// Nav + scavs only when collision is live — far render chunks must not schedule Recast.
 		if ( collider.Enabled )
+		{
+			var chunkBounds = new BBox(
+				chunkOriginEngine + built.LocalBounds.Mins,
+				chunkOriginEngine + built.LocalBounds.Maxs );
+			BuildNavMeshSync.NotifyTerrainChunkLoaded( GameObject.Scene, chunkBounds );
 			TryPopulateEntitiesOnChunk( _loaded[coord], settings, distance, chunkSize );
+		}
 	}
 
 	void ScatterEntityPopulationOnChunk(
@@ -1464,6 +1467,7 @@ public sealed class TerrainWorldManager : Component
 		_lastStreamRefreshHeadingBucket = int.MinValue;
 		BiomePopulationRegistry.Clear();
 		BiomePopulationRespawnQueue.Clear();
+		InvalidateMinimapHostCache();
 	}
 
 	void TryWriteWorldRecipe()
@@ -1637,7 +1641,7 @@ public sealed class TerrainWorldManager : Component
 	bool EnsureMinimapScreen()
 	{
 		// Player HUD owns the minimap when a local pawn ScreenPanel is present.
-		if ( HasLocalPlayerMinimapHost() )
+		if ( HasLocalPlayerMinimapHostCached() )
 			return true;
 
 		var scene = GameObject.Scene;
@@ -1664,7 +1668,23 @@ public sealed class TerrainWorldManager : Component
 		return _minimapScreen is not null && _minimapScreen.IsValid() && _minimapScreen.EnsureScreen();
 	}
 
-	bool HasLocalPlayerMinimapHost()
+	bool HasLocalPlayerMinimapHostCached()
+	{
+		if ( _minimapHostResolved )
+			return _hasLocalPlayerMinimapHost;
+
+		_minimapHostResolved = true;
+		_hasLocalPlayerMinimapHost = ScanLocalPlayerMinimapHost();
+		return _hasLocalPlayerMinimapHost;
+	}
+
+	/// <summary>Call when a local pawn HUD may have appeared (e.g. L spawn) so minimap ownership refreshes.</summary>
+	public void InvalidateMinimapHostCache()
+	{
+		_minimapHostResolved = false;
+	}
+
+	bool ScanLocalPlayerMinimapHost()
 	{
 		var scene = GameObject.Scene;
 		if ( !scene.IsValid() )

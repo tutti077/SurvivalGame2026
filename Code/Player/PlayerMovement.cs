@@ -72,10 +72,14 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 	float _grapplePrevRopeLength;
 
 	/// <summary>
-	/// Set when we jump while grappled: sprint stays allowed until we land again
-	/// (rope-dangling without a jump still blocks sprint).
+	/// While sprint is blocked, <see cref="PlayerController.RunSpeed"/> is forced down.
+	/// While grappled in the air, walk+run speeds are muted to 0 so air-control cannot
+	/// drag tangent speed toward WalkSpeed (that felt like a pump “cap”).
 	/// </summary>
-	bool _sprintAllowedFromGrappleJump;
+	bool _runSpeedOverrideActive;
+	float _savedRunSpeed;
+	bool _walkSpeedMuteActive;
+	float _savedWalkSpeed;
 
 	/// <summary>Host copy of the owning client’s sprint button, for <see cref="ShouldBlockStaminaRegenForAuthority"/> (local driver uses <see cref="Sandbox.Input"/> directly).</summary>
 	bool _sprintHeldReportedOnHost;
@@ -200,26 +204,125 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 	}
 
 	/// <summary>
-	/// Block sprint while airborne, except a jump that left the ground while already grappled
-	/// (feet left via jump, not because the rope is holding our weight).
+	/// Sprint must not boost speed while airborne or while the rope is attached.
+	/// Clears Run input and clamps <see cref="PlayerController.RunSpeed"/> to walk so air-control
+	/// cannot accelerate toward sprint speed (which then compounded with swing pumps).
 	/// </summary>
 	bool IsSprintBlocked()
+	{
+		if ( _grapple is null )
+			_grapple = Components.Get<PlayerGrapple>();
+
+		if ( _grapple is { IsAttached: true } )
+			return true;
+
+		if ( _controller is null )
+			_controller = Components.Get<PlayerController>();
+
+		if ( _controller is null )
+			return false;
+
+		return !_controller.IsOnGround;
+	}
+
+	/// <summary>Soft-clear Run / AltMove so held Shift cannot stick as sprint this frame.</summary>
+	void SuppressBlockedSprintInput()
+	{
+		if ( !IsSprintBlocked() )
+			return;
+
+		if ( !string.IsNullOrWhiteSpace( SprintInputAction )
+		     && (Input.Down( SprintInputAction ) || Input.Pressed( SprintInputAction )) )
+			Input.SetAction( SprintInputAction, false );
+
+		if ( _controller is null )
+			_controller = Components.Get<PlayerController>();
+
+		if ( _controller is null )
+			return;
+
+		var alt = _controller.AltMoveButton;
+		if ( !string.IsNullOrWhiteSpace( alt )
+		     && !string.Equals( alt, SprintInputAction, StringComparison.OrdinalIgnoreCase )
+		     && (Input.Down( alt ) || Input.Pressed( alt )) )
+			Input.SetAction( alt, false );
+	}
+
+	/// <summary>
+	/// Even if Run input leaks past <see cref="SuppressBlockedSprintInput"/>, wish speed cannot
+	/// sprint. While dangling on the rope, mute walk wish entirely so MoveModeWalk does not
+	/// brake a fast swing back toward WalkSpeed.
+	/// </summary>
+	void ApplyBlockedSprintRunSpeedOverride()
 	{
 		if ( _controller is null )
 			_controller = Components.Get<PlayerController>();
 
-		if ( _controller is null || _controller.IsOnGround )
+		if ( _controller is null )
+			return;
+
+		if ( _grapple is null )
+			_grapple = Components.Get<PlayerGrapple>();
+
+		var grappleAir = _grapple is { IsAttached: true } && !_controller.IsOnGround;
+
+		if ( grappleAir )
 		{
-			_sprintAllowedFromGrappleJump = false;
-			return false;
+			if ( !_walkSpeedMuteActive )
+			{
+				_savedWalkSpeed = _controller.WalkSpeed;
+				if ( !_runSpeedOverrideActive )
+					_savedRunSpeed = _controller.RunSpeed;
+				_walkSpeedMuteActive = true;
+				_runSpeedOverrideActive = true;
+			}
+
+			_controller.WalkSpeed = 0f;
+			_controller.RunSpeed = 0f;
+			return;
 		}
 
-		// Grapple + jump: keep run through the hop and onto the next landing.
-		if ( _sprintAllowedFromGrappleJump )
-			return false;
+		if ( _walkSpeedMuteActive )
+		{
+			_controller.WalkSpeed = _savedWalkSpeed > 1f ? _savedWalkSpeed : 110f;
+			_walkSpeedMuteActive = false;
+		}
 
-		// Normal mid-air, or dangling on the rope without a jump.
-		return true;
+		if ( IsSprintBlocked() )
+		{
+			if ( !_runSpeedOverrideActive )
+			{
+				_savedRunSpeed = _controller.RunSpeed;
+				_runSpeedOverrideActive = true;
+			}
+
+			_controller.RunSpeed = Math.Max( 0f, _controller.WalkSpeed );
+			return;
+		}
+
+		RestoreBlockedSprintRunSpeed();
+	}
+
+	void RestoreBlockedSprintRunSpeed()
+	{
+		if ( _controller is null )
+			_controller = Components.Get<PlayerController>();
+
+		if ( _walkSpeedMuteActive && _controller is not null )
+		{
+			_controller.WalkSpeed = _savedWalkSpeed > 1f ? _savedWalkSpeed : 110f;
+			_walkSpeedMuteActive = false;
+		}
+
+		if ( !_runSpeedOverrideActive )
+			return;
+
+		if ( _controller is not null )
+			_controller.RunSpeed = _savedRunSpeed > 1f ? _savedRunSpeed : 320f;
+
+		_runSpeedOverrideActive = false;
+		_savedRunSpeed = 0f;
+		_savedWalkSpeed = 0f;
 	}
 
 	static bool HasMovementSprintIntent() =>
@@ -269,29 +372,18 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		if ( !string.IsNullOrWhiteSpace( SprintInputAction ) )
 		{
 			if ( IsSprintBlocked() )
-			{
-				// Soft suppress only — never ReleaseAction, or landing drops a held Shift.
-				if ( Input.Down( SprintInputAction ) || Input.Pressed( SprintInputAction ) )
-					Input.SetAction( SprintInputAction, false );
-			}
+				SuppressBlockedSprintInput();
 			else if ( SprintStaminaPerSecond > 0f && _vitals.IsStaminaExhausted( ExhaustedStaminaEpsilon ) )
-			{
 				ClearActionIfPressed( SprintInputAction );
-			}
 		}
+
+		ApplyBlockedSprintRunSpeedOverride();
 	}
 
 	public void OnJumped()
 	{
 		if ( !IsLocalMovementDriver() || _vitals is null )
 			return;
-
-		if ( _grapple is null )
-			_grapple = Components.Get<PlayerGrapple>();
-
-		// Jump while grappled (and able to leave the ground) — sprint may continue.
-		if ( _grapple is { IsAttached: true } )
-			_sprintAllowedFromGrappleJump = true;
 
 		if ( _vitals.OnControllerJumpedForStaminaFromMovement( JumpStaminaCost, ExhaustedJumpHeightFraction ) )
 			ApplyExhaustedJumpVelocityScale();
@@ -302,7 +394,6 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() || _vitals is null )
 			return;
 
-		_sprintAllowedFromGrappleJump = false;
 		_vitals.OnControllerLandedForJumpStaminaFromMovement( distance, impactVelocity );
 	}
 
@@ -346,9 +437,8 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		PollCameraScrollZoom();
 
 		// Keep Run suppressed for the whole airborne/dangling frame (controller may re-read input after PreInput).
-		if ( !string.IsNullOrWhiteSpace( SprintInputAction ) && IsSprintBlocked()
-		     && (Input.Down( SprintInputAction ) || Input.Pressed( SprintInputAction )) )
-			Input.SetAction( SprintInputAction, false );
+		SuppressBlockedSprintInput();
+		ApplyBlockedSprintRunSpeedOverride();
 
 		// Length winch runs in FixedUpdate only — applying it here too caused E/Q bobble.
 		// Only catch large over-length desync after MoveModeWalk moves us.
@@ -600,6 +690,9 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() )
 			return;
 
+		// Physics step: re-clamp before MoveModeWalk air-control samples wish speed.
+		SuppressBlockedSprintInput();
+		ApplyBlockedSprintRunSpeedOverride();
 		ApplyGrappleRopeConstraint( Time.Delta );
 	}
 
@@ -767,40 +860,47 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 
 		wish = wish.Normal;
 		var tanSpeed = vTan.Length;
-		var along = tanSpeed > 1e-3f ? Vector3.Dot( vTan / tanSpeed, wish ) : 0f;
+		var tanDir = tanSpeed > 1e-3f ? vTan / tanSpeed : wish;
+		var along = Vector3.Dot( tanDir, wish );
 		var angleFromHang = Vector3.GetAngle( radial, Vector3.Down );
+		var startAccel = Math.Max( 0f, _grapple.AirPushAcceleration );
+		var alignMin = Math.Clamp( _grapple.PumpAlignDot, 0.01f, 0.5f );
+		var minPumpSpeed = Math.Max( 1f, _grapple.PumpMinSpeed );
 
-		var accel = Math.Max( 0f, _grapple.AirPushAcceleration );
-		float speedSoften;
-
-		if ( along > 0.25f && tanSpeed >= Math.Max( 1f, _grapple.PumpMinSpeed ) )
+		// With the arc (W…S… timed with travel): compound pump.
+		if ( along > alignMin && tanSpeed >= minPumpSpeed )
 		{
-			// Timed pump with the arc — builds velocity without needing a strong hold thrust.
-			accel *= Math.Max( 1f, _grapple.PumpWithArcMult );
-			speedSoften = Math.Max( 40f, _grapple.PumpSpeedSoften );
-		}
-		else if ( along < -0.15f && tanSpeed > 1e-3f )
-		{
-			// Fighting the arc bleeds momentum.
-			accel *= Math.Max( 1f, _grapple.FightSwingBrakeMult );
-			speedSoften = Math.Max( 40f, _grapple.SwingSpeedSoften );
-		}
-		else
-		{
-			// Hold / start from rest — weak, and fades past hold max angle (~15°) so you can't park at 45°.
-			accel *= Math.Clamp( _grapple.HoldPushScale, 0f, 1f );
-			var maxAng = Math.Max( 5f, _grapple.HoldMaxAngleDegrees );
-			if ( angleFromHang > maxAng )
-			{
-				var fade = 1f - Math.Clamp( (angleFromHang - maxAng) / Math.Max( 8f, maxAng ), 0f, 1f );
-				accel *= fade;
-			}
-
-			speedSoften = Math.Max( 40f, _grapple.SwingSpeedSoften );
+			var gain = Math.Max( 0f, _grapple.PumpVelocityGainPerSecond );
+			var scale = 1f + gain * dt;
+			body.Velocity = radial * vRadial + tanDir * (tanSpeed * scale);
+			return;
 		}
 
-		var speedFactor = 1f / ( 1f + tanSpeed / speedSoften );
-		body.Velocity += wish * (accel * speedFactor * dt);
+		// Against the arc: coast by default. Optional FightBrakePerSecond if designers want scrub.
+		if ( along < -alignMin && tanSpeed > 1e-3f )
+		{
+			var brake = Math.Max( 0f, _grapple.FightBrakePerSecond );
+			if ( brake <= 1e-4f )
+				return;
+
+			var scale = MathF.Exp( -brake * dt );
+			body.Velocity = radial * vRadial + tanDir * (tanSpeed * scale);
+			return;
+		}
+
+		// Start from hang / low speed only — weak constant push, fades with angle + speed
+		// so holding W cannot launch you up the arc.
+		var holdAccel = startAccel * Math.Clamp( _grapple.HoldPushScale, 0f, 1f );
+		var maxAng = Math.Max( 5f, _grapple.HoldMaxAngleDegrees );
+		if ( angleFromHang > maxAng )
+		{
+			var fade = 1f - Math.Clamp( (angleFromHang - maxAng) / Math.Max( 8f, maxAng ), 0f, 1f );
+			holdAccel *= fade;
+		}
+
+		var holdSoften = Math.Max( 20f, _grapple.SwingSpeedSoften );
+		var holdFactor = 1f / ( 1f + tanSpeed / holdSoften );
+		body.Velocity = radial * vRadial + vTan + wish * (holdAccel * holdFactor * dt);
 	}
 
 	/// <summary>
@@ -1008,6 +1108,7 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 			FlushSprintStaminaDebt( "destroyed" );
 		if ( _vitals is not null && ( _sneakWasDown || _sneakDebtPending > 1e-6f ) )
 			FlushSneakStaminaDebt( "destroyed" );
+		RestoreBlockedSprintRunSpeed();
 		base.OnDestroy();
 	}
 }

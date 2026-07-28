@@ -13,8 +13,11 @@ public static class BuildNavMeshSync
 {
 	const float BuildTraversalMaxSlope = 50f;
 	const float BuildTraversalStepSize = 40f;
-	const double LocalBakeBatchSeconds = 0.55;
+	/// <summary>Coalesce chunk/spawn notifies — avoids GenerateTiles thrash while streaming.</summary>
+	const double LocalBakeBatchSeconds = 0.85;
 	const float ChaseCorridorPadding = 640f;
+	/// <summary>Cap deferred bake size so streaming unions cannot Recast half the world at once.</summary>
+	const float MaxLocalBakeHalfExtent = 512f;
 
 	static readonly Dictionary<Scene, PendingLocalBake> _pendingLocalBakes = new();
 
@@ -46,10 +49,11 @@ public static class BuildNavMeshSync
 	}
 
 	/// <summary>
-	/// Spawn / chunk load: ensure nav tiles exist around a point from the live PhysicsWorld
-	/// so streamed terrain scavs can snap onto mesh instead of falling forever.
+	/// Spawn / chunk load: queue a local tile bake (coalesced). Agents retry via
+	/// <see cref="EntityBrain.OnNavBakeComplete"/> — do not sync-GenerateTiles per scav
+	/// (that was hitching terrainTest ~once/sec while streaming + populating).
 	/// </summary>
-	public static void EnsureNavAroundPoint( Scene scene, Vector3 worldPos, float padding = 768f )
+	public static void EnsureNavAroundPoint( Scene scene, Vector3 worldPos, float padding = 384f )
 	{
 		if ( !scene.IsValid() || !IsNavAuthority() )
 			return;
@@ -65,13 +69,7 @@ public static class BuildNavMeshSync
 			worldPos - new Vector3( pad, pad, pad ),
 			worldPos + new Vector3( pad, pad, pad ) );
 
-		MarkSolidCollidersStaticInBounds( scene, bounds );
-
-		var physics = scene.PhysicsWorld;
-		if ( physics is not null )
-			navMesh.GenerateTiles( physics, bounds );
-		else
-			navMesh.RequestTilesGeneration( bounds );
+		ScheduleLocalBake( scene, bounds );
 	}
 
 	/// <summary>
@@ -92,12 +90,14 @@ public static class BuildNavMeshSync
 
 		var mins = Vector3.Min( from, to ) - new Vector3( ChaseCorridorPadding, ChaseCorridorPadding, ChaseCorridorPadding );
 		var maxs = Vector3.Max( from, to ) + new Vector3( ChaseCorridorPadding, ChaseCorridorPadding, ChaseCorridorPadding );
-		var bounds = new BBox( mins, maxs );
+		var bounds = ClampBakeBounds( new BBox( mins, maxs ) );
+
+		// Alert path still needs live carve — only promote non-static solids (trees already Static).
+		MarkSolidCollidersStaticInBounds( scene, bounds );
 
 		var physics = scene.PhysicsWorld;
 		if ( physics is not null )
 		{
-			// Synchronous tile rebuild from current colliders — this is what actually updates pathing.
 			navMesh.GenerateTiles( physics, bounds );
 			NotifyEnemiesNavUpdated( scene );
 			return;
@@ -109,6 +109,8 @@ public static class BuildNavMeshSync
 	/// <summary>
 	/// Editor cubes default to Static=false (physics collision only). Build pieces force Static=true.
 	/// Nav generation only includes Static/Keyframed bodies — so we promote solids before bake.
+	/// Already-static colliders (terrain + vegetation) are skipped before GetBounds — critical with
+	/// thousands of trees, or every bake hitch becomes a full-scene scan.
 	/// </summary>
 	public static void MarkSolidCollidersStaticInBounds( Scene scene, BBox bounds )
 	{
@@ -123,6 +125,14 @@ public static class BuildNavMeshSync
 			if ( col.IsTrigger )
 				continue;
 
+			// Fast path: vegetation / terrain chunks are already Static — never GetBounds them.
+			if ( col is BoxCollider alreadyBox && alreadyBox.Static )
+				continue;
+			if ( col is ModelCollider alreadyModel && alreadyModel.Static )
+				continue;
+			if ( col is not BoxCollider and not ModelCollider )
+				continue;
+
 			var go = col.GameObject;
 			if ( IsPawnOrEnemyHierarchy( go ) )
 				continue;
@@ -134,10 +144,9 @@ public static class BuildNavMeshSync
 			if ( !BoundsOverlap( bounds, goBounds ) )
 				continue;
 
-			// BoxCollider / ModelCollider expose Static — same flag BuildPiece sets.
-			if ( col is BoxCollider box && !box.Static )
+			if ( col is BoxCollider box )
 				box.Static = true;
-			else if ( col is ModelCollider model && !model.Static )
+			else if ( col is ModelCollider model )
 				model.Static = true;
 		}
 	}
@@ -202,13 +211,14 @@ public static class BuildNavMeshSync
 		if ( navMesh is null || !navMesh.IsEnabled )
 			return;
 
-		MarkSolidCollidersStaticInBounds( scene, pending.Bounds );
+		var bounds = ClampBakeBounds( pending.Bounds );
+		MarkSolidCollidersStaticInBounds( scene, bounds );
 
 		var physics = scene.PhysicsWorld;
 		if ( physics is not null )
-			navMesh.GenerateTiles( physics, pending.Bounds );
+			navMesh.GenerateTiles( physics, bounds );
 		else
-			navMesh.RequestTilesGeneration( pending.Bounds );
+			navMesh.RequestTilesGeneration( bounds );
 
 		NotifyEnemiesNavUpdated( scene );
 	}
@@ -283,6 +293,18 @@ public static class BuildNavMeshSync
 			Bounds = bounds,
 			ExecuteAt = Time.NowDouble + LocalBakeBatchSeconds
 		};
+	}
+
+	static BBox ClampBakeBounds( BBox bounds )
+	{
+		var center = (bounds.Mins + bounds.Maxs) * 0.5f;
+		var half = (bounds.Maxs - bounds.Mins) * 0.5f;
+		var max = MaxLocalBakeHalfExtent;
+		half = new Vector3(
+			Math.Min( half.x, max ),
+			Math.Min( half.y, max ),
+			Math.Min( Math.Max( half.z, 128f ), max ) );
+		return new BBox( center - half, center + half );
 	}
 
 	static BBox UnionBounds( BBox a, BBox b )

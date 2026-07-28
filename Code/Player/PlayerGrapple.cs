@@ -52,41 +52,53 @@ public sealed class PlayerGrapple : Component
 	[Property, Group( "Swing" ), Title( "Attach Velocity Scale" )]
 	public float AttachVelocityScale { get; set; } = 1.08f;
 
-	/// <summary>Base WASD accel. Hold uses <see cref="HoldPushScale"/>; pumps with the arc use <see cref="PumpWithArcMult"/>.</summary>
-	[Property, Group( "Swing" ), Title( "Air Push (engine u/s²)" )]
-	public float AirPushAcceleration { get; set; } = 110f;
+	/// <summary>
+	/// Weak constant accel to leave hang / start a swing. Pumps do <b>not</b> use this —
+	/// they multiply existing tangent speed (<see cref="PumpVelocityGainPerSecond"/>).
+	/// </summary>
+	[Property, Group( "Swing" ), Title( "Start Push (engine u/s²)" )]
+	public float AirPushAcceleration { get; set; } = 36f;
 
-	/// <summary>Hold / start thrust as a fraction of air push (keeps parked angle near hang).</summary>
+	/// <summary>Fraction of start push while holding WASD near hang.</summary>
 	[Property, Group( "Swing" ), Title( "Hold Push Scale" )]
-	public float HoldPushScale { get; set; } = 0.45f;
+	public float HoldPushScale { get; set; } = 0.35f;
 
-	/// <summary>Multiplier when WASD aligns with current swing velocity (timed pumps build speed).</summary>
-	[Property, Group( "Swing" ), Title( "Pump With Arc Mult" )]
-	public float PumpWithArcMult { get; set; } = 3.2f;
+	/// <summary>
+	/// While WASD matches swing travel: add this fraction of current tangent speed per second.
+	/// Flip W/S at the apex to keep pumping. Opposite input coasts (optional brake if
+	/// <see cref="FightBrakePerSecond"/> &gt; 0).
+	/// </summary>
+	[Property, Group( "Swing" ), Title( "Pump Velocity Gain (1/s)" )]
+	public float PumpVelocityGainPerSecond { get; set; } = 0.32f;
 
-	/// <summary>Min tangent speed (engine u/s) before pump bonus applies.</summary>
+	/// <summary>
+	/// How aligned WASD must be with swing travel to pump. Lower = more forgiving timing.
+	/// </summary>
+	[Property, Group( "Swing" ), Title( "Pump Align (dot)" ), Range( 0.01f, 0.5f ), Step( 0.01f )]
+	public float PumpAlignDot { get; set; } = 0.08f;
+
+	/// <summary>
+	/// Optional: while WASD fights travel, exponential tangent decay per second.
+	/// Leave at 0 for classic W…S… pumps (mistimed half-strokes coast, they do not scrub speed).
+	/// </summary>
+	[Property, Group( "Swing" ), Title( "Fight Brake (1/s)" ), Range( 0f, 12f ), Step( 0.25f )]
+	public float FightBrakePerSecond { get; set; } = 0f;
+
+	/// <summary>Min tangent speed before compound pumping applies (below this = start push only).</summary>
 	[Property, Group( "Swing" ), Title( "Pump Min Speed (u/s)" )]
-	public float PumpMinSpeed { get; set; } = 35f;
+	public float PumpMinSpeed { get; set; } = 12f;
 
 	/// <summary>Hold thrust fades after this angle from vertical hang (degrees).</summary>
 	[Property, Group( "Swing" ), Title( "Hold Max Angle (deg)" )]
-	public float HoldMaxAngleDegrees { get; set; } = 16f;
+	public float HoldMaxAngleDegrees { get; set; } = 12f;
 
-	/// <summary>Extra accel multiplier when WASD fights current swing direction (bleeds momentum).</summary>
-	[Property, Group( "Swing" ), Title( "Fight Swing Brake Mult" )]
-	public float FightSwingBrakeMult { get; set; } = 1.45f;
-
-	/// <summary>Softens hold / fight push as tangential speed rises.</summary>
-	[Property, Group( "Swing" ), Title( "Swing Speed Soften (u/s)" )]
-	public float SwingSpeedSoften { get; set; } = 260f;
-
-	/// <summary>Softer falloff for with-arc pumps so repeated pumps keep building speed.</summary>
-	[Property, Group( "Swing" ), Title( "Pump Speed Soften (u/s)" )]
-	public float PumpSpeedSoften { get; set; } = 2800f;
+	/// <summary>Softens start/hold thrust as speed rises so you cannot launch from a standstill hold.</summary>
+	[Property, Group( "Swing" ), Title( "Start Speed Soften (u/s)" )]
+	public float SwingSpeedSoften { get; set; } = 90f;
 
 	/// <summary>Light tangential damping while no WASD (settles toward hang).</summary>
 	[Property, Group( "Swing" ), Title( "Coast Damping (1/s)" )]
-	public float SwingCoastDamping { get; set; } = 0.18f;
+	public float SwingCoastDamping { get; set; } = 0.1f;
 
 	[Property, Group( "Aim" ), Title( "Crosshair Idle Hide (seconds)" )]
 	public float CrosshairIdleHideSeconds { get; set; } = 10f;
@@ -127,6 +139,10 @@ public sealed class PlayerGrapple : Component
 	/// <summary>On-screen swing speed / velocity while attached (local driver).</summary>
 	[Property, Group( "Debug" ), Title( "Show Speed Overlay" )]
 	public bool ShowSpeedDebug { get; set; } = true;
+
+	/// <summary>Big W/A/S/D cue for which key pumps with the current arc (local driver).</summary>
+	[Property, Group( "Debug" ), Title( "Show Pump Cue" )]
+	public bool ShowPumpCue { get; set; } = true;
 
 	[Property, Group( "Debug" )]
 	public bool LogGrapple { get; set; }
@@ -230,6 +246,7 @@ public sealed class PlayerGrapple : Component
 		UpdatePressingOverride( IsAttached );
 		DrawRopeIfNeeded();
 		DrawSpeedDebugIfNeeded();
+		DrawPumpCueIfNeeded();
 	}
 
 	protected override void OnPreRender()
@@ -1363,7 +1380,7 @@ public sealed class PlayerGrapple : Component
 		if ( !go.IsValid() )
 			return false;
 
-		// TagSet.Has is the project-standard check (see buildpreview / worlddrop).
+		// Prefab Tags only (e.g. "grapple" on temp_tree_2 / temp_tree_3).
 		return go.Tags.Has( GrappleSurfaceTag );
 	}
 
@@ -1509,6 +1526,116 @@ public sealed class PlayerGrapple : Component
 			new Vector2( x, y ),
 			$"vel ({vel.x:0}, {vel.y:0}, {vel.z:0})",
 			size: 12f );
+	}
+
+	void DrawPumpCueIfNeeded()
+	{
+		if ( !ShowPumpCue || !IsAttached || !IsLocalDriver() )
+			return;
+
+		if ( !TryGetSwingPumpCue( out var key, out var tanDir, out var tanSpeed, out var pumping ) )
+			return;
+
+		var cam = BuildViewCamera.Resolve( GameObject );
+		if ( !cam.IsValid() )
+			return;
+
+		var rect = cam.ScreenRect;
+		var cx = rect.Left + rect.Width * 0.5f;
+		var cy = rect.Top + rect.Height * 0.72f;
+
+		var status = pumping ? "PUMPING" : "HOLD";
+		var color = pumping
+			? new Color( 0.35f, 1f, 0.45f, 1f )
+			: new Color( 1f, 0.92f, 0.25f, 1f );
+
+		DebugOverlay.ScreenText( new Vector2( cx - 70f, cy - 28f ), status, size: 18f );
+		DebugOverlay.ScreenText( new Vector2( cx - 28f, cy ), key, size: 48f );
+		DebugOverlay.ScreenText(
+			new Vector2( cx - 130f, cy + 52f ),
+			"W…S… with the swing — flip at the apex",
+			size: 12f );
+
+		// World arrow in the swing-travel direction so the cue matches what you feel.
+		if ( tanSpeed >= Math.Max( 1f, PumpMinSpeed ) * 0.5f && tanDir.LengthSquared > 1e-6f )
+		{
+			var origin = GameObject.WorldPosition + Vector3.Up * TerrainWorldUnits.MetersToEngine( 1.1f );
+			var tip = origin + tanDir * TerrainWorldUnits.MetersToEngine( 2.2f );
+			DebugOverlay.Line( origin, tip, color, 0f );
+			DebugOverlay.Sphere( new Sphere( tip, TerrainWorldUnits.MetersToEngine( 0.12f ) ), color, 0f );
+		}
+	}
+
+	/// <summary>
+	/// Which WASD key currently pumps with the arc (camera-relative), and whether the player is holding it.
+	/// </summary>
+	public bool TryGetSwingPumpCue( out string key, out Vector3 tanDir, out float tanSpeed, out bool pumping )
+	{
+		key = "";
+		tanDir = default;
+		tanSpeed = 0f;
+		pumping = false;
+
+		if ( !IsAttached || RopeLengthEngine <= 1e-3f )
+			return false;
+
+		if ( _controller is null )
+			_controller = Components.Get<PlayerController>();
+
+		var body = _controller?.Body;
+		if ( body is null || !body.IsValid() )
+			body = Components.Get<Rigidbody>();
+
+		if ( body is null || !body.IsValid() )
+			return false;
+
+		var attach = AttachWorldPoint;
+		var toPlayer = GameObject.WorldPosition - attach;
+		var dist = toPlayer.Length;
+		if ( dist < 1e-4f )
+			return false;
+
+		var radial = toPlayer / dist;
+		var vel = body.Velocity;
+		var vRad = Vector3.Dot( vel, radial );
+		var vTan = vel - radial * vRad;
+		tanSpeed = vTan.Length;
+		if ( tanSpeed < Math.Max( 1f, PumpMinSpeed ) * 0.35f )
+		{
+			key = "WASD";
+			return true;
+		}
+
+		tanDir = vTan / tanSpeed;
+
+		var cam = BuildViewCamera.Resolve( GameObject );
+		var yaw = cam.IsValid() ? cam.WorldRotation.Angles().yaw : GameObject.WorldRotation.Angles().yaw;
+		var yawRot = new Angles( 0f, yaw, 0f ).ToRotation();
+		var camFwd = yawRot.Forward;
+		var camRight = yawRot.Right;
+
+		// Project travel onto camera axes (same space as swing wish).
+		var fwd = Vector3.Dot( tanDir, camFwd );
+		var right = Vector3.Dot( tanDir, camRight );
+
+		if ( MathF.Abs( fwd ) >= MathF.Abs( right ) )
+			key = fwd >= 0f ? "W" : "S";
+		else
+			key = right >= 0f ? "D" : "A";
+
+		var holdFwd = Input.Down( "Forward" ) ? 1f : 0f;
+		var holdBack = Input.Down( "Backward" ) ? 1f : 0f;
+		var holdLeft = Input.Down( "Left" ) ? 1f : 0f;
+		var holdRight = Input.Down( "Right" ) ? 1f : 0f;
+		var wish = yawRot.Forward * (holdFwd - holdBack) + yawRot.Right * (holdRight - holdLeft);
+		wish -= radial * Vector3.Dot( wish, radial );
+		if ( wish.LengthSquared > 1e-6f )
+		{
+			var along = Vector3.Dot( tanDir, wish.Normal );
+			pumping = along >= Math.Max( 0.01f, PumpAlignDot );
+		}
+
+		return true;
 	}
 
 	Vector3 ResolveLeftArmWorldPoint()
