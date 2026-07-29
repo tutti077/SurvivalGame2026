@@ -346,6 +346,8 @@ public static class EquipmentCatalog
 			AllowedSlots = { "mainHand" },
 			Actions = { "PrimaryMelee" },
 			HotbarEquipable = true,
+			HarvestToolType = "Axe",
+			HarvestToolTier = 0,
 		};
 	}
 

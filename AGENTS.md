@@ -64,3 +64,13 @@ Enforced via **`.cursor/rules/deprecate-cleanly.mdc`**. Subsystem docs (e.g. **`
 **Legacy:** `TerrainWorldUnits` / `BuildModuleDimensions.UnitsPerMeter` may still apply only at **terrain chunk mesh** boundaries. Do not spread that conversion into unrelated systems.
 
 Enforced via **`.cursor/rules/meters-are-engine-units.mdc`**.
+
+## Commandment #5 — No Ensure* bandage components
+
+When a prefab or scene object is missing what it needs, **fix the asset**. Do **not** add a runtime helper (`EnsureChopableTrees`, `AutoWire*`, folder bootstraps that `Components.Create` on children, etc.) to paper over incomplete setup.
+
+- Prefer clarifying requirements and s&box prefab/instance behavior over guessing.
+- Author `ChopableTree` + `DamageReceiver` (and similar) on the tree prefab or scene instance.
+- Repair bad prefab instance patches (`RemovedObjects`) instead of compensating in code.
+
+Enforced via **`.cursor/rules/no-ensure-bandage-components.mdc`**.

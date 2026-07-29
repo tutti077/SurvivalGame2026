@@ -563,8 +563,10 @@
         "OnComponentStart": null,
         "OnComponentUpdate": null,
         "PawnEyeHeight": 64,
-        "WalkOverPickupRadiusMeters": 0.55,
-        "WalkOverScanIntervalSeconds": 0.15
+        "MagnetAimHeightMeters": 0.85,
+        "MagnetAttractRadiusMeters": 2.5,
+        "MagnetContactRadiusMeters": 0.4,
+        "MagnetSpeedMetersPerSecond": 10
       },
       {
         "__type": "Survival.PlayerEquippedItem",

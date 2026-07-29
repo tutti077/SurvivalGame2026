@@ -384,6 +384,10 @@ public sealed class CombatAuthority : Component
 		if ( entity is not null )
 			return !entity.IsDead;
 
+		var tree = ResolveChopableTreeForDamageReceiver( dmg );
+		if ( tree is not null )
+			return !tree.IsBroken;
+
 		return true;
 	}
 
@@ -408,6 +412,29 @@ public sealed class CombatAuthority : Component
 		if ( entity is not null && entity.GameObject.IsValid() )
 			return entity.GameObject.Id;
 
+		var tree = ResolveChopableTreeForDamageReceiver( dmg );
+		if ( tree is not null && tree.GameObject.IsValid() )
+			return tree.GameObject.Id;
+
 		return dmg.GameObject.Id;
+	}
+
+	public static ChopableTree ResolveChopableTreeForDamageReceiver( DamageReceiver dmg )
+	{
+		if ( dmg is null || !dmg.GameObject.IsValid() )
+			return null;
+
+		var self = dmg.GameObject.Components.Get<ChopableTree>();
+		if ( self is not null && self.Enabled )
+			return self;
+
+		for ( var p = dmg.GameObject.Parent; p.IsValid(); p = p.Parent )
+		{
+			var t = p.Components.Get<ChopableTree>();
+			if ( t is not null && t.Enabled )
+				return t;
+		}
+
+		return null;
 	}
 }

@@ -51,6 +51,12 @@ public static class MeleeAttackSweep
 			.IgnoreGameObjectHierarchy( attackerRoot )
 			.UseHitboxes()
 			.Run();
+		if ( !tr.Hit || !tr.GameObject.IsValid() )
+		{
+			tr = scene.Trace.Ray( origin, tip )
+				.IgnoreGameObjectHierarchy( attackerRoot )
+				.Run();
+		}
 		if ( tr.Hit && tr.GameObject.IsValid()
 		     && CombatAuthority.TryFindDamageable( tr.GameObject, out var recv )
 		     && recv is DamageReceiver dmg
@@ -344,10 +350,17 @@ public static class MeleeAttackSweep
 		ref int targetsHitCount,
 		Action<MeleeHitResult> onHitReported )
 	{
+		// Prefer hitboxes (pawns/entities); fall back to solid so world meshes (trees) still register.
 		var tr = scene.Trace.Sphere( radius, segA, segB )
 			.IgnoreGameObjectHierarchy( attackerRoot )
 			.UseHitboxes()
 			.Run();
+		if ( !tr.Hit || !tr.GameObject.IsValid() )
+		{
+			tr = scene.Trace.Sphere( radius, segA, segB )
+				.IgnoreGameObjectHierarchy( attackerRoot )
+				.Run();
+		}
 
 		if ( !tr.Hit || !tr.GameObject.IsValid() )
 			return false;

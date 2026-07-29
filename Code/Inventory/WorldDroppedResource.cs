@@ -8,6 +8,7 @@ namespace Survival;
 public sealed class WorldDroppedResource : Component
 {
 	const float DropperSelfPickupDelaySeconds = 5f;
+	const float MergeReadyDelaySeconds = 5f;
 
 	[Sync, Property, Group( "Pickup" )]
 	public string ResourceId { get; set; } = string.Empty;
@@ -22,11 +23,21 @@ public sealed class WorldDroppedResource : Component
 
 	internal bool IsMergeAuthority => IsHostAuthority;
 
+	/// <summary>True once this drop has sat long enough to clump with neighbors.</summary>
+	internal bool IsReadyToMerge =>
+		IsAvailable
+		&& _spawnedAt >= 0
+		&& Time.NowDouble - _spawnedAt >= MergeReadyDelaySeconds;
+
 	double _droppedAt = -1;
+	double _spawnedAt = -1;
+	double _mergeEligibleAt = -1;
 	Guid _dropperConnectionId = Guid.Empty;
 
 	Rigidbody _body;
 	double _settledSince = -1;
+	bool _magnetBaseScaleCached;
+	Vector3 _magnetBaseScale = Vector3.One;
 
 	protected override void OnEnabled()
 	{
@@ -44,6 +55,7 @@ public sealed class WorldDroppedResource : Component
 	{
 		ResourceId = ResourceCatalog.NormalizeResourceId( resourceId );
 		Count = Math.Max( 1, count );
+		MarkSpawnedIfNeeded();
 	}
 
 	public void SetDropper( GameObject dropper )
@@ -58,6 +70,16 @@ public sealed class WorldDroppedResource : Component
 	{
 		base.OnStart();
 		_body = Components.Get<Rigidbody>();
+		MarkSpawnedIfNeeded();
+	}
+
+	void MarkSpawnedIfNeeded()
+	{
+		if ( _spawnedAt >= 0 )
+			return;
+
+		_spawnedAt = Time.NowDouble;
+		_mergeEligibleAt = _spawnedAt + MergeReadyDelaySeconds;
 	}
 
 	protected override void OnFixedUpdate()
@@ -66,6 +88,12 @@ public sealed class WorldDroppedResource : Component
 
 		if ( !IsHostAuthority || Count <= 0 )
 			return;
+
+		if ( _mergeEligibleAt > 0 && Time.NowDouble >= _mergeEligibleAt )
+		{
+			_mergeEligibleAt = -1;
+			WorldDroppedResourceMerge.TryMergeCluster( this );
+		}
 
 		if ( _body is null || !_body.IsValid() )
 			_body = Components.Get<Rigidbody>();
@@ -125,6 +153,49 @@ public sealed class WorldDroppedResource : Component
 		}
 
 		return false;
+	}
+
+	/// <summary>
+	/// Disable physics and move toward a magnet target (loot vacuum). Safe to call every frame.
+	/// </summary>
+	public void AttractToward( Vector3 worldTarget, float maxStep, float shrinkStartDistance )
+	{
+		if ( !IsAvailable || maxStep <= 0f )
+			return;
+
+		if ( _body is null || !_body.IsValid() )
+			_body = Components.Get<Rigidbody>();
+
+		if ( _body is not null && _body.IsValid() )
+		{
+			_body.Velocity = Vector3.Zero;
+			_body.AngularVelocity = Vector3.Zero;
+			_body.MotionEnabled = false;
+		}
+
+		if ( !_magnetBaseScaleCached )
+		{
+			_magnetBaseScale = GameObject.LocalScale;
+			_magnetBaseScaleCached = true;
+		}
+
+		var pos = GameObject.WorldPosition;
+		var delta = worldTarget - pos;
+		var dist = delta.Length;
+		if ( dist <= 1e-4f )
+		{
+			GameObject.WorldPosition = worldTarget;
+			return;
+		}
+
+		var step = Math.Min( dist, maxStep );
+		GameObject.WorldPosition = pos + (delta / dist) * step;
+
+		if ( shrinkStartDistance > 1e-3f )
+		{
+			var shrink = Math.Clamp( dist / shrinkStartDistance, 0.2f, 1f );
+			GameObject.LocalScale = _magnetBaseScale * shrink;
+		}
 	}
 
 	public bool CanPickupFor( GameObject picker )

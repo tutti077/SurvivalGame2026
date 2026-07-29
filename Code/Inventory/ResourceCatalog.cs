@@ -26,7 +26,7 @@ public static class ResourceCatalog
 			["build_hammer"] = "ui/items/build_hammer.png",
 			["light_torch"] = "ui/items/light_torch.png",
 			["light_lantern"] = "ui/items/light_lantern.png",
-			["axe_stone"] = "ui/items/axe_stone.png",
+			["axe_stone"] = "ui/items/stone_axe.png",
 		};
 
 	/// <summary>Maps old/sample resource ids to current catalog ids.</summary>

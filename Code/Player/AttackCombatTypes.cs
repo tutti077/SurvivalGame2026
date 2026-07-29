@@ -130,6 +130,11 @@ public sealed class DamageReceiver : Component, IDamageable
 	public float TakeDamage( float amount, Component attacker )
 	{
 		var scaled = amount * DamageMultiplier;
+
+		var chop = Components.Get<ChopableTree>() ?? FindChopableTreeInParents( GameObject.Parent );
+		if ( chop is not null && chop.Enabled )
+			return chop.ApplyChopDamage( scaled, attacker );
+
 		var vitals = Components.Get<PlayerVitals>() ?? FindVitalsInParents( GameObject.Parent );
 		if ( vitals is not null && vitals.Enabled )
 			return vitals.ApplyDamageAfterArmor( scaled, attacker );
@@ -139,6 +144,21 @@ public sealed class DamageReceiver : Component, IDamageable
 			return entity.ApplyDamage( scaled, attacker );
 
 		return scaled;
+	}
+
+	static ChopableTree FindChopableTreeInParents( GameObject start )
+	{
+		if ( start is null || !start.IsValid() )
+			return null;
+
+		for ( var p = start; p.IsValid(); p = p.Parent )
+		{
+			var t = p.Components.Get<ChopableTree>();
+			if ( t is not null )
+				return t;
+		}
+
+		return null;
 	}
 
 	static EntityVitals FindEntityVitalsInParents( GameObject start )

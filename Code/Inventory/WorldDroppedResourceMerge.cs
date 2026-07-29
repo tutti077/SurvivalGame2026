@@ -6,11 +6,14 @@ namespace Survival;
 /// <summary>Merges nearby <see cref="WorldDroppedResource"/> piles into full catalog stacks.</summary>
 internal static class WorldDroppedResourceMerge
 {
-	const float MergeRadiusMeters = 0.5f;
+	const float MergeRadiusMeters = 0.75f;
 
 	public static void TryMergeCluster( WorldDroppedResource trigger )
 	{
 		if ( trigger is null || !trigger.IsAvailable || !trigger.IsMergeAuthority )
+			return;
+
+		if ( !trigger.IsReadyToMerge )
 			return;
 
 		var resourceId = trigger.ResourceId;
@@ -20,7 +23,7 @@ internal static class WorldDroppedResourceMerge
 		var cluster = new List<WorldDroppedResource>();
 		foreach ( var drop in WorldDroppedResourceRegistry.Drops )
 		{
-			if ( drop is null || !drop.IsAvailable )
+			if ( drop is null || !drop.IsAvailable || !drop.IsReadyToMerge )
 				continue;
 
 			if ( !string.Equals( drop.ResourceId, resourceId, StringComparison.OrdinalIgnoreCase ) )

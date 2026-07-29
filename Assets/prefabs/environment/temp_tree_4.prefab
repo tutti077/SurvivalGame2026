@@ -122,6 +122,38 @@
         "RigidbodyFlags": 0,
         "SleepThreshold": 2,
         "StartAsleep": false
+      },
+      {
+        "__type": "Survival.DamageReceiver",
+        "__guid": "e5f6a7b8-c9d0-4123-e456-789abcdef012",
+        "__enabled": true,
+        "Flags": 0,
+        "DamageMultiplier": 1,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null
+      },
+      {
+        "__type": "Survival.ChopableTree",
+        "__guid": "f6a7b8c9-d0e1-4234-f567-89abcdef0123",
+        "__enabled": true,
+        "Flags": 0,
+        "CurrentHealth": 40,
+        "LogChop": false,
+        "MaxHealth": 40,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "RequireAxe": true,
+        "WoodDropMax": 10,
+        "WoodDropMin": 10,
+        "WoodResourceId": "resource_woodBasic"
       }
     ],
     "Children": []

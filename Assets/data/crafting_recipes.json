@@ -36,7 +36,7 @@
               {
                 "id": "axe_stone",
                 "displayName": "Stone Axe",
-                "icon": "ui/items/axe_stone.png",
+                "icon": "ui/items/stone_axe.png",
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,

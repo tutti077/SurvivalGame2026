@@ -35,6 +35,14 @@ public sealed class EquipmentProfileData
 
 	public string HandDisplayPrefab { get; set; } = string.Empty;
 
+	/// <summary>Harvest tool category for world nodes (e.g. <c>Axe</c>). Empty = not a harvest tool.</summary>
+	[JsonPropertyName( "harvestToolType" )]
+	public string HarvestToolType { get; set; } = string.Empty;
+
+	/// <summary>Minimum tool tier for harvest nodes that require one.</summary>
+	[JsonPropertyName( "harvestToolTier" )]
+	public int HarvestToolTier { get; set; }
+
 	public int InventorySlotBonus { get; set; }
 
 	/// <summary>Max grapple ray / attach range in meters (converted at runtime).</summary>

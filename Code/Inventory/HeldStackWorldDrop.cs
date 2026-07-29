@@ -31,7 +31,7 @@ public static class HeldStackWorldDrop
 
 		spawnPos = SnapSpawnAboveGround( scene, owner, spawnPos );
 
-		var instance = SpawnDropPrefab( scene, held.ResourceId, dropCount, spawnPos, owner );
+		var instance = TrySpawnWorldDrop( scene, held.ResourceId, dropCount, spawnPos, owner, applyDropperSelfPickupDelay: true );
 		if ( instance is null || !instance.IsValid() )
 			return false;
 
@@ -62,7 +62,7 @@ public static class HeldStackWorldDrop
 
 		spawnPos = SnapSpawnAboveGround( scene, owner, spawnPos );
 
-		var instance = SpawnDropPrefab( scene, held.ResourceId, held.Count, spawnPos, owner );
+		var instance = TrySpawnWorldDrop( scene, held.ResourceId, held.Count, spawnPos, owner, applyDropperSelfPickupDelay: true );
 		if ( instance is null || !instance.IsValid() )
 			return false;
 
@@ -71,7 +71,35 @@ public static class HeldStackWorldDrop
 		return true;
 	}
 
-	static GameObject SpawnDropPrefab( Scene scene, string resourceId, int count, Vector3 worldPosition, GameObject dropper )
+	/// <summary>
+	/// Spawn a physics world pickup pile (inventory walk-over / magnet pickup).
+	/// Pass <paramref name="applyDropperSelfPickupDelay"/> only for player inventory drops so the dropper
+	/// cannot immediately re-scoop their own toss; loot/harvest should leave it false.
+	/// </summary>
+	public static GameObject TrySpawnWorldDrop(
+		Scene scene,
+		string resourceId,
+		int count,
+		Vector3 worldPosition,
+		GameObject ignoreHierarchy = null,
+		bool applyDropperSelfPickupDelay = false )
+	{
+		if ( !scene.IsValid() || string.IsNullOrWhiteSpace( resourceId ) || count <= 0 )
+			return null;
+
+		worldPosition = SnapSpawnAboveGround( scene, ignoreHierarchy, worldPosition );
+
+		var instance = SpawnDropPrefab( scene, resourceId, count, worldPosition, ignoreHierarchy, applyDropperSelfPickupDelay );
+		return instance is not null && instance.IsValid() ? instance : null;
+	}
+
+	static GameObject SpawnDropPrefab(
+		Scene scene,
+		string resourceId,
+		int count,
+		Vector3 worldPosition,
+		GameObject ignoreHierarchy,
+		bool applyDropperSelfPickupDelay )
 	{
 		var instance = BuildPrefabUtility.GetTemplate( DropPrefabPath )?.Clone();
 		if ( instance is null || !instance.IsValid() )
@@ -92,7 +120,7 @@ public static class HeldStackWorldDrop
 		var scale = 0.24f + Sandbox.Game.Random.Float( 0f, 0.1f );
 		instance.LocalScale = new Vector3( scale, scale, scale );
 
-		PrepareSpawnedDrop( instance, resourceId, count, dropper );
+		PrepareSpawnedDrop( instance, resourceId, count, ignoreHierarchy, applyDropperSelfPickupDelay );
 		instance.Enabled = true;
 		return instance;
 	}
@@ -108,14 +136,20 @@ public static class HeldStackWorldDrop
 		return go;
 	}
 
-	static void PrepareSpawnedDrop( GameObject instance, string resourceId, int count, GameObject dropper )
+	static void PrepareSpawnedDrop(
+		GameObject instance,
+		string resourceId,
+		int count,
+		GameObject ignoreHierarchy,
+		bool applyDropperSelfPickupDelay )
 	{
 		foreach ( var definition in instance.Components.GetAll<ResourceItemDefinition>( FindMode.EverythingInSelf ) )
 			definition?.Destroy();
 
 		var drop = instance.Components.Get<WorldDroppedResource>() ?? instance.Components.Create<WorldDroppedResource>();
 		drop.Configure( resourceId, count );
-		drop.SetDropper( dropper );
+		if ( applyDropperSelfPickupDelay )
+			drop.SetDropper( ignoreHierarchy );
 
 		ApplyResourceVisual( instance, resourceId );
 		EnsurePhysics( instance );
@@ -217,6 +251,28 @@ public static class HeldStackWorldDrop
 		body.Velocity = dir * Sandbox.Game.Random.Float( 6f, 18f )
 		                + Vector3.Up * Sandbox.Game.Random.Float( -4f, 10f );
 		body.AngularVelocity = Vector3.Zero;
+	}
+
+	/// <summary>Give loot singles a short outward toss so a burst doesn’t land as one pile.</summary>
+	public static void ApplyScatterBurst( GameObject instance, Vector3 outward )
+	{
+		var body = instance.Components.Get<Rigidbody>();
+		if ( body is null || !body.IsValid() )
+			return;
+
+		var dir = outward.WithZ( 0 );
+		if ( dir.LengthSquared < 1e-8f )
+			dir = Vector3.Forward;
+		else
+			dir = dir.Normal;
+
+		body.MotionEnabled = true;
+		body.Velocity = dir * Sandbox.Game.Random.Float( 25f, 55f )
+		                + Vector3.Up * Sandbox.Game.Random.Float( 15f, 40f );
+		body.AngularVelocity = new Vector3(
+			Sandbox.Game.Random.Float( -40f, 40f ),
+			Sandbox.Game.Random.Float( -40f, 40f ),
+			Sandbox.Game.Random.Float( -40f, 40f ) );
 	}
 
 	static bool TryGetPlayerDropSpawnTransform( GameObject owner, out Vector3 spawnPos, out Vector3 forward )

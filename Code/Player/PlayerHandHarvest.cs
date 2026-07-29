@@ -7,7 +7,7 @@ namespace Survival;
 /// <summary>
 /// Local pawn: hand harvest on <see cref="ResourceItemDefinition"/> within range while looking at it.
 /// Press <see cref="HandHarvestInputAction"/> (default F) while the harvest prompt is shown.
-/// World drops are picked up automatically when the pawn walks over them.
+/// World drops magnetize toward the pawn in range, then pick up on contact.
 /// </summary>
 [Title( "Player Hand Harvest" )]
 public sealed class PlayerHandHarvest : Component
@@ -24,11 +24,17 @@ public sealed class PlayerHandHarvest : Component
 	[Property, Group( "Interaction" ), Title( "Focus Scan Interval (seconds)" )]
 	public float FocusScanIntervalSeconds { get; set; } = 0.2f;
 
-	[Property, Group( "World Pickup" ), Title( "Walk-over Radius (meters)" )]
-	public float WalkOverPickupRadiusMeters { get; set; } = 0.55f;
+	[Property, Group( "World Pickup" ), Title( "Magnet Attract Radius (meters)" )]
+	public float MagnetAttractRadiusMeters { get; set; } = 2.5f;
 
-	[Property, Group( "World Pickup" ), Title( "Walk-over Scan Interval (seconds)" )]
-	public float WalkOverScanIntervalSeconds { get; set; } = 0.15f;
+	[Property, Group( "World Pickup" ), Title( "Magnet Contact Radius (meters)" )]
+	public float MagnetContactRadiusMeters { get; set; } = 0.4f;
+
+	[Property, Group( "World Pickup" ), Title( "Magnet Speed (m/s)" )]
+	public float MagnetSpeedMetersPerSecond { get; set; } = 10f;
+
+	[Property, Group( "World Pickup" ), Title( "Magnet Aim Height (meters)" )]
+	public float MagnetAimHeightMeters { get; set; } = 0.85f;
 
 	[Property, Group( "Debug" )]
 	public bool LogHandHarvest { get; set; }
@@ -40,7 +46,6 @@ public sealed class PlayerHandHarvest : Component
 
 	PlayerVitals _vitals;
 	double _nextFocusScanAt;
-	double _nextWalkOverScanAt;
 	readonly List<(string ResourceId, int Amount)> _capacityScratch = new();
 
 	protected override void OnStart()
@@ -72,6 +77,8 @@ public sealed class PlayerHandHarvest : Component
 		if ( Time.NowDouble >= _nextFocusScanAt )
 			UpdateFocusedNode();
 
+		TickWorldDropMagnet();
+
 		if ( !Input.Pressed( HandHarvestInputAction ) )
 			return;
 
@@ -85,38 +92,20 @@ public sealed class PlayerHandHarvest : Component
 		RequestHandHarvest( FocusedNode );
 	}
 
-	protected override void OnFixedUpdate()
-	{
-		base.OnFixedUpdate();
-
-		if ( _vitals is null )
-			_vitals = Components.Get<PlayerVitals>();
-
-		if ( _vitals is null || !_vitals.IsLocalInputOwnedPawn() )
-			return;
-
-		var menu = Components.Get<PlayerGameMenuController>();
-		if ( menu is not null && menu.IsMenuOpen )
-			return;
-
-		if ( Time.NowDouble < _nextWalkOverScanAt )
-			return;
-
-		_nextWalkOverScanAt = Time.NowDouble + Math.Max( 0.05, WalkOverScanIntervalSeconds );
-		TryWalkOverWorldDropPickup();
-	}
-
-	void TryWalkOverWorldDropPickup()
+	void TickWorldDropMagnet()
 	{
 		var inventory = Components.Get<PlayerInventory>();
 		if ( inventory is null )
 			return;
 
-		var radius = TerrainWorldUnits.MetersToEngine( Math.Max( 0.1f, WalkOverPickupRadiusMeters ) );
-		var pawnPos = GameObject.WorldPosition;
+		var attractRadius = TerrainWorldUnits.MetersToEngine( Math.Max( 0.25f, MagnetAttractRadiusMeters ) );
+		var contactRadius = TerrainWorldUnits.MetersToEngine( Math.Max( 0.05f, MagnetContactRadiusMeters ) );
+		contactRadius = Math.Min( contactRadius, attractRadius );
 
-		WorldDroppedResource best = null;
-		var bestDist = float.MaxValue;
+		var speed = TerrainWorldUnits.MetersToEngine( Math.Max( 0.5f, MagnetSpeedMetersPerSecond ) );
+		var aim = GameObject.WorldPosition
+		          + Vector3.Up * TerrainWorldUnits.MetersToEngine( Math.Max( 0.1f, MagnetAimHeightMeters ) );
+		var maxStep = speed * Time.Delta;
 
 		foreach ( var candidate in WorldDroppedResourceRegistry.Drops )
 		{
@@ -126,18 +115,19 @@ public sealed class PlayerHandHarvest : Component
 			if ( !candidate.CanPickupInto( inventory ) )
 				continue;
 
-			var dist = HorizontalDistanceBetween( pawnPos, candidate.GameObject.WorldPosition );
-			if ( dist > radius || dist >= bestDist )
+			var pos = candidate.GameObject.WorldPosition;
+			var dist = Vector3.DistanceBetween( aim, pos );
+			if ( dist > attractRadius )
 				continue;
 
-			best = candidate;
-			bestDist = dist;
+			if ( dist <= contactRadius )
+			{
+				RequestWorldDropPickup( candidate );
+				continue;
+			}
+
+			candidate.AttractToward( aim, maxStep, attractRadius );
 		}
-
-		if ( best is null )
-			return;
-
-		RequestWorldDropPickup( best );
 	}
 
 	void UpdateFocusedNode()
@@ -274,13 +264,6 @@ public sealed class PlayerHandHarvest : Component
 		}
 
 		return false;
-	}
-
-	static float HorizontalDistanceBetween( Vector3 a, Vector3 b )
-	{
-		var dx = a.x - b.x;
-		var dy = a.y - b.y;
-		return MathF.Sqrt( dx * dx + dy * dy );
 	}
 
 	bool TryFindFocusedNodeFromRay( Scene scene, Vector3 eye, Vector3 dir, out ResourceItemDefinition node )

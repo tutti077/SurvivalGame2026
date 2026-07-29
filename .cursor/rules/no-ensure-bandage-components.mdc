@@ -1,0 +1,47 @@
+---
+description: Do not paper over missing prefab/scene setup with Ensure* helper components
+alwaysApply: true
+---
+
+# No Ensure* bandage components (Commandment #5)
+
+When something is missing from a **prefab or scene**, fix the **asset** — do not add a runtime helper that “makes sure” components exist.
+
+## Forbidden
+
+- New components named `Ensure*`, `AutoWire*`, `Bootstrap*`, or similar whose job is to **create missing gameplay components** on other objects at `OnStart`
+- Folder-level scripts that walk children and `Components.Create<T>()` for systems that belong on those objects in the editor
+- “It works in play mode” while the prefab/scene still lacks the real components
+
+## Required instead
+
+1. **Ask / clarify** if the intended objects or ownership are unclear (see `ask-before-assuming.mdc`).
+2. Put the real components on the **prefab** (`ChopableTree` + `DamageReceiver` on tree prefabs, etc.).
+3. For **scene instances** that are not prefab-linked: add the components in the scene (or convert them to prefab instances).
+4. If s&box prefab instance patches stripped components (`RemovedObjects`), **fix the instance patch** — do not paper over it in code.
+
+## Allowed (not this commandment)
+
+- Catalog `EnsureLoaded()` for JSON data caches
+- Internal private helpers that build transient UI/preview/physics for an object that already owns the feature
+- One-time migrations the user explicitly requested
+
+## Anti-pattern (what we deleted)
+
+```csharp
+// ❌ BAD — hides missing scene/prefab setup
+public sealed class EnsureChopableTrees : Component
+{
+	protected override void OnStart()
+	{
+		foreach ( var child in GameObject.Children )
+			child.Components.Create<ChopableTree>();
+	}
+}
+```
+
+```csharp
+// ✅ GOOD — ChopableTree + DamageReceiver authored on prefab / scene object
+```
+
+See **`AGENTS.md`** Commandment #5.

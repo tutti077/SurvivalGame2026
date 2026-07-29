@@ -48,6 +48,8 @@
       "actions": ["PrimaryMelee"],
       "twoHanded": false,
       "hotbarEquipable": true,
+      "harvestToolType": "Axe",
+      "harvestToolTier": 0,
       "statModifiers": { "armor": 0, "damage": 4, "speed": 0 }
     }
   ]
