@@ -43,6 +43,24 @@ public sealed class EquipmentProfileData
 	/// <summary>Hold-to-shorten rope rate (meters/sec).</summary>
 	public float GrappleRetractMetersPerSecond { get; set; } = 2.5f;
 
+	/// <summary>
+	/// Faster reel-in while rope is slack (not bearing hang/swing load), meters/sec.
+	/// </summary>
+	[JsonPropertyName( "grappleSlackRetractMetersPerSecond" )]
+	public float GrappleSlackRetractMetersPerSecond { get; set; } = 7f;
+
+	/// <summary>Within this many meters of max length the rope counts as taut.</summary>
+	[JsonPropertyName( "grappleTautSlackMeters" )]
+	public float GrappleTautSlackMeters { get; set; } = 0.75f;
+
+	/// <summary>Extra slack still treated as loaded when swing centripetal demand is high.</summary>
+	[JsonPropertyName( "grappleSwingLoadSlackGraceMeters" )]
+	public float GrappleSwingLoadSlackGraceMeters { get; set; } = 2.5f;
+
+	/// <summary>Fraction of gravity for v_tan²/radius before a near-taut swing counts as loaded.</summary>
+	[JsonPropertyName( "grappleSwingLoadCentripetalGravityFraction" )]
+	public float GrappleSwingLoadCentripetalGravityFraction { get; set; } = 0.35f;
+
 	/// <summary>Hold-to-pay-out rope rate (meters/sec).</summary>
 	public float GrappleDetractMetersPerSecond { get; set; } = 4f;
 

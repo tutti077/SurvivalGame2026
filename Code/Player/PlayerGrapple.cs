@@ -138,11 +138,11 @@ public sealed class PlayerGrapple : Component
 
 	/// <summary>On-screen swing speed / velocity while attached (local driver).</summary>
 	[Property, Group( "Debug" ), Title( "Show Speed Overlay" )]
-	public bool ShowSpeedDebug { get; set; } = true;
+	public bool ShowSpeedDebug { get; set; }
 
 	/// <summary>Big W/A/S/D cue for which key pumps with the current arc (local driver).</summary>
 	[Property, Group( "Debug" ), Title( "Show Pump Cue" )]
-	public bool ShowPumpCue { get; set; } = true;
+	public bool ShowPumpCue { get; set; }
 
 	[Property, Group( "Debug" )]
 	public bool LogGrapple { get; set; }
@@ -188,6 +188,12 @@ public sealed class PlayerGrapple : Component
 	float _airborneStaminaDebt;
 	bool _savedEnablePressing = true;
 	bool _pressingOverrideActive;
+
+	// From equipped hook profile (data/equipment_profiles.json) — not player-prefab knobs.
+	float _slackRetractMetersPerSecond = 7f;
+	float _tautSlackMeters = 0.75f;
+	float _swingLoadSlackGraceMeters = 2.5f;
+	float _swingLoadCentripetalGravityFraction = 0.35f;
 
 	protected override void OnStart()
 	{
@@ -329,6 +335,18 @@ public sealed class PlayerGrapple : Component
 
 		if ( profile.GrappleRetractMetersPerSecond > 0f )
 			RetractMetersPerSecond = profile.GrappleRetractMetersPerSecond;
+
+		if ( profile.GrappleSlackRetractMetersPerSecond > 0f )
+			_slackRetractMetersPerSecond = profile.GrappleSlackRetractMetersPerSecond;
+
+		if ( profile.GrappleTautSlackMeters > 0f )
+			_tautSlackMeters = profile.GrappleTautSlackMeters;
+
+		if ( profile.GrappleSwingLoadSlackGraceMeters > 0f )
+			_swingLoadSlackGraceMeters = profile.GrappleSwingLoadSlackGraceMeters;
+
+		if ( profile.GrappleSwingLoadCentripetalGravityFraction > 0f )
+			_swingLoadCentripetalGravityFraction = profile.GrappleSwingLoadCentripetalGravityFraction;
 
 		if ( profile.GrappleDetractMetersPerSecond > 0f )
 			DetractMetersPerSecond = profile.GrappleDetractMetersPerSecond;
@@ -1056,7 +1074,7 @@ public sealed class PlayerGrapple : Component
 
 		var deltaMeters = 0f;
 		if ( IsRetractingRope )
-			deltaMeters -= Math.Max( 0.1f, RetractMetersPerSecond ) * dt;
+			deltaMeters -= Math.Max( 0.1f, ResolveRetractMetersPerSecond() ) * dt;
 
 		if ( IsDetractingRope )
 			deltaMeters += Math.Max( 0.1f, DetractMetersPerSecond ) * dt;
@@ -1065,6 +1083,72 @@ public sealed class PlayerGrapple : Component
 			return;
 
 		RequestAdjustLength( TerrainWorldUnits.MetersToEngine( deltaMeters ) );
+	}
+
+	/// <summary>
+	/// Normal retract when the rope is bearing the player (taut hang or centripetal swing).
+	/// Faster retract when slack — reeling in while falling under a high attach point.
+	/// </summary>
+	float ResolveRetractMetersPerSecond()
+	{
+		var normal = Math.Max( 0.1f, RetractMetersPerSecond );
+		var slack = Math.Max( normal, _slackRetractMetersPerSecond );
+		return IsRopeBearingPlayerLoad() ? normal : slack;
+	}
+
+	/// <summary>
+	/// True when the rope is supporting hang weight or providing centripetal force for a swing
+	/// (e.g. looping a horizontal beam). False when hanging on a long slack line / falling in.
+	/// </summary>
+	bool IsRopeBearingPlayerLoad()
+	{
+		if ( !IsAttached || RopeLengthEngine <= 1e-3f )
+			return false;
+
+		var attach = AttachWorldPoint;
+		var toPlayer = GameObject.WorldPosition - attach;
+		var dist = toPlayer.Length;
+		if ( dist < 1e-4f )
+			return false;
+
+		var maxLen = Math.Max( 1f, RopeLengthEngine );
+		var slackMeters = TerrainWorldUnits.EngineToMeters( maxLen - dist );
+		var tautSlack = Math.Max( 0.05f, _tautSlackMeters );
+
+		// At / past the length limit → rope is the support (hang or arc).
+		if ( slackMeters <= tautSlack )
+			return true;
+
+		var body = ResolveGrappleBody();
+		if ( body is null )
+			return false;
+
+		var radial = toPlayer / dist;
+		var vel = body.Velocity;
+		var vRad = Vector3.Dot( vel, radial );
+		var vTanSq = (vel - radial * vRad).LengthSquared;
+		var radius = Math.Max( dist, 1f );
+		var centripetal = vTanSq / radius;
+
+		var gravity = Scene?.PhysicsWorld?.Gravity ?? new Vector3( 0f, 0f, -800f );
+		var g = Math.Max( 1f, gravity.Length );
+		var grace = Math.Max( tautSlack, _swingLoadSlackGraceMeters );
+		var loadAccel = g * Math.Clamp( _swingLoadCentripetalGravityFraction, 0.05f, 2f );
+
+		// Fast circular motion still needs the rope even if slightly inside the sphere.
+		return slackMeters <= grace && centripetal >= loadAccel;
+	}
+
+	Rigidbody ResolveGrappleBody()
+	{
+		if ( _controller is null )
+			_controller = Components.Get<PlayerController>();
+
+		if ( _controller?.Body is not null && _controller.Body.IsValid() )
+			return _controller.Body;
+
+		var body = Components.Get<Rigidbody>();
+		return body is not null && body.IsValid() ? body : null;
 	}
 
 	static bool IsLengthActionDown( string primary, string altA, string altB, string altC )
