@@ -11,8 +11,9 @@ All player-facing behavior in these domains is owned and **tuned through** these
 | **Movement** | `Code/Player/PlayerMovement.cs` | Anything that changes how the player **moves** (locomotion, modes, motion rules for the pawn). |
 | **Vitals** | `Code/Player/PlayerVitals.cs` | **Loss/gain** of **health, stamina, oxygen** (and similar pools). Host bookkeeping may use `VitalsAuthority`; per-pawn tuning and the main “what the pawn has” contract stay on `PlayerVitals`. |
 | **Combat** | `Code/Player/PlayerCombat.cs` | **Attacks and blocks** — input, phases, weapon tuning, client vs server flow. Host validation may use `CombatAuthority`; **serialized / designer-facing combat parameters for this pawn** stay on `PlayerCombat` unless there is a strong reason otherwise. |
+| **Animation** | `Code/Player/PlayerAnimation.cs` | Citizen **hold poses**, attack anim triggers, left-swing mirror, demo held props. Combat/equipment request intents; this component applies animgraph + presentation. |
 
-Other scripts and whole subtrees exist (environment, AI, networking managers, etc.). For **this player prefab’s** movement, vitals, and combat, **go through these three umbrellas** for edits and for understanding what calls what.
+Other scripts and whole subtrees exist (environment, AI, networking managers, etc.). For **this player prefab’s** movement, vitals, combat, and animation, **go through these umbrellas** for edits and for understanding what calls what.
 
 ## Primary melee — attack action (not collision damage)
 

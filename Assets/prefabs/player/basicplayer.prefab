@@ -310,6 +310,28 @@
         "SwingUpFromSideWinRatio": 1.04
       },
       {
+        "__type": "Survival.PlayerAnimation",
+        "__guid": "970732c0-a058-4701-8a40-c9b9df0da80b",
+        "__enabled": true,
+        "Flags": 0,
+        "MeleeDemoStickGripAlongLength": 0,
+        "MeleeDemoStickLengthMeters": 1.26,
+        "MeleeDemoStickLocalAngles": "0,0,0",
+        "MeleeDemoStickLocalOffset": "0,0,0",
+        "MeleeDemoStickThicknessMeters": 0.045,
+        "MeleeDemoStickTint": "0.72,0.72,0.78,1",
+        "MeleeLateralSwingPlaybackRate": 0.85,
+        "MeleeLateralSwingSlowSeconds": 0.9,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "PlayMeleeSwingAnimation": true,
+        "ShowMeleeDemoStick": true
+      },
+      {
         "__type": "Survival.PlayerMovement",
         "__guid": "a334750f-a7f9-4e36-9c2d-563b96bda182",
         "__enabled": true,

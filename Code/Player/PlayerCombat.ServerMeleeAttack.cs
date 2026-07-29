@@ -177,6 +177,7 @@ public partial class PlayerCombat
 		_serverMeleeAttack = new ServerMeleeAttackRuntime( this, intent, holdSeconds, isHeavy, swingLogNote );
 
 		EmitSwingNoiseIfPlayer();
+		Components.Get<PlayerAnimation>()?.PlayMeleeSwingAttack( ResolveAttackTypeFromIntent( intent ), broadcastFromHost: true );
 
 		// Don't Broadcast inside Rpc.Host handling of the attacker pawn — nested HostOnly broadcasts on a
 		// host-owned object often never reach joining clients (host still runs it locally → host sees clients).
