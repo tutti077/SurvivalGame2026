@@ -9,11 +9,11 @@
     "Scale": "1,1,1",
     "Tags": "grapple",
     "Enabled": true,
-    "NetworkMode": 2,
+    "NetworkMode": 0,
     "NetworkFlags": 0,
     "NetworkOrphaned": 0,
     "NetworkTransmit": true,
-    "OwnerTransfer": 1,
+    "OwnerTransfer": 0,
     "Components": [
       {
         "__type": "Sandbox.ModelRenderer",

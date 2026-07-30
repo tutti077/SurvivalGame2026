@@ -51,6 +51,10 @@ public sealed class ChopableTree : Component
 		if ( !IsHostAuthority || _broken || amount <= 0f )
 			return 0f;
 
+		// Physics / impact also hits <see cref="IDamageable"/> — only melee may chop.
+		if ( attacker is not PlayerCombat )
+			return 0f;
+
 		if ( RequireAxe && !AttackerHasAxe( attacker ) )
 		{
 			if ( LogChop )

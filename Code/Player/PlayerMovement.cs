@@ -499,6 +499,8 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 
 	/// <summary>
 	/// Instantly place the view camera at the stepped distance (hard wall clamp, no ease-out).
+	/// Uses a sphere sweep so foliage / thick mesh colliders (trees) still pull the camera forward
+	/// instead of leaving it behind an opaque occluder.
 	/// </summary>
 	void SnapThirdPersonCameraToZoomDistance( CameraComponent cam )
 	{
@@ -516,14 +518,20 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		             + Vector3.Up * offset.y
 		             + rot.Right * offset.z;
 
-		var tr = Scene.Trace.Ray( eye, target )
+		var radius = Math.Max( 6f, _controller.BodyRadius * 0.45f );
+		var tr = Scene.Trace.Sphere( radius, eye, target )
 			.IgnoreGameObjectHierarchy( GameObject )
 			.WithoutTags( "player", "trigger" )
 			.Run();
 
-		cam.WorldPosition = tr.Hit
-			? tr.HitPosition + tr.Normal * 2f
-			: target;
+		if ( !tr.Hit || !tr.GameObject.IsValid() )
+		{
+			cam.WorldPosition = target;
+			return;
+		}
+
+		// Keep a bit of air off the hit surface so we don't sit inside the occluder.
+		cam.WorldPosition = tr.HitPosition + tr.Normal * Math.Max( 4f, radius );
 	}
 
 	void TickRunNoiseForEntities()

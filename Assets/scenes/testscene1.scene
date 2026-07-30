@@ -1557,7 +1557,7 @@
       "Scale": "200,200,100",
       "Tags": "",
       "Enabled": true,
-      "NetworkMode": 2,
+      "NetworkMode": 1,
       "NetworkFlags": 0,
       "NetworkOrphaned": 0,
       "NetworkTransmit": true,
@@ -95829,7 +95829,51 @@
       "__version": 2,
       "__Prefab": "prefabs/environment/temp_tree_3.prefab",
       "__PrefabInstancePatch": {
-        "AddedObjects": [],
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "7c8d9e0f-1a2b-4c3d-8e9f-0a1b2c3d4e5f"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "6be139f6-7ec6-4a0f-bc35-160aa85a2959"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "4cfb2a0f-3141-4da1-a9b6-486ac8f62f32"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.CapsuleCollider",
+              "__guid": "7c8d9e0f-1a2b-4c3d-8e9f-0a1b2c3d4e5f",
+              "__enabled": true,
+              "Flags": 0,
+              "ColliderFlags": 0,
+              "Elasticity": null,
+              "End": "0,0,20",
+              "Friction": null,
+              "IsTrigger": false,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "OnObjectTriggerEnter": null,
+              "OnObjectTriggerExit": null,
+              "OnTriggerEnter": null,
+              "OnTriggerExit": null,
+              "Radius": 28,
+              "RollingResistance": null,
+              "Start": "0,0,220",
+              "Static": true,
+              "Surface": null,
+              "SurfaceVelocity": "0,0,0"
+            }
+          }
+        ],
         "RemovedObjects": [],
         "PropertyOverrides": [
           {
@@ -95839,6 +95883,22 @@
             },
             "Property": "Position",
             "Value": "-32,-64,1.88218939"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "6be139f6-7ec6-4a0f-bc35-160aa85a2959"
+            },
+            "Property": "NetworkMode",
+            "Value": 2
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "4cfb2a0f-3141-4da1-a9b6-486ac8f62f32"
+            },
+            "Property": "__enabled",
+            "Value": false
           }
         ],
         "MovedObjects": [
@@ -95853,38 +95913,9 @@
             },
             "NewContainerProperty": "Components",
             "IsNewContainerArray": true,
-            "NewPreviousElement": null
-          },
-          {
-            "Id": {
-              "Type": "Component",
-              "IdValue": "a5a310f7-47ec-4a42-8536-638b9c13189a"
-            },
-            "NewParent": {
-              "Type": "GameObject",
-              "IdValue": "6be139f6-7ec6-4a0f-bc35-160aa85a2959"
-            },
-            "NewContainerProperty": "Components",
-            "IsNewContainerArray": true,
             "NewPreviousElement": {
               "Type": "Component",
-              "IdValue": "c3d4e5f6-a7b8-4901-c234-56789abcdef0"
-            }
-          },
-          {
-            "Id": {
-              "Type": "Component",
-              "IdValue": "d4e5f6a7-b8c9-4012-d345-6789abcdef01"
-            },
-            "NewParent": {
-              "Type": "GameObject",
-              "IdValue": "6be139f6-7ec6-4a0f-bc35-160aa85a2959"
-            },
-            "NewContainerProperty": "Components",
-            "IsNewContainerArray": true,
-            "NewPreviousElement": {
-              "Type": "Component",
-              "IdValue": "4cfb2a0f-3141-4da1-a9b6-486ac8f62f32"
+              "IdValue": "7c8d9e0f-1a2b-4c3d-8e9f-0a1b2c3d4e5f"
             }
           }
         ]
@@ -95894,7 +95925,8 @@
         "a5a310f7-47ec-4a42-8536-638b9c13189a": "9d7632e8-c8fc-4182-86ec-a8ff015e926a",
         "4cfb2a0f-3141-4da1-a9b6-486ac8f62f32": "8b6b7298-32b7-4d0a-833c-12b356d4e305",
         "c3d4e5f6-a7b8-4901-c234-56789abcdef0": "c34dc74b-ca9c-8e0f-af90-85be9075d1b7",
-        "d4e5f6a7-b8c9-4012-d345-6789abcdef01": "8b210e99-f5da-8be3-94f9-c1b4981c36fa"
+        "d4e5f6a7-b8c9-4012-d345-6789abcdef01": "8b210e99-f5da-8be3-94f9-c1b4981c36fa",
+        "7c8d9e0f-1a2b-4c3d-8e9f-0a1b2c3d4e5f": "1771048a-c8f6-8e7f-95f7-c90ed744e86b"
       }
     },
     {
@@ -95914,53 +95946,7 @@
             "Value": "31.9999962,2847.99951,1.4312699E-05"
           }
         ],
-        "MovedObjects": [
-          {
-            "Id": {
-              "Type": "Component",
-              "IdValue": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-            },
-            "NewParent": {
-              "Type": "GameObject",
-              "IdValue": "275a6811-0700-4908-8be2-5a3460a6efd4"
-            },
-            "NewContainerProperty": "Components",
-            "IsNewContainerArray": true,
-            "NewPreviousElement": null
-          },
-          {
-            "Id": {
-              "Type": "Component",
-              "IdValue": "46da6ad7-bc6d-4379-8aaf-606e9e4703be"
-            },
-            "NewParent": {
-              "Type": "GameObject",
-              "IdValue": "275a6811-0700-4908-8be2-5a3460a6efd4"
-            },
-            "NewContainerProperty": "Components",
-            "IsNewContainerArray": true,
-            "NewPreviousElement": {
-              "Type": "Component",
-              "IdValue": "a1b2c3d4-e5f6-4789-a012-3456789abcde"
-            }
-          },
-          {
-            "Id": {
-              "Type": "Component",
-              "IdValue": "b2c3d4e5-f6a7-4890-b123-456789abcdef"
-            },
-            "NewParent": {
-              "Type": "GameObject",
-              "IdValue": "275a6811-0700-4908-8be2-5a3460a6efd4"
-            },
-            "NewContainerProperty": "Components",
-            "IsNewContainerArray": true,
-            "NewPreviousElement": {
-              "Type": "Component",
-              "IdValue": "de2760b4-b79b-4426-b207-fdb4e5e4dace"
-            }
-          }
-        ]
+        "MovedObjects": []
       },
       "__PrefabIdToInstanceId": {
         "275a6811-0700-4908-8be2-5a3460a6efd4": "130a2e5e-8b1f-4316-8122-06e040c47bbe",
