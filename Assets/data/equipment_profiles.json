@@ -41,6 +41,16 @@
       "grappleAirborneStaminaPerSecond": 1.5
     },
     {
+      "resourceId": "basic_wingsuit",
+      "displayName": "Basic Wingsuit",
+      "slot": "wingsuit",
+      "allowedSlots": ["wingsuit", "wing"],
+      "actions": ["Wingsuit"],
+      "twoHanded": false,
+      "hotbarEquipable": false,
+      "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
+    },
+    {
       "resourceId": "axe_stone",
       "displayName": "Stone Axe",
       "slot": "mainHand",

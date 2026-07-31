@@ -1,6 +1,6 @@
 {
   "recipes": [
-/*grappling*/ {
+/*movement*/ {
                 "id": "basic_hook",
                 "displayName": "Basic Hook",
                 "icon": "ui/items/basic_hook.png",
@@ -8,13 +8,29 @@
                 "outputAmount": 1,
                 "maxStack": 1,
                 "ingredients": [
-                  { "resourceId": "resource_woodBasic", "amount": 10 },
-                  { "resourceId": "resource_stone", "amount": 3 },
-                  { "resourceId": "crafted_rope", "amount": 2 }
+                  { "resourceId": "resource_woodBasic", "amount": 1 },
+                  //{ "resourceId": "resource_woodBasic", "amount": 10 },
+                  //{ "resourceId": "resource_stone", "amount": 3 },
+                  //{ "resourceId": "crafted_rope", "amount": 2 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "GLHF" },
                   { "label": "Type", "value": "Grappling Hook" }
+                ]
+              },
+              {
+                "id": "basic_wingsuit",
+                "displayName": "Basic Wingsuit",
+                "icon": "ui/items/basic_wingsuit.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "GLHF" },
+                  { "label": "Type", "value": "Wingsuit" }
                 ]
               },
 /*tools*/     {

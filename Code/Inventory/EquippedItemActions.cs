@@ -11,4 +11,5 @@ public enum EquippedItemActions
 	Block = 1 << 1,
 	BuildHammer = 1 << 2,
 	Grapple = 1 << 3,
+	Wingsuit = 1 << 4,
 }

@@ -4,10 +4,10 @@ namespace Survival;
 
 /// <summary>
 /// Attach next to <see cref="PlayerVitals"/> on the pawn root. Handles <see cref="PlayerController.IEvents"/> (jump input / jump–land), sprint stamina,
-/// and rope-swing constraint / air push while <see cref="PlayerGrapple"/> is attached.
+/// grapple (aim/attach/rope/swing — <c>PlayerMovement.Grapple.cs</c>), and wingsuit (<c>PlayerMovement.Wingsuit.cs</c>).
 /// </summary>
 [Title( "Player Movement" )]
-public sealed class PlayerMovement : Component, PlayerController.IEvents
+public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 {
 	[Property, Group( "Stamina - Jump" )] public float JumpStaminaCost { get; set; } = 5f;
 
@@ -56,7 +56,6 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 	public float CameraZoomStep { get; set; } = 48f;
 
 	PlayerVitals _vitals;
-	PlayerGrapple _grapple;
 	PlayerController _controller;
 	/// <summary>Authoritative stepped zoom distance (-1 until first poll).</summary>
 	float _cameraZoomDistance = -1f;
@@ -90,8 +89,8 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 	{
 		base.OnStart();
 		_vitals = Components.Get<PlayerVitals>();
-		_grapple = Components.Get<PlayerGrapple>();
 		_controller = Components.Get<PlayerController>();
+		InitializeGrapple();
 		if ( _vitals is null )
 			Log.Warning( $"[PlayerMovement|{PlayerVitals.GetVitalsProcessRoleTag( GameObject )}] {GameObject.Name}: add PlayerVitals on this pawn — movement stamina hooks disabled." );
 	}
@@ -171,7 +170,7 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		return IsMovingEnoughForFootsteps();
 	}
 
-	/// <summary>Owner-side attach impulse — called when local <see cref="PlayerGrapple.IsAttached"/> rises.</summary>
+	/// <summary>Owner-side attach impulse — called when local <see cref="GrappleAttached"/> rises.</summary>
 	public void ApplyGrappleAttachVelocityScale( float scale )
 	{
 		if ( !IsLocalMovementDriver() )
@@ -255,12 +254,10 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		if ( _controller is null )
 			return;
 
-		if ( _grapple is null )
-			_grapple = Components.Get<PlayerGrapple>();
+		var grappleAir = GrappleAttached && !_controller.IsOnGround;
+		var wingsuitAir = WingsuitDeployed;
 
-		var grappleAir = _grapple is { IsAttached: true } && !_controller.IsOnGround;
-
-		if ( grappleAir )
+		if ( grappleAir || wingsuitAir )
 		{
 			if ( !_walkSpeedMuteActive )
 			{
@@ -276,10 +273,22 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 			return;
 		}
 
-		if ( _walkSpeedMuteActive )
+		// Leaving wingsuit / grapple-air mute — always fully restore walk+run (don't leave Run at 0).
+		if ( _walkSpeedMuteActive || (_runSpeedOverrideActive && _savedWalkSpeed > 1f) )
 		{
-			_controller.WalkSpeed = _savedWalkSpeed > 1f ? _savedWalkSpeed : 110f;
-			_walkSpeedMuteActive = false;
+			RestoreBlockedSprintRunSpeed();
+			if ( IsSprintBlocked() )
+			{
+				if ( !_runSpeedOverrideActive )
+				{
+					_savedRunSpeed = _controller.RunSpeed;
+					_runSpeedOverrideActive = true;
+				}
+
+				_controller.RunSpeed = Math.Max( 0f, _controller.WalkSpeed );
+			}
+
+			return;
 		}
 
 		if ( IsSprintBlocked() )
@@ -350,11 +359,8 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		     && ExhaustedJumpHeightFraction <= 0f )
 			PlayerVitals.ClearJumpInputIfPressed( JumpInputAction );
 
-		if ( _grapple is null )
-			_grapple = Components.Get<PlayerGrapple>();
-
 		// Jump while grappled: feet on ground only (same as sprint — no mid-air hop off the rope).
-		if ( _grapple is { IsAttached: true } )
+		if ( GrappleAttached )
 		{
 			if ( _controller is null )
 				_controller = Components.Get<PlayerController>();
@@ -362,6 +368,8 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 			if ( _controller is not null && !_controller.IsOnGround )
 				ClearActionIfPressed( JumpInputAction );
 		}
+
+		TickWingsuitJumpGate();
 
 		if ( !string.IsNullOrWhiteSpace( SprintInputAction ) )
 		{
@@ -388,6 +396,12 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() || _vitals is null )
 			return;
 
+		if ( WingsuitDeployed )
+			StowWingsuitOnGround();
+		else if ( _wingsuitFreefallAwaitingLand )
+			CompleteWingsuitLand();
+
+		_wingsuitAirborneSeconds = 0f;
 		_vitals.OnControllerLandedForJumpStaminaFromMovement( distance, impactVelocity );
 	}
 
@@ -424,6 +438,7 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		TickRunNoiseForEntities();
 		TickFootstepNoiseForEntities();
 		TickPlayerActionDebug();
+		TickGrappleUpdate();
 
 		if ( !IsLocalMovementDriver() )
 			return;
@@ -438,6 +453,7 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		// Only catch large over-length desync after MoveModeWalk moves us.
 		ApplyGrappleOverLengthCatchup();
 		ApplyGrappleSwingPushAfterWalk( Time.Delta );
+		TickWingsuitDebugDraw();
 	}
 
 	void PollCameraScrollZoom()
@@ -695,39 +711,35 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		// Physics step: re-clamp before MoveModeWalk air-control samples wish speed.
 		SuppressBlockedSprintInput();
 		ApplyBlockedSprintRunSpeedOverride();
+		TickGrappleFixedUpdate();
 		ApplyGrappleRopeConstraint( Time.Delta );
+		TickWingsuitAirborneTimer( Time.Delta );
+		TickWingsuitFlight( Time.Delta );
+		TickWingsuitFreefallHandoff();
 	}
 
 	void DetectGrappleAttachEdge()
 	{
-		if ( _grapple is null )
-			_grapple = Components.Get<PlayerGrapple>();
-
-		if ( _grapple is null )
+		if ( GrappleAttached && !_grappleWasAttached )
 		{
-			_grappleWasAttached = false;
-			return;
+			ApplyGrappleAttachVelocityScale( AttachVelocityScale );
+			if ( WingsuitDeployed )
+				StowWingsuit( keepMomentum: true );
 		}
 
-		if ( _grapple.IsAttached && !_grappleWasAttached )
-			ApplyGrappleAttachVelocityScale( _grapple.AttachVelocityScale );
-
-		if ( !_grapple.IsAttached )
+		if ( !GrappleAttached )
 			_grapplePrevRopeLength = 0f;
 
-		_grappleWasAttached = _grapple.IsAttached;
+		_grappleWasAttached = GrappleAttached;
 	}
 
 	void ApplyGrappleOverLengthCatchup()
 	{
-		if ( _grapple is null )
-			_grapple = Components.Get<PlayerGrapple>();
-
-		if ( _grapple is null || !_grapple.IsAttached || _grapple.RopeLengthEngine <= 1e-3f )
+		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f )
 			return;
 
-		var attach = _grapple.AttachWorldPoint;
-		var maxLen = Math.Max( 1f, _grapple.RopeLengthEngine );
+		var attach = GrappleAttachWorldPoint;
+		var maxLen = Math.Max( 1f, GrappleRopeLengthEngine );
 		var pos = GameObject.WorldPosition;
 		var toPlayer = pos - attach;
 		var dist = toPlayer.Length;
@@ -741,10 +753,7 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 
 	void ApplyGrappleRopeConstraint( float dt )
 	{
-		if ( _grapple is null )
-			_grapple = Components.Get<PlayerGrapple>();
-
-		if ( _grapple is null || !_grapple.IsAttached || _grapple.RopeLengthEngine <= 1e-3f )
+		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f )
 		{
 			_grapplePrevRopeLength = 0f;
 			return;
@@ -756,8 +765,8 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 
 		dt = Math.Max( 1e-4f, dt );
 
-		var attach = _grapple.AttachWorldPoint;
-		var maxLen = Math.Max( 1f, _grapple.RopeLengthEngine );
+		var attach = GrappleAttachWorldPoint;
+		var maxLen = Math.Max( 1f, GrappleRopeLengthEngine );
 		var prevLen = _grapplePrevRopeLength > 1e-3f ? _grapplePrevRopeLength : maxLen;
 		var pos = GameObject.WorldPosition;
 		var toPlayer = pos - attach;
@@ -825,17 +834,14 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() )
 			return;
 
-		if ( _grapple is null )
-			_grapple = Components.Get<PlayerGrapple>();
-
-		if ( _grapple is null || !_grapple.IsAttached || _grapple.RopeLengthEngine <= 1e-3f )
+		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f )
 			return;
 
 		var body = ResolveGrappleBody();
 		if ( body is null )
 			return;
 
-		var attach = _grapple.AttachWorldPoint;
+		var attach = GrappleAttachWorldPoint;
 		var toPlayer = GameObject.WorldPosition - attach;
 		var dist = toPlayer.Length;
 		if ( dist < 1e-4f )
@@ -854,7 +860,7 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 
 		if ( wish.LengthSquared < 1e-6f )
 		{
-			var damp = Math.Max( 0f, _grapple.SwingCoastDamping );
+			var damp = Math.Max( 0f, SwingCoastDamping );
 			if ( damp > 0f && vTan.LengthSquared > 1e-4f )
 				body.Velocity = radial * vRadial + vTan * Math.Max( 0f, 1f - damp * dt );
 			return;
@@ -865,14 +871,14 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		var tanDir = tanSpeed > 1e-3f ? vTan / tanSpeed : wish;
 		var along = Vector3.Dot( tanDir, wish );
 		var angleFromHang = Vector3.GetAngle( radial, Vector3.Down );
-		var startAccel = Math.Max( 0f, _grapple.AirPushAcceleration );
-		var alignMin = Math.Clamp( _grapple.PumpAlignDot, 0.01f, 0.5f );
-		var minPumpSpeed = Math.Max( 1f, _grapple.PumpMinSpeed );
+		var startAccel = Math.Max( 0f, AirPushAcceleration );
+		var alignMin = Math.Clamp( PumpAlignDot, 0.01f, 0.5f );
+		var minPumpSpeed = Math.Max( 1f, PumpMinSpeed );
 
 		// With the arc (W…S… timed with travel): compound pump.
 		if ( along > alignMin && tanSpeed >= minPumpSpeed )
 		{
-			var gain = Math.Max( 0f, _grapple.PumpVelocityGainPerSecond );
+			var gain = Math.Max( 0f, PumpVelocityGainPerSecond );
 			var scale = 1f + gain * dt;
 			body.Velocity = radial * vRadial + tanDir * (tanSpeed * scale);
 			return;
@@ -881,7 +887,7 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 		// Against the arc: coast by default. Optional FightBrakePerSecond if designers want scrub.
 		if ( along < -alignMin && tanSpeed > 1e-3f )
 		{
-			var brake = Math.Max( 0f, _grapple.FightBrakePerSecond );
+			var brake = Math.Max( 0f, FightBrakePerSecond );
 			if ( brake <= 1e-4f )
 				return;
 
@@ -892,15 +898,15 @@ public sealed class PlayerMovement : Component, PlayerController.IEvents
 
 		// Start from hang / low speed only — weak constant push, fades with angle + speed
 		// so holding W cannot launch you up the arc.
-		var holdAccel = startAccel * Math.Clamp( _grapple.HoldPushScale, 0f, 1f );
-		var maxAng = Math.Max( 5f, _grapple.HoldMaxAngleDegrees );
+		var holdAccel = startAccel * Math.Clamp( HoldPushScale, 0f, 1f );
+		var maxAng = Math.Max( 5f, HoldMaxAngleDegrees );
 		if ( angleFromHang > maxAng )
 		{
 			var fade = 1f - Math.Clamp( (angleFromHang - maxAng) / Math.Max( 8f, maxAng ), 0f, 1f );
 			holdAccel *= fade;
 		}
 
-		var holdSoften = Math.Max( 20f, _grapple.SwingSpeedSoften );
+		var holdSoften = Math.Max( 20f, SwingSpeedSoften );
 		var holdFactor = 1f / ( 1f + tanSpeed / holdSoften );
 		body.Velocity = radial * vRadial + vTan + wish * (holdAccel * holdFactor * dt);
 	}

@@ -35,7 +35,8 @@ public static class EquipmentCatalog
 
 	public static void EnsureLoaded()
 	{
-		if ( _loaded )
+		var jsonHash = TryReadJsonHash();
+		if ( _loaded && jsonHash == _loadedJsonHash )
 			return;
 
 		ReloadFromDisk();
@@ -49,13 +50,14 @@ public static class EquipmentCatalog
 		Profiles.Clear();
 		ByResourceId.Clear();
 
-		if ( TryLoadFromFile() )
-			return;
+		if ( !TryLoadFromFile() )
+		{
+			Profiles.AddRange( CreateFallbackProfiles() );
+			RebuildLookup();
+			Log.Warning( "[EquipmentCatalog] Using built-in fallback equipment profiles." );
+		}
 
-		Profiles.AddRange( CreateFallbackProfiles() );
-		RebuildLookup();
-		EnsureRequiredMainHandProfiles();
-		Log.Warning( "[EquipmentCatalog] Using built-in fallback equipment profiles." );
+		EnsureRequiredProfiles();
 	}
 
 	public static bool TryGet( string resourceId, out EquipmentProfileData profile )
@@ -230,7 +232,6 @@ public static class EquipmentCatalog
 				return false;
 
 			RebuildLookup();
-			EnsureRequiredMainHandProfiles();
 			return true;
 		}
 		catch ( Exception ex )
@@ -255,23 +256,21 @@ public static class EquipmentCatalog
 			// MainHand tools must stay selectable from the hotbar even if JSON omitted the flag.
 			if ( IsSlotAllowed( entry, EquipmentSlot.MainHand ) )
 				entry.HotbarEquipable = true;
-			else if ( GetPrimarySlot( entry ) == EquipmentSlot.Grapple )
+			else if ( GetPrimarySlot( entry ) == EquipmentSlot.Grapple
+			          || GetPrimarySlot( entry ) == EquipmentSlot.Wingsuit )
 				entry.HotbarEquipable = false;
 		}
 	}
 
-	/// <summary>Upsert built-in MainHand tools so craft ids like build_hammer always resolve.</summary>
-	static void EnsureRequiredMainHandProfiles()
+	/// <summary>
+	/// Upsert built-in profiles so craft ids (build_hammer, basic_wingsuit, …) always resolve
+	/// even if mounted JSON is stale or missing a row.
+	/// </summary>
+	static void EnsureRequiredProfiles()
 	{
 		foreach ( var fallback in CreateFallbackProfiles() )
 		{
 			if ( fallback is null || string.IsNullOrWhiteSpace( fallback.ResourceId ) )
-				continue;
-
-			// Never rewrite Grapple/armor profiles here — that was forcing the hook HotbarEquipable
-			// and blocking paperdoll equip.
-			if ( !IsSlotAllowed( fallback, EquipmentSlot.MainHand )
-			     && GetPrimarySlot( fallback ) != EquipmentSlot.MainHand )
 				continue;
 
 			var id = ResourceCatalog.NormalizeResourceId( fallback.ResourceId );
@@ -279,7 +278,12 @@ public static class EquipmentCatalog
 
 			if ( ByResourceId.TryGetValue( id, out var existing ) && existing is not null )
 			{
-				existing.HotbarEquipable = true;
+				if ( IsSlotAllowed( fallback, EquipmentSlot.MainHand )
+				     || GetPrimarySlot( fallback ) == EquipmentSlot.MainHand )
+				{
+					existing.HotbarEquipable = true;
+				}
+
 				if ( string.IsNullOrWhiteSpace( existing.Slot ) )
 					existing.Slot = fallback.Slot;
 				if ( existing.AllowedSlots is null || existing.AllowedSlots.Count == 0 )
@@ -294,6 +298,8 @@ public static class EquipmentCatalog
 			Profiles.Add( fallback );
 			ByResourceId[id] = fallback;
 		}
+
+		RebuildLookup();
 	}
 
 	static IEnumerable<EquipmentProfileData> CreateFallbackProfiles()
@@ -336,6 +342,16 @@ public static class EquipmentCatalog
 			GrappleDetractMetersPerSecond = 4f,
 			GrappleAttachStaminaCost = 8f,
 			GrappleAirborneStaminaPerSecond = 1.5f,
+		};
+
+		yield return new EquipmentProfileData
+		{
+			ResourceId = "basic_wingsuit",
+			DisplayName = "Basic Wingsuit",
+			Slot = "wingsuit",
+			AllowedSlots = { "wingsuit", "wing" },
+			Actions = { "Wingsuit" },
+			HotbarEquipable = false,
 		};
 
 		yield return new EquipmentProfileData

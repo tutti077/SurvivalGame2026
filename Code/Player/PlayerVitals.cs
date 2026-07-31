@@ -394,7 +394,7 @@ public sealed class PlayerVitals : Component
 		{
 			auth.TryApplyDeltas( GameObject, -afterArmor, 0f, this, damageSource: attacker );
 			if ( afterArmor > 0f )
-				Components.Get<PlayerGrapple>()?.NotifyDamaged( afterArmor );
+				Components.Get<PlayerMovement>()?.NotifyGrappleDamaged( afterArmor );
 			return afterArmor;
 		}
 
@@ -402,7 +402,7 @@ public sealed class PlayerVitals : Component
 		ApplyLocalSnapshot( new VitalsSnapshot( newHealth, CurrentHealthMax, CurrentStamina, CurrentStaminaMax ) );
 		LogDamageApplied( attacker, afterArmor, CurrentHealth, CurrentHealthMax );
 		if ( afterArmor > 0f )
-			Components.Get<PlayerGrapple>()?.NotifyDamaged( afterArmor );
+			Components.Get<PlayerMovement>()?.NotifyGrappleDamaged( afterArmor );
 		return afterArmor;
 	}
 

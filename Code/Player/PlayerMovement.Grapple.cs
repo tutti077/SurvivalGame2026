@@ -5,10 +5,10 @@ namespace Survival;
 
 /// <summary>
 /// Rope-swing grapple: aim crosshair, attach/detach, length control, and host-validated attach state.
-/// Swing constraint / air push live on <see cref="PlayerMovement"/>.
+/// Owned by <see cref="PlayerMovement"/> (Commandment #1) — same umbrella as the wingsuit.
+/// Swing constraint / air push live in <c>PlayerMovement.cs</c>.
 /// </summary>
-[Title( "Player Grapple" )]
-public sealed class PlayerGrapple : Component
+partial class PlayerMovement
 {
 	public const string GrappleSurfaceTag = "grapple";
 
@@ -22,45 +22,45 @@ public sealed class PlayerGrapple : Component
 		"hand_left",
 	};
 
-	[Property, Group( "Input" )] public string GrappleAction { get; set; } = "mouse3";
+	[Property, Group( "Grapple Input" )] public string GrappleAction { get; set; } = "mouse3";
 	/// <summary>Shorten rope (default E).</summary>
-	[Property, Group( "Input" )] public string RetractAction { get; set; } = "GrappleRetract";
+	[Property, Group( "Grapple Input" )] public string RetractAction { get; set; } = "GrappleRetract";
 	/// <summary>Pay out / expand max rope length (default Q).</summary>
-	[Property, Group( "Input" )] public string DetractAction { get; set; } = "GrappleDetract";
+	[Property, Group( "Grapple Input" )] public string DetractAction { get; set; } = "GrappleDetract";
 
-	[Property, Group( "Range" ), Title( "Max Range (meters)" )]
+	[Property, Group( "Grapple Range" ), Title( "Max Range (meters)" )]
 	public float MaxRangeMeters { get; set; } = 30f;
 
-	[Property, Group( "Rope" ), Title( "Retract (m/s)" )]
+	[Property, Group( "Grapple Rope" ), Title( "Retract (m/s)" )]
 	public float RetractMetersPerSecond { get; set; } = 2.5f;
 
-	[Property, Group( "Rope" ), Title( "Detract (m/s)" )]
+	[Property, Group( "Grapple Rope" ), Title( "Detract (m/s)" )]
 	public float DetractMetersPerSecond { get; set; } = 8f;
 
-	[Property, Group( "Rope" ), Title( "Hard Max Length (meters)" )]
+	[Property, Group( "Grapple Rope" ), Title( "Hard Max Length (meters)" )]
 	public float HardMaxLengthMeters { get; set; } = 30f;
 
-	[Property, Group( "Rope" ), Title( "Min Length (meters)" )]
+	[Property, Group( "Grapple Rope" ), Title( "Min Length (meters)" )]
 	public float MinLengthMeters { get; set; } = 1f;
 
-	[Property, Group( "Stamina" )]
+	[Property, Group( "Grapple Stamina" )]
 	public float AttachStaminaCost { get; set; } = 8f;
 
-	[Property, Group( "Stamina" ), Title( "Airborne Drain (stamina/s)" )]
+	[Property, Group( "Grapple Stamina" ), Title( "Airborne Drain (stamina/s)" )]
 	public float AirborneStaminaPerSecond { get; set; } = 1.5f;
 
-	[Property, Group( "Swing" ), Title( "Attach Velocity Scale" )]
+	[Property, Group( "Grapple Swing" ), Title( "Attach Velocity Scale" )]
 	public float AttachVelocityScale { get; set; } = 1.08f;
 
 	/// <summary>
 	/// Weak constant accel to leave hang / start a swing. Pumps do <b>not</b> use this —
 	/// they multiply existing tangent speed (<see cref="PumpVelocityGainPerSecond"/>).
 	/// </summary>
-	[Property, Group( "Swing" ), Title( "Start Push (engine u/s²)" )]
+	[Property, Group( "Grapple Swing" ), Title( "Start Push (engine u/s²)" )]
 	public float AirPushAcceleration { get; set; } = 36f;
 
 	/// <summary>Fraction of start push while holding WASD near hang.</summary>
-	[Property, Group( "Swing" ), Title( "Hold Push Scale" )]
+	[Property, Group( "Grapple Swing" ), Title( "Hold Push Scale" )]
 	public float HoldPushScale { get; set; } = 0.35f;
 
 	/// <summary>
@@ -68,93 +68,93 @@ public sealed class PlayerGrapple : Component
 	/// Flip W/S at the apex to keep pumping. Opposite input coasts (optional brake if
 	/// <see cref="FightBrakePerSecond"/> &gt; 0).
 	/// </summary>
-	[Property, Group( "Swing" ), Title( "Pump Velocity Gain (1/s)" )]
+	[Property, Group( "Grapple Swing" ), Title( "Pump Velocity Gain (1/s)" )]
 	public float PumpVelocityGainPerSecond { get; set; } = 0.32f;
 
 	/// <summary>
 	/// How aligned WASD must be with swing travel to pump. Lower = more forgiving timing.
 	/// </summary>
-	[Property, Group( "Swing" ), Title( "Pump Align (dot)" ), Range( 0.01f, 0.5f ), Step( 0.01f )]
+	[Property, Group( "Grapple Swing" ), Title( "Pump Align (dot)" ), Range( 0.01f, 0.5f ), Step( 0.01f )]
 	public float PumpAlignDot { get; set; } = 0.08f;
 
 	/// <summary>
 	/// Optional: while WASD fights travel, exponential tangent decay per second.
 	/// Leave at 0 for classic W…S… pumps (mistimed half-strokes coast, they do not scrub speed).
 	/// </summary>
-	[Property, Group( "Swing" ), Title( "Fight Brake (1/s)" ), Range( 0f, 12f ), Step( 0.25f )]
+	[Property, Group( "Grapple Swing" ), Title( "Fight Brake (1/s)" ), Range( 0f, 12f ), Step( 0.25f )]
 	public float FightBrakePerSecond { get; set; } = 0f;
 
 	/// <summary>Min tangent speed before compound pumping applies (below this = start push only).</summary>
-	[Property, Group( "Swing" ), Title( "Pump Min Speed (u/s)" )]
+	[Property, Group( "Grapple Swing" ), Title( "Pump Min Speed (u/s)" )]
 	public float PumpMinSpeed { get; set; } = 12f;
 
 	/// <summary>Hold thrust fades after this angle from vertical hang (degrees).</summary>
-	[Property, Group( "Swing" ), Title( "Hold Max Angle (deg)" )]
+	[Property, Group( "Grapple Swing" ), Title( "Hold Max Angle (deg)" )]
 	public float HoldMaxAngleDegrees { get; set; } = 12f;
 
 	/// <summary>Softens start/hold thrust as speed rises so you cannot launch from a standstill hold.</summary>
-	[Property, Group( "Swing" ), Title( "Start Speed Soften (u/s)" )]
+	[Property, Group( "Grapple Swing" ), Title( "Start Speed Soften (u/s)" )]
 	public float SwingSpeedSoften { get; set; } = 90f;
 
 	/// <summary>Light tangential damping while no WASD (settles toward hang).</summary>
-	[Property, Group( "Swing" ), Title( "Coast Damping (1/s)" )]
+	[Property, Group( "Grapple Swing" ), Title( "Coast Damping (1/s)" )]
 	public float SwingCoastDamping { get; set; } = 0.1f;
 
-	[Property, Group( "Aim" ), Title( "Crosshair Idle Hide (seconds)" )]
+	[Property, Group( "Grapple Aim" ), Title( "Crosshair Idle Hide (seconds)" )]
 	public float CrosshairIdleHideSeconds { get; set; } = 10f;
 
 	/// <summary>Soft lock: pick the best in-range tagged surface near the crosshair, not only the exact center ray.</summary>
-	[Property, Group( "Aim Assist" ), Title( "Enabled" )]
+	[Property, Group( "Grapple Aim Assist" ), Title( "Enabled" )]
 	public bool AimAssistEnabled { get; set; } = true;
 
 	/// <summary>Screen-pixel radius around the crosshair where assist may steal a target.</summary>
-	[Property, Group( "Aim Assist" ), Title( "Radius (pixels)" )]
+	[Property, Group( "Grapple Aim Assist" ), Title( "Radius (pixels)" )]
 	public float AssistRadiusPixels { get; set; } = 72f;
 
 	/// <summary>
 	/// Secondary score weight (meters). Crosshair closeness wins first; this breaks ties toward nearer surfaces.
 	/// </summary>
-	[Property, Group( "Aim Assist" ), Title( "Distance Bias" )]
+	[Property, Group( "Grapple Aim Assist" ), Title( "Distance Bias" )]
 	public float AssistDistanceBias { get; set; } = 0.05f;
 
-	[Property, Group( "Aim Assist" ), Title( "Sample Rings" )]
+	[Property, Group( "Grapple Aim Assist" ), Title( "Sample Rings" )]
 	public int AssistSampleRings { get; set; } = 3;
 
-	[Property, Group( "Aim Assist" ), Title( "Samples Per Ring" )]
+	[Property, Group( "Grapple Aim Assist" ), Title( "Samples Per Ring" )]
 	public int AssistSamplesPerRing { get; set; } = 8;
 
 	/// <summary>
 	/// How many pixels closer to the crosshair a new candidate must be before we leave the sticky lock.
 	/// </summary>
-	[Property, Group( "Aim Assist" ), Title( "Stick Break (pixels)" )]
+	[Property, Group( "Grapple Aim Assist" ), Title( "Stick Break (pixels)" )]
 	public float AssistStickBreakPixels { get; set; } = 18f;
 
 	/// <summary>Screen-space smoothing rate for the lock reticle (higher = snappier).</summary>
-	[Property, Group( "Aim Assist" ), Title( "Lock Smooth" )]
+	[Property, Group( "Grapple Aim Assist" ), Title( "Lock Smooth" )]
 	public float AssistLockSmooth { get; set; } = 14f;
 
-	[Property, Group( "Visual" )]
+	[Property, Group( "Grapple Visual" )]
 	public bool DrawDebugRope { get; set; } = true;
 
 	/// <summary>On-screen swing speed / velocity while attached (local driver).</summary>
-	[Property, Group( "Debug" ), Title( "Show Speed Overlay" )]
+	[Property, Group( "Grapple Debug" ), Title( "Show Speed Overlay" )]
 	public bool ShowSpeedDebug { get; set; }
 
 	/// <summary>Big W/A/S/D cue for which key pumps with the current arc (local driver).</summary>
-	[Property, Group( "Debug" ), Title( "Show Pump Cue" )]
+	[Property, Group( "Grapple Debug" ), Title( "Show Pump Cue" )]
 	public bool ShowPumpCue { get; set; }
 
-	[Property, Group( "Debug" )]
+	[Property, Group( "Grapple Debug" )]
 	public bool LogGrapple { get; set; }
 
 	/// <summary>Host-synced: rope currently attached. <see cref="SyncFlags.FromHost"/> — default Sync is owner-authored and host writes on client pawns never reach the owner.</summary>
-	[Sync( SyncFlags.FromHost )] public bool IsAttached { get; private set; }
+	[Sync( SyncFlags.FromHost )] public bool GrappleAttached { get; private set; }
 
 	/// <summary>Host-synced world attach point (static for v1).</summary>
-	[Sync( SyncFlags.FromHost )] public Vector3 AttachWorldPoint { get; private set; }
+	[Sync( SyncFlags.FromHost )] public Vector3 GrappleAttachWorldPoint { get; private set; }
 
 	/// <summary>Host-synced current rope length in engine units.</summary>
-	[Sync( SyncFlags.FromHost )] public float RopeLengthEngine { get; private set; }
+	[Sync( SyncFlags.FromHost )] public float GrappleRopeLengthEngine { get; private set; }
 
 	/// <summary>Local aim UI: crosshair should draw.</summary>
 	public bool IsAimHudActive { get; private set; }
@@ -181,8 +181,6 @@ public sealed class PlayerGrapple : Component
 	/// <summary>Owner is holding pay-out (Q) this frame.</summary>
 	public bool IsDetractingRope { get; private set; }
 
-	PlayerVitals _vitals;
-	PlayerController _controller;
 	PlayerEquipment _equipment;
 	double _aimHudHideAt;
 	float _airborneStaminaDebt;
@@ -195,23 +193,18 @@ public sealed class PlayerGrapple : Component
 	float _swingLoadSlackGraceMeters = 2.5f;
 	float _swingLoadCentripetalGravityFraction = 0.35f;
 
-	protected override void OnStart()
+	void InitializeGrapple()
 	{
-		base.OnStart();
-		_vitals = Components.Get<PlayerVitals>();
-		_controller = Components.Get<PlayerController>();
 		_equipment = Components.Get<PlayerEquipment>();
 		RefreshTuningFromEquipment();
 
 		if ( LogGrapple )
-			Log.Info( $"[PlayerGrapple] {GameObject.Name}: ready (action '{GrappleAction}', range {MaxRangeMeters:0.#}m)." );
+			Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: ready (action '{GrappleAction}', range {MaxRangeMeters:0.#}m)." );
 	}
 
-	protected override void OnUpdate()
+	void TickGrappleUpdate()
 	{
-		base.OnUpdate();
-
-		if ( !IsLocalDriver() )
+		if ( !IsLocalMovementDriver() )
 		{
 			DrawRopeIfNeeded();
 			return;
@@ -239,7 +232,7 @@ public sealed class PlayerGrapple : Component
 			ClearStickyAim();
 			UpdateAimHudVisibility( forceHide: true );
 			UpdatePressingOverride( false );
-			if ( IsAttached )
+			if ( GrappleAttached )
 				RequestDetach();
 			DrawRopeIfNeeded();
 			return;
@@ -249,7 +242,7 @@ public sealed class PlayerGrapple : Component
 		PollToggleInput();
 		PollLengthHoldState();
 		UpdateAimHudVisibility( forceHide: false );
-		UpdatePressingOverride( IsAttached );
+		UpdatePressingOverride( GrappleAttached );
 		DrawRopeIfNeeded();
 		DrawSpeedDebugIfNeeded();
 		DrawPumpCueIfNeeded();
@@ -260,7 +253,7 @@ public sealed class PlayerGrapple : Component
 		base.OnPreRender();
 
 		// After combat teardrop (OnUpdate) so the yellow grapple reticle sits on top.
-		if ( !IsLocalDriver() )
+		if ( !IsLocalMovementDriver() )
 			return;
 
 		if ( !HasGrappleEquipped() )
@@ -273,18 +266,13 @@ public sealed class PlayerGrapple : Component
 		DrawCrosshairIfNeeded();
 	}
 
-	protected override void OnFixedUpdate()
+	void TickGrappleFixedUpdate()
 	{
-		base.OnFixedUpdate();
-
-		if ( !IsLocalDriver() )
+		if ( !GrappleAttached )
 			return;
 
-		if ( IsAttached )
-		{
-			ApplyLengthHoldDelta( Time.Delta );
-			DrainAirborneStamina( Time.Delta );
-		}
+		ApplyLengthHoldDelta( Time.Delta );
+		DrainAirborneStamina( Time.Delta );
 	}
 
 	public float GetMaxRangeEngine() =>
@@ -297,23 +285,15 @@ public sealed class PlayerGrapple : Component
 		TerrainWorldUnits.MetersToEngine( Math.Max( MinLengthMeters, HardMaxLengthMeters ) );
 
 	/// <summary>Called from <see cref="PlayerVitals.ApplyDamageAfterArmor"/> on the host when HP is lost.</summary>
-	public void NotifyDamaged( float damageAfterArmor )
+	public void NotifyGrappleDamaged( float damageAfterArmor )
 	{
-		if ( damageAfterArmor <= 0f || !IsAttached )
+		if ( damageAfterArmor <= 0f || !GrappleAttached )
 			return;
 
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
 			return;
 
 		ServerDetach( "damage" );
-	}
-
-	bool IsLocalDriver()
-	{
-		if ( _vitals is null )
-			_vitals = Components.Get<PlayerVitals>();
-
-		return _vitals is not null && _vitals.IsLocalInputOwnedPawn();
 	}
 
 	void RefreshTuningFromEquipment()
@@ -498,7 +478,7 @@ public sealed class PlayerGrapple : Component
 
 		BumpAimHud();
 
-		if ( IsAttached )
+		if ( GrappleAttached )
 		{
 			RequestDetach();
 			return;
@@ -518,7 +498,7 @@ public sealed class PlayerGrapple : Component
 	{
 		if ( !TryGetAimRayFromPlayer( out var origin, out var direction ) )
 		{
-			Log.Info( $"[PlayerGrapple] {GameObject.Name}: aim reject — no look direction (view camera)." );
+			Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: aim reject — no look direction (view camera)." );
 			return;
 		}
 
@@ -526,14 +506,14 @@ public sealed class PlayerGrapple : Component
 		var tr = TraceAimRay( origin, direction, maxRange );
 		if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() )
 		{
-			Log.Info( $"[PlayerGrapple] {GameObject.Name}: aim reject — ray miss (cast {TerrainWorldUnits.EngineToMeters( maxRange ):0.#}m from player)." );
+			Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: aim reject — ray miss (cast {TerrainWorldUnits.EngineToMeters( maxRange ):0.#}m from player)." );
 			return;
 		}
 
 		var distPawn = Vector3.DistanceBetween( GameObject.WorldPosition, tr.HitPosition );
 		var tagged = HasGrappleTag( tr );
 		Log.Info(
-			$"[PlayerGrapple] {GameObject.Name}: aim reject — hit '{tr.GameObject.Name}' " +
+			$"[PlayerMovement.Grapple] {GameObject.Name}: aim reject — hit '{tr.GameObject.Name}' " +
 			$"pawnDist={TerrainWorldUnits.EngineToMeters( distPawn ):0.##}m " +
 			$"(max {TerrainWorldUnits.EngineToMeters( maxRange ):0.#}m) tagged={tagged}." );
 	}
@@ -900,7 +880,7 @@ public sealed class PlayerGrapple : Component
 		}
 
 		// Local/host play: still allow the richer aim-trace path when this pawn owns the view.
-		if ( IsLocalDriver() && TryTraceGrappleAim( out var hostPoint, out _, out var hostLen, out _, out _, out _ ) )
+		if ( IsLocalMovementDriver() && TryTraceGrappleAim( out var hostPoint, out _, out var hostLen, out _, out _, out _ ) )
 		{
 			if ( Vector3.DistanceBetween( hostPoint, clientHitPoint ) <= surfaceSlack && IsWithinGrappleRange( hostPoint ) )
 			{
@@ -999,22 +979,6 @@ public sealed class PlayerGrapple : Component
 		return false;
 	}
 
-	float GetAssistMaxAngleDegrees()
-	{
-		if ( !AimAssistEnabled || AssistRadiusPixels < 1f )
-			return 0.75f;
-
-		var cam = BuildViewCamera.Resolve( GameObject );
-		if ( !cam.IsValid() )
-			return 8f;
-
-		var rect = cam.ScreenRect;
-		var halfH = Math.Max( 1f, rect.Height * 0.5f );
-		var halfFovRad = Math.Clamp( cam.FieldOfView, 20f, 110f ) * 0.5f * ( MathF.PI / 180f );
-		var angleRad = MathF.Atan( ( AssistRadiusPixels / halfH ) * MathF.Tan( halfFovRad ) );
-		return angleRad * ( 180f / MathF.PI );
-	}
-
 	static bool TryGetAimDirectionFromScreen( CameraComponent cam, Vector2 screenPos, out Vector3 direction )
 	{
 		direction = default;
@@ -1060,7 +1024,7 @@ public sealed class PlayerGrapple : Component
 		IsRetractingRope = false;
 		IsDetractingRope = false;
 
-		if ( !IsAttached )
+		if ( !GrappleAttached )
 			return;
 
 		IsRetractingRope = IsLengthActionDown( RetractAction, "GrappleRetract", "Use", "e" );
@@ -1069,7 +1033,7 @@ public sealed class PlayerGrapple : Component
 
 	void ApplyLengthHoldDelta( float dt )
 	{
-		if ( !IsAttached )
+		if ( !GrappleAttached )
 			return;
 
 		var deltaMeters = 0f;
@@ -1102,16 +1066,16 @@ public sealed class PlayerGrapple : Component
 	/// </summary>
 	bool IsRopeBearingPlayerLoad()
 	{
-		if ( !IsAttached || RopeLengthEngine <= 1e-3f )
+		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f )
 			return false;
 
-		var attach = AttachWorldPoint;
+		var attach = GrappleAttachWorldPoint;
 		var toPlayer = GameObject.WorldPosition - attach;
 		var dist = toPlayer.Length;
 		if ( dist < 1e-4f )
 			return false;
 
-		var maxLen = Math.Max( 1f, RopeLengthEngine );
+		var maxLen = Math.Max( 1f, GrappleRopeLengthEngine );
 		var slackMeters = TerrainWorldUnits.EngineToMeters( maxLen - dist );
 		var tautSlack = Math.Max( 0.05f, _tautSlackMeters );
 
@@ -1139,18 +1103,6 @@ public sealed class PlayerGrapple : Component
 		return slackMeters <= grace && centripetal >= loadAccel;
 	}
 
-	Rigidbody ResolveGrappleBody()
-	{
-		if ( _controller is null )
-			_controller = Components.Get<PlayerController>();
-
-		if ( _controller?.Body is not null && _controller.Body.IsValid() )
-			return _controller.Body;
-
-		var body = Components.Get<Rigidbody>();
-		return body is not null && body.IsValid() ? body : null;
-	}
-
 	static bool IsLengthActionDown( string primary, string altA, string altB, string altC )
 	{
 		if ( !string.IsNullOrWhiteSpace( primary ) && Input.Down( primary ) )
@@ -1172,7 +1124,7 @@ public sealed class PlayerGrapple : Component
 			return;
 		}
 
-		if ( IsAttached )
+		if ( GrappleAttached )
 		{
 			IsAimHudActive = true;
 			_aimHudHideAt = Time.NowDouble + Math.Max( 0.5, CrosshairIdleHideSeconds );
@@ -1254,7 +1206,7 @@ public sealed class PlayerGrapple : Component
 		if ( AttachStaminaCost > 0f && _vitals is not null && !_vitals.CanAffordStamina( AttachStaminaCost ) )
 		{
 			if ( LogGrapple )
-				Log.Info( $"[PlayerGrapple] {GameObject.Name}: attach failed — stamina." );
+				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: attach failed — stamina." );
 			return;
 		}
 
@@ -1332,7 +1284,7 @@ public sealed class PlayerGrapple : Component
 
 	void ServerTryAttach( Vector3 clientHitPoint, string clientGrappleResourceId = null )
 	{
-		if ( IsAttached )
+		if ( GrappleAttached )
 			return;
 
 		if ( !HasGrappleEquipped() )
@@ -1344,39 +1296,39 @@ public sealed class PlayerGrapple : Component
 			if ( _equipment is null || !_equipment.HostAcceptClientGrappleEquip( clientGrappleResourceId ) )
 			{
 				if ( LogGrapple )
-					Log.Info( $"[PlayerGrapple] {GameObject.Name}: host rejected attach — no grapple equipped." );
+					Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host rejected attach — no grapple equipped." );
 				return;
 			}
 
 			if ( LogGrapple )
-				Log.Info( $"[PlayerGrapple] {GameObject.Name}: host mirrored client grapple '{clientGrappleResourceId}'." );
+				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host mirrored client grapple '{clientGrappleResourceId}'." );
 		}
 
 		if ( !TryValidateAttachPoint( clientHitPoint, out var validatedPoint, out var length ) )
 		{
 			if ( LogGrapple )
-				Log.Info( $"[PlayerGrapple] {GameObject.Name}: host rejected attach." );
+				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host rejected attach." );
 			return;
 		}
 
 		if ( !HostTrySpendAttachStamina() )
 		{
 			if ( LogGrapple )
-				Log.Info( $"[PlayerGrapple] {GameObject.Name}: host attach stamina reject." );
+				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host attach stamina reject." );
 			return;
 		}
 
-		IsAttached = true;
-		AttachWorldPoint = validatedPoint;
-		RopeLengthEngine = length;
+		GrappleAttached = true;
+		GrappleAttachWorldPoint = validatedPoint;
+		GrappleRopeLengthEngine = length;
 
 		if ( LogGrapple )
-			Log.Info( $"[PlayerGrapple] {GameObject.Name}: attached len={TerrainWorldUnits.EngineToMeters( length ):0.##}m" );
+			Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: attached len={TerrainWorldUnits.EngineToMeters( length ):0.##}m" );
 	}
 
 	/// <summary>
 	/// Host attach cost. Must not use <see cref="PlayerVitals.TrySpendStamina"/> — that refuses
-	/// <see cref="GameObject.IsProxy"/> pawns (joining clients), so attach never set <see cref="IsAttached"/>.
+	/// <see cref="GameObject.IsProxy"/> pawns (joining clients), so attach never set <see cref="GrappleAttached"/>.
 	/// Match combat: spend through <see cref="VitalsAuthority.TryApplyDeltas"/>.
 	/// </summary>
 	bool HostTrySpendAttachStamina()
@@ -1403,21 +1355,21 @@ public sealed class PlayerGrapple : Component
 
 	void ServerDetach( string reason )
 	{
-		if ( !IsAttached )
+		if ( !GrappleAttached )
 			return;
 
-		IsAttached = false;
-		AttachWorldPoint = default;
-		RopeLengthEngine = 0f;
+		GrappleAttached = false;
+		GrappleAttachWorldPoint = default;
+		GrappleRopeLengthEngine = 0f;
 		_airborneStaminaDebt = 0f;
 
 		if ( LogGrapple )
-			Log.Info( $"[PlayerGrapple] {GameObject.Name}: detached ({reason})" );
+			Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: detached ({reason})" );
 	}
 
 	void ServerAdjustLength( float deltaEngine )
 	{
-		if ( !IsAttached || MathF.Abs( deltaEngine ) < 1e-5f )
+		if ( !GrappleAttached || MathF.Abs( deltaEngine ) < 1e-5f )
 			return;
 
 		if ( !HasGrappleEquipped() )
@@ -1428,7 +1380,7 @@ public sealed class PlayerGrapple : Component
 
 		var min = GetMinLengthEngine();
 		var max = GetHardMaxLengthEngine();
-		RopeLengthEngine = Math.Clamp( RopeLengthEngine + deltaEngine, min, max );
+		GrappleRopeLengthEngine = Math.Clamp( GrappleRopeLengthEngine + deltaEngine, min, max );
 	}
 
 	Vector3 ResolveEyePosition()
@@ -1554,16 +1506,16 @@ public sealed class PlayerGrapple : Component
 
 	void DrawRopeIfNeeded()
 	{
-		if ( !DrawDebugRope || !IsAttached )
+		if ( !DrawDebugRope || !GrappleAttached )
 			return;
 
 		var from = ResolveLeftArmWorldPoint();
-		DebugOverlay.Line( from, AttachWorldPoint, Color.Black, 0f );
+		DebugOverlay.Line( from, GrappleAttachWorldPoint, Color.Black, 0f );
 	}
 
 	void DrawSpeedDebugIfNeeded()
 	{
-		if ( !ShowSpeedDebug || !IsAttached )
+		if ( !ShowSpeedDebug || !GrappleAttached )
 			return;
 
 		if ( _controller is null )
@@ -1581,7 +1533,7 @@ public sealed class PlayerGrapple : Component
 		var horizontal = vel.WithZ( 0f );
 		var hSpeed = horizontal.Length;
 
-		var attach = AttachWorldPoint;
+		var attach = GrappleAttachWorldPoint;
 		var toPlayer = GameObject.WorldPosition - attach;
 		var dist = toPlayer.Length;
 		var tanSpeed = 0f;
@@ -1614,7 +1566,7 @@ public sealed class PlayerGrapple : Component
 
 	void DrawPumpCueIfNeeded()
 	{
-		if ( !ShowPumpCue || !IsAttached || !IsLocalDriver() )
+		if ( !ShowPumpCue || !GrappleAttached || !IsLocalMovementDriver() )
 			return;
 
 		if ( !TryGetSwingPumpCue( out var key, out var tanDir, out var tanSpeed, out var pumping ) )
@@ -1660,7 +1612,7 @@ public sealed class PlayerGrapple : Component
 		tanSpeed = 0f;
 		pumping = false;
 
-		if ( !IsAttached || RopeLengthEngine <= 1e-3f )
+		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f )
 			return false;
 
 		if ( _controller is null )
@@ -1673,7 +1625,7 @@ public sealed class PlayerGrapple : Component
 		if ( body is null || !body.IsValid() )
 			return false;
 
-		var attach = AttachWorldPoint;
+		var attach = GrappleAttachWorldPoint;
 		var toPlayer = GameObject.WorldPosition - attach;
 		var dist = toPlayer.Length;
 		if ( dist < 1e-4f )
