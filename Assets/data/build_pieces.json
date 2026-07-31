@@ -40,6 +40,19 @@
       ]
     },
     {
+      "id": "chest",
+      "displayName": "Chest",
+      "icon": "",
+      "prefab": "prefabs/build/chest.prefab",
+      "fallbackColor": "0.45,0.32,0.18,1",
+      "halfWidth": 25,
+      "halfHeight": 15,
+      "halfDepth": 18.75,
+      "costs": [
+        { "resourceId": "resource_woodBasic", "amount": 8 }
+      ]
+    },
+    {
       "id": "repair",
       "displayName": "Repair",
       "icon": "ui/build/repair.png",

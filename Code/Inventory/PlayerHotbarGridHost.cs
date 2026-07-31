@@ -78,39 +78,7 @@ public sealed class PlayerHotbarGridHost : IInventoryGridHost
 	public bool TryFindQuickMoveTarget( in InventorySlot stack, int fromSlotIndex, out int targetSlotIndex )
 	{
 		targetSlotIndex = -1;
-		if ( Hotbar is null || stack.IsEmpty )
-			return false;
-
-		// Prefer merge into an existing stack of the same resource.
-		for ( var i = 0; i < SlotCount; i++ )
-		{
-			if ( i == fromSlotIndex )
-				continue;
-
-			var slot = Hotbar.GetSlot( i );
-			if ( slot.IsEmpty )
-				continue;
-
-			if ( !string.Equals( slot.ResourceId, stack.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-				continue;
-
-			targetSlotIndex = i;
-			return true;
-		}
-
-		// Then any empty slot (bindings do not block placing a stack).
-		for ( var i = 0; i < SlotCount; i++ )
-		{
-			if ( i == fromSlotIndex )
-				continue;
-
-			if ( !Hotbar.GetSlot( i ).IsEmpty )
-				continue;
-
-			targetSlotIndex = i;
-			return true;
-		}
-
-		return false;
+		return Hotbar is not null
+		       && InventoryStackRules.TryFindQuickMoveTarget( Hotbar.Slots, stack, fromSlotIndex, out targetSlotIndex );
 	}
 }

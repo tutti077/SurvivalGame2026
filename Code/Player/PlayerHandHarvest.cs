@@ -67,6 +67,9 @@ public sealed class PlayerHandHarvest : Component
 			return;
 		}
 
+		// Loot magnet is a background behavior — keep it running even while the menu is open.
+		TickWorldDropMagnet();
+
 		var menu = Components.Get<PlayerGameMenuController>();
 		if ( menu is not null && menu.IsMenuOpen )
 		{
@@ -76,8 +79,6 @@ public sealed class PlayerHandHarvest : Component
 
 		if ( Time.NowDouble >= _nextFocusScanAt )
 			UpdateFocusedNode();
-
-		TickWorldDropMagnet();
 
 		if ( !Input.Pressed( HandHarvestInputAction ) )
 			return;

@@ -81,26 +81,8 @@ public sealed class PlayerHotbar : Component
 	}
 
 	/// <summary>Count of a resource in hotbar item stacks (not bindings/ghosts).</summary>
-	public int CountResource( string resourceId )
-	{
-		if ( string.IsNullOrWhiteSpace( resourceId ) )
-			return 0;
-
-		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
-		var total = 0;
-		for ( var i = 0; i < SlotCount; i++ )
-		{
-			if ( _slots[i].IsEmpty )
-				continue;
-
-			if ( !ResourceCatalog.ResourceIdsMatch( _slots[i].ResourceId, resourceId ) )
-				continue;
-
-			total += _slots[i].Count;
-		}
-
-		return total;
-	}
+	public int CountResource( string resourceId ) =>
+		InventoryStackRules.CountResource( _slots, resourceId );
 
 	/// <summary>Host: pickup into hotbar stacks, then empty slots with a matching binding ghost.</summary>
 	public int TryAddResourcePickup( string resourceId, int amount )
@@ -547,25 +529,21 @@ public sealed class PlayerHotbar : Component
 		if ( HasHostAuthority )
 			return HostTryPickupAll( slotIndex, out picked );
 
-		if ( !TryGetSlotRef( slotIndex, out var slot ) || slot.IsEmpty )
+		if ( !InventoryStackRules.PickupAll( _slots, slotIndex, out picked ) )
 			return false;
 
-		_slots[slotIndex] = InventorySlot.Empty;
 		ClearBindingIfSlotEmpty( slotIndex );
 		NotifyChanged();
 		RpcHostPickupAll( slotIndex );
-		picked = slot;
 		return true;
 	}
 
 	public bool HostTryPickupAll( int slotIndex, out InventorySlot picked )
 	{
 		picked = InventorySlot.Empty;
-		if ( !HasHostAuthority || !TryGetSlotRef( slotIndex, out var slot ) || slot.IsEmpty )
+		if ( !HasHostAuthority || !InventoryStackRules.PickupAll( _slots, slotIndex, out picked ) )
 			return false;
 
-		picked = slot;
-		_slots[slotIndex] = InventorySlot.Empty;
 		ClearBindingIfSlotEmpty( slotIndex );
 		NotifyChanged();
 		return true;
@@ -574,26 +552,23 @@ public sealed class PlayerHotbar : Component
 	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken )
 	{
 		taken = InventorySlot.Empty;
-		if ( !IsLocalManagingClient() || !TryGetSlotRef( slotIndex, out var slot ) || slot.IsEmpty )
+		if ( !IsLocalManagingClient() )
 			return false;
 
 		if ( HasHostAuthority )
 		{
-			if ( !HostTryTakeOne( slotIndex ) )
+			var slot = GetSlot( slotIndex );
+			if ( slot.IsEmpty || !HostTryTakeOne( slotIndex ) )
 				return false;
 
 			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = 1 };
 			return true;
 		}
 
-		_slots[slotIndex].Count--;
-		if ( _slots[slotIndex].Count <= 0 )
-		{
-			_slots[slotIndex] = InventorySlot.Empty;
-			ClearBindingIfSlotEmpty( slotIndex );
-		}
+		if ( !InventoryStackRules.TakeOne( _slots, slotIndex, out taken ) )
+			return false;
 
-		taken = new InventorySlot { ResourceId = slot.ResourceId, Count = 1 };
+		ClearBindingIfSlotEmpty( slotIndex );
 		NotifyChanged();
 		RpcHostTakeOne( slotIndex );
 		return true;
@@ -602,10 +577,7 @@ public sealed class PlayerHotbar : Component
 	public bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held, out int placedCount )
 	{
 		placedCount = 0;
-		if ( held.IsEmpty || !IsLocalManagingClient() || !TryGetSlotRef( slotIndex, out var dest ) )
-			return false;
-
-		if ( !dest.IsEmpty && !string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
+		if ( held.IsEmpty || !IsLocalManagingClient() )
 			return false;
 
 		if ( HasHostAuthority )
@@ -617,19 +589,10 @@ public sealed class PlayerHotbar : Component
 			return true;
 		}
 
-		var add = dest.IsEmpty
-			? ResourceCatalog.ClampAddToStack( held.ResourceId, 0, 1 )
-			: ResourceCatalog.ClampAddToStack( held.ResourceId, dest.Count, 1 );
-		if ( add <= 0 )
+		if ( !InventoryStackRules.DropOne( _slots, slotIndex, held, out placedCount ) )
 			return false;
 
 		RpcHostDropOne( slotIndex, held.ResourceId, held.Count );
-		if ( dest.IsEmpty )
-			_slots[slotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = add };
-		else
-			_slots[slotIndex].Count += add;
-
-		placedCount = add;
 		UpdateBindingFromSlot( slotIndex );
 		NotifyChanged();
 		return true;
@@ -638,30 +601,24 @@ public sealed class PlayerHotbar : Component
 	public bool OwnerTryTakeHalf( int slotIndex, out InventorySlot taken )
 	{
 		taken = InventorySlot.Empty;
-		if ( !IsLocalManagingClient() || !TryGetSlotRef( slotIndex, out var slot ) || slot.IsEmpty )
-			return false;
-
-		var half = slot.Count / 2;
-		if ( half <= 0 )
+		if ( !IsLocalManagingClient() )
 			return false;
 
 		if ( HasHostAuthority )
 		{
-			if ( !HostTryTakeHalf( slotIndex ) )
+			var slot = GetSlot( slotIndex );
+			var half = slot.Count / 2;
+			if ( half <= 0 || !HostTryTakeHalf( slotIndex ) )
 				return false;
 
 			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = half };
 			return true;
 		}
 
-		_slots[slotIndex].Count -= half;
-		if ( _slots[slotIndex].Count <= 0 )
-		{
-			_slots[slotIndex] = InventorySlot.Empty;
-			ClearBindingIfSlotEmpty( slotIndex );
-		}
+		if ( !InventoryStackRules.TakeHalf( _slots, slotIndex, out taken ) )
+			return false;
 
-		taken = new InventorySlot { ResourceId = slot.ResourceId, Count = half };
+		ClearBindingIfSlotEmpty( slotIndex );
 		NotifyChanged();
 		RpcHostTakeHalf( slotIndex );
 		return true;
@@ -675,32 +632,13 @@ public sealed class PlayerHotbar : Component
 		if ( HasHostAuthority )
 			return HostTryPlaceHalf( slotIndex, ref held );
 
-		if ( !TryGetSlotRef( slotIndex, out var dest ) )
+		var heldResourceId = held.ResourceId;
+		var heldCount = held.Count;
+
+		if ( !InventoryStackRules.PlaceHalf( _slots, slotIndex, ref held ) )
 			return false;
 
-		var half = held.Count / 2;
-		if ( half <= 0 )
-			return false;
-
-		if ( !dest.IsEmpty && !string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-			return false;
-
-		var add = dest.IsEmpty
-			? ResourceCatalog.ClampAddToStack( held.ResourceId, 0, half )
-			: ResourceCatalog.ClampAddToStack( held.ResourceId, dest.Count, half );
-		if ( add <= 0 )
-			return false;
-
-		RpcHostPlaceHalf( slotIndex, held.ResourceId, held.Count );
-		if ( dest.IsEmpty )
-			_slots[slotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = add };
-		else
-			_slots[slotIndex].Count += add;
-
-		held.Count -= add;
-		if ( held.Count <= 0 )
-			held.Clear();
-
+		RpcHostPlaceHalf( slotIndex, heldResourceId, heldCount );
 		UpdateBindingFromSlot( slotIndex );
 		NotifyChanged();
 		return true;
@@ -708,105 +646,51 @@ public sealed class PlayerHotbar : Component
 
 	public bool HostTryTakeOne( int slotIndex )
 	{
-		if ( !HasHostAuthority || !TryGetSlotRef( slotIndex, out var slot ) || slot.IsEmpty )
+		if ( !HasHostAuthority || !InventoryStackRules.TakeOne( _slots, slotIndex, out _ ) )
 			return false;
 
-		_slots[slotIndex].Count--;
-		if ( _slots[slotIndex].Count <= 0 )
-		{
-			_slots[slotIndex] = InventorySlot.Empty;
-			ClearBindingIfSlotEmpty( slotIndex );
-		}
-
+		ClearBindingIfSlotEmpty( slotIndex );
 		NotifyChanged();
 		return true;
 	}
 
 	public bool HostTryDropOne( int slotIndex, in InventoryCursorStack held )
 	{
-		if ( held.IsEmpty || !HasHostAuthority || !TryGetSlotRef( slotIndex, out _ ) )
+		if ( !HasHostAuthority )
 			return false;
 
-		ref var dest = ref _slots[slotIndex];
+		var wasEmpty = GetSlot( slotIndex ).IsEmpty;
+		if ( !InventoryStackRules.DropOne( _slots, slotIndex, held, out _ ) )
+			return false;
 
-		if ( dest.IsEmpty )
-		{
-			dest = new InventorySlot { ResourceId = held.ResourceId, Count = 1 };
+		if ( wasEmpty )
 			UpdateBindingFromSlot( slotIndex );
-			NotifyChanged();
-			return true;
-		}
 
-		if ( !string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-			return false;
-
-		var maxStack = ResourceCatalog.GetMaxStack( held.ResourceId );
-		if ( dest.Count >= maxStack )
-			return false;
-
-		dest.Count++;
 		NotifyChanged();
 		return true;
 	}
 
 	public bool HostTryTakeHalf( int slotIndex )
 	{
-		if ( !HasHostAuthority || !TryGetSlotRef( slotIndex, out var slot ) || slot.IsEmpty )
+		if ( !HasHostAuthority || !InventoryStackRules.TakeHalf( _slots, slotIndex, out _ ) )
 			return false;
 
-		var half = slot.Count / 2;
-		if ( half <= 0 )
-			return false;
-
-		_slots[slotIndex].Count -= half;
-		if ( _slots[slotIndex].Count <= 0 )
-		{
-			_slots[slotIndex] = InventorySlot.Empty;
-			ClearBindingIfSlotEmpty( slotIndex );
-		}
-
+		ClearBindingIfSlotEmpty( slotIndex );
 		NotifyChanged();
 		return true;
 	}
 
 	public bool HostTryPlaceHalf( int slotIndex, ref InventoryCursorStack held )
 	{
-		if ( held.IsEmpty || !HasHostAuthority || !TryGetSlotRef( slotIndex, out _ ) )
+		if ( !HasHostAuthority )
 			return false;
 
-		var half = held.Count / 2;
-		if ( half <= 0 )
+		var wasEmpty = GetSlot( slotIndex ).IsEmpty;
+		if ( !InventoryStackRules.PlaceHalf( _slots, slotIndex, ref held ) )
 			return false;
 
-		ref var dest = ref _slots[slotIndex];
-
-		if ( dest.IsEmpty )
-		{
-			var place = ResourceCatalog.ClampAddToStack( held.ResourceId, 0, half );
-			if ( place <= 0 )
-				return false;
-
-			dest = new InventorySlot { ResourceId = held.ResourceId, Count = place };
-			held.Count -= place;
-			if ( held.Count <= 0 )
-				held.Clear();
-
+		if ( wasEmpty )
 			UpdateBindingFromSlot( slotIndex );
-			NotifyChanged();
-			return true;
-		}
-
-		if ( !string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-			return false;
-
-		var add = ResourceCatalog.ClampAddToStack( held.ResourceId, dest.Count, half );
-		if ( add <= 0 )
-			return false;
-
-		dest.Count += add;
-		held.Count -= add;
-		if ( held.Count <= 0 )
-			held.Clear();
 
 		NotifyChanged();
 		return true;
@@ -820,124 +704,44 @@ public sealed class PlayerHotbar : Component
 		if ( HasHostAuthority )
 			return HostTryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
 
-		if ( sourceSlotIndex == targetSlotIndex )
-		{
-			if ( !TryFinishDragDropOntoSameSlot( targetSlotIndex, ref held ) )
-				return false;
+		var heldResourceId = held.ResourceId;
+		var heldCount = held.Count;
+		var sourceBefore = GetSlot( sourceSlotIndex );
 
-			RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, held.ResourceId, held.Count );
-			return true;
-		}
-
-		if ( !TryGetSlotRef( targetSlotIndex, out var target ) )
+		if ( !InventoryStackRules.FinishDragDrop( _slots, sourceSlotIndex, targetSlotIndex, ref held ) )
 			return false;
 
-		if ( !target.IsEmpty && !string.Equals( target.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-			return HostTrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref held );
+		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, heldResourceId, heldCount );
+		UpdateBindingFromSlot( targetSlotIndex );
+		if ( SlotChangedFrom( sourceSlotIndex, sourceBefore ) )
+			UpdateBindingFromSlot( sourceSlotIndex );
 
-		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, held.ResourceId, held.Count );
-		return ClientTryApplyPlaceHeld( targetSlotIndex, ref held );
+		NotifyChanged();
+		return true;
 	}
 
 	public bool HostTryFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
 	{
-		if ( held.IsEmpty || !HasHostAuthority )
+		if ( !HasHostAuthority )
 			return false;
 
-		if ( sourceSlotIndex == targetSlotIndex )
-			return TryFinishDragDropOntoSameSlot( targetSlotIndex, ref held );
-
-		if ( !TryGetSlotRef( targetSlotIndex, out var target ) )
+		var sourceBefore = GetSlot( sourceSlotIndex );
+		if ( !InventoryStackRules.FinishDragDrop( _slots, sourceSlotIndex, targetSlotIndex, ref held ) )
 			return false;
 
-		if ( !target.IsEmpty && !string.Equals( target.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-			return HostTrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref held );
+		UpdateBindingFromSlot( targetSlotIndex );
+		if ( SlotChangedFrom( sourceSlotIndex, sourceBefore ) )
+			UpdateBindingFromSlot( sourceSlotIndex );
 
-		return HostTryPlaceHeld( targetSlotIndex, ref held );
-	}
-
-	bool TryFinishDragDropOntoSameSlot( int slotIndex, ref InventoryCursorStack held )
-	{
-		if ( !TryGetSlotRef( slotIndex, out _ ) )
-			return false;
-
-		ref var slot = ref _slots[slotIndex];
-		if ( slot.IsEmpty )
-		{
-			slot = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-			held.Clear();
-			UpdateBindingFromSlot( slotIndex );
-			NotifyChanged();
-			return true;
-		}
-
-		if ( !ResourceCatalog.ResourceIdsMatch( slot.ResourceId, held.ResourceId ) )
-			return false;
-
-		var add = ResourceCatalog.ClampAddToStack( held.ResourceId, slot.Count, held.Count );
-		if ( add <= 0 )
-			return false;
-
-		slot.Count += add;
-		held.Count -= add;
-		if ( held.Count <= 0 )
-			held.Clear();
-
-		UpdateBindingFromSlot( slotIndex );
 		NotifyChanged();
 		return true;
 	}
 
 	public bool HostTryPlaceHeld( int slotIndex, ref InventoryCursorStack held )
 	{
-		if ( held.IsEmpty || !HasHostAuthority || !TryGetSlotRef( slotIndex, out _ ) )
+		if ( !HasHostAuthority || !InventoryStackRules.PlaceHeld( _slots, slotIndex, ref held ) )
 			return false;
 
-		ref var dest = ref _slots[slotIndex];
-
-		if ( dest.IsEmpty )
-		{
-			var place = ResourceCatalog.ClampAddToStack( held.ResourceId, 0, held.Count );
-			if ( place <= 0 )
-				return false;
-
-			dest = new InventorySlot { ResourceId = held.ResourceId, Count = place };
-			held.Count -= place;
-			if ( held.Count <= 0 )
-				held.Clear();
-
-			UpdateBindingFromSlot( slotIndex );
-			NotifyChanged();
-			return true;
-		}
-
-		if ( string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-		{
-			var room = ResourceCatalog.GetMaxStack( held.ResourceId ) - dest.Count;
-			if ( room <= 0 )
-			{
-				var displaced = dest;
-				dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-				held.Set( displaced.ResourceId, displaced.Count );
-				UpdateBindingFromSlot( slotIndex );
-				NotifyChanged();
-				return true;
-			}
-
-			var add = Math.Min( held.Count, room );
-			dest.Count += add;
-			held.Count -= add;
-			if ( held.Count <= 0 )
-				held.Clear();
-
-			UpdateBindingFromSlot( slotIndex );
-			NotifyChanged();
-			return true;
-		}
-
-		var swap = dest;
-		dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-		held.Set( swap.ResourceId, swap.Count );
 		UpdateBindingFromSlot( slotIndex );
 		NotifyChanged();
 		return true;
@@ -945,155 +749,47 @@ public sealed class PlayerHotbar : Component
 
 	public bool HostTrySwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
 	{
-		if ( held.IsEmpty || !HasHostAuthority || sourceSlotIndex == targetSlotIndex )
+		if ( !HasHostAuthority || !InventoryStackRules.SwapDragToSlot( _slots, sourceSlotIndex, targetSlotIndex, ref held ) )
 			return false;
 
-		if ( !TryGetSlotRef( targetSlotIndex, out var target ) || target.IsEmpty )
-			return false;
-
-		if ( string.Equals( target.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-			return false;
-
-		var displaced = target;
-		_slots[targetSlotIndex] = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-		_slots[sourceSlotIndex] = displaced;
-		held.Clear();
 		UpdateBindingFromSlot( targetSlotIndex );
 		UpdateBindingFromSlot( sourceSlotIndex );
 		NotifyChanged();
 		return true;
 	}
 
-	bool ClientTryApplyPlaceHeld( int slotIndex, ref InventoryCursorStack held )
-	{
-		if ( HasHostAuthority || held.IsEmpty || !TryGetSlotRef( slotIndex, out _ ) )
-			return HostTryPlaceHeld( slotIndex, ref held );
-
-		ref var dest = ref _slots[slotIndex];
-		if ( dest.IsEmpty )
-		{
-			var place = ResourceCatalog.ClampAddToStack( held.ResourceId, 0, held.Count );
-			if ( place <= 0 )
-				return false;
-
-			dest = new InventorySlot { ResourceId = held.ResourceId, Count = place };
-			held.Count -= place;
-			if ( held.Count <= 0 )
-				held.Clear();
-
-			NotifyChanged();
-			return true;
-		}
-
-		if ( string.Equals( dest.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-		{
-			var add = ResourceCatalog.ClampAddToStack( held.ResourceId, dest.Count, held.Count );
-			if ( add <= 0 )
-			{
-				var displaced = dest;
-				dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-				held.Set( displaced.ResourceId, displaced.Count );
-				NotifyChanged();
-				return true;
-			}
-
-			dest.Count += add;
-			held.Count -= add;
-			if ( held.Count <= 0 )
-				held.Clear();
-
-			NotifyChanged();
-			return true;
-		}
-
-		var swap = dest;
-		dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-		held.Set( swap.ResourceId, swap.Count );
-		NotifyChanged();
-		return true;
-	}
-
-	public bool OwnerTryReturnStack( ref InventoryCursorStack held )
-	{
-		if ( held.IsEmpty || !IsLocalManagingClient() )
-			return false;
-
-		if ( HasHostAuthority )
-			return HostTryReturnStack( ref held );
-
-		for ( var i = 0; i < SlotCount; i++ )
-		{
-			if ( _slots[i].IsEmpty )
-				continue;
-
-			if ( !string.Equals( _slots[i].ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-				continue;
-
-			var maxStack = ResourceCatalog.GetMaxStack( held.ResourceId );
-			var room = maxStack - _slots[i].Count;
-			if ( room <= 0 )
-				continue;
-
-			var add = Math.Min( held.Count, room );
-			_slots[i].Count += add;
-			NotifyChanged();
-			return add == held.Count;
-		}
-
-		for ( var i = 0; i < SlotCount; i++ )
-		{
-			if ( !_slots[i].IsEmpty )
-				continue;
-
-			_slots[i] = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-			NotifyChanged();
-			return true;
-		}
-
-		return false;
-	}
-
+	/// <summary>Host: absorb a cursor stack into matching stacks, then empties. Returns true when fully absorbed.</summary>
 	public bool HostTryReturnStack( ref InventoryCursorStack held )
 	{
-		if ( held.IsEmpty || !HasHostAuthority )
+		if ( !HasHostAuthority )
+			return false;
+
+		Span<bool> wasEmpty = stackalloc bool[SlotCount];
+		for ( var i = 0; i < SlotCount; i++ )
+			wasEmpty[i] = _slots[i].IsEmpty;
+
+		if ( !InventoryStackRules.AbsorbStack( _slots, ref held ) )
 			return false;
 
 		for ( var i = 0; i < SlotCount; i++ )
 		{
-			if ( _slots[i].IsEmpty )
-				continue;
-
-			if ( !string.Equals( _slots[i].ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-				continue;
-
-			var maxStack = ResourceCatalog.GetMaxStack( held.ResourceId );
-			var room = maxStack - _slots[i].Count;
-			if ( room <= 0 )
-				continue;
-
-			var add = Math.Min( held.Count, room );
-			_slots[i].Count += add;
-			held.Count -= add;
-			if ( held.Count <= 0 )
-				held.Clear();
-
-			NotifyChanged();
-			return held.IsEmpty;
+			if ( wasEmpty[i] && !_slots[i].IsEmpty )
+				UpdateBindingFromSlot( i );
 		}
 
-		for ( var i = 0; i < SlotCount; i++ )
-		{
-			if ( !_slots[i].IsEmpty )
-				continue;
+		NotifyChanged();
+		return held.IsEmpty;
+	}
 
-			_slots[i] = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
-			held.Clear();
-			UpdateBindingFromSlot( i );
-			NotifyChanged();
-			return true;
-		}
+	/// <summary>Whether a slot differs from a snapshot (used to re-bind the source slot after a drag swap).</summary>
+	bool SlotChangedFrom( int slotIndex, in InventorySlot before )
+	{
+		if ( slotIndex < 0 || slotIndex >= SlotCount )
+			return false;
 
-		return false;
+		var now = _slots[slotIndex];
+		return now.Count != before.Count
+		       || !string.Equals( now.ResourceId ?? string.Empty, before.ResourceId ?? string.Empty, StringComparison.OrdinalIgnoreCase );
 	}
 
 	void UpdateBindingFromSlot( int slotIndex )
@@ -1216,15 +912,4 @@ public sealed class PlayerHotbar : Component
 		HostTryPlaceHalf( slotIndex, ref held );
 	}
 
-	bool TryGetSlotRef( int index, out InventorySlot slot )
-	{
-		if ( index < 0 || index >= SlotCount )
-		{
-			slot = InventorySlot.Empty;
-			return false;
-		}
-
-		slot = _slots[index];
-		return true;
-	}
 }

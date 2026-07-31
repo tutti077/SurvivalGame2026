@@ -7,10 +7,11 @@ namespace Survival;
 
 /// <summary>
 /// Local inventory cursor: drag ghost, click rules, and menu-open mouse unlock.
-/// Supports dragging between the player bag and hotbar.
+/// Supports dragging between the player bag, hotbar, and an opened world container
+/// (see <c>PlayerInventoryInteraction.Container.cs</c>).
 /// </summary>
 [Title( "Player Inventory Interaction" )]
-public sealed class PlayerInventoryInteraction : Component
+public sealed partial class PlayerInventoryInteraction : Component
 {
 	public InventoryCursorStack Held => _held;
 	public bool IsDragging => _leftDragActive;
@@ -54,6 +55,8 @@ public sealed class PlayerInventoryInteraction : Component
 
 		if ( _hotbar is not null )
 			_grids.Add( new PlayerHotbarGridHost( _hotbar ) );
+
+		InitializeContainerGrid();
 	}
 
 	protected override void OnDestroy()
@@ -228,6 +231,7 @@ public sealed class PlayerInventoryInteraction : Component
 
 		PollHotbarPointerInput();
 		UpdatePlayerDropZone();
+		TickContainerAccess();
 
 		// While the game menu is open, Attack1 drag finish is owned by InventoryMenuInputOverlay
 		// (soft cursor). Finishing here with Mouse.Position cancels bag→hotbar drops.
@@ -261,6 +265,7 @@ public sealed class PlayerInventoryInteraction : Component
 			return;
 
 		ReturnHeldOnMenuClose();
+		CloseContainer();
 	}
 
 	void OnMenuLayoutChanged()
@@ -343,7 +348,10 @@ public sealed class PlayerInventoryInteraction : Component
 		ProcessSlotLeftRelease( slot );
 	}
 
-	/// <summary>Right-click release only — s&amp;box fires <c>OnRightClick</c> on release, not press.</summary>
+	/// <summary>
+	/// Single right-click entry point. Menu open: <see cref="InventoryMenuInputOverlay"/> calls this
+	/// on Attack2 press. Menu closed: the hotbar poll calls it on release. Never both for one click.
+	/// </summary>
 	public void ProcessSlotRightClick( InventorySlotPanel slot ) => ProcessSlotRightPress( slot );
 
 	static bool IsPrimaryMouseButton( string button ) =>
@@ -507,7 +515,7 @@ public sealed class PlayerInventoryInteraction : Component
 		return false;
 	}
 
-	/// <summary>Player bag / paperdoll slots (not hotbar). MainHand is display-only and skipped.</summary>
+	/// <summary>Player bag / paperdoll / open-container slots (not hotbar). MainHand is display-only and skipped.</summary>
 	public InventorySlotPanel FindPlayerBagSlotAtScreenPosition( Vector2 screenPosition )
 	{
 		for ( var i = _slots.Count - 1; i >= 0; i-- )
@@ -519,6 +527,9 @@ public sealed class PlayerInventoryInteraction : Component
 			if ( slot.GridHost?.GridId == "paperdoll" && slot.SlotIndex == (int)EquipmentSlot.MainHand )
 				continue;
 
+			if ( IsClosedContainerSlot( slot ) )
+				continue;
+
 			if ( SlotContainsScreenPoint( slot, screenPosition ) )
 				return slot;
 		}
@@ -526,21 +537,8 @@ public sealed class PlayerInventoryInteraction : Component
 		return null;
 	}
 
-	void PollMenuInventoryPointerInput()
-	{
-		if ( _menu is null )
-			_menu = Components.Get<PlayerGameMenuController>();
-
-		if ( _menu is null || !_menu.IsMenuOpen )
-			return;
-
-		// Attack1 while menu open is owned by InventoryMenuInputOverlay. Handling Pressed
-		// here same-frame after BeginDragFromSlot places the stack back and kills soft-cursor drags.
-		var bagSlot = FindPlayerBagSlotAtScreenPosition( InventoryScreenPointer.GetMenuOrMousePosition() );
-
-		if ( _leftDragActive && Input.Released( "Attack2" ) && bagSlot is not null )
-			ProcessSlotRightClick( bagSlot );
-	}
+	static bool IsClosedContainerSlot( InventorySlotPanel slot ) =>
+		slot?.GridHost is ContainerInventoryGridHost { IsActive: false };
 
 	void PollHotbarPointerInput()
 	{
@@ -571,27 +569,6 @@ public sealed class PlayerInventoryInteraction : Component
 	bool IsHotbarPointerUnlocked() =>
 		Mouse.Visibility != MouseVisibility.Hidden
 		|| ( _menu is not null && _menu.IsMenuOpen );
-
-	public void PollInventoryInput( MenuPanelFlags visiblePanels )
-	{
-		if ( !IsLocalInputOwnedPawn() )
-			return;
-
-		if ( _menu is null )
-			_menu = Components.Get<PlayerGameMenuController>();
-
-		if ( _menu is null || !_menu.IsMenuOpen )
-			return;
-
-		var showBag = (visiblePanels & MenuPanelFlags.Inventory) != 0
-		              || (visiblePanels & MenuPanelFlags.Crafting) != 0
-		              || (visiblePanels & MenuPanelFlags.Quests) != 0;
-
-		if ( !showBag )
-			return;
-
-		PollMenuInventoryPointerInput();
-	}
 
 	public void OnGlobalMouseUp()
 	{
@@ -1041,7 +1018,8 @@ public sealed class PlayerInventoryInteraction : Component
 	}
 
 	/// <summary>
-	/// Shift+click: hotbar-equipable (weapons/tools) bag↔hotbar; armor/etc → paperdoll; chests last.
+	/// Shift+click: an open container wins first (bag/hotbar → container, container → bag);
+	/// otherwise hotbar-equipables (weapons/tools) go bag↔hotbar and armor/etc → paperdoll.
 	/// MainHand is not a storage destination — it mirrors the selected hotbar slot.
 	/// </summary>
 	void TryQuickMoveToExternalStorage( InventorySlotPanel fromSlot )
@@ -1054,6 +1032,20 @@ public sealed class PlayerInventoryInteraction : Component
 		var source = fromHost.GetSlot( fromIndex );
 		if ( source.IsEmpty )
 			return;
+
+		// Open container takes priority: bag/hotbar → container, container → bag.
+		if ( _containerGrid is { IsActive: true } )
+		{
+			if ( ReferenceEquals( fromHost, _containerGrid ) )
+			{
+				TryQuickMoveToPlayerBag( fromHost, fromIndex );
+				return;
+			}
+
+			if ( fromHost.GridId is "player" or "hotbar"
+				&& TryCrossGridQuickMove( fromHost, fromIndex, _containerGrid ) )
+				return;
+		}
 
 		var hotbarEquipable = EquipmentCatalog.TryGet( source.ResourceId, out var profile )
 			&& EquipmentCatalog.IsHotbarMainHandItem( profile );
@@ -1073,19 +1065,24 @@ public sealed class PlayerInventoryInteraction : Component
 				return;
 		}
 
-		// Paperdoll / chest → bag
+		// Paperdoll / container → bag
 		if ( fromHost.GridId is not "player" )
-		{
-			for ( var i = 0; i < _grids.Count; i++ )
-			{
-				var grid = _grids[i];
-				if ( grid is null || grid.GridId is not "player" )
-					continue;
+			TryQuickMoveToPlayerBag( fromHost, fromIndex );
+	}
 
-				if ( TryCrossGridQuickMove( fromHost, fromIndex, grid ) )
-					return;
-			}
+	bool TryQuickMoveToPlayerBag( IInventoryGridHost fromHost, int fromIndex )
+	{
+		for ( var i = 0; i < _grids.Count; i++ )
+		{
+			var grid = _grids[i];
+			if ( grid is null || grid.GridId is not "player" )
+				continue;
+
+			if ( TryCrossGridQuickMove( fromHost, fromIndex, grid ) )
+				return true;
 		}
+
+		return false;
 	}
 
 	void TryQuickMoveHotbarEquipable( IInventoryGridHost fromHost, int fromIndex )
@@ -1128,7 +1125,8 @@ public sealed class PlayerInventoryInteraction : Component
 		if ( source.IsEmpty || toHost is null )
 			return false;
 
-		if ( !toHost.TryFindQuickMoveTarget( source, fromIndex, out var targetIndex ) )
+		// -1: the source index belongs to the other grid — never exclude a destination slot.
+		if ( !toHost.TryFindQuickMoveTarget( source, -1, out _ ) )
 			return false;
 
 		if ( !fromHost.OwnerTryPickupAll( fromIndex, out var picked ) || picked.IsEmpty )
@@ -1136,16 +1134,30 @@ public sealed class PlayerInventoryInteraction : Component
 
 		var held = new InventoryCursorStack();
 		held.Set( picked.ResourceId, picked.Count );
-		if ( !toHost.OwnerTryPlaceHeld( targetIndex, ref held ) )
+		var movedAny = false;
+
+		// Distribute across merge targets, then empties (finders only return slots with room).
+		for ( var guard = 0; guard <= toHost.SlotCount && !held.IsEmpty; guard++ )
 		{
-			fromHost.OwnerTryPlaceHeld( fromIndex, ref held );
-			return false;
+			var probe = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count };
+			if ( !toHost.TryFindQuickMoveTarget( probe, -1, out var targetIndex ) )
+				break;
+
+			var beforeCount = held.Count;
+			if ( !toHost.OwnerTryPlaceHeld( targetIndex, ref held ) )
+				break;
+
+			// No progress (e.g. destination rejected the merge) — stop instead of looping.
+			if ( !held.IsEmpty && held.Count >= beforeCount )
+				break;
+
+			movedAny = true;
 		}
 
 		if ( !held.IsEmpty )
 			fromHost.OwnerTryPlaceHeld( fromIndex, ref held );
 
-		return true;
+		return movedAny;
 	}
 
 	void ReturnHeldToInventory()
@@ -1197,6 +1209,9 @@ public sealed class PlayerInventoryInteraction : Component
 				continue;
 
 			if ( slot.GridHost?.GridId == "paperdoll" && slot.SlotIndex == (int)EquipmentSlot.MainHand )
+				continue;
+
+			if ( IsClosedContainerSlot( slot ) )
 				continue;
 
 			if ( SlotContainsScreenPoint( slot, screenPosition ) )
@@ -1435,6 +1450,9 @@ public sealed class PlayerInventoryInteraction : Component
 
 		// MainHand is display-only (mirrors selected hotbar). Not a drag/place destination.
 		if ( slot.GridHost.GridId == "paperdoll" && slot.SlotIndex == (int)EquipmentSlot.MainHand )
+			return false;
+
+		if ( IsClosedContainerSlot( slot ) )
 			return false;
 
 		if ( _vitals is null )

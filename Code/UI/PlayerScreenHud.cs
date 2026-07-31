@@ -47,6 +47,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	Panel _staminaFill;
 
 	Panel _promptRoot;
+	Label _promptKeyLabel;
 	Label _promptLabel;
 	bool _promptWasVisible;
 
@@ -65,6 +66,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	MapMenuSection _mapSection;
 	GameSettingsMenuSection _settingsSection;
 	EquipmentPaperdollSection _equipmentSection;
+	ContainerMenuSection _containerSection;
 	PickupNotificationHud _pickupNotifications;
 
 	protected override void OnTreeFirstBuilt()
@@ -101,8 +103,6 @@ public sealed class PlayerScreenHud : PanelComponent
 			_menuInputOverlay?.PollMenuPointer();
 			for ( var i = 0; i < _sections.Count; i++ )
 				_sections[i].TickMenu( true );
-
-			_inventoryInteraction?.PollInventoryInput( _menuController.VisiblePanels );
 		}
 
 		_pickupNotifications?.Tick();
@@ -122,6 +122,11 @@ public sealed class PlayerScreenHud : PanelComponent
 	{
 		if ( _vitals is not null )
 			_vitals.OnVitalsChanged -= RefreshVitals;
+		if ( _inventoryInteraction is not null )
+		{
+			_inventoryInteraction.ContainerChanged -= OnContainerChanged;
+			_inventoryInteraction.FocusedContainerChanged -= OnInteractionPromptChanged;
+		}
 		if ( _handHarvest is not null )
 			_handHarvest.FocusedNodeChanged -= OnInteractionPromptChanged;
 		if ( _equipment is not null )
@@ -316,15 +321,17 @@ public sealed class PlayerScreenHud : PanelComponent
 		keyCap.Style.BackgroundColor = new Color( 0.92f, 0.92f, 0.94f );
 		keyCap.Style.Set( "border-radius", "4px" );
 
-		var keyLabel = new Label { Parent = keyCap, Text = "F" };
-		keyLabel.Style.FontColor = Color.Black;
-		keyLabel.Style.FontSize = Length.Pixels( 15f );
+		_promptKeyLabel = new Label { Parent = keyCap, Text = "F" };
+		_promptKeyLabel.Style.FontColor = Color.Black;
+		_promptKeyLabel.Style.FontSize = Length.Pixels( 15f );
 
 		_promptLabel = new Label { Parent = _promptRoot, Text = DefaultHarvestPromptText };
 		_promptLabel.Style.FontColor = Color.White;
 		_promptLabel.Style.FontSize = Length.Pixels( 18f );
 
 		_handHarvest?.FocusedNodeChanged += OnInteractionPromptChanged;
+		if ( _inventoryInteraction is not null )
+			_inventoryInteraction.FocusedContainerChanged += OnInteractionPromptChanged;
 		if ( _equipment is not null )
 			_equipment.EquipmentChanged += OnEquipmentToolChanged;
 		OnInteractionPromptChanged();
@@ -471,6 +478,12 @@ public sealed class PlayerScreenHud : PanelComponent
 		_sections.Add( _questsSection );
 		_questsSection.Build( _leftMenuColumn );
 
+		_containerSection = new ContainerMenuSection( _inventoryInteraction );
+		_sections.Add( _containerSection );
+		_containerSection.Build( _leftMenuColumn );
+		if ( _inventoryInteraction is not null )
+			_inventoryInteraction.ContainerChanged += OnContainerChanged;
+
 		var inventorySection = new InventoryMenuSection( _inventory, _inventoryInteraction );
 		_sections.Add( inventorySection );
 		inventorySection.Build( _rightMenuColumn );
@@ -590,10 +603,21 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _promptRoot is null )
 			return;
 
-		var showHarvest = _handHarvest?.FocusedNode is not null;
-		var show = showHarvest;
+		// Container-in-view wins over harvest (you're aiming at the chest, not the node behind it).
+		var focusedContainer = _inventoryInteraction?.FocusedContainer;
+		var showOpen = focusedContainer is not null && focusedContainer.IsValid();
+		var showHarvest = !showOpen && _handHarvest?.FocusedNode is not null;
+		var show = showOpen || showHarvest;
+
+		if ( _promptKeyLabel is not null )
+			_promptKeyLabel.Text = showOpen ? "E" : "F";
+
 		if ( _promptLabel is not null )
-			_promptLabel.Text = DefaultHarvestPromptText;
+		{
+			_promptLabel.Text = showOpen
+				? ( string.IsNullOrWhiteSpace( focusedContainer.DisplayName ) ? "Open" : $"Open {focusedContainer.DisplayName}" )
+				: DefaultHarvestPromptText;
+		}
 
 		if ( show == _promptWasVisible )
 			return;
@@ -623,6 +647,14 @@ public sealed class PlayerScreenHud : PanelComponent
 	void OnMenuOpenChanged( bool isOpen ) => ApplyMenuOpenState( isOpen );
 
 	void OnMenuLayoutChanged() => ApplyMenuLayout();
+
+	void OnContainerChanged()
+	{
+		_containerSection?.BindContainer( _inventoryInteraction?.OpenContainer );
+
+		if ( _menuController is not null && _menuController.IsMenuOpen )
+			ApplyMenuLayout();
+	}
 
 	void ApplyMenuOpenState( bool isOpen )
 	{
@@ -677,8 +709,10 @@ public sealed class PlayerScreenHud : PanelComponent
 		var showQuests = !showFullscreen && !showSkills && (panels & MenuPanelFlags.Quests) != 0;
 		var showCrafting = !showFullscreen && !showSkills && !showQuests && (panels & MenuPanelFlags.Crafting) != 0;
 		var showInventory = !showFullscreen && !showSkills && (panels & MenuPanelFlags.Inventory) != 0;
-		var showPaperdoll = showInventory && !showCrafting && !showQuests;
-		var showLeftColumn = showCrafting || showQuests || showPaperdoll;
+		var containerOpen = _inventoryInteraction?.OpenContainer is not null;
+		var showContainer = showInventory && !showCrafting && !showQuests && containerOpen;
+		var showPaperdoll = showInventory && !showCrafting && !showQuests && !containerOpen;
+		var showLeftColumn = showCrafting || showQuests || showPaperdoll || showContainer;
 
 		if ( _menuMapRoot is not null )
 			_menuMapRoot.Style.Set( "display", showFullscreen ? "flex" : "none" );
@@ -698,6 +732,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_craftingSection?.SetPanelVisible( showCrafting );
 		_questsSection?.SetPanelVisible( showQuests );
 		_equipmentSection?.SetPanelVisible( showPaperdoll );
+		_containerSection?.SetPanelVisible( showContainer );
 		_skillsSection?.SetPanelVisible( showSkills );
 		_mapSection?.SetPanelVisible( showMap );
 		_settingsSection?.SetPanelVisible( showSettings );

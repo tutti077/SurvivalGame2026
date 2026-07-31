@@ -49,6 +49,15 @@ public static class BuildModuleDimensions
 	public static Vector3 RoofHalfExtents =>
 		new( SnapModuleHalfUnits, SnapModuleHalfUnits, SnapThinHalfUnits );
 
+	/// <summary>Storage chest: 1 m wide, 0.6 m deep, 0.75 m tall.</summary>
+	public static Vector3 ChestSizeMeters => new( 1f, 0.6f, 0.75f );
+
+	public static Vector3 ChestHalfExtents =>
+		new(
+			BuildColliderSnap.PrefabColliderSize.x * 0.5f * ChestSizeMeters.x,
+			BuildColliderSnap.PrefabColliderSize.y * 0.5f * ChestSizeMeters.y,
+			BuildColliderSnap.PrefabColliderSize.z * 0.5f * ChestSizeMeters.z );
+
 	public static bool TryGetHalfExtents( string pieceId, out Vector3 halfExtents )
 	{
 		halfExtents = default;
@@ -73,6 +82,12 @@ public static class BuildModuleDimensions
 			return true;
 		}
 
+		if ( string.Equals( pieceId, "chest", StringComparison.OrdinalIgnoreCase ) )
+		{
+			halfExtents = ChestHalfExtents;
+			return true;
+		}
+
 		return false;
 	}
 
@@ -85,6 +100,8 @@ public static class BuildModuleDimensions
 			return WallSizeMeters;
 		if ( string.Equals( pieceId, "45roof", StringComparison.OrdinalIgnoreCase ) )
 			return RoofSizeMeters;
+		if ( string.Equals( pieceId, "chest", StringComparison.OrdinalIgnoreCase ) )
+			return ChestSizeMeters;
 		return FloorSizeMeters;
 	}
 
