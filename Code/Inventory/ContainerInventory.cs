@@ -19,6 +19,14 @@ public sealed class ContainerInventory : Component
 
 	[Property] public string DisplayName { get; set; } = "Chest";
 
+	/// <summary>Players can only remove items (death loot bags). Host fill still works via <see cref="HostDepositStack"/>.</summary>
+	[Property, Title( "Take Only (no deposits)" )]
+	public bool TakeOnly { get; set; }
+
+	/// <summary>Destroy the owning object once the last item is removed (death loot bags).</summary>
+	[Property, Title( "Destroy When Emptied" )]
+	public bool DestroyWhenEmpty { get; set; }
+
 	public event Action ContentsChanged;
 
 	InventorySlot[] _slots = Array.Empty<InventorySlot>();
@@ -52,7 +60,7 @@ public sealed class ContainerInventory : Component
 
 	public bool TryPlaceHeld( int slotIndex, ref InventoryCursorStack held )
 	{
-		if ( !HasHostAuthority )
+		if ( !HasHostAuthority || TakeOnly )
 			return false;
 
 		EnsureSlotArray();
@@ -62,7 +70,7 @@ public sealed class ContainerInventory : Component
 	/// <summary>Completes a left-drag onto a slot in this container (swap when occupied by a different item).</summary>
 	public bool TryFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
 	{
-		if ( !HasHostAuthority )
+		if ( !HasHostAuthority || TakeOnly )
 			return false;
 
 		EnsureSlotArray();
@@ -72,7 +80,7 @@ public sealed class ContainerInventory : Component
 	/// <summary>Drag-drop swap: held stack goes to target, displaced stack returns to the (emptied) source slot.</summary>
 	public bool TrySwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
 	{
-		if ( !HasHostAuthority )
+		if ( !HasHostAuthority || TakeOnly )
 			return false;
 
 		EnsureSlotArray();
@@ -92,7 +100,7 @@ public sealed class ContainerInventory : Component
 	public bool TryDropOne( int slotIndex, in InventoryCursorStack held, out int placedCount )
 	{
 		placedCount = 0;
-		if ( !HasHostAuthority )
+		if ( !HasHostAuthority || TakeOnly )
 			return false;
 
 		EnsureSlotArray();
@@ -111,7 +119,7 @@ public sealed class ContainerInventory : Component
 
 	public bool TryPlaceHalf( int slotIndex, ref InventoryCursorStack held )
 	{
-		if ( !HasHostAuthority )
+		if ( !HasHostAuthority || TakeOnly )
 			return false;
 
 		EnsureSlotArray();
@@ -121,7 +129,7 @@ public sealed class ContainerInventory : Component
 	/// <summary>Merges a cursor stack into matching stacks, then empties. Returns true when fully absorbed.</summary>
 	public bool TryAbsorbStack( ref InventoryCursorStack held )
 	{
-		if ( !HasHostAuthority )
+		if ( !HasHostAuthority || TakeOnly )
 			return false;
 
 		EnsureSlotArray();
@@ -132,8 +140,41 @@ public sealed class ContainerInventory : Component
 	/// <summary>Quick-move destination: matching stack with room first, then first empty slot.</summary>
 	public bool TryFindQuickMoveTarget( in InventorySlot stack, out int targetSlotIndex )
 	{
+		targetSlotIndex = -1;
+		if ( TakeOnly )
+			return false;
+
 		EnsureSlotArray();
 		return InventoryStackRules.TryFindQuickMoveTarget( _slots, stack, -1, out targetSlotIndex );
+	}
+
+	/// <summary>Host fill (death loot): bypasses <see cref="TakeOnly"/>. Returns how many were deposited.</summary>
+	public int HostDepositStack( string resourceId, int count )
+	{
+		if ( !HasHostAuthority || count <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
+			return 0;
+
+		EnsureSlotArray();
+		var held = new InventoryCursorStack();
+		held.Set( ResourceCatalog.NormalizeResourceId( resourceId ), count );
+		Apply( InventoryStackRules.AbsorbStack( _slots, ref held ) );
+		return count - held.Count;
+	}
+
+	/// <summary>True when every slot is empty (drives <see cref="DestroyWhenEmpty"/>).</summary>
+	public bool IsEmpty
+	{
+		get
+		{
+			EnsureSlotArray();
+			for ( var i = 0; i < _slots.Length; i++ )
+			{
+				if ( !_slots[i].IsEmpty )
+					return false;
+			}
+
+			return true;
+		}
 	}
 
 	/// <summary>Finds an openable container on the hit object or its parents (skips build previews/blueprints).</summary>
@@ -165,10 +206,16 @@ public sealed class ContainerInventory : Component
 
 	bool Apply( bool changed )
 	{
-		if ( changed )
-			ContentsChanged?.Invoke();
+		if ( !changed )
+			return false;
 
-		return changed;
+		ContentsChanged?.Invoke();
+
+		// Loot bags vanish once the last stack is taken (Destroy is deferred, so this op still completes).
+		if ( DestroyWhenEmpty && IsEmpty && GameObject.IsValid() )
+			GameObject.Destroy();
+
+		return true;
 	}
 
 	void EnsureSlotArray()

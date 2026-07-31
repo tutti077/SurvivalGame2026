@@ -520,6 +520,9 @@ public sealed class PlayerVitals : Component
 
 		_pendingDeathRespawnHost = false;
 
+		// Death loot: droppable resources leave the pawn here, at the death spot (equipment stays).
+		DeathLootBag.HostSpawnForDeath( GameObject );
+
 		var hasSpawn = TryResolveSpawnTransform( out var spawnPos, out var spawnRot );
 		if ( !hasSpawn )
 			Log.Warning( $"{VitalsLogPrefix()} {GameObject.Name}: no SpawnPoint or RespawnPointOverride — respawn position unchanged." );

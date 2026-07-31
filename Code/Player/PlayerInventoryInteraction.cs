@@ -1157,6 +1157,13 @@ public sealed partial class PlayerInventoryInteraction : Component
 		if ( !held.IsEmpty )
 			fromHost.OwnerTryPlaceHeld( fromIndex, ref held );
 
+		// Take-only sources (death loot bag) refuse the return — never let the remainder evaporate.
+		if ( !held.IsEmpty && _inventory is not null )
+			_inventory.OwnerTryAbsorbCursorStackIntoBag( ref held );
+
+		if ( !held.IsEmpty )
+			HeldStackWorldDrop.TryDropAtPlayer( GameObject, ref held );
+
 		return movedAny;
 	}
 
