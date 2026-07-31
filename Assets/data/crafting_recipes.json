@@ -111,9 +111,10 @@
                 "outputAmount": 1,
                 "maxStack": 1,
                 "ingredients": [
-                  { "resourceId": "resource_stone", "amount": 3 },
-                  { "resourceId": "resource_woodBasic", "amount": 2 },
-                  { "resourceId": "resource_plantFiber", "amount": 5 }
+                    { "resourceId": "resource_woodBasic", "amount": 1 }
+                  //{ "resourceId": "resource_stone", "amount": 3 },
+                  //{ "resourceId": "resource_woodBasic", "amount": 2 },
+                  //{ "resourceId": "resource_plantFiber", "amount": 5 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Basic Sword c'mere" },
