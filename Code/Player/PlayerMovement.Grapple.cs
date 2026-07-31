@@ -165,6 +165,26 @@ partial class PlayerMovement
 	/// <summary>Local aim hit point when <see cref="HasValidAimTarget"/>.</summary>
 	public Vector3 AimHitWorldPoint { get; private set; }
 
+	/// <summary>
+	/// Smoothed screen point for the grapple lock indicator (unified crosshair inner ring):
+	/// slides with aim assist to the actual attach point on the object.
+	/// </summary>
+	public bool TryGetAimLockScreenPoint( out Vector2 screenPoint )
+	{
+		screenPoint = default;
+		if ( !HasValidAimTarget )
+			return false;
+
+		if ( _aimHitScreenValid )
+		{
+			screenPoint = _aimHitScreenPoint;
+			return true;
+		}
+
+		var cam = BuildViewCamera.Resolve( GameObject );
+		return cam.IsValid() && TryWorldToScreen( cam, AimHitWorldPoint, out screenPoint );
+	}
+
 	/// <summary>Screen position of <see cref="AimHitWorldPoint"/> for the lock reticle (camera space).</summary>
 	Vector2 _aimHitScreenPoint;
 	bool _aimHitScreenValid;
@@ -246,24 +266,6 @@ partial class PlayerMovement
 		DrawRopeIfNeeded();
 		DrawSpeedDebugIfNeeded();
 		DrawPumpCueIfNeeded();
-	}
-
-	protected override void OnPreRender()
-	{
-		base.OnPreRender();
-
-		// After combat teardrop (OnUpdate) so the yellow grapple reticle sits on top.
-		if ( !IsLocalMovementDriver() )
-			return;
-
-		if ( !HasGrappleEquipped() )
-			return;
-
-		var menu = Components.Get<PlayerGameMenuController>();
-		if ( menu is not null && menu.IsMenuOpen )
-			return;
-
-		DrawCrosshairIfNeeded();
 	}
 
 	void TickGrappleFixedUpdate()
@@ -1442,66 +1444,6 @@ partial class PlayerMovement
 
 		direction = direction.Normal;
 		return direction.LengthSquared > 1e-8f;
-	}
-
-	void DrawCrosshairIfNeeded()
-	{
-		if ( !IsAimHudActive )
-			return;
-
-		var cam = BuildViewCamera.Resolve( GameObject );
-		if ( !cam.IsValid() )
-			return;
-
-		var rect = cam.ScreenRect;
-		var center = new Vector2( rect.Left + rect.Width * 0.5f, rect.Top + rect.Height * 0.5f );
-		var yellow = new Color( 1f, 0.92f, 0.2f, 0.95f );
-
-		// Yellow outer ring stays on the true crosshair.
-		const float outerRadius = 5f;
-		DrawHudCircleOutline( cam, center, outerRadius, 20, 1.75f, yellow );
-
-		if ( !HasValidAimTarget )
-			return;
-
-		// Yellow lock dot: centered in the bullseye when looking straight at a target,
-		// otherwise slides to the assist snap on the object.
-		var lockPos = center;
-		if ( _aimHitScreenValid )
-			lockPos = _aimHitScreenPoint;
-		else if ( TryWorldToScreen( cam, AimHitWorldPoint, out var projected ) )
-			lockPos = projected;
-
-		// Dead-center aim → keep the lock in the bullseye (avoid 1px projection jitter).
-		const float centerSnapPixels = 3.5f;
-		if ( (lockPos - center).Length <= centerSnapPixels )
-			lockPos = center;
-
-		const float lockDiameter = 4f;
-		cam.Overlay.DrawCircle( lockPos, new Vector2( lockDiameter, lockDiameter ), yellow );
-	}
-
-	static void DrawHudCircleOutline(
-		CameraComponent cam,
-		Vector2 center,
-		float radius,
-		int segments,
-		float lineWidth,
-		Color color )
-	{
-		if ( !cam.IsValid() )
-			return;
-
-		segments = Math.Clamp( segments, 8, 64 );
-		radius = Math.Max( 1f, radius );
-		var prev = center + new Vector2( radius, 0f );
-		for ( var i = 1; i <= segments; i++ )
-		{
-			var a = i * ( MathF.PI * 2f / segments );
-			var next = center + new Vector2( MathF.Cos( a ), MathF.Sin( a ) ) * radius;
-			cam.Overlay.DrawLine( prev, next, lineWidth, color );
-			prev = next;
-		}
 	}
 
 	void DrawRopeIfNeeded()

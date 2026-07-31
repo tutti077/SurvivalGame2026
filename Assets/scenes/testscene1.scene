@@ -2086,7 +2086,6 @@
           "ShowBlockVisualization": true,
           "ShowCombatInputDebug": true,
           "ShowMeleeAttackWindupTelegraph": true,
-          "ShowSwingDirectionCrosshair": true,
           "SouthpawSwing": false,
           "StaggerPlayFallingPose": true,
           "SwingAxisDeadzone": 0.02,

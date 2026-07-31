@@ -291,7 +291,6 @@
         "ShowBlockVisualization": true,
         "ShowCombatInputDebug": false,
         "ShowMeleeAttackWindupTelegraph": true,
-        "ShowSwingDirectionCrosshair": true,
         "SouthpawSwing": false,
         "SwingAxisDeadzone": 0.02,
         "SwingDamageWindowSeconds": 0.12,
@@ -441,6 +440,19 @@
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null
+      },
+      {
+        "__type": "Survival.PlayerCrosshair",
+        "__guid": "e7a91c42-5d8b-4f36-9a02-3c6b1d84f705",
+        "__enabled": true,
+        "Flags": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "ShowCrosshair": true
       },
       {
         "__type": "Survival.PlayerInventoryInteraction",

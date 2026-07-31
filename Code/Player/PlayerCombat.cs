@@ -37,8 +37,6 @@ public partial class PlayerCombat : Component
 
 	[Property, Group( "Combat — Debug" )] public bool ShowCombatInputDebug { get; set; } = true;
 
-	[Property, Group( "Combat — Debug" )] public bool ShowSwingDirectionCrosshair { get; set; } = true;
-
 	[Property, Group( "Combat — Debug" )] public bool LogCombatNetworkingToConsole { get; set; }
 
 	/// <summary>Owner: logs predicted primary-attack stamina (hold vs formula cost) when the swing window submits to the host.</summary>
@@ -544,9 +542,6 @@ public partial class PlayerCombat : Component
 		if ( ShowCombatInputDebug )
 			DrawCombatInputDebug();
 
-		if ( ShowSwingDirectionCrosshair )
-			DrawTeardropCrosshairOverlay();
-
 		if ( ShouldDrawMeleeBlockVisualization() )
 			DrawMeleeBlockGuardVisualization();
 
@@ -955,17 +950,12 @@ public partial class PlayerCombat : Component
 	byte ClassifyAttackLiveSwingFrame( Vector2 evidence, byte currentAttackDir ) =>
 		SwingDirs.MirrorLateral( ClassifyLiveSwingFrame( evidence, SwingDirs.MirrorLateral( currentAttackDir ) ) );
 
-	void DrawTeardropCrosshairOverlay()
+	/// <summary>
+	/// Screen-space teardrop direction for the unified crosshair (<see cref="PlayerCrosshair"/>);
+	/// +x right, +y down. Attack hold locks the direction; block morph applies when not attacking.
+	/// </summary>
+	public Vector2 GetTeardropScreenDirection()
 	{
-		var cam = ResolveIntentCamera();
-		if ( !cam.IsValid() )
-			return;
-
-		// True screen-space for this camera's viewport: avoids world-space DebugOverlay drift vs the reticle.
-		var rect = cam.ScreenRect;
-		var center = new Vector2( rect.Left + rect.Width * 0.5f, rect.Top + rect.Height * 0.5f );
-
-		// Attack hold locks teardrop; block morph only when not holding attack.
 		var primaryAttackHeld = Input.Down( PrimaryAttackAction );
 		var attackFrozen = primaryAttackHeld || _primarySwingPhaseActive;
 		byte swingPreview;
@@ -988,45 +978,7 @@ public partial class PlayerCombat : Component
 		if ( mirrorTeardropForAttack )
 			swingPreview = SwingDirs.MirrorLateral( swingPreview );
 
-		var dir = SwingCardinalToScreenTeardropDir( swingPreview );
-		var dLen = dir.Length;
-		if ( dLen > 1e-5f )
-			dir /= dLen;
-
-		// Circular base + directional tip (DrawCircle is a filled box — use a real ring).
-		const float r = 11f;
-		const float tip = 12f;
-		const float triHalf = 6f;
-		const int fanSegments = 48;
-		const float fanLineWidth = 2f;
-		var col = Color.White.WithAlpha( 0.95f );
-
-		var rim = center + dir * r;
-		var perp = new Vector2( -dir.y, dir.x );
-		var tipPos = center + dir * ( r + tip );
-		var pLeft = rim + perp * triHalf;
-		var pRight = rim - perp * triHalf;
-
-		var hud = cam.Overlay;
-
-		// White circle at viewport center.
-		const int circleSegments = 40;
-		var prev = center + new Vector2( r, 0f );
-		for ( var i = 1; i <= circleSegments; i++ )
-		{
-			var a = i * ( MathF.PI * 2f / circleSegments );
-			var next = center + new Vector2( MathF.Cos( a ), MathF.Sin( a ) ) * r;
-			hud.DrawLine( prev, next, fanLineWidth, col );
-			prev = next;
-		}
-
-		// Directional triangle from the circle rim.
-		for ( var i = 0; i <= fanSegments; i++ )
-		{
-			var t = i / (float)fanSegments;
-			var edge = Vector2.Lerp( pLeft, pRight, t );
-			hud.DrawLine( tipPos, edge, fanLineWidth, col );
-		}
+		return SwingCardinalToScreenTeardropDir( swingPreview );
 	}
 
 	/// <summary>
