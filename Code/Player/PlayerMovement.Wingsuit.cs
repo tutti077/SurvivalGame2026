@@ -41,8 +41,13 @@ partial class PlayerMovement
 	[Property, Group( "Wingsuit" ), Title( "Steer authority (1/s)" ), Range( 0.5f, 8f ), Step( 0.1f )]
 	public float WingsuitSteerAuthority { get; set; } = 4f;
 
+	/// <summary>
+	/// Dive speed cap ≈ 1.5× what a long freefall actually reaches (~3200 with gravity 850 and
+	/// the pawn's 0.1 linear damping). Climb height scales with entry speed, so this cap also
+	/// bounds how high a max-speed pull-up can go.
+	/// </summary>
 	[Property, Group( "Wingsuit" ), Title( "Max speed" ), Range( 500f, 8000f ), Step( 50f )]
-	public float WingsuitMaxSpeed { get; set; } = 3200f;
+	public float WingsuitMaxSpeed { get; set; } = 4800f;
 
 	[Property, Group( "Wingsuit" ), Title( "Stall speed" ), Range( 50f, 800f ), Step( 10f )]
 	public float WingsuitStallSpeed { get; set; } = 280f;
@@ -50,14 +55,21 @@ partial class PlayerMovement
 	[Property, Group( "Wingsuit" ), Title( "Base drag (1/s)" ), Range( 0f, 2f ), Step( 0.01f )]
 	public float WingsuitBaseDrag { get; set; } = 0.025f;
 
+	/// <summary>Small aerodynamic drag while climbing — gravity (climb cost) does the real work.</summary>
 	[Property, Group( "Wingsuit" ), Title( "Nose-up bleed (1/s)" ), Range( 0f, 4f ), Step( 0.05f )]
-	public float WingsuitNoseUpBleed { get; set; } = 0.28f;
+	public float WingsuitNoseUpBleed { get; set; } = 0.05f;
 
+	/// <summary>
+	/// Fraction of gravity charged against airspeed while climbing. 1 = full ballistic trade:
+	/// climb height is bounded by v²/2g, so how far you can pull up depends on entry speed.
+	/// Below 1 the dive/climb pump generates free energy (never need to land).
+	/// </summary>
 	[Property, Group( "Wingsuit" ), Title( "Climb cost scale" ), Range( 0f, 2f ), Step( 0.05f )]
-	public float WingsuitClimbCostScale { get; set; } = 0.08f;
+	public float WingsuitClimbCostScale { get; set; } = 1f;
 
+	/// <summary>Straight-down dive gains speed at this multiple of gravity (freefall = 1.0).</summary>
 	[Property, Group( "Wingsuit" ), Title( "Dive accel scale" ), Range( 0f, 3f ), Step( 0.05f )]
-	public float WingsuitDiveAccelScale { get; set; } = 1.35f;
+	public float WingsuitDiveAccelScale { get; set; } = 1.5f;
 
 	[Property, Group( "Wingsuit" ), Title( "Cruise accel scale" ), Range( 0f, 1f ), Step( 0.01f )]
 	public float WingsuitCruiseAccelScale { get; set; } = 0.22f;
@@ -73,6 +85,14 @@ partial class PlayerMovement
 
 	[Property, Group( "Wingsuit" ), Title( "Invert stall nose-up (0-1)" ), Range( 0.5f, 1f ), Step( 0.05f )]
 	public float WingsuitInvertStallNoseUp { get; set; } = 0.82f;
+
+	/// <summary>
+	/// Optional extra drag past the invert threshold. Off by default: gravity (climb cost scale)
+	/// spends the airspeed, and the plummet triggers once speed is genuinely gone. This drag
+	/// scales with speed, so any meaningful value punishes fast climbs disproportionately.
+	/// </summary>
+	[Property, Group( "Wingsuit" ), Title( "Invert stall bleed (1/s)" ), Range( 0f, 8f ), Step( 0.1f )]
+	public float WingsuitInvertStallBleed { get; set; } = 0f;
 
 	[Property, Group( "Wingsuit" ), Title( "Ground stow distance" ), Range( 8f, 80f ), Step( 1f )]
 	public float WingsuitGroundStowDistance { get; set; } = 28f;
@@ -475,12 +495,14 @@ partial class PlayerMovement
 		if ( TryWingsuitCrashImpact( body, body.Velocity, dt ) )
 			return;
 
-		// Hard inverted stall: tip straight up → dump speed → full gravity plummet.
+		// Hard inverted stall: tip straight up → trade speed for altitude, plummet only once
+		// airspeed is actually spent (zoom climb, not an instant brake).
+		var hardStallBledThisTick = false;
 		if ( !_wingsuitGravityPlummet && noseUpAmount >= WingsuitInvertStallNoseUp )
 		{
-			var dump = MathF.Exp( -6.5f * noseUpAmount * dt );
+			var dump = MathF.Exp( -WingsuitInvertStallBleed * noseUpAmount * dt );
 			var v = body.Velocity * dump;
-			if ( v.Length < WingsuitStallSpeed * 0.35f || noseUpAmount >= 0.92f )
+			if ( v.Length < WingsuitStallSpeed * 0.35f )
 			{
 				_wingsuitGravityPlummet = true;
 				SetWingsuitGlideGravity( body, glideNoGravity: false );
@@ -491,6 +513,7 @@ partial class PlayerMovement
 			}
 
 			body.Velocity = v;
+			hardStallBledThisTick = true;
 		}
 
 		if ( _wingsuitGravityPlummet )
@@ -530,11 +553,16 @@ partial class PlayerMovement
 		}
 		else if ( noseUpAmount > 1e-3f && speed > 1f )
 		{
-			// Mild climb bleed; hard invert handled above.
-			var climbK = WingsuitNoseUpBleed * (0.35f + 0.65f * noseUpAmount);
-			if ( noseUpAmount > 0.55f )
-				climbK *= 1f + 3.5f * (noseUpAmount - 0.55f);
-			speed *= MathF.Exp( -climbK * dt );
+			// Light aero drag; hard invert already bled this tick (skip so it doesn't double-dip).
+			if ( !hardStallBledThisTick )
+			{
+				var climbK = WingsuitNoseUpBleed * (0.35f + 0.65f * noseUpAmount);
+				if ( noseUpAmount > 0.55f )
+					climbK *= 1f + 2f * (noseUpAmount - 0.55f);
+				speed *= MathF.Exp( -climbK * dt );
+			}
+
+			// The real climb cost: gravity spends airspeed, so climb height scales with entry speed.
 			speed = Math.Max( 0f, speed - gMag * noseUpAmount * WingsuitClimbCostScale * dt );
 		}
 
