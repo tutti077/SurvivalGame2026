@@ -36,7 +36,7 @@ public sealed class ChopableTree : Component
 	public bool IsBroken => _broken;
 
 	bool IsHostAuthority =>
-		GameObject.Network is not { Active: true } || Networking.IsHost;
+		!Networking.IsActive || Networking.IsHost;
 
 	protected override void OnStart()
 	{
@@ -114,10 +114,21 @@ public sealed class ChopableTree : Component
 		if ( LogChop )
 			Log.Info( $"[ChopableTree] {GameObject.Name}: broken — dropped {count}x {resourceId}." );
 
-		if ( GameObject.Network is { Active: true } )
+		var identity = Components.Get<WorldScatterIdentity>( FindMode.EverythingInSelfAndAncestors );
+		if ( identity is not null && !string.IsNullOrWhiteSpace( identity.StableKey ) )
+			WorldScatterIdentity.HostBroadcastBroken( identity.StableKey );
+		else if ( GameObject.Network is { Active: true } )
 			RpcBroadcastBroken();
 
 		EntityNoiseBus.Emit( scene, GameObject.WorldPosition, EntityNoiseKind.ChopTree, ignore );
+	}
+
+	/// <summary>Peer presentation after host chop of a deterministic (non-networked) tree.</summary>
+	public void ApplyRemoteBrokenPresentation()
+	{
+		_broken = true;
+		CurrentHealth = 0f;
+		ApplyBrokenVisual();
 	}
 
 	void ApplyBrokenVisual()

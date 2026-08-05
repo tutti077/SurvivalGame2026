@@ -28,6 +28,7 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "World" )] public float WorldDiameterMeters { get; set; } = 20000f;
 	[Property, Group( "World" ), Title( "Ocean Ring Width (m)" ), Description( "Flat water band outside land disk. Total world = land + 2× ring (default 25 km)." )]
 	public float OceanRingWidthMeters { get; set; } = 2500f;
+
 	[Property, Group( "World" )] public int WorldSeed { get; set; } = 1337;
 	[Property, Group( "World" )] public float MaxTerrainHeightMeters { get; set; } = 700f;
 	[Property, Group( "World" ), Title( "Settings Source" ), Description( "Tuned Preview First = latest editor Generate bundle, then saved world recipe. Uses solved lake offsets from the bundle — no re-solve on play." )]
@@ -264,6 +265,9 @@ public sealed class TerrainWorldManager : Component
 	bool _worldRecipeWritten;
 	bool _biomeMapLoadSettled;
 
+	bool _worldLoadStarted;
+	bool _waitingForHostWorld;
+
 	protected override void OnStart()
 	{
 		base.OnStart();
@@ -279,12 +283,30 @@ public sealed class TerrainWorldManager : Component
 		_backend = TerrainPreviewBackendRegistry.Active;
 		_ = BuildGenerationSettings();
 		_lastChunkSeed = WorldSeed;
-		BeginWorldLoad();
-		TryWriteWorldRecipe();
+
+		// Offline / host: start immediately and publish seed for joiners.
+		if ( !Networking.IsActive || Networking.IsHost )
+		{
+			WorldNetworkSession.Instance?.HostPublish( WorldName, WorldSeed );
+			BeginWorldLoad();
+			_worldLoadStarted = true;
+			TryWriteWorldRecipe();
+			return;
+		}
+
+		// Joining client: wait for host Sync before meshing/scatter.
+		_waitingForHostWorld = true;
+		TryApplyHostWorldSession();
 	}
 
 	protected override void OnUpdate()
 	{
+		if ( _waitingForHostWorld )
+		{
+			TryApplyHostWorldSession();
+			return;
+		}
+
 		if ( WorldSeed != _lastChunkSeed )
 		{
 			_lastChunkSeed = WorldSeed;
@@ -311,6 +333,33 @@ public sealed class TerrainWorldManager : Component
 		UpdateStreamInspectorState();
 		EnsureMinimapScreen();
 		BuildNavMeshSync.TickPendingLocalBakes( Scene );
+	}
+
+	void TryApplyHostWorldSession()
+	{
+		var session = WorldNetworkSession.Instance;
+		if ( session is null || !session.IsValid() || !session.HostWorldReady )
+			return;
+
+		WorldSeed = session.WorldSeed;
+		if ( !string.IsNullOrWhiteSpace( session.WorldName ) )
+			WorldName = session.WorldName;
+
+		BeginClientWorldFromHost();
+	}
+
+	void BeginClientWorldFromHost()
+	{
+		if ( _worldLoadStarted )
+			return;
+
+		_waitingForHostWorld = false;
+		_worldLoadStarted = true;
+		_lastChunkSeed = WorldSeed;
+		InvalidateGenerationSettingsCache();
+		_ = BuildGenerationSettings();
+		BeginWorldLoad();
+		Log.Info( $"[TerrainWorldManager] Client world load from host seed {WorldSeed}." );
 	}
 
 	/// <summary>
@@ -342,17 +391,46 @@ public sealed class TerrainWorldManager : Component
 			}
 		}
 
-		if ( hasCombat && hasVitals )
+		var hasWorldSession = WorldNetworkSession.Instance is not null && WorldNetworkSession.Instance.IsValid();
+		if ( !hasWorldSession )
+		{
+			foreach ( var session in scene.GetAllComponents<WorldNetworkSession>() )
+			{
+				if ( session is not null && session.IsValid() && session.Enabled )
+				{
+					hasWorldSession = true;
+					break;
+				}
+			}
+		}
+
+		if ( hasCombat && hasVitals && hasWorldSession )
 			return;
 
-		var go = new GameObject( true, "RuntimeAuthorities" );
-		go.Parent = GameObject;
+		GameObject go = null;
+		foreach ( var auth in scene.GetAllComponents<CombatAuthority>() )
+		{
+			if ( auth is not null && auth.IsValid() )
+			{
+				go = auth.GameObject;
+				break;
+			}
+		}
+
+		if ( go is null || !go.IsValid() )
+		{
+			go = new GameObject( true, "RuntimeAuthorities" );
+			go.Parent = GameObject;
+		}
 
 		if ( !hasCombat )
 			go.Components.Create<CombatAuthority>();
 
 		if ( !hasVitals )
 			go.Components.Create<VitalsAuthority>();
+
+		if ( !hasWorldSession )
+			go.Components.Create<WorldNetworkSession>();
 	}
 
 	void UpdateStreamInspectorState()
@@ -1407,7 +1485,9 @@ public sealed class TerrainWorldManager : Component
 
 	bool ShouldScatterVegetation( int verticesPerSide )
 	{
-		if ( !VegetationScatterEnabled || !IsWorldAuthority() )
+		// World-seeded vegetation is deterministic per-peer (same WorldSeed → same trees).
+		// Player-placed flora (future farming) will NetworkSpawn separately.
+		if ( !VegetationScatterEnabled )
 			return false;
 
 		if ( VegetationSkipFarLodChunks && verticesPerSide < ChunkVerticesPerSide )

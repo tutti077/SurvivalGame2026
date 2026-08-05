@@ -7,6 +7,8 @@ namespace Survival;
 /// Spread NetworkHelper spawns that share one SpawnPoint, and cull duplicate / ghost pawns.
 /// Host culls networked-unowned pawns; every peer also destroys orphan citizen Body meshes
 /// that are not under a PlayerController (Object-mode child desync leftover).
+/// Prefab note: player <c>Body</c>/<c>Colliders</c> must be <see cref="NetworkMode.Object"/> under the
+/// Object root — <see cref="NetworkMode.Never"/> excludes them from NetworkSpawn (remotes see no mesh).
 /// </summary>
 [Title( "Player Spawn Separation" )]
 public sealed class PlayerSpawnSeparation : Component

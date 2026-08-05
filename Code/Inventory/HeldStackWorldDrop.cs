@@ -111,7 +111,7 @@ public static class HeldStackWorldDrop
 			return null;
 		}
 
-		instance.NetworkMode = NetworkMode.Never;
+		instance.NetworkMode = NetworkMode.Object;
 		instance.Parent = scene;
 		instance.Name = $"drop_{ResourceCatalog.NormalizeResourceId( resourceId )}";
 		instance.WorldPosition = worldPosition;
@@ -122,6 +122,7 @@ public static class HeldStackWorldDrop
 
 		PrepareSpawnedDrop( instance, resourceId, count, ignoreHierarchy, applyDropperSelfPickupDelay );
 		instance.Enabled = true;
+		HostNetworkSpawn.TrySpawn( instance );
 		return instance;
 	}
 

@@ -8,7 +8,7 @@ namespace Survival;
 /// Paperdoll slots are host-authoritative (same pattern as bag/hotbar) so remote clients' Hook equip reaches grapple validation.
 /// </summary>
 [Title( "Player Equipment" )]
-public sealed class PlayerEquipment : Component
+public sealed partial class PlayerEquipment : Component
 {
 	public const int SlotCount = 11;
 
@@ -19,6 +19,15 @@ public sealed class PlayerEquipment : Component
 	GameObject _toolsRoot;
 	GameObject _activeToolInstance;
 	string _activeToolResourceId = string.Empty;
+
+	/// <summary>
+	/// Host→all peers MainHand presentation id. Inventory slots stay owner-private;
+	/// remotes spawn tool meshes / enable combat visuals from this Sync alone.
+	/// </summary>
+	[Sync( SyncFlags.FromHost )]
+	public string NetworkedMainHandResourceId { get; set; } = string.Empty;
+
+	string _lastAppliedNetworkedMainHand = string.Empty;
 
 	PlayerHotbar _hotbar;
 	PlayerCombat _combat;
@@ -48,6 +57,12 @@ public sealed class PlayerEquipment : Component
 
 		RefreshDerivedState();
 		SyncEquipFromActiveHotbar();
+	}
+
+	protected override void OnUpdate()
+	{
+		base.OnUpdate();
+		TickRemoteMainHandPresentation();
 	}
 
 	protected override void OnDestroy()
@@ -310,8 +325,65 @@ public sealed class PlayerEquipment : Component
 		if ( previous.ResourceId == stack.ResourceId && previous.Count == stack.Count )
 			return;
 
+		if ( HasHostAuthority && slot == EquipmentSlot.MainHand )
+			NetworkedMainHandResourceId = stack.IsEmpty ? string.Empty : (stack.ResourceId ?? string.Empty);
+
 		RefreshDerivedState();
 		EquipmentChanged?.Invoke();
+	}
+
+	/// <summary>Remotes: drive tool mesh + combat enable from host Sync (not owner-private slots).</summary>
+	void TickRemoteMainHandPresentation()
+	{
+		if ( !GameObject.IsValid() )
+			return;
+
+		if ( GameObject.Network is not { Active: true } )
+			return;
+
+		// Host + owning client already refresh from local slots.
+		if ( Networking.IsHost || IsLocalManagingClient() )
+			return;
+
+		var id = NetworkedMainHandResourceId ?? string.Empty;
+		if ( string.Equals( _lastAppliedNetworkedMainHand, id, StringComparison.OrdinalIgnoreCase )
+		     && string.Equals( _activeToolResourceId, id, StringComparison.OrdinalIgnoreCase ) )
+			return;
+
+		_lastAppliedNetworkedMainHand = id;
+		RefreshPresentationFromMainHandId( id );
+	}
+
+	void RefreshPresentationFromMainHandId( string mainHandId )
+	{
+		if ( _combat is null )
+			_combat = Components.Get<PlayerCombat>( FindMode.EverythingInSelf );
+
+		if ( _combat is not null )
+		{
+			var actions = EquipmentCatalog.GetActions( mainHandId );
+			_combat.Enabled = (actions & EquippedItemActions.PrimaryMelee) == EquippedItemActions.PrimaryMelee;
+		}
+
+		if ( string.IsNullOrWhiteSpace( mainHandId ) )
+		{
+			DestroyActiveTool();
+			return;
+		}
+
+		if ( !EquipmentCatalog.TryGet( mainHandId, out var profile )
+		     || string.IsNullOrWhiteSpace( profile.ToolPrefab ) )
+		{
+			DestroyActiveTool();
+			return;
+		}
+
+		if ( string.Equals( _activeToolResourceId, mainHandId, StringComparison.OrdinalIgnoreCase )
+		     && _activeToolInstance is { IsValid: true } )
+			return;
+
+		DestroyActiveTool();
+		SpawnTool( profile.ToolPrefab, mainHandId );
 	}
 
 	void PushEquipmentToOwner()
@@ -436,6 +508,9 @@ public sealed class PlayerEquipment : Component
 
 	void RefreshDerivedState()
 	{
+		if ( HasHostAuthority )
+			NetworkedMainHandResourceId = GetSlotResourceId( EquipmentSlot.MainHand ) ?? string.Empty;
+
 		RefreshCombatEnabled();
 		RefreshActiveTool();
 	}

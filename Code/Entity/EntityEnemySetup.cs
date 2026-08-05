@@ -11,7 +11,7 @@ public static class EntityEnemySetup
 		if ( root is null || !root.IsValid() )
 			return;
 
-		root.NetworkMode = NetworkMode.Never;
+		root.NetworkMode = NetworkMode.Object;
 		root.Enabled = true;
 
 		if ( root.Components.Get<PlayerController>() is not null )

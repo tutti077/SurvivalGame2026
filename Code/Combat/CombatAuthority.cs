@@ -47,8 +47,75 @@ public sealed class CombatAuthority : Component
 		// driveHostProxyAuthority: also advance host sweeps on remote-owned pawns.
 		PlayerCombat.TickSceneCombatVisualizations( scene, driveHostProxyAuthority: true );
 
-		// After Rpc.Host stacks unwind — push path overlays with a static Broadcast (reaches clients for host swings).
+		// After Rpc.Host stacks unwind — push path overlays / swing anim via NetworkManager Broadcast.
 		PlayerCombat.FlushDeferredSwingVisualBroadcasts( scene );
+		PlayerAnimation.FlushDeferredSwingAnimBroadcasts( scene );
+	}
+
+	/// <summary>
+	/// Host→all peers: play melee swing presentation on the named attacker.
+	/// Called from <see cref="PlayerAnimation.FlushDeferredSwingAnimBroadcasts"/> after Rpc.Host unwinds.
+	/// Lives on CombatAuthority (scene NetworkManager) so delivery isn't tied to attacker ownership.
+	/// </summary>
+	public void HostBroadcastMeleeSwingAnim( Guid attackerRootId, byte attackType )
+	{
+		if ( !Networking.IsHost || !GameObject.IsValid() )
+			return;
+
+		RpcBroadcastMeleeSwingAnim( attackerRootId, attackType );
+	}
+
+	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable | NetFlags.SendImmediate )]
+	void RpcBroadcastMeleeSwingAnim( Guid attackerRootId, byte attackType )
+	{
+		if ( Networking.IsHost )
+			return;
+
+		var scene = Scene.IsValid() ? Scene : Sandbox.Game.ActiveScene;
+		if ( scene is null || !scene.IsValid() )
+			return;
+
+		foreach ( var anim in scene.GetAllComponents<PlayerAnimation>() )
+		{
+			if ( anim is null || !anim.GameObject.IsValid() )
+				continue;
+			if ( anim.GameObject.Id != attackerRootId )
+				continue;
+
+			anim.ApplyRemoteMeleeSwingAttack( attackType );
+			return;
+		}
+	}
+
+	/// <summary>
+	/// Host→all peers: hide a deterministic world-scatter tree that was chopped on the host.
+	/// </summary>
+	public void HostBroadcastScatterBroken( string stableKey )
+	{
+		if ( !Networking.IsHost || string.IsNullOrWhiteSpace( stableKey ) )
+			return;
+
+		RpcBroadcastScatterBroken( stableKey );
+	}
+
+	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable )]
+	void RpcBroadcastScatterBroken( string stableKey )
+	{
+		WorldScatterIdentity.ApplyBrokenLocal( stableKey );
+	}
+
+	public void HostBroadcastScatterHarvestDepleted( string stableKey )
+	{
+		if ( !Networking.IsHost || string.IsNullOrWhiteSpace( stableKey ) )
+			return;
+
+		RpcBroadcastScatterHarvestDepleted( stableKey );
+	}
+
+	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable )]
+	void RpcBroadcastScatterHarvestDepleted( string stableKey )
+	{
+		WorldScatterIdentity.ApplyHarvestDepletedLocal( stableKey );
 	}
 
 	/// <summary>Host-only: validate intent against <paramref name="attacker"/> root and apply damage. Caller must be the attacker owner when networked.</summary>

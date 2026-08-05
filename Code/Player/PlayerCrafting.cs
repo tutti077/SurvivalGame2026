@@ -19,6 +19,7 @@ public sealed class PlayerCrafting : Component
 		_inventory = Components.Get<PlayerInventory>();
 		CraftingRecipeCatalog.EnsureLoaded();
 		ResourceDefinitionCatalog.EnsureLoaded();
+		BuildPieceCatalog.EnsureLoaded();
 		TryRequestHostCatalogs();
 	}
 
@@ -65,24 +66,33 @@ public sealed class PlayerCrafting : Component
 
 		CraftingRecipeCatalog.EnsureLoaded();
 		ResourceDefinitionCatalog.EnsureLoaded();
+		BuildPieceCatalog.EnsureLoaded();
 
 		var recipesJson = CraftingRecipeCatalog.ExportSourceJson();
 		var resourcesJson = ResourceDefinitionCatalog.ExportSourceJson();
+		var buildPiecesJson = BuildPieceCatalog.ExportSourceJson();
 
 		if ( string.IsNullOrWhiteSpace( recipesJson ) && LogCrafting )
 			Log.Warning( "[PlayerCrafting] Host has no recipe JSON to sync to client." );
 
-		RpcOwnerReceiveCatalogs( recipesJson ?? string.Empty, resourcesJson ?? string.Empty );
+		if ( string.IsNullOrWhiteSpace( buildPiecesJson ) && LogCrafting )
+			Log.Warning( "[PlayerCrafting] Host has no build piece JSON to sync to client." );
+
+		RpcOwnerReceiveCatalogs(
+			recipesJson ?? string.Empty,
+			resourcesJson ?? string.Empty,
+			buildPiecesJson ?? string.Empty );
 	}
 
 	[Rpc.Owner]
-	void RpcOwnerReceiveCatalogs( string recipesJson, string resourcesJson )
+	void RpcOwnerReceiveCatalogs( string recipesJson, string resourcesJson, string buildPiecesJson )
 	{
 		var recipesOk = CraftingRecipeCatalog.ReplaceFromJson( recipesJson );
 		var resourcesOk = ResourceDefinitionCatalog.ReplaceFromJson( resourcesJson );
+		var buildOk = BuildPieceCatalog.ReplaceFromJson( buildPiecesJson );
 
-		if ( LogCrafting || !recipesOk )
-			Log.Info( $"[PlayerCrafting] Client catalog sync recipesOk={recipesOk} resourcesOk={resourcesOk} recipeCount={CraftingRecipeCatalog.All.Count}" );
+		if ( LogCrafting || !recipesOk || !buildOk )
+			Log.Info( $"[PlayerCrafting] Client catalog sync recipesOk={recipesOk} resourcesOk={resourcesOk} buildOk={buildOk} recipeCount={CraftingRecipeCatalog.All.Count} buildCount={BuildPieceCatalog.All.Count}" );
 	}
 
 	/// <summary>Request a craft from the local player. Returns true when applied on host, or when the RPC was sent.</summary>

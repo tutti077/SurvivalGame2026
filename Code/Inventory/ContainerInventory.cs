@@ -4,11 +4,10 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// World-object item storage (chest, etc.) — a host-authoritative slot grid. All stack rules
-/// come from <see cref="InventoryStackRules"/>; this component only adds the authority gate
-/// and change notifications. Authored on the container prefab; the menu UI talks to it through
-/// <see cref="ContainerInventoryGridHost"/>. Contents live for the session on the host
-/// (build pieces are host-side objects today; client replication rides on build networking later).
+/// World-object item storage (chest, death loot, etc.) — host-authoritative slot grid.
+/// Stack rules come from <see cref="InventoryStackRules"/>. After NetworkSpawn, contents are
+/// Broadcast to all peers (shared view). Clients predict locally then host confirms; concurrent
+/// takes serialize on the host (first Rpc wins, losers get a full contents resync).
 /// </summary>
 [Title( "Container Inventory" )]
 public sealed class ContainerInventory : Component
@@ -27,9 +26,14 @@ public sealed class ContainerInventory : Component
 	[Property, Title( "Destroy When Emptied" )]
 	public bool DestroyWhenEmpty { get; set; }
 
+	/// <summary>Bumps when host contents change — remotes can detect a missed Broadcast.</summary>
+	[Sync( SyncFlags.FromHost )]
+	public int ContentsVersion { get; set; }
+
 	public event Action ContentsChanged;
 
 	InventorySlot[] _slots = Array.Empty<InventorySlot>();
+	int _lastSeenContentsVersion = -1;
 
 	public bool HasHostAuthority =>
 		GameObject.Network is not { Active: true } || Networking.IsHost;
@@ -38,6 +42,23 @@ public sealed class ContainerInventory : Component
 	{
 		base.OnStart();
 		EnsureSlotArray();
+		_lastSeenContentsVersion = ContentsVersion;
+
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
+			RpcHostRequestContentsSync();
+	}
+
+	protected override void OnUpdate()
+	{
+		base.OnUpdate();
+		if ( Networking.IsHost || GameObject.Network is not { Active: true } )
+			return;
+
+		if ( ContentsVersion == _lastSeenContentsVersion )
+			return;
+
+		_lastSeenContentsVersion = ContentsVersion;
+		RpcHostRequestContentsSync();
 	}
 
 	public InventorySlot GetSlot( int index )
@@ -46,6 +67,150 @@ public sealed class ContainerInventory : Component
 		if ( index < 0 || index >= _slots.Length )
 			return InventorySlot.Empty;
 		return _slots[index];
+	}
+
+	/// <summary>Owner/client entry: predict locally, host confirms and Broadcasts shared truth.</summary>
+	public bool OwnerTryPickupAll( int slotIndex, out InventorySlot picked )
+	{
+		picked = InventorySlot.Empty;
+		EnsureSlotArray();
+		if ( HasHostAuthority )
+			return TryPickupAll( slotIndex, out picked );
+
+		var ok = InventoryStackRules.PickupAll( _slots, slotIndex, out picked );
+		if ( ok )
+			ContentsChanged?.Invoke();
+		RpcHostPickupAll( slotIndex );
+		return ok;
+	}
+
+	public bool OwnerTryPlaceHeld( int slotIndex, ref InventoryCursorStack held )
+	{
+		EnsureSlotArray();
+		if ( HasHostAuthority )
+			return TryPlaceHeld( slotIndex, ref held );
+
+		if ( TakeOnly )
+			return false;
+
+		var snapshot = held;
+		var ok = InventoryStackRules.PlaceHeld( _slots, slotIndex, ref held );
+		if ( ok )
+			ContentsChanged?.Invoke();
+		RpcHostPlaceHeld( slotIndex, snapshot.ResourceId ?? string.Empty, snapshot.Count );
+		return ok;
+	}
+
+	public bool OwnerTryFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
+	{
+		EnsureSlotArray();
+		if ( HasHostAuthority )
+			return TryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
+
+		if ( TakeOnly )
+			return false;
+
+		var snapshot = held;
+		var ok = InventoryStackRules.FinishDragDrop( _slots, sourceSlotIndex, targetSlotIndex, ref held );
+		if ( ok )
+			ContentsChanged?.Invoke();
+		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, snapshot.ResourceId ?? string.Empty, snapshot.Count );
+		return ok;
+	}
+
+	public bool OwnerTrySwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
+	{
+		EnsureSlotArray();
+		if ( HasHostAuthority )
+			return TrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref held );
+
+		if ( TakeOnly )
+			return false;
+
+		var snapshot = held;
+		var ok = InventoryStackRules.SwapDragToSlot( _slots, sourceSlotIndex, targetSlotIndex, ref held );
+		if ( ok )
+			ContentsChanged?.Invoke();
+		RpcHostSwapDragToSlot( sourceSlotIndex, targetSlotIndex, snapshot.ResourceId ?? string.Empty, snapshot.Count );
+		return ok;
+	}
+
+	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken )
+	{
+		taken = InventorySlot.Empty;
+		EnsureSlotArray();
+		if ( HasHostAuthority )
+			return TryTakeOne( slotIndex, out taken );
+
+		var ok = InventoryStackRules.TakeOne( _slots, slotIndex, out taken );
+		if ( ok )
+			ContentsChanged?.Invoke();
+		RpcHostTakeOne( slotIndex );
+		return ok;
+	}
+
+	public bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held, out int placedCount )
+	{
+		placedCount = 0;
+		EnsureSlotArray();
+		if ( HasHostAuthority )
+			return TryDropOne( slotIndex, held, out placedCount );
+
+		if ( TakeOnly )
+			return false;
+
+		var ok = InventoryStackRules.DropOne( _slots, slotIndex, held, out placedCount );
+		if ( ok )
+			ContentsChanged?.Invoke();
+		RpcHostDropOne( slotIndex, held.ResourceId ?? string.Empty, held.Count );
+		return ok;
+	}
+
+	public bool OwnerTryTakeHalf( int slotIndex, out InventorySlot taken )
+	{
+		taken = InventorySlot.Empty;
+		EnsureSlotArray();
+		if ( HasHostAuthority )
+			return TryTakeHalf( slotIndex, out taken );
+
+		var ok = InventoryStackRules.TakeHalf( _slots, slotIndex, out taken );
+		if ( ok )
+			ContentsChanged?.Invoke();
+		RpcHostTakeHalf( slotIndex );
+		return ok;
+	}
+
+	public bool OwnerTryPlaceHalf( int slotIndex, ref InventoryCursorStack held )
+	{
+		EnsureSlotArray();
+		if ( HasHostAuthority )
+			return TryPlaceHalf( slotIndex, ref held );
+
+		if ( TakeOnly )
+			return false;
+
+		var snapshot = held;
+		var ok = InventoryStackRules.PlaceHalf( _slots, slotIndex, ref held );
+		if ( ok )
+			ContentsChanged?.Invoke();
+		RpcHostPlaceHalf( slotIndex, snapshot.ResourceId ?? string.Empty, snapshot.Count );
+		return ok;
+	}
+
+	public bool OwnerTryAbsorbStack( ref InventoryCursorStack held )
+	{
+		EnsureSlotArray();
+		if ( HasHostAuthority )
+			return TryAbsorbStack( ref held );
+
+		if ( TakeOnly )
+			return false;
+
+		var snapshot = held;
+		InventoryStackRules.AbsorbStack( _slots, ref held );
+		ContentsChanged?.Invoke();
+		RpcHostAbsorbStack( snapshot.ResourceId ?? string.Empty, snapshot.Count );
+		return held.IsEmpty;
 	}
 
 	public bool TryPickupAll( int slotIndex, out InventorySlot picked )
@@ -67,7 +232,6 @@ public sealed class ContainerInventory : Component
 		return Apply( InventoryStackRules.PlaceHeld( _slots, slotIndex, ref held ) );
 	}
 
-	/// <summary>Completes a left-drag onto a slot in this container (swap when occupied by a different item).</summary>
 	public bool TryFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
 	{
 		if ( !HasHostAuthority || TakeOnly )
@@ -77,7 +241,6 @@ public sealed class ContainerInventory : Component
 		return Apply( InventoryStackRules.FinishDragDrop( _slots, sourceSlotIndex, targetSlotIndex, ref held ) );
 	}
 
-	/// <summary>Drag-drop swap: held stack goes to target, displaced stack returns to the (emptied) source slot.</summary>
 	public bool TrySwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
 	{
 		if ( !HasHostAuthority || TakeOnly )
@@ -126,7 +289,6 @@ public sealed class ContainerInventory : Component
 		return Apply( InventoryStackRules.PlaceHalf( _slots, slotIndex, ref held ) );
 	}
 
-	/// <summary>Merges a cursor stack into matching stacks, then empties. Returns true when fully absorbed.</summary>
 	public bool TryAbsorbStack( ref InventoryCursorStack held )
 	{
 		if ( !HasHostAuthority || TakeOnly )
@@ -137,7 +299,6 @@ public sealed class ContainerInventory : Component
 		return held.IsEmpty;
 	}
 
-	/// <summary>Quick-move destination: matching stack with room first, then first empty slot.</summary>
 	public bool TryFindQuickMoveTarget( in InventorySlot stack, out int targetSlotIndex )
 	{
 		targetSlotIndex = -1;
@@ -148,7 +309,6 @@ public sealed class ContainerInventory : Component
 		return InventoryStackRules.TryFindQuickMoveTarget( _slots, stack, -1, out targetSlotIndex );
 	}
 
-	/// <summary>Host fill (death loot): bypasses <see cref="TakeOnly"/>. Returns how many were deposited.</summary>
 	public int HostDepositStack( string resourceId, int count )
 	{
 		if ( !HasHostAuthority || count <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
@@ -161,7 +321,6 @@ public sealed class ContainerInventory : Component
 		return count - held.Count;
 	}
 
-	/// <summary>True when every slot is empty (drives <see cref="DestroyWhenEmpty"/>).</summary>
 	public bool IsEmpty
 	{
 		get
@@ -177,7 +336,6 @@ public sealed class ContainerInventory : Component
 		}
 	}
 
-	/// <summary>Finds an openable container on the hit object or its parents (skips build previews/blueprints).</summary>
 	public static bool TryFindOnHierarchy( GameObject hitObject, out ContainerInventory container )
 	{
 		container = null;
@@ -210,12 +368,58 @@ public sealed class ContainerInventory : Component
 			return false;
 
 		ContentsChanged?.Invoke();
+		PushContentsToPeers();
 
-		// Loot bags vanish once the last stack is taken (Destroy is deferred, so this op still completes).
 		if ( DestroyWhenEmpty && IsEmpty && GameObject.IsValid() )
 			GameObject.Destroy();
 
 		return true;
+	}
+
+	void PushContentsToPeers()
+	{
+		if ( !HasHostAuthority || GameObject.Network is not { Active: true } )
+			return;
+
+		EnsureSlotArray();
+		var ids = new string[_slots.Length];
+		var counts = new int[_slots.Length];
+		for ( var i = 0; i < _slots.Length; i++ )
+		{
+			ids[i] = _slots[i].ResourceId ?? string.Empty;
+			counts[i] = _slots[i].Count;
+		}
+
+		ContentsVersion++;
+		RpcBroadcastContents( ids, counts, DisplayName ?? string.Empty, TakeOnly, SlotCount, Columns );
+	}
+
+	void ApplyNetworkedContents( string[] ids, int[] counts, string displayName, bool takeOnly, int slotCount, int columns )
+	{
+		if ( ids is null || counts is null )
+			return;
+
+		SlotCount = Math.Max( 1, slotCount );
+		Columns = Math.Max( 1, columns );
+		DisplayName = displayName ?? DisplayName;
+		TakeOnly = takeOnly;
+		EnsureSlotArray();
+
+		var n = Math.Min( _slots.Length, Math.Min( ids.Length, counts.Length ) );
+		for ( var i = 0; i < n; i++ )
+		{
+			var id = ids[i];
+			var c = counts[i];
+			_slots[i] = string.IsNullOrWhiteSpace( id ) || c <= 0
+				? InventorySlot.Empty
+				: new InventorySlot { ResourceId = ResourceCatalog.NormalizeResourceId( id ), Count = c };
+		}
+
+		for ( var i = n; i < _slots.Length; i++ )
+			_slots[i] = InventorySlot.Empty;
+
+		_lastSeenContentsVersion = ContentsVersion;
+		ContentsChanged?.Invoke();
 	}
 
 	void EnsureSlotArray()
@@ -228,6 +432,109 @@ public sealed class ContainerInventory : Component
 		if ( _slots.Length > 0 )
 			Array.Copy( _slots, next, Math.Min( _slots.Length, next.Length ) );
 		_slots = next;
-		SlotCount = count;
+	}
+
+	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable )]
+	void RpcBroadcastContents( string[] ids, int[] counts, string displayName, bool takeOnly, int slotCount, int columns )
+	{
+		if ( Networking.IsHost )
+			return;
+
+		ApplyNetworkedContents( ids, counts, displayName, takeOnly, slotCount, columns );
+	}
+
+	[Rpc.Host]
+	void RpcHostRequestContentsSync()
+	{
+		if ( !Networking.IsHost )
+			return;
+
+		PushContentsToPeers();
+	}
+
+	[Rpc.Host]
+	void RpcHostPickupAll( int slotIndex )
+	{
+		if ( !Networking.IsHost )
+			return;
+		TryPickupAll( slotIndex, out _ );
+	}
+
+	[Rpc.Host]
+	void RpcHostPlaceHeld( int slotIndex, string resourceId, int count )
+	{
+		if ( !Networking.IsHost )
+			return;
+		var held = MakeHeld( resourceId, count );
+		TryPlaceHeld( slotIndex, ref held );
+	}
+
+	[Rpc.Host]
+	void RpcHostFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count )
+	{
+		if ( !Networking.IsHost )
+			return;
+		var held = MakeHeld( resourceId, count );
+		TryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
+	}
+
+	[Rpc.Host]
+	void RpcHostSwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count )
+	{
+		if ( !Networking.IsHost )
+			return;
+		var held = MakeHeld( resourceId, count );
+		TrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref held );
+	}
+
+	[Rpc.Host]
+	void RpcHostTakeOne( int slotIndex )
+	{
+		if ( !Networking.IsHost )
+			return;
+		TryTakeOne( slotIndex, out _ );
+	}
+
+	[Rpc.Host]
+	void RpcHostDropOne( int slotIndex, string resourceId, int count )
+	{
+		if ( !Networking.IsHost )
+			return;
+		var held = MakeHeld( resourceId, count );
+		TryDropOne( slotIndex, held, out _ );
+	}
+
+	[Rpc.Host]
+	void RpcHostTakeHalf( int slotIndex )
+	{
+		if ( !Networking.IsHost )
+			return;
+		TryTakeHalf( slotIndex, out _ );
+	}
+
+	[Rpc.Host]
+	void RpcHostPlaceHalf( int slotIndex, string resourceId, int count )
+	{
+		if ( !Networking.IsHost )
+			return;
+		var held = MakeHeld( resourceId, count );
+		TryPlaceHalf( slotIndex, ref held );
+	}
+
+	[Rpc.Host]
+	void RpcHostAbsorbStack( string resourceId, int count )
+	{
+		if ( !Networking.IsHost )
+			return;
+		var held = MakeHeld( resourceId, count );
+		TryAbsorbStack( ref held );
+	}
+
+	static InventoryCursorStack MakeHeld( string resourceId, int count )
+	{
+		var held = new InventoryCursorStack();
+		if ( !string.IsNullOrWhiteSpace( resourceId ) && count > 0 )
+			held.Set( ResourceCatalog.NormalizeResourceId( resourceId ), count );
+		return held;
 	}
 }

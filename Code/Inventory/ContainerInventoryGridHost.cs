@@ -4,6 +4,8 @@ namespace Survival;
 /// <see cref="IInventoryGridHost"/> for the currently opened world container (chest, etc.).
 /// One instance lives on <see cref="PlayerInventoryInteraction"/>; <see cref="Container"/> is
 /// swapped when the player opens/closes a container. All ops no-op while closed.
+/// Routes through <see cref="ContainerInventory.OwnerTryPickupAll"/> etc. so clients predict
+/// and the host serializes concurrent takes.
 /// </summary>
 public sealed class ContainerInventoryGridHost : IInventoryGridHost
 {
@@ -26,38 +28,38 @@ public sealed class ContainerInventoryGridHost : IInventoryGridHost
 	public bool OwnerTryPickupAll( int slotIndex, out InventorySlot picked )
 	{
 		picked = InventorySlot.Empty;
-		return IsActive && Container.TryPickupAll( slotIndex, out picked );
+		return IsActive && Container.OwnerTryPickupAll( slotIndex, out picked );
 	}
 
 	public bool OwnerTryFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held ) =>
-		IsActive && Container.TryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
+		IsActive && Container.OwnerTryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
 
 	public bool OwnerTryPlaceHeld( int slotIndex, ref InventoryCursorStack held ) =>
-		IsActive && Container.TryPlaceHeld( slotIndex, ref held );
+		IsActive && Container.OwnerTryPlaceHeld( slotIndex, ref held );
 
 	public bool OwnerTryReturnStack( ref InventoryCursorStack held ) =>
-		IsActive && Container.TryAbsorbStack( ref held );
+		IsActive && Container.OwnerTryAbsorbStack( ref held );
 
 	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken )
 	{
 		taken = InventorySlot.Empty;
-		return IsActive && Container.TryTakeOne( slotIndex, out taken );
+		return IsActive && Container.OwnerTryTakeOne( slotIndex, out taken );
 	}
 
 	public bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held, out int placedCount )
 	{
 		placedCount = 0;
-		return IsActive && Container.TryDropOne( slotIndex, held, out placedCount );
+		return IsActive && Container.OwnerTryDropOne( slotIndex, held, out placedCount );
 	}
 
 	public bool OwnerTryTakeHalf( int slotIndex, out InventorySlot taken )
 	{
 		taken = InventorySlot.Empty;
-		return IsActive && Container.TryTakeHalf( slotIndex, out taken );
+		return IsActive && Container.OwnerTryTakeHalf( slotIndex, out taken );
 	}
 
 	public bool OwnerTryPlaceHalf( int slotIndex, ref InventoryCursorStack held ) =>
-		IsActive && Container.TryPlaceHalf( slotIndex, ref held );
+		IsActive && Container.OwnerTryPlaceHalf( slotIndex, ref held );
 
 	/// <summary>Cross-grid destination lookup — <paramref name="fromSlotIndex"/> belongs to the source grid and is ignored.</summary>
 	public bool TryFindQuickMoveTarget( in InventorySlot stack, int fromSlotIndex, out int targetSlotIndex )

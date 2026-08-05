@@ -16,6 +16,7 @@ public sealed class PlayerHotbar : Component
 
 	readonly InventorySlot[] _slots = new InventorySlot[SlotCount];
 	string[] _bindings = PlayerHotbarBindingsStore.CreateEmpty();
+	bool _pushedBindingsToHost;
 
 	public bool HasHostAuthority =>
 		GameObject.Network is not { Active: true } || Networking.IsHost;
@@ -40,9 +41,45 @@ public sealed class PlayerHotbar : Component
 	{
 		base.OnStart();
 		if ( IsLocalManagingClient() )
+		{
 			_bindings = PlayerHotbarBindingsStore.Load();
+			TryPushBindingsToHost();
+		}
 
 		HotbarChanged?.Invoke();
+	}
+
+	protected override void OnUpdate()
+	{
+		base.OnUpdate();
+		// Owner may not be networked on the first OnStart frame after spawn.
+		if ( !_pushedBindingsToHost && IsLocalManagingClient() )
+			TryPushBindingsToHost();
+	}
+
+	/// <summary>
+	/// Owning client → host: bindings steer host craft/pickup into ghost hotbar slots.
+	/// Without this, the host only sees empty bindings and dumps crafts into the bag.
+	/// </summary>
+	void TryPushBindingsToHost()
+	{
+		if ( _pushedBindingsToHost )
+			return;
+
+		if ( GameObject.Network is not { Active: true } )
+			return;
+
+		if ( Networking.IsHost )
+		{
+			_pushedBindingsToHost = true;
+			return;
+		}
+
+		if ( !IsLocalManagingClient() )
+			return;
+
+		_pushedBindingsToHost = true;
+		RpcHostSetBindings( _bindings );
 	}
 
 	public bool IsLocalManagingClient()
@@ -475,8 +512,7 @@ public sealed class PlayerHotbar : Component
 		if ( !changed )
 			return;
 
-		PersistBindingsLocal();
-		RpcSyncBindings( _bindings );
+		CommitBindings();
 	}
 
 	public void SetBinding( int slotIndex, string resourceId ) => RememberResourceSlot( slotIndex, resourceId );
@@ -487,8 +523,31 @@ public sealed class PlayerHotbar : Component
 			return;
 
 		_bindings[slotIndex] = string.Empty;
+		CommitBindings();
+	}
+
+	/// <summary>
+	/// Persist locally, keep host authority in sync (for craft/pickup), and mirror to the owning client when host mutates.
+	/// </summary>
+	void CommitBindings()
+	{
 		PersistBindingsLocal();
-		RpcSyncBindings( _bindings );
+		HotbarChanged?.Invoke();
+
+		if ( GameObject.Network is not { Active: true } )
+			return;
+
+		if ( Networking.IsHost )
+		{
+			// Host is the placement authority; push so the owner UI/ghosts stay aligned.
+			if ( GameObject.Network.Owner is { } owner
+			     && !ConnectionIdentity.SameClient( owner, Connection.Local ) )
+				RpcOwnerApplyBindings( _bindings );
+			return;
+		}
+
+		if ( IsLocalManagingClient() )
+			RpcHostSetBindings( _bindings );
 	}
 
 	/// <summary>Local client: forget a hotbar slot binding (ghost icon).</summary>
@@ -510,14 +569,43 @@ public sealed class PlayerHotbar : Component
 			PlayerHotbarBindingsStore.Save( _bindings );
 	}
 
-	[Rpc.Owner]
-	void RpcSyncBindings( string[] bindings )
+	[Rpc.Host]
+	void RpcHostSetBindings( string[] bindings )
 	{
-		if ( bindings is null || bindings.Length != SlotCount )
+		if ( !Networking.IsHost )
 			return;
 
-		_bindings = bindings;
+		if ( Rpc.Caller is { } caller
+		     && GameObject.Network is { Active: true, Owner: { } owner }
+		     && caller.Id != owner.Id )
+		{
+			Log.Warning( $"[PlayerHotbar] RpcHostSetBindings ignored: caller ≠ owner." );
+			return;
+		}
+
+		if ( !TryApplyBindings( bindings ) )
+			return;
+
 		HotbarChanged?.Invoke();
+	}
+
+	[Rpc.Owner]
+	void RpcOwnerApplyBindings( string[] bindings )
+	{
+		if ( !TryApplyBindings( bindings ) )
+			return;
+
+		PersistBindingsLocal();
+		HotbarChanged?.Invoke();
+	}
+
+	bool TryApplyBindings( string[] bindings )
+	{
+		if ( bindings is null || bindings.Length != SlotCount )
+			return false;
+
+		_bindings = bindings;
+		return true;
 	}
 
 	public bool OwnerTryPickupAll( int slotIndex, out InventorySlot picked )

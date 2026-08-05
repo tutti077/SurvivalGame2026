@@ -140,6 +140,18 @@ public static class BiomePopulationScatter
 		var slot = instance.Components.Get<BiomePopulationSlot>() ?? instance.Components.Create<BiomePopulationSlot>();
 		slot.Configure( slotKey, entry );
 
+		// Reparent to scene before NetworkSpawn — chunk roots are local/non-networked.
+		var scene = chunkRoot.Scene;
+		if ( scene.IsValid() )
+		{
+			var worldPos = instance.WorldPosition;
+			var worldRot = instance.WorldRotation;
+			instance.Parent = scene;
+			instance.WorldPosition = worldPos;
+			instance.WorldRotation = worldRot;
+		}
+
+		HostNetworkSpawn.TrySpawn( instance );
 		BiomePopulationRegistry.NotifySpawned( slotKey, instance );
 		return true;
 	}
@@ -170,6 +182,17 @@ public static class BiomePopulationScatter
 		var slot = instance.Components.Get<BiomePopulationSlot>() ?? instance.Components.Create<BiomePopulationSlot>();
 		slot.Configure( slotKey, entry );
 
+		var scene = chunkRoot.Scene;
+		if ( scene.IsValid() )
+		{
+			var worldPos = instance.WorldPosition;
+			var worldRot = instance.WorldRotation;
+			instance.Parent = scene;
+			instance.WorldPosition = worldPos;
+			instance.WorldRotation = worldRot;
+		}
+
+		HostNetworkSpawn.TrySpawn( instance );
 		BiomePopulationRegistry.NotifySpawned( slotKey, instance );
 		return true;
 	}

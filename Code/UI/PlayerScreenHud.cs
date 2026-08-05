@@ -107,6 +107,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_pickupNotifications?.Tick();
 		_minimapHud?.Tick();
+		_buildMenuHud?.Tick();
 
 		if ( !_deferScreenPanelCamera || _hudScreen is null || !_hudScreen.IsValid() )
 			return;

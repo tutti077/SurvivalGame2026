@@ -35,8 +35,14 @@ public sealed class BuildMenuHud
 	Label _blueprintToggleLabel;
 	ToolBuildHammer _boundHammer;
 	string _hoveredPieceId;
+	int _builtPieceContentVersion = -1;
 
 	public BuildMenuHud( PlayerEquipment equipment ) => _equipment = equipment;
+
+	public void Tick()
+	{
+		EnsureSlotsMatchCatalog();
+	}
 
 	public void Build( Panel hudRoot )
 	{
@@ -108,6 +114,7 @@ public sealed class BuildMenuHud
 		_grid.Style.Set( "justify-content", "center" );
 		_grid.Style.Set( "gap", $"{SlotGap}px" );
 		_grid.Style.Set( "max-width", $"{Columns * SlotSize + ( Columns - 1 ) * SlotGap}px" );
+		_grid.AddEventListener( "onmouseout", () => SetHoveredSlot( null ) );
 
 		_detailRoot = new Panel { Parent = _panelRoot };
 		_detailRoot.Style.Set( "flex-direction", "column" );
@@ -132,6 +139,31 @@ public sealed class BuildMenuHud
 		_detailCosts.Style.Set( "white-space", "pre-line" );
 
 		UpdateDetailPanel( null );
+		RebuildSlots();
+
+		_equipment.EquipmentChanged += OnEquipmentChanged;
+		RebindHammerEvents();
+		OnBuildMenuOpenChanged();
+		OnBlueprintModeChanged();
+	}
+
+	void EnsureSlotsMatchCatalog()
+	{
+		BuildPieceCatalog.EnsureLoaded();
+		if ( _builtPieceContentVersion == BuildPieceCatalog.ContentVersion )
+			return;
+
+		RebuildSlots();
+	}
+
+	void RebuildSlots()
+	{
+		if ( _grid is null )
+			return;
+
+		_hoveredPieceId = null;
+		_grid.DeleteChildren();
+		_slots.Clear();
 
 		BuildPieceCatalog.EnsureLoaded();
 		foreach ( var piece in BuildPieceCatalog.All )
@@ -187,12 +219,9 @@ public sealed class BuildMenuHud
 			_slots.Add( slotUi );
 		}
 
-		_grid.AddEventListener( "onmouseout", () => SetHoveredSlot( null ) );
-
-		_equipment.EquipmentChanged += OnEquipmentChanged;
-		RebindHammerEvents();
-		OnBuildMenuOpenChanged();
-		OnBlueprintModeChanged();
+		_builtPieceContentVersion = BuildPieceCatalog.ContentVersion;
+		UpdateDetailPanel( null );
+		ApplyBlueprintModeUi();
 	}
 
 	void SetHoveredSlot( PieceSlotUi hovered )
@@ -238,7 +267,10 @@ public sealed class BuildMenuHud
 		var visible = hammer is not null && hammer.IsBuildMenuOpen;
 
 		if ( visible )
+		{
+			EnsureSlotsMatchCatalog();
 			RebindHammerEvents();
+		}
 
 		_overlay?.SetOpen( visible );
 		if ( _panelRoot is not null )

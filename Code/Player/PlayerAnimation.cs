@@ -79,6 +79,27 @@ public sealed class PlayerAnimation : Component
 
 	HoldPose _appliedHoldPose = HoldPose.None;
 
+	/// <summary>
+	/// Host→all peers presentation of hold pose. Inventory/equipment stays owner-private;
+	/// remotes drive stick + animgraph from this instead of empty MainHand slots.
+	/// </summary>
+	[Sync( SyncFlags.FromHost )]
+	public byte NetworkedHoldPose { get; set; }
+
+	/// <summary>
+	/// Host increments on each accepted melee swing; non-host peers play the anim when this changes.
+	/// More reliable than Broadcast for host-owned pawns (presentation, not authority).
+	/// </summary>
+	[Sync( SyncFlags.FromHost )]
+	public int NetworkedSwingCounter { get; set; }
+
+	[Sync( SyncFlags.FromHost )]
+	public byte NetworkedSwingAttackType { get; set; }
+
+	int _lastAppliedSwingCounter;
+	byte _deferredSwingAnimType;
+	bool _deferSwingAnimBroadcast;
+
 	bool _lateralSwingPlaybackSlowed;
 	float _playbackRateSaved = 1f;
 	double _playbackRateRestoreAt;
@@ -98,6 +119,8 @@ public sealed class PlayerAnimation : Component
 		_equippedItem = Components.Get<PlayerEquippedItem>();
 		EnsureAnimTargets();
 		ClearStuckNegativeBodyScale();
+		// Don't replay a pre-join swing when Sync arrives with a non-zero counter.
+		_lastAppliedSwingCounter = NetworkedSwingCounter;
 	}
 
 	protected override void OnUpdate()
@@ -106,6 +129,7 @@ public sealed class PlayerAnimation : Component
 			return;
 
 		EnsureAnimTargets();
+		TickSyncedSwingPresentation();
 		TickHoldPose();
 		TickLateralSwingPlaybackRestore();
 	}
@@ -117,6 +141,7 @@ public sealed class PlayerAnimation : Component
 			return;
 
 		EnsureAnimTargets();
+		TickSyncedSwingPresentation();
 		TickHoldPose();
 		TickMeleeDemoStickTransform();
 	}
@@ -129,7 +154,11 @@ public sealed class PlayerAnimation : Component
 		base.OnDestroy();
 	}
 
-	/// <summary>Host/local: play melee swing anim; optionally broadcast for remotes.</summary>
+	/// <summary>
+	/// Host/local: play melee swing anim. When <paramref name="broadcastFromHost"/> is true,
+	/// bumps Sync presentation for remotes and queues a deferred Broadcast via CombatAuthority
+	/// (do not nest HostOnly Broadcast on the attacker inside Rpc.Host).
+	/// </summary>
 	public void PlayMeleeSwingAttack( byte attackType, bool broadcastFromHost = false )
 	{
 		if ( !PlayMeleeSwingAnimation || !GameObject.IsValid() )
@@ -140,8 +169,68 @@ public sealed class PlayerAnimation : Component
 		if ( !broadcastFromHost )
 			return;
 
-		if ( GameObject.Network is { Active: true } && Networking.IsHost )
-			RpcBroadcastMeleeSwingAttack( attackType );
+		if ( GameObject.Network is not { Active: true } || !Networking.IsHost )
+			return;
+
+		// Sync path: every non-host peer notices the counter and plays locally.
+		NetworkedHoldPose = (byte)HoldPose.MeleeTwoHand;
+		NetworkedSwingAttackType = attackType;
+		NetworkedSwingCounter++;
+
+		_deferredSwingAnimType = attackType;
+		_deferSwingAnimBroadcast = true;
+	}
+
+	/// <summary>
+	/// Host: flush deferred swing-anim broadcasts after Rpc.Host stacks unwind.
+	/// Routes through <see cref="CombatAuthority"/> (scene NetworkManager) so delivery isn't
+	/// tied to the attacker object's ownership.
+	/// </summary>
+	public static void FlushDeferredSwingAnimBroadcasts( Scene scene )
+	{
+		if ( !Networking.IsHost || scene is null || !scene.IsValid() )
+			return;
+
+		var authority = CombatAuthority.Instance;
+		if ( authority is null || !authority.GameObject.IsValid() )
+			return;
+
+		foreach ( var anim in scene.GetAllComponents<PlayerAnimation>() )
+		{
+			if ( anim is null || !anim.GameObject.IsValid() || !anim._deferSwingAnimBroadcast )
+				continue;
+
+			anim._deferSwingAnimBroadcast = false;
+			authority.HostBroadcastMeleeSwingAnim( anim.GameObject.Id, anim._deferredSwingAnimType );
+		}
+	}
+
+	/// <summary>Called on non-host peers from CombatAuthority Broadcast (low-latency path).</summary>
+	internal void ApplyRemoteMeleeSwingAttack( byte attackType )
+	{
+		// Sync may have already applied this swing; don't double-fire.
+		if ( NetworkedSwingCounter > 0 && NetworkedSwingCounter == _lastAppliedSwingCounter )
+			return;
+
+		if ( NetworkedSwingCounter > _lastAppliedSwingCounter )
+			_lastAppliedSwingCounter = NetworkedSwingCounter;
+
+		ApplyMeleeSwingAttackLocal( attackType );
+	}
+
+	void TickSyncedSwingPresentation()
+	{
+		if ( Networking.IsHost || GameObject.Network is not { Active: true } )
+			return;
+
+		if ( NetworkedSwingCounter == _lastAppliedSwingCounter )
+			return;
+
+		_lastAppliedSwingCounter = NetworkedSwingCounter;
+		if ( _lastAppliedSwingCounter <= 0 )
+			return;
+
+		ApplyMeleeSwingAttackLocal( NetworkedSwingAttackType );
 	}
 
 	void ApplyMeleeSwingAttackLocal( byte attackType )
@@ -160,15 +249,6 @@ public sealed class PlayerAnimation : Component
 		body.Set( "b_attack", true );
 	}
 
-	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable )]
-	void RpcBroadcastMeleeSwingAttack( byte attackType )
-	{
-		if ( Networking.IsHost )
-			return;
-
-		ApplyMeleeSwingAttackLocal( attackType );
-	}
-
 	HoldPose ResolveDesiredHoldPose()
 	{
 		_equippedItem ??= Components.Get<PlayerEquippedItem>();
@@ -180,9 +260,33 @@ public sealed class PlayerAnimation : Component
 		return HoldPose.None;
 	}
 
+	/// <summary>Hold pose used for local presentation this frame (synced on remotes).</summary>
+	HoldPose ResolvePresentationHoldPose()
+	{
+		if ( !PlayMeleeSwingAnimation )
+			return HoldPose.None;
+
+		var networked = GameObject.Network is { Active: true };
+
+		// Host: authoritative equipment → Sync for remotes.
+		if ( !networked || Networking.IsHost )
+		{
+			var desired = ResolveDesiredHoldPose();
+			NetworkedHoldPose = (byte)desired;
+			return desired;
+		}
+
+		// Owning client: local equipment (owner RPCs keep MainHand filled).
+		if ( !GameObject.IsProxy )
+			return ResolveDesiredHoldPose();
+
+		// Other peers: inventory is owner-private — use host Sync.
+		return (HoldPose)NetworkedHoldPose;
+	}
+
 	void TickHoldPose()
 	{
-		ApplyHoldPose( ResolveDesiredHoldPose() );
+		ApplyHoldPose( ResolvePresentationHoldPose() );
 	}
 
 	void ApplyHoldPose( HoldPose pose )
@@ -283,7 +387,7 @@ public sealed class PlayerAnimation : Component
 
 	void TickMeleeDemoStickTransform()
 	{
-		if ( !ShowMeleeDemoStick || ResolveDesiredHoldPose() != HoldPose.MeleeTwoHand )
+		if ( !ShowMeleeDemoStick || ResolvePresentationHoldPose() != HoldPose.MeleeTwoHand )
 		{
 			DestroyMeleeDemoStick();
 			return;

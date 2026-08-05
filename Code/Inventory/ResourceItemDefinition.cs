@@ -74,7 +74,7 @@ public sealed class ResourceItemDefinition : Component
 	readonly Random _rng = new();
 
 	bool IsHostAuthority =>
-		GameObject.Network is not { Active: true } || Networking.IsHost;
+		!Networking.IsActive || Networking.IsHost;
 
 	protected override void OnEnabled()
 	{
@@ -264,8 +264,19 @@ public sealed class ResourceItemDefinition : Component
 
 		ApplyDepletedVisual( true );
 
-		if ( GameObject.Network is { Active: true } )
+		var identity = Components.Get<WorldScatterIdentity>( FindMode.EverythingInSelfAndAncestors );
+		if ( identity is not null && !string.IsNullOrWhiteSpace( identity.StableKey ) )
+			WorldScatterIdentity.HostBroadcastHarvestDepleted( identity.StableKey );
+		else if ( GameObject.Network is { Active: true } )
 			RpcSyncHarvestState( true, 0 );
+	}
+
+	/// <summary>Peer presentation after host depletes a deterministic harvest node.</summary>
+	public void ApplyRemoteDepletedPresentation()
+	{
+		_isDepleted = true;
+		_remainingHarvestTicks = 0;
+		ApplyDepletedVisual( true );
 	}
 
 	void EnsureTraceCollider()

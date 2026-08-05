@@ -33,6 +33,10 @@ public static class BuildAuthority
 
 		var piece = spawned.Components.Get<BuildPiece>() ?? spawned.Components.Create<BuildPiece>();
 		piece.Configure( pieceId, blueprint, previewGhost: false );
+
+		// Host NetworkSpawn so remotes see placed walls/chests (prefabs are already Object mode).
+		HostNetworkSpawn.TrySpawn( spawned );
+
 		BuildSnapPlacement.InvalidatePieceCache();
 		BuildNavMeshSync.OnBuildPieceChanged( scene, spawned );
 

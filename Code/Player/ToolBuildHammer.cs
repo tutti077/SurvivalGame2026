@@ -98,9 +98,7 @@ public sealed class ToolBuildHammer : Component
 
 	void ApplyBuildSettings()
 	{
-		if ( Pawn.Network is { Active: true } && !Networking.IsHost )
-			return;
-
+		// Local preview/UI (FreeBuild cost display) — every driver needs this, not just host.
 		BuildSettings.FreeBuild = FreeBuildEnabled;
 	}
 
@@ -419,16 +417,17 @@ public sealed class ToolBuildHammer : Component
 
 		var transform = new Transform( _lastPlacement.Position, _lastPlacement.Rotation );
 		var pieceId = _selectedPieceId;
+		var equipment = ResolveEquipment();
+		if ( equipment is null )
+		{
+			if ( LogBuildMode )
+				Log.Warning( "[ToolBuildHammer] Place failed — no PlayerEquipment on pawn." );
+			return;
+		}
 
-		if ( Pawn.Network is not { Active: true } || Networking.IsHost )
-		{
-			if ( BuildAuthority.TryPlacePiece( Pawn, pieceId, transform, BlueprintModeEnabled, out _ ) && LogBuildMode )
-				Log.Info( $"[ToolBuildHammer] Placed '{pieceId}'." );
-		}
-		else
-		{
-			RpcRequestPlacePiece( pieceId, transform.Position, transform.Rotation, BlueprintModeEnabled );
-		}
+		equipment.OwnerRequestPlacePiece( pieceId, transform.Position, transform.Rotation, BlueprintModeEnabled );
+		if ( LogBuildMode )
+			Log.Info( $"[ToolBuildHammer] Place requested '{pieceId}'." );
 	}
 
 	void TryRepairLookedAtBuildPiece()
@@ -440,14 +439,13 @@ public sealed class ToolBuildHammer : Component
 		if ( !BuildPlacementUtility.TryTraceBuildPiece( scene, Pawn, _previewRoot, origin, direction, BuildRange, out var piece ) )
 			return;
 
-		if ( Pawn.Network is not { Active: true } || Networking.IsHost )
-		{
-			if ( BuildAuthority.TryRepairBuildPiece( Pawn, piece ) && LogBuildMode )
-				Log.Info( $"[ToolBuildHammer] Repaired '{piece.PieceId}'." );
+		var equipment = ResolveEquipment();
+		if ( equipment is null )
 			return;
-		}
 
-		RpcRequestRepairBuildPiece( piece.GameObject.Id );
+		equipment.OwnerRequestRepairBuildPiece( piece.GameObject.Id );
+		if ( LogBuildMode )
+			Log.Info( $"[ToolBuildHammer] Repair requested '{piece.PieceId}'." );
 	}
 
 	bool TryDeleteLookedAtBuildPiece()
@@ -459,78 +457,18 @@ public sealed class ToolBuildHammer : Component
 		if ( !BuildPlacementUtility.TryTraceBuildPiece( scene, Pawn, _previewRoot, origin, direction, BuildRange, out var piece ) )
 			return false;
 
-		if ( Pawn.Network is not { Active: true } || Networking.IsHost )
-		{
-			BuildAuthority.TryDestroyBuildPiece( Pawn, piece );
-			return true;
-		}
+		var equipment = ResolveEquipment();
+		if ( equipment is null )
+			return false;
 
-		RpcRequestDestroyBuildPiece( piece.GameObject.Id );
+		equipment.OwnerRequestDestroyBuildPiece( piece.GameObject.Id );
 		return true;
 	}
 
-	[Rpc.Host]
-	void RpcRequestPlacePiece( string pieceId, Vector3 position, Rotation rotation, bool blueprintMode )
+	PlayerEquipment ResolveEquipment()
 	{
-		if ( !Networking.IsHost || !Pawn.IsValid() )
-			return;
-
-		if ( Pawn.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
-		     && !ConnectionIdentity.SameClient( caller, owner ) )
-			return;
-
-		BuildAuthority.TryPlacePiece( Pawn, pieceId, new Transform( position, rotation ), blueprintMode, out _ );
-	}
-
-	[Rpc.Host]
-	void RpcRequestRepairBuildPiece( Guid targetId )
-	{
-		if ( !Networking.IsHost || !Pawn.IsValid() )
-			return;
-
-		if ( Pawn.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
-		     && !ConnectionIdentity.SameClient( caller, owner ) )
-			return;
-
-		if ( !TryResolveBuildPiece( targetId, out var piece ) )
-			return;
-
-		BuildAuthority.TryRepairBuildPiece( Pawn, piece );
-	}
-
-	[Rpc.Host]
-	void RpcRequestDestroyBuildPiece( Guid targetId )
-	{
-		if ( !Networking.IsHost || !Pawn.IsValid() )
-			return;
-
-		if ( Pawn.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
-		     && !ConnectionIdentity.SameClient( caller, owner ) )
-			return;
-
-		if ( !TryResolveBuildPiece( targetId, out var piece ) )
-			return;
-
-		BuildAuthority.TryDestroyBuildPiece( Pawn, piece );
-	}
-
-	bool TryResolveBuildPiece( Guid targetId, out BuildPiece piece )
-	{
-		piece = null;
-		var scene = ResolveScene();
-		if ( !scene.IsValid() )
-			return false;
-
-		foreach ( var candidate in scene.GetAllComponents<BuildPiece>() )
-		{
-			if ( candidate is null || !candidate.IsValid() || candidate.GameObject.Id != targetId )
-				continue;
-
-			piece = candidate;
-			return true;
-		}
-
-		return false;
+		var pawn = Pawn;
+		return pawn.IsValid() ? pawn.Components.Get<PlayerEquipment>() : null;
 	}
 
 	Scene ResolveScene() => Pawn.Scene.IsValid() ? Pawn.Scene : Sandbox.Game.ActiveScene;

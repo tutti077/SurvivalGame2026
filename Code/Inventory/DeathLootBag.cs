@@ -131,7 +131,7 @@ public static class DeathLootBag
 		var ownerName = ResolveOwnerName( pawn );
 
 		var go = new GameObject( true, "death_loot_bag" );
-		go.NetworkMode = NetworkMode.Never;
+		go.NetworkMode = NetworkMode.Object;
 		go.Parent = scene;
 		go.WorldPosition = SnapToGround( scene, pawn, pawn.WorldPosition );
 
@@ -157,6 +157,7 @@ public static class DeathLootBag
 		container.TakeOnly = true;
 		container.DestroyWhenEmpty = true;
 
+		HostNetworkSpawn.TrySpawn( go );
 		return go;
 	}
 

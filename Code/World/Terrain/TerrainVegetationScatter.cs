@@ -578,6 +578,11 @@ public static class TerrainVegetationScatter
 
 		instance.Enabled = true;
 
+		var stableKey = $"veg:{coord.X}:{coord.Y}:{ix}:{iy}:{memberIndex}:{instancePrefix}:{variant}";
+		var identity = instance.Components.Get<WorldScatterIdentity>()
+			?? instance.Components.Create<WorldScatterIdentity>();
+		identity.Configure( stableKey );
+
 		return true;
 	}
 

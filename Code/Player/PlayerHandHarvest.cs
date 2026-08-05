@@ -316,19 +316,22 @@ public sealed class PlayerHandHarvest : Component
 
 		var viewPos = cam.WorldPosition;
 		var look = cam.WorldRotation.Forward.Normal;
-		var nodeId = node.GameObject.Id;
+		var identity = node.Components.Get<WorldScatterIdentity>( FindMode.EverythingInSelfAndAncestors );
+		var nodeKey = identity is not null && !string.IsNullOrWhiteSpace( identity.StableKey )
+			? identity.StableKey
+			: node.GameObject.Id.ToString();
 
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
 		{
-			ServerTryHandHarvest( nodeId, viewPos, look );
+			ServerTryHandHarvest( nodeKey, viewPos, look );
 			return;
 		}
 
-		RpcRequestHandHarvest( nodeId, viewPos, look );
+		RpcRequestHandHarvest( nodeKey, viewPos, look );
 	}
 
 	[Rpc.Host]
-	void RpcRequestHandHarvest( Guid nodeRootId, Vector3 clientViewPos, Vector3 clientLookDir )
+	void RpcRequestHandHarvest( string nodeKey, Vector3 clientViewPos, Vector3 clientLookDir )
 	{
 		if ( !Networking.IsHost || !GameObject.IsValid() )
 			return;
@@ -337,15 +340,15 @@ public sealed class PlayerHandHarvest : Component
 		     && !ConnectionIdentity.SameClient( caller, owner ) )
 			return;
 
-		ServerTryHandHarvest( nodeRootId, clientViewPos, clientLookDir );
+		ServerTryHandHarvest( nodeKey, clientViewPos, clientLookDir );
 	}
 
-	void ServerTryHandHarvest( Guid nodeRootId, Vector3 viewPos, Vector3 lookDir )
+	void ServerTryHandHarvest( string nodeKey, Vector3 viewPos, Vector3 lookDir )
 	{
-		if ( !TryResolveHarvestNode( nodeRootId, out var node ) )
+		if ( !TryResolveHarvestNode( nodeKey, out var node ) )
 		{
 			if ( LogHandHarvest )
-				Log.Warning( $"[PlayerHandHarvest] {GameObject.Name}: harvest node {nodeRootId} not found." );
+				Log.Warning( $"[PlayerHandHarvest] {GameObject.Name}: harvest node '{nodeKey}' not found." );
 			return;
 		}
 
@@ -440,17 +443,26 @@ public sealed class PlayerHandHarvest : Component
 			Log.Warning( $"[PlayerHandHarvest] {GameObject.Name}: inventory full — lost {FormatLootLog( result.Loot )}." );
 	}
 
-	bool TryResolveHarvestNode( Guid nodeRootId, out ResourceItemDefinition node )
+	bool TryResolveHarvestNode( string nodeKey, out ResourceItemDefinition node )
 	{
 		node = null;
+		if ( string.IsNullOrWhiteSpace( nodeKey ) )
+			return false;
 
-		foreach ( var n in ResourceHarvestRegistry.Nodes )
-		{
-			if ( n is null || !n.GameObject.IsValid() || n.GameObject.Id != nodeRootId )
-				continue;
-
-			node = n;
+		if ( WorldScatterIdentity.TryFindHarvestNode( nodeKey, out node ) )
 			return true;
+
+		// Offline / non-scatter nodes: fall back to Guid string match.
+		if ( Guid.TryParse( nodeKey, out var nodeRootId ) )
+		{
+			foreach ( var n in ResourceHarvestRegistry.Nodes )
+			{
+				if ( n is null || !n.GameObject.IsValid() || n.GameObject.Id != nodeRootId )
+					continue;
+
+				node = n;
+				return true;
+			}
 		}
 
 		return false;
