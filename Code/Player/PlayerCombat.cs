@@ -522,7 +522,8 @@ public partial class PlayerCombat : Component
 
 		// Lock attack direction on press / first held frame; teardrop stays fixed until release (then through drag window).
 		var primaryAttackHeld = Input.Down( PrimaryAttackAction );
-		if ( Input.Pressed( PrimaryAttackAction ) || (primaryAttackHeld && !_wasPrimaryAttackButtonDownLastFrame) )
+		if ( !IsBlockPreventingAttack()
+		     && (Input.Pressed( PrimaryAttackAction ) || (primaryAttackHeld && !_wasPrimaryAttackButtonDownLastFrame)) )
 		{
 			if ( _primarySwingPhaseActive )
 				CancelPrimarySwingPhase();
@@ -702,11 +703,12 @@ public partial class PlayerCombat : Component
 		DispatchPrimaryAttackReleaseToAuthority( sent );
 	}
 
-	protected virtual bool CanStartPrimaryAttack() => !IsStaggered && CanAffordPrimaryAttackOnPress();
+	protected virtual bool CanStartPrimaryAttack() =>
+		!IsStaggered && !IsBlockPreventingAttack() && CanAffordPrimaryAttackOnPress();
 
 	protected virtual bool CanContinuePrimaryAttack()
 	{
-		if ( IsStaggered )
+		if ( IsStaggered || IsBlockPreventingAttack() )
 			return false;
 
 		var vitals = Components.Get<PlayerVitals>();
@@ -716,6 +718,10 @@ public partial class PlayerCombat : Component
 		var hold = _primary.Snapshot.HoldDurationSeconds;
 		return vitals.CanAffordStamina( GetPrimaryAttackStaminaCostForHoldDuration( hold ) );
 	}
+
+	/// <summary>Block and attack are mutually exclusive — holding guard rejects new/ongoing primary attack intents.</summary>
+	bool IsBlockPreventingAttack() =>
+		LocalBlockInputActive() || IsAuthoritativeMeleeBlocking;
 
 	protected virtual bool CanStartBlock() => !IsStaggered && _postBlockRecoveryRemaining <= 0.001f;
 

@@ -96313,6 +96313,14 @@
             },
             "Property": "Position",
             "Value": "192,-312.514008,-1.58105087"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "1058fdd4-620a-4707-954c-802f31fb0b41"
+            },
+            "Property": "NetworkMode",
+            "Value": 1
           }
         ],
         "MovedObjects": []

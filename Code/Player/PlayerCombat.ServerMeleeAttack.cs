@@ -69,6 +69,10 @@ public partial class PlayerCombat
 		if ( _serverMeleeAttack is not null )
 			return false;
 
+		// Cannot start a swing while the guard is still up.
+		if ( IsAuthoritativeMeleeBlocking )
+			return false;
+
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
 		return scene.IsValid();
 	}
