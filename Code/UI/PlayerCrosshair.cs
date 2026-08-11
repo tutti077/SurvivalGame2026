@@ -47,8 +47,8 @@ public sealed class PlayerCrosshair : Component
 	protected override void OnStart()
 	{
 		base.OnStart();
-		// EverythingInSelf: PlayerEquipment disables PlayerCombat while hands are empty (spawn
-		// state) — an enabled-only lookup here would cache null and the arrow would never draw.
+		// EverythingInSelf so a component disabled at spawn time still caches here rather than
+		// sticking as null. The teardrop itself is gated on weaponOut below.
 		_movement = Components.Get<PlayerMovement>( FindMode.EverythingInSelf );
 		_combat = Components.Get<PlayerCombat>( FindMode.EverythingInSelf );
 		_equipment = Components.Get<PlayerEquipment>( FindMode.EverythingInSelf );

@@ -79,6 +79,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	float _savedRunSpeed;
 	bool _walkSpeedMuteActive;
 	float _savedWalkSpeed;
+	bool _meleeLocomotionSlowActive;
+	float _savedWalkForMelee;
+	float _savedRunForMelee;
 
 	/// <summary>Host copy of the owning client’s sprint button, for <see cref="ShouldBlockStaminaRegenForAuthority"/> (local driver uses <see cref="Sandbox.Input"/> directly).</summary>
 	bool _sprintHeldReportedOnHost;
@@ -205,6 +208,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	/// <summary>
 	/// Sprint only with feet on the ground. Mid-air (with or without rope) cannot Run —
 	/// that was inventing foot propulsion while dangling. Grappled + grounded is allowed.
+	/// Committed melee swing also blocks sprint on the ground (walk only); airborne keeps velocity.
+	/// Post-shove / combat recovery uses the same walk-only gate via <see cref="PlayerCombat.IsCombatActionLocked"/>.
 	/// </summary>
 	bool IsSprintBlocked()
 	{
@@ -214,8 +219,27 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( _controller is null )
 			return false;
 
-		return !_controller.IsOnGround;
+		if ( !_controller.IsOnGround )
+			return true;
+
+		return IsMeleeAttackWalkOnlyOnGround();
 	}
+
+	bool IsMeleeAttackWalkOnlyOnGround()
+	{
+		var combat = Components.Get<PlayerCombat>();
+		return combat is not null && combat.IsMeleeAttackWalkOnlyActive;
+	}
+
+	/// <summary>
+	/// True while this pawn is in its "just got hit" window (no jump, no rope). Read from
+	/// <see cref="PlayerAnimation"/>, which owns the window.
+	/// </summary>
+	public bool IsHitReactionActive() =>
+		Components.Get<PlayerAnimation>() is { IsHitReactionActive: true };
+
+	/// <summary>Hit reaction start: the rope always drops, on every machine that knows about this pawn.</summary>
+	internal void OnHitReactionBegan() => DetachGrappleForHitReaction();
 
 	/// <summary>Soft-clear Run / AltMove so held Shift cannot stick as sprint this frame.</summary>
 	void SuppressBlockedSprintInput()
@@ -277,19 +301,12 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( _walkSpeedMuteActive || (_runSpeedOverrideActive && _savedWalkSpeed > 1f) )
 		{
 			RestoreBlockedSprintRunSpeed();
-			if ( IsSprintBlocked() )
-			{
-				if ( !_runSpeedOverrideActive )
-				{
-					_savedRunSpeed = _controller.RunSpeed;
-					_runSpeedOverrideActive = true;
-				}
-
-				_controller.RunSpeed = Math.Max( 0f, _controller.WalkSpeed );
-			}
-
+			ApplyMeleeAttackLocomotionSlow();
 			return;
 		}
+
+		if ( ApplyMeleeAttackLocomotionSlow() )
+			return;
 
 		if ( IsSprintBlocked() )
 		{
@@ -306,8 +323,54 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		RestoreBlockedSprintRunSpeed();
 	}
 
+	/// <summary>
+	/// Committed melee: scale Walk+Run to <see cref="PlayerCombat.MeleeAttackMoveSpeedScale"/> (default 10%)
+	/// and force Run=Walk so sprint cannot bypass. Returns true when the override is active.
+	/// </summary>
+	bool ApplyMeleeAttackLocomotionSlow()
+	{
+		if ( _controller is null || !_controller.IsOnGround || !IsMeleeAttackWalkOnlyOnGround() )
+		{
+			RestoreMeleeAttackLocomotionSlow();
+			return false;
+		}
+
+		var combat = Components.Get<PlayerCombat>();
+		var scale = combat is not null ? Math.Clamp( combat.MeleeAttackMoveSpeedScale, 0.05f, 1f ) : 0.1f;
+
+		if ( !_meleeLocomotionSlowActive )
+		{
+			_savedWalkForMelee = _controller.WalkSpeed > 1f ? _controller.WalkSpeed : 110f;
+			_savedRunForMelee = _controller.RunSpeed > 1f ? _controller.RunSpeed : 320f;
+			_meleeLocomotionSlowActive = true;
+		}
+
+		var wish = _savedWalkForMelee * scale;
+		_controller.WalkSpeed = wish;
+		_controller.RunSpeed = wish;
+		return true;
+	}
+
+	void RestoreMeleeAttackLocomotionSlow()
+	{
+		if ( !_meleeLocomotionSlowActive )
+			return;
+
+		if ( _controller is not null )
+		{
+			_controller.WalkSpeed = _savedWalkForMelee > 1f ? _savedWalkForMelee : 110f;
+			_controller.RunSpeed = _savedRunForMelee > 1f ? _savedRunForMelee : 320f;
+		}
+
+		_meleeLocomotionSlowActive = false;
+		_savedWalkForMelee = 0f;
+		_savedRunForMelee = 0f;
+	}
+
 	void RestoreBlockedSprintRunSpeed()
 	{
+		RestoreMeleeAttackLocomotionSlow();
+
 		if ( _controller is null )
 			_controller = Components.Get<PlayerController>();
 
@@ -358,6 +421,10 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		     && !_vitals.CanAffordStamina( JumpStaminaCost )
 		     && ExhaustedJumpHeightFraction <= 0f )
 			PlayerVitals.ClearJumpInputIfPressed( JumpInputAction );
+
+		// Just got hit: no jumping out of the reaction.
+		if ( IsHitReactionActive() )
+			ClearActionIfPressed( JumpInputAction );
 
 		// Jump while grappled: feet on ground only (same as sprint — no mid-air hop off the rope).
 		if ( GrappleAttached )
@@ -944,6 +1011,82 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			return _controller.Body;
 
 		return Components.Get<Rigidbody>();
+	}
+
+	/// <summary>
+	/// Host/authority: collision-clamped flat dash along <paramref name="flatForwardUnit"/>.
+	/// <paramref name="meters"/> is designer meters; converted to pawn engine units via BodyHeight/1.8
+	/// (citizen is ~72u tall ≈ 1.8m — a literal 1-unit "meter" was invisible).
+	/// </summary>
+	public void ServerApplyFlatDashMeters( Vector3 flatForwardUnit, float meters )
+	{
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
+			return;
+
+		ApplyFlatDashMeters( flatForwardUnit, meters );
+	}
+
+	/// <summary>Owner prediction: same dash math as host so the shover sees the lunge immediately.</summary>
+	public void PredictFlatDashMeters( Vector3 flatForwardUnit, float meters )
+	{
+		if ( Networking.IsHost )
+			return;
+
+		ApplyFlatDashMeters( flatForwardUnit, meters );
+	}
+
+	void ApplyFlatDashMeters( Vector3 flatForwardUnit, float meters )
+	{
+		meters = Math.Max( 0f, meters );
+		if ( meters <= 1e-4f )
+			return;
+
+		var flat = flatForwardUnit.WithZ( 0f );
+		if ( flat.LengthSquared < 1e-6f )
+			return;
+
+		flat = flat.Normal;
+		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+		if ( scene is null || !scene.IsValid() )
+			return;
+
+		_controller ??= Components.Get<PlayerController>();
+
+		var bodyHeight = _controller is not null && _controller.IsValid()
+			? Math.Max( 24f, _controller.BodyHeight )
+			: 72f;
+		var bodyRadius = _controller is not null && _controller.IsValid()
+			? Math.Max( 8f, _controller.BodyRadius )
+			: 16f;
+		// Citizen BodyHeight 72 ≈ 1.8m → ~40 engine units per designer meter.
+		var unitsPerMeter = bodyHeight / 1.8f;
+		var distance = meters * unitsPerMeter;
+
+		var start = GameObject.WorldPosition + Vector3.Up * (bodyHeight * 0.5f);
+		var tr = scene.Trace.Ray( start, start + flat * distance )
+			.Radius( bodyRadius * 0.9f )
+			.IgnoreGameObjectHierarchy( GameObject )
+			.Run();
+
+		var travel = distance;
+		if ( tr.Hit )
+			travel = Math.Max( 0f, (tr.HitPosition - start).WithZ( 0f ).Length - bodyRadius );
+
+		if ( travel <= 1e-4f )
+			return;
+
+		GameObject.WorldPosition += flat * travel;
+		Transform.ClearInterpolation();
+		if ( GameObject.Network is { Active: true } )
+			GameObject.Network.ClearInterpolation();
+
+		var body = ResolveGrappleBody();
+		if ( body is not null && body.IsValid() )
+		{
+			var burst = flat * Math.Max( 200f, travel / 0.1f );
+			body.Velocity = new Vector3( burst.x, burst.y, body.Velocity.z );
+			body.AngularVelocity = Vector3.Zero;
+		}
 	}
 
 	void UpdateSprintStaminaHoldAndFlushOnRelease()

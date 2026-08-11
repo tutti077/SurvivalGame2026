@@ -45,7 +45,6 @@ public readonly struct MeleeBlockValidationTrace
 	public bool WasBlocking { get; init; }
 	public bool WasPerfectParry { get; init; }
 	public string OutcomeId { get; init; }
-	public float StaggerDurationSeconds { get; init; }
 	public float HealthDamage { get; init; }
 	public float StaminaCost { get; init; }
 	public MeleeBlockRejectReason RejectReason { get; init; }

@@ -340,8 +340,8 @@ public static class EquipmentCatalog
 			GrappleSwingLoadSlackGraceMeters = 2.5f,
 			GrappleSwingLoadCentripetalGravityFraction = 0.35f,
 			GrappleDetractMetersPerSecond = 4f,
-			GrappleAttachStaminaCost = 8f,
-			GrappleAirborneStaminaPerSecond = 1.5f,
+			GrappleAttachStaminaCost = 0f,
+			GrappleAirborneStaminaPerSecond = 3f,
 		};
 
 		yield return new EquipmentProfileData

@@ -5,6 +5,35 @@ namespace Survival;
 
 public partial class PlayerCombat
 {
+	/// <summary>Host: apply JSON block costs, then the blocker's reaction (parry = none, heavy block = hit reaction).</summary>
+	internal void ServerApplyBlockOutcome( in MeleeBlockOutcome outcome, Component attacker )
+	{
+		if ( !IsServerSideForMeleeAuthority() )
+			return;
+
+		var vitals = Components.Get<PlayerVitals>();
+		if ( vitals is not null )
+		{
+			if ( outcome.StaminaCost > 1e-4f )
+				vitals.TrySpendStamina( outcome.StaminaCost );
+
+			if ( outcome.HealthDamage > 1e-4f )
+				vitals.ApplyDamageAfterArmor( outcome.HealthDamage, attacker );
+		}
+
+		var wasHeavy = outcome.OutcomeId.StartsWith( "heavy", StringComparison.OrdinalIgnoreCase );
+		var wasParry = outcome.WasPerfectParry;
+
+		ConsumeAuthoritativeMeleeBlock( attackWasHeavy: wasHeavy, wasPerfectParry: wasParry );
+
+		if ( !wasParry && wasHeavy )
+			ServerBeginHitReaction( RecoveryBlockerHeavyBlockSeconds );
+
+		Log.Info(
+			$"[MeleeBlock] outcome {GameObject.Name}: {outcome.OutcomeId} tier={outcome.Tier} "
+			+ $"duration={outcome.DurationSeconds:0.###}s hp={outcome.HealthDamage:0.#} stam={outcome.StaminaCost:0.#} parry={outcome.WasPerfectParry}" );
+	}
+
 	[Property, Group( "Combat — Block" ), Title( "Show block guard + ground arc" )]
 	public bool ShowBlockVisualization { get; set; } = true;
 
@@ -168,6 +197,7 @@ public partial class PlayerCombat
 	void CancelAllAttackActivity()
 	{
 		CancelPrimarySwingPhase();
+		Components.Get<PlayerAnimation>()?.CancelMeleeAttackWindupHold();
 		ServerCancelMeleeAttack();
 		_postAttackRecoveryRemaining = 0f;
 
@@ -186,19 +216,6 @@ public partial class PlayerCombat
 			return;
 
 		ServerCancelMeleeAttack();
-	}
-
-	internal void NotifyServerMeleeAttackFinished()
-	{
-		if ( !IsServerSideForMeleeAuthority() && !IsLocalCombatDriver() )
-			return;
-
-		if ( CombatState == CombatState.Blocking || CombatState == CombatState.PostBlocking )
-			return;
-
-		_postAttackRecoveryRemaining = Math.Max( 0f, MeleeRecoveryDuration );
-		if ( IsLocalCombatDriver() && !Input.Down( BlockAction ) )
-			CombatState = CombatState.PostAttack;
 	}
 
 	void TickAuthoritativeMeleeBlockState()
@@ -353,32 +370,34 @@ public partial class PlayerCombat
 			return;
 	}
 
-	internal void ConsumeAuthoritativeMeleeBlock( bool attackWasHeavy )
+	internal void ConsumeAuthoritativeMeleeBlock( bool attackWasHeavy, bool wasPerfectParry = false )
 	{
 		if ( !IsServerSideForMeleeAuthority() )
 			return;
 
-		// Stamina for the block outcome is applied in ServerApplyBlockOutcome (JSON). This only ends the hold.
 		_ = attackWasHeavy;
 		SetAuthoritativeMeleeBlockState( false, _authoritativeMeleeBlockDirection );
-		_postBlockRecoveryRemaining = Math.Max( 0f, PostBlockRecoveryDuration );
+
+		// Successful parry: no post-block recovery. Other blocks also skip the old flat timer —
+		// heavy uses combat recovery; light ends the hold only.
+		_postBlockRecoveryRemaining = 0f;
 
 		if ( GameObject.Network is { Active: true } )
-			RpcOwnerMeleeBlockConsumed();
+			RpcOwnerMeleeBlockConsumed( wasPerfectParry );
 		else
 			_meleeBlockConsumedAwaitingRelease = true;
 
 		if ( IsLocalCombatDriver() )
-			CombatState = CombatState.PostBlocking;
+			CombatState = wasPerfectParry ? CombatState.Idle : CombatState.PostBlocking;
 	}
 
 	[Rpc.Owner]
-	void RpcOwnerMeleeBlockConsumed()
+	void RpcOwnerMeleeBlockConsumed( bool wasPerfectParry )
 	{
 		_meleeBlockConsumedAwaitingRelease = true;
 		_lastSentBlockActive = false;
-		_postBlockRecoveryRemaining = Math.Max( _postBlockRecoveryRemaining, PostBlockRecoveryDuration );
-		CombatState = CombatState.PostBlocking;
+		_postBlockRecoveryRemaining = 0f;
+		CombatState = wasPerfectParry ? CombatState.Idle : CombatState.PostBlocking;
 	}
 
 	byte GetBlockGuardDirection()

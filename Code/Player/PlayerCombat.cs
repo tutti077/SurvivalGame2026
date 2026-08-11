@@ -71,7 +71,8 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Input" )] public string PrimaryAttackAction { get; set; } = "Attack1";
 	[Property, Group( "Input" )] public string BlockAction { get; set; } = "Attack2";
 
-	[Property, Group( "Combat — Attack" )] public float AttackCooldownAfterRelease { get; set; } = 0.5f;
+	[Property, Group( "Combat — Attack" ), Title( "Attack cooldown after release (s)" ), Description( "Extra press cooldown after a valid release. Keep low — combat recovery paces light spam." )]
+	public float AttackCooldownAfterRelease { get; set; } = 0f;
 	[Property, Group( "Combat — Block" )] public float BlockCooldownAfterRelease { get; set; } = 0.5f;
 
 	[Property, Group( "Combat — Server validation" )] public float ServerEyeHeight { get; set; } = 64f;
@@ -113,8 +114,11 @@ public partial class PlayerCombat : Component
 
 	[Property, Group( "Combat — Melee (attack action)" )] public GameObject MeleeBladeHeel { get; set; }
 
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Windup duration (s)" )]
-	public float MeleeWindupDuration { get; set; } = 0.25f;
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Light windup duration (s)" ), Description( "Light attack windup. Chart total light = windup + damage window + outcome recovery." )]
+	public float MeleeWindupDuration { get; set; } = 0.22f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Heavy windup duration (s)" )]
+	public float MeleeHeavyWindupDuration { get; set; } = 0.30f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Show windup direction telegraph" )]
 	public bool ShowMeleeAttackWindupTelegraph { get; set; } = true;
@@ -122,8 +126,12 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Windup telegraph line thickness" )]
 	public float MeleeWindupTelegraphThickness { get; set; } = 6f;
 
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Recovery duration (s)" )]
-	public float MeleeRecoveryDuration { get; set; } = 0.4f;
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Recovery duration (s)" ), Description( "Built-in sweep idle after active phases. Outcome combat recovery owns the real lock — keep this near 0." )]
+	public float MeleeRecoveryDuration { get; set; } = 0f;
+
+	/// <summary>Windup seconds for light or heavy attack timelines.</summary>
+	public float GetMeleeWindupDuration( bool isHeavy ) =>
+		Math.Max( 0f, isHeavy ? MeleeHeavyWindupDuration : MeleeWindupDuration );
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Attack range L/R" )]
 	public float MeleeAttackRangeLeftRight { get; set; } = 76f;
@@ -138,7 +146,7 @@ public partial class PlayerCombat : Component
 	public float MeleeSweepSubstepLength { get; set; } = 12f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Heavy attack hold threshold (s)" )]
-	public float MeleeHeavyAttackHoldThreshold { get; set; } = 0.35f;
+	public float MeleeHeavyAttackHoldThreshold { get; set; } = 0.7f;
 
 	/// <summary>Added to the combat damage multiplier when the attack is heavy (see <see cref="ComputeMeleeCombatDamageMultiplier"/>).</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Heavy attack damage bonus (+)" )]
@@ -166,14 +174,23 @@ public partial class PlayerCombat : Component
 
 	internal float GetMeleeAttackArcDegreeStep() => Math.Max( 1f, MeleeAttackArcDegreeStep );
 
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "EarlyActive duration (s) — blue" )]
-	public float MeleeEarlyActiveDuration { get; set; } = 0.037f;
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Light EarlyActive duration (s) — blue" ), Description( "Light damage window = Early + Active + Late (default 0.10s)." )]
+	public float MeleeEarlyActiveDuration { get; set; } = 0.02f;
 
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Active duration (s) — yellow" )]
-	public float MeleeActiveDuration { get; set; } = 0.146f;
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Light Active duration (s) — yellow" )]
+	public float MeleeActiveDuration { get; set; } = 0.06f;
 
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "LateActive duration (s) — red" )]
-	public float MeleeLateActiveDuration { get; set; } = 0.037f;
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Light LateActive duration (s) — red" )]
+	public float MeleeLateActiveDuration { get; set; } = 0.02f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Heavy EarlyActive duration (s)" ), Description( "Heavy damage window = Early + Active + Late (default 0.15s)." )]
+	public float MeleeHeavyEarlyActiveDuration { get; set; } = 0.03f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Heavy Active duration (s)" )]
+	public float MeleeHeavyActiveDuration { get; set; } = 0.09f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Heavy LateActive duration (s)" )]
+	public float MeleeHeavyLateActiveDuration { get; set; } = 0.03f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Tilt left (° start→end drop only)" )]
 	public float MeleeAttackTiltDegreesLeft { get; set; } = 25f;
@@ -375,11 +392,10 @@ public partial class PlayerCombat : Component
 	bool _hasPendingSwingVisualIntent;
 
 	/// <summary>
-	/// Per-hold sum of raw <see cref="Input.MouseDelta"/> (screen pixels) while attack / block buttons are down.
+	/// Per-hold sum of raw <see cref="Input.MouseDelta"/> (screen pixels) while the block button is down.
 	/// Pure mouse delta — independent of pawn movement, strafing, or camera world rotation, so L/R/U
 	/// classification reflects *only* what the player flicked with the mouse during the hold.
 	/// </summary>
-	Vector2 _primaryLookAccum;
 	Vector2 _blockLookAccum;
 	bool _wasBlockButtonDownLastFrame;
 
@@ -398,8 +414,6 @@ public partial class PlayerCombat : Component
 	float _blockGuardPrevYaw;
 	bool _blockGuardYawTracking;
 
-	byte _stickySwingDir = SwingDirs.Up;
-	byte _lastAttackSwingDir = SwingDirs.Up;
 	Vector2 _blockReleaseSwingXz;
 	float _blockReleaseSwingVerticalHint;
 	byte _blockReleaseSwingDir;
@@ -412,6 +426,8 @@ public partial class PlayerCombat : Component
 	double _primarySwingPhaseEndAtSandbox;
 	Vector2 _primaryPostReleaseDragAccum;
 	AttackReleaseIntent _pendingPrimarySwingIntent;
+	/// <summary>Owner expects the host melee action to still be running (online clients without local runtime).</summary>
+	bool _ownerExpectsHostMeleeBusy;
 
 	/// <summary>When set, non-local attack/block paths use intent yaw instead of pawn body rotation.</summary>
 	float? _meleeIntentBasisYawOverride;
@@ -463,9 +479,13 @@ public partial class PlayerCombat : Component
 			if ( !GameObject.IsProxy || !Networking.IsActive )
 				MaybeTickServerMeleeAttackAction();
 
+			TickMeleeAttackLookLockFromSync();
+
 			if ( IsLocalCombatDriver() )
 			{
-				TickAllRemoteCombatVisualizationsInScene();
+				// CombatAuthority already ticks companions scene-wide; avoid double-advance (sparse arcs).
+				if ( CombatAuthority.Instance is null || !CombatAuthority.Instance.IsValid() )
+					TickAllRemoteCombatVisualizationsInScene();
 				TickWindupTelegraphNetworkState();
 			}
 		}
@@ -475,13 +495,17 @@ public partial class PlayerCombat : Component
 
 		MaybeWarnCombatAuthorityMisconfigured();
 
+		// Host-simulated client pawns are proxies — their authority timers tick from
+		// CombatAuthority.TickSceneCombatVisualizations(driveHostProxyAuthority: true), not here
+		// (avoids double-ticking when both run).
 		if ( IsServerSideForMeleeAuthority() && !GameObject.IsProxy )
 		{
 			ServerTickMeleeBlockTimers();
-			ServerTickMeleeStagger();
+			ServerTickCombatRecovery();
 		}
 
-		TickLocalMeleeStaggerPresentation();
+		TickLocalCombatRecoveryPresentation();
+		TickMeleePhaseReadyDebug();
 
 		if ( IsServerSideForMeleeAuthority() && !IsLocalCombatDriver() && !( GameObject.IsProxy && !Networking.IsHost ) )
 			TickAuthoritativeMeleeBlockState();
@@ -493,6 +517,12 @@ public partial class PlayerCombat : Component
 		if ( menuController is not null && menuController.IsMenuOpen )
 			return;
 
+		// Shove is a player ability, not a weapon one — it runs before the melee-item gate below and
+		// works bare-handed. (Equipment used to disable this whole component when no melee item was
+		// held, which killed the shove, the hit reaction, and the jump/grapple locks along with it.)
+		TickOwnerShoveInput();
+
+		// Everything past here is the sword: swing input, block, telegraphs.
 		var equipped = Components.Get<PlayerEquippedItem>();
 		if ( equipped is not null && !equipped.HasAction( EquippedItemActions.PrimaryMelee ) )
 			return;
@@ -502,11 +532,13 @@ public partial class PlayerCombat : Component
 		// Finish any expired swing window before processing this frame's input (uses sandbox time, not wall clock).
 		MaybeCompletePrimarySwingPhase();
 
-		// Only reset the per-hold mouse accumulator on a fresh press; the live swing evidence is *continuous* across
-		// presses (matches "_primaryLiveSwingDir is always tracked") so quick taps still reflect recent motion.
-		if ( Input.Pressed( PrimaryAttackAction ) && !_primary.Down )
-			_primaryLookAccum = default;
+		// Attacks are strictly stateful: pressing while the swing animation / sweep / recovery is still
+		// running does nothing at all (no buffer, no queued follow-up, no chained spam swing).
+		if ( Input.Pressed( PrimaryAttackAction ) && IsMeleeAttackChainBusy() )
+			LogCombatDiag( "CLIENT / OWNER", $"Attack press ignored — {FormatMeleePhaseBusyReason()}" );
 
+		// Only a fresh press on an idle timeline starts an attack — holding through the busy window
+		// deliberately does not auto-charge the next swing.
 		_primary.Step( PrimaryAttackAction, CanStartPrimaryAttack, CanContinuePrimaryAttack, GetViewDirectionForIntent, GetCameraPositionForIntent, GetPrimaryAttackRules(), OnOwnerValidPrimaryAttackRelease );
 		_block.Step( BlockAction, CanStartBlock, CanContinueBlock, GetViewDirectionForIntent, GetCameraPositionForIntent, GetBlockRules(), OnOwnerValidBlockRelease );
 
@@ -520,15 +552,24 @@ public partial class PlayerCombat : Component
 
 		_wasBlockButtonDownLastFrame = _block.Down;
 
-		// Lock attack direction on press / first held frame; teardrop stays fixed until release (then through drag window).
+		// Lock attack direction on press / first held frame. Do NOT cancel an in-flight swing window —
+		// spam-clicking used to abort the light attack before it could dispatch (black telegraph, no swing).
 		var primaryAttackHeld = Input.Down( PrimaryAttackAction );
 		if ( !IsBlockPreventingAttack()
+		     && !_primarySwingPhaseActive
 		     && (Input.Pressed( PrimaryAttackAction ) || (primaryAttackHeld && !_wasPrimaryAttackButtonDownLastFrame)) )
 		{
-			if ( _primarySwingPhaseActive )
-				CancelPrimarySwingPhase();
 			LockPreparedPrimaryAttackDirection();
+			// Only start the windup clip when the combat channel actually accepted the press.
+			if ( !IsMeleeAttackChainBusy() && _primary.Down )
+			{
+				var windupType = ResolveAttackTypeFromCursorDir( _lockedPrimaryAttackSwingDir );
+				Components.Get<PlayerAnimation>()?.BeginMeleeAttackWindupHold( windupType );
+			}
 		}
+
+		Components.Get<PlayerAnimation>()?.TickMeleeAttackWindupHold(
+			primaryAttackHeld && !_primarySwingPhaseActive && !IsBlockPreventingAttack() );
 
 		_wasPrimaryAttackButtonDownLastFrame = primaryAttackHeld;
 
@@ -600,9 +641,6 @@ public partial class PlayerCombat : Component
 			ApplyLiveSwingFromEvidence( _blockSwingEvidence, ref _blockLiveSwingDir, ref _blockLastFlipRealSeconds );
 		}
 
-		if ( Input.Down( PrimaryAttackAction ) )
-			_primaryLookAccum += rawFrame;
-
 		if ( Input.Down( BlockAction ) )
 			_blockLookAccum += rawFrame;
 	}
@@ -647,8 +685,6 @@ public partial class PlayerCombat : Component
 		_primarySwingEvidence = e;
 		_lockedPrimaryAttackSwingDir = ClassifyAttackLiveSwingFrame( e, _primaryLiveSwingDir );
 		_hasLockedPrimaryAttackDir = true;
-		_lastAttackSwingDir = _lockedPrimaryAttackSwingDir;
-		_stickySwingDir = _lockedPrimaryAttackSwingDir;
 	}
 
 	void CancelPrimarySwingPhase()
@@ -704,11 +740,11 @@ public partial class PlayerCombat : Component
 	}
 
 	protected virtual bool CanStartPrimaryAttack() =>
-		!IsStaggered && !IsBlockPreventingAttack() && CanAffordPrimaryAttackOnPress();
+		!IsMeleeAttackChainBusy() && !IsBlockPreventingAttack() && CanAffordPrimaryAttackOnPress();
 
 	protected virtual bool CanContinuePrimaryAttack()
 	{
-		if ( IsStaggered || IsBlockPreventingAttack() )
+		if ( IsMeleeAttackChainBusy() || IsBlockPreventingAttack() )
 			return false;
 
 		var vitals = Components.Get<PlayerVitals>();
@@ -723,9 +759,11 @@ public partial class PlayerCombat : Component
 	bool IsBlockPreventingAttack() =>
 		LocalBlockInputActive() || IsAuthoritativeMeleeBlocking;
 
-	protected virtual bool CanStartBlock() => !IsStaggered && _postBlockRecoveryRemaining <= 0.001f;
+	protected virtual bool CanStartBlock() =>
+		!IsCombatActionLocked && _postBlockRecoveryRemaining <= 0.001f;
 
-	protected virtual bool CanContinueBlock() => !_meleeBlockConsumedAwaitingRelease;
+	protected virtual bool CanContinueBlock() =>
+		!IsCombatActionLocked && !_meleeBlockConsumedAwaitingRelease;
 
 	bool LocalBlockInputActive() =>
 		IsLocalCombatDriver() && _block.Down && !_meleeBlockConsumedAwaitingRelease;
@@ -1213,12 +1251,38 @@ public partial class PlayerCombat : Component
 			return;
 		}
 
+		if ( !TryBuildPrimaryAttackReleaseIntent( snapshot, out var intent ) )
+			return;
+
 		if ( _primarySwingPhaseActive )
 		{
-			LogCombatDiag( "CLIENT / OWNER", "Ignored release — swing damage window still active." );
+			_combatNetDiag = "dropped — swing window active";
+			LogCombatDiag( "CLIENT / OWNER",
+				$"{CombatClientLogVersion} — Dropped release seq={intent.IntentSequence} (swing window still active)" );
 			return;
 		}
 
+		_pendingPrimarySwingIntent = intent;
+		_primaryPostReleaseDragAccum = default;
+		var w = SwingDamageWindowSeconds;
+		if ( !float.IsFinite( w ) || w < 0f )
+			w = 0.12f;
+		var window = Math.Max( 0.0, (double)w );
+		_primarySwingPhaseEndAtSandbox = Time.NowDouble + window;
+		_primarySwingPhaseActive = true;
+
+		var releaseHold = Math.Max( 0f, snapshot.HoldDurationSeconds );
+		var releaseHeavy = IsHeavyAttackForHoldDuration( releaseHold );
+		Components.Get<PlayerAnimation>()?.ReleaseMeleeAttackWindupHold( intent.AttackType, releaseHeavy );
+
+		_combatNetDiag = $"swing window {window:0.###}s (drag→dmg)";
+		LogCombatDiag( "CLIENT / OWNER",
+			$"{CombatClientLogVersion} — Begin swing seq={intent.IntentSequence} locked={SwingDirs.Letter( intent.SwingDir )} held={snapshot.HoldDurationSeconds:0.###}s — damage after window" );
+	}
+
+	bool TryBuildPrimaryAttackReleaseIntent( CombatButtonIntentSnapshot snapshot, out AttackReleaseIntent intent )
+	{
+		intent = default;
 		if ( snapshot.ViewDirectionOnPress is not { } vf
 		     || snapshot.ViewDirectionOnRelease is not { } vr
 		     || snapshot.CameraPositionOnPress is not { } cp
@@ -1228,30 +1292,26 @@ public partial class PlayerCombat : Component
 		{
 			_combatNetDiag = "snapshot incomplete — intent not sent";
 			LogCombatDiag( "CLIENT / OWNER", "Release snapshot missing view/camera/times — intent not sent." );
-			return;
+			return false;
 		}
 
 		_attackIntentSequence++;
-		var camPress = cp;
-		var camRel = cr;
 		var c = _hasLockedPrimaryAttackDir ? _lockedPrimaryAttackSwingDir : _primaryLiveSwingDir;
 		CardinalVectors( c, vr, out var swingXz, out var swingV );
-		_lastAttackSwingDir = c;
-		_stickySwingDir = c;
 
 		var prepay = GetPrimaryAttackPressStaminaPrepayAmount();
 		var attackType = ResolveAttackTypeFromCursorDir( c );
 
-		var intent = new AttackReleaseIntent
+		intent = new AttackReleaseIntent
 		{
 			PressedGlobalSeconds = pg,
 			ReleasedGlobalSeconds = rg,
-			ClientCameraPressX = camPress.x,
-			ClientCameraPressY = camPress.y,
-			ClientCameraPressZ = camPress.z,
-			ClientCameraReleaseX = camRel.x,
-			ClientCameraReleaseY = camRel.y,
-			ClientCameraReleaseZ = camRel.z,
+			ClientCameraPressX = cp.x,
+			ClientCameraPressY = cp.y,
+			ClientCameraPressZ = cp.z,
+			ClientCameraReleaseX = cr.x,
+			ClientCameraReleaseY = cr.y,
+			ClientCameraReleaseZ = cr.z,
 			ViewForwardOnPress = vf,
 			ViewForwardOnRelease = vr,
 			ClientPlayerWorldPosition = WorldPosition,
@@ -1268,19 +1328,7 @@ public partial class PlayerCombat : Component
 			CombatBasisYawDegrees = GetMeleeCombatBasisYaw( attackType ),
 			CombatBasisPitchDegrees = GetCameraPitchDegrees()
 		};
-
-		_pendingPrimarySwingIntent = intent;
-		_primaryPostReleaseDragAccum = default;
-		var w = SwingDamageWindowSeconds;
-		if ( !float.IsFinite( w ) || w < 0f )
-			w = 0.12f;
-		var window = Math.Max( 0.0, (double)w );
-		_primarySwingPhaseEndAtSandbox = Time.NowDouble + window;
-		_primarySwingPhaseActive = true;
-
-		_combatNetDiag = $"swing window {window:0.###}s (drag→dmg)";
-		LogCombatDiag( "CLIENT / OWNER",
-			$"{CombatClientLogVersion} — Begin swing seq={intent.IntentSequence} locked={SwingDirs.Letter( c )} held={snapshot.HoldDurationSeconds:0.###}s — damage after window" );
+		return true;
 	}
 
 	void OnOwnerValidBlockRelease( CombatButtonIntentSnapshot snapshot )
@@ -1291,11 +1339,13 @@ public partial class PlayerCombat : Component
 		_blockReleaseSwingXz = bxz;
 		_blockReleaseSwingVerticalHint = bv;
 		_blockReleaseSwingDir = c;
-		_stickySwingDir = c;
 	}
 
 	void DispatchPrimaryAttackReleaseToAuthority( AttackReleaseIntent intent )
 	{
+		// No busy gate here: this dispatch belongs to the swing already animating on the owner.
+		// Gating happens once, on press (see CanStartPrimaryAttack / IsMeleeAttackChainBusy).
+
 		// Offline: run validation on this machine only.
 		// Online: always go through [Rpc.Host] once — avoids host "local dispatch" + any duplicate server path both debiting stamina.
 		if ( GameObject.Network is not { Active: true } )
@@ -1322,9 +1372,12 @@ public partial class PlayerCombat : Component
 			LastServerAttackResult = result;
 			_combatNetDiag = $"offline: acc={result.Accepted} hit={result.Hit} dmg={result.DamageDealt:0.#} code={result.DebugCode}";
 			LogCombatDiag( "SERVER (local dispatch)", FormatAttackResultLog( result ) );
+			if ( result.Accepted )
+				_ownerExpectsHostMeleeBusy = true;
 			return;
 		}
 
+		_ownerExpectsHostMeleeBusy = true;
 		_combatNetDiag = Networking.IsHost ? "host→Rpc.Host (single server pass)" : "RPC->host sent (await result)";
 		LogCombatDiag( "CLIENT (dispatch)", "RpcSubmitPrimaryAttackRelease -> host (see editor Output)" );
 		_pendingSwingVisualIntent = intent;
@@ -1332,15 +1385,35 @@ public partial class PlayerCombat : Component
 		RpcSubmitPrimaryAttackRelease( intent );
 	}
 
-	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable | NetFlags.SendImmediate )]
-	public void RpcBroadcastMeleeSwingTraceDebug( AttackReleaseIntent intent )
+	/// <summary>
+	/// One gate for "a swing owns this pawn": the committed swing clip window (through its return frames),
+	/// the host sweep, the owner drag window, and recovery / hit reaction. While true, Attack1 does nothing —
+	/// there is no buffering, so the player must press again once the animation has finished.
+	/// The press windup itself is not busy, or the attack being aimed could never fire.
+	/// </summary>
+	bool IsMeleeAttackChainBusy()
 	{
-		// Prefer <see cref="RpcStaticBroadcastMeleeSwingTraceDebug"/> (deferred/static). Kept for local backup.
-		if ( !MeleeDebugDrawEnabled || !ClientMeleeSwingTraceDebug )
-			return;
+		if ( IsCombatActionLocked )
+			return true;
 
-		StartClientMeleeSwingTracePlayback( intent );
-		_hasPendingSwingVisualIntent = false;
+		if ( ServerHasActiveMeleeAttackAction )
+			return true;
+
+		if ( _primarySwingPhaseActive )
+			return true;
+
+		// Swing animation owns the pawn until its clip window (including return frames) ends.
+		if ( Components.Get<PlayerAnimation>() is { IsMeleeSwingAnimBusy: true } )
+			return true;
+
+		// Pure clients need this until RpcOwner sweep-complete. Listen-server host uses ServerHasActive above —
+		// keeping ownerExpects after sweep end locked out the next press for ~a second / forever.
+		if ( GameObject.Network is { Active: true }
+		     && !Networking.IsHost
+		     && _ownerExpectsHostMeleeBusy )
+			return true;
+
+		return false;
 	}
 
 	[Rpc.Host]
@@ -1396,6 +1469,10 @@ public partial class PlayerCombat : Component
 		_combatNetDiag = $"rpc owner: acc={result.Accepted} hit={result.Hit} dmg={result.DamageDealt:0.#}";
 		LogCombatDiag( "CLIENT (Rpc.Owner)", FormatAttackResultLog( result ) );
 
+		// Rejected (including RejectMeleeBusy): the swing is simply lost — the player must press again.
+		if ( !result.Accepted )
+			_ownerExpectsHostMeleeBusy = false;
+
 		// Backup: if HostOnly broadcast was missed, still show the local slash path on the attacking client.
 		if ( result.Accepted
 		     && _hasPendingSwingVisualIntent
@@ -1435,6 +1512,7 @@ public partial class PlayerCombat : Component
 
 		_combatNetDiag = $"rpc owner sweep: seq={intentSequence} anyHit={anyHit} total={totalDamageDealt:0.#}";
 		LogCombatDiag( "CLIENT (Rpc.Owner)", FormatAttackResultLog( LastServerAttackResult ) );
+		_ownerExpectsHostMeleeBusy = false;
 	}
 
 	CombatAuthority ResolveCombatAuthority()
@@ -1610,27 +1688,7 @@ public partial class PlayerCombat : Component
 				if ( !canStart() )
 					return;
 
-				Down = true;
-				_pressGlobal = RealTime.GlobalNow;
-				_pressSandbox = Time.NowDouble;
-				_pressUtc = DateTime.UtcNow;
-				_viewDirOnPress = getViewDirection();
-				_cameraPositionOnPress = getCameraPosition();
-				Snapshot = new CombatButtonIntentSnapshot
-				{
-					IsHeld = true,
-					HoldDurationSeconds = 0f,
-					PressedUtc = _pressUtc,
-					PressedGlobalSeconds = _pressGlobal,
-					PressedSandboxTimeNowDouble = _pressSandbox,
-					ReleasedUtc = null,
-					ReleasedGlobalSeconds = null,
-					ReleasedSandboxTimeNowDouble = null,
-					ViewDirectionOnPress = _viewDirOnPress,
-					ViewDirectionOnRelease = null,
-					CameraPositionOnPress = _cameraPositionOnPress,
-					CameraPositionOnRelease = null
-				};
+				BeginPress( getViewDirection, getCameraPosition );
 			}
 
 			if ( Down )
@@ -1662,6 +1720,31 @@ public partial class PlayerCombat : Component
 				if ( Snapshot.ReleasedGlobalSeconds is null && Snapshot.PressedGlobalSeconds is null )
 					Snapshot = default;
 			}
+		}
+
+		void BeginPress( Func<Vector3> getViewDirection, Func<Vector3> getCameraPosition )
+		{
+			Down = true;
+			_pressGlobal = RealTime.GlobalNow;
+			_pressSandbox = Time.NowDouble;
+			_pressUtc = DateTime.UtcNow;
+			_viewDirOnPress = getViewDirection();
+			_cameraPositionOnPress = getCameraPosition();
+			Snapshot = new CombatButtonIntentSnapshot
+			{
+				IsHeld = true,
+				HoldDurationSeconds = 0f,
+				PressedUtc = _pressUtc,
+				PressedGlobalSeconds = _pressGlobal,
+				PressedSandboxTimeNowDouble = _pressSandbox,
+				ReleasedUtc = null,
+				ReleasedGlobalSeconds = null,
+				ReleasedSandboxTimeNowDouble = null,
+				ViewDirectionOnPress = _viewDirOnPress,
+				ViewDirectionOnRelease = null,
+				CameraPositionOnPress = _cameraPositionOnPress,
+				CameraPositionOnRelease = null
+			};
 		}
 
 		void FinishPress( Func<Vector3> getCameraPosition, Func<Vector3> getViewDirection, CombatChannelRules rules )

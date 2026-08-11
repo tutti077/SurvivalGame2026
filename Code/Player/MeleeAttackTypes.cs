@@ -68,9 +68,10 @@ public readonly record struct MeleeHitResult
 	public byte AttackState { get; init; }
 	public Vector3 HitPosition { get; init; }
 	public float DamageApplied { get; init; }
-	public float StaggerApplied { get; init; }
 	public int TargetsHitCount { get; init; }
 	public bool TargetWasAlreadyHit { get; init; }
 	public bool WasBlocked { get; init; }
+	/// <summary>True when the hit was intercepted by a perfect parry (subset of <see cref="WasBlocked"/>).</summary>
+	public bool WasParried { get; init; }
 	public float IncomingAngleDegrees { get; init; }
 }

@@ -163,7 +163,6 @@
         "MeleeBladeHeelFraction": 0.22,
         "MeleeBladeTip": null,
         "MeleeBlockedDamageMultiplier": 0,
-        "MeleeBlockedStaggerMultiplier": 0.35,
         "MeleeBlockLateralArcDegrees": 150,
         "MeleeBlockOverheadArcDegrees": 50,
         "MeleeDebugDrawEnabled": true,

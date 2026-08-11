@@ -42,6 +42,4 @@ public readonly struct MeleeBlockOutcome
 	public float HealthDamage { get; init; }
 	public float StaminaCost { get; init; }
 	public bool WasPerfectParry { get; init; }
-
-	public bool HasStagger => DurationSeconds > 1e-4f && Tier != MeleeStaggerTier.None;
 }

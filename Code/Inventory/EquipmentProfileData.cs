@@ -72,8 +72,8 @@ public sealed class EquipmentProfileData
 	/// <summary>Hold-to-pay-out rope rate (meters/sec).</summary>
 	public float GrappleDetractMetersPerSecond { get; set; } = 4f;
 
-	public float GrappleAttachStaminaCost { get; set; } = 8f;
+	public float GrappleAttachStaminaCost { get; set; }
 
 	/// <summary>Stamina drained per second while attached and airborne.</summary>
-	public float GrappleAirborneStaminaPerSecond { get; set; } = 1.5f;
+	public float GrappleAirborneStaminaPerSecond { get; set; } = 3f;
 }

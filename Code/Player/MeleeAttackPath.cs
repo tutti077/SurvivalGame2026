@@ -11,15 +11,26 @@ public static class MeleeAttackPath
 {
 	const float Deg2Rad = MathF.PI / 180f;
 
-	public static float GetActiveDurationSeconds( PlayerCombat pc, byte attackType )
+	public static float GetActiveDurationSeconds( PlayerCombat pc, byte attackType, bool isHeavy = false )
 	{
-		GetPhaseDurations( pc, out var early, out var active, out var late );
+		GetPhaseDurations( pc, isHeavy, out var early, out var active, out var late );
 		_ = attackType;
 		return Math.Max( 0.04f, early + active + late );
 	}
 
-	public static void GetPhaseDurations( PlayerCombat pc, out float early, out float active, out float late )
+	public static void GetPhaseDurations( PlayerCombat pc, out float early, out float active, out float late ) =>
+		GetPhaseDurations( pc, isHeavy: false, out early, out active, out late );
+
+	public static void GetPhaseDurations( PlayerCombat pc, bool isHeavy, out float early, out float active, out float late )
 	{
+		if ( isHeavy )
+		{
+			early = Math.Max( 0f, pc.MeleeHeavyEarlyActiveDuration );
+			active = Math.Max( 0f, pc.MeleeHeavyActiveDuration );
+			late = Math.Max( 0f, pc.MeleeHeavyLateActiveDuration );
+			return;
+		}
+
 		early = Math.Max( 0f, pc.MeleeEarlyActiveDuration );
 		active = Math.Max( 0f, pc.MeleeActiveDuration );
 		late = Math.Max( 0f, pc.MeleeLateActiveDuration );
@@ -59,10 +70,10 @@ public static class MeleeAttackPath
 	}
 
 	/// <summary>Time-based EarlyActive / Active / LateActive / Recovery from elapsed seconds after the active swing begins.</summary>
-	public static byte ClassifyActiveState( PlayerCombat pc, byte attackType, float activeElapsedSeconds )
+	public static byte ClassifyActiveState( PlayerCombat pc, byte attackType, float activeElapsedSeconds, bool isHeavy = false )
 	{
 		activeElapsedSeconds = Math.Max( 0f, activeElapsedSeconds );
-		GetPhaseDurations( pc, out var earlyDur, out var activeDur, out var lateDur );
+		GetPhaseDurations( pc, isHeavy, out var earlyDur, out var activeDur, out var lateDur );
 		var earlyEnd = earlyDur;
 		var activePhaseEnd = earlyDur + activeDur;
 		var latePhaseEnd = earlyDur + activeDur + lateDur;
@@ -76,31 +87,31 @@ public static class MeleeAttackPath
 	}
 
 	/// <summary>Time-based state from normalized active progress (0–1 over full active window).</summary>
-	public static byte ClassifyActiveStateFromProgress( PlayerCombat pc, byte attackType, float activeProgress01 )
+	public static byte ClassifyActiveStateFromProgress( PlayerCombat pc, byte attackType, float activeProgress01, bool isHeavy = false )
 	{
 		activeProgress01 = Math.Clamp( activeProgress01, 0f, 1f );
-		var total = GetActiveDurationSeconds( pc, attackType );
-		return ClassifyActiveState( pc, attackType, activeProgress01 * total );
+		var total = GetActiveDurationSeconds( pc, attackType, isHeavy );
+		return ClassifyActiveState( pc, attackType, activeProgress01 * total, isHeavy );
 	}
 
 	/// <summary>Elapsed seconds (from active start) where EarlyActive→Active, Active→LateActive, and LateActive→Recovery begin.</summary>
-	public static void GetPhaseBoundaryElapsedSeconds( PlayerCombat pc, byte attackType, out float activePhaseStart, out float latePhaseStart )
+	public static void GetPhaseBoundaryElapsedSeconds( PlayerCombat pc, byte attackType, out float activePhaseStart, out float latePhaseStart, bool isHeavy = false )
 	{
-		GetPhaseDurations( pc, out var earlyDur, out var activeDur, out _ );
+		GetPhaseDurations( pc, isHeavy, out var earlyDur, out var activeDur, out _ );
 		activePhaseStart = earlyDur;
 		latePhaseStart = earlyDur + activeDur;
 	}
 
 	/// <summary>End of the timed active window (early + active + late) in seconds from active start.</summary>
-	public static float GetLatePhaseEndElapsedSeconds( PlayerCombat pc, byte attackType )
+	public static float GetLatePhaseEndElapsedSeconds( PlayerCombat pc, byte attackType, bool isHeavy = false )
 	{
-		GetPhaseDurations( pc, out var earlyDur, out var activeDur, out var lateDur );
+		GetPhaseDurations( pc, isHeavy, out var earlyDur, out var activeDur, out var lateDur );
 		return earlyDur + activeDur + lateDur;
 	}
 
-	public static float ActiveProgressFromElapsed( PlayerCombat pc, byte attackType, float activeElapsedSeconds )
+	public static float ActiveProgressFromElapsed( PlayerCombat pc, byte attackType, float activeElapsedSeconds, bool isHeavy = false )
 	{
-		var total = GetActiveDurationSeconds( pc, attackType );
+		var total = GetActiveDurationSeconds( pc, attackType, isHeavy );
 		if ( total <= 1e-6f )
 			return 0f;
 		return Math.Clamp( activeElapsedSeconds / total, 0f, 1f );

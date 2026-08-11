@@ -129,10 +129,10 @@ public static class MeleeAttackSweep
 				AttackState = attackState,
 				HitPosition = blockFirstPos,
 				DamageApplied = blockFirstOutcome.HealthDamage,
-				StaggerApplied = blockFirstOutcome.DurationSeconds,
 				TargetsHitCount = targetsHitCount,
 				TargetWasAlreadyHit = false,
 				WasBlocked = true,
+				WasParried = blockFirstOutcome.WasPerfectParry,
 				IncomingAngleDegrees = MeleeBlockResolution.ComputeIncomingAngleFromAttacker(
 					blockFirstDefender, attackerRoot.WorldPosition )
 			} );
@@ -182,10 +182,10 @@ public static class MeleeAttackSweep
 				AttackState = attackState,
 				HitPosition = bodyHitPos,
 				DamageApplied = blockOutcome.HealthDamage,
-				StaggerApplied = blockOutcome.DurationSeconds,
 				TargetsHitCount = ++targetsHitCount,
 				TargetWasAlreadyHit = false,
 				WasBlocked = true,
+				WasParried = blockOutcome.WasPerfectParry,
 				IncomingAngleDegrees = incomingAngle
 			} );
 
@@ -213,7 +213,6 @@ public static class MeleeAttackSweep
 			AttackState = attackState,
 			HitPosition = bodyHitPos,
 			DamageApplied = bodyDealt,
-			StaggerApplied = bodyStaggerApplied,
 			TargetsHitCount = targetsHitCount,
 			TargetWasAlreadyHit = false,
 			WasBlocked = wasBlocked,
@@ -408,10 +407,10 @@ public static class MeleeAttackSweep
 				AttackState = attackState,
 				HitPosition = tr.HitPosition,
 				DamageApplied = blockOutcome.HealthDamage,
-				StaggerApplied = blockOutcome.DurationSeconds,
 				TargetsHitCount = targetsHitCount,
 				TargetWasAlreadyHit = false,
 				WasBlocked = true,
+				WasParried = blockOutcome.WasPerfectParry,
 				IncomingAngleDegrees = incomingAngle
 			} );
 
@@ -440,7 +439,6 @@ public static class MeleeAttackSweep
 			AttackState = attackState,
 			HitPosition = tr.HitPosition,
 			DamageApplied = dealt,
-			StaggerApplied = staggerAppliedAmount,
 			TargetsHitCount = targetsHitCount,
 			TargetWasAlreadyHit = false,
 			WasBlocked = wasBlocked,

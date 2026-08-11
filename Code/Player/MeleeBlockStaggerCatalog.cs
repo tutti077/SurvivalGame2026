@@ -127,10 +127,11 @@ public static class MeleeBlockStaggerCatalog
 
 	static MeleeBlockStaggerOutcomeData CreateFallback( string id ) => id switch
 	{
+		"lightBlock" => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 8f },
 		"lightParry" => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 0f },
-		"heavyBlock" => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0.55f, HealthDamage = 2f, StaminaCost = 12f },
-		"heavyParry" => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0.25f, HealthDamage = 1f, StaminaCost = 6f },
-		_ => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0.35f, HealthDamage = 0f, StaminaCost = 8f },
+		"heavyBlock" => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 2f, StaminaCost = 12f },
+		"heavyParry" => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 0f },
+		_ => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 8f },
 	};
 
 	static MeleeStaggerTier ParseTier( string raw )

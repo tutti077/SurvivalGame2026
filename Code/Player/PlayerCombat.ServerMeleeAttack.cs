@@ -69,8 +69,8 @@ public partial class PlayerCombat
 		if ( _serverMeleeAttack is not null )
 			return false;
 
-		// Cannot start a swing while the guard is still up.
-		if ( IsAuthoritativeMeleeBlocking )
+		// Cannot start a swing while the guard is still up or recovery locks actions.
+		if ( IsAuthoritativeMeleeBlocking || IsCombatActionLocked )
 			return false;
 
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
@@ -155,9 +155,21 @@ public partial class PlayerCombat
 
 	public void ApplyMeleeStaggerToVictim( PlayerVitals vitals, float stagger )
 	{
-		if ( vitals is null || stagger <= 1e-4f )
+		if ( stagger <= 1e-4f )
 			return;
-		vitals.ApplyMeleeStagger( stagger );
+
+		if ( vitals is null || !vitals.GameObject.IsValid() )
+			return;
+
+		// Resolve the victim's animation, not its combat — being hit is not equipment-dependent and
+		// PlayerAnimation owns the reaction window.
+		var victimAnimation = vitals.Components.Get<PlayerAnimation>()
+		                      ?? vitals.GameObject.Root?.Components.Get<PlayerAnimation>( FindMode.EverythingInSelfAndDescendants );
+
+		if ( victimAnimation is null || victimAnimation.GameObject == GameObject )
+			return;
+
+		victimAnimation.ServerBeginHitReaction( Math.Max( stagger, victimAnimation.HitReactionSeconds ) );
 	}
 
 	public void ServerStartMeleeAttackAction( in AttackReleaseIntent intent, float holdSeconds, bool isHeavy, string swingLogNote )
@@ -178,10 +190,23 @@ public partial class PlayerCombat
 		if ( !scene.IsValid() )
 			return;
 
+		SetMeleeAttackCommitmentLock( true );
+		// Drop soft pistol / prior recovery so it cannot re-apply over the new swing anim next frame.
+		ServerClearCombatRecoveryForNewAttack();
+		var animation = Components.Get<PlayerAnimation>();
+		// Press/release already owns the clip — don't abort before Resume/Play.
+		if ( animation is null || !animation.HasActiveMeleeSwingPresentation )
+			animation?.AbortMeleeAttackAnimClip( "new swing" );
 		_serverMeleeAttack = new ServerMeleeAttackRuntime( this, intent, holdSeconds, isHeavy, swingLogNote );
 
+		var attackType = ResolveAttackTypeFromIntent( intent );
+		LogMeleePhasePulse( "Swing start",
+			$"type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} hold={holdSeconds:0.###}s wind={GetMeleeWindupDuration( isHeavy ):0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( this, attackType, isHeavy ):0.###}s seq={intent.IntentSequence}" );
+		LogMeleePhaseEnter( "windup start",
+			$"duration={GetMeleeWindupDuration( isHeavy ):0.###}s" );
+
 		EmitSwingNoiseIfPlayer();
-		Components.Get<PlayerAnimation>()?.PlayMeleeSwingAttack( ResolveAttackTypeFromIntent( intent ), broadcastFromHost: true );
+		animation?.PlayMeleeSwingAttack( attackType, broadcastFromHost: true, isHeavy: isHeavy );
 
 		// Don't Broadcast inside Rpc.Host handling of the attacker pawn — nested HostOnly broadcasts on a
 		// host-owned object often never reach joining clients (host still runs it locally → host sees clients).
@@ -263,6 +288,9 @@ public partial class PlayerCombat
 		ClearMeleeAttackBasisFromIntent();
 		ClearForwardMeleeStartPitch();
 		_serverMeleeAttack = null;
+		SetMeleeAttackCommitmentLock( false );
+		if ( IsLocalCombatDriver() )
+			_ownerExpectsHostMeleeBusy = false;
 	}
 
 	void MaybeTickServerMeleeAttackAction()
@@ -275,11 +303,12 @@ public partial class PlayerCombat
 		{
 			_serverMeleeAttack = null;
 			_clientSwingTracePlayback = null;
+			SetMeleeAttackCommitmentLock( false );
 			return;
 		}
 
-		if ( _clientSwingTracePlayback is not null && !_clientSwingTracePlayback.Tick( scene ) )
-			_clientSwingTracePlayback = null;
+		// Visual arc replay is ticked only from TickSceneCombatVisualizations (once per frame).
+		// Ticking it here too double-advanced the companion and clients saw sparse arcs.
 
 		// Client proxies never run host sweeps; listen-server host still simulates client-owned pawns.
 		if ( GameObject.IsProxy && !Networking.IsHost )
@@ -292,14 +321,33 @@ public partial class PlayerCombat
 			return;
 
 		if ( !_serverMeleeAttack.Tick( scene ) )
+		{
 			_serverMeleeAttack = null;
+			SetMeleeAttackCommitmentLock( false );
+			// Don't wait on Rpc.Owner to clear the spam-click gate (listen-server host can stall otherwise).
+			if ( IsLocalCombatDriver() )
+				_ownerExpectsHostMeleeBusy = false;
+		}
+	}
+
+	/// <summary>
+	/// True when this pawn's swing clip is actually playing on this machine. The arc overlay is a
+	/// presentation of that clip, so it must never draw on its own (spam clicks used to show arcs
+	/// with no animation at all).
+	/// </summary>
+	bool IsSwingAnimPlayingForArcOverlay()
+	{
+		var anim = Components.Get<PlayerAnimation>();
+		if ( anim is null || !anim.IsValid() )
+			return true;
+
+		return anim.HasActiveMeleeSwingPresentation;
 	}
 
 	void StartClientMeleeSwingTracePlayback( in AttackReleaseIntent intent )
 	{
-		// Allow a visual companion alongside host authority — DebugOverlay is local-only, so the
-		// host also needs this playback to see remote (and own) attack lines when testing MP.
-		if ( _clientSwingTracePlayback is not null )
+		// One companion per swing: a duplicate intent (broadcast + owner backup) must not restart the fan.
+		if ( _clientSwingTracePlayback is { } active && active.IntentSequence == intent.IntentSequence )
 			return;
 
 		var hold = Math.Max( 0f, (float)( intent.ReleasedGlobalSeconds - intent.PressedGlobalSeconds ) );
@@ -334,15 +382,19 @@ public partial class PlayerCombat
 
 			var isHostProxy = Networking.IsHost && pc.GameObject.IsProxy;
 
-			// Listen-server: proxy pawns may skip OnUpdate — CombatAuthority drives sweep + draw companion once.
+			// Listen-server: client-owned pawns are proxies — OnUpdate skips authority timers here.
+			// Without these ticks, NetworkedCombatRecovery* never counts down → stuck UseAnimGraph=false poses.
 			if ( driveHostProxyAuthority && isHostProxy )
 			{
 				pc.MaybeTickServerMeleeAttackAction();
+				pc.ServerTickMeleeBlockTimers();
+				pc.ServerTickCombatRecovery();
+				pc.TickLocalCombatRecoveryPresentation();
 			}
-			else if ( !pc.IsLocalCombatDriver() && !isHostProxy )
-			{
-				pc.TickClientSwingTracePlaybackOnly( scene );
-			}
+
+			// Every peer ticks visual arc replay once per pawn. Host proxies already ran MaybeTick
+			// above (authority only — playback is not ticked there anymore).
+			pc.TickClientSwingTracePlaybackOnly( scene );
 
 			if ( pc.IsLocalCombatDriver() )
 				continue;
@@ -380,7 +432,9 @@ public partial class PlayerCombat
 		if ( attackState == MeleeAttackStates.Recovery )
 			return;
 
-		var drawOverlay = allowDebugOverlay && MeleeDebugDrawEnabled;
+		// Arcs are bound to the swing animation on this peer: no clip playing here means no arc drawn here.
+		// (Damage sweeps below still run on the host — authority never depends on presentation.)
+		var drawOverlay = allowDebugOverlay && MeleeDebugDrawEnabled && IsSwingAnimPlayingForArcOverlay();
 		var overlayDuration = GetMeleeDebugOverlayDrawDuration();
 		var degreeStep = GetMeleeAttackArcDegreeStep();
 
@@ -439,21 +493,33 @@ public partial class PlayerCombat
 		if ( drawOverlay )
 		{
 			var yawBucket = MeleeAttackPath.QuantizeYawDegrees( currentBasisYaw, degreeStep );
-			var currentSampleIndex = Math.Clamp( (int)MathF.Round( activeProgress01 * (sampleCount - 1) ), 0, sampleCount - 1 );
-			var key = MeleeAttackPath.PackArcYawDebugKey( currentSampleIndex, yawBucket ) ^ ((long)attackStateForDraw << 56);
-			if ( drawnArcYawKeys.Add( key ) )
-			{
-				var arcProgress = MeleeAttackPath.ArcSampleIndexToProgress01( sampleCount, currentSampleIndex );
-				EmitMeleeDebugPathRay( attackType, currentBasisYaw, arcProgress, attackStateForDraw, drawOverlay,
-					overlayDuration, hitRadius, drawSpheres, ref scratch );
-			}
+			var isHeavy = _clientSwingTracePlayback?.IsHeavy ?? _serverMeleeAttack?.IsHeavy ?? false;
+			var lastProgress = scratch.LastArcProgress01;
+
+			// Contiguous catch-up: short Early/Late windows + low FPS used to skip most ~1° samples.
+			MeleeAttackPath.ForEachNewlyRevealedArcSampleIndex(
+				this,
+				attackType,
+				degreeStep,
+				lastProgress,
+				activeProgress01,
+				sampleIndex =>
+				{
+					var arcProgress = MeleeAttackPath.ArcSampleIndexToProgress01( sampleCount, sampleIndex );
+					var phase = MeleeAttackPath.ClassifyActiveStateFromProgress( this, attackType, arcProgress, isHeavy );
+					var key = MeleeAttackPath.PackArcYawDebugKey( sampleIndex, yawBucket ) ^ ((long)phase << 56);
+					if ( !drawnArcYawKeys.Add( key ) )
+						return;
+
+					EmitMeleeDebugPathRay( attackType, currentBasisYaw, arcProgress, phase, drawOverlay,
+						overlayDuration, hitRadius, drawSpheres );
+				} );
 		}
 
+		scratch.LastArcProgress01 = activeProgress01;
+
 		if ( !MeleeDebugDrawRotationSpokes )
-		{
-			scratch.LastArcProgress01 = activeProgress01;
 			return;
-		}
 
 		scratch.DrawnRelativeYawStepIndices ??= new HashSet<int>();
 		var drawnYawSteps = scratch.DrawnRelativeYawStepIndices;
@@ -497,12 +563,11 @@ public partial class PlayerCombat
 
 			var spokeYaw = Angles.NormalizeAngle( scratch.SwingBasisYaw + scratch.YawTurnSign * stepIndex * degreeStep );
 			EmitMeleeDebugPathRay( attackType, spokeYaw, scratch.YawRingProgress01, attackStateForDraw, drawOverlay,
-				overlayDuration, hitRadius, drawSpheres, ref scratch );
+				overlayDuration, hitRadius, drawSpheres );
 		}
 
 		scratch.LastDrawBasisYaw = currentBasisYaw;
 		scratch.HasLastDrawBasisYaw = true;
-		scratch.LastArcProgress01 = activeProgress01;
 	}
 
 	internal void DrawWindupTelegraphIfNeeded()
@@ -549,15 +614,19 @@ public partial class PlayerCombat
 		if ( ServerHasActiveMeleeAttackInWindup( out attackType, out basisYaw, out isHeavy ) )
 			return true;
 
+		// Press / hold: black (light) or white (heavy) aim bar before release.
 		if ( !_hasLockedPrimaryAttackDir )
 			return false;
 
-		if ( !Input.Down( PrimaryAttackAction ) && !_primarySwingPhaseActive )
+		if ( !Input.Down( PrimaryAttackAction ) && !_primary.Down && !_primarySwingPhaseActive )
+			return false;
+
+		if ( IsBlockPreventingAttack() || IsCombatActionLocked )
 			return false;
 
 		attackType = ResolveAttackTypeFromCursorDir( _lockedPrimaryAttackSwingDir );
 		basisYaw = GetMeleeCombatBasisYaw( attackType );
-		isHeavy = IsHeavyAttackForHoldDuration( _primary.Snapshot.HoldDurationSeconds );
+		isHeavy = IsHeavyAttackForHoldDuration( _primary.Down ? _primary.Snapshot.HoldDurationSeconds : 0f );
 		return true;
 	}
 
@@ -695,8 +764,7 @@ public partial class PlayerCombat
 		bool drawOverlay,
 		float overlayDuration,
 		float hitRadius,
-		bool drawSpheres,
-		ref MeleeAttackDebugDrawScratch scratch )
+		bool drawSpheres )
 	{
 		if ( !drawOverlay )
 			return;
@@ -785,6 +853,8 @@ public partial class PlayerCombat
 		readonly bool _visualOnly;
 		readonly bool _allowMultiple;
 		readonly int _maxTargets;
+		bool _loggedAttackPhase;
+		bool _loggedBuiltinRecovery;
 
 		readonly HashSet<Guid> _hitVictims = new();
 
@@ -795,9 +865,10 @@ public partial class PlayerCombat
 		float _totalDamageDealt;
 		Guid _firstHitTargetId;
 		bool _anyHit;
+		bool _wasBlocked;
+		bool _wasParried;
 		bool _completionSent;
 		int _targetsHitCount;
-		float _prevActiveT01;
 		float _prevActiveElapsed;
 		bool _stopHitValidation;
 		MeleeAttackDebugDrawScratch _debugDrawScratch;
@@ -817,8 +888,8 @@ public partial class PlayerCombat
 			_instanceId = _nextMeleeAttackInstanceId++;
 			_isHeavy = isHeavy;
 			_visualOnly = visualOnly;
-			_windup = Math.Max( 0f, pc.MeleeWindupDuration );
-			_active = MeleeAttackPath.GetActiveDurationSeconds( pc, _attackType );
+			_windup = pc.GetMeleeWindupDuration( isHeavy );
+			_active = MeleeAttackPath.GetActiveDurationSeconds( pc, _attackType, isHeavy );
 			_recovery = Math.Max( 0f, pc.MeleeRecoveryDuration );
 			_radius = Math.Max( 2f, pc.MeleeHitVolumeThickness );
 			_substep = Math.Max( 4f, pc.MeleeSweepSubstepLength );
@@ -832,6 +903,8 @@ public partial class PlayerCombat
 		}
 
 		internal byte AttackType => _attackType;
+
+		internal ushort IntentSequence => _intent.IntentSequence;
 
 		internal bool IsInWindupPhase
 		{
@@ -854,7 +927,7 @@ public partial class PlayerCombat
 			if ( elapsed >= activeEnd )
 				return 1f;
 			var activeLen = Math.Max( 1e-4f, _active );
-			var activeElapsed = Math.Min( elapsed - windEnd, MeleeAttackPath.GetLatePhaseEndElapsedSeconds( _pc, _attackType ) );
+			var activeElapsed = Math.Min( elapsed - windEnd, MeleeAttackPath.GetLatePhaseEndElapsedSeconds( _pc, _attackType, _isHeavy ) );
 			return Math.Clamp( activeElapsed / activeLen, 0f, 1f );
 		}
 
@@ -878,24 +951,41 @@ public partial class PlayerCombat
 			var activeEnd = windEnd + _active;
 			var totalEnd = activeEnd + _recovery;
 
-			// When clients replicate path overlay is on, only the visual-only runtime draws DebugOverlay
-			// (avoids double lines on the listen-server host that also has the authoritative sweep).
+			// Path overlay: visual-only replay draws for clients. Authority also draws unless a
+			// visual companion is already running (avoids double lines on listen-server host).
 			var allowOverlay = _visualOnly
-			                   || !_pc.ClientMeleeSwingTraceDebug
-			                   || _pc.GameObject.Network is not { Active: true };
+			                   || _pc._clientSwingTracePlayback is null
+			                   || !_pc.ClientMeleeSwingTraceDebug;
 
 			if ( elapsed < windEnd )
 			{
+				// Windup: black/white telegraph only — no red/yellow/blue path until Active phases.
 				_pc.AdvanceAttackPath( _attackType, 0f, MeleeAttackStates.Windup,
-					_pc.GetMeleeCombatBasisYaw( _attackType ), ref _debugDrawScratch, allowOverlay );
+					_pc.GetMeleeCombatBasisYaw( _attackType ), ref _debugDrawScratch, allowDebugOverlay: false );
 				return true;
+			}
+
+			if ( !_visualOnly && !_loggedAttackPhase )
+			{
+				_loggedAttackPhase = true;
+				_pc.LogMeleePhaseEnter( "attack phase",
+					$"duration={_active:0.###}s type={MeleeAttackTypes.Label( _attackType )}" );
 			}
 
 			if ( elapsed >= activeEnd )
 			{
 				_debugDrawScratch.Reset();
 				if ( elapsed < totalEnd )
+				{
+					if ( !_visualOnly && !_loggedBuiltinRecovery && _recovery > 1e-4f )
+					{
+						_loggedBuiltinRecovery = true;
+						_pc.LogMeleePhaseEnter( "recover phase",
+							$"builtin MeleeRecoveryDuration={_recovery:0.###}s" );
+					}
+
 					return true;
+				}
 
 				TrySendCompletion();
 				return false;
@@ -903,10 +993,10 @@ public partial class PlayerCombat
 
 			var activeLen = Math.Max( 1e-4f, _active );
 			var activeElapsed = elapsed - windEnd;
-			var latePhaseEnd = MeleeAttackPath.GetLatePhaseEndElapsedSeconds( _pc, _attackType );
+			var latePhaseEnd = MeleeAttackPath.GetLatePhaseEndElapsedSeconds( _pc, _attackType, _isHeavy );
 			activeElapsed = Math.Min( activeElapsed, latePhaseEnd );
 			var activeT01 = Math.Clamp( activeElapsed / activeLen, 0f, 1f );
-			var segState = MeleeAttackPath.ClassifyActiveState( _pc, _attackType, activeElapsed );
+			var segState = MeleeAttackPath.ClassifyActiveState( _pc, _attackType, activeElapsed, _isHeavy );
 
 			_pc.SampleServerMeleeBladeWorld( _attackType, activeT01, out var tip, out var heel );
 			if ( MeleeAttackStates.DealsDamage( segState ) )
@@ -920,25 +1010,36 @@ public partial class PlayerCombat
 				_prevTip = tip;
 				_prevHeel = heel;
 				_havePrevSample = true;
-				_prevActiveT01 = activeT01;
+				_prevActiveElapsed = activeElapsed;
 				return true;
 			}
 
 			if ( !_visualOnly && !_stopHitValidation && MeleeAttackStates.DealsDamage( segState ) )
 			{
 				var midElapsed = (_prevActiveElapsed + activeElapsed) * 0.5f;
-				var hitState = MeleeAttackPath.ClassifyActiveState( _pc, _attackType, midElapsed );
+				var hitState = MeleeAttackPath.ClassifyActiveState( _pc, _attackType, midElapsed, _isHeavy );
+				// Edge of LateActive can classify mid-sample as Recovery — still use the live segment state.
+				if ( !MeleeAttackStates.DealsDamage( hitState ) )
+					hitState = segState;
+
 				var damage = _pc.GetMeleeDamageForState( hitState, _isHeavy, _intent );
 				var stagger = _pc.GetMeleeStaggerForState( hitState );
+				var hitRadius = Math.Max( 2f, _pc.MeleeHitVolumeThickness );
 				var basis = _pc.GetMeleeCombatBasisRotation( _attackType );
 				var rayOrigin = MeleeAttackPath.GetSwingPivotWorld( attacker, _pc, _attackType, basis );
 
-				_stopHitValidation = MeleeAttackSweep.RaySweepFromOrigin(
+				// Primary: sweep tip+heel motion between frames (catches LateActive tunneling that
+				// a single pivot→tip spoke misses when the blade has already swung through the body).
+				_stopHitValidation = MeleeAttackSweep.SphereSweepBladeSegment(
 					scene,
 					attacker,
 					_pc,
-					rayOrigin,
+					hitRadius,
+					_substep,
+					_prevTip,
 					tip,
+					_prevHeel,
+					heel,
 					_hitVictims,
 					_maxTargets,
 					_allowMultiple,
@@ -946,7 +1047,6 @@ public partial class PlayerCombat
 					stagger,
 					hitState,
 					_attackType,
-					_intent.SwingDir,
 					_isHeavy,
 					_instanceId,
 					_swingNote,
@@ -954,7 +1054,32 @@ public partial class PlayerCombat
 					ref _targetsHitCount,
 					OnHit );
 
-				// End this attack action immediately on first relevant contact (hit or block), per training flow.
+				// Secondary: spoke ray for tip currently inside a body with little inter-frame motion.
+				if ( !_stopHitValidation )
+				{
+					_stopHitValidation = MeleeAttackSweep.RaySweepFromOrigin(
+						scene,
+						attacker,
+						_pc,
+						rayOrigin,
+						tip,
+						_hitVictims,
+						_maxTargets,
+						_allowMultiple,
+						damage,
+						stagger,
+						hitState,
+						_attackType,
+						_intent.SwingDir,
+						_isHeavy,
+						_instanceId,
+						_swingNote,
+						_logHits,
+						ref _targetsHitCount,
+						OnHit );
+				}
+
+				// End this attack action immediately on first relevant contact (hit or block).
 				if ( _stopHitValidation )
 				{
 					_debugDrawScratch.Reset();
@@ -963,7 +1088,6 @@ public partial class PlayerCombat
 				}
 			}
 
-			_prevActiveT01 = activeT01;
 			_prevActiveElapsed = activeElapsed;
 			_prevTip = tip;
 			_prevHeel = heel;
@@ -975,6 +1099,10 @@ public partial class PlayerCombat
 			_anyHit = true;
 			_totalDamageDealt += hit.DamageApplied;
 			_pc.LastMeleeHitResult = hit;
+			if ( hit.WasBlocked )
+				_wasBlocked = true;
+			if ( hit.WasParried )
+				_wasParried = true;
 			if ( _firstHitTargetId == Guid.Empty && hit.TargetId != Guid.Empty )
 				_firstHitTargetId = hit.TargetId;
 		}
@@ -996,7 +1124,16 @@ public partial class PlayerCombat
 				return;
 
 			if ( !_visualOnly )
-				_pc.NotifyServerMeleeAttackFinished();
+			{
+				_pc.NotifyServerMeleeAttackFinished( new MeleeAttackFinishOutcome
+				{
+					AnyHit = _anyHit,
+					WasBlocked = _wasBlocked,
+					WasParried = _wasParried,
+					IsHeavy = _isHeavy,
+					IsShove = false
+				} );
+			}
 
 			if ( !_visualOnly && _pc.GameObject.Network is { Active: true } )
 				_pc.RpcOwnerMeleeSwingComplete( _sequence, _anyHit, _totalDamageDealt, _firstHitTargetId );

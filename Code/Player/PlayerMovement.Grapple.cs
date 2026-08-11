@@ -44,10 +44,10 @@ partial class PlayerMovement
 	public float MinLengthMeters { get; set; } = 1f;
 
 	[Property, Group( "Grapple Stamina" )]
-	public float AttachStaminaCost { get; set; } = 8f;
+	public float AttachStaminaCost { get; set; }
 
 	[Property, Group( "Grapple Stamina" ), Title( "Airborne Drain (stamina/s)" )]
-	public float AirborneStaminaPerSecond { get; set; } = 1.5f;
+	public float AirborneStaminaPerSecond { get; set; } = 3f;
 
 	[Property, Group( "Grapple Swing" ), Title( "Attach Velocity Scale" )]
 	public float AttachVelocityScale { get; set; } = 1.08f;
@@ -298,6 +298,29 @@ partial class PlayerMovement
 		ServerDetach( "damage" );
 	}
 
+	/// <summary>
+	/// Hit reaction: drop the rope. Runs on whichever machine saw the reaction start — the host
+	/// detaches authoritatively, the owner asks the host, and observers just stop drawing it.
+	/// </summary>
+	void DetachGrappleForHitReaction()
+	{
+		if ( !GrappleAttached )
+			return;
+
+		IsRetractingRope = false;
+		IsDetractingRope = false;
+		ClearStickyAim();
+
+		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
+		{
+			ServerDetach( "hit reaction" );
+			return;
+		}
+
+		if ( !GameObject.IsProxy )
+			RpcRequestDetach();
+	}
+
 	void RefreshTuningFromEquipment()
 	{
 		if ( _equipment is null )
@@ -485,6 +508,10 @@ partial class PlayerMovement
 			RequestDetach();
 			return;
 		}
+
+		// No re-attaching out of a hit reaction — the rope is gone for that whole window.
+		if ( IsHitReactionActive() )
+			return;
 
 		if ( !HasValidAimTarget )
 		{

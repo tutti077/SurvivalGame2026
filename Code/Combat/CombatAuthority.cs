@@ -154,6 +154,13 @@ public sealed class CombatAuthority : Component
 			return RejectResult( code, detail );
 		}
 
+		// The pawn keeps its PlayerCombat with empty hands (shove is a player ability), so the swing
+		// needs its own gate. Host-side equipment is authoritative here — it is the same lookup that
+		// drives the synced hold pose for remote pawns.
+		var attackerEquipped = attacker.Components.Get<PlayerEquippedItem>();
+		if ( attackerEquipped is not null && !attackerEquipped.HasAction( EquippedItemActions.PrimaryMelee ) )
+			return Fail( AttackReleaseDebugCode.RejectNoMeleeItemEquipped, "attacker has no melee item equipped" );
+
 		if ( attacker.Network is { Active: true } net && net.Owner is { } owner && Rpc.Caller is { } caller && !ConnectionIdentity.SameClient( caller, owner ) )
 			return Fail( AttackReleaseDebugCode.RejectOwnerMismatch, $"caller [{ConnectionIdentity.Format( caller )}] ≠ owner [{ConnectionIdentity.Format( owner )}]" );
 
@@ -281,7 +288,7 @@ public sealed class CombatAuthority : Component
 			DamageDealt = 0f,
 			TargetGameObjectId = Guid.Empty,
 			DebugCode = AttackReleaseDebugCode.OkMeleeSweepStarted,
-			DebugDetail = $"scheduled host sweep seq={intent.IntentSequence} type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} wind={pc.MeleeWindupDuration:0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( pc, attackType ):0.###}s rec={pc.MeleeRecoveryDuration:0.###}s{swingNote}"
+			DebugDetail = $"scheduled host sweep seq={intent.IntentSequence} type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} wind={pc.GetMeleeWindupDuration( isHeavy ):0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( pc, attackType, isHeavy ):0.###}s rec={pc.MeleeRecoveryDuration:0.###}s{swingNote}"
 		};
 	}
 

@@ -37,8 +37,8 @@
       "grappleSwingLoadSlackGraceMeters": 2.5,
       "grappleSwingLoadCentripetalGravityFraction": 0.35,
       "grappleDetractMetersPerSecond": 4,
-      "grappleAttachStaminaCost": 8,
-      "grappleAirborneStaminaPerSecond": 1.5
+      "grappleAttachStaminaCost": 0,
+      "grappleAirborneStaminaPerSecond": 3
     },
     {
       "resourceId": "basic_wingsuit",

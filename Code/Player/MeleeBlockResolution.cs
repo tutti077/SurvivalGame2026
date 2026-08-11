@@ -134,7 +134,6 @@ public static class MeleeBlockResolution
 		{
 			RejectReason = rejectReason,
 			OutcomeId = outcome.OutcomeId,
-			StaggerDurationSeconds = outcome.DurationSeconds,
 			HealthDamage = outcome.HealthDamage,
 			StaminaCost = outcome.StaminaCost
 		};

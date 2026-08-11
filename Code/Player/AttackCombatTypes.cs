@@ -114,6 +114,7 @@ public static class AttackReleaseDebugCode
 	public const int RejectInsufficientStamina = 14;
 	public const int OkMeleeSweepStarted = 15;
 	public const int RejectMeleeBusy = 16;
+	public const int RejectNoMeleeItemEquipped = 17;
 }
 
 public interface IDamageable

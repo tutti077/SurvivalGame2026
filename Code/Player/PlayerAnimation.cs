@@ -9,7 +9,7 @@ namespace Survival;
 /// Combat / equipment request intents; this component applies animgraph + presentation.
 /// </summary>
 [Title( "Player Animation" )]
-public sealed class PlayerAnimation : Component
+public sealed partial class PlayerAnimation : Component
 {
 	public enum HoldPose : byte
 	{
@@ -44,9 +44,6 @@ public sealed class PlayerAnimation : Component
 	/// <summary>Playback multiplier on the body during left/right swings (&lt;1 = slower).</summary>
 	[Property, Group( "Animation" ), Title( "Lateral swing playback rate" ), Range( 0.5f, 1f ), Step( 0.05f )]
 	public float MeleeLateralSwingPlaybackRate { get; set; } = 0.85f;
-
-	[Property, Group( "Animation" ), Title( "Lateral swing slow duration (s)" ), Range( 0.2f, 2f ), Step( 0.05f )]
-	public float MeleeLateralSwingSlowSeconds { get; set; } = 0.9f;
 
 	[Property, Group( "Melee demo stick" ), Title( "Show demo stick" )]
 	public bool ShowMeleeDemoStick { get; set; } = true;
@@ -103,15 +100,17 @@ public sealed class PlayerAnimation : Component
 	bool _lateralSwingPlaybackSlowed;
 	float _playbackRateSaved = 1f;
 	double _playbackRateRestoreAt;
+	/// <summary>Sandbox time until the melee attack clip presentation should be treated as finished.</summary>
+	double _meleeAttackAnimBusyUntilSandbox;
+
+	const string DemoStickObjectName = "melee_demo_stick";
 
 	GameObject _meleeDemoStick;
 	ModelRenderer _meleeDemoStickRenderer;
 	float _demoStickMeshHalfExtentX = 0.5f;
 
 	PlayerEquippedItem _equippedItem;
-
-	/// <summary>Last hold pose this component applied (for debugging / future callers).</summary>
-	public HoldPose AppliedHoldPose => _appliedHoldPose;
+	PlayerCombat _combat;
 
 	protected override void OnStart()
 	{
@@ -130,8 +129,18 @@ public sealed class PlayerAnimation : Component
 
 		EnsureAnimTargets();
 		TickSyncedSwingPresentation();
+		TickHitReactionPose();
 		TickHoldPose();
 		TickLateralSwingPlaybackRestore();
+		TickMeleeSwingPresentationExpiry();
+	}
+
+	PlayerCombat ResolveCombat()
+	{
+		if ( _combat is null || !_combat.IsValid() )
+			_combat = Components.Get<PlayerCombat>();
+
+		return _combat;
 	}
 
 	protected override void OnPreRender()
@@ -142,6 +151,7 @@ public sealed class PlayerAnimation : Component
 
 		EnsureAnimTargets();
 		TickSyncedSwingPresentation();
+		TickHitReactionPose();
 		TickHoldPose();
 		TickMeleeDemoStickTransform();
 	}
@@ -152,33 +162,6 @@ public sealed class PlayerAnimation : Component
 		DestroyMeleeDemoStick();
 		ClearStuckNegativeBodyScale();
 		base.OnDestroy();
-	}
-
-	/// <summary>
-	/// Host/local: play melee swing anim. When <paramref name="broadcastFromHost"/> is true,
-	/// bumps Sync presentation for remotes and queues a deferred Broadcast via CombatAuthority
-	/// (do not nest HostOnly Broadcast on the attacker inside Rpc.Host).
-	/// </summary>
-	public void PlayMeleeSwingAttack( byte attackType, bool broadcastFromHost = false )
-	{
-		if ( !PlayMeleeSwingAnimation || !GameObject.IsValid() )
-			return;
-
-		ApplyMeleeSwingAttackLocal( attackType );
-
-		if ( !broadcastFromHost )
-			return;
-
-		if ( GameObject.Network is not { Active: true } || !Networking.IsHost )
-			return;
-
-		// Sync path: every non-host peer notices the counter and plays locally.
-		NetworkedHoldPose = (byte)HoldPose.MeleeTwoHand;
-		NetworkedSwingAttackType = attackType;
-		NetworkedSwingCounter++;
-
-		_deferredSwingAnimType = attackType;
-		_deferSwingAnimBroadcast = true;
 	}
 
 	/// <summary>
@@ -215,7 +198,10 @@ public sealed class PlayerAnimation : Component
 		if ( NetworkedSwingCounter > _lastAppliedSwingCounter )
 			_lastAppliedSwingCounter = NetworkedSwingCounter;
 
-		ApplyMeleeSwingAttackLocal( attackType );
+		if ( ShouldSkipRemoteSwingRestart() )
+			return;
+
+		ApplyMeleeSwingAttackLocal( attackType, isHeavy: false );
 	}
 
 	void TickSyncedSwingPresentation()
@@ -230,14 +216,40 @@ public sealed class PlayerAnimation : Component
 		if ( _lastAppliedSwingCounter <= 0 )
 			return;
 
-		ApplyMeleeSwingAttackLocal( NetworkedSwingAttackType );
+		if ( ShouldSkipRemoteSwingRestart() )
+			return;
+
+		ApplyMeleeSwingAttackLocal( NetworkedSwingAttackType, isHeavy: false );
 	}
 
-	void ApplyMeleeSwingAttackLocal( byte attackType )
+	/// <summary>
+	/// Owner already started the clip on press/release — don't re-pulse b_attack from host Sync/Broadcast
+	/// (that stuttered the attack start as a second begin).
+	/// </summary>
+	bool ShouldSkipRemoteSwingRestart()
+	{
+		// Getting hit outranks a swing — never turn the graph back on mid-flail.
+		if ( _hitReactionPoseActive )
+			return true;
+
+		if ( _ownerSkipNextRemoteSwingApply )
+		{
+			_ownerSkipNextRemoteSwingApply = false;
+			return true;
+		}
+
+		// Owning client already playing this swing from windup hold / press clip.
+		if ( !GameObject.IsProxy
+		     && (_windupHoldActive || _meleeSwingClipFromPress || GetMeleeAttackAnimBusyRemainingSeconds() > 0.05f) )
+			return true;
+
+		return false;
+	}
+
+	void ApplyMeleeSwingAttackLocal( byte attackType, bool isHeavy = false )
 	{
 		EnsureAnimTargets();
 		ApplyHoldPose( HoldPose.MeleeTwoHand );
-		ApplyLateralSwingPlaybackSlow( attackType );
 
 		var body = ResolveBody();
 		if ( body is null )
@@ -245,9 +257,19 @@ public sealed class PlayerAnimation : Component
 
 		// Citizen only ships Melee_Weapons_2H_Attack_01 (rightward). No engine L/R mirror —
 		// a real left clip needs to come from Blender / animgraph.
+		body.UseAnimGraph = true;
 		body.Set( "holdtype_attack", 0f );
 		body.Set( "b_attack", true );
+		ApplySwingPlaybackRate( body, attackType, isHeavy );
+		_meleeSwingClipFromPress = false;
+		Components.Get<PlayerCombat>()?.LogMeleeAnimStart(
+			"animgraph b_attack (Melee_Weapons_2H_Attack_01)",
+			$"type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} busyUntil+={GetMeleeAttackAnimBusyRemainingSeconds():0.###}s" );
 	}
+
+	/// <summary>Seconds left in the melee attack clip window (from swing start). Used to gate chain-ready.</summary>
+	public float GetMeleeAttackAnimBusyRemainingSeconds() =>
+		Math.Max( 0f, (float)( _meleeAttackAnimBusyUntilSandbox - Time.NowDouble ) );
 
 	HoldPose ResolveDesiredHoldPose()
 	{
@@ -286,6 +308,21 @@ public sealed class PlayerAnimation : Component
 
 	void TickHoldPose()
 	{
+		// Hit reaction: the flail sequence owns the body and the sword is gone for the whole window.
+		if ( _hitReactionPoseActive )
+		{
+			DestroyMeleeDemoStick();
+			return;
+		}
+
+		// Combat recovery / shove sequences own the graph; still refresh melee hold for sword visibility.
+		if ( _combatSequenceActive )
+		{
+			if ( ResolvePresentationHoldPose() == HoldPose.MeleeTwoHand )
+				ApplyMeleeTwoHandHold();
+			return;
+		}
+
 		ApplyHoldPose( ResolvePresentationHoldPose() );
 	}
 
@@ -306,6 +343,14 @@ public sealed class PlayerAnimation : Component
 
 	void ApplyMeleeTwoHandHold()
 	{
+		ApplyMeleeTwoHandHold( includeDemoStick: true );
+	}
+
+	/// <param name="includeDemoStick">
+	/// False during combat recovery sequences so we don't spawn a second box-sword on top of real equipment.
+	/// </param>
+	void ApplyMeleeTwoHandHold( bool includeDemoStick )
+	{
 		if ( _animHelper is not null && _animHelper.IsValid() )
 		{
 			_animHelper.HoldType = CitizenAnimationHelper.HoldTypes.Swing;
@@ -322,7 +367,8 @@ public sealed class PlayerAnimation : Component
 		body.Set( "holdtype_pose", 0f );
 		body.Set( "b_weapon_lower", false );
 
-		EnsureMeleeDemoStick();
+		if ( includeDemoStick )
+			EnsureMeleeDemoStick();
 	}
 
 	void ClearMeleeTwoHandHold()
@@ -340,6 +386,329 @@ public sealed class PlayerAnimation : Component
 		body.Set( "holdtype", (int)CitizenAnimationHelper.HoldTypes.None );
 	}
 
+	bool _combatSequenceActive;
+	string _activeCombatSequenceName;
+	string _lastClearedCombatSequenceName;
+	double _combatSequenceClearedAtSandbox;
+
+	public bool IsPlayingCombatSequence( string sequenceName ) =>
+		_combatSequenceActive
+		&& !string.IsNullOrEmpty( sequenceName )
+		&& string.Equals( _activeCombatSequenceName, sequenceName, StringComparison.OrdinalIgnoreCase );
+
+	/// <summary>True when the active combat sequence has reached its end (non-looping).</summary>
+	public bool IsCombatSequenceFinished()
+	{
+		if ( !_combatSequenceActive )
+			return true;
+
+		var body = ResolveBody();
+		if ( body is null || !body.IsValid() )
+			return true;
+
+		if ( body.Sequence.IsFinished )
+			return true;
+
+		var duration = body.Sequence.Duration;
+		return duration > 1e-4f && body.Sequence.Time >= duration - 1e-3f;
+	}
+
+	/// <summary>Length of the active combat sequence clip, or 0 if none.</summary>
+	public float GetActiveCombatSequenceDurationSeconds()
+	{
+		if ( !_combatSequenceActive )
+			return 0f;
+
+		var body = ResolveBody();
+		if ( body is null || !body.IsValid() )
+			return 0f;
+
+		return Math.Max( 0f, body.Sequence.Duration );
+	}
+
+	/// <summary>
+	/// Play a named citizen sequence (recovery / shove). Keeps melee hold + demo stick so the sword stays visible.
+	/// Aborts any in-flight animgraph attack clip first so it cannot keep playing "in the background"
+	/// under the sequence or resume mid-swing when the graph returns.
+	/// </summary>
+	/// <param name="forceRestart">True for a new shove/recovery — bypass post-clear suppress and restart Time=0.</param>
+	public void PlayCombatSequencePose( string sequenceName, bool keepMeleeSwordVisible, bool forceRestart = false )
+	{
+		if ( string.IsNullOrWhiteSpace( sequenceName ) || !GameObject.IsValid() )
+			return;
+
+		// Clear→Apply / Sync race at recovery end used to restart the same clip (second punch).
+		// Intentional new shove must forceRestart — otherwise spam F lunges with no anim for ~0.35s.
+		if ( !forceRestart
+		     && !_combatSequenceActive
+		     && Time.NowDouble - _combatSequenceClearedAtSandbox < 0.35f
+		     && string.Equals( _lastClearedCombatSequenceName, sequenceName, StringComparison.OrdinalIgnoreCase ) )
+		{
+			Components.Get<PlayerCombat>()?.LogShoveAnimIfPunch( sequenceName,
+				$"SUPPRESS Play after clear ({Time.NowDouble - _combatSequenceClearedAtSandbox:0.000}s)" );
+			return;
+		}
+
+		if ( forceRestart )
+		{
+			_lastClearedCombatSequenceName = null;
+			_combatSequenceClearedAtSandbox = 0;
+		}
+
+		EnsureAnimTargets();
+		var body = ResolveBody();
+		if ( body is null )
+			return;
+
+		if ( !_combatSequenceActive )
+		{
+			// Kill Melee_Weapons_2H_Attack_01 while the graph is still active, then freeze to a sequence.
+			AbortMeleeAttackAnimClip( "enter sequence" );
+			_combatSequenceActive = true;
+		}
+
+		body.UseAnimGraph = false;
+		body.Sequence.Looping = false;
+		var sameName = string.Equals( _activeCombatSequenceName, sequenceName, StringComparison.OrdinalIgnoreCase );
+		if ( forceRestart || !sameName )
+		{
+			_activeCombatSequenceName = sequenceName;
+			body.Sequence.Name = sequenceName;
+			body.Sequence.Time = 0f;
+			body.Sequence.Looping = false;
+			Components.Get<PlayerCombat>()?.LogMeleeAnimStart( $"sequence {sequenceName}",
+				$"UseAnimGraph=false Looping=false force={forceRestart} dur={body.Sequence.Duration:0.###}s" );
+			Components.Get<PlayerCombat>()?.LogShoveAnimIfPunch( sequenceName,
+				$"ACTIVATE Sequence.Time=0 force={forceRestart}" );
+		}
+
+		if ( keepMeleeSwordVisible )
+			ApplyMeleeTwoHandHold( includeDemoStick: false );
+	}
+
+	/// <summary>Keep an already-playing recovery clip alive without restarting it from time 0.</summary>
+	public void MaintainCombatSequencePose( string sequenceName, bool keepMeleeSwordVisible )
+	{
+		if ( !IsPlayingCombatSequence( sequenceName ) )
+		{
+			PlayCombatSequencePose( sequenceName, keepMeleeSwordVisible );
+			return;
+		}
+
+		var body = ResolveBody();
+		if ( body is not null && body.IsValid() )
+		{
+			body.UseAnimGraph = false;
+			body.Sequence.Looping = false;
+		}
+
+		if ( keepMeleeSwordVisible )
+			ApplyMeleeTwoHandHold( includeDemoStick: false );
+	}
+
+	public void ClearCombatSequencePose()
+	{
+		var hadSequence = _combatSequenceActive || HasBodyCombatSequencePose();
+		if ( !hadSequence )
+		{
+			ForceRestoreLocomotionGraph();
+			return;
+		}
+
+		var stopped = _activeCombatSequenceName;
+		_combatSequenceActive = false;
+		_activeCombatSequenceName = null;
+		_lastClearedCombatSequenceName = stopped;
+		_combatSequenceClearedAtSandbox = Time.NowDouble;
+
+		if ( !string.IsNullOrEmpty( stopped ) )
+			Components.Get<PlayerCombat>()?.LogMeleeAnimStopIfAny( $"cleared sequence {stopped}" );
+
+		// If a swing clip is presenting (press windup, release, or a remote-applied swing), only drop the
+		// sequence — do NOT kill b_attack. Wiping it left the sweep drawing arcs with no animation.
+		// Entering a sequence still aborts the swing explicitly (see PlayCombatSequencePose).
+		var preserveSwing = HasActiveMeleeSwingPresentation;
+
+		var body = ResolveBody();
+		if ( body is not null && body.IsValid() )
+		{
+			body.UseAnimGraph = false;
+			if ( !string.IsNullOrEmpty( body.Sequence.Name ) )
+			{
+				body.Sequence.Name = null;
+				body.Sequence.Time = 0f;
+			}
+
+			body.UseAnimGraph = true;
+
+			if ( !preserveSwing )
+			{
+				body.Set( "b_attack", false );
+				body.Set( "holdtype_attack", 0f );
+				body.Set( "b_weapon_lower", false );
+				Components.Get<PlayerCombat>()?.LogMeleeAnimStart( "animgraph melee idle hold (post-recovery reset)",
+					"b_attack=false seqClearedBeforeGraphOn UseAnimGraph=true" );
+			}
+			else
+			{
+				Components.Get<PlayerCombat>()?.LogMeleeAnimStart( "animgraph keep swing after sequence clear",
+					"preserved press/windup clip UseAnimGraph=true" );
+			}
+		}
+
+		if ( !preserveSwing )
+		{
+			RestoreLateralSwingPlaybackRate();
+			_meleeAttackAnimBusyUntilSandbox = 0;
+			ClearMeleeSwingClipFromPressFlag();
+		}
+	}
+
+	/// <summary>Hard reset to citizen locomotion — call when a pose ends even if flags desynced.</summary>
+	public void ForceRestoreLocomotionGraph()
+	{
+		var body = ResolveBody();
+		if ( body is null || !body.IsValid() )
+			return;
+
+		if ( !string.IsNullOrEmpty( body.Sequence.Name ) )
+		{
+			body.UseAnimGraph = false;
+			body.Sequence.Name = null;
+			body.Sequence.Time = 0f;
+		}
+
+		body.UseAnimGraph = true;
+		_combatSequenceActive = false;
+		_activeCombatSequenceName = null;
+	}
+
+	/// <summary>
+	/// Exit a UseAnimGraph=false combat sequence into standing locomotion.
+	/// Clearing the sequence alone leaves the last flail bone pose frozen until the graph is nudged.
+	/// </summary>
+	public void ExitCombatSequenceToLocomotion()
+	{
+		// A swing clip started on press/release owns b_attack and the playback rate. Clearing a recovery
+		// sequence must never reset it to idle: that killed the animation while the sweep kept drawing arcs.
+		var preserveSwing = HasActiveMeleeSwingPresentation;
+		if ( preserveSwing && !_combatSequenceActive && !HasBodyCombatSequencePose() )
+		{
+			var swingBody = ResolveBody();
+			if ( swingBody is not null && swingBody.IsValid() )
+				swingBody.UseAnimGraph = true;
+			return;
+		}
+
+		ClearCombatSequencePose();
+		ForceRestoreLocomotionGraph();
+
+		EnsureAnimTargets();
+		var body = ResolveBody();
+		if ( body is not null && body.IsValid() )
+		{
+			// Some Sequence.Name clears ignore null — force empty then graph on.
+			body.UseAnimGraph = false;
+			body.Sequence.Name = string.Empty;
+			body.Sequence.Time = 0f;
+			body.Sequence.Looping = false;
+			body.UseAnimGraph = true;
+			if ( !preserveSwing )
+			{
+				body.PlaybackRate = 1f;
+				ResetMeleeAttackAnimGraphToIdle( body );
+			}
+
+			body.Set( "b_grounded", true );
+			body.Set( "b_swim", false );
+			body.Set( "b_climbing", false );
+			body.Set( "b_noclip", false );
+			body.Set( "duck", 0f );
+		}
+
+		if ( _animHelper is not null && _animHelper.IsValid() )
+		{
+			var controller = Components.Get<PlayerController>();
+			_animHelper.IsGrounded = controller is null || !controller.IsValid() || controller.IsOnGround;
+			_animHelper.IsSwimming = false;
+			_animHelper.IsClimbing = false;
+			_animHelper.IsNoclipping = false;
+			_animHelper.DuckLevel = 0f;
+			// One-shot idle nudge — PlayerController resumes real velocity next frame.
+			_animHelper.WithVelocity( Vector3.Zero );
+			_animHelper.WithWishVelocity( Vector3.Zero );
+		}
+
+		if ( !preserveSwing )
+		{
+			_lateralSwingPlaybackSlowed = false;
+			_playbackRateSaved = 1f;
+			_windupHoldFrozen = false;
+		}
+
+		if ( ResolvePresentationHoldPose() == HoldPose.MeleeTwoHand )
+			ApplyMeleeTwoHandHold();
+		else
+			ClearMeleeTwoHandHold();
+	}
+
+	bool HasBodyCombatSequencePose()
+	{
+		var body = ResolveBody();
+		return body is not null && body.IsValid()
+		       && (!body.UseAnimGraph || !string.IsNullOrEmpty( body.Sequence.Name ));
+	}
+
+	/// <summary>
+	/// Stop the citizen melee attack clip and clear the busy window so recovery/idle can take over cleanly.
+	/// </summary>
+	public void AbortMeleeAttackAnimClip( string reason )
+	{
+		ClearMeleeSwingClipFromPressFlag();
+		_meleeAttackAnimBusyUntilSandbox = 0;
+		RestoreLateralSwingPlaybackRate();
+
+		var body = ResolveBody();
+		if ( body is not null && body.IsValid() )
+		{
+			// Prefer killing the attack while the graph still drives the pose.
+			var graphWasOn = body.UseAnimGraph;
+			if ( !graphWasOn )
+				body.UseAnimGraph = true;
+
+			body.Set( "b_attack", false );
+			body.Set( "holdtype_attack", 0f );
+			body.Set( "b_weapon_lower", false );
+
+			if ( !graphWasOn )
+				body.UseAnimGraph = false;
+		}
+
+		Components.Get<PlayerCombat>()?.LogMeleeAnimStopIfAny( $"abort attack clip ({reason})" );
+	}
+
+	/// <summary>
+	/// After a UseAnimGraph=false recovery sequence, force melee idle — never resume a frozen attack clip.
+	/// </summary>
+	void ResetMeleeAttackAnimGraphToIdle( SkinnedModelRenderer body )
+	{
+		if ( body is null || !body.IsValid() )
+			return;
+
+		body.Set( "b_attack", false );
+		body.Set( "holdtype_attack", 0f );
+		body.Set( "b_weapon_lower", false );
+
+		if ( !string.IsNullOrEmpty( body.Sequence.Name ) )
+		{
+			body.Sequence.Name = null;
+			body.Sequence.Time = 0f;
+		}
+
+		Components.Get<PlayerCombat>()?.LogMeleeAnimStart( "animgraph melee idle hold (post-recovery reset)",
+			"b_attack=false busyCleared" );
+	}
+
 	void EnsureMeleeDemoStick()
 	{
 		if ( !ShowMeleeDemoStick )
@@ -351,7 +720,10 @@ public sealed class PlayerAnimation : Component
 		if ( _meleeDemoStick is not null && _meleeDemoStick.IsValid() )
 			return;
 
-		_meleeDemoStick = new GameObject( true, "melee_demo_stick" );
+		_meleeDemoStick = new GameObject( true, DemoStickObjectName );
+		// Local presentation only. As a plain child of a networked pawn this replicated to clients,
+		// so a client saw the host's copy on top of the one it built itself — two swords.
+		_meleeDemoStick.NetworkMode = NetworkMode.Never;
 		_meleeDemoStick.Parent = GameObject;
 		_meleeDemoStick.Tags.Add( "ignore" );
 
@@ -362,6 +734,23 @@ public sealed class PlayerAnimation : Component
 		_meleeDemoStickRenderer.RenderType = ModelRenderer.ShadowRenderType.Off;
 
 		_demoStickMeshHalfExtentX = ResolveMeshHalfExtentAlongX( model );
+		DestroyStrayDemoSticks();
+	}
+
+	/// <summary>
+	/// Drop any other box-sword under this pawn (a replicated copy from a peer, or a leftover whose
+	/// field reference we lost). Only runs when we build a stick — not per frame.
+	/// </summary>
+	void DestroyStrayDemoSticks()
+	{
+		foreach ( var child in GameObject.Children )
+		{
+			if ( child is null || !child.IsValid() || child == _meleeDemoStick )
+				continue;
+
+			if ( string.Equals( child.Name, DemoStickObjectName, StringComparison.OrdinalIgnoreCase ) )
+				child.Destroy();
+		}
 	}
 
 	static float ResolveMeshHalfExtentAlongX( Model model )
@@ -387,7 +776,8 @@ public sealed class PlayerAnimation : Component
 
 	void TickMeleeDemoStickTransform()
 	{
-		if ( !ShowMeleeDemoStick || ResolvePresentationHoldPose() != HoldPose.MeleeTwoHand )
+		// Sword is dropped for the whole hit reaction — don't let PreRender re-create it.
+		if ( _hitReactionPoseActive || !ShowMeleeDemoStick || ResolvePresentationHoldPose() != HoldPose.MeleeTwoHand )
 		{
 			DestroyMeleeDemoStick();
 			return;
@@ -493,31 +883,12 @@ public sealed class PlayerAnimation : Component
 		return false;
 	}
 
-	void ApplyLateralSwingPlaybackSlow( byte attackType )
-	{
-		if ( attackType is not (MeleeAttackTypes.Left or MeleeAttackTypes.Right) )
-		{
-			RestoreLateralSwingPlaybackRate();
-			return;
-		}
-
-		var body = ResolveBody();
-		if ( body is null || !body.IsValid() )
-			return;
-
-		if ( !_lateralSwingPlaybackSlowed )
-		{
-			_playbackRateSaved = body.PlaybackRate;
-			_lateralSwingPlaybackSlowed = true;
-		}
-
-		body.PlaybackRate = Math.Clamp( MeleeLateralSwingPlaybackRate, 0.5f, 1f );
-		_playbackRateRestoreAt = Time.NowDouble + Math.Max( 0.2f, MeleeLateralSwingSlowSeconds );
-	}
-
 	void TickLateralSwingPlaybackRestore()
 	{
 		if ( !_lateralSwingPlaybackSlowed )
+			return;
+
+		if ( _windupHoldFrozen || _windupHoldActive )
 			return;
 
 		if ( Time.NowDouble < _playbackRateRestoreAt )

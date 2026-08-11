@@ -248,14 +248,13 @@ public sealed class TrainingDummyAttackTelegraph : Component
 
 	void DrawTelegraphDebug()
 	{
+		if ( !_telegraphActive || !_hasQueuedAttack )
+			return;
+
 		var start = GameObject.WorldPosition + Vector3.Up * TelegraphEyeHeight;
 		var viewForward = _lockedAttackRotation.Forward.Normal;
 		var right = Vector3.Cross( viewForward, Vector3.Up ).Normal;
-		var color = _nextSwingDir == SwingDirs.Left
-			? new Color( 0.50f, 0.78f, 1f, 0.95f )
-			: _nextSwingDir == SwingDirs.Right
-				? new Color( 1f, 0.85f, 0.20f, 0.95f )
-				: new Color( 1f, 0.45f, 0.35f, 0.95f );
+		var color = ResolveTelegraphColor();
 
 		Vector3 dir;
 		if ( _nextSwingDir == SwingDirs.Left )
@@ -269,5 +268,19 @@ public sealed class TrainingDummyAttackTelegraph : Component
 		var drawFor = MathF.Max( 0.03f, Time.Delta * 1.5f );
 		DebugOverlay.Line( start, end, color, drawFor );
 		DebugOverlay.Sphere( new Sphere( end, 3f ), color.WithAlpha( 0.75f ), drawFor );
+	}
+
+	Color ResolveTelegraphColor()
+	{
+		// Black flash = player light windup window (mirrors MeleeWindupDuration).
+		var flashWindow = Combat is not null ? Combat.GetMeleeWindupDuration( isHeavy: false ) : 0f;
+		if ( flashWindow > 1e-4f && _telegraphActive && Time.NowDouble >= _phaseEndsAt - flashWindow )
+			return new Color( 0.02f, 0.02f, 0.02f, 0.98f );
+
+		return _nextSwingDir == SwingDirs.Left
+			? new Color( 0.50f, 0.78f, 1f, 0.95f )
+			: _nextSwingDir == SwingDirs.Right
+				? new Color( 1f, 0.85f, 0.20f, 0.95f )
+				: new Color( 1f, 0.45f, 0.35f, 0.95f );
 	}
 }
