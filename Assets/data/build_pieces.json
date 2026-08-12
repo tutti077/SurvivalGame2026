@@ -53,6 +53,19 @@
       ]
     },
     {
+      "id": "augment_station",
+      "displayName": "Augment Station",
+      "icon": "",
+      "prefab": "prefabs/build/augment_station.prefab",
+      "fallbackColor": "0.28,0.48,0.62,1",
+      "halfWidth": 25,
+      "halfHeight": 15,
+      "halfDepth": 18.75,
+      "costs": [
+        { "resourceId": "resource_woodBasic", "amount": 10 }
+      ]
+    },
+    {
       "id": "repair",
       "displayName": "Repair",
       "icon": "ui/build/repair.png",

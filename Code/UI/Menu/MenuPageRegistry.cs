@@ -13,6 +13,9 @@ public static class MenuPageRegistry
 		new( MenuPageIds.Quests, "Quests", "ui/menu/QuestsTab.png", MenuPanelFlags.Inventory | MenuPanelFlags.Quests, allowsHotkey: false ),
 		new( MenuPageIds.Map, "Map", "ui/menu/MapTab.png", MenuPanelFlags.Map ),
 		new( MenuPageIds.Settings, "Settings", "ui/menu/tab_blank.png", MenuPanelFlags.Settings ),
+		// Station-only page — not shown in the top tab bar (filtered in MenuPageNavigator).
+		new( MenuPageIds.AugmentStation, "Augments", "ui/menu/CraftingTab.png",
+			MenuPanelFlags.AugmentStation | MenuPanelFlags.Inventory, allowsHotkey: false ),
 	};
 
 	public static MenuPageDefinition Get( string pageId )

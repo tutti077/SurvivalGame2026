@@ -22,7 +22,7 @@ partial class PlayerMovement
 		"hand_left",
 	};
 
-	[Property, Group( "Grapple Input" )] public string GrappleAction { get; set; } = "mouse3";
+	[Property, Group( "Grapple Input" )] public string GrappleAction { get; set; } = "Grapple";
 	/// <summary>Shorten rope (default E).</summary>
 	[Property, Group( "Grapple Input" )] public string RetractAction { get; set; } = "GrappleRetract";
 	/// <summary>Pay out / expand max rope length (default Q).</summary>

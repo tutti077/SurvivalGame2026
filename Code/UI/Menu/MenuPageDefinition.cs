@@ -33,4 +33,5 @@ public enum MenuPanelFlags
 	Map = 8,
 	Quests = 16,
 	Settings = 32,
+	AugmentStation = 64,
 }

@@ -346,7 +346,11 @@ public sealed class InventoryMenuInputOverlay : Panel
 
 	protected override void OnEscape( PanelEvent e )
 	{
-		base.OnEscape( e );
+		if ( !_isOpen )
+			return;
+
+		// Consume Escape so closing inventory does not also open the engine pause menu.
+		Input.EscapePressed = false;
 		_menuController?.SetMenuOpen( false );
 	}
 
@@ -358,6 +362,9 @@ public sealed class InventoryMenuInputOverlay : Panel
 			return;
 
 		if ( e.Button == "escape" )
+		{
+			Input.EscapePressed = false;
 			_menuController?.SetMenuOpen( false );
+		}
 	}
 }

@@ -117,6 +117,9 @@ public static class ResourceCatalog
 		if ( ResourceDefinitionCatalog.TryGet( resourceId, out _ ) )
 			return ResourceDefinitionCatalog.ResolveCatalogEntry( resourceId );
 
+		if ( AugmentCatalog.TryGet( resourceId, out _ ) )
+			return AugmentCatalog.ResolveCatalogEntry( resourceId );
+
 		if ( CraftingRecipeCatalog.TryGetRecipeByOutput( resourceId, out _ ) )
 			return CraftingRecipeCatalog.ResolveOutputCatalogEntry( resourceId );
 
@@ -137,6 +140,10 @@ public static class ResourceCatalog
 
 		if ( ResourceDefinitionCatalog.TryGet( resourceId, out _ ) )
 			return ResourceDefinitionCatalog.GetMaxStack( resourceId );
+
+		var augmentMax = AugmentCatalog.GetMaxStack( resourceId );
+		if ( augmentMax > 0 )
+			return augmentMax;
 
 		var craftedMax = CraftingRecipeCatalog.GetOutputMaxStack( resourceId );
 		if ( craftedMax > 0 )
@@ -169,6 +176,10 @@ public static class ResourceCatalog
 		var jsonIcon = ResourceDefinitionCatalog.GetIconPath( resourceId );
 		if ( !string.IsNullOrWhiteSpace( jsonIcon ) )
 			return jsonIcon;
+
+		var augmentIcon = AugmentCatalog.GetIconPath( resourceId );
+		if ( !string.IsNullOrWhiteSpace( augmentIcon ) )
+			return augmentIcon;
 
 		var craftedIcon = CraftingRecipeCatalog.GetOutputIconPath( resourceId );
 		if ( !string.IsNullOrWhiteSpace( craftedIcon ) )

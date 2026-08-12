@@ -56,5 +56,12 @@ public sealed class EnemySpawnButton : Component
 			instance.WorldRotation = SpawnPoint.WorldRotation;
 
 		EntityEnemySetup.Configure( instance, EnemyType, Tier, SpawnHealth );
+
+		// Clone alone is host-local — remotes never see the scav without NetworkSpawn.
+		if ( Networking.IsActive && !HostNetworkSpawn.TrySpawn( instance ) )
+		{
+			Log.Warning( $"[EnemySpawnButton] NetworkSpawn failed for '{PrefabPath}' — destroying local clone." );
+			instance.Destroy();
+		}
 	}
 }

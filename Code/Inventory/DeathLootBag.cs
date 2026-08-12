@@ -7,8 +7,8 @@ namespace Survival;
 /// <summary>
 /// Death loot drop: when a pawn dies on the host, its droppable stacks move into a pitch-black
 /// sphere spawned at the death spot. Current death rule is "resources only" — anything with an
-/// equipment profile (tools, wingsuit, grapple, armor) stays on the pawn; future all/nothing
-/// switches slot into <see cref="IsDroppableOnDeath"/>. The sphere carries a take-only
+/// equipment profile (tools, wingsuit, grapple, armor) stays on the pawn. Augments stay unless
+/// <see cref="PlayerAugments.DropAugmentsOnDeath"/> is enabled. The sphere carries a take-only
 /// <see cref="ContainerInventory"/> ("&lt;name&gt;'s Loot") that opens with the standard Use/E
 /// container flow and destroys itself once emptied.
 /// </summary>
@@ -28,7 +28,8 @@ public static class DeathLootBag
 		if ( inventory is null || !inventory.HasHostAuthority )
 			return;
 
-		var stacks = CollectDroppableStacks( inventory, hotbar );
+		var augments = pawn.Components.Get<PlayerAugments>();
+		var stacks = CollectDroppableStacks( inventory, hotbar, augments );
 		if ( stacks.Count == 0 )
 			return;
 
@@ -38,29 +39,67 @@ public static class DeathLootBag
 		if ( container is null )
 			return;
 
-		RemoveDroppablesFromPawn( inventory, hotbar );
+		RemoveDroppablesFromPawn( inventory, hotbar, augments );
 
 		foreach ( var (resourceId, count) in stacks )
 			container.HostDepositStack( resourceId, count );
 	}
 
-	/// <summary>Death drop rule (currently "resources only"): equipment-profile items stay with the pawn.</summary>
-	static bool IsDroppableOnDeath( in InventorySlot slot ) =>
-		!slot.IsEmpty && !EquipmentCatalog.TryGet( slot.ResourceId, out _ );
+	/// <summary>
+	/// Death drop rule: equipment stays; augments stay unless <see cref="PlayerAugments.DropAugmentsOnDeath"/>;
+	/// other resources drop.
+	/// </summary>
+	static bool IsDroppableOnDeath( in InventorySlot slot, PlayerAugments augments )
+	{
+		if ( slot.IsEmpty )
+			return false;
 
-	/// <summary>Totals droppable resources across bag + hotbar, packed into max-size stacks.</summary>
-	static List<(string ResourceId, int Count)> CollectDroppableStacks( PlayerInventory inventory, PlayerHotbar hotbar )
+		if ( EquipmentCatalog.TryGet( slot.ResourceId, out _ ) )
+			return false;
+
+		if ( AugmentCatalog.IsAugment( slot.ResourceId ) )
+			return augments is not null && augments.DropAugmentsOnDeath;
+
+		return true;
+	}
+
+	/// <summary>Totals droppable resources across bag + hotbar (+ optional augment bank/installed).</summary>
+	static List<(string ResourceId, int Count)> CollectDroppableStacks(
+		PlayerInventory inventory,
+		PlayerHotbar hotbar,
+		PlayerAugments augments )
 	{
 		var totals = new Dictionary<string, int>( StringComparer.OrdinalIgnoreCase );
 		var order = new List<string>();
 
 		for ( var i = 0; i < inventory.SlotCount; i++ )
-			Accumulate( totals, order, inventory.GetSlot( i ) );
+			Accumulate( totals, order, inventory.GetSlot( i ), augments );
 
 		if ( hotbar is not null )
 		{
 			for ( var i = 0; i < PlayerHotbar.SlotCount; i++ )
-				Accumulate( totals, order, hotbar.GetSlot( i ) );
+				Accumulate( totals, order, hotbar.GetSlot( i ), augments );
+		}
+
+		if ( augments is not null && augments.DropAugmentsOnDeath )
+		{
+			var extra = new List<(string ResourceId, int Count)>();
+			augments.HostCollectDeathDrops( extra );
+			for ( var i = 0; i < extra.Count; i++ )
+			{
+				var (id, count) = extra[i];
+				if ( string.IsNullOrWhiteSpace( id ) || count <= 0 )
+					continue;
+
+				id = ResourceCatalog.NormalizeResourceId( id );
+				if ( !totals.ContainsKey( id ) )
+				{
+					totals[id] = 0;
+					order.Add( id );
+				}
+
+				totals[id] += count;
+			}
 		}
 
 		var stacks = new List<(string, int)>();
@@ -79,9 +118,13 @@ public static class DeathLootBag
 		return stacks;
 	}
 
-	static void Accumulate( Dictionary<string, int> totals, List<string> order, in InventorySlot slot )
+	static void Accumulate(
+		Dictionary<string, int> totals,
+		List<string> order,
+		in InventorySlot slot,
+		PlayerAugments augments )
 	{
-		if ( !IsDroppableOnDeath( slot ) )
+		if ( !IsDroppableOnDeath( slot, augments ) )
 			return;
 
 		var id = ResourceCatalog.NormalizeResourceId( slot.ResourceId );
@@ -94,31 +137,33 @@ public static class DeathLootBag
 		totals[id] += slot.Count;
 	}
 
-	static void RemoveDroppablesFromPawn( PlayerInventory inventory, PlayerHotbar hotbar )
+	static void RemoveDroppablesFromPawn( PlayerInventory inventory, PlayerHotbar hotbar, PlayerAugments augments )
 	{
 		for ( var i = 0; i < inventory.SlotCount; i++ )
 		{
-			if ( IsDroppableOnDeath( inventory.GetSlot( i ) ) )
+			if ( IsDroppableOnDeath( inventory.GetSlot( i ), augments ) )
 				inventory.HostTryPickupAll( i, out _ );
 		}
 
-		if ( hotbar is null )
-			return;
-
-		// Consume (not pickup) so slot binding ghosts survive and refill on re-collection.
-		var hotbarTotals = new Dictionary<string, int>( StringComparer.OrdinalIgnoreCase );
-		for ( var i = 0; i < PlayerHotbar.SlotCount; i++ )
+		if ( hotbar is not null )
 		{
-			var slot = hotbar.GetSlot( i );
-			if ( !IsDroppableOnDeath( slot ) )
-				continue;
+			// Consume (not pickup) so slot binding ghosts survive and refill on re-collection.
+			var hotbarTotals = new Dictionary<string, int>( StringComparer.OrdinalIgnoreCase );
+			for ( var i = 0; i < PlayerHotbar.SlotCount; i++ )
+			{
+				var slot = hotbar.GetSlot( i );
+				if ( !IsDroppableOnDeath( slot, augments ) )
+					continue;
 
-			var id = ResourceCatalog.NormalizeResourceId( slot.ResourceId );
-			hotbarTotals[id] = hotbarTotals.TryGetValue( id, out var total ) ? total + slot.Count : slot.Count;
+				var id = ResourceCatalog.NormalizeResourceId( slot.ResourceId );
+				hotbarTotals[id] = hotbarTotals.TryGetValue( id, out var total ) ? total + slot.Count : slot.Count;
+			}
+
+			foreach ( var (id, count) in hotbarTotals )
+				hotbar.TryConsumeResource( id, count );
 		}
 
-		foreach ( var (id, count) in hotbarTotals )
-			hotbar.TryConsumeResource( id, count );
+		augments?.HostClearAllForDeathDrop();
 	}
 
 	/// <summary>Pitch-black sphere with a static collider (Use-key look trace) and the loot container.</summary>

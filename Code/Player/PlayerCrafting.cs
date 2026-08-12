@@ -67,10 +67,12 @@ public sealed class PlayerCrafting : Component
 		CraftingRecipeCatalog.EnsureLoaded();
 		ResourceDefinitionCatalog.EnsureLoaded();
 		BuildPieceCatalog.EnsureLoaded();
+		AugmentCatalog.EnsureLoaded();
 
 		var recipesJson = CraftingRecipeCatalog.ExportSourceJson();
 		var resourcesJson = ResourceDefinitionCatalog.ExportSourceJson();
 		var buildPiecesJson = BuildPieceCatalog.ExportSourceJson();
+		var augmentsJson = AugmentCatalog.ExportSourceJson();
 
 		if ( string.IsNullOrWhiteSpace( recipesJson ) && LogCrafting )
 			Log.Warning( "[PlayerCrafting] Host has no recipe JSON to sync to client." );
@@ -81,18 +83,20 @@ public sealed class PlayerCrafting : Component
 		RpcOwnerReceiveCatalogs(
 			recipesJson ?? string.Empty,
 			resourcesJson ?? string.Empty,
-			buildPiecesJson ?? string.Empty );
+			buildPiecesJson ?? string.Empty,
+			augmentsJson ?? string.Empty );
 	}
 
 	[Rpc.Owner]
-	void RpcOwnerReceiveCatalogs( string recipesJson, string resourcesJson, string buildPiecesJson )
+	void RpcOwnerReceiveCatalogs( string recipesJson, string resourcesJson, string buildPiecesJson, string augmentsJson )
 	{
 		var recipesOk = CraftingRecipeCatalog.ReplaceFromJson( recipesJson );
 		var resourcesOk = ResourceDefinitionCatalog.ReplaceFromJson( resourcesJson );
 		var buildOk = BuildPieceCatalog.ReplaceFromJson( buildPiecesJson );
+		var augmentsOk = AugmentCatalog.ReplaceFromJson( augmentsJson );
 
 		if ( LogCrafting || !recipesOk || !buildOk )
-			Log.Info( $"[PlayerCrafting] Client catalog sync recipesOk={recipesOk} resourcesOk={resourcesOk} buildOk={buildOk} recipeCount={CraftingRecipeCatalog.All.Count} buildCount={BuildPieceCatalog.All.Count}" );
+			Log.Info( $"[PlayerCrafting] Client catalog sync recipesOk={recipesOk} resourcesOk={resourcesOk} buildOk={buildOk} augmentsOk={augmentsOk} recipeCount={CraftingRecipeCatalog.All.Count} buildCount={BuildPieceCatalog.All.Count} augmentCount={AugmentCatalog.All.Count}" );
 	}
 
 	/// <summary>Request a craft from the local player. Returns true when applied on host, or when the RPC was sent.</summary>

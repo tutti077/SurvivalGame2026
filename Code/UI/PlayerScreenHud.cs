@@ -57,6 +57,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	Panel _menuSkillsCenterRoot;
 	Panel _menuSkillsDetailRoot;
 	Panel _menuMapRoot;
+	Panel _menuAugmentRoot;
 	Panel _leftMenuColumn;
 	Panel _rightMenuColumn;
 	readonly List<IPlayerMenuSection> _sections = new();
@@ -67,6 +68,8 @@ public sealed class PlayerScreenHud : PanelComponent
 	GameSettingsMenuSection _settingsSection;
 	EquipmentPaperdollSection _equipmentSection;
 	ContainerMenuSection _containerSection;
+	AugmentStationMenuSection _augmentStationSection;
+	PlayerAugments _augments;
 	PickupNotificationHud _pickupNotifications;
 
 	protected override void OnTreeFirstBuilt()
@@ -127,6 +130,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		{
 			_inventoryInteraction.ContainerChanged -= OnContainerChanged;
 			_inventoryInteraction.FocusedContainerChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedAugmentStationChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.AugmentStationChanged -= OnAugmentStationChanged;
 		}
 		if ( _handHarvest is not null )
 			_handHarvest.FocusedNodeChanged -= OnInteractionPromptChanged;
@@ -178,6 +183,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_inventory = FindOnAncestors<PlayerInventory>();
 		_hotbar = FindOnAncestors<PlayerHotbar>();
 		_equipment = FindOnAncestors<PlayerEquipment>();
+		_augments = FindOnAncestors<PlayerAugments>();
 
 		_inventoryInteraction = FindOnAncestors<PlayerInventoryInteraction>();
 		_inventoryInteraction?.SetDragLayerRoot( Panel );
@@ -440,6 +446,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_menuRoot.Style.Set( "display", "none" );
 
 		_menuMapRoot = CreateMapCenterAnchor( _menuRoot );
+		_menuAugmentRoot = CreateMapCenterAnchor( _menuRoot );
 		_menuSkillsCenterRoot = CreateSkillsCenterAnchor( _menuRoot );
 		_menuSkillsDetailRoot = CreateSkillsDetailAnchor( _menuRoot );
 		_menuLeftRoot = CreateMenuSideAnchor( _menuRoot, alignLeft: true );
@@ -469,11 +476,15 @@ public sealed class PlayerScreenHud : PanelComponent
 		_craftingSection.Build( _leftMenuColumn );
 		_menuInputOverlay.BindCraftingWheel( _craftingSection.ApplyRecipeListWheel );
 		_menuInputOverlay.BindCraftingScrollbar( _craftingSection.TryHandleScrollbarPointer );
-		_menuInputOverlay.BindCraftingRecipeSelect( _craftingSection.TrySelectRecipeAtScreen );
-		_menuInputOverlay.BindCraftingCraftPointer( _craftingSection.TryCraftPointerAtScreen );
+		_menuInputOverlay.BindCraftingRecipeSelect( OnMenuRecipeSelectAtScreen );
+		_menuInputOverlay.BindCraftingCraftPointer( OnMenuCraftPointerAtScreen );
 		_menuInputOverlay.BindTabSelect( _pageNavigator.TrySelectTabAtScreen );
 		_menuInputOverlay.BindPageContentSelect( TryMenuPageContentAtScreen );
 		_menuController.MenuMouseWheelSink = OnMenuMouseWheel;
+
+		_augmentStationSection = new AugmentStationMenuSection( _augments, _inventory, _inventoryInteraction );
+		_sections.Add( _augmentStationSection );
+		_augmentStationSection.Build( _menuAugmentRoot );
 
 		_questsSection = new QuestMenuSection();
 		_sections.Add( _questsSection );
@@ -483,7 +494,12 @@ public sealed class PlayerScreenHud : PanelComponent
 		_sections.Add( _containerSection );
 		_containerSection.Build( _leftMenuColumn );
 		if ( _inventoryInteraction is not null )
+		{
 			_inventoryInteraction.ContainerChanged += OnContainerChanged;
+			_inventoryInteraction.FocusedContainerChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedAugmentStationChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.AugmentStationChanged += OnAugmentStationChanged;
+		}
 
 		var inventorySection = new InventoryMenuSection( _inventory, _inventoryInteraction );
 		_sections.Add( inventorySection );
@@ -604,9 +620,11 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _promptRoot is null )
 			return;
 
-		// Container-in-view wins over harvest (you're aiming at the chest, not the node behind it).
+		// Container / augment station under the crosshair wins over harvest.
 		var focusedContainer = _inventoryInteraction?.FocusedContainer;
-		var showOpen = focusedContainer is not null && focusedContainer.IsValid();
+		var focusedStation = _inventoryInteraction?.FocusedAugmentStation;
+		var showOpen = (focusedContainer is not null && focusedContainer.IsValid())
+		               || (focusedStation is not null && focusedStation.IsValid());
 		var showHarvest = !showOpen && _handHarvest?.FocusedNode is not null;
 		var show = showOpen || showHarvest;
 
@@ -615,9 +633,22 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		if ( _promptLabel is not null )
 		{
-			_promptLabel.Text = showOpen
-				? ( string.IsNullOrWhiteSpace( focusedContainer.DisplayName ) ? "Open" : $"Open {focusedContainer.DisplayName}" )
-				: DefaultHarvestPromptText;
+			if ( focusedContainer is not null && focusedContainer.IsValid() )
+			{
+				_promptLabel.Text = string.IsNullOrWhiteSpace( focusedContainer.DisplayName )
+					? "Open"
+					: $"Open {focusedContainer.DisplayName}";
+			}
+			else if ( focusedStation is not null && focusedStation.IsValid() )
+			{
+				_promptLabel.Text = string.IsNullOrWhiteSpace( focusedStation.DisplayName )
+					? "Open Augment Station"
+					: $"Open {focusedStation.DisplayName}";
+			}
+			else
+			{
+				_promptLabel.Text = DefaultHarvestPromptText;
+			}
 		}
 
 		if ( show == _promptWasVisible )
@@ -640,7 +671,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		for ( var i = 0; i < _sections.Count; i++ )
 		{
 			var id = _sections[i].SectionId;
-			if ( id is "inventory" or "crafting" or "equipment" )
+			if ( id is "inventory" or "crafting" or "equipment" or "augment_station" )
 				_sections[i].Refresh();
 		}
 	}
@@ -655,6 +686,36 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		if ( _menuController is not null && _menuController.IsMenuOpen )
 			ApplyMenuLayout();
+	}
+
+	void OnAugmentStationChanged()
+	{
+		if ( _menuController is not null && _menuController.IsMenuOpen )
+			ApplyMenuLayout();
+
+		_augmentStationSection?.Refresh();
+	}
+
+	bool OnMenuRecipeSelectAtScreen( Vector2 screenPos )
+	{
+		if ( _menuController is not null
+		     && string.Equals( _menuController.ActivePageId, MenuPageIds.AugmentStation, StringComparison.OrdinalIgnoreCase )
+		     && _augmentStationSection is not null
+		     && _augmentStationSection.TrySelectRecipeAtScreen( screenPos ) )
+			return true;
+
+		return _craftingSection is not null && _craftingSection.TrySelectRecipeAtScreen( screenPos );
+	}
+
+	bool OnMenuCraftPointerAtScreen( Vector2 screenPos, bool pressed )
+	{
+		if ( _menuController is not null
+		     && string.Equals( _menuController.ActivePageId, MenuPageIds.AugmentStation, StringComparison.OrdinalIgnoreCase )
+		     && _augmentStationSection is not null
+		     && _augmentStationSection.TryCraftPointerAtScreen( screenPos, pressed ) )
+			return true;
+
+		return _craftingSection is not null && _craftingSection.TryCraftPointerAtScreen( screenPos, pressed );
 	}
 
 	void ApplyMenuOpenState( bool isOpen )
@@ -694,6 +755,8 @@ public sealed class PlayerScreenHud : PanelComponent
 				_menuSkillsDetailRoot.Style.Set( "display", "none" );
 			if ( _menuMapRoot is not null )
 				_menuMapRoot.Style.Set( "display", "none" );
+			if ( _menuAugmentRoot is not null )
+				_menuAugmentRoot.Style.Set( "display", "none" );
 		}
 	}
 
@@ -705,7 +768,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		var panels = _menuController.VisiblePanels;
 		var showMap = (panels & MenuPanelFlags.Map) != 0;
 		var showSettings = (panels & MenuPanelFlags.Settings) != 0;
-		var showFullscreen = showMap || showSettings;
+		var showAugmentStation = (panels & MenuPanelFlags.AugmentStation) != 0;
+		var showFullscreen = showMap || showSettings || showAugmentStation;
 		var showSkills = !showFullscreen && (panels & MenuPanelFlags.Skills) != 0;
 		var showQuests = !showFullscreen && !showSkills && (panels & MenuPanelFlags.Quests) != 0;
 		var showCrafting = !showFullscreen && !showSkills && !showQuests && (panels & MenuPanelFlags.Crafting) != 0;
@@ -716,7 +780,10 @@ public sealed class PlayerScreenHud : PanelComponent
 		var showLeftColumn = showCrafting || showQuests || showPaperdoll || showContainer;
 
 		if ( _menuMapRoot is not null )
-			_menuMapRoot.Style.Set( "display", showFullscreen ? "flex" : "none" );
+			_menuMapRoot.Style.Set( "display", (showMap || showSettings) ? "flex" : "none" );
+
+		if ( _menuAugmentRoot is not null )
+			_menuAugmentRoot.Style.Set( "display", showAugmentStation ? "flex" : "none" );
 
 		if ( _menuSkillsCenterRoot is not null )
 			_menuSkillsCenterRoot.Style.Set( "display", showSkills ? "flex" : "none" );
@@ -737,6 +804,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_skillsSection?.SetPanelVisible( showSkills );
 		_mapSection?.SetPanelVisible( showMap );
 		_settingsSection?.SetPanelVisible( showSettings );
+		_augmentStationSection?.SetPanelVisible( showAugmentStation );
 
 		for ( var i = 0; i < _sections.Count; i++ )
 		{
@@ -761,7 +829,9 @@ public sealed class PlayerScreenHud : PanelComponent
 		}
 
 		var panels = _menuController.VisiblePanels;
-		var hideForFullscreen = (panels & MenuPanelFlags.Map) != 0 || (panels & MenuPanelFlags.Settings) != 0;
+		var hideForFullscreen = (panels & MenuPanelFlags.Map) != 0
+		                        || (panels & MenuPanelFlags.Settings) != 0
+		                        || (panels & MenuPanelFlags.AugmentStation) != 0;
 		_hotbarHud.SetVisible( !hideForFullscreen );
 	}
 
@@ -777,7 +847,9 @@ public sealed class PlayerScreenHud : PanelComponent
 		}
 
 		var panels = _menuController.VisiblePanels;
-		var hideForFullscreen = (panels & MenuPanelFlags.Map) != 0 || (panels & MenuPanelFlags.Settings) != 0;
+		var hideForFullscreen = (panels & MenuPanelFlags.Map) != 0
+		                        || (panels & MenuPanelFlags.Settings) != 0
+		                        || (panels & MenuPanelFlags.AugmentStation) != 0;
 		_minimapHud.SetVisible( !hideForFullscreen );
 	}
 

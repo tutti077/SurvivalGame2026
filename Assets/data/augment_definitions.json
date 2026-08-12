@@ -1,0 +1,57 @@
+{
+  "augments": [
+    {
+      "id": "augment_jump_legs",
+      "displayName": "Jump Legs",
+      "icon": "ui/items/resource_woodBasic.png",
+      "description": "Passive: every grounded jump launches at 3× normal height.",
+      "slot": "LegQuads",
+      "ability": "JumpHeight",
+      "jumpHeightMultiplier": 3,
+      "maxStack": 1,
+      "ingredients": [
+        { "resourceId": "resource_woodBasic", "amount": 1 }
+      ],
+      "stats": [
+        { "label": "Slot", "value": "Leg · Quads" },
+        { "label": "Type", "value": "Passive" },
+        { "label": "Jump height", "value": "3×" }
+      ]
+    },
+    {
+      "id": "augment_lateral_dash_legs",
+      "displayName": "Lateral Dash Legs",
+      "icon": "ui/items/resource_woodBasic.png",
+      "description": "Grounded A/D + Jump dashes 3m sideways instead of jumping. Use W/S + Jump to jump normally.",
+      "slot": "LegQuads",
+      "ability": "LateralDash",
+      "dashMeters": 3,
+      "maxStack": 1,
+      "ingredients": [
+        { "resourceId": "resource_woodBasic", "amount": 1 }
+      ],
+      "stats": [
+        { "label": "Slot", "value": "Leg · Quads" },
+        { "label": "Type", "value": "Triggered" },
+        { "label": "Dash", "value": "3 m (A/D + Jump)" }
+      ]
+    },
+    {
+      "id": "augment_double_jump_legs",
+      "displayName": "Double Jump Legs",
+      "icon": "ui/items/resource_woodBasic.png",
+      "description": "Press Jump once more while airborne for a second hop at normal jump height. Resets on landing.",
+      "slot": "LegQuads",
+      "ability": "DoubleJump",
+      "maxStack": 1,
+      "ingredients": [
+        { "resourceId": "resource_woodBasic", "amount": 1 }
+      ],
+      "stats": [
+        { "label": "Slot", "value": "Leg · Quads" },
+        { "label": "Type", "value": "Triggered" },
+        { "label": "Air jumps", "value": "1" }
+      ]
+    }
+  ]
+}

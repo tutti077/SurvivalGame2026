@@ -168,6 +168,22 @@
           "StaminaRegenMaxPerSecond": 40,
           "StaminaRegenMinPerSecond": 4,
           "StaminaRegenRampSeconds": 1.5
+        },
+        {
+          "__type": "Survival.BackgroundMusic",
+          "__guid": "d4481336-e7f6-4260-9044-7a8a8a650eeb",
+          "__enabled": true,
+          "Flags": 0,
+          "Loop": true,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "PlayOnStart": true,
+          "TrackPath": "sounds/music/clover_hills_sketch_2.mp3",
+          "Volume": 0.18
         }
       ],
       "Children": []
@@ -269,7 +285,8 @@
         "656a88e8-687e-8e78-a357-1ec3dab10364": "bc50845c-bfb4-45ee-b96a-7a7e33b3b092",
         "786f226e-690d-8b6e-83ff-4342a80cd0ee": "4cee7fd1-a96f-4a96-b9f9-da1b48deb402",
         "13b5a6bf-7962-8375-99b1-4790290e5448": "dd5a2d30-69e9-4921-bc78-d134de33dbe5",
-        "18ee3cca-7999-85c9-8512-f7d092d15954": "d4386acc-12ea-483d-89dd-8ee5e7ee75c2"
+        "18ee3cca-7999-85c9-8512-f7d092d15954": "d4386acc-12ea-483d-89dd-8ee5e7ee75c2",
+        "a7b8c9d0-e1f2-3456-7890-abcdef012345": "04eb0936-39d7-87ec-94d5-738ae9f56baf"
       }
     },
     {
@@ -1080,6 +1097,7 @@
           "MeleeAttackLookSensitivityScale": 0.4,
           "MeleeAttackMaxPitchDegrees": 30,
           "MeleeAttackMaxYawDegrees": 40,
+          "MeleeAttackMoveSpeedScale": 0.1,
           "MeleeAttackRangeForward": 76,
           "MeleeAttackRangeLeftRight": 76,
           "MeleeAttackTiltDegreesForward": 10,

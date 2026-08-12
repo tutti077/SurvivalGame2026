@@ -417,6 +417,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() || _vitals is null )
 			return;
 
+		// Augment air hop / dash must see Jump before stamina or wingsuit clear it.
+		TickAugmentJumpGates();
+
 		if ( JumpStaminaCost > 0f
 		     && !_vitals.CanAffordStamina( JumpStaminaCost )
 		     && ExhaustedJumpHeightFraction <= 0f )
@@ -456,6 +459,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		if ( _vitals.OnControllerJumpedForStaminaFromMovement( JumpStaminaCost, ExhaustedJumpHeightFraction ) )
 			ApplyExhaustedJumpVelocityScale();
+
+		OnAugmentJumped();
+		TickPendingJumpLegsScale();
 	}
 
 	public void OnLanded( float distance, Vector3 impactVelocity )
@@ -470,6 +476,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		_wingsuitAirborneSeconds = 0f;
 		_vitals.OnControllerLandedForJumpStaminaFromMovement( distance, impactVelocity );
+		OnAugmentLanded();
 	}
 
 	/// <summary>

@@ -231,9 +231,7 @@ public partial class PlayerCombat
 
 		if ( _combatRecoveryAnim == CombatRecoveryAnim.MeleePunchLeft )
 		{
-			// Host reset the flag locally; owning clients keep a stale true after clear — reset before play.
-			_shovePunchPlayedThisRecovery = false;
-			PlayShovePunchAnimationOnce( "RpcOwnerApplyCombatRecoveryLock" );
+			// Punch clip is Rpc.Broadcast from the host — this Owner RPC only owns the combat lock.
 			var clip = Components.Get<PlayerAnimation>()?.GetActiveCombatSequenceDurationSeconds() ?? 0f;
 			if ( clip > durationSeconds + 1e-4f )
 				ExtendCombatActionRecovery( clip );

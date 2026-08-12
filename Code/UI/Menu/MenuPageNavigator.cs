@@ -65,6 +65,10 @@ public sealed class MenuPageNavigator
 			tab.Style.Set( "overflow", "hidden" );
 			tab.Style.Set( "pointer-events", "none" );
 
+			// Station-only pages stay out of the tab bar.
+			if ( string.Equals( page.PageId, MenuPageIds.AugmentStation, StringComparison.OrdinalIgnoreCase ) )
+				tab.Style.Set( "display", "none" );
+
 			var icon = new Panel { Parent = tab };
 			icon.Style.Set( "position", "absolute" );
 			icon.Style.Set( "left", "4px" );

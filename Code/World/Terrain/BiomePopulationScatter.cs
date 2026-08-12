@@ -151,7 +151,20 @@ public static class BiomePopulationScatter
 			instance.WorldRotation = worldRot;
 		}
 
-		HostNetworkSpawn.TrySpawn( instance );
+		if ( Networking.IsActive )
+		{
+			if ( !HostNetworkSpawn.TrySpawn( instance ) )
+			{
+				Log.Warning( $"[BiomePopulation] NetworkSpawn failed for '{entry.PrefabPath}' — destroying local clone." );
+				instance.Destroy();
+				return false;
+			}
+		}
+		else
+		{
+			HostNetworkSpawn.TrySpawn( instance );
+		}
+
 		BiomePopulationRegistry.NotifySpawned( slotKey, instance );
 		return true;
 	}
@@ -192,7 +205,20 @@ public static class BiomePopulationScatter
 			instance.WorldRotation = worldRot;
 		}
 
-		HostNetworkSpawn.TrySpawn( instance );
+		if ( Networking.IsActive )
+		{
+			if ( !HostNetworkSpawn.TrySpawn( instance ) )
+			{
+				Log.Warning( $"[BiomePopulation] NetworkSpawn failed for respawn '{entry.PrefabPath}' — destroying local clone." );
+				instance.Destroy();
+				return false;
+			}
+		}
+		else
+		{
+			HostNetworkSpawn.TrySpawn( instance );
+		}
+
 		BiomePopulationRegistry.NotifySpawned( slotKey, instance );
 		return true;
 	}

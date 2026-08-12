@@ -1,9 +1,9 @@
 {
   "RootObject": {
-    "__guid": "b1010004-1111-4111-8111-111111111104",
+    "__guid": "a2010004-2222-4222-8222-222222222201",
     "__version": 2,
     "Flags": 0,
-    "Name": "chest",
+    "Name": "augment_station",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
     "Scale": "1,0.6,0.75",
@@ -17,14 +17,14 @@
     "Components": [
       {
         "__type": "Sandbox.ModelRenderer",
-        "__guid": "b1010004-1111-4111-8111-111111111141",
+        "__guid": "a2010004-2222-4222-8222-222222222241",
         "__enabled": true,
         "Flags": 0,
         "BodyGroups": 18446744073709551615,
         "CreateAttachments": false,
         "LodOverride": null,
         "MaterialGroup": null,
-        "MaterialOverride": "materials/build/chest_brown.vmat",
+        "MaterialOverride": "materials/build/augment_station_blue.vmat",
         "Materials": null,
         "Model": "models/dev/box.vmdl",
         "OnComponentDestroy": null,
@@ -44,7 +44,7 @@
       },
       {
         "__type": "Sandbox.BoxCollider",
-        "__guid": "b1010004-1111-4111-8111-111111111142",
+        "__guid": "a2010004-2222-4222-8222-222222222242",
         "__enabled": true,
         "Flags": 0,
         "Center": "0,0,0",
@@ -70,7 +70,7 @@
       },
       {
         "__type": "Survival.BuildPiece",
-        "__guid": "b1010004-1111-4111-8111-111111111143",
+        "__guid": "a2010004-2222-4222-8222-222222222243",
         "__enabled": true,
         "Flags": 0,
         "IsBlueprint": false,
@@ -80,22 +80,20 @@
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null,
-        "PieceId": "chest"
+        "PieceId": "augment_station"
       },
       {
-        "__type": "Survival.ContainerInventory",
-        "__guid": "b1010004-1111-4111-8111-111111111144",
+        "__type": "Survival.AugmentStation",
+        "__guid": "a2010004-2222-4222-8222-222222222244",
         "__enabled": true,
         "Flags": 0,
-        "Columns": 4,
-        "DisplayName": "Chest",
+        "DisplayName": "Augment Station",
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
-        "OnComponentUpdate": null,
-        "SlotCount": 16
+        "OnComponentUpdate": null
       }
     ],
     "Children": [],

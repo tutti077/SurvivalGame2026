@@ -232,6 +232,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		PollHotbarPointerInput();
 		UpdatePlayerDropZone();
 		TickContainerAccess();
+		TickAugmentStationAccess();
 
 		// While the game menu is open, Attack1 drag finish is owned by InventoryMenuInputOverlay
 		// (soft cursor). Finishing here with Mouse.Position cancels bag→hotbar drops.
@@ -266,6 +267,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 
 		ReturnHeldOnMenuClose();
 		CloseContainer();
+		CloseAugmentStation();
 	}
 
 	void OnMenuLayoutChanged()
@@ -280,7 +282,8 @@ public sealed partial class PlayerInventoryInteraction : Component
 	static bool IsBagPanelVisible( MenuPanelFlags panels ) =>
 		(panels & MenuPanelFlags.Inventory) != 0
 		|| (panels & MenuPanelFlags.Crafting) != 0
-		|| (panels & MenuPanelFlags.Quests) != 0;
+		|| (panels & MenuPanelFlags.Quests) != 0
+		|| (panels & MenuPanelFlags.AugmentStation) != 0;
 
 	void ReturnHeldOnMenuClose()
 	{
@@ -387,6 +390,21 @@ public sealed partial class PlayerInventoryInteraction : Component
 
 	static bool IsStackMouseChord() => IsPrimaryMouseDown() && IsSecondaryMouseDown();
 
+	/// <summary>
+	/// Inventory modifier (quick-move / half-stack) is always physical Shift — never the rebindable
+	/// <c>Run</c> sprint action. Rebinding Shift for Grapple Retract must not break shift-click equip.
+	/// </summary>
+	static bool IsInventoryShiftModifierDown()
+	{
+		if ( Input.Keyboard.Down( "shift" ) )
+			return true;
+		if ( Input.Keyboard.Down( "leftshift" ) )
+			return true;
+		if ( Input.Keyboard.Down( "rightshift" ) )
+			return true;
+		return false;
+	}
+
 	void ProcessSlotLeftPress( InventorySlotPanel slot )
 	{
 		if ( !CanInteractSlot( slot ) )
@@ -395,7 +413,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		if ( IsStackMouseChord() )
 			return;
 
-		if ( Input.Down( "Run" ) )
+		if ( IsInventoryShiftModifierDown() )
 		{
 			if ( !_held.IsEmpty )
 				return;
@@ -463,7 +481,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 			return;
 
 		var host = slot.GridHost;
-		var shift = Input.Down( "Run" );
+		var shift = IsInventoryShiftModifierDown();
 
 		if ( !_held.IsEmpty )
 		{

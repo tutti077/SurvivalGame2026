@@ -187,13 +187,18 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 		if ( IsMenuOpen )
 			FlushCapturedMenuMouseWheel();
 
+		// Closing our menu must consume Escape — otherwise the same press also trips the
+		// engine pause overlay, then EnsureGameplayLookControls fights it (hidden mouse /
+		// forced look) and the host looks "unpossessed" with no usable s&box menu.
 		if ( IsMenuOpen && Input.EscapePressed )
 		{
+			Input.EscapePressed = false;
 			SetMenuOpen( false );
 			return;
 		}
 
-
+		if ( IsEnginePauseBlockingGameplay() )
+			return;
 
 		if ( WasActionPressed( CraftingMenuAction ) )
 		{
@@ -220,10 +225,7 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 		if ( WasActionPressed( InventoryMenuAction ) )
 			HandlePageHotkey( MenuPageIds.Inventory );
 
-
-
 		if ( !IsMenuOpen )
-
 			EnsureGameplayLookControls();
 
 	}
@@ -301,6 +303,8 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 
 	public void OpenCraftingPage() => OpenPage( MenuPageIds.Crafting );
+
+	public void OpenAugmentStationPage() => OpenPage( MenuPageIds.AugmentStation );
 
 
 
@@ -456,7 +460,7 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 	{
 
-		if ( IsMenuOpen )
+		if ( IsMenuOpen || IsEnginePauseBlockingGameplay() )
 
 			return;
 
@@ -475,10 +479,18 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 		_savedUseLookControls = true;
 
-		if ( Mouse.Visibility != MouseVisibility.Hidden )
+		// Only hide the cursor when the engine is not paused. Forcing Hidden every frame
+		// while the s&box pause overlay is up steals the mouse and feels like unpossessing.
+		if ( !Sandbox.Game.IsPaused && Mouse.Visibility != MouseVisibility.Hidden )
 			Mouse.Visibility = MouseVisibility.Hidden;
 
 	}
+
+	/// <summary>
+	/// Engine pause / ESC overlay. Prefer <see cref="Sandbox.Game.IsPaused"/> —
+	/// nested <c>Game.Overlay</c> pause flags are instance members and are not usable statically.
+	/// </summary>
+	static bool IsEnginePauseBlockingGameplay() => Sandbox.Game.IsPaused;
 
 
 

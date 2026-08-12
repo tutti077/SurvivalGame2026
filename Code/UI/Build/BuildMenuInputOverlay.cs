@@ -96,7 +96,10 @@ public sealed class BuildMenuInputOverlay : Panel
 
 	protected override void OnEscape( PanelEvent e )
 	{
-		base.OnEscape( e );
+		if ( !_isOpen )
+			return;
+
+		Input.EscapePressed = false;
 		ResolveBuildHammer()?.SetBuildMenuOpen( false );
 	}
 

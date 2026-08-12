@@ -219,6 +219,21 @@ public partial class PlayerCombat
 		}
 
 		CancelAttackIntentsForShoveRecovery();
+
+		// Remotes never tick Sync-driven recovery on the host pawn — broadcast the punch like hit reaction / swing.
+		if ( GameObject.Network is { Active: true } && Networking.IsHost )
+			RpcBroadcastShovePunch();
+	}
+
+	/// <summary>Host→all peers: play the shove punch on every machine that isn't the host (host already played locally).</summary>
+	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable | NetFlags.SendImmediate )]
+	void RpcBroadcastShovePunch()
+	{
+		if ( !GameObject.IsValid() || Networking.IsHost )
+			return;
+
+		_shovePunchPlayedThisRecovery = false;
+		PlayShovePunchAnimationOnce( "RpcBroadcastShovePunch" );
 	}
 
 	/// <summary>Owner + host: drop in-flight sword intents so Attack1 during kick does not fire at unlock.</summary>
