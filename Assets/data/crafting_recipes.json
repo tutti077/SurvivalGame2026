@@ -576,6 +576,128 @@
                   { "label": "Description", "value": "Pipes for crafting" },
                   { "label": "Type", "value": "Resource" }
                 ]
+              },
+/*cooking*/   {
+                "id": "food_roasted_mushroom",
+                "displayName": "Roasted Mushroom",
+                "icon": "ui/items/food_roasted_mushroom.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 10,
+                "requiredStation": "campfire",
+                "craftSeconds": 3,
+                "ingredients": [
+                  { "resourceId": "food_mushroom", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Cooked mushroom" },
+                  { "label": "Type", "value": "Food" }
+                ]
+              },
+              {
+                "id": "food_roasted_bird",
+                "displayName": "Roasted Bird",
+                "icon": "ui/items/food_roasted_bird.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 10,
+                "requiredStation": "campfire",
+                "craftSeconds": 3,
+                "ingredients": [
+                  { "resourceId": "rawmeat_bird", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Cooked bird meat" },
+                  { "label": "Type", "value": "Food" }
+                ]
+              },
+              {
+                "id": "food_roasted_fox",
+                "displayName": "Roasted Fox",
+                "icon": "ui/items/food_roasted_fox.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 10,
+                "requiredStation": "campfire",
+                "craftSeconds": 3,
+                "ingredients": [
+                  { "resourceId": "rawmeat_fox", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Cooked fox meat" },
+                  { "label": "Type", "value": "Food" }
+                ]
+              },
+              {
+                "id": "food_roasted_whitetail",
+                "displayName": "Roasted Whitetail",
+                "icon": "ui/items/food_roasted_whitetail.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 10,
+                "requiredStation": "campfire",
+                "craftSeconds": 3,
+                "ingredients": [
+                  { "resourceId": "rawmeat_whitetail", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Cooked whitetail meat" },
+                  { "label": "Type", "value": "Food" }
+                ]
+              },
+              {
+                "id": "food_roasted_lynx",
+                "displayName": "Roasted Lynx",
+                "icon": "ui/items/food_roasted_lynx.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 10,
+                "requiredStation": "campfire",
+                "craftSeconds": 3,
+                "ingredients": [
+                  { "resourceId": "rawmeat_lynx", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Cooked lynx meat" },
+                  { "label": "Type", "value": "Food" }
+                ]
+              },
+              {
+                "id": "food_berry_skewers",
+                "displayName": "Berry Skewers",
+                "icon": "ui/items/food_berry_skewers.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 10,
+                "requiredStation": "campfire",
+                "craftSeconds": 3,
+                "ingredients": [
+                  { "resourceId": "food_blueberry", "amount": 1 },
+                  { "resourceId": "food_raspberry", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Blueberry and raspberry skewers" },
+                  { "label": "Type", "value": "Food" }
+                ]
+              },
+              {
+                "id": "food_hunter_stew",
+                "displayName": "Hunter Stew",
+                "icon": "ui/items/food_hunter_stew.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 5,
+                "requiredStation": "campfire",
+                "craftSeconds": 3,
+                "ingredients": [
+                  { "resourceId": "rawmeat_whitetail", "amount": 1 },
+                  { "resourceId": "rawmeat_lynx", "amount": 1 },
+                  { "resourceId": "food_mushroom", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Hearty stew of whitetail, lynx, and mushroom" },
+                  { "label": "Type", "value": "Food" }
+                ]
               }
   ]
 }

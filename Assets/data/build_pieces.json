@@ -76,6 +76,17 @@
       "costs": [
         { "resourceId": "resource_woodBasic", "amount": 1 }
       ]
+    },
+    {
+      "id": "furniture_campfire",
+      "displayName": "Campfire",
+      "icon": "",
+      "prefab": "prefabs/build/furniture_campfire.prefab",
+      "fallbackColor": "1,0.45,0.12,1",
+      "halfWidth": 12,
+      "halfHeight": 12,
+      "halfDepth": 12,
+      "costs": []
     }
   ]
 }

@@ -47,8 +47,22 @@ public sealed class CraftingRecipe
 	[JsonPropertyName( "damage" )]
 	public float Damage { get; set; }
 
+	/// <summary>
+	/// Crafting station required nearby (e.g. <c>campfire</c>). Empty = craft anywhere.
+	/// </summary>
+	[JsonPropertyName( "requiredStation" )]
+	public string RequiredStation { get; set; } = string.Empty;
+
+	/// <summary>Hold-to-craft duration in seconds. 0 = UI default.</summary>
+	[JsonPropertyName( "craftSeconds" )]
+	public float CraftSeconds { get; set; }
+
 	/// <summary>Items granted / space required for one craft.</summary>
 	public int TotalOutputAmount => Math.Max( 1, OutputAmount );
+
+	public bool RequiresStation => !string.IsNullOrWhiteSpace( RequiredStation );
+
+	public float ResolvedCraftSeconds => CraftSeconds > 0.05f ? CraftSeconds : 0f;
 
 	/// <summary>How many output items fit in one inventory stack after crafting.</summary>
 	public int ResolvedMaxStack => MaxStack > 0 ? MaxStack : 1;

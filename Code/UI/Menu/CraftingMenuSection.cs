@@ -66,6 +66,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	float _craftHoldElapsed;
 	bool _craftButtonPressedVisual;
 	int _builtRecipeContentVersion = -1;
+	bool _builtNearCampfire;
 
 	static readonly Color CraftButtonColor = new( 0.22f, 0.45f, 0.28f, 0.95f );
 	static readonly Color CraftButtonPressedColor = new( 0.14f, 0.32f, 0.18f, 0.98f );
@@ -240,12 +241,18 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 		rowParent.DeleteChildren();
 		_rows.Clear();
+		var nearCampfire = IsNearCampfire();
+		_builtNearCampfire = nearCampfire;
+
 		foreach ( var recipe in CraftingRecipeCatalog.All )
 		{
 			if ( recipe is null || string.IsNullOrWhiteSpace( recipe.Id ) )
 				continue;
 
 			if ( !recipe.IsUnlockedByDefault )
+				continue;
+
+			if ( recipe.RequiresStation && !HasRequiredStation( recipe ) )
 				continue;
 
 			var row = new CraftingRecipeRowPanel
@@ -302,8 +309,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 			_rows[^1].Root.Style.MarginBottom = Length.Pixels( 0f );
 
 		_recipeListPanel?.SetRowCount( _rows.Count );
-		_builtRecipeContentVersion = CraftingRecipeCatalog.ContentVersion
-			^ (ResourceDefinitionCatalog.ContentVersion << 16);
+		_builtRecipeContentVersion = BuildRecipeListVersion( nearCampfire );
 
 		var keepSelection = !string.IsNullOrWhiteSpace( _selectedRecipeId )
 			&& CraftingRecipeCatalog.Get( _selectedRecipeId ) is not null;
@@ -322,9 +328,9 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		CraftingRecipeCatalog.EnsureLoaded();
 		ResourceDefinitionCatalog.EnsureLoaded();
 
-		var version = CraftingRecipeCatalog.ContentVersion
-			^ (ResourceDefinitionCatalog.ContentVersion << 16);
-		if ( version == _builtRecipeContentVersion )
+		var nearCampfire = IsNearCampfire();
+		var version = BuildRecipeListVersion( nearCampfire );
+		if ( version == _builtRecipeContentVersion && nearCampfire == _builtNearCampfire )
 			return;
 
 		var content = _recipeListPanel?.Content;
@@ -333,6 +339,11 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 		PopulateRecipeRows( content );
 	}
+
+	static int BuildRecipeListVersion( bool nearCampfire ) =>
+		CraftingRecipeCatalog.ContentVersion
+		^ (ResourceDefinitionCatalog.ContentVersion << 16)
+		^ (nearCampfire ? 1 << 30 : 0);
 
 	public void ApplyRecipeListWheel( Vector2 wheel )
 	{
@@ -572,7 +583,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		}
 
 		_craftHoldElapsed += Time.Delta;
-		var duration = Math.Max( 0.05f, CraftHoldSeconds );
+		var duration = Math.Max( 0.05f, GetSelectedCraftHoldSeconds() );
 		var t = Math.Clamp( _craftHoldElapsed / duration, 0f, 1f );
 		SetCraftHoldVisual( t );
 
@@ -647,10 +658,34 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( recipe is null || _inventory is null )
 			return false;
 
+		if ( recipe.RequiresStation && !HasRequiredStation( recipe ) )
+			return false;
+
 		if ( !HasScaledResources( recipe ) )
 			return false;
 
 		return _inventory.CanFitResource( recipe.Id, recipe.TotalOutputAmount );
+	}
+
+	float GetSelectedCraftHoldSeconds()
+	{
+		var recipe = CraftingRecipeCatalog.Get( _selectedRecipeId );
+		if ( recipe is not null && recipe.ResolvedCraftSeconds > 0f )
+			return recipe.ResolvedCraftSeconds;
+
+		return CraftHoldSeconds;
+	}
+
+	bool IsNearCampfire() =>
+		_inventory is not null
+		&& Campfire.IsPlayerNearLitOrFueledStation( _inventory.GameObject, Campfire.StationId );
+
+	bool HasRequiredStation( CraftingRecipe recipe )
+	{
+		if ( recipe is null || !recipe.RequiresStation || _inventory is null )
+			return false;
+
+		return Campfire.IsPlayerNearLitOrFueledStation( _inventory.GameObject, recipe.RequiredStation );
 	}
 
 	bool HasScaledResources( CraftingRecipe recipe )
@@ -677,7 +712,19 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 			return;
 
 		_craftButton.Style.Set( "opacity", canCraft ? "1" : "0.45" );
-		_craftButtonLabel.Text = canCraft ? "Hold to craft (LMB)" : "Need materials / space";
+		if ( canCraft )
+		{
+			_craftButtonLabel.Text = "Hold to craft (LMB)";
+		}
+		else
+		{
+			var recipe = CraftingRecipeCatalog.Get( _selectedRecipeId );
+			if ( recipe is not null && recipe.RequiresStation && !HasRequiredStation( recipe ) )
+				_craftButtonLabel.Text = $"Need {recipe.RequiredStation} nearby";
+			else
+				_craftButtonLabel.Text = "Need materials / space";
+		}
+
 		if ( !_craftButtonPressedVisual )
 			_craftButton.Style.BackgroundColor = CraftButtonColor;
 	}

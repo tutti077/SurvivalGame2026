@@ -131,6 +131,14 @@ public sealed class PlayerCrafting : Component
 			return false;
 		}
 
+		if ( recipe.RequiresStation
+		     && !Campfire.IsPlayerNearLitOrFueledStation( GameObject, recipe.RequiredStation ) )
+		{
+			if ( LogCrafting )
+				Log.Info( $"[PlayerCrafting] {GameObject.Name}: need station '{recipe.RequiredStation}' for '{recipeId}'." );
+			return false;
+		}
+
 		var scaledIngredients = BuildIngredients( recipe );
 		var outputTotal = recipe.TotalOutputAmount;
 

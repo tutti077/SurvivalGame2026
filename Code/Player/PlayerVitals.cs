@@ -480,6 +480,37 @@ public sealed class PlayerVitals : Component
 			RpcVitalsSync( CurrentHealth, CurrentHealthMax, CurrentStamina, CurrentStaminaMax );
 	}
 
+	/// <summary>
+	/// Host/offline: set pool maxima (food buffs). Clamps current HP/stamina into the new caps.
+	/// </summary>
+	public void HostSetPoolMaxes( float healthMax, float staminaMax )
+	{
+		if ( !IsHostOrOffline )
+			return;
+
+		healthMax = Math.Max( 1f, healthMax );
+		staminaMax = Math.Max( 0f, staminaMax );
+
+		if ( VitalsAuthority.Instance is { } auth )
+		{
+			var snap = auth.RegisterAndGetSnapshot( GameObject, healthMax, staminaMax, forceFullPoolsAndResetRegenClocks: false );
+			if ( snap is { } s )
+			{
+				ApplyFromAuthorityAndSync( s );
+				return;
+			}
+		}
+
+		ApplyLocalSnapshot( new VitalsSnapshot(
+			Math.Clamp( CurrentHealth, 0f, healthMax ),
+			healthMax,
+			Math.Clamp( CurrentStamina, 0f, staminaMax ),
+			staminaMax ), allowDeathRespawn: false );
+
+		if ( GameObject.Network is { Active: true } && Networking.IsHost )
+			RpcVitalsSync( CurrentHealth, CurrentHealthMax, CurrentStamina, CurrentStaminaMax );
+	}
+
 	void ApplyLocalSnapshot( VitalsSnapshot s, bool allowDeathRespawn = true )
 	{
 		var wasAlive = CurrentHealth > 0.001f;

@@ -23,6 +23,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	static readonly Color DepletedPortionColor = new Color( 0.82f, 0.82f, 0.83f );
 
 	PlayerVitals _vitals;
+	PlayerFood _food;
 	PlayerHandHarvest _handHarvest;
 	PlayerEquipment _equipment;
 	PlayerGameMenuController _menuController;
@@ -45,6 +46,11 @@ public sealed class PlayerScreenHud : PanelComponent
 	Label _staminaText;
 	Panel _staminaRoot;
 	Panel _staminaFill;
+
+	Panel _foodSlotsRoot;
+	readonly Panel[] _foodSlotPanels = new Panel[PlayerFood.MaxFoodSlots];
+	readonly Label[] _foodSlotTimers = new Label[PlayerFood.MaxFoodSlots];
+	readonly string[] _foodSlotAppliedIds = new string[PlayerFood.MaxFoodSlots];
 
 	Panel _promptRoot;
 	Label _promptKeyLabel;
@@ -111,6 +117,9 @@ public sealed class PlayerScreenHud : PanelComponent
 		_pickupNotifications?.Tick();
 		_minimapHud?.Tick();
 		_buildMenuHud?.Tick();
+		RefreshFoodSlots();
+		if ( _inventoryInteraction?.FocusedCampfire is not null )
+			OnInteractionPromptChanged();
 
 		if ( !_deferScreenPanelCamera || _hudScreen is null || !_hudScreen.IsValid() )
 			return;
@@ -126,11 +135,14 @@ public sealed class PlayerScreenHud : PanelComponent
 	{
 		if ( _vitals is not null )
 			_vitals.OnVitalsChanged -= RefreshVitals;
+		if ( _food is not null )
+			_food.FoodChanged -= RefreshFoodSlots;
 		if ( _inventoryInteraction is not null )
 		{
 			_inventoryInteraction.ContainerChanged -= OnContainerChanged;
 			_inventoryInteraction.FocusedContainerChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedAugmentStationChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedCampfireChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.AugmentStationChanged -= OnAugmentStationChanged;
 		}
 		if ( _handHarvest is not null )
@@ -228,7 +240,10 @@ public sealed class PlayerScreenHud : PanelComponent
 		vitalsHost.Style.Set( "bottom", "16px" );
 		vitalsHost.Style.Set( "pointer-events", "none" );
 
-		var hostHeight = BarHeight * 2f + BarGap;
+		const float foodSlotSize = 36f;
+		const float foodSlotGap = 6f;
+		const float foodRowTopGap = 8f;
+		var hostHeight = BarHeight * 2f + BarGap + foodRowTopGap + foodSlotSize;
 		var barsHost = new Panel { Parent = vitalsHost };
 		barsHost.Style.Width = Length.Pixels( BarWidth );
 		barsHost.Style.Height = Length.Pixels( hostHeight );
@@ -287,6 +302,100 @@ public sealed class PlayerScreenHud : PanelComponent
 		_staminaText.Style.Set( "z-index", "1" );
 		_staminaText.Style.FontColor = Color.Black;
 		_staminaText.Style.FontSize = Length.Pixels( 14f );
+
+		_food = FindOnAncestors<PlayerFood>();
+		_foodSlotsRoot = new Panel { Parent = barsHost };
+		_foodSlotsRoot.Style.Set( "position", "absolute" );
+		_foodSlotsRoot.Style.Set( "left", "0" );
+		_foodSlotsRoot.Style.Set( "top", $"{BarHeight * 2f + BarGap + foodRowTopGap}px" );
+		_foodSlotsRoot.Style.Set( "flex-direction", "row" );
+		_foodSlotsRoot.Style.Set( "gap", $"{foodSlotGap}px" );
+		_foodSlotsRoot.Style.Set( "pointer-events", "none" );
+
+		for ( var i = 0; i < PlayerFood.MaxFoodSlots; i++ )
+		{
+			var slot = new Panel { Parent = _foodSlotsRoot };
+			slot.Style.Width = Length.Pixels( foodSlotSize );
+			slot.Style.Height = Length.Pixels( foodSlotSize );
+			slot.Style.BackgroundColor = new Color( 0.12f, 0.13f, 0.15f, 0.85f );
+			slot.Style.Set( "border-width", "1px" );
+			slot.Style.Set( "border-color", "#383d47" );
+			slot.Style.Set( "border-radius", "4px" );
+			slot.Style.Set( "overflow", "hidden" );
+
+			var timer = new Label { Parent = slot, Text = "" };
+			timer.Style.Set( "position", "absolute" );
+			timer.Style.Set( "left", "0" );
+			timer.Style.Set( "right", "0" );
+			timer.Style.Set( "bottom", "1px" );
+			timer.Style.Set( "align-items", "center" );
+			timer.Style.Set( "justify-content", "center" );
+			timer.Style.FontColor = Color.White;
+			timer.Style.FontSize = Length.Pixels( 11f );
+			timer.Style.Set( "text-shadow", "1px 1px 2px black" );
+
+			_foodSlotPanels[i] = slot;
+			_foodSlotTimers[i] = timer;
+			_foodSlotAppliedIds[i] = string.Empty;
+		}
+
+		if ( _food is not null )
+			_food.FoodChanged += RefreshFoodSlots;
+
+		RefreshFoodSlots();
+	}
+
+	void RefreshFoodSlots()
+	{
+		if ( _foodSlotsRoot is null )
+			return;
+
+		_food ??= FindOnAncestors<PlayerFood>();
+		FoodCatalog.EnsureLoaded();
+
+		for ( var i = 0; i < PlayerFood.MaxFoodSlots; i++ )
+		{
+			var panel = _foodSlotPanels[i];
+			var timer = _foodSlotTimers[i];
+			if ( panel is null || timer is null )
+				continue;
+
+			var id = _food?.GetSlotResourceId( i ) ?? string.Empty;
+			var remaining = _food?.GetSlotRemainingSeconds( i ) ?? -1f;
+			var active = !string.IsNullOrWhiteSpace( id ) && remaining > 0f;
+
+			if ( !string.Equals( _foodSlotAppliedIds[i], active ? id : string.Empty, StringComparison.OrdinalIgnoreCase ) )
+			{
+				_foodSlotAppliedIds[i] = active ? id : string.Empty;
+				if ( active && FoodCatalog.TryGet( id, out var food ) )
+				{
+					panel.Style.BackgroundColor = FoodCatalog.ResolveFallbackColor( food );
+					panel.Style.Set( "opacity", "1" );
+				}
+				else
+				{
+					panel.Style.BackgroundColor = new Color( 0.12f, 0.13f, 0.15f, 0.85f );
+					panel.Style.Set( "opacity", "0.55" );
+				}
+			}
+
+			if ( !active )
+			{
+				timer.Text = "";
+				continue;
+			}
+
+			timer.Text = FormatFoodRemaining( remaining );
+		}
+	}
+
+	static string FormatFoodRemaining( float seconds )
+	{
+		seconds = Math.Max( 0f, seconds );
+		var total = (int)Math.Ceiling( seconds );
+		var m = total / 60;
+		var s = total % 60;
+		return m > 0 ? $"{m}:{s:00}" : $"{s}s";
 	}
 
 	void BuildHarvestPrompt( Panel root )
@@ -338,7 +447,11 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_handHarvest?.FocusedNodeChanged += OnInteractionPromptChanged;
 		if ( _inventoryInteraction is not null )
+		{
 			_inventoryInteraction.FocusedContainerChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedAugmentStationChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
+		}
 		if ( _equipment is not null )
 			_equipment.EquipmentChanged += OnEquipmentToolChanged;
 		OnInteractionPromptChanged();
@@ -498,6 +611,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.ContainerChanged += OnContainerChanged;
 			_inventoryInteraction.FocusedContainerChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedAugmentStationChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.AugmentStationChanged += OnAugmentStationChanged;
 		}
 
@@ -620,13 +734,15 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _promptRoot is null )
 			return;
 
-		// Container / augment station under the crosshair wins over harvest.
+		// Container / augment station under the crosshair wins over campfire / harvest.
 		var focusedContainer = _inventoryInteraction?.FocusedContainer;
 		var focusedStation = _inventoryInteraction?.FocusedAugmentStation;
+		var focusedCampfire = _inventoryInteraction?.FocusedCampfire;
 		var showOpen = (focusedContainer is not null && focusedContainer.IsValid())
 		               || (focusedStation is not null && focusedStation.IsValid());
-		var showHarvest = !showOpen && _handHarvest?.FocusedNode is not null;
-		var show = showOpen || showHarvest;
+		var showCampfire = !showOpen && focusedCampfire is not null && focusedCampfire.IsValid();
+		var showHarvest = !showOpen && !showCampfire && _handHarvest?.FocusedNode is not null;
+		var show = showOpen || showCampfire || showHarvest;
 
 		if ( _promptKeyLabel is not null )
 			_promptKeyLabel.Text = "E";
@@ -644,6 +760,12 @@ public sealed class PlayerScreenHud : PanelComponent
 				_promptLabel.Text = string.IsNullOrWhiteSpace( focusedStation.DisplayName )
 					? "Open Augment Station"
 					: $"Open {focusedStation.DisplayName}";
+			}
+			else if ( showCampfire )
+			{
+				var fuel = focusedCampfire.FuelUnits;
+				var max = Math.Max( 1, focusedCampfire.MaxFuelUnits );
+				_promptLabel.Text = $"Add Wood ({fuel}/{max})";
 			}
 			else
 			{

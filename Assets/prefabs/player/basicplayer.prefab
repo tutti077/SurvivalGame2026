@@ -599,6 +599,18 @@
         "OnComponentUpdate": null
       },
       {
+        "__type": "Survival.PlayerFood",
+        "__guid": "f00d0001-2222-4333-8444-555555555501",
+        "__enabled": true,
+        "Flags": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null
+      },
+      {
         "__type": "Survival.PlayerClientContentSync",
         "__guid": "a9b8c7d6-e5f4-3210-9876-543210fedcba",
         "__enabled": true,

@@ -30,7 +30,7 @@
       "retreatHealthFraction": 0.1,
       "retreatDistanceMeters": 50
     },
-    "deerT1": {
+    "whitetailT1": {
       "sightRangeMeters": 12,
       "sightFovDegrees": 220,
       "eyeHeightMeters": 1.4,

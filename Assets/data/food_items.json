@@ -1,0 +1,142 @@
+{
+  "foods": [
+    {
+      "resourceId": "food_blueberry",
+      "displayName": "Blueberry",
+      "edible": true,
+      "maxHealth": 5,
+      "maxStamina": 5,
+      "healthRegenPerSecond": 0,
+      "durationSeconds": 300,
+      "restoreHealth": 10,
+      "restoreStamina": 0,
+      "fallbackColor": "0.25,0.35,0.85,1"
+    },
+    {
+      "resourceId": "food_raspberry",
+      "displayName": "Raspberry",
+      "edible": true,
+      "maxHealth": 7,
+      "maxStamina": 7,
+      "healthRegenPerSecond": 1,
+      "durationSeconds": 300,
+      "restoreHealth": 10,
+      "restoreStamina": 0,
+      "fallbackColor": "0.85,0.2,0.35,1"
+    },
+    {
+      "resourceId": "food_mushroom",
+      "displayName": "Mushroom",
+      "edible": false,
+      "fallbackColor": "0.55,0.42,0.28,1"
+    },
+    {
+      "resourceId": "rawmeat_bird",
+      "displayName": "Bird Meat",
+      "edible": false,
+      "fallbackColor": "0.72,0.45,0.4,1"
+    },
+    {
+      "resourceId": "rawmeat_fox",
+      "displayName": "Fox Meat",
+      "edible": false,
+      "fallbackColor": "0.7,0.4,0.32,1"
+    },
+    {
+      "resourceId": "rawmeat_whitetail",
+      "displayName": "Whitetail Meat",
+      "edible": false,
+      "fallbackColor": "0.68,0.38,0.3,1"
+    },
+    {
+      "resourceId": "rawmeat_lynx",
+      "displayName": "Lynx Meat",
+      "edible": false,
+      "fallbackColor": "0.65,0.36,0.28,1"
+    },
+    {
+      "resourceId": "food_roasted_mushroom",
+      "displayName": "Roasted Mushroom",
+      "edible": true,
+      "maxHealth": 7,
+      "maxStamina": 10,
+      "healthRegenPerSecond": 1,
+      "durationSeconds": 300,
+      "restoreHealth": 15,
+      "restoreStamina": 0,
+      "fallbackColor": "0.62,0.48,0.3,1"
+    },
+    {
+      "resourceId": "food_roasted_bird",
+      "displayName": "Roasted Bird",
+      "edible": true,
+      "maxHealth": 12,
+      "maxStamina": 5,
+      "healthRegenPerSecond": 1,
+      "durationSeconds": 420,
+      "restoreHealth": 15,
+      "restoreStamina": 0,
+      "fallbackColor": "0.78,0.5,0.35,1"
+    },
+    {
+      "resourceId": "food_roasted_fox",
+      "displayName": "Roasted Fox",
+      "edible": true,
+      "maxHealth": 13,
+      "maxStamina": 5,
+      "healthRegenPerSecond": 1,
+      "durationSeconds": 480,
+      "restoreHealth": 17,
+      "restoreStamina": 0,
+      "fallbackColor": "0.75,0.48,0.32,1"
+    },
+    {
+      "resourceId": "food_roasted_whitetail",
+      "displayName": "Roasted Whitetail",
+      "edible": true,
+      "maxHealth": 15,
+      "maxStamina": 5,
+      "healthRegenPerSecond": 2,
+      "durationSeconds": 600,
+      "restoreHealth": 20,
+      "restoreStamina": 0,
+      "fallbackColor": "0.72,0.45,0.28,1"
+    },
+    {
+      "resourceId": "food_roasted_lynx",
+      "displayName": "Roasted Lynx",
+      "edible": true,
+      "maxHealth": 20,
+      "maxStamina": 7,
+      "healthRegenPerSecond": 2,
+      "durationSeconds": 720,
+      "restoreHealth": 22,
+      "restoreStamina": 0,
+      "fallbackColor": "0.7,0.42,0.26,1"
+    },
+    {
+      "resourceId": "food_berry_skewers",
+      "displayName": "Berry Skewers",
+      "edible": true,
+      "maxHealth": 12,
+      "maxStamina": 20,
+      "healthRegenPerSecond": 1,
+      "durationSeconds": 600,
+      "restoreHealth": 20,
+      "restoreStamina": 0,
+      "fallbackColor": "0.55,0.25,0.65,1"
+    },
+    {
+      "resourceId": "food_hunter_stew",
+      "displayName": "Hunter Stew",
+      "edible": true,
+      "maxHealth": 30,
+      "maxStamina": 10,
+      "healthRegenPerSecond": 3,
+      "durationSeconds": 1200,
+      "restoreHealth": 25,
+      "restoreStamina": 0,
+      "fallbackColor": "0.55,0.35,0.18,1"
+    }
+  ]
+}

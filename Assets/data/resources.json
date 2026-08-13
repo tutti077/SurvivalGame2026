@@ -188,6 +188,104 @@
       "icon": "ui/items/resource_lightningBug.png",
       "maxStack": 20,
       "fallbackColor": "0.95,0.87,0.87,1"
+    },
+    {
+      "id": "food_blueberry",
+      "displayName": "Blueberry",
+      "icon": "ui/items/food_blueberry.png",
+      "maxStack": 20,
+      "fallbackColor": "0.25,0.35,0.85,1"
+    },
+    {
+      "id": "food_raspberry",
+      "displayName": "Raspberry",
+      "icon": "ui/items/food_raspberry.png",
+      "maxStack": 20,
+      "fallbackColor": "0.85,0.2,0.35,1"
+    },
+    {
+      "id": "food_mushroom",
+      "displayName": "Mushroom",
+      "icon": "ui/items/food_mushroom.png",
+      "maxStack": 20,
+      "fallbackColor": "0.55,0.42,0.28,1"
+    },
+    {
+      "id": "rawmeat_bird",
+      "displayName": "Bird Meat",
+      "icon": "ui/items/rawmeat_bird.png",
+      "maxStack": 20,
+      "fallbackColor": "0.72,0.45,0.4,1"
+    },
+    {
+      "id": "rawmeat_fox",
+      "displayName": "Fox Meat",
+      "icon": "ui/items/rawmeat_fox.png",
+      "maxStack": 20,
+      "fallbackColor": "0.7,0.4,0.32,1"
+    },
+    {
+      "id": "rawmeat_whitetail",
+      "displayName": "Whitetail Meat",
+      "icon": "ui/items/rawmeat_whitetail.png",
+      "maxStack": 20,
+      "fallbackColor": "0.68,0.38,0.3,1"
+    },
+    {
+      "id": "rawmeat_lynx",
+      "displayName": "Lynx Meat",
+      "icon": "ui/items/rawmeat_lynx.png",
+      "maxStack": 20,
+      "fallbackColor": "0.65,0.36,0.28,1"
+    },
+    {
+      "id": "food_roasted_mushroom",
+      "displayName": "Roasted Mushroom",
+      "icon": "ui/items/food_roasted_mushroom.png",
+      "maxStack": 10,
+      "fallbackColor": "0.62,0.48,0.3,1"
+    },
+    {
+      "id": "food_roasted_bird",
+      "displayName": "Roasted Bird",
+      "icon": "ui/items/food_roasted_bird.png",
+      "maxStack": 10,
+      "fallbackColor": "0.78,0.5,0.35,1"
+    },
+    {
+      "id": "food_roasted_fox",
+      "displayName": "Roasted Fox",
+      "icon": "ui/items/food_roasted_fox.png",
+      "maxStack": 10,
+      "fallbackColor": "0.75,0.48,0.32,1"
+    },
+    {
+      "id": "food_roasted_whitetail",
+      "displayName": "Roasted Whitetail",
+      "icon": "ui/items/food_roasted_whitetail.png",
+      "maxStack": 10,
+      "fallbackColor": "0.72,0.45,0.28,1"
+    },
+    {
+      "id": "food_roasted_lynx",
+      "displayName": "Roasted Lynx",
+      "icon": "ui/items/food_roasted_lynx.png",
+      "maxStack": 10,
+      "fallbackColor": "0.7,0.42,0.26,1"
+    },
+    {
+      "id": "food_berry_skewers",
+      "displayName": "Berry Skewers",
+      "icon": "ui/items/food_berry_skewers.png",
+      "maxStack": 10,
+      "fallbackColor": "0.55,0.25,0.65,1"
+    },
+    {
+      "id": "food_hunter_stew",
+      "displayName": "Hunter Stew",
+      "icon": "ui/items/food_hunter_stew.png",
+      "maxStack": 5,
+      "fallbackColor": "0.55,0.35,0.18,1"
     }
   ]
 }
