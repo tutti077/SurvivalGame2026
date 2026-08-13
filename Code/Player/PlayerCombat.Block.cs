@@ -199,6 +199,8 @@ public partial class PlayerCombat
 		CancelPrimarySwingPhase();
 		Components.Get<PlayerAnimation>()?.CancelMeleeAttackWindupHold();
 		ServerCancelMeleeAttack();
+		// Pure clients never run ServerCancelMeleeAttack locally — still unlock Attack1 immediately.
+		ClearOwnerMeleeBusyExpect( "cancel all attack" );
 		_postAttackRecoveryRemaining = 0f;
 
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost && IsLocalCombatDriver() )

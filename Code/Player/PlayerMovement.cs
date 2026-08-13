@@ -19,6 +19,13 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	/// <summary>Input cleared in <see cref="PreInput"/> when <see cref="JumpStaminaCost"/> is positive and stamina cannot pay the full cost.</summary>
 	[Property, Group( "Stamina - Jump" )] public string JumpInputAction { get; set; } = "jump";
 
+	/// <summary>
+	/// Walkable slope margin (°). 45° roofs need a few degrees headroom or
+	/// <see cref="Sandbox.Movement.MoveModeWalk"/> rejects the surface (can't walk up).
+	/// </summary>
+	[Property, Group( "Movement — Ground" ), Title( "Walkable ground angle (°)" ), Range( 40f, 70f ), Step( 1f )]
+	public float WalkableGroundAngleDegrees { get; set; } = 50f;
+
 	/// <summary>Usually matches <see cref="PlayerController.AltMoveButton"/> when <c>RunByDefault</c> is off.</summary>
 	[Property, Group( "Stamina - Sprint" )] public string SprintInputAction { get; set; } = "run";
 
@@ -45,6 +52,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 	[Property, Group( "Camera" ), Title( "Scroll wheel zoom" ), Description( "Mouse wheel steps third-person CameraOffset.x in/out. Skipped while the game menu is open or build placement owns the wheel." )]
 	public bool CameraScrollZoomEnabled { get; set; } = true;
+
+	[Property, Group( "Camera" ), Title( "Keyboard zoom (+/-)" ), Description( "Equals/+ zooms in, Minus zooms out (same steps as scroll). Numpad +/- also work." )]
+	public bool CameraKeyboardZoomEnabled { get; set; } = true;
 
 	[Property, Group( "Camera" ), Title( "Zoom min distance" ), Range( 32f, 512f ), Step( 8f )]
 	public float CameraZoomMinDistance { get; set; } = 96f;
@@ -83,19 +93,56 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	float _savedWalkForMelee;
 	float _savedRunForMelee;
 
+	/// <summary>Prefab walk/run (not temporary melee/grapple overrides) for overspeed clamps.</summary>
+	float _designWalkSpeed = 110f;
+	float _designRunSpeed = 320f;
+
+	/// <summary>
+	/// Physics can redirect impact into horizontal for a few steps after <see cref="OnLanded"/> —
+	/// keep scrubbing so roof downhill jumps don't launch.
+	/// </summary>
+	int _sanitizeLandFrames;
+
 	/// <summary>Host copy of the owning client’s sprint button, for <see cref="ShouldBlockStaminaRegenForAuthority"/> (local driver uses <see cref="Sandbox.Input"/> directly).</summary>
 	bool _sprintHeldReportedOnHost;
 
 	bool _sprintHeldReportedToHostLast;
-
 	protected override void OnStart()
 	{
 		base.OnStart();
 		_vitals = Components.Get<PlayerVitals>();
 		_controller = Components.Get<PlayerController>();
+		CacheDesignLocomotionSpeeds();
+		ApplyWalkableGroundAngle();
 		InitializeGrapple();
 		if ( _vitals is null )
 			Log.Warning( $"[PlayerMovement|{PlayerVitals.GetVitalsProcessRoleTag( GameObject )}] {GameObject.Name}: add PlayerVitals on this pawn — movement stamina hooks disabled." );
+	}
+
+	void CacheDesignLocomotionSpeeds()
+	{
+		if ( _controller is null || !_controller.IsValid() )
+			return;
+
+		if ( _controller.WalkSpeed > 1f )
+			_designWalkSpeed = _controller.WalkSpeed;
+		if ( _controller.RunSpeed > 1f )
+			_designRunSpeed = _controller.RunSpeed;
+	}
+
+	float DesignGroundMaxSpeed()
+	{
+		var max = Math.Max( _designWalkSpeed, _designRunSpeed );
+		return max > 1f ? max : 320f;
+	}
+
+	void ApplyWalkableGroundAngle()
+	{
+		var walk = Components.Get<Sandbox.Movement.MoveModeWalk>();
+		if ( walk is null || !walk.IsValid() )
+			return;
+
+		walk.GroundAngle = Math.Clamp( WalkableGroundAngleDegrees, 1f, 89f );
 	}
 
 	bool IsLocalMovementDriver()
@@ -190,13 +237,19 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		body.Velocity *= scale;
 	}
 
-	/// <summary>Sprint stamina only while Run is held and a WASD movement key is held.</summary>
+	/// <summary>Sprint stamina only while grounded, Run held, and a WASD movement key held.</summary>
 	bool WantsSprintStaminaSpend()
 	{
 		if ( _vitals is null || string.IsNullOrWhiteSpace( SprintInputAction ) )
 			return false;
 
-		if ( IsSprintBlocked() )
+		if ( _controller is null )
+			_controller = Components.Get<PlayerController>();
+
+		if ( _controller is null || !_controller.IsOnGround )
+			return false;
+
+		if ( IsMeleeAttackWalkOnlyOnGround() )
 			return false;
 
 		if ( !Input.Down( SprintInputAction ) || _vitals.IsStaminaExhausted( ExhaustedStaminaEpsilon ) )
@@ -206,24 +259,11 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	}
 
 	/// <summary>
-	/// Sprint only with feet on the ground. Mid-air (with or without rope) cannot Run —
-	/// that was inventing foot propulsion while dangling. Grappled + grounded is allowed.
-	/// Committed melee swing also blocks sprint on the ground (walk only); airborne keeps velocity.
-	/// Post-shove / combat recovery uses the same walk-only gate via <see cref="PlayerCombat.IsCombatActionLocked"/>.
+	/// Clear held Run only for grounded melee walk-lock — never while airborne, so sprint can stay
+	/// held through jumps. Airborne wish still won't invent sprint accel (controller air control);
+	/// takeoff speed is kept until land.
 	/// </summary>
-	bool IsSprintBlocked()
-	{
-		if ( _controller is null )
-			_controller = Components.Get<PlayerController>();
-
-		if ( _controller is null )
-			return false;
-
-		if ( !_controller.IsOnGround )
-			return true;
-
-		return IsMeleeAttackWalkOnlyOnGround();
-	}
+	bool ShouldSuppressSprintInput() => IsMeleeAttackWalkOnlyOnGround();
 
 	bool IsMeleeAttackWalkOnlyOnGround()
 	{
@@ -241,10 +281,10 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	/// <summary>Hit reaction start: the rope always drops, on every machine that knows about this pawn.</summary>
 	internal void OnHitReactionBegan() => DetachGrappleForHitReaction();
 
-	/// <summary>Soft-clear Run / AltMove so held Shift cannot stick as sprint this frame.</summary>
+	/// <summary>Soft-clear Run / AltMove during grounded melee walk-lock only.</summary>
 	void SuppressBlockedSprintInput()
 	{
-		if ( !IsSprintBlocked() )
+		if ( !ShouldSuppressSprintInput() )
 			return;
 
 		if ( !string.IsNullOrWhiteSpace( SprintInputAction )
@@ -265,10 +305,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	}
 
 	/// <summary>
-	/// Even if Run input leaks past <see cref="SuppressBlockedSprintInput"/>, wish speed cannot
-	/// sprint while airborne. While dangling mid-air, mute walk+run wish so MoveModeWalk air-control
-	/// cannot invent foot propulsion — swing speed then only comes from rope pumps / prior ground run.
-	/// Grappled + grounded leaves walk/run alone so feet can sprint and walk normally.
+	/// While dangling mid-air (grapple) or wingsuit, mute walk+run wish so MoveModeWalk air-control
+	/// cannot invent foot propulsion. Normal jumps leave Run alone so held sprint survives landing
+	/// and takeoff speed is not forced down to walk.
 	/// </summary>
 	void ApplyBlockedSprintRunSpeedOverride()
 	{
@@ -307,18 +346,6 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		if ( ApplyMeleeAttackLocomotionSlow() )
 			return;
-
-		if ( IsSprintBlocked() )
-		{
-			if ( !_runSpeedOverrideActive )
-			{
-				_savedRunSpeed = _controller.RunSpeed;
-				_runSpeedOverrideActive = true;
-			}
-
-			_controller.RunSpeed = Math.Max( 0f, _controller.WalkSpeed );
-			return;
-		}
 
 		RestoreBlockedSprintRunSpeed();
 	}
@@ -420,6 +447,10 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// Augment air hop / dash must see Jump before stamina or wingsuit clear it.
 		TickAugmentJumpGates();
 
+		// Before PlayerController.Jump: strip downhill -Z so SubtractDirection doesn't
+		// convert slope-aligned speed into a horizontal launch (roof walk-off boost).
+		PrepareGroundedJumpVelocity();
+
 		if ( JumpStaminaCost > 0f
 		     && !_vitals.CanAffordStamina( JumpStaminaCost )
 		     && ExhaustedJumpHeightFraction <= 0f )
@@ -443,7 +474,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		if ( !string.IsNullOrWhiteSpace( SprintInputAction ) )
 		{
-			if ( IsSprintBlocked() )
+			if ( ShouldSuppressSprintInput() )
 				SuppressBlockedSprintInput();
 			else if ( SprintStaminaPerSecond > 0f && _vitals.IsStaminaExhausted( ExhaustedStaminaEpsilon ) )
 				ClearActionIfPressed( SprintInputAction );
@@ -457,11 +488,71 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() || _vitals is null )
 			return;
 
+		// Jump may SubtractDirection along the ground normal after PreInput — scrub boost, keep sprint.
+		SanitizeHorizontalToDesignRun( keepUpwardZ: true );
+
 		if ( _vitals.OnControllerJumpedForStaminaFromMovement( JumpStaminaCost, ExhaustedJumpHeightFraction ) )
 			ApplyExhaustedJumpVelocityScale();
 
 		OnAugmentJumped();
 		TickPendingJumpLegsScale();
+	}
+
+	/// <summary>
+	/// Before <see cref="PlayerController.Jump"/>: drop downhill -Z so SubtractDirection does not
+	/// convert slope-aligned speed into free horizontal launch. XY stays at sprint; design-run
+	/// cap happens in <see cref="OnJumped"/> / land sanitize (not walk-speed).
+	/// </summary>
+	void PrepareGroundedJumpVelocity()
+	{
+		if ( string.IsNullOrWhiteSpace( JumpInputAction ) || !Input.Pressed( JumpInputAction ) )
+			return;
+
+		_controller ??= Components.Get<PlayerController>();
+		if ( _controller is null || !_controller.IsValid() || !_controller.IsOnGround )
+			return;
+
+		var body = _controller.Body ?? Components.Get<Rigidbody>();
+		if ( body is null || !body.IsValid() )
+			return;
+
+		var v = body.Velocity;
+		body.Velocity = new Vector3( v.x, v.y, 0f );
+	}
+
+	/// <summary>
+	/// Cap horizontal speed to design walk/run max. Uses prefab speeds so temporary Run=Walk
+	/// overrides cannot force a walk-speed scrub. Optional keep-upward for mid-jump.
+	/// </summary>
+	void SanitizeHorizontalToDesignRun( bool keepUpwardZ )
+	{
+		_controller ??= Components.Get<PlayerController>();
+		var body = _controller?.Body ?? Components.Get<Rigidbody>();
+		if ( body is null || !body.IsValid() )
+			return;
+
+		// Shove dash intentionally exceeds run for a beat — don't eat it.
+		var combat = Components.Get<PlayerCombat>();
+		if ( combat is not null && combat.IsCombatActionLocked )
+			return;
+
+		if ( GrappleAttached || WingsuitDeployed )
+			return;
+
+		var groundMax = DesignGroundMaxSpeed();
+		var v = body.Velocity;
+		var flat = new Vector3( v.x, v.y, 0f );
+		var speed = flat.Length;
+		if ( speed <= groundMax + 0.5f )
+		{
+			if ( keepUpwardZ && v.z < 0f )
+				body.Velocity = new Vector3( v.x, v.y, 0f );
+			return;
+		}
+
+		flat *= groundMax / speed;
+		var z = keepUpwardZ ? Math.Max( v.z, 0f ) : v.z;
+		body.Velocity = new Vector3( flat.x, flat.y, z );
 	}
 
 	public void OnLanded( float distance, Vector3 impactVelocity )
@@ -475,6 +566,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			CompleteWingsuitLand();
 
 		_wingsuitAirborneSeconds = 0f;
+		// Slope redirect often lands after this callback — scrub for several physics steps.
+		_sanitizeLandFrames = 20;
+		SanitizeHorizontalToDesignRun( keepUpwardZ: false );
 		_vitals.OnControllerLandedForJumpStaminaFromMovement( distance, impactVelocity );
 		OnAugmentLanded();
 	}
@@ -519,7 +613,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		PollCameraScrollZoom();
 
-		// Keep Run suppressed for the whole airborne/dangling frame (controller may re-read input after PreInput).
+		// Melee walk-lock / grapple-air mute (do not clear held sprint while jumping).
 		SuppressBlockedSprintInput();
 		ApplyBlockedSprintRunSpeedOverride();
 
@@ -532,7 +626,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 	void PollCameraScrollZoom()
 	{
-		if ( !CameraScrollZoomEnabled )
+		if ( !CameraScrollZoomEnabled && !CameraKeyboardZoomEnabled )
 			return;
 
 		_controller ??= Components.Get<PlayerController>();
@@ -543,8 +637,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			return;
 
 		var hammer = Components.Get<PlayerEquipment>()?.GetActiveTool<ToolBuildHammer>();
-		if ( hammer is not null && hammer.IsPreviewingPlacePiece )
-			return;
+		var buildOwnsWheel = hammer is not null && hammer.IsPreviewingPlacePiece;
 
 		var min = MathF.Min( CameraZoomMinDistance, CameraZoomMaxDistance );
 		var max = MathF.Max( CameraZoomMinDistance, CameraZoomMaxDistance );
@@ -558,20 +651,56 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			ApplyCameraZoomDistance( snapView: false );
 		}
 
-		var scroll = Input.MouseWheel.y;
-		if ( MathF.Abs( scroll ) <= 0.01f )
+		var zoomIn = false;
+		var zoomOut = false;
+
+		if ( CameraScrollZoomEnabled && !buildOwnsWheel )
+		{
+			var scroll = Input.MouseWheel.y;
+			if ( scroll > 0.01f )
+				zoomIn = true;
+			else if ( scroll < -0.01f )
+				zoomOut = true;
+		}
+
+		if ( CameraKeyboardZoomEnabled && IsCameraZoomKeyPressed( zoomIn: true ) )
+			zoomIn = true;
+		if ( CameraKeyboardZoomEnabled && IsCameraZoomKeyPressed( zoomIn: false ) )
+			zoomOut = true;
+
+		if ( !zoomIn && !zoomOut )
 			return;
 
+		// Prefer zoom-in if both somehow fire same frame.
 		var notch = (float)Math.Round( (_cameraZoomDistance - min) / step );
-		if ( scroll > 0f )
-			notch -= 1f; // wheel up → zoom in (closer)
+		if ( zoomIn )
+			notch -= 1f;
 		else
 			notch += 1f;
 
 		var next = Math.Clamp( min + notch * step, min, max );
 		_cameraZoomDistance = next;
-		// Hard-place the camera so zoom-out does not ease via the controller's wall-trace recovery.
 		ApplyCameraZoomDistance( snapView: true );
+	}
+
+	/// <summary>
+	/// Hardcoded physical keys (not the rebindable Run action): = / + zoom in, - zoom out.
+	/// Numpad +/- included. Shift+= is fine — we listen for equals and add.
+	/// </summary>
+	static bool IsCameraZoomKeyPressed( bool zoomIn )
+	{
+		if ( zoomIn )
+		{
+			return Input.Keyboard.Pressed( "equals" )
+			       || Input.Keyboard.Pressed( "+" )
+			       || Input.Keyboard.Pressed( "add" )
+			       || Input.Pressed( "CameraZoomIn" );
+		}
+
+		return Input.Keyboard.Pressed( "minus" )
+		       || Input.Keyboard.Pressed( "-" )
+		       || Input.Keyboard.Pressed( "subtract" )
+		       || Input.Pressed( "CameraZoomOut" );
 	}
 
 	void ApplyCameraZoomDistance( bool snapView )
@@ -782,9 +911,16 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() )
 			return;
 
-		// Physics step: re-clamp before MoveModeWalk air-control samples wish speed.
+		// Physics step: melee / grapple mute before MoveModeWalk samples wish speed.
 		SuppressBlockedSprintInput();
 		ApplyBlockedSprintRunSpeedOverride();
+
+		if ( _sanitizeLandFrames > 0 )
+		{
+			SanitizeHorizontalToDesignRun( keepUpwardZ: false );
+			_sanitizeLandFrames--;
+		}
+
 		TickGrappleFixedUpdate();
 		ApplyGrappleRopeConstraint( Time.Delta );
 		TickWingsuitAirborneTimer( Time.Delta );

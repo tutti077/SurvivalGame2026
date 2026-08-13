@@ -430,7 +430,7 @@ public partial class PlayerCombat
 
 		// Sweep is done on the host — free the owner spam-click gate immediately (don't wait on Rpc.Owner).
 		if ( IsLocalCombatDriver() )
-			_ownerExpectsHostMeleeBusy = false;
+			ClearOwnerMeleeBusyExpect( "local sweep finish" );
 
 		if ( IsLocalCombatDriver() && !Input.Down( BlockAction ) )
 			CombatState = CombatState.PostAttack;

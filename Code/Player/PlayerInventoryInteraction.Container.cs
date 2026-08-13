@@ -78,7 +78,11 @@ public sealed partial class PlayerInventoryInteraction
 		if ( menuOpen || !Input.Pressed( ContainerUseAction ) )
 			return;
 
-		// E doubles as grapple retract while attached — don't pop chests mid-swing.
+		// E cycles build snap corners while placing — don't open chests.
+		if ( IsBuildHammerPreviewing() )
+			return;
+
+		// Space doubles as grapple retract while attached — don't pop chests mid-swing.
 		if ( IsGrappleRetractActive() )
 			return;
 
@@ -94,8 +98,8 @@ public sealed partial class PlayerInventoryInteraction
 		if ( FocusedContainer is not null && !FocusedContainer.IsValid() )
 			SetFocusedContainer( null );
 
-		// No prompt while a menu/container is open, or while E means "retract grapple".
-		if ( menuOpen || _containerGrid?.Container is not null || IsGrappleRetractActive() )
+		// No prompt while a menu/container is open, while placing a build piece, or while grappled.
+		if ( menuOpen || _containerGrid?.Container is not null || IsGrappleRetractActive() || IsBuildHammerPreviewing() )
 		{
 			SetFocusedContainer( null );
 			return;
@@ -190,5 +194,12 @@ public sealed partial class PlayerInventoryInteraction
 	{
 		_containerMovement ??= Components.Get<PlayerMovement>();
 		return _containerMovement is not null && _containerMovement.GrappleAttached;
+	}
+
+	bool IsBuildHammerPreviewing()
+	{
+		var equipment = Components.Get<PlayerEquipment>();
+		var hammer = equipment?.GetActiveTool<ToolBuildHammer>();
+		return hammer is not null && hammer.IsPreviewingPlacePiece;
 	}
 }

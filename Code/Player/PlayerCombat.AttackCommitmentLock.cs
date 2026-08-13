@@ -48,6 +48,11 @@ public partial class PlayerCombat : Component, PlayerController.IEvents
 		if ( !MeleeAttackCommitmentLockEnabled || !IsLocalCombatDriver() )
 			return false;
 
+		// Inventory/crafting soft-cursor uses Attack1 for hold-to-craft / drag — not a sword swing.
+		var menu = Components.Get<PlayerGameMenuController>();
+		if ( menu is not null && menu.IsMenuOpen )
+			return false;
+
 		if ( ServerHasActiveMeleeAttackAction || _primarySwingPhaseActive || _primary.Down )
 			return true;
 

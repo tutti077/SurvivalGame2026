@@ -29,18 +29,26 @@ static class BuildSnapCandidateGrouper
 
 			var anchorRole = GetAnchorRole( placingSnaps, candidate.AnchorSnapIndex );
 			var targetRole = candidate.TargetPiece.SnapPoints[candidate.TargetSnapIndex].Role;
-			var priorityIndex = BuildSnapAutoRules.GetAnchorPriorityIndex(
-				placingPieceId,
-				candidate.TargetPiece.PieceId,
-				anchorRole,
-				targetRole,
-				candidate.IsEdgeSnap );
+			var priorityIndex = candidate.CycleOrder >= 0
+				? candidate.CycleOrder
+				: BuildSnapAutoRules.GetAnchorPriorityIndex(
+					placingPieceId,
+					candidate.TargetPiece.PieceId,
+					anchorRole,
+					targetRole,
+					candidate.IsEdgeSnap );
+
+			// CycleOrder is sort-only — do not inflate group BestScore (that made mixed
+			// mates pick stack/corner groups and fail wall→floor commit).
+			var scored = candidate.CycleOrder >= 0
+				? candidate.Score
+				: candidate.Score + BuildSnapAutoRules.ScoreAnchorPriority( priorityIndex );
 
 			var member = candidate with
 			{
 				GroupKey = key,
 				AnchorPriority = priorityIndex,
-				Score = candidate.Score + BuildSnapAutoRules.ScoreAnchorPriority( priorityIndex ),
+				Score = scored,
 			};
 
 			if ( !buckets.TryGetValue( key, out var list ) )
@@ -55,6 +63,8 @@ static class BuildSnapCandidateGrouper
 		var orderedGroups = new List<( BuildSnapGroupKey Key, float BestScore, List<BuildSnapCandidate> Members )>();
 		foreach ( var pair in buckets )
 		{
+			DedupeNearDuplicatePlacements( pair.Value );
+
 			var best = float.MaxValue;
 			for ( var i = 0; i < pair.Value.Count; i++ )
 				best = System.Math.Min( best, pair.Value[i].Score );
@@ -87,6 +97,7 @@ static class BuildSnapCandidateGrouper
 		IReadOnlyList<BuildSnapPoint> placingSnaps,
 		Vector3 rayOrigin,
 		Vector3 rayDirection,
+		Vector3 aimLand,
 		float maxRange,
 		out BuildSnapCandidate selected,
 		out int variantCount )
@@ -120,6 +131,7 @@ static class BuildSnapCandidateGrouper
 			     placingSnaps,
 			     rayOrigin,
 			     rayDirection,
+			     aimLand,
 			     maxRange ) )
 		{
 			bestGroup = locked;
@@ -165,12 +177,19 @@ static class BuildSnapCandidateGrouper
 		IReadOnlyList<BuildSnapPoint> placingSnaps,
 		Vector3 rayOrigin,
 		Vector3 rayDirection,
+		Vector3 aimLand,
 		float maxRange )
 	{
 		if ( !TryGetBuiltFocusPoint( candidates, locked, placingPieceId, placingSnaps, out var builtWorld, out var mateWorld ) )
 			return false;
 
-		if ( !BuildSnapCrosshair.IsMateReachable( rayOrigin, rayDirection, builtWorld, mateWorld, maxRange ) )
+		if ( !BuildSnapCrosshair.IsMateReachableFromAim(
+			     rayOrigin,
+			     rayDirection,
+			     aimLand,
+			     builtWorld,
+			     mateWorld,
+			     maxRange ) )
 			return false;
 
 		if ( locked.Equals( bestGroup ) )
@@ -264,6 +283,42 @@ static class BuildSnapCandidateGrouper
 		}
 
 		return count;
+	}
+
+	static void DedupeNearDuplicatePlacements( List<BuildSnapCandidate> members )
+	{
+		const float posEpsSq = 6f * 6f;
+		const float angEps = 10f;
+
+		for ( var i = 0; i < members.Count; i++ )
+		{
+			for ( var j = members.Count - 1; j > i; j-- )
+			{
+				var a = members[i];
+				var b = members[j];
+				var delta = a.Placement.Position - b.Placement.Position;
+				if ( delta.LengthSquared > posEpsSq )
+					continue;
+
+				var yawA = a.Placement.Rotation.Angles().yaw;
+				var yawB = b.Placement.Rotation.Angles().yaw;
+				var yawDelta = System.Math.Abs( ((yawA - yawB + 540f) % 360f) - 180f );
+				if ( yawDelta > angEps )
+					continue;
+
+				// Keep earlier CycleOrder / lower priority (abut before corners before stack).
+				if ( b.AnchorPriority < a.AnchorPriority
+				     || ( b.AnchorPriority == a.AnchorPriority && b.Score < a.Score ) )
+				{
+					members[i] = b;
+					members.RemoveAt( j );
+				}
+				else
+				{
+					members.RemoveAt( j );
+				}
+			}
+		}
 	}
 
 	static BuildSnapGroupKey GetGroupKey( BuildSnapCandidate candidate )

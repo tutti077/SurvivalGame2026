@@ -10,8 +10,14 @@ namespace Survival;
 public static class BuildModuleDimensions
 {
 	public const float UnitsPerMeter = 40f;
-	public const float ModuleMeters = 1.5f;
+	/// <summary>Floor / wall module edge length (m). Floors are Module×Module; walls Module tall × Module wide.</summary>
+	public const float ModuleMeters = 2f;
 	public const float ThinMeters = 0.06f;
+	/// <summary>
+	/// 45° roof slope length (m): √(Module²+Module²) so one roof covers the run+rise of a module
+	/// and two roofs meet in the middle across a 2-module span. Width stays <see cref="ModuleMeters"/>.
+	/// </summary>
+	public const float RoofSlopeMeters = 2.82f;
 
 	/// <summary>Dev box at local scale 1 = 1 m edge.</summary>
 	public const float DevBoxEdgeMeters = 1f;
@@ -29,6 +35,10 @@ public static class BuildModuleDimensions
 	public static float SnapThinHalfUnits =>
 		BuildColliderSnap.PrefabColliderSize.x * 0.5f * ThinMeters;
 
+	/// <summary>Half roof slope-axis in snap/collider world units.</summary>
+	public static float SnapRoofSlopeHalfUnits =>
+		BuildColliderSnap.PrefabColliderSize.x * 0.5f * RoofSlopeMeters;
+
 	/// <summary>Tiny lift so pieces sit on the surface instead of clipping through.</summary>
 	public const float SurfaceContactBias = 0.25f;
 
@@ -44,10 +54,11 @@ public static class BuildModuleDimensions
 	public static Vector3 WallHalfExtents =>
 		new( SnapModuleHalfUnits, SnapThinHalfUnits, SnapModuleHalfUnits );
 
-	public static Vector3 RoofSizeMeters => new( ModuleMeters, ModuleMeters, ThinMeters );
+	/// <summary>X = wall width (module), Y = slope hypotenuse, Z = thickness.</summary>
+	public static Vector3 RoofSizeMeters => new( ModuleMeters, RoofSlopeMeters, ThinMeters );
 
 	public static Vector3 RoofHalfExtents =>
-		new( SnapModuleHalfUnits, SnapModuleHalfUnits, SnapThinHalfUnits );
+		new( SnapModuleHalfUnits, SnapRoofSlopeHalfUnits, SnapThinHalfUnits );
 
 	/// <summary>Storage chest: 1 m wide, 0.6 m deep, 0.75 m tall.</summary>
 	public static Vector3 ChestSizeMeters => new( 1f, 0.6f, 0.75f );

@@ -328,7 +328,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		keyCap.Style.BackgroundColor = new Color( 0.92f, 0.92f, 0.94f );
 		keyCap.Style.Set( "border-radius", "4px" );
 
-		_promptKeyLabel = new Label { Parent = keyCap, Text = "F" };
+		_promptKeyLabel = new Label { Parent = keyCap, Text = "E" };
 		_promptKeyLabel.Style.FontColor = Color.Black;
 		_promptKeyLabel.Style.FontSize = Length.Pixels( 15f );
 
@@ -629,7 +629,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		var show = showOpen || showHarvest;
 
 		if ( _promptKeyLabel is not null )
-			_promptKeyLabel.Text = showOpen ? "E" : "F";
+			_promptKeyLabel.Text = "E";
 
 		if ( _promptLabel is not null )
 		{

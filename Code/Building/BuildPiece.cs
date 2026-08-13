@@ -37,9 +37,16 @@ public sealed class BuildPiece : Component
 		RefreshSnapPoints();
 
 		if ( previewGhost )
+		{
 			SetCollidersEnabled( false );
+			// Preview clones inherit prefab tags — don't steal grapple aim from ghosts.
+			GameObject.Tags.Remove( PlayerMovement.GrappleSurfaceTag );
+		}
 		else
+		{
 			EnsureWalkColliders( pieceId );
+			EnsureGrappleSurfaceTag();
+		}
 
 		ApplyVisualTint();
 	}
@@ -56,6 +63,19 @@ public sealed class BuildPiece : Component
 			RefreshSnapPoints();
 
 		EnsureWalkColliders( PieceId );
+		EnsureGrappleSurfaceTag();
+	}
+
+	/// <summary>
+	/// Placed structures use the same <c>grapple</c> tag as trees so the rope can latch.
+	/// Prefabs author it; this covers already-placed pieces and any future build prefab.
+	/// </summary>
+	void EnsureGrappleSurfaceTag()
+	{
+		if ( !GameObject.IsValid() )
+			return;
+
+		GameObject.Tags.Add( PlayerMovement.GrappleSurfaceTag );
 	}
 
 	public void RefreshSnapPoints()
@@ -169,31 +189,21 @@ public sealed class BuildPiece : Component
 		if ( !root.IsValid() )
 			return;
 
+		// Fat WalkRamp (50×50×160) made a tall end-cap at the eave — blocked walking
+		// onto ground-placed roofs and physics-pushed the pawn on jump. Use the thin
+		// plate collider that matches the pitched roof mesh instead.
+		RemoveWalkChild( "WalkRamp" );
+		RemoveWalkChild( "WalkDeck" );
+
 		var rootBox = root.Components.Get<BoxCollider>();
-		if ( rootBox is not null )
-			rootBox.IsTrigger = true;
+		if ( rootBox is null )
+			return;
 
-		var ramp = GetOrCreateWalkChild( "WalkRamp" );
-		var walkBox = ramp.Components.Get<BoxCollider>() ?? ramp.Components.Create<BoxCollider>();
-		walkBox.Center = Vector3.Zero;
-		walkBox.Scale = new Vector3( 50f, 50f, 160f );
-		walkBox.Static = true;
-		walkBox.IsTrigger = false;
-		walkBox.Enabled = true;
-		ramp.LocalRotation = Rotation.Identity;
-		ramp.LocalPosition = Vector3.Zero;
-
-		var deck = GetOrCreateWalkChild( "WalkDeck" );
-		var deckBox = deck.Components.Get<BoxCollider>() ?? deck.Components.Create<BoxCollider>();
-		deckBox.Center = Vector3.Zero;
-		deckBox.Scale = new Vector3( 58f, 58f, 8f );
-		deckBox.Static = true;
-		deckBox.IsTrigger = false;
-		deckBox.Enabled = true;
-
-		var half = BuildModuleDimensions.RoofHalfExtents;
-		deck.LocalPosition = new Vector3( 0f, 0f, half.z - 2f );
-		deck.LocalRotation = Rotation.Identity;
+		rootBox.Center = Vector3.Zero;
+		rootBox.Scale = BuildColliderSnap.PrefabColliderSize;
+		rootBox.Static = true;
+		rootBox.IsTrigger = false;
+		rootBox.Enabled = true;
 	}
 
 	void RemoveWalkChild( string childName )
@@ -203,22 +213,6 @@ public sealed class BuildPiece : Component
 			if ( child.IsValid() && child.Name == childName )
 				child.Destroy();
 		}
-	}
-
-	GameObject GetOrCreateWalkChild( string childName )
-	{
-		foreach ( var child in GameObject.Children )
-		{
-			if ( child.IsValid() && child.Name == childName )
-				return child;
-		}
-
-		var walk = new GameObject( false, childName );
-		walk.Parent = GameObject;
-		walk.LocalPosition = Vector3.Zero;
-		walk.LocalRotation = Rotation.Identity;
-		walk.LocalScale = Vector3.One;
-		return walk;
 	}
 }
 

@@ -4,13 +4,13 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// F-key shove: grounded dash + punch sequence with sword still held. Yields to hand-harvest when the F prompt is up.
+/// F-key shove: grounded dash + punch sequence with sword still held.
 /// Post-shove combat lock uses the same recovery gate as sword (<see cref="IsCombatActionLocked"/>).
 /// </summary>
 public partial class PlayerCombat
 {
 	[Property, Group( "Combat — Shove" ), Title( "Shove input action" )]
-	public string ShoveAction { get; set; } = "HandHarvest";
+	public string ShoveAction { get; set; } = "Shove";
 
 	[Property, Group( "Combat — Shove" ), Title( "Shove range (m)" )]
 	public float ShoveRangeMeters { get; set; } = 70f;
@@ -35,9 +35,6 @@ public partial class PlayerCombat
 		if ( string.IsNullOrWhiteSpace( ShoveAction ) || !Input.Pressed( ShoveAction ) )
 			return;
 
-		if ( IsHarvestPromptBlockingShove() )
-			return;
-
 		if ( !IsLocalPlayerGroundedForShove() )
 			return;
 
@@ -54,12 +51,6 @@ public partial class PlayerCombat
 		}
 
 		OwnerRequestShove();
-	}
-
-	bool IsHarvestPromptBlockingShove()
-	{
-		var harvest = Components.Get<PlayerHandHarvest>();
-		return harvest is not null && harvest.FocusedNode is not null && harvest.FocusedNode.IsValid();
 	}
 
 	bool IsLocalPlayerGroundedForShove()

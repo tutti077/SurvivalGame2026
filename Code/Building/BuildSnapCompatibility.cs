@@ -25,10 +25,31 @@ static class BuildSnapCompatibility
 
 	public static bool PrefersEdgeOnly( string placingPieceId, string targetPieceId ) =>
 		( IsRoof( placingPieceId ) && IsRoof( targetPieceId ) )
+		|| ( IsWall( placingPieceId ) && IsWall( targetPieceId ) )
+		|| ( IsFloor( placingPieceId ) && IsFloor( targetPieceId ) )
 		|| ( IsWall( placingPieceId ) && IsFloor( targetPieceId ) )
 		|| ( IsFloor( placingPieceId ) && IsWall( targetPieceId ) )
 		|| ( IsRoof( placingPieceId ) && IsFloor( targetPieceId ) )
 		|| ( IsFloor( placingPieceId ) && IsRoof( targetPieceId ) );
+
+	static readonly SnapEdgeId[] AllThinEdges =
+	{
+		SnapEdgeId.North,
+		SnapEdgeId.South,
+		SnapEdgeId.East,
+		SnapEdgeId.West,
+	};
+
+	static readonly SnapEdgeId[] BottomLipOnly =
+	{
+		SnapEdgeId.South,
+	};
+
+	static readonly SnapEdgeId[] LevelLips =
+	{
+		SnapEdgeId.South,
+		SnapEdgeId.North,
+	};
 
 	public static IReadOnlyList<SnapEdgeId> GetPlacingEdgesForTarget(
 		string placingPieceId,
@@ -42,7 +63,10 @@ static class BuildSnapCompatibility
 			return Empty;
 
 		if ( IsWall( placingPieceId ) && IsFloor( targetPieceId ) )
-			return new[] { SnapEdgeId.South };
+		{
+			// Bottom lip only — North (top) on a floor edge sinks the wall through the deck.
+			return BottomLipOnly;
+		}
 
 		if ( IsFloor( placingPieceId ) && IsWall( targetPieceId ) )
 		{
@@ -55,21 +79,36 @@ static class BuildSnapCompatibility
 			if ( targetEdge != SnapEdgeId.North )
 				return Empty;
 
-			return new[] { SnapEdgeId.South, SnapEdgeId.North };
+			// Bottom lip first so default / Q/E index 0 seats the eave on the wall top.
+			return LevelLips;
 		}
 
 		if ( IsRoof( placingPieceId ) && IsFloor( targetPieceId ) )
 		{
-			// Pitch makes North/South the level lips and East/West the slope. Always mate a
-			// level lip; yaw rotates it onto whichever floor edge you're aiming at.
-			return new[] { SnapEdgeId.North, SnapEdgeId.South };
+			// Pitch makes North/South the level lips. Both so we can hang below or sit above.
+			return LevelLips;
+		}
+
+		if ( IsFloor( placingPieceId ) && IsRoof( targetPieceId ) )
+		{
+			// Snap floors onto roof lips (ridge / eave).
+			return LevelLips;
 		}
 
 		if ( IsWall( placingPieceId ) && IsRoof( targetPieceId ) )
 			return new[] { BuildSnapEdge.GetOpposite( targetEdge ) };
 
+		if ( IsRoof( placingPieceId ) && IsRoof( targetPieceId ) )
+		{
+			// Upward + downward roof chains: try every lip; TryAlignToEdge keeps fits.
+			return AllThinEdges;
+		}
+
 		if ( IsSameEdgeFamily( placingPieceId, targetPieceId ) )
-			return new[] { BuildSnapEdge.GetOpposite( targetEdge ) };
+		{
+			// All lips so Q/E can cycle held corners/edges on the locked target seam.
+			return AllThinEdges;
+		}
 
 		return Empty;
 	}
@@ -82,10 +121,21 @@ static class BuildSnapCompatibility
 		BuildPiece targetPiece )
 	{
 		if ( IsWall( placingPieceId ) && IsFloor( targetPieceId ) )
-			return targetEdge == SnapEdgeId.South && placingEdge == SnapEdgeId.South;
+			return placingEdge == SnapEdgeId.South;
+
+		// Wall↔wall: same lip = coplanar extend; opposite = abut — both valid for Q/E.
+		if ( IsWall( placingPieceId ) && IsWall( targetPieceId ) )
+			return placingEdge == targetEdge;
 
 		if ( IsRoof( placingPieceId ) && IsFloor( targetPieceId ) )
 			return false;
+
+		if ( IsFloor( placingPieceId ) && IsRoof( targetPieceId ) )
+			return false;
+
+		// Roof↔roof: same lip = hang/extend along the slope; opposite = flush abut.
+		if ( IsRoof( placingPieceId ) && IsRoof( targetPieceId ) )
+			return placingEdge == targetEdge;
 
 		return IsRoof( placingPieceId )
 		       && IsWall( targetPieceId )
@@ -101,54 +151,49 @@ static class BuildSnapCompatibility
 		Transform placement,
 		BuildPiece targetPiece )
 	{
-		if ( IsRoof( placingPieceId ) && IsFloor( targetPieceId ) )
-			return IsRoofMostlyAboveTarget( placingPieceId, placement, targetPiece );
+		// Wall top-lip on a floor edge buries half the wall in the deck — never allow it.
+		if ( IsWall( placingPieceId ) && IsFloor( targetPieceId ) && placingEdge.Id != SnapEdgeId.South )
+			return false;
 
+		// Roof↔floor: allow sit-above and hang-down; aim scoring picks which.
 		return true;
 	}
 
 	/// <summary>
-	/// 45° roofs can mate a floor edge on the raised lip so the plate hangs below ground.
-	/// Require the roof center and average snap height to sit at/above the floor deck.
+	/// Lower is better — used to pick among several yaw fits that all mate an edge.
+	/// When <paramref name="preferHangDown"/>, prefer plates hanging below the floor edge.
 	/// </summary>
-	public static bool IsRoofMostlyAboveTarget(
-		string roofPieceId,
-		Transform roofPlacement,
-		BuildPiece targetPiece )
-	{
-		if ( targetPiece is null || !targetPiece.IsValid() )
-			return false;
-
-		var floorZ = targetPiece.GameObject.WorldPosition.z;
-		var centerZ = roofPlacement.Position.z;
-		var avgZ = GetSnapCornersAverageWorldZ( roofPieceId, roofPlacement );
-
-		// Center below the deck ⇒ the raised lip was mated (hangs into the ground).
-		if ( centerZ < floorZ - BuildModuleDimensions.SnapThinHalfUnits )
-			return false;
-
-		if ( avgZ < floorZ - BuildModuleDimensions.SnapThinHalfUnits )
-			return false;
-
-		return true;
-	}
-
-	/// <summary>Lower is better — used to pick among several yaw fits that all mate an edge.</summary>
 	public static float ScoreRoofElevation(
 		string roofPieceId,
 		Transform roofPlacement,
-		BuildPiece targetPiece )
+		BuildPiece targetPiece,
+		bool preferHangDown = false )
 	{
 		if ( targetPiece is null || !targetPiece.IsValid() )
+			return 0f;
+
+		// Roof↔roof: no above/below bias — downward chains must score fairly.
+		if ( IsRoof( targetPiece.PieceId ) )
 			return 0f;
 
 		var floorZ = targetPiece.GameObject.WorldPosition.z;
 		var centerZ = roofPlacement.Position.z;
 		var avgZ = GetSnapCornersAverageWorldZ( roofPieceId, roofPlacement );
+
+		if ( preferHangDown )
+		{
+			// Prefer center below the deck (raised-lip mate); penalize sit-above.
+			var abovePenalty = centerZ >= floorZ - BuildModuleDimensions.SnapThinHalfUnits ? 500f : 0f;
+			return abovePenalty + ( avgZ - floorZ ) + ( centerZ - floorZ );
+		}
+
 		// Strongly prefer center above the floor; then prefer higher average.
 		var belowPenalty = centerZ < floorZ ? 500f : 0f;
 		return belowPenalty - ( avgZ - floorZ ) - ( centerZ - floorZ );
 	}
+
+	/// <summary>Ridge / upper lip — mates a floor edge so the plate hangs downward.</summary>
+	public static SnapEdgeId RoofTopLip => SnapEdgeId.North;
 
 	public static float GetSnapCornersAverageWorldZ( string pieceId, Transform placement )
 	{
@@ -180,38 +225,8 @@ static class BuildSnapCompatibility
 		       + BuildColliderSnap.GetCornerSnapWorldOffset( pieceId, role, orientedRot, scale, half ).z;
 	}
 
-	public static SnapEdgeId GetPreferredRoofOnWallPlacingEdge(
-		BuildPiece wall,
-		Vector3 rayOrigin,
-		Vector3 rayDirection ) =>
-		IsLookingAboveWall( wall, rayOrigin, rayDirection )
-			? SnapEdgeId.South
-			: SnapEdgeId.North;
-
-	static bool IsLookingAboveWall( BuildPiece wall, Vector3 rayOrigin, Vector3 rayDirection )
-	{
-		if ( wall is null || !wall.IsValid() )
-			return rayDirection.z > 0.15f;
-
-		var topZ = GetWallTopZ( wall );
-		return rayOrigin.z > topZ - 8f && rayDirection.z > 0.05f;
-	}
-
-	static float GetWallTopZ( BuildPiece wall )
-	{
-		var scale = BuildModuleDimensions.GetPieceLocalScale( wall.PieceId );
-		var half = BuildColliderSnap.PrefabColliderSize * 0.5f;
-		var rot = wall.GameObject.WorldRotation;
-		var top = float.MinValue;
-		foreach ( var role in new[] { BuildSnapRole.CornerNorthWest, BuildSnapRole.CornerNorthEast } )
-		{
-			var z = wall.GameObject.WorldPosition.z
-			        + BuildColliderSnap.GetCornerSnapWorldOffset( wall.PieceId, role, rot, scale, half ).z;
-			top = Math.Max( top, z );
-		}
-
-		return top;
-	}
+	/// <summary>Lower eave lip for pitched roofs (North = ridge / upper lip).</summary>
+	public static SnapEdgeId RoofBottomLip => SnapEdgeId.South;
 
 	static bool IsWallFloorEdgePair( SnapEdgeId placingEdge, SnapEdgeId targetEdge ) =>
 		( targetEdge, placingEdge ) switch
@@ -223,7 +238,7 @@ static class BuildSnapCompatibility
 			_ => false,
 		};
 
-	static bool IsSameEdgeFamily( string placingPieceId, string targetPieceId ) =>
+	public static bool IsSameEdgeFamily( string placingPieceId, string targetPieceId ) =>
 		( IsFloor( placingPieceId ) && IsFloor( targetPieceId ) )
 		|| ( IsWall( placingPieceId ) && IsWall( targetPieceId ) )
 		|| ( IsRoof( placingPieceId ) && IsRoof( targetPieceId ) );

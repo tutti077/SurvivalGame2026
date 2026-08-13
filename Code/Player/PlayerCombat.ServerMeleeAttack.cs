@@ -289,8 +289,25 @@ public partial class PlayerCombat
 		ClearForwardMeleeStartPitch();
 		_serverMeleeAttack = null;
 		SetMeleeAttackCommitmentLock( false );
+		NotifyOwnerMeleeBusyCleared( "host cancel" );
+	}
+
+	/// <summary>
+	/// Unlock Attack1 on the owning client after host cancel / early teardown.
+	/// Local drivers clear immediately; remote owners get <see cref="RpcOwnerMeleeBusyCleared"/>.
+	/// </summary>
+	void NotifyOwnerMeleeBusyCleared( string reason )
+	{
 		if ( IsLocalCombatDriver() )
-			_ownerExpectsHostMeleeBusy = false;
+		{
+			ClearOwnerMeleeBusyExpect( reason );
+			return;
+		}
+
+		if ( !Networking.IsHost || GameObject.Network is not { Active: true } )
+			return;
+
+		RpcOwnerMeleeBusyCleared( reason ?? "host cancel" );
 	}
 
 	void MaybeTickServerMeleeAttackAction()
@@ -325,8 +342,10 @@ public partial class PlayerCombat
 			_serverMeleeAttack = null;
 			SetMeleeAttackCommitmentLock( false );
 			// Don't wait on Rpc.Owner to clear the spam-click gate (listen-server host can stall otherwise).
+			// Remote owners are cleared by RpcOwnerMeleeSwingComplete inside Tick; if that path
+			// never ran, failsafe unlock so the client is not stuck forever.
 			if ( IsLocalCombatDriver() )
-				_ownerExpectsHostMeleeBusy = false;
+				ClearOwnerMeleeBusyExpect( "local sweep end" );
 		}
 	}
 
@@ -622,6 +641,10 @@ public partial class PlayerCombat
 			return false;
 
 		if ( IsBlockPreventingAttack() || IsCombatActionLocked )
+			return false;
+
+		// Chain-busy without a real press channel = fake black bar (common when ownerExpects stuck).
+		if ( IsMeleeAttackChainBusy() && !_primary.Down && !_primarySwingPhaseActive )
 			return false;
 
 		attackType = ResolveAttackTypeFromCursorDir( _lockedPrimaryAttackSwingDir );

@@ -1,3 +1,4 @@
+using System;
 using Sandbox;
 
 namespace Survival;
@@ -19,10 +20,39 @@ public static class BuildViewCamera
 		{
 			origin = cam.WorldPosition;
 			direction = cam.WorldRotation.Forward.Normal;
-			return direction.LengthSquared > 1e-8f;
+			if ( direction.LengthSquared < 1e-8f )
+				return false;
+
+			// Third-person: start the build ray past the pawn so the body can't steal aim hits.
+			if ( !IsFirstPersonViewCamera( pawn, cam ) )
+				origin = PushRayOriginPastPawn( pawn, origin, direction );
+
+			return true;
 		}
 
 		return false;
+	}
+
+	/// <summary>
+	/// Move the ray start forward along the view until it clears the pawn capsule.
+	/// Keep this tight — a large push put nearby/high seams behind the ray origin.
+	/// </summary>
+	static Vector3 PushRayOriginPastPawn( GameObject pawn, Vector3 rayOrigin, Vector3 rayDir )
+	{
+		var pawnPos = pawn.WorldPosition + Vector3.Up * 36f;
+		var toPawn = pawnPos - rayOrigin;
+		var along = Vector3.Dot( toPawn, rayDir );
+		if ( along <= 0f )
+			return rayOrigin;
+
+		var radius = 16f;
+		var pc = pawn.Components.Get<PlayerController>();
+		if ( pc is not null && pc.IsValid() )
+			radius = Math.Max( 12f, pc.BodyRadius );
+
+		// Just past the torso along the view — TraceBuildRay still skips player hits.
+		var clearPast = along + radius + 8f;
+		return rayOrigin + rayDir * clearPast;
 	}
 
 	/// <summary>

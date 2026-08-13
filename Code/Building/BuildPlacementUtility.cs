@@ -58,6 +58,12 @@ public static class BuildPlacementUtility
 		var aimDrop = rayOrigin + dir * Math.Min( AimDropDistance, maxRange * 0.75f );
 		var rayEnd = rayOrigin + dir * maxRange;
 		var trace = TraceBuildRay( scene, pawn, ignorePreview, rayOrigin, rayEnd );
+		var aimLand = BuildSnapCrosshair.ResolveAimLandPoint(
+			rayOrigin,
+			dir,
+			maxRange,
+			trace.Hit,
+			trace.Hit ? trace.HitPosition : default );
 
 		BuildPlacementResult? TrySnapFromCandidates( IReadOnlyList<BuildSnapCandidate> list )
 		{
@@ -72,6 +78,7 @@ public static class BuildPlacementUtility
 				     placingSnaps,
 				     rayOrigin,
 				     dir,
+				     aimLand,
 				     maxRange,
 				     out var snap,
 				     out var variantCount ) )
@@ -100,11 +107,12 @@ public static class BuildPlacementUtility
 			ignorePreview,
 			rayOrigin,
 			dir,
+			aimLand,
 			yawDegrees,
 			maxRange );
 
 		var bestRay = BuildSnapPlacement.GetBestRayScore( candidates );
-		var view = BuildSnapCrosshair.BuildViewContext( rayOrigin, dir, maxRange, bestRay );
+		var view = BuildSnapCrosshair.BuildViewContext( rayOrigin, dir, maxRange, aimLand, bestRay );
 		BuildPlacementResult WithRayDebug( BuildPlacementResult result ) => result with
 		{
 			HasRayDebug = true,
@@ -117,36 +125,83 @@ public static class BuildPlacementUtility
 		};
 
 		var snapResult = TrySnapFromCandidates( candidates );
-		if ( snapResult is not null )
-			return snapResult.Value;
+		if ( snapResult is { } snapped && snapped.SnapCandidate is { } committed )
+		{
+			var aimOk = BuildSnapCrosshair.ShouldCommitSnap( committed, aimLand );
+			// Sticky lock: once Q/E-locked to a seam, keep that snap while aim stays near it
+			// so cycling doesn't reset when the face-commit band flickers.
+			var sticky = lockedSnapGroup is { } locked
+			             && committed.GroupKey.Equals( locked )
+			             && ( aimOk
+			                  || committed.RayScore.AimLandDistance
+			                  <= BuildSnapCrosshair.LookPastSnapCommitRadius * 1.5f );
+
+			if ( aimOk || sticky )
+				return snapped;
+		}
 
 		var ground = ComputeGroundPlacement(
 			data,
+			placingSnaps,
 			scene,
 			pawn,
 			ignorePreview,
 			rayOrigin,
 			rayDirection,
 			yawDegrees,
-			maxRange );
+			maxRange,
+			snapAnchorVariantIndex );
+
+		var groundVariantCount = CountGroundHoldVariants( placingSnaps );
+		var groundIndex = groundVariantCount > 0
+			? ( ( snapAnchorVariantIndex % groundVariantCount ) + groundVariantCount ) % groundVariantCount
+			: 0;
 
 		return WithRayDebug( ground with
 		{
-			SnapCandidateIndex = 0,
-			SnapCandidateCount = 0,
+			SnapCandidateIndex = groundIndex,
+			SnapCandidateCount = groundVariantCount,
+			SnapAnchorVariantIndex = groundIndex,
 			SnappedToStructure = false,
+			SnapCandidate = null,
+			ActiveSnapGroup = null,
 		} );
 	}
 
+	public const int GroundHoldVariantCount = 5;
+
+	static int CountGroundHoldVariants( IReadOnlyList<BuildSnapPoint> placingSnaps )
+	{
+		if ( placingSnaps is null || placingSnaps.Count == 0 )
+			return 1;
+
+		var corners = 0;
+		for ( var i = 0; i < placingSnaps.Count; i++ )
+		{
+			if ( IsHoldCornerRole( placingSnaps[i].Role ) )
+				corners++;
+		}
+
+		return 1 + corners;
+	}
+
+	static bool IsHoldCornerRole( BuildSnapRole role ) =>
+		role is BuildSnapRole.CornerNorthEast
+			or BuildSnapRole.CornerNorthWest
+			or BuildSnapRole.CornerSouthEast
+			or BuildSnapRole.CornerSouthWest;
+
 	public static BuildPlacementResult ComputeGroundPlacement(
 		BuildPieceData data,
+		IReadOnlyList<BuildSnapPoint> placingSnaps,
 		Scene scene,
 		GameObject pawn,
 		GameObject ignorePreview,
 		Vector3 rayOrigin,
 		Vector3 rayDirection,
 		float yawDegrees,
-		float maxRange )
+		float maxRange,
+		int holdVariantIndex = 0 )
 	{
 		var invalid = new BuildPlacementResult { IsValid = false, HasSurfaceHit = false };
 		if ( data is null || !pawn.IsValid() || !scene.IsValid() )
@@ -203,6 +258,8 @@ public static class BuildPlacementUtility
 			position = DropFromCameraAim( scene, pawn, ignorePreview, rayOrigin, dir, maxRange, sitHalf, out hasSurface );
 		}
 
+		position = ApplyGroundHoldOffset( data.Id, placingSnaps, position, rotation, holdVariantIndex );
+
 		if ( Vector3.DistanceBetween( rayOrigin, position ) > maxRange )
 		{
 			return new BuildPlacementResult
@@ -227,6 +284,46 @@ public static class BuildPlacementUtility
 		};
 	}
 
+	/// <summary>
+	/// Hold variant 0 = center (no offset). 1+ = shift so that corner sits over the aim/hit point.
+	/// </summary>
+	static Vector3 ApplyGroundHoldOffset(
+		string pieceId,
+		IReadOnlyList<BuildSnapPoint> placingSnaps,
+		Vector3 centerPosition,
+		Rotation rotation,
+		int holdVariantIndex )
+	{
+		if ( holdVariantIndex <= 0 || placingSnaps is null || placingSnaps.Count == 0 )
+			return centerPosition;
+
+		var cornerOrdinal = 0;
+		for ( var i = 0; i < placingSnaps.Count; i++ )
+		{
+			var role = placingSnaps[i].Role;
+			if ( !IsHoldCornerRole( role ) )
+				continue;
+
+			cornerOrdinal++;
+			if ( cornerOrdinal != holdVariantIndex )
+				continue;
+
+			var orientedRot = rotation * BuildModuleDimensions.GetPrefabLocalRotation( pieceId );
+			var scale = BuildModuleDimensions.GetPieceLocalScale( pieceId );
+			var half = BuildColliderSnap.PrefabColliderSize * 0.5f;
+			var cornerOffset = BuildColliderSnap.GetCornerSnapWorldOffset(
+				pieceId,
+				role,
+				orientedRot,
+				scale,
+				half );
+			// Keep height from sit; slide XY so the held corner is over the aim point.
+			return centerPosition - cornerOffset.WithZ( 0f );
+		}
+
+		return centerPosition;
+	}
+
 	static Vector3 DropFromCameraAim(
 		Scene scene,
 		GameObject pawn,
@@ -245,9 +342,10 @@ public static class BuildPlacementUtility
 		var downEnd = aimPoint - Vector3.Up * 4096f;
 		var downTrace = scene.Trace.Ray( downStart, downEnd )
 			.IgnoreGameObjectHierarchy( pawn )
+			.WithoutTags( "player" )
 			.Run();
 
-		if ( downTrace.Hit && !IsIgnoredTraceHit( downTrace.GameObject, ignorePreview ) )
+		if ( downTrace.Hit && !IsIgnoredTraceHit( downTrace.GameObject, ignorePreview ) && !IsPlayerTraceHit( downTrace.GameObject ) )
 		{
 			foundSurface = true;
 			return downTrace.HitPosition + Vector3.Up * sitHalfZ;
@@ -296,15 +394,65 @@ public static class BuildPlacementUtility
 
 	static SceneTraceResult TraceBuildRay( Scene scene, GameObject pawn, GameObject ignorePreview, Vector3 start, Vector3 end )
 	{
-		var trace = scene.Trace.Ray( start, end ).IgnoreGameObjectHierarchy( pawn ).Run();
-		if ( trace.Hit && !IsIgnoredTraceHit( trace.GameObject, ignorePreview ) )
-			return trace;
+		// Third-person: camera rays clip the local pawn/hitboxes and drop aim onto the body →
+		// false ground placement. Ignore player (+ triggers so roof root triggers don't steal hits).
+		var dir = (end - start);
+		var maxDist = dir.Length;
+		if ( maxDist < 1e-4f )
+			return default;
 
-		trace = scene.Trace.Ray( start, end ).IgnoreGameObjectHierarchy( pawn ).UseHitboxes().Run();
-		if ( trace.Hit && !IsIgnoredTraceHit( trace.GameObject, ignorePreview ) )
+		dir /= maxDist;
+		var from = start;
+		const int maxSkips = 6;
+		for ( var i = 0; i < maxSkips; i++ )
+		{
+			var remaining = end - from;
+			if ( remaining.Length < 1e-3f )
+				break;
+
+			var trace = scene.Trace.Ray( from, end )
+				.IgnoreGameObjectHierarchy( pawn )
+				.WithoutTags( "player" )
+				.Run();
+
+			if ( !trace.Hit )
+			{
+				trace = scene.Trace.Ray( from, end )
+					.IgnoreGameObjectHierarchy( pawn )
+					.WithoutTags( "player" )
+					.UseHitboxes()
+					.Run();
+			}
+
+			if ( !trace.Hit )
+				return default;
+
+			if ( IsIgnoredTraceHit( trace.GameObject, ignorePreview )
+			     || IsPlayerTraceHit( trace.GameObject ) )
+			{
+				from = trace.HitPosition + dir * 8f;
+				continue;
+			}
+
 			return trace;
+		}
 
 		return default;
+	}
+
+	static bool IsPlayerTraceHit( GameObject hit )
+	{
+		for ( var current = hit; current.IsValid(); current = current.Parent )
+		{
+			if ( current.Tags.Has( "player" ) )
+				return true;
+			if ( current.Components.Get<PlayerVitals>() is not null )
+				return true;
+			if ( current.Components.Get<PlayerController>() is not null )
+				return true;
+		}
+
+		return false;
 	}
 
 	static bool IsIgnoredTraceHit( GameObject hit, GameObject ignorePreview )

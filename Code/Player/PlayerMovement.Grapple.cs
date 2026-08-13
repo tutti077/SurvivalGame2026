@@ -1056,8 +1056,16 @@ partial class PlayerMovement
 		if ( !GrappleAttached )
 			return;
 
-		IsRetractingRope = IsLengthActionDown( RetractAction, "GrappleRetract", "Use", "e" );
-		IsDetractingRope = IsLengthActionDown( DetractAction, "GrappleDetract", "Menu", "q" );
+		_controller ??= Components.Get<PlayerController>();
+		var onGround = _controller is not null && _controller.IsOnGround;
+
+		// Space is Jump + GrappleRetract: on the ground, Jump wins (no retract).
+		// In the air on the rope, Space shortens the line.
+		if ( !onGround )
+			IsRetractingRope = IsLengthActionDown( RetractAction, "GrappleRetract", "Jump", "space" );
+
+		// Ctrl is Duck + GrappleDetract — both can run while grappled.
+		IsDetractingRope = IsLengthActionDown( DetractAction, "GrappleDetract", "Duck", "ctrl" );
 	}
 
 	void ApplyLengthHoldDelta( float dt )

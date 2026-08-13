@@ -46,6 +46,8 @@ public sealed class ToolBuildHammer : Component
 	int _snapAnchorIndex;
 	int _lastSnapAnchorCount;
 	BuildSnapGroupKey? _lockedSnapGroup;
+	/// <summary>Last Q/E variant per piece id — kept across places of the same type.</summary>
+	readonly Dictionary<string, int> _snapVariantByPieceId = new( StringComparer.OrdinalIgnoreCase );
 	bool _previewValid;
 	BuildPlacementResult _lastPlacement;
 	BuildSnapCandidate? _activeSnapCandidate;
@@ -127,12 +129,14 @@ public sealed class ToolBuildHammer : Component
 		if ( string.IsNullOrWhiteSpace( pieceId ) || !BuildPieceCatalog.TryGet( pieceId, out var data ) )
 			return;
 
+		RememberSnapVariantForSelected();
+
 		DestroyPreview();
 		_selectedPieceId = pieceId;
 		_selectedData = data;
 		_prefabTemplate = BuildPrefabUtility.GetTemplate( data.Prefab );
 		_yawDegrees = 0f;
-		_snapAnchorIndex = 0;
+		_snapAnchorIndex = _snapVariantByPieceId.TryGetValue( pieceId, out var saved ) ? saved : 0;
 		_lastSnapAnchorCount = 0;
 		_lockedSnapGroup = null;
 		RefreshPlacingSnaps();
@@ -147,11 +151,20 @@ public sealed class ToolBuildHammer : Component
 		UpdatePreview();
 	}
 
+	void RememberSnapVariantForSelected()
+	{
+		if ( string.IsNullOrWhiteSpace( _selectedPieceId ) )
+			return;
+
+		_snapVariantByPieceId[_selectedPieceId] = _snapAnchorIndex;
+	}
+
 	public void ClearSelectedPiece()
 	{
 		if ( !IsPlacingPiece && _previewRoot is null )
 			return;
 
+		RememberSnapVariantForSelected();
 		_selectedPieceId = null;
 		_selectedData = null;
 		_prefabTemplate = null;
@@ -243,10 +256,11 @@ public sealed class ToolBuildHammer : Component
 
 		if ( !IsRepairMode )
 		{
-			if ( Input.Pressed( SnapPrevAction ) )
+			// Hardcoded Q/E so snap cycle isn't lost if Use/Menu share those keys.
+			if ( Input.Pressed( SnapPrevAction ) || Input.Keyboard.Pressed( "q" ) )
 				_snapAnchorIndex--;
 
-			if ( Input.Pressed( SnapNextAction ) )
+			if ( Input.Pressed( SnapNextAction ) || Input.Keyboard.Pressed( "e" ) )
 				_snapAnchorIndex++;
 
 			if ( IsPreviewingPlacePiece )
@@ -254,7 +268,11 @@ public sealed class ToolBuildHammer : Component
 				var scroll = Input.MouseWheel.y;
 				if ( Math.Abs( scroll ) > 0.01f )
 				{
-					var step = Input.Down( "Run" ) ? 15f : 45f;
+					// Hardcoded physical Shift for fine rotate — not the rebindable Run action.
+					var fine = Input.Keyboard.Down( "shift" )
+					           || Input.Keyboard.Down( "leftshift" )
+					           || Input.Keyboard.Down( "rightshift" );
+					var step = fine ? 15f : 45f;
 					_yawDegrees += scroll > 0f ? step : -step;
 				}
 			}
@@ -266,7 +284,8 @@ public sealed class ToolBuildHammer : Component
 				TryRepairLookedAtBuildPiece();
 			else
 				TryPlaceSelectedPiece();
-		}
+				RememberSnapVariantForSelected();
+			}
 	}
 
 	void UpdatePreview()
@@ -306,21 +325,30 @@ public sealed class ToolBuildHammer : Component
 
 		if ( _lastPlacement.SnappedToStructure && _lastPlacement.ActiveSnapGroup is { } activeGroup )
 		{
-			if ( _lockedSnapGroup is not { } prev || !prev.Equals( activeGroup ) )
-				_snapAnchorIndex = 0;
-
+			// Keep Q/E index across seams and places of the same piece type (1234 sticky).
 			_lockedSnapGroup = activeGroup;
 		}
 		else if ( !_lastPlacement.SnappedToStructure )
 		{
+			// Do not clear lock here when sticky snap dropped for one frame — sticky in
+			// ComputePlacement keeps SnappedToStructure while aim stays near the seam.
 			_lockedSnapGroup = null;
 		}
 
-		if ( _lastPlacement.SnapCandidateCount != _lastSnapAnchorCount )
+		var variantCount = Math.Max( 0, _lastPlacement.SnapCandidateCount );
+		if ( variantCount != _lastSnapAnchorCount )
+			_lastSnapAnchorCount = variantCount;
+
+		if ( variantCount > 0 )
 		{
-			_lastSnapAnchorCount = _lastPlacement.SnapCandidateCount;
-			_snapAnchorIndex = Math.Clamp( _snapAnchorIndex, 0, Math.Max( 0, _lastSnapAnchorCount - 1 ) );
+			// Wrap Q/E instead of clamping to 0 when count flickers.
+			_snapAnchorIndex %= variantCount;
+			if ( _snapAnchorIndex < 0 )
+				_snapAnchorIndex += variantCount;
+
+			RememberSnapVariantForSelected();
 		}
+		// Keep last index while free-aiming so the next same-type snap restores 1234.
 
 		_activeSnapCandidate = _lastPlacement.SnapCandidate;
 

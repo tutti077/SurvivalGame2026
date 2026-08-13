@@ -6,7 +6,7 @@ namespace Survival;
 
 /// <summary>
 /// Local pawn: hand harvest on <see cref="ResourceItemDefinition"/> within range while looking at it.
-/// Press <see cref="HandHarvestInputAction"/> (default F) while the harvest prompt is shown.
+/// Press <see cref="HandHarvestInputAction"/> (default E) while the harvest prompt is shown.
 /// World drops magnetize toward the pawn in range, then pick up on contact.
 /// </summary>
 [Title( "Player Hand Harvest" )]
@@ -77,6 +77,13 @@ public sealed class PlayerHandHarvest : Component
 			return;
 		}
 
+		// Build Q/E snap cycle owns E while the hammer preview is up.
+		if ( IsBuildHammerPreviewing() )
+		{
+			SetFocusedNode( null );
+			return;
+		}
+
 		if ( Time.NowDouble >= _nextFocusScanAt )
 			UpdateFocusedNode();
 
@@ -91,6 +98,12 @@ public sealed class PlayerHandHarvest : Component
 		}
 
 		RequestHandHarvest( FocusedNode );
+	}
+
+	bool IsBuildHammerPreviewing()
+	{
+		var hammer = Components.Get<PlayerEquipment>()?.GetActiveTool<ToolBuildHammer>();
+		return hammer is not null && hammer.IsPreviewingPlacePiece;
 	}
 
 	void TickWorldDropMagnet()

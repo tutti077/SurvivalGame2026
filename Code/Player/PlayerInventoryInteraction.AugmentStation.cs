@@ -49,6 +49,9 @@ public sealed partial class PlayerInventoryInteraction
 		if ( menuOpen || !Input.Pressed( ContainerUseAction ) )
 			return;
 
+		if ( IsBuildHammerPreviewing() )
+			return;
+
 		if ( IsGrappleRetractActive() )
 			return;
 
@@ -67,7 +70,7 @@ public sealed partial class PlayerInventoryInteraction
 		if ( FocusedAugmentStation is not null && !FocusedAugmentStation.IsValid() )
 			SetFocusedAugmentStation( null );
 
-		if ( menuOpen || OpenAugmentStation is not null || OpenContainer is not null || IsGrappleRetractActive() )
+		if ( menuOpen || OpenAugmentStation is not null || OpenContainer is not null || IsGrappleRetractActive() || IsBuildHammerPreviewing() )
 		{
 			SetFocusedAugmentStation( null );
 			return;

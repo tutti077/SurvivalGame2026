@@ -365,7 +365,7 @@
           "__version": 2,
           "Flags": 0,
           "Name": "visual",
-          "Position": "0,0,3",
+          "Position": "-258,-640,3",
           "Rotation": "0,0,0,1",
           "Scale": "2,2,0.119999997",
           "Tags": "",
@@ -845,7 +845,7 @@
       "__version": 2,
       "Flags": 0,
       "Name": "Cube",
-      "Position": "270.432068,91.5213089,2.35694695",
+      "Position": "768,352,2.35694695",
       "Rotation": "0,0,0,1",
       "Scale": "2,2,0.100000001",
       "Tags": "",
@@ -981,7 +981,7 @@
       "__version": 2,
       "Flags": 0,
       "Name": "BlockTrainingDummy",
-      "Position": "353.009277,-143.056885,34.4427872",
+      "Position": "736,544,34.4427872",
       "Rotation": "-0,0,-1,-4.37113883E-08",
       "Scale": "0.349999994,0.349999994,1",
       "Tags": "",
@@ -1253,6 +1253,80 @@
         "7b03ae53-6aa1-4f8f-b9f2-05a124be88cb": "a38d11ab-82fd-4f3c-85f7-811fb813d043",
         "0de75b50-d8df-402d-ae5b-bca32fdf2464": "b8e4c621-9f12-4a6d-bc03-1f7a2d8e9041",
         "f1e2d3c4-b5a6-9788-7766-554433221100": "fa6675f7-7058-429e-b4f8-1b030053f5a1"
+      }
+    },
+    {
+      "__guid": "c8e4f012-3456-7890-abcd-ef1234567801",
+      "__version": 2,
+      "__Prefab": "prefabs/build/chest.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "c8e4f012-3456-7890-abcd-ef1234567806"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111144"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.StarterKitChestFill",
+              "__guid": "c8e4f012-3456-7890-abcd-ef1234567806",
+              "__enabled": true,
+              "Flags": 0,
+              "KitDisplayName": "Starter Kit",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "SetsOfEach": 4
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "Property": "Name",
+            "Value": "StarterKitChest"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "Property": "Position",
+            "Value": "160,-64,8"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111144"
+            },
+            "Property": "DisplayName",
+            "Value": "Starter Kit"
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "b1010004-1111-4111-8111-111111111104": "c8e4f012-3456-7890-abcd-ef1234567801",
+        "b1010004-1111-4111-8111-111111111141": "c8e4f012-3456-7890-abcd-ef1234567802",
+        "b1010004-1111-4111-8111-111111111142": "c8e4f012-3456-7890-abcd-ef1234567803",
+        "b1010004-1111-4111-8111-111111111143": "c8e4f012-3456-7890-abcd-ef1234567804",
+        "b1010004-1111-4111-8111-111111111144": "c8e4f012-3456-7890-abcd-ef1234567805"
       }
     },
     {
@@ -95242,7 +95316,7 @@
               "IdValue": "6be139f6-7ec6-4a0f-bc35-160aa85a2959"
             },
             "Property": "Position",
-            "Value": "-32,-64,1.88218939"
+            "Value": "128,704,1.88218939"
           },
           {
             "Target": {
@@ -95358,7 +95432,7 @@
               "IdValue": "c38d434a-c528-4a1d-8885-6b4f3e0cfded"
             },
             "Property": "Position",
-            "Value": "-2.49072456,65.1285248,25"
+            "Value": "-15.8975391,415.696106,25"
           }
         ],
         "MovedObjects": []

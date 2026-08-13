@@ -429,6 +429,15 @@ public partial class PlayerCombat : Component
 	/// <summary>Owner expects the host melee action to still be running (online clients without local runtime).</summary>
 	bool _ownerExpectsHostMeleeBusy;
 
+	/// <summary><see cref="Time.NowDouble"/> when <see cref="_ownerExpectsHostMeleeBusy"/> was last set true.</summary>
+	double _ownerExpectsHostMeleeBusySince;
+
+	/// <summary>
+	/// Safety: if RpcOwner sweep-complete / reject is dropped, unlock Attack1 after this many seconds
+	/// (covers full windup+active+recovery with margin).
+	/// </summary>
+	const float OwnerExpectsHostMeleeBusyTimeoutSeconds = 2.75f;
+
 	/// <summary>When set, non-local attack/block paths use intent yaw instead of pawn body rotation.</summary>
 	float? _meleeIntentBasisYawOverride;
 	bool _meleeIntentForwardPitchCaptured;
@@ -554,18 +563,26 @@ public partial class PlayerCombat : Component
 
 		// Lock attack direction on press / first held frame. Do NOT cancel an in-flight swing window —
 		// spam-clicking used to abort the light attack before it could dispatch (black telegraph, no swing).
+		// Also skip lock while chain-busy — otherwise clients show a fake black telegraph with no
+		// _primary channel (busy gate blocked CanStart) and never fire arc/damage.
 		var primaryAttackHeld = Input.Down( PrimaryAttackAction );
+		var chainBusy = IsMeleeAttackChainBusy();
 		if ( !IsBlockPreventingAttack()
 		     && !_primarySwingPhaseActive
+		     && !chainBusy
 		     && (Input.Pressed( PrimaryAttackAction ) || (primaryAttackHeld && !_wasPrimaryAttackButtonDownLastFrame)) )
 		{
 			LockPreparedPrimaryAttackDirection();
 			// Only start the windup clip when the combat channel actually accepted the press.
-			if ( !IsMeleeAttackChainBusy() && _primary.Down )
+			if ( _primary.Down )
 			{
 				var windupType = ResolveAttackTypeFromCursorDir( _lockedPrimaryAttackSwingDir );
 				Components.Get<PlayerAnimation>()?.BeginMeleeAttackWindupHold( windupType );
 			}
+		}
+		else if ( chainBusy && !_primary.Down && !_primarySwingPhaseActive && !primaryAttackHeld )
+		{
+			_hasLockedPrimaryAttackDir = false;
 		}
 
 		Components.Get<PlayerAnimation>()?.TickMeleeAttackWindupHold(
@@ -608,7 +625,7 @@ public partial class PlayerCombat : Component
 		}
 		else if ( _hasLockedPrimaryAttackDir )
 			_primaryLiveSwingDir = _lockedPrimaryAttackSwingDir;
-		else if ( primaryAttackHeld )
+		else if ( primaryAttackHeld && !IsMeleeAttackChainBusy() )
 			LockPreparedPrimaryAttackDirection();
 
 		if ( _primarySwingPhaseActive && Time.NowDouble < _primarySwingPhaseEndAtSandbox )
@@ -1373,16 +1390,40 @@ public partial class PlayerCombat : Component
 			_combatNetDiag = $"offline: acc={result.Accepted} hit={result.Hit} dmg={result.DamageDealt:0.#} code={result.DebugCode}";
 			LogCombatDiag( "SERVER (local dispatch)", FormatAttackResultLog( result ) );
 			if ( result.Accepted )
-				_ownerExpectsHostMeleeBusy = true;
+				SetOwnerExpectsHostMeleeBusy( true );
 			return;
 		}
 
-		_ownerExpectsHostMeleeBusy = true;
+		SetOwnerExpectsHostMeleeBusy( true );
 		_combatNetDiag = Networking.IsHost ? "host→Rpc.Host (single server pass)" : "RPC->host sent (await result)";
 		LogCombatDiag( "CLIENT (dispatch)", "RpcSubmitPrimaryAttackRelease -> host (see editor Output)" );
 		_pendingSwingVisualIntent = intent;
 		_hasPendingSwingVisualIntent = true;
 		RpcSubmitPrimaryAttackRelease( intent );
+	}
+
+	void SetOwnerExpectsHostMeleeBusy( bool expects )
+	{
+		_ownerExpectsHostMeleeBusy = expects;
+		_ownerExpectsHostMeleeBusySince = expects ? Time.NowDouble : 0;
+	}
+
+	/// <summary>Clear client spam-gate after reject / sweep complete / host cancel / timeout.</summary>
+	public void ClearOwnerMeleeBusyExpect( string reason = null )
+	{
+		var hadBusy = _ownerExpectsHostMeleeBusy || _primarySwingPhaseActive;
+		SetOwnerExpectsHostMeleeBusy( false );
+		if ( _primarySwingPhaseActive )
+		{
+			_primarySwingPhaseActive = false;
+			_primaryPostReleaseDragAccum = default;
+		}
+
+		_hasLockedPrimaryAttackDir = false;
+		_hasPendingSwingVisualIntent = false;
+
+		if ( hadBusy && !string.IsNullOrWhiteSpace( reason ) )
+			LogCombatDiag( "CLIENT / OWNER", $"Cleared owner melee busy expect ({reason})" );
 	}
 
 	/// <summary>
@@ -1411,7 +1452,18 @@ public partial class PlayerCombat : Component
 		if ( GameObject.Network is { Active: true }
 		     && !Networking.IsHost
 		     && _ownerExpectsHostMeleeBusy )
+		{
+			if ( _ownerExpectsHostMeleeBusySince > 0
+			     && Time.NowDouble - _ownerExpectsHostMeleeBusySince > OwnerExpectsHostMeleeBusyTimeoutSeconds )
+			{
+				LogCombatDiag( "CLIENT / OWNER",
+					$"ownerExpectsHostMeleeBusy timed out after {OwnerExpectsHostMeleeBusyTimeoutSeconds:0.##}s — unlocking Attack1" );
+				ClearOwnerMeleeBusyExpect( "timeout" );
+				return false;
+			}
+
 			return true;
+		}
 
 		return false;
 	}
@@ -1471,7 +1523,7 @@ public partial class PlayerCombat : Component
 
 		// Rejected (including RejectMeleeBusy): the swing is simply lost — the player must press again.
 		if ( !result.Accepted )
-			_ownerExpectsHostMeleeBusy = false;
+			ClearOwnerMeleeBusyExpect( $"reject {result.DebugCode}" );
 
 		// Backup: if HostOnly broadcast was missed, still show the local slash path on the attacking client.
 		if ( result.Accepted
@@ -1488,6 +1540,11 @@ public partial class PlayerCombat : Component
 	[Rpc.Owner]
 	public void RpcOwnerMeleeSwingComplete( ushort intentSequence, bool anyHit, float totalDamageDealt, Guid firstHitTargetId ) =>
 		ApplyAuthoritativeMeleeSweepSummary( intentSequence, anyHit, totalDamageDealt, firstHitTargetId );
+
+	/// <summary>Host cancelled the swing without a normal sweep complete — unlock the owning client.</summary>
+	[Rpc.Owner]
+	public void RpcOwnerMeleeBusyCleared( string reason ) =>
+		ClearOwnerMeleeBusyExpect( string.IsNullOrWhiteSpace( reason ) ? "host cancel" : reason );
 
 	/// <summary>Applies host sweep outcome locally (offline) or from <see cref="RpcOwnerMeleeSwingComplete"/>.</summary>
 	public void ApplyAuthoritativeMeleeSweepSummary( ushort intentSequence, bool anyHit, float totalDamageDealt, Guid firstHitTargetId )
@@ -1512,7 +1569,7 @@ public partial class PlayerCombat : Component
 
 		_combatNetDiag = $"rpc owner sweep: seq={intentSequence} anyHit={anyHit} total={totalDamageDealt:0.#}";
 		LogCombatDiag( "CLIENT (Rpc.Owner)", FormatAttackResultLog( LastServerAttackResult ) );
-		_ownerExpectsHostMeleeBusy = false;
+		ClearOwnerMeleeBusyExpect( "sweep complete" );
 	}
 
 	CombatAuthority ResolveCombatAuthority()

@@ -8,12 +8,15 @@ public readonly struct BuildSnapCandidate
 {
 	public bool IsValid { get; init; }
 	public bool IsEdgeSnap { get; init; }
+	public bool IsStackSnap { get; init; }
 	public SnapEdgeId TargetEdgeId { get; init; }
 	public Transform Placement { get; init; }
 	public BuildPiece TargetPiece { get; init; }
 	public int TargetSnapIndex { get; init; }
 	public int AnchorSnapIndex { get; init; }
 	public float Score { get; init; }
+	/// <summary>Q/E order within a locked group (lower first). Negative = derive from auto-rules.</summary>
+	public int CycleOrder { get; init; }
 	public BuildSnapGroupKey GroupKey { get; init; }
 	public int AnchorPriority { get; init; }
 	public int AnchorVariantIndex { get; init; }
@@ -34,6 +37,7 @@ static class BuildSnapPlacement
 		GameObject ignorePreview,
 		Vector3 rayOrigin,
 		Vector3 rayDirection,
+		Vector3 aimLand,
 		float yawDegrees,
 		float maxRange )
 	{
@@ -63,6 +67,7 @@ static class BuildSnapPlacement
 				targetPiece,
 				rayOrigin,
 				dir,
+				aimLand,
 				yawDegrees,
 				maxRange );
 
@@ -74,6 +79,7 @@ static class BuildSnapPlacement
 				targetPiece,
 				rayOrigin,
 				dir,
+				aimLand,
 				yawDegrees,
 				maxRange );
 		}
@@ -93,6 +99,14 @@ static class BuildSnapPlacement
 		return candidates[0].RayScore;
 	}
 
+	static readonly BuildSnapRole[] HoldCorners =
+	{
+		BuildSnapRole.CornerNorthEast,
+		BuildSnapRole.CornerNorthWest,
+		BuildSnapRole.CornerSouthEast,
+		BuildSnapRole.CornerSouthWest,
+	};
+
 	static void CollectEdgeCandidates(
 		BuildPieceData placingData,
 		IReadOnlyList<BuildSnapPoint> placingSnaps,
@@ -101,6 +115,7 @@ static class BuildSnapPlacement
 		BuildPiece targetPiece,
 		Vector3 rayOrigin,
 		Vector3 rayDir,
+		Vector3 aimLand,
 		float yawDegrees,
 		float maxRange )
 	{
@@ -119,6 +134,19 @@ static class BuildSnapPlacement
 
 			var t0 = targetPiece.GetSnapWorldTransform( FindSnap( targetPiece, targetEdge.CornerA ) );
 			var t1 = targetPiece.GetSnapWorldTransform( FindSnap( targetPiece, targetEdge.CornerB ) );
+			var edgeAim = BuildSnapCrosshair.ScoreSegmentToAimLand(
+				rayOrigin,
+				rayDir,
+				aimLand,
+				t0.Position,
+				t1.Position,
+				maxRange );
+
+			var bestAbutScore = float.MaxValue;
+			var hasAbut = false;
+			SnapEdge bestPlacingEdge = default;
+			Transform bestPlacement = default;
+			BuildSnapCrosshair.RayTargetScore bestScore = default;
 
 			for ( var pi = 0; pi < placingEdgeIds.Count; pi++ )
 			{
@@ -132,6 +160,13 @@ static class BuildSnapPlacement
 					targetEdge.Id,
 					targetPiece );
 
+				var targetZForAim = targetPiece.GameObject.WorldPosition.z;
+				var lookingDownRoof = aimLand.z < targetZForAim - 8f || rayDir.z < -0.12f;
+				var lookingUpRoof = aimLand.z > targetZForAim + 8f || rayDir.z > 0.12f;
+				var preferHangDownOnFloor = IsRoof( placingData.Id )
+				                           && IsFloor( targetPiece.PieceId )
+				                           && lookingDownRoof;
+
 				if ( !TryAlignToEdge(
 					     placingData.Id,
 					     placingEdge,
@@ -141,6 +176,7 @@ static class BuildSnapPlacement
 					     t1.Position,
 					     yawDegrees,
 					     sameEdge,
+					     preferHangDownOnFloor,
 					     out var placement ) )
 					continue;
 
@@ -153,57 +189,202 @@ static class BuildSnapPlacement
 					     targetPiece ) )
 					continue;
 
-				var builtReach = BuildSnapCrosshair.ScoreSegment(
-					rayOrigin,
-					rayDir,
-					t0.Position,
-					t1.Position,
-					maxRange );
 				var score = ScorePlacingEdge(
 					placingData.Id,
 					placingEdge,
 					placement,
 					rayOrigin,
 					rayDir,
+					aimLand,
 					maxRange );
-				if ( !builtReach.IsValid && !score.IsValid )
+				if ( !edgeAim.IsValid && !score.IsValid )
 					continue;
+
+				// Prefer the built seam closest to aim-land (slotting), not the ghost placement score.
+				if ( edgeAim.IsValid )
+					score = edgeAim;
+
+				if ( IsRoof( placingData.Id ) && IsRoof( targetPiece.PieceId ) )
+				{
+					var placeZ = placement.Position.z;
+					if ( lookingDownRoof )
+						score = score with { Combined = score.Combined + ( placeZ < targetZForAim ? -28f : 28f ) };
+					else if ( lookingUpRoof )
+						score = score with { Combined = score.Combined + ( placeZ > targetZForAim ? -28f : 28f ) };
+				}
 
 				if ( IsRoof( placingData.Id ) && IsWall( targetPiece.PieceId ) )
 				{
-					var preferred = BuildSnapCompatibility.GetPreferredRoofOnWallPlacingEdge(
-						targetPiece,
-						rayOrigin,
-						rayDir );
+					var preferred = BuildSnapCompatibility.RoofBottomLip;
 					score = score with
 					{
-						Combined = score.Combined + ( placingEdge.Id == preferred ? -14f : 14f ),
+						Combined = score.Combined + ( placingEdge.Id == preferred ? -40f : 40f ),
 					};
 				}
 
 				if ( IsRoof( placingData.Id ) && IsFloor( targetPiece.PieceId ) )
 				{
+					var placeZ = placement.Position.z;
 					var elev = BuildSnapCompatibility.ScoreRoofElevation(
 						placingData.Id,
 						placement,
-						targetPiece );
-					score = score with { Combined = score.Combined + elev };
+						targetPiece,
+						preferHangDown: preferHangDownOnFloor );
+					// Hang-down mates the ridge (North); sit-above mates the eave (South).
+					var preferred = preferHangDownOnFloor
+						? BuildSnapCompatibility.RoofTopLip
+						: BuildSnapCompatibility.RoofBottomLip;
+					var lipBias = placingEdge.Id == preferred ? -24f : 24f;
+					var lookBias = 0f;
+					if ( preferHangDownOnFloor )
+						lookBias = placeZ < targetZForAim ? -28f : 28f;
+					else if ( lookingUpRoof )
+						lookBias = placeZ > targetZForAim ? -28f : 28f;
+
+					score = score with { Combined = score.Combined + elev + lipBias + lookBias };
 				}
 
+				if ( !hasAbut || score.Combined < bestAbutScore )
+				{
+					hasAbut = true;
+					bestAbutScore = score.Combined;
+					bestPlacingEdge = placingEdge;
+					bestPlacement = placement;
+					bestScore = score;
+				}
+			}
+
+			if ( !hasAbut )
+				continue;
+
+			// Q/E index 0 = center / auto (best edge abut for this seam).
+			TryAddCandidate(
+				placingData.Id,
+				scene,
+				ignorePreview,
+				targetPiece,
+				placingSnaps,
+				bestPlacingEdge.CornerA,
+				targetEdge.CornerA,
+				bestPlacement,
+				bestScore,
+				isEdgeSnap: true,
+				targetEdge.Id,
+				cycleOrder: 0 );
+
+			if ( !edgeAim.IsValid )
+				continue;
+
+			CollectHoldCornerVariants(
+				placingData,
+				placingSnaps,
+				scene,
+				ignorePreview,
+				targetPiece,
+				targetEdge,
+				t0.Position,
+				t1.Position,
+				edgeAim,
+				aimLand,
+				yawDegrees );
+
+			if ( BuildSnapCompatibility.IsSameEdgeFamily( placingData.Id, targetPiece.PieceId ) )
+			{
+				var stackPlacement = new Transform(
+					targetPiece.GameObject.WorldPosition,
+					GetPlacementYaw( yawDegrees ) );
 				TryAddCandidate(
 					placingData.Id,
 					scene,
 					ignorePreview,
 					targetPiece,
 					placingSnaps,
-					placingEdge.CornerA,
 					targetEdge.CornerA,
-					placement,
-					score,
+					targetEdge.CornerA,
+					stackPlacement,
+					edgeAim,
 					isEdgeSnap: true,
-					targetEdge.Id );
+					targetEdge.Id,
+					cycleOrder: 100,
+					isStackSnap: true );
 			}
 		}
+	}
+
+	/// <summary>
+	/// Q/E after center/auto: hold the placing piece by each of its four corners against the aimed edge.
+	/// </summary>
+	static void CollectHoldCornerVariants(
+		BuildPieceData placingData,
+		IReadOnlyList<BuildSnapPoint> placingSnaps,
+		Scene scene,
+		GameObject ignorePreview,
+		BuildPiece targetPiece,
+		SnapEdge targetEdge,
+		Vector3 targetWorldA,
+		Vector3 targetWorldB,
+		BuildSnapCrosshair.RayTargetScore edgeAim,
+		Vector3 aimLand,
+		float yawDegrees )
+	{
+		for ( var i = 0; i < HoldCorners.Length; i++ )
+		{
+			var holdRole = HoldCorners[i];
+			var holdIndex = FindSnapIndex( placingSnaps, holdRole );
+			if ( holdIndex < 0 )
+				continue;
+
+			var targetRole = PickHoldTargetCorner(
+				holdRole,
+				targetEdge,
+				targetWorldA,
+				targetWorldB,
+				aimLand );
+			var targetWorld = targetPiece.GetSnapWorldTransform( FindSnap( targetPiece, targetRole ) );
+			var anchorSnap = placingSnaps[holdIndex];
+
+			if ( !TryAlignToSnap(
+				     placingData.Id,
+				     anchorSnap,
+				     targetWorld,
+				     targetPiece,
+				     yawDegrees,
+				     out var placement ) )
+				continue;
+
+			TryAddCandidate(
+				placingData.Id,
+				scene,
+				ignorePreview,
+				targetPiece,
+				placingSnaps,
+				holdRole,
+				targetRole,
+				placement,
+				edgeAim,
+				isEdgeSnap: true,
+				targetEdge.Id,
+				cycleOrder: 1 + i,
+				isStackSnap: false );
+		}
+	}
+
+	static BuildSnapRole PickHoldTargetCorner(
+		BuildSnapRole holdRole,
+		SnapEdge targetEdge,
+		Vector3 targetWorldA,
+		Vector3 targetWorldB,
+		Vector3 aimLand )
+	{
+		// Prefer a CanConnect mate on this edge; else the endpoint closer to aim.
+		if ( BuildSnapCompatibility.CanConnect( holdRole, targetEdge.CornerA ) )
+			return targetEdge.CornerA;
+		if ( BuildSnapCompatibility.CanConnect( holdRole, targetEdge.CornerB ) )
+			return targetEdge.CornerB;
+
+		var da = Vector3.DistanceBetween( aimLand, targetWorldA );
+		var db = Vector3.DistanceBetween( aimLand, targetWorldB );
+		return da <= db ? targetEdge.CornerA : targetEdge.CornerB;
 	}
 
 	static void CollectCornerCandidates(
@@ -214,6 +395,7 @@ static class BuildSnapPlacement
 		BuildPiece targetPiece,
 		Vector3 rayOrigin,
 		Vector3 rayDir,
+		Vector3 aimLand,
 		float yawDegrees,
 		float maxRange )
 	{
@@ -241,9 +423,10 @@ static class BuildSnapPlacement
 					     out var placement ) )
 					continue;
 
-				var builtReach = BuildSnapCrosshair.ScorePoint(
+				var builtReach = BuildSnapCrosshair.ScorePointToAimLand(
 					rayOrigin,
 					rayDir,
+					aimLand,
 					targetWorld.Position,
 					maxRange );
 				var rayScore = ScorePlacingSnap(
@@ -252,9 +435,13 @@ static class BuildSnapPlacement
 					placement,
 					rayOrigin,
 					rayDir,
+					aimLand,
 					maxRange );
 				if ( !builtReach.IsValid && !rayScore.IsValid )
 					continue;
+
+				if ( builtReach.IsValid )
+					rayScore = builtReach;
 
 				TryAddCandidate(
 					placingData.Id,
@@ -283,12 +470,18 @@ static class BuildSnapPlacement
 		Transform placement,
 		BuildSnapCrosshair.RayTargetScore rayScore,
 		bool isEdgeSnap,
-		SnapEdgeId targetEdge )
+		SnapEdgeId targetEdge,
+		int cycleOrder = -1,
+		bool isStackSnap = false )
 	{
 		// Snap points are never consumed — multiple pieces may mate to the same built snaps.
 		// Overlap is not used to void snap candidates (ground placement still checks overlap).
 		var anchorIndex = FindSnapIndex( placingSnaps, anchorRole );
 		var targetIndex = FindSnapIndex( targetPiece.SnapPoints, targetRole );
+		if ( targetIndex < 0 && isStackSnap )
+			targetIndex = FindSnapIndex( targetPiece.SnapPoints, BuildSnapRole.CornerNorthEast );
+		if ( anchorIndex < 0 && isStackSnap )
+			anchorIndex = FindSnapIndex( placingSnaps, BuildSnapRole.CornerNorthEast );
 
 		// Prefer floor mates when placing walls so perimeter wall tops don't steal interior seams.
 		var scoreBias = 0f;
@@ -297,16 +490,22 @@ static class BuildSnapPlacement
 		else if ( IsWall( placingPieceId ) && IsWall( targetPiece.PieceId ) )
 			scoreBias += 40f;
 
+		// Stack is a late Q/E step — keep it reachable without winning auto-pick over abut.
+		if ( isStackSnap )
+			scoreBias += 12f;
+
 		CandidateScratch.Add( new BuildSnapCandidate
 		{
 			IsValid = true,
 			IsEdgeSnap = isEdgeSnap,
+			IsStackSnap = isStackSnap,
 			TargetEdgeId = targetEdge,
 			Placement = placement,
 			TargetPiece = targetPiece,
 			TargetSnapIndex = targetIndex,
 			AnchorSnapIndex = anchorIndex,
 			Score = rayScore.Combined + scoreBias,
+			CycleOrder = cycleOrder,
 			RayScore = rayScore,
 		} );
 	}
@@ -390,10 +589,12 @@ static class BuildSnapPlacement
 		Transform placement,
 		Vector3 rayOrigin,
 		Vector3 rayDir,
+		Vector3 aimLand,
 		float maxRange ) =>
-		BuildSnapCrosshair.ScorePoint(
+		BuildSnapCrosshair.ScorePointToAimLand(
 			rayOrigin,
 			rayDir,
+			aimLand,
 			GetPlacingSnapWorld( placingPieceId, role, placement ),
 			maxRange );
 
@@ -403,11 +604,12 @@ static class BuildSnapPlacement
 		Transform placement,
 		Vector3 rayOrigin,
 		Vector3 rayDir,
+		Vector3 aimLand,
 		float maxRange )
 	{
 		var a = GetPlacingSnapWorld( placingPieceId, placingEdge.CornerA, placement );
 		var b = GetPlacingSnapWorld( placingPieceId, placingEdge.CornerB, placement );
-		return BuildSnapCrosshair.ScoreSegment( rayOrigin, rayDir, a, b, maxRange );
+		return BuildSnapCrosshair.ScoreSegmentToAimLand( rayOrigin, rayDir, aimLand, a, b, maxRange );
 	}
 
 	static bool IsRoof( string pieceId ) =>
@@ -489,6 +691,29 @@ static class BuildSnapPlacement
 		Vector3 targetWorldB,
 		float yawDegrees,
 		bool sameEdgeAlignment,
+		out Transform placement ) =>
+		TryAlignToEdge(
+			placingPieceId,
+			placingEdge,
+			targetPiece,
+			targetEdge,
+			targetWorldA,
+			targetWorldB,
+			yawDegrees,
+			sameEdgeAlignment,
+			preferHangDownOnFloor: false,
+			out placement );
+
+	public static bool TryAlignToEdge(
+		string placingPieceId,
+		SnapEdge placingEdge,
+		BuildPiece targetPiece,
+		SnapEdge targetEdge,
+		Vector3 targetWorldA,
+		Vector3 targetWorldB,
+		float yawDegrees,
+		bool sameEdgeAlignment,
+		bool preferHangDownOnFloor,
 		out Transform placement )
 	{
 		placement = default;
@@ -497,7 +722,11 @@ static class BuildSnapPlacement
 
 		var wallOnFloor = IsWall( placingPieceId ) && IsFloor( targetPiece.PieceId );
 		var roofOnFloor = IsRoof( placingPieceId ) && IsFloor( targetPiece.PieceId );
-		if ( !wallOnFloor && !roofOnFloor )
+		var floorOnRoof = IsFloor( placingPieceId ) && IsRoof( targetPiece.PieceId );
+		var roofOnRoof = IsRoof( placingPieceId ) && IsRoof( targetPiece.PieceId );
+		var wallOnWall = IsWall( placingPieceId ) && IsWall( targetPiece.PieceId );
+		// Multi-lip families expose several placing edges for Q/E — don't force opposite-only.
+		if ( !wallOnFloor && !roofOnFloor && !floorOnRoof && !roofOnRoof && !wallOnWall )
 		{
 			if ( !sameEdgeAlignment && placingEdge.Id != BuildSnapEdge.GetOpposite( targetEdge.Id ) )
 				return false;
@@ -510,11 +739,12 @@ static class BuildSnapPlacement
 		{
 			// Edge direction defines orientation — try all 90° steps so interior E/W seams
 			// still fit when scroll yaw was left on a N/S wall (and vice versa).
-			// When several yaws fit (common for pitched roofs), keep the one that sits above
-			// the target instead of the first geometric match (often underground).
+			// When several yaws fit (common for pitched roofs), keep sit-above or hang-down
+			// according to aim instead of the first geometric match.
 			var baseYaw = BuildSnapAlignment.GetEdgeSnapYaw( targetPiece, yawDegrees );
 			var found = false;
 			var bestScore = float.MaxValue;
+			var hang = preferHangDownOnFloor && roofOnFloor;
 			for ( var step = 0; step < 4; step++ )
 			{
 				var alignedYaw = Rotation.FromYaw( baseYaw.Angles().yaw + step * 90f );
@@ -537,7 +767,11 @@ static class BuildSnapPlacement
 					continue;
 
 				var elev = IsRoof( placingPieceId )
-					? BuildSnapCompatibility.ScoreRoofElevation( placingPieceId, candidate, targetPiece )
+					? BuildSnapCompatibility.ScoreRoofElevation(
+						placingPieceId,
+						candidate,
+						targetPiece,
+						preferHangDown: hang )
 					: 0f;
 				// Prefer the scroll-aligned step when elevation ties.
 				var score = elev + step * 0.01f;
