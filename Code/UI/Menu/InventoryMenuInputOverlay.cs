@@ -84,6 +84,29 @@ public sealed class InventoryMenuInputOverlay : Panel
 		TickSoftCursor();
 		PollAttack1MenuPointer();
 		PollAttack2MenuPointer();
+		PollEquipAmmoOnUse();
+	}
+
+	/// <summary>Inventory soft-cursor + E (HandHarvest): mark hovered ammo stack as preferred.</summary>
+	void PollEquipAmmoOnUse()
+	{
+		if ( !Input.Pressed( "HandHarvest" ) )
+			return;
+
+		if ( _inventoryInteraction is null )
+			return;
+
+		var slot = _inventoryInteraction.FindPlayerBagSlotAtScreenPosition( _softCursorPos )
+			?? _inventoryInteraction.FindHotbarSlotAtScreenPosition( _softCursorPos );
+		if ( slot?.GridHost is null )
+			return;
+
+		var stack = slot.GridHost.GetSlot( slot.SlotIndex );
+		if ( stack.IsEmpty || !AmmoCatalog.IsAmmo( stack.ResourceId ) )
+			return;
+
+		var pref = _inventoryInteraction.Components.Get<PlayerAmmoPreference>();
+		pref?.OwnerTryEquipAmmoFromSlot( stack.ResourceId );
 	}
 
 	public override void Tick()

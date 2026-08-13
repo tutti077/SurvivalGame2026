@@ -365,6 +365,19 @@ public static class EquipmentCatalog
 			HarvestToolType = "Axe",
 			HarvestToolTier = 0,
 		};
+
+		yield return new EquipmentProfileData
+		{
+			ResourceId = "basic_bow",
+			DisplayName = "Basic Bow",
+			Slot = "mainHand",
+			AllowedSlots = { "mainHand" },
+			Actions = { "PrimaryRanged" },
+			TwoHanded = true,
+			HotbarEquipable = true,
+			AmmoType = "bow",
+			StatModifiers = new EquipmentStatModifiersData { Damage = 10f },
+		};
 	}
 
 	static readonly JsonSerializerOptions JsonOptions = new()

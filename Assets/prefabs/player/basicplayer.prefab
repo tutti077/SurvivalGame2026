@@ -534,6 +534,18 @@
         "SlotCount": 16
       },
       {
+        "__type": "Survival.PlayerAmmoPreference",
+        "__guid": "c4d5e6f7-a8b9-4012-9c3d-e5f60718293a",
+        "__enabled": true,
+        "Flags": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null
+      },
+      {
         "__type": "Survival.PlayerHotbar",
         "__guid": "f1e2d3c4-b5a6-7890-fedc-ba9876543210",
         "__enabled": true,

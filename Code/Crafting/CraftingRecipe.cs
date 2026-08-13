@@ -37,6 +37,16 @@ public sealed class CraftingRecipe
 	[JsonPropertyName( "maxStack" )]
 	public int MaxStack { get; set; }
 
+	/// <summary>
+	/// Ammo family key shared with weapons (e.g. <c>bow</c>). Empty = not ammo.
+	/// </summary>
+	[JsonPropertyName( "ammoType" )]
+	public string AmmoType { get; set; } = string.Empty;
+
+	/// <summary>Base damage contributed by this ammo when fired (weapons add their own scaled damage).</summary>
+	[JsonPropertyName( "damage" )]
+	public float Damage { get; set; }
+
 	/// <summary>Items granted / space required for one craft.</summary>
 	public int TotalOutputAmount => Math.Max( 1, OutputAmount );
 

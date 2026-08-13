@@ -579,17 +579,49 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	/// </summary>
 	void PlayerController.IEvents.PostCameraSetup( CameraComponent camera )
 	{
-		if ( !IsLocalMovementDriver() || !CameraScrollZoomEnabled || _cameraZoomDistance < 0f )
+		if ( !IsLocalMovementDriver() || !camera.IsValid() )
 			return;
 
 		_controller ??= Components.Get<PlayerController>();
-		if ( _controller is null || !_controller.IsValid() || !_controller.ThirdPerson )
+		if ( _controller is null || !_controller.IsValid() )
 			return;
 
-		if ( !camera.IsValid() )
+		var combat = Components.Get<PlayerCombat>();
+
+		// First-person: FOV zoom (no CameraOffset pull).
+		if ( !_controller.ThirdPerson )
+		{
+			if ( combat?.IsBowAdsActive == true )
+				camera.FieldOfView = Math.Clamp( camera.FieldOfView * 0.82f, 35f, 110f );
+			return;
+		}
+
+		if ( !CameraScrollZoomEnabled )
 			return;
 
-		SnapThirdPersonCameraToZoomDistance( camera );
+		if ( _cameraZoomDistance < 0f )
+		{
+			var min = MathF.Min( CameraZoomMinDistance, CameraZoomMaxDistance );
+			var max = MathF.Max( CameraZoomMinDistance, CameraZoomMaxDistance );
+			var step = MathF.Max( 1f, CameraZoomStep );
+			var start = Math.Clamp( _controller.CameraOffset.x, min, max );
+			var startNotch = (float)Math.Round( (start - min) / step );
+			_cameraZoomDistance = Math.Clamp( min + startNotch * step, min, max );
+		}
+
+		// Bow ADS: pull the third-person cam closer (FOV writes alone get overwritten every frame).
+		float? adsDistance = null;
+		if ( combat is not null )
+		{
+			var mul = combat.GetBowAdsCameraDistanceMultiplier();
+			if ( mul < 0.999f )
+			{
+				var minAds = MathF.Max( 32f, CameraZoomMinDistance * 0.35f );
+				adsDistance = Math.Clamp( _cameraZoomDistance * mul, minAds, _cameraZoomDistance );
+			}
+		}
+
+		SnapThirdPersonCameraToZoomDistance( camera, adsDistance );
 	}
 
 	protected override void OnUpdate()
@@ -721,11 +753,15 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	/// Uses a sphere sweep so foliage / thick mesh colliders (trees) still pull the camera forward
 	/// instead of leaving it behind an opaque occluder.
 	/// </summary>
-	void SnapThirdPersonCameraToZoomDistance( CameraComponent cam )
+	void SnapThirdPersonCameraToZoomDistance( CameraComponent cam, float? distanceOverride = null )
 	{
 		cam ??= BuildViewCamera.Resolve( GameObject );
 		if ( cam is null || !cam.IsValid() || !Scene.IsValid() || _controller is null )
 			return;
+
+		var distance = distanceOverride ?? _cameraZoomDistance;
+		if ( distance < 1f )
+			distance = _cameraZoomDistance;
 
 		var eye = GameObject.WorldPosition
 		          + Vector3.Up * Math.Max( 8f, _controller.BodyHeight - _controller.EyeDistanceFromTop );
@@ -733,7 +769,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		var offset = _controller.CameraOffset;
 		// Prefab CameraOffset is (back, height, side) — x is pull-back distance.
 		var target = eye
-		             - rot.Forward * _cameraZoomDistance
+		             - rot.Forward * distance
 		             + Vector3.Up * offset.y
 		             + rot.Right * offset.z;
 

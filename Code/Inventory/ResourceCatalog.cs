@@ -28,6 +28,8 @@ public static class ResourceCatalog
 			["light_lantern"] = "ui/items/light_lantern.png",
 			["axe_stone"] = "ui/items/stone_axe.png",
 			["basic_wingsuit"] = "ui/items/basic_wingsuit.png",
+			["basic_bow"] = "ui/items/basic_bow.png",
+			["arrow_wood"] = "ui/items/arrow_wood.png",
 		};
 
 	/// <summary>Maps old/sample resource ids to current catalog ids.</summary>

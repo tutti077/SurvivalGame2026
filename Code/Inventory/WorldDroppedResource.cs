@@ -16,7 +16,17 @@ public sealed class WorldDroppedResource : Component
 	[Sync, Property, Group( "Pickup" )]
 	public int Count { get; set; }
 
+	/// <summary>Stuck arrows / pinned drops — still magnet-pickupable, but never clump-merged.</summary>
+	[Sync, Property, Group( "Pickup" )]
+	public bool PreventMerge { get; set; }
+
+	/// <summary>Host destroys this drop after this many seconds (0 = keep forever).</summary>
+	[Property, Group( "Pickup" ), Title( "Despawn after (s)" )]
+	public float DespawnAfterSeconds { get; set; }
+
 	public bool IsAvailable => Count > 0 && Active && GameObject.IsValid() && GameObject.Enabled;
+
+	double _despawnAt = -1;
 
 	internal bool IsHostAuthority =>
 		GameObject.Network is not { Active: true } || Networking.IsHost;
@@ -26,6 +36,7 @@ public sealed class WorldDroppedResource : Component
 	/// <summary>True once this drop has sat long enough to clump with neighbors.</summary>
 	internal bool IsReadyToMerge =>
 		IsAvailable
+		&& !PreventMerge
 		&& _spawnedAt >= 0
 		&& Time.NowDouble - _spawnedAt >= MergeReadyDelaySeconds;
 
@@ -56,6 +67,25 @@ public sealed class WorldDroppedResource : Component
 		ResourceId = ResourceCatalog.NormalizeResourceId( resourceId );
 		Count = Math.Max( 1, count );
 		MarkSpawnedIfNeeded();
+		RefreshDespawnDeadline();
+	}
+
+	/// <summary>Host: auto-delete after <paramref name="seconds"/> (stuck arrows, etc.).</summary>
+	public void SetDespawnAfterSeconds( float seconds )
+	{
+		DespawnAfterSeconds = Math.Max( 0f, seconds );
+		RefreshDespawnDeadline();
+	}
+
+	void RefreshDespawnDeadline()
+	{
+		if ( DespawnAfterSeconds <= 0f )
+		{
+			_despawnAt = -1;
+			return;
+		}
+
+		_despawnAt = Time.NowDouble + DespawnAfterSeconds;
 	}
 
 	public void SetDropper( GameObject dropper )
@@ -88,6 +118,14 @@ public sealed class WorldDroppedResource : Component
 
 		if ( !IsHostAuthority || Count <= 0 )
 			return;
+
+		if ( _despawnAt > 0 && Time.NowDouble >= _despawnAt )
+		{
+			Count = 0;
+			if ( GameObject.IsValid() )
+				GameObject.Destroy();
+			return;
+		}
 
 		if ( _mergeEligibleAt > 0 && Time.NowDouble >= _mergeEligibleAt )
 		{

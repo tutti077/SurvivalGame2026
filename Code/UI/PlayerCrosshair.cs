@@ -38,6 +38,7 @@ public sealed class PlayerCrosshair : Component
 	static readonly Color CrosshairWhite = Color.White.WithAlpha( 0.95f );
 	static readonly Color GrappleYellow = new( 1f, 0.92f, 0.2f, 0.95f );
 	static readonly Color BorderBlack = Color.Black.WithAlpha( 0.9f );
+	static readonly Color BowDrawRing = Color.White.WithAlpha( 0.35f );
 
 	PlayerMovement _movement;
 	PlayerCombat _combat;
@@ -74,8 +75,10 @@ public sealed class PlayerCrosshair : Component
 
 		var grappleMode = _movement?.IsAimHudActive == true;
 		var weaponOut = _equipment?.MainHandHasAction( EquippedItemActions.PrimaryMelee ) == true;
+		var bowDrawing = _combat is not null && _combat.IsBowCharging;
 
 		// Base: yellow donut in grapple context, thin white ring otherwise.
+		// Bow keeps the classic ring (no melee teardrop) — PrimaryRanged does not set weaponOut.
 		float baseOuterEdge;
 		if ( grappleMode )
 		{
@@ -86,6 +89,12 @@ public sealed class PlayerCrosshair : Component
 		{
 			DrawBorderedRing( cam, center, BaseRadius, BaseLineWidth, CrosshairWhite );
 			baseOuterEdge = BaseRadius + BaseLineWidth * 0.5f;
+		}
+
+		if ( bowDrawing )
+		{
+			var drawRadius = Math.Max( BaseRadius, _combat.GetBowDrawRingRadiusPixels() );
+			DrawBorderedRing( cam, center, drawRadius, BaseLineWidth, BowDrawRing );
 		}
 
 		if ( weaponOut && _combat is not null )

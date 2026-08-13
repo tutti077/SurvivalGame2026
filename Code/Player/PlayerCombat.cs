@@ -524,12 +524,19 @@ public partial class PlayerCombat : Component
 
 		var menuController = Components.Get<PlayerGameMenuController>();
 		if ( menuController is not null && menuController.IsMenuOpen )
+		{
+			CancelBowCharge();
+			_bowAdsActive = false;
 			return;
+		}
 
 		// Shove is a player ability, not a weapon one — it runs before the melee-item gate below and
 		// works bare-handed. (Equipment used to disable this whole component when no melee item was
 		// held, which killed the shove, the hit reaction, and the jump/grapple locks along with it.)
 		TickOwnerShoveInput();
+
+		// Bow / ranged hold-to-charge — separate from melee; classic crosshair (no teardrop).
+		TickOwnerRangedInput();
 
 		// Everything past here is the sword: swing input, block, telegraphs.
 		var equipped = Components.Get<PlayerEquippedItem>();

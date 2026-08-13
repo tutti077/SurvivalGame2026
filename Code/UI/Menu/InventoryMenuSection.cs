@@ -146,7 +146,11 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 		UpdateVisibility();
 	}
 
-	public void TickMenu( bool menuOpen ) { }
+	public void TickMenu( bool menuOpen )
+	{
+		if ( menuOpen )
+			Refresh();
+	}
 
 	public void OnMenuGlobalMouseUp() { }
 
@@ -196,15 +200,32 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 	{
 		var resourceId = slot.IsEmpty ? string.Empty : slot.ResourceId ?? string.Empty;
 		var count = slot.IsEmpty ? 0 : slot.Count;
+		var preferred = IsPreferredAmmoStack( resourceId );
 
 		var iconPath = slot.IsEmpty ? string.Empty : ResourceCatalog.GetIconPath( resourceId );
-		if ( ui.LastResourceId == resourceId && ui.LastCount == count && ui.LastIconPath == iconPath )
+		if ( ui.LastResourceId == resourceId && ui.LastCount == count && ui.LastIconPath == iconPath
+		     && ui.LastPreferred == preferred )
+		{
 			return;
+		}
 
 		ui.LastResourceId = resourceId;
 		ui.LastCount = count;
 		ui.LastIconPath = iconPath;
+		ui.LastPreferred = preferred;
 		ResourceCatalog.ApplyStackVisual( ui.IconPanel, ui.CountLabel, slot );
+		ui.Root.Style.BackgroundColor = preferred
+			? new Color( 0.42f, 0.42f, 0.45f, 0.95f )
+			: new Color( 0.12f, 0.13f, 0.15f, 0.92f );
+	}
+
+	bool IsPreferredAmmoStack( string resourceId )
+	{
+		if ( string.IsNullOrWhiteSpace( resourceId ) || _inventory is null )
+			return false;
+
+		var pref = _inventory.Components.Get<PlayerAmmoPreference>();
+		return pref is not null && pref.IsPreferredAmmo( resourceId );
 	}
 
 	sealed class SlotUi
@@ -215,6 +236,7 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 		public string LastResourceId { get; set; }
 		public string LastIconPath { get; set; }
 		public int LastCount { get; set; } = -1;
+		public bool LastPreferred { get; set; }
 
 		public SlotUi( Panel root, Panel iconPanel, Label countLabel )
 		{

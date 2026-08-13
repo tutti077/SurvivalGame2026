@@ -31,6 +31,13 @@ public sealed class EquipmentProfileData
 
 	public EquipmentStatModifiersData StatModifiers { get; set; } = new();
 
+	/// <summary>
+	/// Ammo family this weapon accepts (e.g. <c>bow</c>). Empty = not a ranged ammo weapon.
+	/// Must match ammo item <c>ammoType</c> from crafting recipes.
+	/// </summary>
+	[JsonPropertyName( "ammoType" )]
+	public string AmmoType { get; set; } = string.Empty;
+
 	public string ToolPrefab { get; set; } = string.Empty;
 
 	public string HandDisplayPrefab { get; set; } = string.Empty;

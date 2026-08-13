@@ -12,4 +12,6 @@ public enum EquippedItemActions
 	BuildHammer = 1 << 2,
 	Grapple = 1 << 3,
 	Wingsuit = 1 << 4,
+	/// <summary>Hold-to-charge ranged fire (bow). Does not enable melee teardrop / sword paths.</summary>
+	PrimaryRanged = 1 << 5,
 }

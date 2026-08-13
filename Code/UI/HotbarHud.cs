@@ -22,6 +22,7 @@ public sealed class HotbarHud
 	PlayerHotbar _hotbar;
 	PlayerInventoryInteraction _interaction;
 	PlayerHotbarGridHost _gridHost;
+	PlayerAmmoPreference _ammoPreference;
 	bool _built;
 	int _lastActiveSlot = -1;
 
@@ -78,6 +79,9 @@ public sealed class HotbarHud
 
 		_hotbar.HotbarChanged += OnHotbarChanged;
 		_hotbar.ActiveSlotChanged += OnActiveSlotChanged;
+		_ammoPreference = _hotbar.Components.Get<PlayerAmmoPreference>();
+		if ( _ammoPreference is not null )
+			_ammoPreference.PreferenceChanged += OnHotbarChanged;
 		_built = true;
 		_interaction?.SetHotbarHudDisplayed( true );
 		Refresh();
@@ -90,6 +94,9 @@ public sealed class HotbarHud
 			_hotbar.HotbarChanged -= OnHotbarChanged;
 			_hotbar.ActiveSlotChanged -= OnActiveSlotChanged;
 		}
+
+		if ( _ammoPreference is not null )
+			_ammoPreference.PreferenceChanged -= OnHotbarChanged;
 	}
 
 	void OnHotbarChanged() => Refresh();
@@ -123,10 +130,8 @@ public sealed class HotbarHud
 
 	void RefreshActiveHighlight( int activeIndex )
 	{
-		if ( activeIndex == _lastActiveSlot )
-			return;
-
-		if ( _lastActiveSlot >= 0 && _lastActiveSlot < _slots.Count )
+		// Always re-apply borders — Refresh() resets backgrounds for preferred ammo.
+		if ( _lastActiveSlot >= 0 && _lastActiveSlot < _slots.Count && _lastActiveSlot != activeIndex )
 			SetSlotHighlighted( _slots[_lastActiveSlot].Root, false );
 
 		_lastActiveSlot = activeIndex;
@@ -186,13 +191,20 @@ public sealed class HotbarHud
 		var count = slot.IsEmpty ? 0 : slot.Count;
 		var iconPath = string.IsNullOrWhiteSpace( resourceId ) ? string.Empty : ResourceCatalog.GetIconPath( resourceId );
 		var ghostKey = showGhost ? "|ghost|" : string.Empty;
+		var preferred = !showGhost && IsPreferredAmmoStack( resourceId );
 
-		if ( ui.LastResourceId == resourceId && ui.LastCount == count && ui.LastIconPath == iconPath + ghostKey )
+		if ( ui.LastResourceId == resourceId && ui.LastCount == count && ui.LastIconPath == iconPath + ghostKey
+		     && ui.LastPreferred == preferred )
 			return;
 
 		ui.LastResourceId = resourceId;
 		ui.LastCount = count;
 		ui.LastIconPath = iconPath + ghostKey;
+		ui.LastPreferred = preferred;
+
+		ui.Root.Style.BackgroundColor = preferred
+			? new Color( 0.42f, 0.42f, 0.45f, 0.95f )
+			: new Color( 0.08f, 0.09f, 0.11f, 0.94f );
 
 		if ( showGhost )
 		{
@@ -204,6 +216,15 @@ public sealed class HotbarHud
 		ResourceCatalog.ApplyStackVisual( ui.IconPanel, ui.CountLabel, slot );
 	}
 
+	bool IsPreferredAmmoStack( string resourceId )
+	{
+		if ( string.IsNullOrWhiteSpace( resourceId ) || _hotbar is null )
+			return false;
+
+		var pref = _hotbar.Components.Get<PlayerAmmoPreference>();
+		return pref is not null && pref.IsPreferredAmmo( resourceId );
+	}
+
 	sealed class SlotUi
 	{
 		public Panel Root { get; }
@@ -212,6 +233,7 @@ public sealed class HotbarHud
 		public string LastResourceId { get; set; }
 		public string LastIconPath { get; set; }
 		public int LastCount { get; set; } = -1;
+		public bool LastPreferred { get; set; }
 
 		public SlotUi( Panel root, Panel iconPanel, Label countLabel )
 		{

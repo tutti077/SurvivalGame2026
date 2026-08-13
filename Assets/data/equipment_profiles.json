@@ -61,6 +61,17 @@
       "harvestToolType": "Axe",
       "harvestToolTier": 0,
       "statModifiers": { "armor": 0, "damage": 4, "speed": 0 }
+    },
+    {
+      "resourceId": "basic_bow",
+      "displayName": "Basic Bow",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": ["PrimaryRanged"],
+      "twoHanded": true,
+      "hotbarEquipable": true,
+      "ammoType": "bow",
+      "statModifiers": { "armor": 0, "damage": 10, "speed": 0 }
     }
   ]
 }

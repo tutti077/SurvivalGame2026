@@ -286,7 +286,8 @@
         "786f226e-690d-8b6e-83ff-4342a80cd0ee": "4cee7fd1-a96f-4a96-b9f9-da1b48deb402",
         "13b5a6bf-7962-8375-99b1-4790290e5448": "dd5a2d30-69e9-4921-bc78-d134de33dbe5",
         "18ee3cca-7999-85c9-8512-f7d092d15954": "d4386acc-12ea-483d-89dd-8ee5e7ee75c2",
-        "a7b8c9d0-e1f2-3456-7890-abcdef012345": "04eb0936-39d7-87ec-94d5-738ae9f56baf"
+        "a7b8c9d0-e1f2-3456-7890-abcdef012345": "04eb0936-39d7-87ec-94d5-738ae9f56baf",
+        "c4d5e6f7-a8b9-4012-9c3d-e5f60718293a": "c3e465e7-025b-870e-be46-533fe86ddb75"
       }
     },
     {
@@ -1060,6 +1061,14 @@
           "BlockParryWindowColor": "1,1,1,1",
           "BlockSampleSphereRadius": 2,
           "BlockShellHeightPadding": 8,
+          "BowAdsCameraDistanceScale": 0.55,
+          "BowFullDrawLevelRangeMeters": 12.2,
+          "BowFullDrawSeconds": 1,
+          "BowLaunchSpeedMultiplier": 1,
+          "BowMaxAimConePixels": 56,
+          "BowMinDrawPower": 0.35,
+          "BowMinHoldToFireSeconds": 0.2,
+          "BowMinWeaponDamageContribution": 1,
           "ClientMeleeSwingTraceDebug": true,
           "EnableServerPrimaryAttackValidation": true,
           "HostCombatAuthority": null,
@@ -1816,6 +1825,70 @@
             },
             "Property": "Position",
             "Value": "351.382141,-407.447479,34"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowAdsCameraDistanceScale",
+            "Value": 0.55
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowFullDrawLevelRangeMeters",
+            "Value": 12.2
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowFullDrawSeconds",
+            "Value": 1
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowLaunchSpeedMultiplier",
+            "Value": 1
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowMaxAimConePixels",
+            "Value": 56
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowMinDrawPower",
+            "Value": 0.35
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowMinHoldToFireSeconds",
+            "Value": 0.2
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowMinWeaponDamageContribution",
+            "Value": 1
           }
         ],
         "MovedObjects": []

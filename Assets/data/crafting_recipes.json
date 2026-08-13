@@ -123,6 +123,42 @@
                   { "label": "Speed", "value": "1.0" }
                 ]
               },
+              {
+                "id": "basic_bow",
+                "displayName": "Basic Bow",
+                "icon": "ui/items/basic_bow.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Wooden bow — hold to draw, release to fire" },
+                  { "label": "Type", "value": "Bow" },
+                  { "label": "Damage", "value": "10" },
+                  { "label": "Ammo", "value": "bow" }
+                ]
+              },
+              {
+                "id": "arrow_wood",
+                "displayName": "Wooden Arrow",
+                "icon": "ui/items/arrow_wood.png",
+                "unlockId": "",
+                "outputAmount": 10,
+                "maxStack": 50,
+                "ammoType": "bow",
+                "damage": 5,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Basic wooden arrows" },
+                  { "label": "Type", "value": "Ammo" },
+                  { "label": "Damage", "value": "5" },
+                  { "label": "Ammo", "value": "bow" }
+                ]
+              },
 /*resources*/ {
                 "id": "crafted_rope",
                 "displayName": "Rope",
