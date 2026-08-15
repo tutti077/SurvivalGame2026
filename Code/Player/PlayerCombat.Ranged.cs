@@ -16,7 +16,7 @@ public partial class PlayerCombat
 	public float BowFullDrawSeconds { get; set; } = 1.0f;
 
 	[Property, Group( "Combat — Bow" ), Title( "Level-shot range at full draw (m)" ), Description( "Horizontal distance before ground contact when aimed level from hand height. Designer meters → pawn units via BodyHeight/1.8." ), Range( 2f, 40f ), Step( 0.5f )]
-	public float BowFullDrawLevelRangeMeters { get; set; } = 12.2f;
+	public float BowFullDrawLevelRangeMeters { get; set; } = 18.3f;
 
 	/// <summary>Extra launch velocity after the range→speed solve (1 = ballistic solve only).</summary>
 	[Property, Group( "Combat — Bow" ), Title( "Launch speed multiplier" ), Range( 0.5f, 4f ), Step( 0.1f )]

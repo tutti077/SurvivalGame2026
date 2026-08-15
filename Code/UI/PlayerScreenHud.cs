@@ -51,11 +51,22 @@ public sealed class PlayerScreenHud : PanelComponent
 	readonly Panel[] _foodSlotPanels = new Panel[PlayerFood.MaxFoodSlots];
 	readonly Label[] _foodSlotTimers = new Label[PlayerFood.MaxFoodSlots];
 	readonly string[] _foodSlotAppliedIds = new string[PlayerFood.MaxFoodSlots];
+	readonly string[] _foodSlotAppliedTimers = new string[PlayerFood.MaxFoodSlots];
 
 	Panel _promptRoot;
 	Label _promptKeyLabel;
 	Label _promptLabel;
 	bool _promptWasVisible;
+
+	Label _timeTrialCountdown;
+	Label _timeTrialTimer;
+	Label _timeTrialBanner;
+	double _timeTrialBannerUntil;
+	TimeTrialMenuPanel _timeTrialMenu;
+	Panel _timeTrialLbRoot;
+	Label _timeTrialLbTitle;
+	Label _timeTrialLbBody;
+	double _timeTrialLbUntil;
 
 	Panel _menuRoot;
 	Panel _menuLeftRoot;
@@ -118,8 +129,24 @@ public sealed class PlayerScreenHud : PanelComponent
 		_minimapHud?.Tick();
 		_buildMenuHud?.Tick();
 		RefreshFoodSlots();
-		if ( _inventoryInteraction?.FocusedCampfire is not null )
+		if ( _inventoryInteraction?.FocusedCampfire is not null
+		     || _inventoryInteraction?.FocusedTimeTrialStand is not null )
 			OnInteractionPromptChanged();
+
+		if ( _timeTrialMenu is not null && _inventoryInteraction is { IsTimeTrialMenuOpen: true } )
+			_timeTrialMenu.TickOpen();
+
+		if ( _timeTrialBanner is not null && _timeTrialBannerUntil > 0 && Time.NowDouble >= _timeTrialBannerUntil )
+		{
+			_timeTrialBannerUntil = 0;
+			_timeTrialBanner.Style.Set( "display", "none" );
+		}
+
+		if ( _timeTrialLbRoot is not null && _timeTrialLbUntil > 0 && Time.NowDouble >= _timeTrialLbUntil )
+		{
+			_timeTrialLbUntil = 0;
+			_timeTrialLbRoot.Style.Set( "display", "none" );
+		}
 
 		if ( !_deferScreenPanelCamera || _hudScreen is null || !_hudScreen.IsValid() )
 			return;
@@ -143,10 +170,16 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedContainerChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedAugmentStationChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedCampfireChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedTimeTrialStandChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.TimeTrialMenuOpenChanged -= OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.AugmentStationChanged -= OnAugmentStationChanged;
 		}
 		if ( _handHarvest is not null )
 			_handHarvest.FocusedNodeChanged -= OnInteractionPromptChanged;
+		TimeTrialSession.LocalCountdownTextChanged -= OnTimeTrialCountdown;
+		TimeTrialSession.LocalRaceElapsedChanged -= OnTimeTrialElapsed;
+		TimeTrialSession.LocalFinishBannerChanged -= OnTimeTrialBanner;
+		TimeTrialSession.LocalFinishResultsChanged -= OnTimeTrialFinishResults;
 		if ( _equipment is not null )
 			_equipment.EquipmentChanged -= OnEquipmentToolChanged;
 		if ( _inventory is not null )
@@ -204,6 +237,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		BuildVitals( Panel );
 		BuildHarvestPrompt( Panel );
+		BuildTimeTrialHud( Panel );
 		BuildPickupNotifications( Panel );
 		BuildMinimap( Panel );
 		BuildGameMenu( Panel );
@@ -330,6 +364,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			timer.Style.Set( "bottom", "1px" );
 			timer.Style.Set( "align-items", "center" );
 			timer.Style.Set( "justify-content", "center" );
+			timer.Style.Set( "z-index", "2" );
 			timer.Style.FontColor = Color.White;
 			timer.Style.FontSize = Length.Pixels( 11f );
 			timer.Style.Set( "text-shadow", "1px 1px 2px black" );
@@ -337,6 +372,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_foodSlotPanels[i] = slot;
 			_foodSlotTimers[i] = timer;
 			_foodSlotAppliedIds[i] = string.Empty;
+			_foodSlotAppliedTimers[i] = string.Empty;
 		}
 
 		if ( _food is not null )
@@ -367,35 +403,63 @@ public sealed class PlayerScreenHud : PanelComponent
 			if ( !string.Equals( _foodSlotAppliedIds[i], active ? id : string.Empty, StringComparison.OrdinalIgnoreCase ) )
 			{
 				_foodSlotAppliedIds[i] = active ? id : string.Empty;
+				_foodSlotAppliedTimers[i] = string.Empty;
 				if ( active && FoodCatalog.TryGet( id, out var food ) )
 				{
 					panel.Style.BackgroundColor = FoodCatalog.ResolveFallbackColor( food );
+					ApplyFoodSlotIcon( panel, id );
 					panel.Style.Set( "opacity", "1" );
 				}
 				else
 				{
 					panel.Style.BackgroundColor = new Color( 0.12f, 0.13f, 0.15f, 0.85f );
+					panel.Style.SetBackgroundImage( (Texture)null );
+					panel.Style.Set( "background-image", "none" );
 					panel.Style.Set( "opacity", "0.55" );
 				}
 			}
 
 			if ( !active )
 			{
-				timer.Text = "";
+				if ( !string.IsNullOrEmpty( _foodSlotAppliedTimers[i] ) )
+				{
+					_foodSlotAppliedTimers[i] = string.Empty;
+					timer.Text = "";
+				}
+
 				continue;
 			}
 
-			timer.Text = FormatFoodRemaining( remaining );
+			var label = FormatFoodRemainingMinutes( remaining );
+			if ( string.Equals( _foodSlotAppliedTimers[i], label, StringComparison.Ordinal ) )
+				continue;
+
+			_foodSlotAppliedTimers[i] = label;
+			timer.Text = label;
 		}
 	}
 
-	static string FormatFoodRemaining( float seconds )
+	static void ApplyFoodSlotIcon( Panel panel, string resourceId )
 	{
-		seconds = Math.Max( 0f, seconds );
-		var total = (int)Math.Ceiling( seconds );
-		var m = total / 60;
-		var s = total % 60;
-		return m > 0 ? $"{m}:{s:00}" : $"{s}s";
+		if ( panel is null )
+			return;
+
+		var path = ResourceDefinitionCatalog.GetIconPath( resourceId );
+		if ( string.IsNullOrWhiteSpace( path ) )
+			path = $"ui/items/{ResourceCatalog.NormalizeResourceId( resourceId )}.png";
+
+		if ( !MenuUiTextures.ApplyBackground( panel, path ) )
+			panel.Style.Set( "background-image", "none" );
+	}
+
+	/// <summary>Whole minutes only (e.g. 9m). No live second countdown.</summary>
+	static string FormatFoodRemainingMinutes( float seconds )
+	{
+		if ( seconds <= 0f )
+			return "0m";
+
+		var minutes = Math.Max( 1, (int)Math.Ceiling( seconds / 60.0 ) );
+		return $"{minutes}m";
 	}
 
 	void BuildHarvestPrompt( Panel root )
@@ -404,10 +468,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_equipment ??= FindOnAncestors<PlayerEquipment>();
 
 		if ( _handHarvest is null )
-		{
-			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerHandHarvest — interaction prompt skipped." );
-			return;
-		}
+			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerHandHarvest — harvest prompt text only; E prompt still built for containers / campfire / time trial." );
 
 		var promptHost = new Panel { Parent = root };
 		promptHost.Style.Set( "position", "absolute" );
@@ -451,10 +512,158 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedContainerChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedAugmentStationChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
 		}
 		if ( _equipment is not null )
 			_equipment.EquipmentChanged += OnEquipmentToolChanged;
 		OnInteractionPromptChanged();
+	}
+
+	void BuildTimeTrialHud( Panel root )
+	{
+		var host = new Panel { Parent = root };
+		host.Style.Set( "position", "absolute" );
+		host.Style.Set( "left", "50%" );
+		host.Style.Set( "top", "18%" );
+		host.Style.Set( "transform", "translateX(-50%)" );
+		host.Style.Set( "flex-direction", "column" );
+		host.Style.Set( "align-items", "center" );
+		host.Style.Set( "gap", "8px" );
+		host.Style.Set( "pointer-events", "none" );
+
+		_timeTrialCountdown = new Label { Parent = host, Text = "" };
+		_timeTrialCountdown.Style.FontColor = Color.White;
+		_timeTrialCountdown.Style.FontSize = Length.Pixels( 72f );
+		_timeTrialCountdown.Style.Set( "text-shadow", "2px 2px 4px black" );
+		_timeTrialCountdown.Style.Set( "display", "none" );
+
+		_timeTrialTimer = new Label { Parent = host, Text = "" };
+		_timeTrialTimer.Style.FontColor = new Color( 0.95f, 0.95f, 0.2f );
+		_timeTrialTimer.Style.FontSize = Length.Pixels( 28f );
+		_timeTrialTimer.Style.Set( "text-shadow", "1px 1px 2px black" );
+		_timeTrialTimer.Style.Set( "display", "none" );
+
+		_timeTrialBanner = new Label { Parent = host, Text = "" };
+		_timeTrialBanner.Style.FontColor = Color.White;
+		_timeTrialBanner.Style.FontSize = Length.Pixels( 26f );
+		_timeTrialBanner.Style.Set( "text-shadow", "1px 1px 3px black" );
+		_timeTrialBanner.Style.Set( "display", "none" );
+
+		_timeTrialLbRoot = new Panel { Parent = root };
+		_timeTrialLbRoot.Style.Set( "position", "absolute" );
+		_timeTrialLbRoot.Style.Set( "left", "50%" );
+		_timeTrialLbRoot.Style.Set( "top", "58%" );
+		_timeTrialLbRoot.Style.Set( "transform", "translate(-50%, 0)" );
+		_timeTrialLbRoot.Style.Set( "flex-direction", "column" );
+		_timeTrialLbRoot.Style.Set( "gap", "6px" );
+		_timeTrialLbRoot.Style.Width = Length.Pixels( 340f );
+		_timeTrialLbRoot.Style.PaddingLeft = Length.Pixels( 14f );
+		_timeTrialLbRoot.Style.PaddingRight = Length.Pixels( 14f );
+		_timeTrialLbRoot.Style.PaddingTop = Length.Pixels( 10f );
+		_timeTrialLbRoot.Style.PaddingBottom = Length.Pixels( 10f );
+		_timeTrialLbRoot.Style.BackgroundColor = new Color( 0.06f, 0.07f, 0.09f, 0.9f );
+		_timeTrialLbRoot.Style.Set( "border-radius", "6px" );
+		_timeTrialLbRoot.Style.Set( "pointer-events", "none" );
+		_timeTrialLbRoot.Style.Set( "display", "none" );
+
+		_timeTrialLbTitle = new Label { Parent = _timeTrialLbRoot, Text = "Top 10" };
+		_timeTrialLbTitle.Style.FontColor = Color.White;
+		_timeTrialLbTitle.Style.FontSize = Length.Pixels( 16f );
+
+		_timeTrialLbBody = new Label { Parent = _timeTrialLbRoot, Text = "" };
+		_timeTrialLbBody.Style.FontColor = new Color( 0.85f, 0.88f, 0.9f );
+		_timeTrialLbBody.Style.FontSize = Length.Pixels( 13f );
+		_timeTrialLbBody.Style.Set( "white-space", "pre" );
+
+		if ( _inventoryInteraction is not null )
+		{
+			_timeTrialMenu = new TimeTrialMenuPanel( _inventoryInteraction ) { Parent = root };
+			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
+		}
+
+		TimeTrialSession.LocalCountdownTextChanged += OnTimeTrialCountdown;
+		TimeTrialSession.LocalRaceElapsedChanged += OnTimeTrialElapsed;
+		TimeTrialSession.LocalFinishBannerChanged += OnTimeTrialBanner;
+		TimeTrialSession.LocalFinishResultsChanged += OnTimeTrialFinishResults;
+	}
+
+	void OnTimeTrialMenuOpenChanged()
+	{
+		_timeTrialMenu?.SetOpen( _inventoryInteraction is { IsTimeTrialMenuOpen: true } );
+		OnInteractionPromptChanged();
+	}
+
+	void OnTimeTrialFinishResults( TimeTrialFinishResults results )
+	{
+		if ( _timeTrialLbRoot is null || results is null )
+			return;
+
+		var title = string.IsNullOrWhiteSpace( results.VariationDisplayName )
+			? "Top 10"
+			: $"Top 10 — {results.VariationDisplayName}";
+		if ( results.YourRank > 0 && results.YourTimeSeconds > 0f )
+			title += $"  (You #{results.YourRank} · {TimeTrialSession.FormatTime( results.YourTimeSeconds )})";
+
+		_timeTrialLbTitle.Text = title;
+
+		if ( results.Entries is null || results.Entries.Count == 0 )
+		{
+			_timeTrialLbBody.Text = "No times yet";
+		}
+		else
+		{
+			var lines = new System.Text.StringBuilder();
+			for ( var i = 0; i < results.Entries.Count; i++ )
+			{
+				var e = results.Entries[i];
+				if ( i > 0 )
+					lines.Append( '\n' );
+				lines.Append( $"{i + 1,2}.  {e.DisplayName,-18}  {TimeTrialSession.FormatTime( e.TimeSeconds )}" );
+			}
+
+			_timeTrialLbBody.Text = lines.ToString();
+		}
+
+		_timeTrialLbRoot.Style.Set( "display", "flex" );
+		_timeTrialLbUntil = Time.NowDouble + 10.0;
+	}
+
+	void OnTimeTrialCountdown( string text )
+	{
+		if ( _timeTrialCountdown is null )
+			return;
+
+		var show = !string.IsNullOrWhiteSpace( text );
+		_timeTrialCountdown.Text = text ?? "";
+		_timeTrialCountdown.Style.Set( "display", show ? "flex" : "none" );
+	}
+
+	void OnTimeTrialElapsed( float seconds )
+	{
+		if ( _timeTrialTimer is null )
+			return;
+
+		if ( seconds < 0f )
+		{
+			_timeTrialTimer.Style.Set( "display", "none" );
+			return;
+		}
+
+		_timeTrialTimer.Text = seconds >= 60f
+			? $"{(int)(seconds / 60f)}:{seconds % 60f:00.00}"
+			: $"{seconds:0.00}s";
+		_timeTrialTimer.Style.Set( "display", "flex" );
+	}
+
+	void OnTimeTrialBanner( string text )
+	{
+		if ( _timeTrialBanner is null )
+			return;
+
+		_timeTrialBanner.Text = text ?? "";
+		_timeTrialBanner.Style.Set( "display", string.IsNullOrWhiteSpace( text ) ? "none" : "flex" );
+		_timeTrialBannerUntil = Time.NowDouble + 5.0;
 	}
 
 	void OnEquipmentToolChanged() => _equipmentSection?.Refresh();
@@ -612,6 +821,8 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedContainerChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedAugmentStationChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.AugmentStationChanged += OnAugmentStationChanged;
 		}
 
@@ -734,15 +945,18 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _promptRoot is null )
 			return;
 
-		// Container / augment station under the crosshair wins over campfire / harvest.
+		// Container / augment station wins over time trial / campfire / harvest.
 		var focusedContainer = _inventoryInteraction?.FocusedContainer;
 		var focusedStation = _inventoryInteraction?.FocusedAugmentStation;
+		var focusedStand = _inventoryInteraction?.FocusedTimeTrialStand;
+		var menuOpen = _inventoryInteraction is { IsTimeTrialMenuOpen: true };
 		var focusedCampfire = _inventoryInteraction?.FocusedCampfire;
 		var showOpen = (focusedContainer is not null && focusedContainer.IsValid())
 		               || (focusedStation is not null && focusedStation.IsValid());
-		var showCampfire = !showOpen && focusedCampfire is not null && focusedCampfire.IsValid();
-		var showHarvest = !showOpen && !showCampfire && _handHarvest?.FocusedNode is not null;
-		var show = showOpen || showCampfire || showHarvest;
+		var showTrial = !menuOpen && !showOpen && focusedStand is not null && focusedStand.IsValid();
+		var showCampfire = !showOpen && !showTrial && focusedCampfire is not null && focusedCampfire.IsValid();
+		var showHarvest = !showOpen && !showTrial && !showCampfire && _handHarvest?.FocusedNode is not null;
+		var show = showOpen || showTrial || showCampfire || showHarvest;
 
 		if ( _promptKeyLabel is not null )
 			_promptKeyLabel.Text = "E";
@@ -760,6 +974,12 @@ public sealed class PlayerScreenHud : PanelComponent
 				_promptLabel.Text = string.IsNullOrWhiteSpace( focusedStation.DisplayName )
 					? "Open Augment Station"
 					: $"Open {focusedStation.DisplayName}";
+			}
+			else if ( showTrial )
+			{
+				_promptLabel.Text = focusedStand.Phase == TimeTrialPhase.WaitingForPlayers
+					? "Open Time Trial Queue"
+					: "Time Trials";
 			}
 			else if ( showCampfire )
 			{

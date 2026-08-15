@@ -234,6 +234,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		TickContainerAccess();
 		TickAugmentStationAccess();
 		TickCampfireAccess();
+		TickTimeTrialAccess();
 
 		// While the game menu is open, Attack1 drag finish is owned by InventoryMenuInputOverlay
 		// (soft cursor). Finishing here with Mouse.Position cancels bag→hotbar drops.

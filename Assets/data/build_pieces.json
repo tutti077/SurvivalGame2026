@@ -83,9 +83,9 @@
       "icon": "",
       "prefab": "prefabs/build/furniture_campfire.prefab",
       "fallbackColor": "1,0.45,0.12,1",
-      "halfWidth": 12,
-      "halfHeight": 12,
-      "halfDepth": 12,
+      "halfWidth": 8.75,
+      "halfHeight": 8.75,
+      "halfDepth": 8.75,
       "costs": []
     }
   ]

@@ -1,0 +1,9 @@
+{
+  "variations": [
+    {
+      "id": "race1_full_map",
+      "displayName": "Race 1 - Full Map",
+      "checkpointOrders": [0, 1]
+    }
+  ]
+}

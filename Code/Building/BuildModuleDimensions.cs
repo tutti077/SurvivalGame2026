@@ -69,6 +69,15 @@ public static class BuildModuleDimensions
 			BuildColliderSnap.PrefabColliderSize.y * 0.5f * ChestSizeMeters.y,
 			BuildColliderSnap.PrefabColliderSize.z * 0.5f * ChestSizeMeters.z );
 
+	/// <summary>Campfire: small uniform sphere (meters on each axis).</summary>
+	public static Vector3 CampfireSizeMeters => new( 0.35f, 0.35f, 0.35f );
+
+	public static Vector3 CampfireHalfExtents =>
+		new(
+			BuildColliderSnap.PrefabColliderSize.x * 0.5f * CampfireSizeMeters.x,
+			BuildColliderSnap.PrefabColliderSize.y * 0.5f * CampfireSizeMeters.y,
+			BuildColliderSnap.PrefabColliderSize.z * 0.5f * CampfireSizeMeters.z );
+
 	public static bool TryGetHalfExtents( string pieceId, out Vector3 halfExtents )
 	{
 		halfExtents = default;
@@ -99,6 +108,12 @@ public static class BuildModuleDimensions
 			return true;
 		}
 
+		if ( string.Equals( pieceId, "furniture_campfire", StringComparison.OrdinalIgnoreCase ) )
+		{
+			halfExtents = CampfireHalfExtents;
+			return true;
+		}
+
 		return false;
 	}
 
@@ -113,6 +128,8 @@ public static class BuildModuleDimensions
 			return RoofSizeMeters;
 		if ( string.Equals( pieceId, "chest", StringComparison.OrdinalIgnoreCase ) )
 			return ChestSizeMeters;
+		if ( string.Equals( pieceId, "furniture_campfire", StringComparison.OrdinalIgnoreCase ) )
+			return CampfireSizeMeters;
 		return FloorSizeMeters;
 	}
 

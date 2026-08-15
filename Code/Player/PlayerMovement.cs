@@ -65,6 +65,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	[Property, Group( "Camera" ), Title( "Zoom step" ), Range( 8f, 128f ), Step( 8f ), Description( "Distance change per wheel notch." )]
 	public float CameraZoomStep { get; set; } = 48f;
 
+	[Property, Group( "Camera" ), Title( "Far clip (m)" ), Description( "How far the view camera draws (1 unit = 1 m)." ), Range( 500f, 100000f ), Step( 500f )]
+	public float CameraFarClipMeters { get; set; } = 50000f;
+
 	PlayerVitals _vitals;
 	PlayerController _controller;
 	/// <summary>Authoritative stepped zoom distance (-1 until first poll).</summary>
@@ -107,6 +110,73 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	bool _sprintHeldReportedOnHost;
 
 	bool _sprintHeldReportedToHostLast;
+
+	/// <summary>Host-synced: countdown freeze for time trials (no move / jump / grapple / wingsuit).</summary>
+	[Sync( SyncFlags.FromHost )]
+	public bool TimeTrialInputLocked { get; private set; }
+
+	public void HostSetTimeTrialFrozen( bool frozen )
+	{
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
+			return;
+
+		TimeTrialInputLocked = frozen;
+		ApplyTimeTrialFreezeLocal( frozen );
+		if ( GameObject.Network is { Active: true } )
+			RpcOwnerApplyTimeTrialFreeze( frozen );
+	}
+
+	[Rpc.Owner]
+	void RpcOwnerApplyTimeTrialFreeze( bool frozen )
+	{
+		ApplyTimeTrialFreezeLocal( frozen );
+	}
+
+	void ApplyTimeTrialFreezeLocal( bool frozen )
+	{
+		if ( !frozen )
+			return;
+
+		_controller ??= Components.Get<PlayerController>();
+		var body = _controller?.Body ?? Components.Get<Rigidbody>();
+		if ( body is not null && body.IsValid() )
+			body.Velocity = Vector3.Zero;
+
+		if ( GrappleAttached )
+			DetachGrappleForHitReaction();
+	}
+
+	/// <summary>Host places a racer at the countdown pads; owning clients apply via <see cref="RpcOwnerApplyTimeTrialSpawn"/>.</summary>
+	public void HostApplyTimeTrialSpawn( Vector3 worldPos, Rotation worldRot )
+	{
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
+			return;
+
+		ApplyTimeTrialSpawnLocal( worldPos, worldRot );
+		if ( GameObject.Network is { Active: true } )
+			RpcOwnerApplyTimeTrialSpawn( worldPos, worldRot );
+	}
+
+	[Rpc.Owner]
+	void RpcOwnerApplyTimeTrialSpawn( Vector3 worldPos, Rotation worldRot )
+	{
+		ApplyTimeTrialSpawnLocal( worldPos, worldRot );
+	}
+
+	void ApplyTimeTrialSpawnLocal( Vector3 worldPos, Rotation worldRot )
+	{
+		GameObject.WorldPosition = worldPos;
+		GameObject.WorldRotation = worldRot;
+
+		_controller ??= Components.Get<PlayerController>();
+		var body = _controller?.Body ?? Components.Get<Rigidbody>();
+		if ( body is not null && body.IsValid() )
+			body.Velocity = Vector3.Zero;
+
+		if ( _controller is not null )
+			_controller.EyeAngles = worldRot.Angles();
+	}
+
 	protected override void OnStart()
 	{
 		base.OnStart();
@@ -444,6 +514,19 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() || _vitals is null )
 			return;
 
+		if ( TimeTrialInputLocked )
+		{
+			ClearActionIfPressed( JumpInputAction );
+			if ( !string.IsNullOrWhiteSpace( SprintInputAction ) )
+				ClearActionIfPressed( SprintInputAction );
+			ClearActionIfPressed( SneakInputAction );
+			_controller ??= Components.Get<PlayerController>();
+			var body = _controller?.Body ?? Components.Get<Rigidbody>();
+			if ( body is not null && body.IsValid() )
+				body.Velocity = Vector3.Zero;
+			return;
+		}
+
 		// Augment air hop / dash must see Jump before stamina or wingsuit clear it.
 		TickAugmentJumpGates();
 
@@ -581,6 +664,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	{
 		if ( !IsLocalMovementDriver() || !camera.IsValid() )
 			return;
+
+		camera.ZFar = Math.Max( 100f, CameraFarClipMeters );
 
 		_controller ??= Components.Get<PlayerController>();
 		if ( _controller is null || !_controller.IsValid() )

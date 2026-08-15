@@ -1061,8 +1061,12 @@ partial class PlayerMovement
 
 		// Space is Jump + GrappleRetract: on the ground, Jump wins (no retract).
 		// In the air on the rope, Space shortens the line.
+		// E / Q also retract while grappled (HandHarvest / Use / build-snap / Menu).
 		if ( !onGround )
 			IsRetractingRope = IsLengthActionDown( RetractAction, "GrappleRetract", "Jump", "space" );
+
+		if ( !IsRetractingRope && IsEqRetractDown() )
+			IsRetractingRope = true;
 
 		// Ctrl is Duck + GrappleDetract — both can run while grappled.
 		IsDetractingRope = IsLengthActionDown( DetractAction, "GrappleDetract", "Duck", "ctrl" );
@@ -1151,6 +1155,16 @@ partial class PlayerMovement
 		if ( !string.IsNullOrWhiteSpace( altC ) && !string.Equals( primary, altC, StringComparison.OrdinalIgnoreCase ) && Input.Down( altC ) )
 			return true;
 		return false;
+	}
+
+	/// <summary>E / Q retract while on the rope (also bound as HandHarvest / Use / build snap / Menu).</summary>
+	static bool IsEqRetractDown()
+	{
+		return Input.Down( "HandHarvest" )
+		       || Input.Down( "Use" )
+		       || Input.Down( "BuildSnapPrev" )
+		       || Input.Down( "BuildSnapNext" )
+		       || Input.Down( "Menu" );
 	}
 
 	void UpdateAimHudVisibility( bool forceHide )
