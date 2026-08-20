@@ -1,0 +1,6 @@
+Layer0
+{
+	shader "shaders/environment/jungle_gym_depth.shader"
+
+	g_flBlobSize "280.000"
+}
