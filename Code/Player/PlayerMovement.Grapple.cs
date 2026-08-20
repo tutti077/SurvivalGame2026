@@ -315,6 +315,7 @@ partial class PlayerMovement
 	{
 		TickGrappleReleaseWeight();
 		TickGrappleControllerOverride();
+		TickGrapplePlayerTargetValidity();
 
 		if ( !GrappleAttached )
 			return;
@@ -511,7 +512,7 @@ partial class PlayerMovement
 		     && TryResolveAimPointOnObject( _stickyAimObject, out var stickyPoint, out var stickyScreen, out var stickySelectDist )
 		     && IsWithinGrappleRange( stickyPoint ) )
 		{
-			var sameObject = hitObject.IsValid() && IsSameGrappleObject( hitObject, _stickyAimObject );
+			var sameObject = hitObject.IsValid() && IsSameGrappleTarget( hitObject, _stickyAimObject );
 			if ( sameObject || selectScreenDist + 0.01f >= stickySelectDist - stickBreak )
 			{
 				adoptNew = false;
@@ -587,6 +588,9 @@ partial class PlayerMovement
 
 		// No re-attaching out of a hit reaction — the rope is gone for that whole window.
 		if ( IsHitReactionActive() )
+			return;
+
+		if ( IsGrappleVictimCooldownActive() )
 			return;
 
 		if ( !HasValidAimTarget )
@@ -677,14 +681,14 @@ partial class PlayerMovement
 			if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() )
 				return;
 
-			if ( !HasGrappleTag( tr ) )
+			if ( !IsGrappleTarget( tr ) )
 				return;
 
 			var distPawn = Vector3.DistanceBetween( pawnPos, tr.HitPosition );
 			if ( distPawn > maxRange )
 				return;
 
-			var root = ResolveGrappleRoot( tr.GameObject );
+			var root = ResolveGrappleTargetRoot( tr.GameObject );
 			var projected = rayScreen;
 			var projectedOk = useRayScreen;
 			if ( hasCenter && cam.IsValid() && TryWorldToScreen( cam, tr.HitPosition, out var engineScreen ) )
@@ -797,7 +801,7 @@ partial class PlayerMovement
 		var centerTr = TraceAimRay( rayOrigin, lookDir, castDist );
 		if ( centerTr.Hit && centerTr.GameObject.IsValid()
 		     && IsUnderGrappleRoot( centerTr.GameObject, root )
-		     && HasGrappleTag( centerTr ) )
+		     && IsGrappleTarget( centerTr ) )
 		{
 			var distPawn = Vector3.DistanceBetween( GameObject.WorldPosition, centerTr.HitPosition );
 			if ( IsWithinGrappleRange( centerTr.HitPosition ) )
@@ -955,15 +959,27 @@ partial class PlayerMovement
 	/// Host check: client snap must be in range on a tagged surface.
 	/// Avoids host-camera aim (scene.Camera is the host view for remote pawns).
 	/// </summary>
-	bool TryValidateAttachPoint( Vector3 clientHitPoint, out Vector3 validatedPoint, out float length )
+	bool TryValidateAttachPoint( Vector3 clientHitPoint, out Vector3 validatedPoint, out float length, out Guid playerTargetId )
 	{
 		validatedPoint = default;
 		length = 0f;
+		playerTargetId = Guid.Empty;
 
 		if ( !IsWithinGrappleRange( clientHitPoint ) )
 			return false;
 
 		var surfaceSlack = TerrainWorldUnits.MetersToEngine( 3f );
+		var playerSlack = TerrainWorldUnits.MetersToEngine( 0.85f );
+
+		if ( TryFindGrapplePlayerNearPoint( clientHitPoint, playerSlack, out var playerRoot, out var playerAttach )
+		     && IsGrappleablePlayer( playerRoot )
+		     && IsWithinGrappleRange( playerAttach ) )
+		{
+			validatedPoint = playerAttach;
+			length = Vector3.DistanceBetween( GameObject.WorldPosition, playerAttach );
+			playerTargetId = playerRoot.Id;
+			return true;
+		}
 
 		if ( TryFindTaggedRootNearPoint( clientHitPoint, surfaceSlack, out var nearRoot ) )
 		{
@@ -1438,6 +1454,9 @@ partial class PlayerMovement
 		if ( GrappleAttached )
 			return;
 
+		if ( IsGrappleVictimCooldownActive() )
+			return;
+
 		if ( !HasGrappleEquipped() )
 		{
 			// Paperdoll RPC can lag behind the client's local equip — accept a valid client-reported hook.
@@ -1455,7 +1474,7 @@ partial class PlayerMovement
 				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host mirrored client grapple '{clientGrappleResourceId}'." );
 		}
 
-		if ( !TryValidateAttachPoint( clientHitPoint, out var validatedPoint, out var length ) )
+		if ( !TryValidateAttachPoint( clientHitPoint, out var validatedPoint, out var length, out var playerTargetId ) )
 		{
 			if ( LogGrapple )
 				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host rejected attach." );
@@ -1472,9 +1491,20 @@ partial class PlayerMovement
 		GrappleAttached = true;
 		GrappleAttachWorldPoint = validatedPoint;
 		GrappleRopeLengthEngine = length;
+		ClearGrapplePlayerAttachState();
+
+		if ( playerTargetId != Guid.Empty && TryResolveGrapplePlayerTarget( playerTargetId, out var target ) )
+		{
+			GrappleAttachPlayerId = playerTargetId;
+			GrappleAttachLocalOffset = target.WorldTransform.PointToLocal( validatedPoint );
+			target.Components.Get<PlayerMovement>()?.HostNotifyGrappledByPlayer();
+		}
 
 		if ( LogGrapple )
-			Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: attached len={TerrainWorldUnits.EngineToMeters( length ):0.##}m" );
+		{
+			var kind = playerTargetId != Guid.Empty ? "player" : "surface";
+			Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: attached ({kind}) len={TerrainWorldUnits.EngineToMeters( length ):0.##}m" );
+		}
 	}
 
 	/// <summary>
@@ -1512,6 +1542,7 @@ partial class PlayerMovement
 		GrappleAttached = false;
 		GrappleAttachWorldPoint = default;
 		GrappleRopeLengthEngine = 0f;
+		ClearGrapplePlayerAttachState();
 		_airborneStaminaDebt = 0f;
 		_grappleReleaseAir = true;
 
@@ -1602,7 +1633,7 @@ partial class PlayerMovement
 			return;
 
 		var from = ResolveLeftArmWorldPoint();
-		DebugOverlay.Line( from, GrappleAttachWorldPoint, Color.Black, 0f );
+		DebugOverlay.Line( from, ResolveGrappleAttachWorldPoint(), Color.Black, 0f );
 	}
 
 	void DrawSpeedDebugIfNeeded()
@@ -1625,7 +1656,7 @@ partial class PlayerMovement
 		var horizontal = vel.WithZ( 0f );
 		var hSpeed = horizontal.Length;
 
-		var attach = GrappleAttachWorldPoint;
+		var attach = ResolveGrappleAttachWorldPoint();
 		var toPlayer = GameObject.WorldPosition - attach;
 		var dist = toPlayer.Length;
 		var tanSpeed = 0f;

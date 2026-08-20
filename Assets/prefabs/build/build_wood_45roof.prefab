@@ -1,9 +1,9 @@
 {
   "RootObject": {
-    "__guid": "b1010003-3333-4333-8333-333333333303",
+    "__guid": "acf5b938-f57d-5e70-b555-4061cf115e77",
     "__version": 2,
     "Flags": 0,
-    "Name": "45roof",
+    "Name": "build_wood_45roof",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
     "Scale": "2,2.82,0.06",
@@ -17,7 +17,7 @@
     "Components": [
       {
         "__type": "Sandbox.ModelRenderer",
-        "__guid": "b1010003-3333-4333-8333-333333333331",
+        "__guid": "e2a959a8-3b15-552b-b629-3fef5c94c904",
         "__enabled": true,
         "Flags": 0,
         "BodyGroups": 18446744073709551615,
@@ -44,7 +44,7 @@
       },
       {
         "__type": "Sandbox.BoxCollider",
-        "__guid": "b1010003-3333-4333-8333-333333333332",
+        "__guid": "16f69374-310f-54a4-a818-3dc0b7a9e568",
         "__enabled": true,
         "Flags": 0,
         "Center": "0,0,0",
@@ -70,7 +70,7 @@
       },
       {
         "__type": "Survival.BuildPiece",
-        "__guid": "b1010003-3333-4333-8333-333333333333",
+        "__guid": "2394777f-ce5c-5188-b952-f78eec464a7e",
         "__enabled": true,
         "Flags": 0,
         "IsBlueprint": false,
@@ -80,7 +80,7 @@
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null,
-        "PieceId": "45roof"
+        "PieceId": "build_wood_45roof"
       }
     ],
     "Children": [],
@@ -97,7 +97,7 @@
         "AgentHeight": 64,
         "AgentRadius": 16,
         "AgentStepSize": 18,
-        "AgentMaxSlope": 50,
+        "AgentMaxSlope": 40,
         "ExcludedBodies": "",
         "IncludedBodies": "",
         "DeferGeneration": false,

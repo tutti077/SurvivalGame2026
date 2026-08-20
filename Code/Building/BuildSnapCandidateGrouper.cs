@@ -9,7 +9,6 @@ static class BuildSnapCandidateGrouper
 
 	public static void FinalizeCandidates(
 		List<BuildSnapCandidate> candidates,
-		string placingPieceId,
 		IReadOnlyList<BuildSnapPoint> placingSnaps )
 	{
 		if ( candidates.Count == 0 )
@@ -28,27 +27,13 @@ static class BuildSnapCandidateGrouper
 				continue;
 
 			var anchorRole = GetAnchorRole( placingSnaps, candidate.AnchorSnapIndex );
-			var targetRole = candidate.TargetPiece.SnapPoints[candidate.TargetSnapIndex].Role;
-			var priorityIndex = candidate.CycleOrder >= 0
-				? candidate.CycleOrder
-				: BuildSnapAutoRules.GetAnchorPriorityIndex(
-					placingPieceId,
-					candidate.TargetPiece.PieceId,
-					anchorRole,
-					targetRole,
-					candidate.IsEdgeSnap );
 
-			// CycleOrder is sort-only — do not inflate group BestScore (that made mixed
+			// CycleOrder is sort-only — it must not inflate group BestScore (that made mixed
 			// mates pick stack/corner groups and fail wall→floor commit).
-			var scored = candidate.CycleOrder >= 0
-				? candidate.Score
-				: candidate.Score + BuildSnapAutoRules.ScoreAnchorPriority( priorityIndex );
-
 			var member = candidate with
 			{
 				GroupKey = key,
-				AnchorPriority = priorityIndex,
-				Score = scored,
+				HoldOrder = BuildSnapLayout.GetHoldOrder( anchorRole ),
 			};
 
 			if ( !buckets.TryGetValue( key, out var list ) )
@@ -78,10 +63,15 @@ static class BuildSnapCandidateGrouper
 		for ( var g = 0; g < orderedGroups.Count; g++ )
 		{
 			var members = orderedGroups[g].Members;
+			// Order must not depend on Score — see BuildSnapCandidate.HoldOrder.
 			members.Sort( static ( a, b ) =>
 			{
-				var byPriority = a.AnchorPriority.CompareTo( b.AnchorPriority );
-				return byPriority != 0 ? byPriority : a.Score.CompareTo( b.Score );
+				var byCycle = a.CycleOrder.CompareTo( b.CycleOrder );
+				if ( byCycle != 0 )
+					return byCycle;
+
+				var byHold = a.HoldOrder.CompareTo( b.HoldOrder );
+				return byHold != 0 ? byHold : a.TargetEdgeId.CompareTo( b.TargetEdgeId );
 			} );
 
 			for ( var m = 0; m < members.Count; m++ )
@@ -306,9 +296,10 @@ static class BuildSnapCandidateGrouper
 				if ( yawDelta > angEps )
 					continue;
 
-				// Keep earlier CycleOrder / lower priority (abut before corners before stack).
-				if ( b.AnchorPriority < a.AnchorPriority
-				     || ( b.AnchorPriority == a.AnchorPriority && b.Score < a.Score ) )
+				// Keep earlier CycleOrder (abut before corners before stack). Tie-break on hold
+				// order, never Score — a moving score reshuffles Q/E under a held index.
+				if ( b.CycleOrder < a.CycleOrder
+				     || ( b.CycleOrder == a.CycleOrder && b.HoldOrder < a.HoldOrder ) )
 				{
 					members[i] = b;
 					members.RemoveAt( j );

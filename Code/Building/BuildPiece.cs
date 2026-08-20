@@ -154,13 +154,13 @@ public sealed class BuildPiece : Component
 
 	void EnsureWalkColliders( string pieceId )
 	{
-		if ( string.Equals( pieceId, "foundation", StringComparison.OrdinalIgnoreCase ) )
+		if ( BuildPieceFamily.IsFloor( pieceId ) )
 		{
 			RestoreFoundationCollider();
 			return;
 		}
 
-		if ( !string.Equals( pieceId, "45roof", StringComparison.OrdinalIgnoreCase ) )
+		if ( !BuildPieceFamily.IsRoof( pieceId ) )
 			return;
 
 		EnsureRoofWalkSurface();

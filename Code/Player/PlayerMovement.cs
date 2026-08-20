@@ -1138,7 +1138,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f )
 			return;
 
-		var attach = GrappleAttachWorldPoint;
+		var attach = ResolveGrappleAttachWorldPoint();
 		var maxLen = Math.Max( 1f, GrappleRopeLengthEngine );
 		var pos = GameObject.WorldPosition;
 		var toPlayer = pos - attach;
@@ -1166,7 +1166,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		dt = Math.Max( 1e-4f, dt );
 
-		var attach = GrappleAttachWorldPoint;
+		var attach = ResolveGrappleAttachWorldPoint();
 		var maxLen = Math.Max( 1f, GrappleRopeLengthEngine );
 		var prevLen = _grapplePrevRopeLength > 1e-3f ? _grapplePrevRopeLength : maxLen;
 		var pos = GameObject.WorldPosition;
@@ -1255,7 +1255,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( body is null )
 			return;
 
-		var attach = GrappleAttachWorldPoint;
+		var attach = ResolveGrappleAttachWorldPoint();
 		var toPlayer = GameObject.WorldPosition - attach;
 		var dist = toPlayer.Length;
 		if ( dist < 1e-4f )

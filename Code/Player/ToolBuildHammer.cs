@@ -19,6 +19,17 @@ public sealed class ToolBuildHammer : Component
 	[Property, Group( "Input" ), Title( "Demolish Hold (seconds)" )]
 	public float DemolishHoldSeconds { get; set; } = 0.25f;
 	[Property, Group( "Placement" )] public float BuildRange { get; set; } = 640f;
+
+	/// <summary>Plain scroll rotate step.</summary>
+	[Property, Group( "Placement" ), Title( "Scroll Rotate Step (deg)" )]
+	public float ScrollYawStep { get; set; } = 45f;
+
+	/// <summary>
+	/// Shift + scroll. Fine steps only read on free / corner-held placements — a flush edge mate
+	/// quantises yaw to 90°, so anything under a quarter turn is rounded away there.
+	/// </summary>
+	[Property, Group( "Placement" ), Title( "Shift Scroll Rotate Step (deg)" )]
+	public float FineYawStep { get; set; } = 15f;
 	[Property, Group( "Debug" )] public bool FreeBuildEnabled { get; set; } = true;
 	[Property, Group( "Debug" )] public bool ShowSnapDebug { get; set; } = true;
 	[Property, Group( "Debug" )] public bool ShowBuildRayDebug { get; set; } = true;
@@ -58,6 +69,35 @@ public sealed class ToolBuildHammer : Component
 	double _openMenuHoldStarted;
 
 	public void BindPawn( GameObject pawn ) => _pawn = pawn;
+
+	/// <summary>True while a ghost is up and mated to an existing piece (as opposed to free aim).</summary>
+	public bool IsSnappedToStructure => IsPreviewingPlacePiece && _lastPlacement.SnappedToStructure;
+
+	/// <summary>1-based Q/E position and the number of variants on the current seam, for the HUD.</summary>
+	public int SnapVariantNumber => _lastPlacement.SnapCandidateCount <= 0 ? 0 : _snapAnchorIndex + 1;
+
+	public int SnapVariantCount => Math.Max( 0, _lastPlacement.SnapCandidateCount );
+
+	/// <summary>
+	/// Which snap the ghost is hanging from: "Auto" for the flush edge mate, otherwise the held
+	/// corner/end of the piece being placed.
+	/// </summary>
+	public string SnapVariantLabel
+	{
+		get
+		{
+			if ( !IsSnappedToStructure || _activeSnapCandidate is not { } candidate )
+				return "Free";
+
+			if ( candidate.CycleOrder == 0 )
+				return "Auto";
+
+			if ( candidate.AnchorSnapIndex >= 0 && candidate.AnchorSnapIndex < _placingSnaps.Count )
+				return BuildSnapLayout.GetHoldLabel( _placingSnaps[candidate.AnchorSnapIndex].Role );
+
+			return "Auto";
+		}
+	}
 
 	protected override void OnStart()
 	{
@@ -272,7 +312,7 @@ public sealed class ToolBuildHammer : Component
 					var fine = Input.Keyboard.Down( "shift" )
 					           || Input.Keyboard.Down( "leftshift" )
 					           || Input.Keyboard.Down( "rightshift" );
-					var step = fine ? 15f : 45f;
+					var step = fine ? FineYawStep : ScrollYawStep;
 					_yawDegrees += scroll > 0f ? step : -step;
 				}
 			}

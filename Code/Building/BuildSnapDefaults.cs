@@ -5,8 +5,9 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Four corner-edge snaps per piece. World positions come from
-/// <see cref="BuildColliderSnap"/> (BoxCollider corner-to-corner scale / 2).
+/// Builds a piece's snap set from <see cref="BuildSnapLayout"/> — four corner-edge snaps for
+/// plates, two end snaps for beams. World positions come from <see cref="BuildColliderSnap"/>
+/// (BoxCollider corner-to-corner scale / 2).
 /// </summary>
 static class BuildSnapDefaults
 {
@@ -16,25 +17,21 @@ static class BuildSnapDefaults
 			return;
 
 		data.SnapPoints = CreateDefaults( data.Id );
-		data.AnchorSnapRole = BuildSnapRole.CornerNorthEast;
+		data.AnchorSnapRole = BuildSnapLayout.UsesAxisEnds( data.Id )
+			? BuildSnapRole.AxisStart
+			: BuildSnapRole.CornerNorthEast;
 	}
 
 	static List<BuildSnapPointData> CreateDefaults( string pieceId )
 	{
-		if ( string.Equals( pieceId, "wall", StringComparison.OrdinalIgnoreCase )
-		     || string.Equals( pieceId, "foundation", StringComparison.OrdinalIgnoreCase )
-		     || string.Equals( pieceId, "45roof", StringComparison.OrdinalIgnoreCase ) )
-		{
-			return new List<BuildSnapPointData>
-			{
-				RoleSnap( pieceId, BuildSnapRole.CornerNorthEast ),
-				RoleSnap( pieceId, BuildSnapRole.CornerNorthWest ),
-				RoleSnap( pieceId, BuildSnapRole.CornerSouthEast ),
-				RoleSnap( pieceId, BuildSnapRole.CornerSouthWest ),
-			};
-		}
+		// Snap counts differ per piece — plates get four corners, beams get two end points, and
+		// furniture gets none. BuildSnapLayout owns which set a piece uses.
+		var roles = BuildSnapLayout.GetRoles( pieceId );
+		var snaps = new List<BuildSnapPointData>( roles.Count );
+		for ( var i = 0; i < roles.Count; i++ )
+			snaps.Add( RoleSnap( pieceId, roles[i] ) );
 
-		return new List<BuildSnapPointData>();
+		return snaps;
 	}
 
 	static BuildSnapPointData RoleSnap( string pieceId, BuildSnapRole role )
@@ -44,7 +41,10 @@ static class BuildSnapDefaults
 		if ( outward.LengthSquared < 1e-8f )
 			outward = Vector3.Forward;
 
-		var rot = Rotation.LookAt( outward.Normal, Vector3.Up );
+		// A beam's end snaps point straight up/down, where LookAt( dir, Up ) is degenerate.
+		var direction = outward.Normal;
+		var up = MathF.Abs( direction.z ) > 0.9f ? Vector3.Forward : Vector3.Up;
+		var rot = Rotation.LookAt( direction, up );
 		return new BuildSnapPointData
 		{
 			Role = role,

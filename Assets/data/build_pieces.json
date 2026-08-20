@@ -1,43 +1,235 @@
 {
   "buildPieces": [
     {
-      "id": "foundation",
-      "displayName": "Floor",
-      "icon": "ui/build/foundation.png",
-      "prefab": "prefabs/build/foundation.prefab",
-      "fallbackColor": "0.52,0.48,0.42,1",
-      "halfWidth": 30,
-      "halfHeight": 30,
-      "halfDepth": 1.2,
-      "costs": [
-        { "resourceId": "resource_woodBasic", "amount": 5 }
-      ]
-    },
-    {
-      "id": "wall",
-      "displayName": "Wall",
-      "icon": "ui/build/wall.png",
-      "prefab": "prefabs/build/wall.prefab",
+      "id": "build_wood_wall",
+      "displayName": "Wood Wall",
+      "icon": "ui/build/build_wood_wall.png",
+      "prefab": "prefabs/build/build_wood_wall.prefab",
       "fallbackColor": "0.62,0.58,0.52,1",
-      "halfWidth": 30,
-      "halfHeight": 1.2,
-      "halfDepth": 30,
-      "costs": [
-        { "resourceId": "resource_woodBasic", "amount": 3 }
-      ]
+      "halfWidth": 50.0,
+      "halfHeight": 1.5,
+      "halfDepth": 50.0,
+      "costs": []
     },
     {
-      "id": "45roof",
-      "displayName": "45° Roof",
-      "icon": "ui/build/45roof.png",
-      "prefab": "prefabs/build/45roof.prefab",
+      "id": "build_wood_wall_2m1m",
+      "displayName": "Wood Wall 2x1m",
+      "icon": "ui/build/build_wood_wall_2m1m.png",
+      "prefab": "prefabs/build/build_wood_wall_2m1m.prefab",
+      "fallbackColor": "0.62,0.58,0.52,1",
+      "halfWidth": 50.0,
+      "halfHeight": 1.5,
+      "halfDepth": 25.0,
+      "costs": []
+    },
+    {
+      "id": "build_wood_wall_1m1m",
+      "displayName": "Wood Wall 1x1m",
+      "icon": "ui/build/build_wood_wall_1m1m.png",
+      "prefab": "prefabs/build/build_wood_wall_1m1m.prefab",
+      "fallbackColor": "0.62,0.58,0.52,1",
+      "halfWidth": 25.0,
+      "halfHeight": 1.5,
+      "halfDepth": 25.0,
+      "costs": []
+    },
+    {
+      "id": "build_wood_floor",
+      "displayName": "Wood Floor",
+      "icon": "ui/build/build_wood_floor.png",
+      "prefab": "prefabs/build/build_wood_floor.prefab",
+      "fallbackColor": "0.52,0.48,0.42,1",
+      "halfWidth": 50.0,
+      "halfHeight": 50.0,
+      "halfDepth": 1.5,
+      "costs": []
+    },
+    {
+      "id": "build_wood_floor_2m1m",
+      "displayName": "Wood Floor 2x1m",
+      "icon": "ui/build/build_wood_floor_2m1m.png",
+      "prefab": "prefabs/build/build_wood_floor_2m1m.prefab",
+      "fallbackColor": "0.52,0.48,0.42,1",
+      "halfWidth": 50.0,
+      "halfHeight": 25.0,
+      "halfDepth": 1.5,
+      "costs": []
+    },
+    {
+      "id": "build_wood_floor_1m1m",
+      "displayName": "Wood Floor 1x1m",
+      "icon": "ui/build/build_wood_floor_1m1m.png",
+      "prefab": "prefabs/build/build_wood_floor_1m1m.prefab",
+      "fallbackColor": "0.52,0.48,0.42,1",
+      "halfWidth": 25.0,
+      "halfHeight": 25.0,
+      "halfDepth": 1.5,
+      "costs": []
+    },
+    {
+      "id": "build_wood_45roof",
+      "displayName": "Wood 45° Roof",
+      "icon": "ui/build/build_wood_45roof.png",
+      "prefab": "prefabs/build/build_wood_45roof.prefab",
       "fallbackColor": "0.48,0.36,0.28,1",
-      "halfWidth": 30,
-      "halfHeight": 30,
-      "halfDepth": 1.2,
-      "costs": [
-        { "resourceId": "resource_woodBasic", "amount": 2 }
-      ]
+      "halfWidth": 50.0,
+      "halfHeight": 70.5,
+      "halfDepth": 1.5,
+      "costs": []
+    },
+    {
+      "id": "build_wood_45roofInsideCorner",
+      "displayName": "Wood 45° Roof Inside Corner",
+      "icon": "ui/build/build_wood_45roofInsideCorner.png",
+      "prefab": "prefabs/build/build_wood_45roofInsideCorner.prefab",
+      "fallbackColor": "0.48,0.36,0.28,1",
+      "halfWidth": 50.0,
+      "halfHeight": 70.5,
+      "halfDepth": 1.5,
+      "costs": []
+    },
+    {
+      "id": "build_wood_45roofOutsideCorner",
+      "displayName": "Wood 45° Roof Outside Corner",
+      "icon": "ui/build/build_wood_45roofOutsideCorner.png",
+      "prefab": "prefabs/build/build_wood_45roofOutsideCorner.prefab",
+      "fallbackColor": "0.48,0.36,0.28,1",
+      "halfWidth": 50.0,
+      "halfHeight": 70.5,
+      "halfDepth": 1.5,
+      "costs": []
+    },
+    {
+      "id": "build_wood_45wallLeft",
+      "displayName": "Wood 45° Wall Left",
+      "icon": "ui/build/build_wood_45wallLeft.png",
+      "prefab": "prefabs/build/build_wood_45wallLeft.prefab",
+      "fallbackColor": "0.62,0.58,0.52,1",
+      "halfWidth": 50.0,
+      "halfHeight": 1.5,
+      "halfDepth": 50.0,
+      "costs": []
+    },
+    {
+      "id": "build_wood_45wallRight",
+      "displayName": "Wood 45° Wall Right",
+      "icon": "ui/build/build_wood_45wallRight.png",
+      "prefab": "prefabs/build/build_wood_45wallRight.prefab",
+      "fallbackColor": "0.62,0.58,0.52,1",
+      "halfWidth": 50.0,
+      "halfHeight": 1.5,
+      "halfDepth": 50.0,
+      "costs": []
+    },
+    {
+      "id": "build_wood_door",
+      "displayName": "Wood Door",
+      "icon": "ui/build/build_wood_door.png",
+      "prefab": "prefabs/build/build_wood_door.prefab",
+      "fallbackColor": "0.62,0.58,0.52,1",
+      "halfWidth": 50.0,
+      "halfHeight": 1.5,
+      "halfDepth": 50.0,
+      "costs": []
+    },
+    {
+      "id": "build_wood_triangleFloor",
+      "displayName": "Wood Triangle Floor",
+      "icon": "ui/build/build_wood_triangleFloor.png",
+      "prefab": "prefabs/build/build_wood_triangleFloor.prefab",
+      "fallbackColor": "0.52,0.48,0.42,1",
+      "halfWidth": 50.0,
+      "halfHeight": 50.0,
+      "halfDepth": 1.5,
+      "costs": []
+    },
+    {
+      "id": "build_wood_stairs",
+      "displayName": "Wood Stairs",
+      "icon": "ui/build/build_wood_stairs.png",
+      "prefab": "prefabs/build/build_wood_stairs.prefab",
+      "fallbackColor": "0.5,0.46,0.4,1",
+      "halfWidth": 50.0,
+      "halfHeight": 50.0,
+      "halfDepth": 50.0,
+      "costs": []
+    },
+    {
+      "id": "build_wood_stairsSpiral",
+      "displayName": "Wood Stairs Spiral",
+      "icon": "ui/build/build_wood_stairsSpiral.png",
+      "prefab": "prefabs/build/build_wood_stairsSpiral.prefab",
+      "fallbackColor": "0.5,0.46,0.4,1",
+      "halfWidth": 50.0,
+      "halfHeight": 50.0,
+      "halfDepth": 50.0,
+      "costs": []
+    },
+    {
+      "id": "build_wood_horizontalBeam_1m",
+      "displayName": "Wood Horizontal Beam 1m",
+      "icon": "ui/build/build_wood_horizontalBeam_1m.png",
+      "prefab": "prefabs/build/build_wood_horizontalBeam_1m.prefab",
+      "fallbackColor": "0.55,0.45,0.36,1",
+      "halfWidth": 25.0,
+      "halfHeight": 12.5,
+      "halfDepth": 12.5,
+      "costs": []
+    },
+    {
+      "id": "build_wood_verticalBeam_1m",
+      "displayName": "Wood Vertical Beam 1m",
+      "icon": "ui/build/build_wood_verticalBeam_1m.png",
+      "prefab": "prefabs/build/build_wood_verticalBeam_1m.prefab",
+      "fallbackColor": "0.55,0.45,0.36,1",
+      "halfWidth": 12.5,
+      "halfHeight": 12.5,
+      "halfDepth": 25.0,
+      "costs": []
+    },
+    {
+      "id": "build_wood_45Beam_1m",
+      "displayName": "Wood 45° Beam 1m",
+      "icon": "ui/build/build_wood_45Beam_1m.png",
+      "prefab": "prefabs/build/build_wood_45Beam_1m.prefab",
+      "fallbackColor": "0.55,0.45,0.36,1",
+      "halfWidth": 25.0,
+      "halfHeight": 12.5,
+      "halfDepth": 12.5,
+      "costs": []
+    },
+    {
+      "id": "build_wood_horizontalBeam_2m",
+      "displayName": "Wood Horizontal Beam 2m",
+      "icon": "ui/build/build_wood_horizontalBeam_2m.png",
+      "prefab": "prefabs/build/build_wood_horizontalBeam_2m.prefab",
+      "fallbackColor": "0.55,0.45,0.36,1",
+      "halfWidth": 50.0,
+      "halfHeight": 12.5,
+      "halfDepth": 12.5,
+      "costs": []
+    },
+    {
+      "id": "build_wood_verticalBeam_2m",
+      "displayName": "Wood Vertical Beam 2m",
+      "icon": "ui/build/build_wood_verticalBeam_2m.png",
+      "prefab": "prefabs/build/build_wood_verticalBeam_2m.prefab",
+      "fallbackColor": "0.55,0.45,0.36,1",
+      "halfWidth": 12.5,
+      "halfHeight": 12.5,
+      "halfDepth": 50.0,
+      "costs": []
+    },
+    {
+      "id": "build_wood_45Beam_2m",
+      "displayName": "Wood 45° Beam 2m",
+      "icon": "ui/build/build_wood_45Beam_2m.png",
+      "prefab": "prefabs/build/build_wood_45Beam_2m.prefab",
+      "fallbackColor": "0.55,0.45,0.36,1",
+      "halfWidth": 50.0,
+      "halfHeight": 12.5,
+      "halfDepth": 12.5,
+      "costs": []
     },
     {
       "id": "chest",
@@ -49,7 +241,10 @@
       "halfHeight": 15,
       "halfDepth": 18.75,
       "costs": [
-        { "resourceId": "resource_woodBasic", "amount": 8 }
+        {
+          "resourceId": "resource_woodBasic",
+          "amount": 8
+        }
       ]
     },
     {
@@ -62,7 +257,10 @@
       "halfHeight": 15,
       "halfDepth": 18.75,
       "costs": [
-        { "resourceId": "resource_woodBasic", "amount": 10 }
+        {
+          "resourceId": "resource_woodBasic",
+          "amount": 10
+        }
       ]
     },
     {
@@ -74,7 +272,10 @@
       "allowTerrainPlacement": false,
       "fallbackColor": "0.72,0.58,0.28,1",
       "costs": [
-        { "resourceId": "resource_woodBasic", "amount": 1 }
+        {
+          "resourceId": "resource_woodBasic",
+          "amount": 1
+        }
       ]
     },
     {

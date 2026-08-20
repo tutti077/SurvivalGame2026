@@ -21,11 +21,10 @@ public static class BuildPieceNavPolicy
 		if ( string.IsNullOrWhiteSpace( pieceId ) )
 			return BuildNavCategory.Blocking;
 
-		if ( pieceId.Contains( "stair", StringComparison.OrdinalIgnoreCase )
-		     || pieceId.Contains( "ramp", StringComparison.OrdinalIgnoreCase )
+		if ( BuildPieceFamily.IsStairs( pieceId )
+		     || BuildPieceFamily.IsRoof( pieceId )
 		     || pieceId.Contains( "bridge", StringComparison.OrdinalIgnoreCase )
-		     || pieceId.Contains( "gate", StringComparison.OrdinalIgnoreCase )
-		     || string.Equals( pieceId, "45roof", StringComparison.OrdinalIgnoreCase ) )
+		     || pieceId.Contains( "gate", StringComparison.OrdinalIgnoreCase ) )
 			return BuildNavCategory.WalkablePath;
 
 		return BuildNavCategory.Blocking;

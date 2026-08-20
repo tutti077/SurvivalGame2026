@@ -42,6 +42,35 @@ public sealed class BuildMenuHud
 	public void Tick()
 	{
 		EnsureSlotsMatchCatalog();
+		PollHoveredSlot();
+	}
+
+	/// <summary>
+	/// Hover is polled rather than event-driven. Mouse-out bubbles from a slot up to the grid, so
+	/// the grid's own handler cleared the hover again the moment the pointer crossed between two
+	/// slots — the name panel and highlight never settled on anything.
+	/// </summary>
+	void PollHoveredSlot()
+	{
+		if ( _grid is null )
+			return;
+
+		var hammer = ResolveBuildHammer();
+		if ( hammer is null || !hammer.IsBuildMenuOpen )
+			return;
+
+		PieceSlotUi hovered = null;
+		for ( var i = 0; i < _slots.Count; i++ )
+		{
+			var slot = _slots[i];
+			if ( slot?.Panel is null || !slot.Panel.HasHovered )
+				continue;
+
+			hovered = slot;
+			break;
+		}
+
+		SetHoveredSlot( hovered );
 	}
 
 	public void Build( Panel hudRoot )
@@ -114,7 +143,6 @@ public sealed class BuildMenuHud
 		_grid.Style.Set( "justify-content", "center" );
 		_grid.Style.Set( "gap", $"{SlotGap}px" );
 		_grid.Style.Set( "max-width", $"{Columns * SlotSize + ( Columns - 1 ) * SlotGap}px" );
-		_grid.AddEventListener( "onmouseout", () => SetHoveredSlot( null ) );
 
 		_detailRoot = new Panel { Parent = _panelRoot };
 		_detailRoot.Style.Set( "flex-direction", "column" );
@@ -196,8 +224,6 @@ public sealed class BuildMenuHud
 			icon.Style.Set( "pointer-events", "none" );
 
 			var slotUi = new PieceSlotUi { Panel = slotPanel, Icon = icon, PieceId = piece.Id, Data = piece };
-			slotPanel.AddEventListener( "onmouseover", () => SetHoveredSlot( slotUi ) );
-			slotPanel.AddEventListener( "onmouseout", () => SetHoveredSlot( null ) );
 
 			var iconPath = piece.Icon;
 			if ( !MenuUiTextures.ApplyBackground( icon, iconPath ) )
@@ -322,9 +348,14 @@ public sealed class BuildMenuHud
 			if ( slot?.Panel is null )
 				continue;
 
+			// A 1px→2px border recolour was too subtle to read at slot size — lift the whole tile.
 			var isHovered = hovered is not null && slot == hovered;
 			slot.Panel.Style.Set( "border-color", isHovered ? "#8ab4f8" : "#474d57" );
-			slot.Panel.Style.Set( "border-width", isHovered ? "2px" : "1px" );
+			slot.Panel.Style.Set( "border-width", isHovered ? "3px" : "1px" );
+			slot.Panel.Style.BackgroundColor = isHovered
+				? new Color( 0.20f, 0.28f, 0.42f, 0.98f )
+				: new Color( 0.12f, 0.13f, 0.15f, 0.92f );
+			slot.Panel.Style.Set( "transform", isHovered ? "scale(1.08)" : "scale(1)" );
 		}
 	}
 

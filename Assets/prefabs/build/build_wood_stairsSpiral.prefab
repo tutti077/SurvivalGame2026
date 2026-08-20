@@ -1,12 +1,12 @@
 {
   "RootObject": {
-    "__guid": "b1010002-2222-4222-8222-222222222202",
+    "__guid": "278ef154-1d6c-57fe-90c9-5f22133000aa",
     "__version": 2,
     "Flags": 0,
-    "Name": "wall",
+    "Name": "build_wood_stairsSpiral",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
-    "Scale": "2,0.06,2",
+    "Scale": "2,2,2",
     "Tags": "buildpiece,grapple",
     "Enabled": true,
     "NetworkMode": 1,
@@ -17,14 +17,14 @@
     "Components": [
       {
         "__type": "Sandbox.ModelRenderer",
-        "__guid": "b1010002-2222-4222-8222-222222222221",
+        "__guid": "90ab4f19-c14f-5131-b817-d33eabafab64",
         "__enabled": true,
         "Flags": 0,
         "BodyGroups": 18446744073709551615,
         "CreateAttachments": false,
         "LodOverride": null,
         "MaterialGroup": null,
-        "MaterialOverride": "materials/build/wall.vmat",
+        "MaterialOverride": "materials/build/floor.vmat",
         "Materials": null,
         "Model": "models/dev/box.vmdl",
         "OnComponentDestroy": null,
@@ -40,11 +40,11 @@
           "AfterUILayer": false
         },
         "RenderType": "On",
-        "Tint": "0.62,0.58,0.52,1"
+        "Tint": "0.5,0.46,0.4,1"
       },
       {
         "__type": "Sandbox.BoxCollider",
-        "__guid": "b1010002-2222-4222-8222-222222222222",
+        "__guid": "0881857a-f079-5ab9-ad21-93942b12c705",
         "__enabled": true,
         "Flags": 0,
         "Center": "0,0,0",
@@ -70,7 +70,7 @@
       },
       {
         "__type": "Survival.BuildPiece",
-        "__guid": "b1010002-2222-4222-8222-222222222223",
+        "__guid": "5bdde70d-3936-5bfb-a650-845ac134e290",
         "__enabled": true,
         "Flags": 0,
         "IsBlueprint": false,
@@ -80,7 +80,7 @@
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null,
-        "PieceId": "wall"
+        "PieceId": "build_wood_stairsSpiral"
       }
     ],
     "Children": [],

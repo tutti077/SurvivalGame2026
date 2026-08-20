@@ -185,11 +185,14 @@ public static class BuildPlacementUtility
 		return 1 + corners;
 	}
 
+	/// <summary>Any real snap can be the held point — a beam cycles its two ends, a plate its four corners.</summary>
 	static bool IsHoldCornerRole( BuildSnapRole role ) =>
 		role is BuildSnapRole.CornerNorthEast
 			or BuildSnapRole.CornerNorthWest
 			or BuildSnapRole.CornerSouthEast
-			or BuildSnapRole.CornerSouthWest;
+			or BuildSnapRole.CornerSouthWest
+			or BuildSnapRole.AxisStart
+			or BuildSnapRole.AxisEnd;
 
 	public static BuildPlacementResult ComputeGroundPlacement(
 		BuildPieceData data,

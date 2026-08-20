@@ -36,6 +36,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	InventoryMenuInputOverlay _menuInputOverlay;
 	MenuPageNavigator _pageNavigator;
 	BuildMenuHud _buildMenuHud;
+	BuildSnapReadoutHud _buildSnapReadout;
 	ScreenPanel _hudScreen;
 	bool _deferScreenPanelCamera;
 	bool _built;
@@ -133,6 +134,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_pickupNotifications?.Tick();
 		_minimapHud?.Tick();
 		_buildMenuHud?.Tick();
+		_buildSnapReadout?.Tick();
 		RefreshFoodSlots();
 		if ( _inventoryInteraction?.FocusedCampfire is not null
 		     || _inventoryInteraction?.FocusedTimeTrialStand is not null )
@@ -197,6 +199,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_hotbarHud?.Dispose();
 		_buildMenuHud = null;
+		_buildSnapReadout = null;
 		RestoreGrapplePromptCapture();
 		if ( _menuController is not null )
 		{
@@ -799,6 +802,9 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_buildMenuHud = new BuildMenuHud( _equipment );
 		_buildMenuHud.Build( root );
+
+		_buildSnapReadout = new BuildSnapReadoutHud( _equipment );
+		_buildSnapReadout.Build( root );
 	}
 
 	void BuildGameMenu( Panel root )

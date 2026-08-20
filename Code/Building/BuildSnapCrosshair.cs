@@ -69,7 +69,13 @@ public static class BuildSnapCrosshair
 
 		// Pitched roofs: the "face" isn't a flat XY deck, so planar on-face tests fail and
 		// block top/bottom lip snaps. Commit from aim→seam distance with the look-past band.
-		if ( string.Equals( piece.PieceId, "45roof", StringComparison.OrdinalIgnoreCase ) )
+		if ( BuildPieceFamily.IsRoof( piece.PieceId ) )
+			return candidate.RayScore.AimLandDistance <= LookPastSnapCommitRadius;
+
+		// Walls are the thing you aim at when there is no deck to aim at, so the tight mid-face
+		// band would leave a lone wall unsnappable. The free-placement carve-out only matters for
+		// decks you stand on, so keep the wide band for upright faces.
+		if ( BuildModuleDimensions.IsThinOnY( piece.PieceId ) )
 			return candidate.RayScore.AimLandDistance <= LookPastSnapCommitRadius;
 
 		if ( !TryPlanarEdgeDistance( piece, aimLand, out var edgeDist, out var onFace ) )
@@ -103,7 +109,7 @@ public static class BuildSnapCrosshair
 
 		// HalfExtents are world-sized; ignore LocalScale so we compare in meters-of-extents space.
 		var delta = go.WorldRotation.Inverse * (aimLand - go.WorldPosition);
-		var isWall = string.Equals( piece.PieceId, "wall", StringComparison.OrdinalIgnoreCase );
+		var isWall = BuildModuleDimensions.IsThinOnY( piece.PieceId );
 
 		float planX;
 		float planY;

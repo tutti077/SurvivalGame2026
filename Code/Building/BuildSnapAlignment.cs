@@ -22,8 +22,26 @@ static class BuildSnapAlignment
 
 		var targetYaw = targetPiece.GameObject.WorldRotation.Angles().yaw;
 		var delta = DeltaDegrees( scrollYawDegrees, targetYaw );
-		var steps = MathF.Round( delta / 90f );
+		// AwayFromZero: banker's rounding sent an exact 45° half-step back to 0, so the first
+		// scroll tick past halfway did nothing and the next appeared to jump a full quarter turn.
+		var steps = MathF.Round( delta / 90f, MidpointRounding.AwayFromZero );
 		return Rotation.FromYaw( targetYaw + steps * 90f );
+	}
+
+	/// <summary>
+	/// How far the scroll yaw sits from the target's 90° grid. A flush edge mate only exists on that
+	/// grid, so callers use this to tell "player wants the piece square with this one" from
+	/// "player is deliberately angling it out" instead of rounding the intent away.
+	/// </summary>
+	public static float OffGridYawDegrees( BuildPiece targetPiece, float scrollYawDegrees )
+	{
+		if ( targetPiece is null || !targetPiece.IsValid() )
+			return 0f;
+
+		var targetYaw = targetPiece.GameObject.WorldRotation.Angles().yaw;
+		var delta = DeltaDegrees( scrollYawDegrees, targetYaw );
+		var steps = MathF.Round( delta / 90f, MidpointRounding.AwayFromZero );
+		return Math.Abs( delta - steps * 90f );
 	}
 
 	public static bool TryFitEdge(
@@ -68,7 +86,8 @@ static class BuildSnapAlignment
 		return true;
 	}
 
-	static float DeltaDegrees( float a, float b )
+	/// <summary>Signed shortest angle from <paramref name="b"/> to <paramref name="a"/>, in [-180, 180].</summary>
+	public static float DeltaDegrees( float a, float b )
 	{
 		var delta = ( a - b ) % 360f;
 		if ( delta > 180f )
@@ -80,16 +99,12 @@ static class BuildSnapAlignment
 	}
 
 	static bool IsSameEdgeFamily( string placingPieceId, string targetPieceId ) =>
-		( IsFloor( placingPieceId ) && IsFloor( targetPieceId ) )
-		|| ( IsWall( placingPieceId ) && IsWall( targetPieceId ) )
-		|| ( IsRoof( placingPieceId ) && IsRoof( targetPieceId ) );
+		BuildPieceFamily.IsSameFamily( placingPieceId, targetPieceId );
 
-	static bool IsWall( string pieceId ) =>
-		string.Equals( pieceId, "wall", StringComparison.OrdinalIgnoreCase );
+	static bool IsWall( string pieceId ) => BuildPieceFamily.IsWall( pieceId );
 
-	static bool IsFloor( string pieceId ) =>
-		string.Equals( pieceId, "foundation", StringComparison.OrdinalIgnoreCase );
+	static bool IsFloor( string pieceId ) => BuildPieceFamily.IsFloor( pieceId );
 
-	static bool IsRoof( string pieceId ) =>
-		string.Equals( pieceId, "45roof", StringComparison.OrdinalIgnoreCase );
+	/// <summary>Stairs align on edges like roofs do — see BuildPieceFamily.IsRampLike.</summary>
+	static bool IsRoof( string pieceId ) => BuildPieceFamily.IsRampLike( pieceId );
 }

@@ -24,7 +24,19 @@ static class BuildColliderSnap
 		var hx = colliderHalfLocal.x;
 		var hy = colliderHalfLocal.y;
 		var hz = colliderHalfLocal.z;
-		var thinOnY = string.Equals( pieceId, "wall", StringComparison.OrdinalIgnoreCase );
+		var thinOnY = BuildModuleDimensions.IsThinOnY( pieceId );
+
+		// Beams / posts: one snap centred on each end of the run, not four corners.
+		if ( BuildSnapLayout.IsAxisRole( role ) )
+		{
+			var sign = role == BuildSnapRole.AxisEnd ? 1f : -1f;
+			return BuildModuleDimensions.GetLongAxis( pieceId ) switch
+			{
+				0 => new Vector3( hx * sign, 0f, 0f ),
+				1 => new Vector3( 0f, hy * sign, 0f ),
+				_ => new Vector3( 0f, 0f, hz * sign ),
+			};
+		}
 
 		return role switch
 		{

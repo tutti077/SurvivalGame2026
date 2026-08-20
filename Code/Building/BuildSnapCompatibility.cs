@@ -8,10 +8,25 @@ static class BuildSnapCompatibility
 {
 	static readonly SnapEdgeId[] Empty = Array.Empty<SnapEdgeId>();
 
+	/// <summary>
+	/// The natural mate for a pair of snaps. This is a <b>preference</b>, not a gate: it decides
+	/// which corner leads the Q/E cycle and therefore what auto-placement picks, while every other
+	/// corner stays reachable by cycling.
+	/// </summary>
 	public static bool CanConnect( BuildSnapRole anchorRole, BuildSnapRole targetRole )
 	{
 		if ( anchorRole == BuildSnapRole.Unknown || targetRole == BuildSnapRole.Unknown )
 			return false;
+
+		// A beam end mates the opposite end of another beam (stacking posts, chaining rails) and
+		// any plate corner, so a post can carry a floor or wall corner.
+		if ( BuildSnapLayout.IsAxisRole( anchorRole ) || BuildSnapLayout.IsAxisRole( targetRole ) )
+		{
+			if ( BuildSnapLayout.IsAxisRole( anchorRole ) && BuildSnapLayout.IsAxisRole( targetRole ) )
+				return anchorRole != targetRole;
+
+			return true;
+		}
 
 		return anchorRole switch
 		{
@@ -22,15 +37,6 @@ static class BuildSnapCompatibility
 			_ => false,
 		};
 	}
-
-	public static bool PrefersEdgeOnly( string placingPieceId, string targetPieceId ) =>
-		( IsRoof( placingPieceId ) && IsRoof( targetPieceId ) )
-		|| ( IsWall( placingPieceId ) && IsWall( targetPieceId ) )
-		|| ( IsFloor( placingPieceId ) && IsFloor( targetPieceId ) )
-		|| ( IsWall( placingPieceId ) && IsFloor( targetPieceId ) )
-		|| ( IsFloor( placingPieceId ) && IsWall( targetPieceId ) )
-		|| ( IsRoof( placingPieceId ) && IsFloor( targetPieceId ) )
-		|| ( IsFloor( placingPieceId ) && IsRoof( targetPieceId ) );
 
 	static readonly SnapEdgeId[] AllThinEdges =
 	{
@@ -60,6 +66,10 @@ static class BuildSnapCompatibility
 		Vector3 rayDirection )
 	{
 		if ( string.IsNullOrWhiteSpace( placingPieceId ) || string.IsNullOrWhiteSpace( targetPieceId ) )
+			return Empty;
+
+		// Beams have two end points, not edges — they snap point-to-point via CanConnect only.
+		if ( BuildSnapLayout.UsesAxisEnds( placingPieceId ) || BuildSnapLayout.UsesAxisEnds( targetPieceId ) )
 			return Empty;
 
 		if ( IsWall( placingPieceId ) && IsFloor( targetPieceId ) )
@@ -122,10 +132,6 @@ static class BuildSnapCompatibility
 	{
 		if ( IsWall( placingPieceId ) && IsFloor( targetPieceId ) )
 			return placingEdge == SnapEdgeId.South;
-
-		// Wall↔wall: same lip = coplanar extend; opposite = abut — both valid for Q/E.
-		if ( IsWall( placingPieceId ) && IsWall( targetPieceId ) )
-			return placingEdge == targetEdge;
 
 		if ( IsRoof( placingPieceId ) && IsFloor( targetPieceId ) )
 			return false;
@@ -239,16 +245,12 @@ static class BuildSnapCompatibility
 		};
 
 	public static bool IsSameEdgeFamily( string placingPieceId, string targetPieceId ) =>
-		( IsFloor( placingPieceId ) && IsFloor( targetPieceId ) )
-		|| ( IsWall( placingPieceId ) && IsWall( targetPieceId ) )
-		|| ( IsRoof( placingPieceId ) && IsRoof( targetPieceId ) );
+		BuildPieceFamily.IsSameFamily( placingPieceId, targetPieceId );
 
-	static bool IsWall( string pieceId ) =>
-		string.Equals( pieceId, "wall", StringComparison.OrdinalIgnoreCase );
+	static bool IsWall( string pieceId ) => BuildPieceFamily.IsWall( pieceId );
 
-	static bool IsFloor( string pieceId ) =>
-		string.Equals( pieceId, "foundation", StringComparison.OrdinalIgnoreCase );
+	static bool IsFloor( string pieceId ) => BuildPieceFamily.IsFloor( pieceId );
 
-	static bool IsRoof( string pieceId ) =>
-		string.Equals( pieceId, "45roof", StringComparison.OrdinalIgnoreCase );
+	/// <summary>Stairs share the roof's lip rules — both climb between levels.</summary>
+	static bool IsRoof( string pieceId ) => BuildPieceFamily.IsRampLike( pieceId );
 }

@@ -462,12 +462,6 @@ public static class BuildPieceCatalog
 
 
 
-				if ( string.Equals( entry.Id, "45roofCorner", StringComparison.OrdinalIgnoreCase ) )
-
-					continue;
-
-
-
 				ApplyStandardHalfExtents( entry );
 
 				BuildSnapDefaults.EnsureDefaults( entry );
@@ -582,13 +576,13 @@ public static class BuildPieceCatalog
 
 		{
 
-			Id = "foundation",
+			Id = "build_wood_floor",
 
-			DisplayName = "Floor",
+			DisplayName = "Wood Floor",
 
-			Icon = "ui/build/foundation.png",
+			Icon = "ui/build/build_wood_floor.png",
 
-			Prefab = "prefabs/build/foundation.prefab",
+			Prefab = "prefabs/build/build_wood_floor.prefab",
 
 			HalfWidth = floorHalf.x,
 
@@ -598,8 +592,6 @@ public static class BuildPieceCatalog
 
 			FallbackColor = "0.52,0.48,0.42,1",
 
-			Costs = { new BuildPieceCost { ResourceId = "resource_woodBasic", Amount = 5 } },
-
 		};
 
 		var wallHalf = BuildModuleDimensions.WallHalfExtents;
@@ -608,13 +600,13 @@ public static class BuildPieceCatalog
 
 		{
 
-			Id = "wall",
+			Id = "build_wood_wall",
 
-			DisplayName = "Wall",
+			DisplayName = "Wood Wall",
 
-			Icon = "ui/build/wall.png",
+			Icon = "ui/build/build_wood_wall.png",
 
-			Prefab = "prefabs/build/wall.prefab",
+			Prefab = "prefabs/build/build_wood_wall.prefab",
 
 			HalfWidth = wallHalf.x,
 
@@ -624,8 +616,6 @@ public static class BuildPieceCatalog
 
 			FallbackColor = "0.62,0.58,0.52,1",
 
-			Costs = { new BuildPieceCost { ResourceId = "resource_woodBasic", Amount = 3 } },
-
 		};
 
 		var roofHalf = BuildModuleDimensions.RoofHalfExtents;
@@ -634,13 +624,13 @@ public static class BuildPieceCatalog
 
 		{
 
-			Id = "45roof",
+			Id = "build_wood_45roof",
 
-			DisplayName = "45° Roof",
+			DisplayName = "Wood 45° Roof",
 
-			Icon = "ui/build/45roof.png",
+			Icon = "ui/build/build_wood_45roof.png",
 
-			Prefab = "prefabs/build/45roof.prefab",
+			Prefab = "prefabs/build/build_wood_45roof.prefab",
 
 			HalfWidth = roofHalf.x,
 
@@ -649,8 +639,6 @@ public static class BuildPieceCatalog
 			HalfDepth = roofHalf.z,
 
 			FallbackColor = "0.48,0.36,0.28,1",
-
-			Costs = { new BuildPieceCost { ResourceId = "resource_woodBasic", Amount = 2 } },
 
 		};
 
@@ -669,8 +657,6 @@ public static class BuildPieceCatalog
 			IsRepairTool = true,
 
 			AllowTerrainPlacement = false,
-
-			Costs = { new BuildPieceCost { ResourceId = "resource_woodBasic", Amount = 1 } },
 
 		};
 

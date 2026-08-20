@@ -1,12 +1,12 @@
 {
   "RootObject": {
-    "__guid": "b1010001-1111-4111-8111-111111111101",
+    "__guid": "5fa78e29-1dd9-5beb-8f6b-52af69706754",
     "__version": 2,
     "Flags": 0,
-    "Name": "foundation",
+    "Name": "build_wood_wall_1m1m",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
-    "Scale": "2,2,0.06",
+    "Scale": "1,0.06,1",
     "Tags": "buildpiece,grapple",
     "Enabled": true,
     "NetworkMode": 1,
@@ -17,14 +17,14 @@
     "Components": [
       {
         "__type": "Sandbox.ModelRenderer",
-        "__guid": "b1010001-1111-4111-8111-111111111111",
+        "__guid": "bd763cae-faa4-53cb-ac69-35780db1a56e",
         "__enabled": true,
         "Flags": 0,
         "BodyGroups": 18446744073709551615,
         "CreateAttachments": false,
         "LodOverride": null,
         "MaterialGroup": null,
-        "MaterialOverride": "materials/build/floor.vmat",
+        "MaterialOverride": "materials/build/wall.vmat",
         "Materials": null,
         "Model": "models/dev/box.vmdl",
         "OnComponentDestroy": null,
@@ -40,11 +40,11 @@
           "AfterUILayer": false
         },
         "RenderType": "On",
-        "Tint": "0.52,0.48,0.42,1"
+        "Tint": "0.62,0.58,0.52,1"
       },
       {
         "__type": "Sandbox.BoxCollider",
-        "__guid": "b1010001-1111-4111-8111-111111111112",
+        "__guid": "58ead14e-7261-599e-90c5-1f165ab909af",
         "__enabled": true,
         "Flags": 0,
         "Center": "0,0,0",
@@ -70,7 +70,7 @@
       },
       {
         "__type": "Survival.BuildPiece",
-        "__guid": "b1010001-1111-4111-8111-111111111113",
+        "__guid": "04d2a7af-2796-59ee-811f-50a080b3b189",
         "__enabled": true,
         "Flags": 0,
         "IsBlueprint": false,
@@ -80,7 +80,7 @@
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null,
-        "PieceId": "foundation"
+        "PieceId": "build_wood_wall_1m1m"
       }
     ],
     "Children": [],
