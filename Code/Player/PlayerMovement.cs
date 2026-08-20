@@ -7,7 +7,7 @@ namespace Survival;
 /// grapple (aim/attach/rope/swing — <c>PlayerMovement.Grapple.cs</c>), and wingsuit (<c>PlayerMovement.Wingsuit.cs</c>).
 /// </summary>
 [Title( "Player Movement" )]
-public sealed partial class PlayerMovement : Component, PlayerController.IEvents
+public sealed partial class PlayerMovement : Component, PlayerController.IEvents, Component.ICollisionListener
 {
 	[Property, Group( "Stamina - Jump" )] public float JumpStaminaCost { get; set; } = 5f;
 
@@ -50,10 +50,10 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	/// </summary>
 	[Property, Group( "Stamina - Regen" )] public float StaminaRegenDelayOverrideSeconds { get; set; } = -1f;
 
-	[Property, Group( "Camera" ), Title( "Scroll wheel zoom" ), Description( "Mouse wheel steps third-person CameraOffset.x in/out. Skipped while the game menu is open or build placement owns the wheel." )]
-	public bool CameraScrollZoomEnabled { get; set; } = true;
+	[Property, Group( "Camera" ), Title( "Scroll wheel zoom" ), Description( "Off by default — scroll selects hotbar. Use +/- for zoom." )]
+	public bool CameraScrollZoomEnabled { get; set; } = false;
 
-	[Property, Group( "Camera" ), Title( "Keyboard zoom (+/-)" ), Description( "Equals/+ zooms in, Minus zooms out (same steps as scroll). Numpad +/- also work." )]
+	[Property, Group( "Camera" ), Title( "Keyboard zoom (+/-)" ), Description( "Equals/+ zooms in, Minus zooms out. Numpad +/- also work." )]
 	public bool CameraKeyboardZoomEnabled { get; set; } = true;
 
 	[Property, Group( "Camera" ), Title( "Zoom min distance" ), Range( 32f, 512f ), Step( 8f )]
@@ -82,11 +82,18 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	bool _sneakHeldReportedToHostLast;
 	bool _grappleWasAttached;
 	float _grapplePrevRopeLength;
+	/// <summary>Engine units of rope taken in per second this step. Gates the E swing assist.</summary>
+	float _grappleRopeShrinkRate;
+	/// <summary>Rope is at max length this step. Slack = inside the sphere; WASD still works.</summary>
+	bool _grappleRopeTaut;
+	bool _grappleFirstCatchDone;
+	/// <summary>Full-body wall overlap this step — velocity zero until clear.</summary>
+	bool _grappleBlockedByWall;
 
 	/// <summary>
 	/// While sprint is blocked, <see cref="PlayerController.RunSpeed"/> is forced down.
-	/// While grappled in the air, walk+run speeds are muted to 0 so air-control cannot
-	/// drag tangent speed toward WalkSpeed (that felt like a pump “cap”).
+	/// Wingsuit mutes walk+run to 0 so MoveModeWalk cannot invent foot propulsion.
+	/// Grapple air does <b>not</b> mute to 0 — that air-accelerated toward a zero wish and braked the swing.
 	/// </summary>
 	bool _runSpeedOverrideActive;
 	float _savedRunSpeed;
@@ -95,6 +102,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	bool _meleeLocomotionSlowActive;
 	float _savedWalkForMelee;
 	float _savedRunForMelee;
+	float _grappleSteerX;
+	float _grappleSteerY;
+	bool _grappleSteerSampled;
 
 	/// <summary>Prefab walk/run (not temporary melee/grapple overrides) for overspeed clamps.</summary>
 	float _designWalkSpeed = 110f;
@@ -387,10 +397,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( _controller is null )
 			return;
 
-		var grappleAir = GrappleAttached && !_controller.IsOnGround;
-		var wingsuitAir = WingsuitDeployed;
-
-		if ( grappleAir || wingsuitAir )
+		// Rope or wingsuit owns your speed up here. Walk/Run stay at 0 so held Shift cannot raise
+		// the air-control target and add swing speed — sprint is a walking thing, not a swinging one.
+		if ( WingsuitDeployed || (GrappleAttached && !_controller.IsOnGround) )
 		{
 			if ( !_walkSpeedMuteActive )
 			{
@@ -502,6 +511,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( !Input.Down( SneakInputAction ) || _vitals.IsStaminaExhausted( ExhaustedStaminaEpsilon ) )
 			return false;
 
+		if ( GrappleAttached )
+			return false;
+
 		// Sneaking while sprinting doesn't stack — run wins for noise + stamina.
 		if ( WantsSprintStaminaSpend() )
 			return false;
@@ -527,6 +539,16 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			return;
 		}
 
+		if ( GrappleControlSchemeStore.NeedsChoice && HasGrappleEquipped() )
+		{
+			ClearActionIfPressed( JumpInputAction );
+			ClearActionIfPressed( SneakInputAction );
+			if ( !string.IsNullOrWhiteSpace( SprintInputAction ) )
+				ClearActionIfPressed( SprintInputAction );
+			if ( Input.Pressed( "Attack1" ) || Input.Down( "Attack1" ) )
+				Input.SetAction( "Attack1", false );
+		}
+
 		// Augment air hop / dash must see Jump before stamina or wingsuit clear it.
 		TickAugmentJumpGates();
 
@@ -543,13 +565,17 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( IsHitReactionActive() )
 			ClearActionIfPressed( JumpInputAction );
 
-		// Jump while grappled: feet on ground only (same as sprint — no mid-air hop off the rope).
+		// Jump while grappled: no mid-air hop off the rope (both schemes).
 		if ( GrappleAttached )
 		{
 			if ( _controller is null )
 				_controller = Components.Get<PlayerController>();
 
 			if ( _controller is not null && !_controller.IsOnGround )
+				ClearActionIfPressed( JumpInputAction );
+
+			// Training Wheels retract is Space — eat jump so reel isn't a hop.
+			if ( GrappleControlSchemeStore.IsTrainingWheels )
 				ClearActionIfPressed( JumpInputAction );
 		}
 
@@ -563,6 +589,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 				ClearActionIfPressed( SprintInputAction );
 		}
 
+		SampleGrappleSteerAndHideFromWalk();
+		TickGrappleControllerOverride();
 		ApplyBlockedSprintRunSpeedOverride();
 	}
 
@@ -681,7 +709,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			return;
 		}
 
-		if ( !CameraScrollZoomEnabled )
+		if ( !CameraScrollZoomEnabled && !CameraKeyboardZoomEnabled )
 			return;
 
 		if ( _cameraZoomDistance < 0f )
@@ -737,7 +765,6 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// Length winch runs in FixedUpdate only — applying it here too caused E/Q bobble.
 		// Only catch large over-length desync after MoveModeWalk moves us.
 		ApplyGrappleOverLengthCatchup();
-		ApplyGrappleSwingPushAfterWalk( Time.Delta );
 		TickWingsuitDebugDraw();
 	}
 
@@ -1053,15 +1080,57 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	{
 		if ( GrappleAttached && !_grappleWasAttached )
 		{
+			_grappleReleaseAir = false;
+			_grappleRopeTaut = false;
+			_grappleFirstCatchDone = false;
+			_grappleBlockedByWall = false;
+			_grappleRopeShrinkRate = 0f;
+			ResetGrappleSwingLog();
 			ApplyGrappleAttachVelocityScale( AttachVelocityScale );
 			if ( WingsuitDeployed )
 				StowWingsuit( keepMomentum: true );
 		}
 
+		if ( _grappleWasAttached && !GrappleAttached )
+		{
+			_grappleReleaseAir = true;
+			WakePawnAfterGrappleDetach();
+		}
+
 		if ( !GrappleAttached )
+		{
 			_grapplePrevRopeLength = 0f;
+			_grappleRopeShrinkRate = 0f;
+			_grappleRopeTaut = false;
+			_grappleFirstCatchDone = false;
+			_grappleBlockedByWall = false;
+			FlushGrappleSwingLog();
+		}
 
 		_grappleWasAttached = GrappleAttached;
+	}
+
+	/// <summary>
+	/// Rope hang mutes walk/run and <see cref="PlayerController.EnablePressing"/>. If we leave those
+	/// off after detach, a still pawn floats until WASD wakes the controller.
+	/// </summary>
+	void WakePawnAfterGrappleDetach()
+	{
+		UpdatePressingOverride( false );
+		TickGrappleControllerOverride();
+
+		_controller ??= Components.Get<PlayerController>();
+		if ( _controller is not null && _controller.IsValid() )
+			_controller.EnablePressing = true;
+
+		RestoreBlockedSprintRunSpeed();
+
+		var body = ResolveGrappleBody();
+		if ( body is null || !body.IsValid() )
+			return;
+
+		if ( body.GravityScale < 1f )
+			body.GravityScale = 1f;
 	}
 
 	void ApplyGrappleOverLengthCatchup()
@@ -1087,6 +1156,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f )
 		{
 			_grapplePrevRopeLength = 0f;
+			_grappleRopeTaut = false;
 			return;
 		}
 
@@ -1112,23 +1182,31 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		var vel = body.Velocity;
 		var vRad = Vector3.Dot( vel, radial );
 		var vTan = vel - radial * vRad;
+		var wasTaut = _grappleRopeTaut;
 
 		// Length-only winch: E/Q change RopeLengthEngine; we only enforce the hard sphere.
-		// Dual position teleports were fighting MoveModeWalk and stalling the swing.
 		if ( dist > maxLen )
 		{
 			GameObject.WorldPosition = attach + radial * maxLen;
 			Transform.ClearInterpolation();
 
-			// Shorten → conserve angular momentum (faster tangent on a tighter arc).
-			if ( prevLen > maxLen + 1e-3f )
+			// Strip only outward radial pull. Re-writing full tangent every step was bleeding
+			// speed and felt like dragging through mud on a taut rope.
+			if ( vRad > 0f )
+				body.Velocity = StripOutwardRadial( vel, radial, vRad, maxLen, dt );
+
+			ApplyWinchAngularMomentum( body, radial, prevLen, maxLen );
+
+			if ( !wasTaut )
 			{
-				var scale = Math.Clamp( prevLen / maxLen, 1f, 1.45f );
-				vTan *= scale;
-				ClampTangentialSpeed( ref vTan, 2400f );
+				var incomingSpeed = vel.Length;
+				var tanDir = ResolveCatchTangent( vTan, vel, radial );
+				if ( tanDir.LengthSquared > 1e-6f && incomingSpeed > vTan.Length + 1f )
+					RecordGrappleRopeCatch( incomingSpeed, vTan.Length );
 			}
 
-			body.Velocity = vTan;
+			_grappleRopeTaut = true;
+			_grappleFirstCatchDone = true;
 
 			pos = GameObject.WorldPosition;
 			toPlayer = pos - attach;
@@ -1136,30 +1214,35 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			if ( dist > 1e-4f )
 				radial = toPlayer / dist;
 		}
-		else if ( dist >= maxLen - 0.5f && vRad > 0f )
+		else
 		{
-			// Pay-out while taut: ease tangent as the arc grows.
-			if ( maxLen > prevLen + 1e-3f )
-			{
-				var scale = Math.Clamp( prevLen / maxLen, 0.7f, 1f );
-				vTan *= scale;
-			}
+			_grappleRopeTaut = dist >= maxLen - Math.Max( 2f, maxLen * 0.02f );
 
-			body.Velocity = vTan;
+			if ( _grappleRopeTaut && vRad > 0f )
+				body.Velocity = StripOutwardRadial( vel, radial, vRad, maxLen, dt );
+
+			if ( _grappleRopeTaut )
+				ApplyWinchAngularMomentum( body, radial, prevLen, maxLen );
 		}
 
+		_grappleRopeShrinkRate = (prevLen - maxLen) / dt;
 		_grapplePrevRopeLength = maxLen;
-		// Push runs in OnUpdate after MoveModeWalk so walk air-control does not eat the accel.
+
+		TickGrappleBodyBlock();
+
+		ApplyGrappleSwingPushAfterWalk( dt );
+
+		if ( _grappleBlockedByWall )
+		{
+			var bodyAfterPump = ResolveGrappleBody();
+			if ( bodyAfterPump is not null && bodyAfterPump.IsValid() )
+				bodyAfterPump.Velocity = Vector3.Zero;
+		}
+
+		WriteGrappleSwingLogRow( dist, maxLen, radial, body.Velocity );
 	}
 
-	static void ClampTangentialSpeed( ref Vector3 vTan, float maxSpeed )
-	{
-		var speed = vTan.Length;
-		if ( speed > maxSpeed && speed > 1e-4f )
-			vTan *= maxSpeed / speed;
-	}
-
-	/// <summary>WASD swing thrust — call after the controller moves so velocity sticks.</summary>
+	/// <summary>WASD swing thrust after the rope constraint so walk air-control cannot eat it.</summary>
 	public void ApplyGrappleSwingPushAfterWalk( float dt )
 	{
 		if ( !IsLocalMovementDriver() )
@@ -1178,92 +1261,333 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( dist < 1e-4f )
 			return;
 
-		ApplyPendulumSwingPush( body, toPlayer / dist, Math.Max( 1e-4f, dt ) );
+		ApplyPendulumSwingPush( body, toPlayer / dist, dist, Math.Max( 1e-4f, dt ) );
 	}
 
-	void ApplyPendulumSwingPush( Rigidbody body, Vector3 radial, float dt )
+	void ApplyPendulumSwingPush( Rigidbody body, Vector3 radial, float radius, float dt )
 	{
-		// Horizontal camera wish only — no camera-up loft (that was yanking arcs toward 45°).
-		var wish = BuildHorizontalSwingWish( radial );
+		if ( body.Sleeping )
+			body.Sleeping = false;
+
+		radius = Math.Max( 1f, radius );
+
 		var vel = body.Velocity;
 		var vRadial = Vector3.Dot( vel, radial );
 		var vTan = vel - radial * vRadial;
+		var speed = vel.Length;
 
-		if ( wish.LengthSquared < 1e-6f )
+		float steerX;
+		float steerY;
+		if ( _grappleSteerSampled )
 		{
-			var damp = Math.Max( 0f, SwingCoastDamping );
-			if ( damp > 0f && vTan.LengthSquared > 1e-4f )
-				body.Velocity = radial * vRadial + vTan * Math.Max( 0f, 1f - damp * dt );
-			return;
+			steerX = _grappleSteerX;
+			steerY = _grappleSteerY;
+		}
+		else
+		{
+			ReadMoveAxes( out steerX, out steerY );
 		}
 
-		wish = wish.Normal;
-		var tanSpeed = vTan.Length;
-		var tanDir = tanSpeed > 1e-3f ? vTan / tanSpeed : wish;
-		var along = Vector3.Dot( tanDir, wish );
-		var angleFromHang = Vector3.GetAngle( radial, Vector3.Down );
-		var startAccel = Math.Max( 0f, AirPushAcceleration );
-		var alignMin = Math.Clamp( PumpAlignDot, 0.01f, 0.5f );
-		var minPumpSpeed = Math.Max( 1f, PumpMinSpeed );
+		var hasInput = MathF.Abs( steerX ) > 1e-4f || MathF.Abs( steerY ) > 1e-4f;
+		var retracting = IsRetractingRope;
 
-		// With the arc (W…S… timed with travel): compound pump.
-		if ( along > alignMin && tanSpeed >= minPumpSpeed )
+		if ( _grappleBlockedByWall )
 		{
-			var gain = Math.Max( 0f, PumpVelocityGainPerSecond );
-			var scale = 1f + gain * dt;
-			body.Velocity = radial * vRadial + tanDir * (tanSpeed * scale);
-			return;
-		}
-
-		// Against the arc: coast by default. Optional FightBrakePerSecond if designers want scrub.
-		if ( along < -alignMin && tanSpeed > 1e-3f )
-		{
-			var brake = Math.Max( 0f, FightBrakePerSecond );
-			if ( brake <= 1e-4f )
+			if ( hasInput )
+				_grappleBlockedByWall = false;
+			else
+			{
+				body.Velocity = Vector3.Zero;
+				RecordGrappleSwingPush( "blocked", 0f, 0f, 0f, speed, 0f, 0f );
 				return;
+			}
+		}
 
-			var scale = MathF.Exp( -brake * dt );
-			body.Velocity = radial * vRadial + tanDir * (tanSpeed * scale);
+		// Air drag runs whether or not you hold a key: it is what makes a held direction finally
+		// settle at its offset hang angle instead of oscillating around it forever.
+		var damp = Math.Max( 0f, SwingCoastDamping );
+		if ( damp > 0f && speed > 1e-4f )
+		{
+			vel *= Math.Max( 0f, 1f - damp * dt );
+			body.Velocity = vel;
+			vRadial = Vector3.Dot( vel, radial );
+			vTan = vel - radial * vRadial;
+			speed = vel.Length;
+		}
+
+		if ( !hasInput && !retracting )
+		{
+			RecordGrappleSwingPush( "coast", 0f, 0f, 0f, speed, body.Velocity.Length, speed );
 			return;
 		}
 
-		// Start from hang / low speed only — weak constant push, fades with angle + speed
-		// so holding W cannot launch you up the arc.
-		var holdAccel = startAccel * Math.Clamp( HoldPushScale, 0f, 1f );
-		var maxAng = Math.Max( 5f, HoldMaxAngleDegrees );
-		if ( angleFromHang > maxAng )
+		var camRot = GetSwingCameraRotation();
+		var gravity = Scene.IsValid() ? Scene.PhysicsWorld.Gravity : Vector3.Down * 800f;
+		var gMag = gravity.Length * (body.GravityScale > 0.01f ? body.GravityScale : 1f );
+		if ( gMag < 1f )
+			gMag = 800f;
+
+		var maxSpeed = Math.Max( 1f, SwingMaxSpeed );
+		var speedFrac = Math.Clamp( speed / maxSpeed, 0f, 1f );
+		var headroom = Math.Clamp( 1f - speedFrac * speedFrac * speedFrac * speedFrac, 0f, 1f );
+		if ( headroom < 1e-4f )
 		{
-			var fade = 1f - Math.Clamp( (angleFromHang - maxAng) / Math.Max( 8f, maxAng ), 0f, 1f );
-			holdAccel *= fade;
+			RecordGrappleSwingPush( "capped", 0f, 0f, 0f, speed, speed, speed );
+			return;
 		}
 
-		var holdSoften = Math.Max( 20f, SwingSpeedSoften );
-		var holdFactor = 1f / ( 1f + tanSpeed / holdSoften );
-		body.Velocity = radial * vRadial + vTan + wish * (holdAccel * holdFactor * dt);
+		var tanSpeed = vTan.Length;
+		var deltaV = Vector3.Zero;
+		var along = 0f;
+
+		// Full strength anywhere below the anchor, gone above it. This is the ceiling on flat
+		// W..S..W..S (top out at the ledge) — drag used to do it, but a drag plateau weakens every
+		// pump on the way up, which is what made the ramp take 7 pumps instead of 5.
+		var heightScale = ComputePumpHeightScale( radial, gravity );
+
+		if ( hasInput && heightScale > 1e-4f )
+		{
+			var wish = camRot.Forward * steerY + camRot.Right * steerX;
+			if ( wish.LengthSquared > 1e-6f )
+			{
+				// Constant force in the held direction — a leaning weight, not a thruster. The rope
+				// eats the radial part, so the tangent projection keeps its natural cosine falloff
+				// (do not normalise here: that is what let a dead hang jet to 90 degrees).
+				var force = ProjectOntoTangentPlane( wish.Normal, radial );
+				deltaV += force * (gMag * Math.Clamp( SwingPumpGravityFraction, 0f, 1f ) * headroom * heightScale * dt);
+
+				if ( tanSpeed > 1e-3f && force.LengthSquared > 1e-6f )
+					along = Vector3.Dot( force.Normal, vTan / tanSpeed );
+			}
+		}
+
+		// E is a winch. Its assist only exists while rope is genuinely coming in — reeled all the way
+		// to min length, holding E adds nothing, so it can never be a free engine.
+		if ( retracting && heightScale > 1e-4f && _grappleRopeShrinkRate > 1f
+		     && tanSpeed >= Math.Max( 10f, SwingRetractPumpMinSpeed ) )
+		{
+			var frac = Math.Clamp( SwingRetractPumpGravityFraction, 0f, 1f );
+			if ( frac > 1e-4f )
+				deltaV += (vTan / tanSpeed) * (gMag * frac * headroom * heightScale * dt);
+		}
+
+		if ( deltaV.LengthSquared < 1e-8f )
+		{
+			RecordGrappleSwingPush( "stalled", along, 0f, 0f, speed, speed, tanSpeed );
+			return;
+		}
+
+		var before = speed;
+		body.Velocity = vel + deltaV;
+		var pumpAccel = deltaV.Length / Math.Max( 1e-4f, dt );
+		var phase = along < -0.15f ? "brake" : retracting && !hasInput ? "retract" : "pump";
+		RecordGrappleSwingPush( phase, along, headroom, pumpAccel, before, body.Velocity.Length, tanSpeed );
+	}
+
+	static Vector3 ProjectOntoTangentPlane( Vector3 wish, Vector3 radial )
+		=> wish - radial * Vector3.Dot( wish, radial );
+
+	/// <summary>
+	/// Take the outward pull off a taut rope while keeping the speed the rope only <i>rotated</i>.
+	/// <para>
+	/// A step of <c>tan·dt</c> along a rope of length <c>len</c> swings the rope through
+	/// <c>theta = tan·dt/len</c>, and a straight-line integrator turns <c>tan·theta</c> of pure
+	/// tangent speed into outward radial velocity. Dropping that instead of rotating it costs
+	/// <c>tan³·dt/(2·len²)</c> per second — invisible on a slow swing, but it grows with the cube of
+	/// speed, so a fast orbit hits a wall where that fake drag equals the pump and stops gaining
+	/// (~2900 u/s on a 30 m rope, ~1400 on a 10 m one) no matter how high <see cref="SwingMaxSpeed"/> is.
+	/// </para>
+	/// Only a turn-sized outward component is given back, so a genuine outward fling (slack going
+	/// taut, pay-out) still loses it and this can never return more than the speed coming in.
+	/// </summary>
+	static Vector3 StripOutwardRadial( Vector3 vel, Vector3 radial, float vRad, float len, float dt )
+	{
+		var vTan = vel - radial * vRad;
+		var tan = vTan.Length;
+		if ( tan < 1e-3f )
+			return vTan;
+
+		var theta = tan * dt / Math.Max( 1f, len );
+		if ( vRad > tan * theta * 2f )
+			return vTan;
+
+		var speed = MathF.Sqrt( tan * tan + vRad * vRad );
+		return vTan * (speed / tan);
 	}
 
 	/// <summary>
-	/// WASD from camera yaw, projected onto the rope tangent plane.
-	/// Stays mostly horizontal so pumps build ±angle around hang instead of lofting up the rope.
+	/// Pump authority by height relative to the anchor: full below it, faded out above. A taut circular
+	/// orbit always hangs below the anchor, so circling keeps full authority and can still build the
+	/// speed to coast over the top — flat back-and-forth simply runs out of ceiling at the ledge.
 	/// </summary>
-	Vector3 BuildHorizontalSwingWish( Vector3 radial )
+	float ComputePumpHeightScale( Vector3 radial, Vector3 gravity )
 	{
-		var forward = Input.Down( "Forward" ) ? 1f : 0f;
-		var back = Input.Down( "Backward" ) ? 1f : 0f;
-		var left = Input.Down( "Left" ) ? 1f : 0f;
-		var right = Input.Down( "Right" ) ? 1f : 0f;
-		var x = right - left;
-		var y = forward - back;
+		var down = gravity.LengthSquared > 1e-6f ? gravity.Normal : Vector3.Down;
+		var belowness = Vector3.Dot( radial, down );
+		if ( belowness >= 0f )
+			return 1f;
+
+		var keep = Math.Clamp( SwingPumpAboveAnchorScale, 0f, 1f );
+		// Fade over the ~15 degrees just past level so the ceiling is not a hard wall.
+		var fade = Math.Clamp( 1f + belowness / 0.26f, 0f, 1f );
+		return keep + (1f - keep) * fade;
+	}
+
+	/// <summary>
+	/// Ice-skater rule: shorter rope, faster tangent. Pay-out does the reverse.
+	/// Per-step clamp stops a hitch from exploding speed.
+	/// </summary>
+	void ApplyWinchAngularMomentum( Rigidbody body, Vector3 radial, float prevLen, float newLen )
+	{
+		if ( body is null || !body.IsValid() )
+			return;
+		if ( prevLen < 1f || newLen < 1f )
+			return;
+		if ( MathF.Abs( prevLen - newLen ) < 1e-3f )
+			return;
+
+		var vel = body.Velocity;
+		var vRad = Vector3.Dot( vel, radial );
+		var vTan = vel - radial * vRad;
+		var tanSpeed = vTan.Length;
+		if ( tanSpeed < 1e-4f )
+			return;
+
+		var scale = prevLen / newLen;
+		var transfer = Math.Clamp( SwingWinchMomentumTransfer, 0f, 1f );
+		var blended = 1f + (scale - 1f) * transfer;
+		blended = Math.Clamp( blended, 0.85f, 1.15f );
+		body.Velocity = radial * (vRad > 0f ? 0f : vRad) + vTan.Normal * (tanSpeed * blended);
+	}
+
+	/// <summary>
+	/// Catch tangent from real motion only. Never invent <c>cross(radial, up)</c> — that is a
+	/// sideways axis, and dumping catch speed onto it is how a vertical hang became an orbit.
+	/// </summary>
+	Vector3 ResolveCatchTangent( Vector3 vTan, Vector3 vel, Vector3 radial )
+	{
+		if ( vTan.LengthSquared > 1e-6f )
+			return vTan.Normal;
+
+		var horiz = vel.WithZ( 0f );
+		horiz -= radial * Vector3.Dot( horiz, radial );
+		if ( horiz.LengthSquared > 1e-6f )
+			return horiz.Normal;
+
+		var look = BuildSwingInputDirection();
+		if ( look.LengthSquared > 1e-6f )
+		{
+			look -= radial * Vector3.Dot( look, radial );
+			if ( look.LengthSquared > 1e-6f )
+				return look.Normal;
+		}
+
+		return Vector3.Zero;
+	}
+
+	/// <summary>
+	/// Capture WASD for the rope pump, then hide those actions so MoveModeWalk cannot
+	/// air-accelerate (toward 0 or WalkSpeed) and steal tangent speed.
+	/// </summary>
+	void SampleGrappleSteerAndHideFromWalk()
+	{
+		_grappleSteerSampled = false;
+		_grappleSteerX = 0f;
+		_grappleSteerY = 0f;
+
+		if ( !GrappleAttached )
+			return;
+
+		_controller ??= Components.Get<PlayerController>();
+		if ( _controller is not null && _controller.IsOnGround )
+			return;
+
+		ReadMoveAxes( out _grappleSteerX, out _grappleSteerY );
+		_grappleSteerSampled = true;
+
+		// SetAction only — ReleaseAction would eat the hold, so the next PreInput would see no WASD.
+		HideMoveActionFromWalk( "Forward" );
+		HideMoveActionFromWalk( "Backward" );
+		HideMoveActionFromWalk( "Left" );
+		HideMoveActionFromWalk( "Right" );
+
+		// Sprint speeds up walking, never swinging.
+		HideMoveActionFromWalk( SprintInputAction );
+		if ( _controller is not null && !string.Equals( _controller.AltMoveButton, SprintInputAction, StringComparison.OrdinalIgnoreCase ) )
+			HideMoveActionFromWalk( _controller.AltMoveButton );
+	}
+
+	/// <summary>
+	/// Keyboard W/S/A/D are exact. Analog is only used when no movement key is down (gamepad).
+	/// Holding W must not pick up A from AnalogMove.
+	/// </summary>
+	static void ReadMoveAxes( out float x, out float y )
+	{
+		x = (Input.Down( "Right" ) ? 1f : 0f) - (Input.Down( "Left" ) ? 1f : 0f);
+		y = (Input.Down( "Forward" ) ? 1f : 0f) - (Input.Down( "Backward" ) ? 1f : 0f);
+		if ( MathF.Abs( x ) > 1e-4f || MathF.Abs( y ) > 1e-4f )
+			return;
+
+		const float analogDeadzone = 0.2f;
+		var analog = Input.AnalogMove;
+		x = -analog.y;
+		y = analog.x;
+		if ( MathF.Abs( x ) < analogDeadzone )
+			x = 0f;
+		if ( MathF.Abs( y ) < analogDeadzone )
+			y = 0f;
+	}
+
+	/// <summary>Active view camera rotation. WASD is relative to this, not the pawn model.</summary>
+	Rotation GetSwingCameraRotation()
+	{
+		var cam = BuildViewCamera.Resolve( GameObject );
+		if ( cam.IsValid() )
+			return cam.WorldRotation;
+
+		_controller ??= Components.Get<PlayerController>();
+		if ( _controller is not null && _controller.IsValid() )
+			return _controller.EyeAngles.ToRotation();
+
+		return GameObject.WorldRotation;
+	}
+
+	static void HideMoveActionFromWalk( string action )
+	{
+		if ( string.IsNullOrWhiteSpace( action ) )
+			return;
+
+		if ( !Input.Pressed( action ) && !Input.Down( action ) )
+			return;
+
+		Input.SetAction( action, false );
+	}
+
+	/// <summary>
+	/// Camera-yaw horizontal WASD direction (unit), or zero when there is no input. Deliberately
+	/// not projected onto the rope's tangent plane — that projection collapses to zero and then
+	/// flips sign as you pass the anchor's height, which walled the swing at grapple-point height.
+	/// </summary>
+	Vector3 BuildSwingInputDirection()
+	{
+		float x;
+		float y;
+		if ( _grappleSteerSampled )
+		{
+			x = _grappleSteerX;
+			y = _grappleSteerY;
+		}
+		else
+		{
+			ReadMoveAxes( out x, out y );
+		}
+
 		if ( MathF.Abs( x ) < 1e-4f && MathF.Abs( y ) < 1e-4f )
 			return Vector3.Zero;
 
-		var cam = BuildViewCamera.Resolve( GameObject );
-		var yaw = cam.IsValid() ? cam.WorldRotation.Angles().yaw : GameObject.WorldRotation.Angles().yaw;
-		var yawRot = new Angles( 0f, yaw, 0f ).ToRotation();
-
-		var wish = yawRot.Forward * y + yawRot.Right * x;
-		wish -= radial * Vector3.Dot( wish, radial );
-		return wish;
+		var camRot = GetSwingCameraRotation();
+		var wish = camRot.Forward * y + camRot.Right * x;
+		return wish.LengthSquared < 1e-6f ? Vector3.Zero : wish.Normal;
 	}
 
 	Rigidbody ResolveGrappleBody()
@@ -1275,6 +1599,105 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			return _controller.Body;
 
 		return Components.Get<Rigidbody>();
+	}
+
+	public void OnCollisionStart( Collision collision ) => TryKillGrappleOnCollision( collision );
+
+	public void OnCollisionUpdate( Collision _ ) { }
+
+	public void OnCollisionStop( CollisionStop _ ) { }
+
+	void TryKillGrappleOnCollision( Collision collision )
+	{
+		if ( !GrappleAttached || !IsLocalMovementDriver() )
+			return;
+
+		var other = collision.Other.GameObject;
+		if ( !other.IsValid() )
+			return;
+		if ( other == GameObject || other.Root == GameObject.Root )
+			return;
+
+		// Orbiting a grapple post means scraping that collider — not a wall slam.
+		if ( IsGrappleSurfaceObject( other ) )
+			return;
+
+		var body = ResolveGrappleBody();
+		var vel = body is not null && body.IsValid() ? body.Velocity : Vector3.Zero;
+		var closing = collision.Contact.NormalSpeed;
+		if ( closing < 1f )
+			closing = Vector3.Dot( vel, -collision.Contact.Normal );
+
+		ConsiderGrappleWallHit( collision.Contact.Normal, vel, closing );
+	}
+
+	void TickGrappleBodyBlock()
+	{
+		if ( !GrappleAttached )
+			return;
+
+		_controller ??= Components.Get<PlayerController>();
+		var radius = _controller is not null ? Math.Max( 8f, _controller.BodyRadius * 0.85f ) : 14f;
+		var pos = GameObject.WorldPosition;
+
+		var scene = Scene.IsValid() ? Scene : Sandbox.Game.ActiveScene;
+		if ( scene is null || !scene.IsValid() )
+			return;
+
+		var body = ResolveGrappleBody();
+		var vel = body is not null && body.IsValid() ? body.Velocity : Vector3.Zero;
+
+		var overlap = scene.Trace.Sphere( radius, pos, pos )
+			.IgnoreGameObjectHierarchy( GameObject )
+			.Run();
+
+		_grappleBlockedByWall = overlap.Hit
+		                        && overlap.StartedSolid
+		                        && !IsGrappleSurfaceObject( overlap.GameObject )
+		                        && IsWallNormal( overlap.Normal )
+		                        && vel.Length > 40f;
+	}
+
+	void ConsiderGrappleWallHit( Vector3 normal, Vector3 velocity, float closing )
+	{
+		if ( !IsWallNormal( normal ) )
+			return;
+
+		if ( closing < 120f )
+			return;
+
+		var body = ResolveGrappleBody();
+		if ( body is not null && body.IsValid() )
+		{
+			body.Velocity = Vector3.Zero;
+			body.AngularVelocity = Vector3.Zero;
+		}
+
+		_grappleBlockedByWall = true;
+	}
+
+	static bool IsWallNormal( Vector3 normal )
+	{
+		if ( normal.LengthSquared < 1e-6f )
+			return false;
+
+		normal = normal.Normal;
+		// Ground skip (up) and head graze (down) are not a body block.
+		return MathF.Abs( normal.z ) <= 0.55f;
+	}
+
+	static bool IsGrappleSurfaceObject( GameObject go )
+	{
+		if ( !go.IsValid() )
+			return false;
+
+		for ( var cur = go; cur.IsValid(); cur = cur.Parent )
+		{
+			if ( ObjectHasGrappleTag( cur ) )
+				return true;
+		}
+
+		return false;
 	}
 
 	/// <summary>

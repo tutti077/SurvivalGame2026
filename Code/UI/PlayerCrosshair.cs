@@ -7,9 +7,8 @@ namespace Survival;
 /// Unified screen-center crosshair — the single draw path replacing the old separate combat
 /// teardrop and grapple reticle overlays. Composable layers, all state read from the owning
 /// pawn's components:
-///   base  — thin white ring; becomes a thick yellow ring while the grapple aim HUD is active
-///           (<see cref="PlayerMovement.IsAimHudActive"/>: recently aimed/used or attached,
-///           existing idle-hide timer)
+///   base  — thin white ring; while grapple aim HUD is active it stays a thin hollow white
+///           donut (so the inner lock ring — where the attach ray will cast — stays readable)
 ///   arrow — directional attack teardrop when the active hotbar item has
 ///           <see cref="EquippedItemActions.PrimaryMelee"/> (build hammer shows the plain ring)
 ///   inner — small yellow lock ring when a grapple attach target is valid right now; slides
@@ -24,8 +23,8 @@ public sealed class PlayerCrosshair : Component
 
 	const float BaseRadius = 7f;
 	const float BaseLineWidth = 1.75f;
-	const float GrappleRingRadius = 6f;
-	const float GrappleRingWidth = 4.5f;
+	const float GrappleRingRadius = 10f;
+	const float GrappleRingWidth = 1.5f;
 	const float ArrowTipLength = 8f;
 	const float ArrowHalfWidth = 4f;
 	const float InnerRingRadius = 3f;
@@ -77,12 +76,11 @@ public sealed class PlayerCrosshair : Component
 		var weaponOut = _equipment?.MainHandHasAction( EquippedItemActions.PrimaryMelee ) == true;
 		var bowDrawing = _combat is not null && _combat.IsBowCharging;
 
-		// Base: yellow donut in grapple context, thin white ring otherwise.
-		// Bow keeps the classic ring (no melee teardrop) — PrimaryRanged does not set weaponOut.
+		// Base: thin hollow white donut while grappling (hole shows the yellow lock helper); thin white ring otherwise.
 		float baseOuterEdge;
 		if ( grappleMode )
 		{
-			DrawBorderedRing( cam, center, GrappleRingRadius, GrappleRingWidth, GrappleYellow );
+			DrawBorderedRing( cam, center, GrappleRingRadius, GrappleRingWidth, CrosshairWhite );
 			baseOuterEdge = GrappleRingRadius + GrappleRingWidth * 0.5f;
 		}
 		else

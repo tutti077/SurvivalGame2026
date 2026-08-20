@@ -45,8 +45,8 @@ public static class TimeTrialVariationCatalog
 			Log.Warning( "[TimeTrialVariationCatalog] Missing/invalid time_trial_variations.json — using Race 1 fallback." );
 			var fallback = new TimeTrialVariationData
 			{
-				Id = "race1_full_map",
-				DisplayName = "Race 1 - Full Map",
+				Id = "race1_bunny_slope",
+				DisplayName = "Race 1 - Bunny slope",
 				CheckpointOrders = new List<int> { 0, 1 },
 			};
 			Variations.Add( fallback );

@@ -1,9 +1,14 @@
 {
   "variations": [
     {
-      "id": "race1_full_map",
-      "displayName": "Race 1 - Full Map",
+      "id": "race1_bunny_slope",
+      "displayName": "Race 1 - Bunny slope",
       "checkpointOrders": [0, 1]
+    },
+    {
+      "id": "race2_full_map",
+      "displayName": "Race 2 - Full Map",
+      "checkpointOrders": [0, 2]
     }
   ]
 }

@@ -4,8 +4,8 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Number keys select hotbar slots (including while the game menu is open).
-/// Mouse wheel is not used for hotbar — it drives camera zoom / build rotate / menu scroll instead.
+/// Number keys + mouse wheel select hotbar slots (including while the game menu is open).
+/// Camera zoom uses +/- keys — not the wheel.
 /// </summary>
 [Title( "Player Hotbar Controller" )]
 public sealed class PlayerHotbarController : Component
@@ -35,6 +35,7 @@ public sealed class PlayerHotbarController : Component
 			return;
 
 		PollSlotKeys();
+		PollMouseWheel();
 	}
 
 	bool CanControl()
@@ -57,11 +58,40 @@ public sealed class PlayerHotbarController : Component
 			if ( !Input.Pressed( SlotActions[i] ) )
 				continue;
 
-			ExitBuildModeForHotbarSwap();
-			_hotbar.SetActiveSlot( i );
-			_equipment?.SyncEquipFromActiveHotbar();
+			SelectSlot( i );
 			return;
 		}
+	}
+
+	void PollMouseWheel()
+	{
+		if ( Components.Get<PlayerGameMenuController>() is { IsMenuOpen: true } )
+			return;
+
+		var hammer = _equipment?.GetActiveTool<ToolBuildHammer>();
+		if ( hammer is not null && hammer.IsPreviewingPlacePiece )
+			return;
+
+		var scroll = Input.MouseWheel.y;
+		if ( scroll > 0.01f )
+		{
+			ExitBuildModeForHotbarSwap();
+			_hotbar.StepActiveSlot( -1 );
+			_equipment?.SyncEquipFromActiveHotbar();
+		}
+		else if ( scroll < -0.01f )
+		{
+			ExitBuildModeForHotbarSwap();
+			_hotbar.StepActiveSlot( 1 );
+			_equipment?.SyncEquipFromActiveHotbar();
+		}
+	}
+
+	void SelectSlot( int slot )
+	{
+		ExitBuildModeForHotbarSwap();
+		_hotbar.SetActiveSlot( slot );
+		_equipment?.SyncEquipFromActiveHotbar();
 	}
 
 	void ExitBuildModeForHotbarSwap()

@@ -34,6 +34,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 
 	readonly Dictionary<string, Panel> _subPageById = new();
 	readonly List<SettingsMenuButtonPanel> _rootButtons = new();
+	readonly List<SettingsMenuButtonPanel> _controlSchemeButtons = new();
 	SettingsMenuBackButtonPanel _backButton;
 	string _activeSubPageId;
 
@@ -200,11 +201,30 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		body.Style.PaddingLeft = Length.Pixels( 24f );
 		body.Style.PaddingRight = Length.Pixels( 24f );
 
-		var placeholder = new Label { Parent = body, Text = $"{titleText} options coming soon." };
-		placeholder.Style.FontColor = new Color( 0.72f, 0.74f, 0.78f );
-		placeholder.Style.FontSize = Length.Pixels( CraftingMenuSection.SectionEntryFontSize );
-		placeholder.Style.Set( "text-align", "center" );
-		placeholder.Style.Set( "white-space", "normal" );
+		if ( string.Equals( pageId, "controls", StringComparison.OrdinalIgnoreCase ) )
+		{
+			var intro = new Label
+			{
+				Parent = body,
+				Text = "Grapple winch — Pro is E retract / Q detract. Training Wheels is Space retract / Ctrl detract.",
+			};
+			intro.Style.FontColor = new Color( 0.72f, 0.74f, 0.78f );
+			intro.Style.FontSize = Length.Pixels( CraftingMenuSection.SectionEntryFontSize );
+			intro.Style.Set( "text-align", "center" );
+			intro.Style.Set( "white-space", "normal" );
+			intro.Style.Set( "margin-bottom", "14px" );
+
+			AddControlSchemeButton( body, "grapple_pro", "Pro (E / Q)" );
+			AddControlSchemeButton( body, "grapple_training", "Training Wheels (Space / Ctrl)" );
+		}
+		else
+		{
+			var placeholder = new Label { Parent = body, Text = $"{titleText} options coming soon." };
+			placeholder.Style.FontColor = new Color( 0.72f, 0.74f, 0.78f );
+			placeholder.Style.FontSize = Length.Pixels( CraftingMenuSection.SectionEntryFontSize );
+			placeholder.Style.Set( "text-align", "center" );
+			placeholder.Style.Set( "white-space", "normal" );
+		}
 
 		_subPageById[pageId] = page;
 	}
@@ -219,6 +239,23 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		};
 		StyleMenuButton( row );
 		_rootButtons.Add( row );
+
+		var label = new Label { Parent = row, Text = labelText };
+		label.Style.FontColor = Color.White;
+		label.Style.FontSize = Length.Pixels( CraftingMenuSection.ItemNameFontSize );
+		label.Style.Set( "pointer-events", "none" );
+	}
+
+	void AddControlSchemeButton( Panel parent, string actionId, string labelText )
+	{
+		var row = new SettingsMenuButtonPanel
+		{
+			Parent = parent,
+			Section = this,
+			ActionId = actionId
+		};
+		StyleMenuButton( row );
+		_controlSchemeButtons.Add( row );
 
 		var label = new Label { Parent = row, Text = labelText };
 		label.Style.FontColor = Color.White;
@@ -259,6 +296,22 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 				return true;
 			}
 
+			if ( string.Equals( _activeSubPageId, "controls", StringComparison.OrdinalIgnoreCase ) )
+			{
+				for ( var i = 0; i < _controlSchemeButtons.Count; i++ )
+				{
+					var button = _controlSchemeButtons[i];
+					if ( button is null || !button.IsValid() )
+						continue;
+
+					if ( !InventoryScreenPointer.PanelBoxContainsScreen( button, screenPos ) )
+						continue;
+
+					InvokeAction( button.ActionId );
+					return true;
+				}
+			}
+
 			return false;
 		}
 
@@ -288,6 +341,12 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 			case "video":
 			case "player_stats":
 				NavigateToSubPage( actionId );
+				break;
+			case "grapple_pro":
+				GrappleControlSchemeStore.Set( GrappleControlScheme.Pro );
+				break;
+			case "grapple_training":
+				GrappleControlSchemeStore.Set( GrappleControlScheme.TrainingWheels );
 				break;
 			case "quit_menu":
 				GameSettingsMenuActions.QuitToMainMenu();

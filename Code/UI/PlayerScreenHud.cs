@@ -88,6 +88,11 @@ public sealed class PlayerScreenHud : PanelComponent
 	AugmentStationMenuSection _augmentStationSection;
 	PlayerAugments _augments;
 	PickupNotificationHud _pickupNotifications;
+	GrappleControlPromptPanel _grappleControlPrompt;
+	PlayerMovement _movement;
+	PlayerController _grapplePromptController;
+	bool _grapplePromptCaptureActive;
+	bool _grapplePromptSavedLook;
 
 	protected override void OnTreeFirstBuilt()
 	{
@@ -135,6 +140,8 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		if ( _timeTrialMenu is not null && _inventoryInteraction is { IsTimeTrialMenuOpen: true } )
 			_timeTrialMenu.TickOpen();
+
+		TickGrappleControlPrompt();
 
 		if ( _timeTrialBanner is not null && _timeTrialBannerUntil > 0 && Time.NowDouble >= _timeTrialBannerUntil )
 		{
@@ -190,6 +197,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_hotbarHud?.Dispose();
 		_buildMenuHud = null;
+		RestoreGrapplePromptCapture();
 		if ( _menuController is not null )
 		{
 			_menuController.MenuOpenChanged -= OnMenuOpenChanged;
@@ -243,6 +251,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		BuildGameMenu( Panel );
 		BuildHotbar( Panel );
 		BuildBuildMenu( Panel );
+		BuildGrappleControlPrompt( Panel );
 
 		if ( screen is not null )
 		{
@@ -586,6 +595,77 @@ public sealed class PlayerScreenHud : PanelComponent
 		TimeTrialSession.LocalRaceElapsedChanged += OnTimeTrialElapsed;
 		TimeTrialSession.LocalFinishBannerChanged += OnTimeTrialBanner;
 		TimeTrialSession.LocalFinishResultsChanged += OnTimeTrialFinishResults;
+	}
+
+	void BuildGrappleControlPrompt( Panel root )
+	{
+		_movement = FindOnAncestors<PlayerMovement>();
+		_grapplePromptController = FindOnAncestors<PlayerController>();
+		_grappleControlPrompt = new GrappleControlPromptPanel { Parent = root };
+	}
+
+	void TickGrappleControlPrompt()
+	{
+		_movement ??= FindOnAncestors<PlayerMovement>();
+		_equipment ??= FindOnAncestors<PlayerEquipment>();
+
+		var menuOpen = _menuController is { IsMenuOpen: true };
+		var trialOpen = _inventoryInteraction is { IsTimeTrialMenuOpen: true };
+		var equipped = _movement is not null && _movement.HasGrappleEquipped();
+		var want = equipped && GrappleControlSchemeStore.NeedsChoice && !menuOpen && !trialOpen;
+
+		_grappleControlPrompt?.SetOpen( want );
+
+		if ( want )
+			ApplyGrapplePromptCapture();
+		else
+			RestoreGrapplePromptCapture();
+	}
+
+	void ApplyGrapplePromptCapture()
+	{
+		_grapplePromptController ??= FindOnAncestors<PlayerController>();
+		if ( !_grapplePromptCaptureActive )
+		{
+			if ( _grapplePromptController is not null && _grapplePromptController.IsValid() )
+			{
+				_grapplePromptSavedLook = _grapplePromptController.UseLookControls;
+				_grapplePromptController.UseLookControls = false;
+			}
+
+			_grapplePromptCaptureActive = true;
+		}
+		else if ( _grapplePromptController is not null && _grapplePromptController.IsValid() )
+		{
+			_grapplePromptController.UseLookControls = false;
+		}
+
+		if ( Mouse.Visibility != MouseVisibility.Auto )
+			Mouse.Visibility = MouseVisibility.Auto;
+
+		InventoryScreenPointer.ClampMouseToView( GameObject );
+
+		if ( Input.Pressed( "Attack1" ) || Input.Down( "Attack1" ) )
+			Input.SetAction( "Attack1", false );
+	}
+
+	void RestoreGrapplePromptCapture()
+	{
+		if ( !_grapplePromptCaptureActive )
+			return;
+
+		_grapplePromptCaptureActive = false;
+
+		if ( _menuController is { IsMenuOpen: true } )
+			return;
+
+		if ( _inventoryInteraction is { IsTimeTrialMenuOpen: true } )
+			return;
+
+		if ( _grapplePromptController is not null && _grapplePromptController.IsValid() )
+			_grapplePromptController.UseLookControls = _grapplePromptSavedLook;
+
+		Mouse.Visibility = MouseVisibility.Hidden;
 	}
 
 	void OnTimeTrialMenuOpenChanged()

@@ -29,16 +29,18 @@ partial class PlayerMovement
 	[Property, Group( "Grapple Input" )] public string DetractAction { get; set; } = "GrappleDetract";
 
 	[Property, Group( "Grapple Range" ), Title( "Max Range (meters)" )]
-	public float MaxRangeMeters { get; set; } = 30f;
+	public float MaxRangeMeters { get; set; } = 60f;
 
-	[Property, Group( "Grapple Rope" ), Title( "Retract (m/s)" )]
-	public float RetractMetersPerSecond { get; set; } = 2.5f;
+	[Property, Group( "Grapple Rope" ), Title( "Winch (m/s)" )]
+	public float RetractMetersPerSecond { get; set; } = 8f;
 
-	[Property, Group( "Grapple Rope" ), Title( "Detract (m/s)" )]
-	public float DetractMetersPerSecond { get; set; } = 8f;
-
+	/// <summary>
+	/// Longest the rope may be paid out with Q. Its own value rather than a copy of
+	/// <see cref="MaxRangeMeters"/>, so a short hook shot can still be let out into a long, slow swing;
+	/// by default the two match, and the rope can reach as far as the hook can.
+	/// </summary>
 	[Property, Group( "Grapple Rope" ), Title( "Hard Max Length (meters)" )]
-	public float HardMaxLengthMeters { get; set; } = 30f;
+	public float HardMaxLengthMeters { get; set; } = 60f;
 
 	[Property, Group( "Grapple Rope" ), Title( "Min Length (meters)" )]
 	public float MinLengthMeters { get; set; } = 1f;
@@ -50,55 +52,78 @@ partial class PlayerMovement
 	public float AirborneStaminaPerSecond { get; set; } = 3f;
 
 	[Property, Group( "Grapple Swing" ), Title( "Attach Velocity Scale" )]
-	public float AttachVelocityScale { get; set; } = 1.08f;
+	public float AttachVelocityScale { get; set; } = 1f;
 
 	/// <summary>
-	/// Weak constant accel to leave hang / start a swing. Pumps do <b>not</b> use this —
-	/// they multiply existing tangent speed (<see cref="PumpVelocityGainPerSecond"/>).
+	/// Kids-swing pump: WASD is a <b>constant force</b> (this × gravity) in the camera-relative
+	/// direction you hold, exactly like leaning your weight on a swing. It is <b>not</b> thrust along
+	/// your motion, so holding one key cannot climb forever — it just moves the pendulum's resting
+	/// point to <c>atan(this)</c> off vertical and you settle there.
+	/// <para>
+	/// Height comes from flipping direction at each apex (W…S…W…S, or A…D…A…D — any axis works).
+	/// This also fixes the size of the <b>first</b> pump: one W from a dead hang peaks at
+	/// <c>2 × atan(this)</c> and no further, so 0.15 ≈ 17°. Every later pump grows the arc by about
+	/// that same amount, which is why ~3 pumps reaches 45° and ~5-6 reaches anchor height. Keep
+	/// <see cref="SwingCoastDamping"/> low or drag eats most of each pump on a long rope.
+	/// Pressing against your motion brakes for the same reason.
+	/// </para>
 	/// </summary>
-	[Property, Group( "Grapple Swing" ), Title( "Start Push (engine u/s²)" )]
-	public float AirPushAcceleration { get; set; } = 36f;
-
-	/// <summary>Fraction of start push while holding WASD near hang.</summary>
-	[Property, Group( "Grapple Swing" ), Title( "Hold Push Scale" )]
-	public float HoldPushScale { get; set; } = 0.35f;
+	[Property, Group( "Grapple Swing" ), Title( "Pump Force (× gravity)" ), Range( 0.05f, 1f ), Step( 0.01f )]
+	public float SwingPumpGravityFraction { get; set; } = 0.18f;
 
 	/// <summary>
-	/// While WASD matches swing travel: add this fraction of current tangent speed per second.
-	/// Flip W/S at the apex to keep pumping. Opposite input coasts (optional brake if
-	/// <see cref="FightBrakePerSecond"/> &gt; 0).
+	/// Pump authority retained once you are <b>above anchor height</b>. 0 means flat W…S…W…S tops out
+	/// level with the anchor (grab the ledge) without needing drag to do it — so every pump below that
+	/// keeps full strength and the ramp stays crisp.
+	/// <para>
+	/// Circling (W…A…S…D) still loops: a taut orbit always sits below the anchor, so it keeps full
+	/// authority and can build the speed to coast over the top. Raise this only if you want flat
+	/// pumping alone to be able to wrap.
+	/// </para>
 	/// </summary>
-	[Property, Group( "Grapple Swing" ), Title( "Pump Velocity Gain (1/s)" )]
-	public float PumpVelocityGainPerSecond { get; set; } = 0.32f;
+	[Property, Group( "Grapple Swing" ), Title( "Pump Above Anchor" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float SwingPumpAboveAnchorScale { get; set; }
 
 	/// <summary>
-	/// How aligned WASD must be with swing travel to pump. Lower = more forgiving timing.
+	/// Retract thrust along existing motion. Requires both an existing swing <b>and</b> rope actually
+	/// coming in, so at min length holding E adds nothing. Winch rate is unaffected by this.
 	/// </summary>
-	[Property, Group( "Grapple Swing" ), Title( "Pump Align (dot)" ), Range( 0.01f, 0.5f ), Step( 0.01f )]
-	public float PumpAlignDot { get; set; } = 0.08f;
+	[Property, Group( "Grapple Swing" ), Title( "Retract Pump (× gravity)" ), Range( 0f, 1f ), Step( 0.01f )]
+	public float SwingRetractPumpGravityFraction { get; set; } = 0.18f;
+
+	/// <summary>Tangent speed below which retract adds nothing (keeps E from creating a swing from rest).</summary>
+	[Property, Group( "Grapple Swing" ), Title( "Retract Pump Min Speed (u/s)" ), Range( 10f, 200f ), Step( 5f )]
+	public float SwingRetractPumpMinSpeed { get; set; } = 60f;
 
 	/// <summary>
-	/// Optional: while WASD fights travel, exponential tangent decay per second.
-	/// Leave at 0 for classic W…S… pumps (mistimed half-strokes coast, they do not scrub speed).
+	/// How much of ideal angular-momentum conservation the winch applies when rope length changes
+	/// (<c>v ∝ 1/r</c>). 1 = full ice-skater spin-up on E and full slow-down on Q; lower is gentler.
+	/// This is the main reason reeling in mid-swing gains speed.
 	/// </summary>
-	[Property, Group( "Grapple Swing" ), Title( "Fight Brake (1/s)" ), Range( 0f, 12f ), Step( 0.25f )]
-	public float FightBrakePerSecond { get; set; } = 0f;
+	[Property, Group( "Grapple Swing" ), Title( "Winch Momentum Transfer" ), Range( 0f, 1f ), Step( 0.05f )]
+	public float SwingWinchMomentumTransfer { get; set; } = 0.4f;
 
-	/// <summary>Min tangent speed before compound pumping applies (below this = start push only).</summary>
-	[Property, Group( "Grapple Swing" ), Title( "Pump Min Speed (u/s)" )]
-	public float PumpMinSpeed { get; set; } = 12f;
+	/// <summary>
+	/// Soft ceiling for WASD / retract pump add (engine units). Gravity can still carry you past this.
+	/// Deliberately set well above what a loop needs (<c>sqrt(5·g·rope)</c> ≈ 3100 on a fully paid-out
+	/// 60 m rope) so the cap is never the thing that stops a loop — drag and technique are.
+	/// </summary>
+	[Property, Group( "Grapple Swing" ), Title( "Max Speed" ), Range( 50f, 8000f ), Step( 50f )]
+	public float SwingMaxSpeed { get; set; } = 6000f;
 
-	/// <summary>Hold thrust fades after this angle from vertical hang (degrees).</summary>
-	[Property, Group( "Grapple Swing" ), Title( "Hold Max Angle (deg)" )]
-	public float HoldMaxAngleDegrees { get; set; } = 12f;
+	/// <summary>
+	/// Air drag, always applied. Costs a slice of every pump that scales with the swing period, so on a
+	/// long slow rope it is expensive: 0.04 was eating enough per pump to turn a 5-pump ramp into 7.
+	/// Keep it small — <see cref="SwingPumpAboveAnchorScale"/> owns the ceiling now, not drag.
+	/// </summary>
+	[Property, Group( "Grapple Swing" ), Title( "Air Drag (1/s)" ), Range( 0f, 0.4f ), Step( 0.01f )]
+	public float SwingCoastDamping { get; set; } = 0.01f;
 
-	/// <summary>Softens start/hold thrust as speed rises so you cannot launch from a standstill hold.</summary>
-	[Property, Group( "Grapple Swing" ), Title( "Start Speed Soften (u/s)" )]
-	public float SwingSpeedSoften { get; set; } = 90f;
-
-	/// <summary>Light tangential damping while no WASD (settles toward hang).</summary>
-	[Property, Group( "Grapple Swing" ), Title( "Coast Damping (1/s)" )]
-	public float SwingCoastDamping { get; set; } = 0.1f;
+	/// <summary>
+	/// Gravity scale after release until you land. Heavier = faster fall-off, less sky whip. No height cap.
+	/// </summary>
+	[Property, Group( "Grapple Swing" ), Title( "Air Gravity Scale" ), Range( 1f, 3f ), Step( 0.05f )]
+	public float GrappleAirGravityScale { get; set; } = 1.24f;
 
 	[Property, Group( "Grapple Aim" ), Title( "Crosshair Idle Hide (seconds)" )]
 	public float CrosshairIdleHideSeconds { get; set; } = 10f;
@@ -139,10 +164,6 @@ partial class PlayerMovement
 	/// <summary>On-screen swing speed / velocity while attached (local driver).</summary>
 	[Property, Group( "Grapple Debug" ), Title( "Show Speed Overlay" )]
 	public bool ShowSpeedDebug { get; set; }
-
-	/// <summary>Big W/A/S/D cue for which key pumps with the current arc (local driver).</summary>
-	[Property, Group( "Grapple Debug" ), Title( "Show Pump Cue" )]
-	public bool ShowPumpCue { get; set; }
 
 	[Property, Group( "Grapple Debug" )]
 	public bool LogGrapple { get; set; }
@@ -206,12 +227,15 @@ partial class PlayerMovement
 	float _airborneStaminaDebt;
 	bool _savedEnablePressing = true;
 	bool _pressingOverrideActive;
-
-	// From equipped hook profile (data/equipment_profiles.json) — not player-prefab knobs.
-	float _slackRetractMetersPerSecond = 7f;
-	float _tautSlackMeters = 0.75f;
-	float _swingLoadSlackGraceMeters = 2.5f;
-	float _swingLoadCentripetalGravityFraction = 0.35f;
+	bool _grappleReleaseAir;
+	bool _grappleGravityOverrideActive;
+	float _savedGrappleGravityScale = 1f;
+	bool _grappleWasEquippedForControlPrompt;
+	bool _grappleControllerOverrideActive;
+	float _savedAirFriction;
+	float _savedBrakePower;
+	bool _grappleDampingOverrideActive;
+	float _savedLinearDamping;
 
 	void InitializeGrapple()
 	{
@@ -231,6 +255,7 @@ partial class PlayerMovement
 		}
 
 		RefreshTuningFromEquipment();
+		PollGrappleControlSchemePrompt();
 
 		var menu = Components.Get<PlayerGameMenuController>();
 		if ( menu is not null && menu.IsMenuOpen )
@@ -258,23 +283,78 @@ partial class PlayerMovement
 			return;
 		}
 
+		if ( GrappleControlSchemeStore.NeedsChoice )
+		{
+			IsRetractingRope = false;
+			IsDetractingRope = false;
+			HasValidAimTarget = false;
+			UpdateAimHudVisibility( forceHide: true );
+			UpdatePressingOverride( false );
+			DrawRopeIfNeeded();
+			return;
+		}
+
 		UpdateAimTrace();
 		PollToggleInput();
 		PollLengthHoldState();
 		UpdateAimHudVisibility( forceHide: false );
-		UpdatePressingOverride( GrappleAttached );
 		DrawRopeIfNeeded();
 		DrawSpeedDebugIfNeeded();
-		DrawPumpCueIfNeeded();
+	}
+
+	void PollGrappleControlSchemePrompt()
+	{
+		var equipped = HasGrappleEquipped();
+		if ( equipped && !_grappleWasEquippedForControlPrompt )
+			GrappleControlSchemeStore.RequestChoice();
+
+		_grappleWasEquippedForControlPrompt = equipped;
 	}
 
 	void TickGrappleFixedUpdate()
 	{
+		TickGrappleReleaseWeight();
+		TickGrappleControllerOverride();
+
 		if ( !GrappleAttached )
 			return;
 
+		PollLengthHoldState();
 		ApplyLengthHoldDelta( Time.Delta );
 		DrainAirborneStamina( Time.Delta );
+	}
+
+	void TickGrappleReleaseWeight()
+	{
+		if ( !IsLocalMovementDriver() )
+			return;
+
+		_controller ??= Components.Get<PlayerController>();
+		var grounded = _controller is not null && _controller.IsOnGround;
+		if ( grounded && !GrappleAttached )
+			_grappleReleaseAir = false;
+
+		var body = ResolveGrappleBody();
+		if ( body is null || !body.IsValid() )
+			return;
+
+		var heavy = !WingsuitDeployed && !grounded && !GrappleAttached && _grappleReleaseAir;
+		var wantScale = heavy ? Math.Max( 1f, GrappleAirGravityScale ) : 1f;
+		if ( heavy )
+		{
+			if ( !_grappleGravityOverrideActive )
+			{
+				_savedGrappleGravityScale = body.GravityScale > 0.01f ? body.GravityScale : 1f;
+				_grappleGravityOverrideActive = true;
+			}
+
+			body.GravityScale = wantScale;
+		}
+		else if ( _grappleGravityOverrideActive )
+		{
+			body.GravityScale = _savedGrappleGravityScale;
+			_grappleGravityOverrideActive = false;
+		}
 	}
 
 	public float GetMaxRangeEngine() =>
@@ -321,6 +401,15 @@ partial class PlayerMovement
 			RpcRequestDetach();
 	}
 
+	/// <summary>Debug / world teleports: drop the rope so the pawn isn't yanked back to the attach point.</summary>
+	public void DetachGrappleForWorldTeleport()
+	{
+		if ( !GrappleAttached )
+			return;
+
+		RequestDetach();
+	}
+
 	void RefreshTuningFromEquipment()
 	{
 		if ( _equipment is null )
@@ -333,28 +422,15 @@ partial class PlayerMovement
 			return;
 
 		if ( profile.GrappleMaxRangeMeters > 0f )
-		{
 			MaxRangeMeters = profile.GrappleMaxRangeMeters;
+
+		if ( profile.GrappleHardMaxLengthMeters > 0f )
+			HardMaxLengthMeters = profile.GrappleHardMaxLengthMeters;
+		else if ( profile.GrappleMaxRangeMeters > 0f )
 			HardMaxLengthMeters = profile.GrappleMaxRangeMeters;
-		}
 
 		if ( profile.GrappleRetractMetersPerSecond > 0f )
 			RetractMetersPerSecond = profile.GrappleRetractMetersPerSecond;
-
-		if ( profile.GrappleSlackRetractMetersPerSecond > 0f )
-			_slackRetractMetersPerSecond = profile.GrappleSlackRetractMetersPerSecond;
-
-		if ( profile.GrappleTautSlackMeters > 0f )
-			_tautSlackMeters = profile.GrappleTautSlackMeters;
-
-		if ( profile.GrappleSwingLoadSlackGraceMeters > 0f )
-			_swingLoadSlackGraceMeters = profile.GrappleSwingLoadSlackGraceMeters;
-
-		if ( profile.GrappleSwingLoadCentripetalGravityFraction > 0f )
-			_swingLoadCentripetalGravityFraction = profile.GrappleSwingLoadCentripetalGravityFraction;
-
-		if ( profile.GrappleDetractMetersPerSecond > 0f )
-			DetractMetersPerSecond = profile.GrappleDetractMetersPerSecond;
 
 		if ( profile.GrappleAttachStaminaCost >= 0f )
 			AttachStaminaCost = profile.GrappleAttachStaminaCost;
@@ -1056,20 +1132,8 @@ partial class PlayerMovement
 		if ( !GrappleAttached )
 			return;
 
-		_controller ??= Components.Get<PlayerController>();
-		var onGround = _controller is not null && _controller.IsOnGround;
-
-		// Space is Jump + GrappleRetract: on the ground, Jump wins (no retract).
-		// In the air on the rope, Space shortens the line.
-		// E / Q also retract while grappled (HandHarvest / Use / build-snap / Menu).
-		if ( !onGround )
-			IsRetractingRope = IsLengthActionDown( RetractAction, "GrappleRetract", "Jump", "space" );
-
-		if ( !IsRetractingRope && IsEqRetractDown() )
-			IsRetractingRope = true;
-
-		// Ctrl is Duck + GrappleDetract — both can run while grappled.
-		IsDetractingRope = IsLengthActionDown( DetractAction, "GrappleDetract", "Duck", "ctrl" );
+		IsRetractingRope = IsRetractKeyDown();
+		IsDetractingRope = IsDetractKeyDown();
 	}
 
 	void ApplyLengthHoldDelta( float dt )
@@ -1078,70 +1142,17 @@ partial class PlayerMovement
 			return;
 
 		var deltaMeters = 0f;
+		var rate = Math.Max( 0.1f, RetractMetersPerSecond );
 		if ( IsRetractingRope )
-			deltaMeters -= Math.Max( 0.1f, ResolveRetractMetersPerSecond() ) * dt;
+			deltaMeters -= rate * dt;
 
 		if ( IsDetractingRope )
-			deltaMeters += Math.Max( 0.1f, DetractMetersPerSecond ) * dt;
+			deltaMeters += rate * dt;
 
 		if ( MathF.Abs( deltaMeters ) < 1e-5f )
 			return;
 
 		RequestAdjustLength( TerrainWorldUnits.MetersToEngine( deltaMeters ) );
-	}
-
-	/// <summary>
-	/// Normal retract when the rope is bearing the player (taut hang or centripetal swing).
-	/// Faster retract when slack — reeling in while falling under a high attach point.
-	/// </summary>
-	float ResolveRetractMetersPerSecond()
-	{
-		var normal = Math.Max( 0.1f, RetractMetersPerSecond );
-		var slack = Math.Max( normal, _slackRetractMetersPerSecond );
-		return IsRopeBearingPlayerLoad() ? normal : slack;
-	}
-
-	/// <summary>
-	/// True when the rope is supporting hang weight or providing centripetal force for a swing
-	/// (e.g. looping a horizontal beam). False when hanging on a long slack line / falling in.
-	/// </summary>
-	bool IsRopeBearingPlayerLoad()
-	{
-		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f )
-			return false;
-
-		var attach = GrappleAttachWorldPoint;
-		var toPlayer = GameObject.WorldPosition - attach;
-		var dist = toPlayer.Length;
-		if ( dist < 1e-4f )
-			return false;
-
-		var maxLen = Math.Max( 1f, GrappleRopeLengthEngine );
-		var slackMeters = TerrainWorldUnits.EngineToMeters( maxLen - dist );
-		var tautSlack = Math.Max( 0.05f, _tautSlackMeters );
-
-		// At / past the length limit → rope is the support (hang or arc).
-		if ( slackMeters <= tautSlack )
-			return true;
-
-		var body = ResolveGrappleBody();
-		if ( body is null )
-			return false;
-
-		var radial = toPlayer / dist;
-		var vel = body.Velocity;
-		var vRad = Vector3.Dot( vel, radial );
-		var vTanSq = (vel - radial * vRad).LengthSquared;
-		var radius = Math.Max( dist, 1f );
-		var centripetal = vTanSq / radius;
-
-		var gravity = Scene?.PhysicsWorld?.Gravity ?? new Vector3( 0f, 0f, -800f );
-		var g = Math.Max( 1f, gravity.Length );
-		var grace = Math.Max( tautSlack, _swingLoadSlackGraceMeters );
-		var loadAccel = g * Math.Clamp( _swingLoadCentripetalGravityFraction, 0.05f, 2f );
-
-		// Fast circular motion still needs the rope even if slightly inside the sphere.
-		return slackMeters <= grace && centripetal >= loadAccel;
 	}
 
 	static bool IsLengthActionDown( string primary, string altA, string altB, string altC )
@@ -1157,15 +1168,45 @@ partial class PlayerMovement
 		return false;
 	}
 
-	/// <summary>E / Q retract while on the rope (also bound as HandHarvest / Use / build snap / Menu).</summary>
-	static bool IsEqRetractDown()
+	/// <summary>Pro: E retract. Training Wheels: Space (keyboard hold — Jump action is cleared so you don't hop).</summary>
+	bool IsRetractKeyDown()
 	{
-		return Input.Down( "HandHarvest" )
-		       || Input.Down( "Use" )
-		       || Input.Down( "BuildSnapPrev" )
-		       || Input.Down( "BuildSnapNext" )
-		       || Input.Down( "Menu" );
+		if ( GrappleControlSchemeStore.NeedsChoice )
+			return false;
+
+		if ( GrappleControlSchemeStore.IsTrainingWheels )
+			return IsTrainingRetractHeld();
+
+		if ( IsLengthActionDown( RetractAction, "GrappleRetract", "HandHarvest", "Use" ) )
+			return true;
+		return Input.Down( "BuildSnapNext" );
 	}
+
+	/// <summary>Pro: Q detract. Training Wheels: Ctrl via the Duck action (raw Keyboard has no Ctrl key).</summary>
+	bool IsDetractKeyDown()
+	{
+		if ( GrappleControlSchemeStore.NeedsChoice )
+			return false;
+
+		if ( GrappleControlSchemeStore.IsTrainingWheels )
+			return IsTrainingDetractHeld();
+
+		if ( IsLengthActionDown( DetractAction, "GrappleDetract", "BuildSnapPrev", "Menu" ) )
+			return true;
+		return false;
+	}
+
+	/// <summary>Space is on the raw keyboard list; hold survives Jump being released.</summary>
+	static bool IsTrainingRetractHeld() =>
+		Input.Keyboard.Down( "space" ) || Input.Keyboard.Down( "SPACE" );
+
+	/// <summary>
+	/// Ctrl is not a raw <see cref="Input.Keyboard"/> name in s&box — Duck is the Ctrl bind.
+	/// Do not <c>ReleaseAction("Duck")</c> while training or hold never stays true.
+	/// </summary>
+	bool IsTrainingDetractHeld() =>
+		( !string.IsNullOrWhiteSpace( SneakInputAction ) && Input.Down( SneakInputAction ) )
+		|| Input.Down( "Duck" );
 
 	void UpdateAimHudVisibility( bool forceHide )
 	{
@@ -1191,31 +1232,90 @@ partial class PlayerMovement
 		IsAimHudActive = true;
 	}
 
+	/// <summary>
+	/// Rope hang used to force <see cref="PlayerController.EnablePressing"/> off, which also
+	/// killed WASD air-push until the controller saw move input. We no longer disable it;
+	/// this just restores pressing if an older attach left it off.
+	/// </summary>
 	void UpdatePressingOverride( bool attached )
 	{
+		if ( attached )
+			return;
+
 		if ( _controller is null )
 			_controller = Components.Get<PlayerController>();
 
 		if ( _controller is null )
 			return;
 
-		if ( attached )
+		if ( !_pressingOverrideActive )
 		{
-			if ( !_pressingOverrideActive )
-			{
-				_savedEnablePressing = _controller.EnablePressing;
-				_pressingOverrideActive = true;
-			}
-
-			_controller.EnablePressing = false;
+			_controller.EnablePressing = true;
 			return;
 		}
 
-		if ( !_pressingOverrideActive )
-			return;
-
 		_controller.EnablePressing = _savedEnablePressing;
 		_pressingOverrideActive = false;
+	}
+
+	/// <summary>
+	/// Walk/run air-control clamps speed to ~110–320, which tops a pendulum out around 45°.
+	/// While dangling, kill air-friction / brake and body damping so pumped speed can carry over the top.
+	/// Look + PreInput stay on (do not toggle UseInputControls — that would stop WASD sampling).
+	/// </summary>
+	void TickGrappleControllerOverride()
+	{
+		_controller ??= Components.Get<PlayerController>();
+		var airborne = GrappleAttached && _controller is not null && _controller.IsValid() && !_controller.IsOnGround;
+		ApplyGrappleControllerOverride( airborne );
+	}
+
+	void ApplyGrappleControllerOverride( bool airborneGrapple )
+	{
+		_controller ??= Components.Get<PlayerController>();
+		var body = ResolveGrappleBody();
+
+		if ( airborneGrapple )
+		{
+			if ( _controller is not null && _controller.IsValid() )
+			{
+				if ( !_grappleControllerOverrideActive )
+				{
+					_savedAirFriction = _controller.AirFriction;
+					_savedBrakePower = _controller.BrakePower;
+					_grappleControllerOverrideActive = true;
+				}
+
+				_controller.AirFriction = 0f;
+				_controller.BrakePower = 0f;
+			}
+
+			if ( body is not null && body.IsValid() )
+			{
+				if ( !_grappleDampingOverrideActive )
+				{
+					_savedLinearDamping = body.LinearDamping;
+					_grappleDampingOverrideActive = true;
+				}
+
+				body.LinearDamping = 0f;
+			}
+
+			return;
+		}
+
+		if ( _grappleControllerOverrideActive && _controller is not null && _controller.IsValid() )
+		{
+			_controller.AirFriction = _savedAirFriction;
+			_controller.BrakePower = _savedBrakePower;
+			_grappleControllerOverrideActive = false;
+		}
+
+		if ( _grappleDampingOverrideActive && body is not null && body.IsValid() )
+		{
+			body.LinearDamping = _savedLinearDamping;
+			_grappleDampingOverrideActive = false;
+		}
 	}
 
 	void DrainAirborneStamina( float dt )
@@ -1413,6 +1513,7 @@ partial class PlayerMovement
 		GrappleAttachWorldPoint = default;
 		GrappleRopeLengthEngine = 0f;
 		_airborneStaminaDebt = 0f;
+		_grappleReleaseAir = true;
 
 		if ( LogGrapple )
 			Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: detached ({reason})" );
@@ -1553,116 +1654,6 @@ partial class PlayerMovement
 			new Vector2( x, y ),
 			$"vel ({vel.x:0}, {vel.y:0}, {vel.z:0})",
 			size: 12f );
-	}
-
-	void DrawPumpCueIfNeeded()
-	{
-		if ( !ShowPumpCue || !GrappleAttached || !IsLocalMovementDriver() )
-			return;
-
-		if ( !TryGetSwingPumpCue( out var key, out var tanDir, out var tanSpeed, out var pumping ) )
-			return;
-
-		var cam = BuildViewCamera.Resolve( GameObject );
-		if ( !cam.IsValid() )
-			return;
-
-		var rect = cam.ScreenRect;
-		var cx = rect.Left + rect.Width * 0.5f;
-		var cy = rect.Top + rect.Height * 0.72f;
-
-		var status = pumping ? "PUMPING" : "HOLD";
-		var color = pumping
-			? new Color( 0.35f, 1f, 0.45f, 1f )
-			: new Color( 1f, 0.92f, 0.25f, 1f );
-
-		DebugOverlay.ScreenText( new Vector2( cx - 70f, cy - 28f ), status, size: 18f );
-		DebugOverlay.ScreenText( new Vector2( cx - 28f, cy ), key, size: 48f );
-		DebugOverlay.ScreenText(
-			new Vector2( cx - 130f, cy + 52f ),
-			"W…S… with the swing — flip at the apex",
-			size: 12f );
-
-		// World arrow in the swing-travel direction so the cue matches what you feel.
-		if ( tanSpeed >= Math.Max( 1f, PumpMinSpeed ) * 0.5f && tanDir.LengthSquared > 1e-6f )
-		{
-			var origin = GameObject.WorldPosition + Vector3.Up * TerrainWorldUnits.MetersToEngine( 1.1f );
-			var tip = origin + tanDir * TerrainWorldUnits.MetersToEngine( 2.2f );
-			DebugOverlay.Line( origin, tip, color, 0f );
-			DebugOverlay.Sphere( new Sphere( tip, TerrainWorldUnits.MetersToEngine( 0.12f ) ), color, 0f );
-		}
-	}
-
-	/// <summary>
-	/// Which WASD key currently pumps with the arc (camera-relative), and whether the player is holding it.
-	/// </summary>
-	public bool TryGetSwingPumpCue( out string key, out Vector3 tanDir, out float tanSpeed, out bool pumping )
-	{
-		key = "";
-		tanDir = default;
-		tanSpeed = 0f;
-		pumping = false;
-
-		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f )
-			return false;
-
-		if ( _controller is null )
-			_controller = Components.Get<PlayerController>();
-
-		var body = _controller?.Body;
-		if ( body is null || !body.IsValid() )
-			body = Components.Get<Rigidbody>();
-
-		if ( body is null || !body.IsValid() )
-			return false;
-
-		var attach = GrappleAttachWorldPoint;
-		var toPlayer = GameObject.WorldPosition - attach;
-		var dist = toPlayer.Length;
-		if ( dist < 1e-4f )
-			return false;
-
-		var radial = toPlayer / dist;
-		var vel = body.Velocity;
-		var vRad = Vector3.Dot( vel, radial );
-		var vTan = vel - radial * vRad;
-		tanSpeed = vTan.Length;
-		if ( tanSpeed < Math.Max( 1f, PumpMinSpeed ) * 0.35f )
-		{
-			key = "WASD";
-			return true;
-		}
-
-		tanDir = vTan / tanSpeed;
-
-		var cam = BuildViewCamera.Resolve( GameObject );
-		var yaw = cam.IsValid() ? cam.WorldRotation.Angles().yaw : GameObject.WorldRotation.Angles().yaw;
-		var yawRot = new Angles( 0f, yaw, 0f ).ToRotation();
-		var camFwd = yawRot.Forward;
-		var camRight = yawRot.Right;
-
-		// Project travel onto camera axes (same space as swing wish).
-		var fwd = Vector3.Dot( tanDir, camFwd );
-		var right = Vector3.Dot( tanDir, camRight );
-
-		if ( MathF.Abs( fwd ) >= MathF.Abs( right ) )
-			key = fwd >= 0f ? "W" : "S";
-		else
-			key = right >= 0f ? "D" : "A";
-
-		var holdFwd = Input.Down( "Forward" ) ? 1f : 0f;
-		var holdBack = Input.Down( "Backward" ) ? 1f : 0f;
-		var holdLeft = Input.Down( "Left" ) ? 1f : 0f;
-		var holdRight = Input.Down( "Right" ) ? 1f : 0f;
-		var wish = yawRot.Forward * (holdFwd - holdBack) + yawRot.Right * (holdRight - holdLeft);
-		wish -= radial * Vector3.Dot( wish, radial );
-		if ( wish.LengthSquared > 1e-6f )
-		{
-			var along = Vector3.Dot( tanDir, wish.Normal );
-			pumping = along >= Math.Max( 0.01f, PumpAlignDot );
-		}
-
-		return true;
 	}
 
 	Vector3 ResolveLeftArmWorldPoint()

@@ -40,6 +40,9 @@ public sealed class TeleportPad : Component
 
 	[Property, Group( "Debug" )] public bool LogTeleports { get; set; }
 
+	/// <summary>Last pad arrival per pawn — used by scene <see cref="TeleportWaypointDebug"/> (J recall).</summary>
+	static readonly Dictionary<Guid, LastArrival> LastArrivals = new();
+
 	/// <summary>Give the arriving pawn a moment to register inside the volume before the latch may release.</summary>
 	const double LatchMinHoldSeconds = 0.75;
 	/// <summary>Pawns may sink slightly into the pad — accept feet a little below its origin.</summary>
@@ -117,9 +120,51 @@ public sealed class TeleportPad : Component
 
 		// Latch on the destination pad so standing there doesn't bounce the pawn straight back.
 		destPad?.HoldUntilExit( pawn.Id );
+		RememberArrival( pawn, arrivalPos, destPad );
 
 		if ( LogTeleports )
 			Log.Info( $"[TeleportPad] {GameObject.Name}: teleported {pawn.Name} → {Destination.Name} @ {arrivalPos}" );
+	}
+
+	struct LastArrival
+	{
+		public Vector3 Position;
+		public Rotation Rotation;
+		public TeleportPad Pad;
+	}
+
+	static void RememberArrival( GameObject pawn, Vector3 position, TeleportPad pad )
+	{
+		if ( pawn is null || !pawn.IsValid() )
+			return;
+
+		LastArrivals[pawn.Id] = new LastArrival
+		{
+			Position = position,
+			Rotation = pawn.WorldRotation,
+			Pad = pad,
+		};
+	}
+
+	public static bool TryGetLastArrival( GameObject pawn, out Vector3 position, out Rotation rotation, out TeleportPad pad )
+	{
+		position = default;
+		rotation = Rotation.Identity;
+		pad = null;
+		if ( pawn is null || !pawn.IsValid() )
+			return false;
+		if ( !LastArrivals.TryGetValue( pawn.Id, out var arrival ) )
+			return false;
+
+		position = arrival.Position;
+		rotation = arrival.Rotation;
+		pad = arrival.Pad;
+		return true;
+	}
+
+	public static void MarkCooldown( Guid pawnId, float cooldownSeconds )
+	{
+		NextTeleportAllowedAt[pawnId] = Time.NowDouble + Math.Max( 0.1, cooldownSeconds );
 	}
 
 	/// <summary>Called by the source pad on arrival: don't teleport this pawn until it steps off.</summary>
