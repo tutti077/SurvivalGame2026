@@ -231,6 +231,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		UpdatePlayerDropZone();
 		TickContainerAccess();
 		TickAugmentStationAccess();
+		TickWorkbenchAccess();
 		TickCampfireAccess();
 		TickTimeTrialAccess();
 
@@ -268,6 +269,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		ReturnHeldOnMenuClose();
 		CloseContainer();
 		CloseAugmentStation();
+		CloseWorkbench();
 	}
 
 	void OnMenuLayoutChanged()
@@ -608,7 +610,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 
 		if ( host.OwnerTryPickupAll( slot.SlotIndex, out var picked ) && !picked.IsEmpty )
 		{
-			_held.Set( picked.ResourceId, picked.Count );
+			_held.Set( picked.ResourceId, picked.Count, picked.Wear );
 			_dragSourceHost = host;
 			_dragSourceSlot = slot.SlotIndex;
 			_dropHoverSlot = slot;
@@ -738,7 +740,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
 			return HeldStackWorldDrop.TryDropAtPlayer( GameObject, ref held, dropCount );
 
-		RpcRequestPlayerWorldDrop( sourceHost?.GridId ?? string.Empty, sourceSlot, held.ResourceId, dropCount );
+		RpcRequestPlayerWorldDrop( sourceHost?.GridId ?? string.Empty, sourceSlot, held.ResourceId, dropCount, held.Wear );
 		held.Count -= dropCount;
 		if ( held.Count <= 0 )
 			held.Clear();
@@ -746,13 +748,13 @@ public sealed partial class PlayerInventoryInteraction : Component
 	}
 
 	[Rpc.Host]
-	void RpcRequestPlayerWorldDrop( string sourceGridId, int sourceSlot, string resourceId, int count )
+	void RpcRequestPlayerWorldDrop( string sourceGridId, int sourceSlot, string resourceId, int count, int wear )
 	{
 		if ( !Networking.IsHost )
 			return;
 
 		var held = new InventoryCursorStack();
-		held.Set( resourceId, count );
+		held.Set( resourceId, count, wear );
 		if ( HeldStackWorldDrop.TryDropAtPlayer( GameObject, ref held, count ) )
 			return;
 
@@ -816,19 +818,19 @@ public sealed partial class PlayerInventoryInteraction : Component
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
 			return HeldStackWorldDrop.TryDrop( GameObject, ref held, GetDropProbeScreenPosition() );
 
-		RpcRequestHotbarWorldDrop( sourceSlot, held.ResourceId, held.Count, GetDropProbeScreenPosition() );
+		RpcRequestHotbarWorldDrop( sourceSlot, held.ResourceId, held.Count, held.Wear, GetDropProbeScreenPosition() );
 		held.Clear();
 		return true;
 	}
 
 	[Rpc.Host]
-	void RpcRequestHotbarWorldDrop( int sourceSlot, string resourceId, int count, Vector2 screenPosition )
+	void RpcRequestHotbarWorldDrop( int sourceSlot, string resourceId, int count, int wear, Vector2 screenPosition )
 	{
 		if ( !Networking.IsHost )
 			return;
 
 		var held = new InventoryCursorStack();
-		held.Set( resourceId, count );
+		held.Set( resourceId, count, wear );
 		if ( HeldStackWorldDrop.TryDrop( GameObject, ref held, screenPosition ) )
 			return;
 
@@ -935,7 +937,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		var wasEmpty = _held.IsEmpty;
 		if ( wasEmpty )
 		{
-			_held.Set( taken.ResourceId, taken.Count );
+			_held.Set( taken.ResourceId, taken.Count, taken.Wear );
 			RememberHeldReturnSlot( host, slotIndex );
 		}
 		else
@@ -975,7 +977,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		var wasEmpty = _held.IsEmpty;
 		if ( wasEmpty )
 		{
-			_held.Set( taken.ResourceId, taken.Count );
+			_held.Set( taken.ResourceId, taken.Count, taken.Wear );
 			RememberHeldReturnSlot( host, slotIndex );
 		}
 		else
@@ -1151,7 +1153,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 			return false;
 
 		var held = new InventoryCursorStack();
-		held.Set( picked.ResourceId, picked.Count );
+		held.Set( picked.ResourceId, picked.Count, picked.Wear );
 		var movedAny = false;
 
 		// Distribute across merge targets, then empties (finders only return slots with room).
@@ -1374,7 +1376,8 @@ public sealed partial class PlayerInventoryInteraction : Component
 			ResourceCatalog.ApplyStackVisual( _dragIcon, _dragCount, new InventorySlot
 			{
 				ResourceId = _held.ResourceId,
-				Count = _held.Count
+				Count = _held.Count,
+				Wear = _held.Wear
 			} );
 		}
 	}
@@ -1456,7 +1459,8 @@ public sealed partial class PlayerInventoryInteraction : Component
 			ResourceCatalog.ApplyStackVisual( _dragIcon, _dragCount, new InventorySlot
 			{
 				ResourceId = _held.ResourceId,
-				Count = _held.Count
+				Count = _held.Count,
+				Wear = _held.Wear
 			} );
 		}
 	}

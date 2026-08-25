@@ -15,6 +15,10 @@ public static class BuildAuthority
 		if ( !placer.IsValid() || string.IsNullOrWhiteSpace( pieceId ) )
 			return false;
 
+		// Broken build hammer cannot place — repair it at a workbench first.
+		if ( ToolDurability.IsActiveToolBroken( placer ) )
+			return false;
+
 		if ( !BuildPieceCatalog.TryGet( pieceId, out var data ) || string.IsNullOrWhiteSpace( data.Prefab ) )
 			return false;
 
@@ -40,6 +44,9 @@ public static class BuildAuthority
 		BuildSnapPlacement.InvalidatePieceCache();
 		BuildNavMeshSync.OnBuildPieceChanged( scene, spawned );
 
+		// Build hammer durability: 1 tick per successful placement.
+		ToolDurability.HostAddWearToActiveTool( placer );
+
 		return true;
 	}
 
@@ -51,8 +58,14 @@ public static class BuildAuthority
 		if ( !target.IsBlueprint )
 			return false;
 
+		if ( ToolDurability.IsActiveToolBroken( placer ) )
+			return false;
+
 		target.Configure( target.PieceId, blueprint: false, previewGhost: false );
 		BuildNavMeshSync.OnBuildPieceChanged( target.Scene, target.GameObject );
+
+		// Build hammer durability: 1 tick per successful structure repair.
+		ToolDurability.HostAddWearToActiveTool( placer );
 		return true;
 	}
 

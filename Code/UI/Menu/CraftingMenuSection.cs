@@ -67,9 +67,19 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	bool _craftButtonPressedVisual;
 	int _builtRecipeContentVersion = -1;
 	bool _builtNearCampfire;
+	bool _builtWorkbenchOpen;
+
+	PlayerInventoryInteraction _interaction;
+	Label _titleLabel;
+	Panel _repairButton;
+	Label _repairButtonLabel;
+	bool _repairAvailable;
+	double _nextRepairStateRefreshAt;
 
 	static readonly Color CraftButtonColor = new( 0.22f, 0.45f, 0.28f, 0.95f );
 	static readonly Color CraftButtonPressedColor = new( 0.14f, 0.32f, 0.18f, 0.98f );
+	static readonly Color RepairButtonColor = new( 0.52f, 0.40f, 0.18f, 0.95f );
+	static readonly Color RepairButtonPressedColor = new( 0.38f, 0.29f, 0.12f, 0.98f );
 
 	/// <summary>True when the crafting page is open and this panel is shown — recipe list owns mouse wheel.</summary>
 	public bool IsScrollTargetActive => _menuOpen && _panelVisible;
@@ -109,6 +119,28 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		title.Style.FontSize = Length.Pixels( CraftingTitleFontSize );
 		title.Style.Set( "flex-shrink", "0" );
 		title.Style.Set( "white-space", "nowrap" );
+		_titleLabel = title;
+
+		// Workbench-only: free tool repair, one most-damaged tool per click.
+		_repairButton = new Panel { Parent = header };
+		_repairButton.Style.Set( "padding-left", $"{10f * LayoutScale}px" );
+		_repairButton.Style.Set( "padding-right", $"{10f * LayoutScale}px" );
+		_repairButton.Style.Set( "padding-top", $"{6f * LayoutScale}px" );
+		_repairButton.Style.Set( "padding-bottom", $"{6f * LayoutScale}px" );
+		_repairButton.Style.BackgroundColor = RepairButtonColor;
+		_repairButton.Style.Set( "border-radius", "4px" );
+		_repairButton.Style.Set( "border-width", "1px" );
+		_repairButton.Style.Set( "border-color", "#8f7a3e" );
+		_repairButton.Style.Set( "pointer-events", "auto" );
+		_repairButton.Style.Set( "cursor", "pointer" );
+		_repairButton.Style.Set( "flex-shrink", "0" );
+		_repairButton.Style.Set( "display", "none" );
+
+		_repairButtonLabel = new Label { Parent = _repairButton, Text = "Repair Tool" };
+		_repairButtonLabel.Style.FontColor = Color.White;
+		_repairButtonLabel.Style.FontSize = Length.Pixels( 15f * TextScale );
+		_repairButtonLabel.Style.Set( "pointer-events", "none" );
+		_repairButtonLabel.Style.Set( "white-space", "nowrap" );
 
 		var craftWrap = new Panel { Parent = header };
 		craftWrap.Style.Set( "position", "relative" );
@@ -242,7 +274,9 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		rowParent.DeleteChildren();
 		_rows.Clear();
 		var nearCampfire = IsNearCampfire();
+		var workbenchOpen = IsWorkbenchOpen;
 		_builtNearCampfire = nearCampfire;
+		_builtWorkbenchOpen = workbenchOpen;
 
 		foreach ( var recipe in CraftingRecipeCatalog.All )
 		{
@@ -252,7 +286,14 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 			if ( !recipe.IsUnlockedByDefault )
 				continue;
 
-			if ( recipe.RequiresStation && !HasRequiredStation( recipe ) )
+			// Workbench view lists the bench's recipe set; the plain menu hides
+			// station-gated recipes until the station is nearby (campfire food).
+			if ( workbenchOpen )
+			{
+				if ( !recipe.AppearsAtStation( Workbench.StationId ) )
+					continue;
+			}
+			else if ( recipe.RequiresStation && !HasRequiredStation( recipe ) )
 				continue;
 
 			var row = new CraftingRecipeRowPanel
@@ -310,6 +351,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 		_recipeListPanel?.SetRowCount( _rows.Count );
 		_builtRecipeContentVersion = BuildRecipeListVersion( nearCampfire );
+		RefreshWorkbenchHeader();
 
 		var keepSelection = !string.IsNullOrWhiteSpace( _selectedRecipeId )
 			&& CraftingRecipeCatalog.Get( _selectedRecipeId ) is not null;
@@ -330,7 +372,8 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 		var nearCampfire = IsNearCampfire();
 		var version = BuildRecipeListVersion( nearCampfire );
-		if ( version == _builtRecipeContentVersion && nearCampfire == _builtNearCampfire )
+		if ( version == _builtRecipeContentVersion && nearCampfire == _builtNearCampfire
+		     && IsWorkbenchOpen == _builtWorkbenchOpen )
 			return;
 
 		var content = _recipeListPanel?.Content;
@@ -395,6 +438,9 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( !IsScrollTargetActive )
 			return false;
 
+		if ( TryRepairPointerAtScreen( screenPos, pressed ) )
+			return true;
+
 		var over = _craftButton is not null && _craftButton.IsValid()
 		           && IsScreenPosInsidePanel( _craftButton, screenPos );
 
@@ -450,6 +496,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		ResourceDefinitionCatalog.EnsureLoaded();
 		RefreshSelectedDetail();
 		UpdateRowHighlights();
+		RefreshWorkbenchHeader();
 	}
 
 	void RefreshSelectedDetail()
@@ -610,6 +657,14 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 		RebuildRecipeRowsIfNeeded();
 		_recipeListPanel?.PollWheelWhileOpen();
+
+		// Repair grey state follows live wear (host sync lands shortly after a repair click).
+		if ( _repairButton is not null && IsWorkbenchOpen && Time.NowDouble >= _nextRepairStateRefreshAt )
+		{
+			_nextRepairStateRefreshAt = Time.NowDouble + 0.25;
+			_repairButton.Style.BackgroundColor = RepairButtonColor;
+			RefreshWorkbenchHeader();
+		}
 	}
 
 	public void OnMenuGlobalMouseUp()
@@ -679,6 +734,53 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	bool IsNearCampfire() =>
 		_inventory is not null
 		&& Campfire.IsPlayerNearLitOrFueledStation( _inventory.GameObject, Campfire.StationId );
+
+	PlayerInventoryInteraction ResolveInteraction() =>
+		_interaction ??= _inventory?.Components.Get<PlayerInventoryInteraction>();
+
+	bool IsWorkbenchOpen => ResolveInteraction()?.OpenWorkbench is not null;
+
+	/// <summary>Title + repair button follow the open workbench; repair grey state reads live slot wear.</summary>
+	void RefreshWorkbenchHeader()
+	{
+		var workbenchOpen = IsWorkbenchOpen;
+
+		if ( _titleLabel is not null )
+			_titleLabel.Text = workbenchOpen ? "Workbench" : "Crafting";
+
+		if ( _repairButton is null )
+			return;
+
+		_repairButton.Style.Set( "display", workbenchOpen ? "flex" : "none" );
+		if ( !workbenchOpen )
+			return;
+
+		_repairAvailable = _crafting is not null && _crafting.HasDamagedTool();
+		_repairButton.Style.Set( "opacity", _repairAvailable ? "1" : "0.45" );
+		_repairButton.Style.Set( "cursor", _repairAvailable ? "pointer" : "default" );
+		if ( _repairButtonLabel is not null )
+			_repairButtonLabel.Text = _repairAvailable ? "Repair Tool" : "No damaged tools";
+	}
+
+	bool TryRepairPointerAtScreen( Vector2 screenPos, bool pressed )
+	{
+		if ( !IsWorkbenchOpen || _repairButton is null || !_repairButton.IsValid() )
+			return false;
+
+		if ( !IsScreenPosInsidePanel( _repairButton, screenPos ) )
+			return false;
+
+		if ( !pressed )
+			return true;
+
+		if ( !_repairAvailable || _crafting is null )
+			return true;
+
+		_repairButton.Style.BackgroundColor = RepairButtonPressedColor;
+		_crafting.OwnerTryRepairDamagedTool();
+		_nextRepairStateRefreshAt = 0;
+		return true;
+	}
 
 	bool HasRequiredStation( CraftingRecipe recipe )
 	{

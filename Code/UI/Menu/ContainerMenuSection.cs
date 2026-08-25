@@ -214,13 +214,16 @@ public sealed class ContainerMenuSection : IPlayerMenuSection
 		var resourceId = slot.IsEmpty ? string.Empty : slot.ResourceId ?? string.Empty;
 		var count = slot.IsEmpty ? 0 : slot.Count;
 
+		var wear = slot.IsEmpty ? 0 : slot.Wear;
 		var iconPath = slot.IsEmpty ? string.Empty : ResourceCatalog.GetIconPath( resourceId );
-		if ( ui.LastResourceId == resourceId && ui.LastCount == count && ui.LastIconPath == iconPath )
+		if ( ui.LastResourceId == resourceId && ui.LastCount == count && ui.LastIconPath == iconPath
+		     && ui.LastWear == wear )
 			return;
 
 		ui.LastResourceId = resourceId;
 		ui.LastCount = count;
 		ui.LastIconPath = iconPath;
+		ui.LastWear = wear;
 		ResourceCatalog.ApplyStackVisual( ui.IconPanel, ui.CountLabel, slot );
 	}
 
@@ -231,6 +234,7 @@ public sealed class ContainerMenuSection : IPlayerMenuSection
 		public string LastResourceId { get; set; }
 		public string LastIconPath { get; set; }
 		public int LastCount { get; set; } = -1;
+		public int LastWear { get; set; } = -1;
 
 		public SlotUi( Panel iconPanel, Label countLabel )
 		{

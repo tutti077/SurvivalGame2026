@@ -46,6 +46,17 @@ public sealed class EquipmentProfileData
 	[JsonPropertyName( "harvestToolType" )]
 	public string HarvestToolType { get; set; } = string.Empty;
 
+	/// <summary>Total durability uses before the item breaks. 0 = item never wears.</summary>
+	[JsonPropertyName( "durabilityMax" )]
+	public int DurabilityMax { get; set; }
+
+	/// <summary>
+	/// Passive drain: one durability tick per this many seconds while equipped in MainHand
+	/// (torch/lantern). 0 = no passive drain; weapon hits still cost 1 tick each.
+	/// </summary>
+	[JsonPropertyName( "durabilityDrainSecondsEquipped" )]
+	public float DurabilityDrainSecondsEquipped { get; set; }
+
 	/// <summary>Minimum tool tier for harvest nodes that require one.</summary>
 	[JsonPropertyName( "harvestToolTier" )]
 	public int HarvestToolTier { get; set; }

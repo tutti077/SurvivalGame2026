@@ -305,6 +305,118 @@ public static class ResourceCatalog
 				countLabel.Style.Set( "display", "flex" );
 			}
 		}
+
+		// Reset any ghost fade; broken state reads from the grey bar + red X, not opacity.
+		iconPanel.Style.Set( "opacity", "1" );
+		ApplyDurabilityBar( iconPanel, slot );
+		ApplyBrokenOverlay( iconPanel, ToolDurability.IsBroken( slot ) );
+	}
+
+	static readonly Color DurabilityBarColor = new( 0.87f, 0.76f, 0.38f );
+	static readonly Color DurabilityBrokenBarColor = new( 0.5f, 0.5f, 0.5f );
+
+	/// <summary>
+	/// Health-bar style durability readout along the icon's bottom edge: every durability item
+	/// shows it — full tan/yellow when untouched, shrinking with wear, entirely grey when broken.
+	/// </summary>
+	static void ApplyDurabilityBar( Panel iconPanel, in InventorySlot slot )
+	{
+		var track = FindChildWithClass( iconPanel, "durability-track" );
+
+		if ( slot.IsEmpty || !ToolDurability.HasDurability( slot.ResourceId ) )
+		{
+			track?.Style.Set( "display", "none" );
+			return;
+		}
+
+		Panel fill = null;
+		if ( track is null )
+		{
+			track = new Panel { Parent = iconPanel };
+			track.AddClass( "durability-track" );
+			track.Style.Set( "position", "absolute" );
+			track.Style.Set( "left", "6%" );
+			track.Style.Set( "right", "6%" );
+			track.Style.Set( "bottom", "5%" );
+			track.Style.Set( "height", "9%" );
+			track.Style.Set( "border-radius", "2px" );
+			track.Style.BackgroundColor = new Color( 0f, 0f, 0f, 0.65f );
+			track.Style.Set( "pointer-events", "none" );
+
+			fill = new Panel { Parent = track };
+			fill.AddClass( "durability-fill" );
+			fill.Style.Set( "position", "absolute" );
+			fill.Style.Set( "left", "0" );
+			fill.Style.Set( "top", "0" );
+			fill.Style.Set( "bottom", "0" );
+			fill.Style.Set( "border-radius", "2px" );
+		}
+		else
+		{
+			fill = FindChildWithClass( track, "durability-fill" );
+		}
+
+		track.Style.Set( "display", "flex" );
+		if ( fill is null )
+			return;
+
+		var broken = ToolDurability.IsBroken( slot );
+		var frac = ToolDurability.GetRemainingFraction( slot );
+		fill.Style.Width = Length.Percent( broken ? 100f : Math.Max( frac * 100f, 3f ) );
+		fill.Style.BackgroundColor = broken ? DurabilityBrokenBarColor : DurabilityBarColor;
+	}
+
+	/// <summary>Semi-transparent red X over the icon while the item is broken.</summary>
+	static void ApplyBrokenOverlay( Panel iconPanel, bool broken )
+	{
+		var overlay = FindChildWithClass( iconPanel, "broken-x" );
+
+		if ( !broken )
+		{
+			overlay?.Style.Set( "display", "none" );
+			return;
+		}
+
+		if ( overlay is null )
+		{
+			overlay = new Panel { Parent = iconPanel };
+			overlay.AddClass( "broken-x" );
+			overlay.Style.Set( "position", "absolute" );
+			overlay.Style.Set( "left", "0" );
+			overlay.Style.Set( "top", "0" );
+			overlay.Style.Set( "right", "0" );
+			overlay.Style.Set( "bottom", "0" );
+			overlay.Style.Set( "pointer-events", "none" );
+
+			for ( var i = 0; i < 2; i++ )
+			{
+				var stroke = new Panel { Parent = overlay };
+				stroke.Style.Set( "position", "absolute" );
+				stroke.Style.Set( "left", "10%" );
+				stroke.Style.Set( "right", "10%" );
+				stroke.Style.Set( "top", "44%" );
+				stroke.Style.Set( "height", "12%" );
+				stroke.Style.Set( "border-radius", "3px" );
+				stroke.Style.BackgroundColor = new Color( 0.85f, 0.12f, 0.1f, 0.55f );
+				stroke.Style.Set( "transform", i == 0 ? "rotate(45deg)" : "rotate(-45deg)" );
+			}
+		}
+
+		overlay.Style.Set( "display", "flex" );
+	}
+
+	static Panel FindChildWithClass( Panel parent, string className )
+	{
+		if ( parent is null )
+			return null;
+
+		foreach ( var child in parent.Children )
+		{
+			if ( child is not null && child.HasClass( className ) )
+				return child;
+		}
+
+		return null;
 	}
 
 	/// <summary>Faded item icon for an empty hotbar slot that still has a remembered binding.</summary>
@@ -330,6 +442,8 @@ public static class ResourceCatalog
 		}
 
 		iconPanel.Style.Set( "display", "flex" );
+		ApplyDurabilityBar( iconPanel, InventorySlot.Empty );
+		ApplyBrokenOverlay( iconPanel, broken: false );
 
 		if ( countLabel is not null )
 		{

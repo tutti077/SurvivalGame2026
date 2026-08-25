@@ -757,7 +757,8 @@ public partial class PlayerCombat : Component
 	}
 
 	protected virtual bool CanStartPrimaryAttack() =>
-		!IsMeleeAttackChainBusy() && !IsBlockPreventingAttack() && CanAffordPrimaryAttackOnPress();
+		!IsMeleeAttackChainBusy() && !IsBlockPreventingAttack() && !IsActiveMainHandBroken()
+		&& CanAffordPrimaryAttackOnPress();
 
 	protected virtual bool CanContinuePrimaryAttack()
 	{

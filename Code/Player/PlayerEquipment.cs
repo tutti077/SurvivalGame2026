@@ -149,6 +149,11 @@ public sealed partial class PlayerEquipment : Component
 		var hotbarSlot = _hotbar.GetSlot( hotbarIndex );
 		if ( !hotbarSlot.IsEmpty )
 		{
+			// Broken tools cannot be equipped — the hand stays empty until a workbench repair.
+			// Wear changes raise HotbarChanged, so a tool breaking mid-use auto-unequips here.
+			if ( ToolDurability.IsBroken( hotbarSlot ) )
+				return false;
+
 			resourceId = hotbarSlot.ResourceId;
 			return !string.IsNullOrWhiteSpace( resourceId );
 		}
@@ -217,7 +222,7 @@ public sealed partial class PlayerEquipment : Component
 		if ( !previous.IsEmpty )
 		{
 			if ( held.IsEmpty )
-				held.Set( previous.ResourceId, previous.Count );
+				held.Set( previous.ResourceId, previous.Count, previous.Wear );
 			else
 				return false;
 		}

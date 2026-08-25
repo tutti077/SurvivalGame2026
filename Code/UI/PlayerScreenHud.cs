@@ -182,6 +182,8 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedTimeTrialStandChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged -= OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.AugmentStationChanged -= OnAugmentStationChanged;
+			_inventoryInteraction.FocusedWorkbenchChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.WorkbenchChanged -= OnWorkbenchChanged;
 		}
 		if ( _handHarvest is not null )
 			_handHarvest.FocusedNodeChanged -= OnInteractionPromptChanged;
@@ -908,6 +910,8 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.AugmentStationChanged += OnAugmentStationChanged;
+			_inventoryInteraction.FocusedWorkbenchChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.WorkbenchChanged += OnWorkbenchChanged;
 		}
 
 		var inventorySection = new InventoryMenuSection( _inventory, _inventoryInteraction );
@@ -1029,14 +1033,16 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _promptRoot is null )
 			return;
 
-		// Container / augment station wins over time trial / campfire / harvest.
+		// Container / augment station / workbench wins over time trial / campfire / harvest.
 		var focusedContainer = _inventoryInteraction?.FocusedContainer;
 		var focusedStation = _inventoryInteraction?.FocusedAugmentStation;
+		var focusedWorkbench = _inventoryInteraction?.FocusedWorkbench;
 		var focusedStand = _inventoryInteraction?.FocusedTimeTrialStand;
 		var menuOpen = _inventoryInteraction is { IsTimeTrialMenuOpen: true };
 		var focusedCampfire = _inventoryInteraction?.FocusedCampfire;
 		var showOpen = (focusedContainer is not null && focusedContainer.IsValid())
-		               || (focusedStation is not null && focusedStation.IsValid());
+		               || (focusedStation is not null && focusedStation.IsValid())
+		               || (focusedWorkbench is not null && focusedWorkbench.IsValid());
 		var showTrial = !menuOpen && !showOpen && focusedStand is not null && focusedStand.IsValid();
 		var showCampfire = !showOpen && !showTrial && focusedCampfire is not null && focusedCampfire.IsValid();
 		var showHarvest = !showOpen && !showTrial && !showCampfire && _handHarvest?.FocusedNode is not null;
@@ -1058,6 +1064,10 @@ public sealed class PlayerScreenHud : PanelComponent
 				_promptLabel.Text = string.IsNullOrWhiteSpace( focusedStation.DisplayName )
 					? "Open Augment Station"
 					: $"Open {focusedStation.DisplayName}";
+			}
+			else if ( focusedWorkbench is not null && focusedWorkbench.IsValid() )
+			{
+				_promptLabel.Text = "Open Workbench";
 			}
 			else if ( showTrial )
 			{
@@ -1120,6 +1130,15 @@ public sealed class PlayerScreenHud : PanelComponent
 			ApplyMenuLayout();
 
 		_augmentStationSection?.Refresh();
+	}
+
+	void OnWorkbenchChanged()
+	{
+		// Workbench open/close swaps the crafting list between the bench set and the player set.
+		if ( _menuController is not null && _menuController.IsMenuOpen )
+			ApplyMenuLayout();
+
+		_craftingSection?.Refresh();
 	}
 
 	bool OnMenuRecipeSelectAtScreen( Vector2 screenPos )

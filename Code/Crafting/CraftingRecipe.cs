@@ -53,6 +53,14 @@ public sealed class CraftingRecipe
 	[JsonPropertyName( "requiredStation" )]
 	public string RequiredStation { get; set; } = string.Empty;
 
+	/// <summary>
+	/// Stations whose crafting menus list this recipe (a recipe can appear at several benches).
+	/// Empty = default: <see cref="RequiredStation"/> when set (campfire food), else <c>workbench</c>.
+	/// Listing here does not gate crafting — only <see cref="RequiredStation"/> does.
+	/// </summary>
+	[JsonPropertyName( "stations" )]
+	public List<string> Stations { get; set; } = new();
+
 	/// <summary>Hold-to-craft duration in seconds. 0 = UI default.</summary>
 	[JsonPropertyName( "craftSeconds" )]
 	public float CraftSeconds { get; set; }
@@ -61,6 +69,29 @@ public sealed class CraftingRecipe
 	public int TotalOutputAmount => Math.Max( 1, OutputAmount );
 
 	public bool RequiresStation => !string.IsNullOrWhiteSpace( RequiredStation );
+
+	/// <summary>Whether this recipe shows in the crafting menu of the given station.</summary>
+	public bool AppearsAtStation( string stationId )
+	{
+		if ( string.IsNullOrWhiteSpace( stationId ) )
+			return false;
+
+		if ( Stations is { Count: > 0 } )
+		{
+			for ( var i = 0; i < Stations.Count; i++ )
+			{
+				if ( string.Equals( Stations[i], stationId, StringComparison.OrdinalIgnoreCase ) )
+					return true;
+			}
+
+			return false;
+		}
+
+		if ( RequiresStation )
+			return string.Equals( RequiredStation, stationId, StringComparison.OrdinalIgnoreCase );
+
+		return string.Equals( stationId, Workbench.StationId, StringComparison.OrdinalIgnoreCase );
+	}
 
 	public float ResolvedCraftSeconds => CraftSeconds > 0.05f ? CraftSeconds : 0f;
 

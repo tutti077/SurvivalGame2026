@@ -193,14 +193,16 @@ public sealed class HotbarHud
 		var ghostKey = showGhost ? "|ghost|" : string.Empty;
 		var preferred = !showGhost && IsPreferredAmmoStack( resourceId );
 
+		var wear = slot.IsEmpty ? 0 : slot.Wear;
 		if ( ui.LastResourceId == resourceId && ui.LastCount == count && ui.LastIconPath == iconPath + ghostKey
-		     && ui.LastPreferred == preferred )
+		     && ui.LastPreferred == preferred && ui.LastWear == wear )
 			return;
 
 		ui.LastResourceId = resourceId;
 		ui.LastCount = count;
 		ui.LastIconPath = iconPath + ghostKey;
 		ui.LastPreferred = preferred;
+		ui.LastWear = wear;
 
 		ui.Root.Style.BackgroundColor = preferred
 			? new Color( 0.42f, 0.42f, 0.45f, 0.95f )
@@ -234,6 +236,7 @@ public sealed class HotbarHud
 		public string LastIconPath { get; set; }
 		public int LastCount { get; set; } = -1;
 		public bool LastPreferred { get; set; }
+		public int LastWear { get; set; } = -1;
 
 		public SlotUi( Panel root, Panel iconPanel, Label countLabel )
 		{

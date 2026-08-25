@@ -97,7 +97,7 @@ public sealed class ContainerInventory : Component
 		var ok = InventoryStackRules.PlaceHeld( _slots, slotIndex, ref held );
 		if ( ok )
 			ContentsChanged?.Invoke();
-		RpcHostPlaceHeld( slotIndex, snapshot.ResourceId ?? string.Empty, snapshot.Count );
+		RpcHostPlaceHeld( slotIndex, snapshot.ResourceId ?? string.Empty, snapshot.Count, snapshot.Wear );
 		return ok;
 	}
 
@@ -114,7 +114,7 @@ public sealed class ContainerInventory : Component
 		var ok = InventoryStackRules.FinishDragDrop( _slots, sourceSlotIndex, targetSlotIndex, ref held );
 		if ( ok )
 			ContentsChanged?.Invoke();
-		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, snapshot.ResourceId ?? string.Empty, snapshot.Count );
+		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, snapshot.ResourceId ?? string.Empty, snapshot.Count, snapshot.Wear );
 		return ok;
 	}
 
@@ -131,7 +131,7 @@ public sealed class ContainerInventory : Component
 		var ok = InventoryStackRules.SwapDragToSlot( _slots, sourceSlotIndex, targetSlotIndex, ref held );
 		if ( ok )
 			ContentsChanged?.Invoke();
-		RpcHostSwapDragToSlot( sourceSlotIndex, targetSlotIndex, snapshot.ResourceId ?? string.Empty, snapshot.Count );
+		RpcHostSwapDragToSlot( sourceSlotIndex, targetSlotIndex, snapshot.ResourceId ?? string.Empty, snapshot.Count, snapshot.Wear );
 		return ok;
 	}
 
@@ -162,7 +162,7 @@ public sealed class ContainerInventory : Component
 		var ok = InventoryStackRules.DropOne( _slots, slotIndex, held, out placedCount );
 		if ( ok )
 			ContentsChanged?.Invoke();
-		RpcHostDropOne( slotIndex, held.ResourceId ?? string.Empty, held.Count );
+		RpcHostDropOne( slotIndex, held.ResourceId ?? string.Empty, held.Count, held.Wear );
 		return ok;
 	}
 
@@ -193,7 +193,7 @@ public sealed class ContainerInventory : Component
 		var ok = InventoryStackRules.PlaceHalf( _slots, slotIndex, ref held );
 		if ( ok )
 			ContentsChanged?.Invoke();
-		RpcHostPlaceHalf( slotIndex, snapshot.ResourceId ?? string.Empty, snapshot.Count );
+		RpcHostPlaceHalf( slotIndex, snapshot.ResourceId ?? string.Empty, snapshot.Count, snapshot.Wear );
 		return ok;
 	}
 
@@ -209,7 +209,7 @@ public sealed class ContainerInventory : Component
 		var snapshot = held;
 		InventoryStackRules.AbsorbStack( _slots, ref held );
 		ContentsChanged?.Invoke();
-		RpcHostAbsorbStack( snapshot.ResourceId ?? string.Empty, snapshot.Count );
+		RpcHostAbsorbStack( snapshot.ResourceId ?? string.Empty, snapshot.Count, snapshot.Wear );
 		return held.IsEmpty;
 	}
 
@@ -384,17 +384,19 @@ public sealed class ContainerInventory : Component
 		EnsureSlotArray();
 		var ids = new string[_slots.Length];
 		var counts = new int[_slots.Length];
+		var wears = new int[_slots.Length];
 		for ( var i = 0; i < _slots.Length; i++ )
 		{
 			ids[i] = _slots[i].ResourceId ?? string.Empty;
 			counts[i] = _slots[i].Count;
+			wears[i] = _slots[i].Wear;
 		}
 
 		ContentsVersion++;
-		RpcBroadcastContents( ids, counts, DisplayName ?? string.Empty, TakeOnly, SlotCount, Columns );
+		RpcBroadcastContents( ids, counts, wears, DisplayName ?? string.Empty, TakeOnly, SlotCount, Columns );
 	}
 
-	void ApplyNetworkedContents( string[] ids, int[] counts, string displayName, bool takeOnly, int slotCount, int columns )
+	void ApplyNetworkedContents( string[] ids, int[] counts, int[] wears, string displayName, bool takeOnly, int slotCount, int columns )
 	{
 		if ( ids is null || counts is null )
 			return;
@@ -410,9 +412,10 @@ public sealed class ContainerInventory : Component
 		{
 			var id = ids[i];
 			var c = counts[i];
+			var w = wears is not null && i < wears.Length ? wears[i] : 0;
 			_slots[i] = string.IsNullOrWhiteSpace( id ) || c <= 0
 				? InventorySlot.Empty
-				: new InventorySlot { ResourceId = ResourceCatalog.NormalizeResourceId( id ), Count = c };
+				: new InventorySlot { ResourceId = ResourceCatalog.NormalizeResourceId( id ), Count = c, Wear = w };
 		}
 
 		for ( var i = n; i < _slots.Length; i++ )
@@ -435,12 +438,12 @@ public sealed class ContainerInventory : Component
 	}
 
 	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable )]
-	void RpcBroadcastContents( string[] ids, int[] counts, string displayName, bool takeOnly, int slotCount, int columns )
+	void RpcBroadcastContents( string[] ids, int[] counts, int[] wears, string displayName, bool takeOnly, int slotCount, int columns )
 	{
 		if ( Networking.IsHost )
 			return;
 
-		ApplyNetworkedContents( ids, counts, displayName, takeOnly, slotCount, columns );
+		ApplyNetworkedContents( ids, counts, wears, displayName, takeOnly, slotCount, columns );
 	}
 
 	[Rpc.Host]
@@ -461,29 +464,29 @@ public sealed class ContainerInventory : Component
 	}
 
 	[Rpc.Host]
-	void RpcHostPlaceHeld( int slotIndex, string resourceId, int count )
+	void RpcHostPlaceHeld( int slotIndex, string resourceId, int count, int wear )
 	{
 		if ( !Networking.IsHost )
 			return;
-		var held = MakeHeld( resourceId, count );
+		var held = MakeHeld( resourceId, count, wear );
 		TryPlaceHeld( slotIndex, ref held );
 	}
 
 	[Rpc.Host]
-	void RpcHostFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count )
+	void RpcHostFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count, int wear )
 	{
 		if ( !Networking.IsHost )
 			return;
-		var held = MakeHeld( resourceId, count );
+		var held = MakeHeld( resourceId, count, wear );
 		TryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
 	}
 
 	[Rpc.Host]
-	void RpcHostSwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count )
+	void RpcHostSwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count, int wear )
 	{
 		if ( !Networking.IsHost )
 			return;
-		var held = MakeHeld( resourceId, count );
+		var held = MakeHeld( resourceId, count, wear );
 		TrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref held );
 	}
 
@@ -496,11 +499,11 @@ public sealed class ContainerInventory : Component
 	}
 
 	[Rpc.Host]
-	void RpcHostDropOne( int slotIndex, string resourceId, int count )
+	void RpcHostDropOne( int slotIndex, string resourceId, int count, int wear )
 	{
 		if ( !Networking.IsHost )
 			return;
-		var held = MakeHeld( resourceId, count );
+		var held = MakeHeld( resourceId, count, wear );
 		TryDropOne( slotIndex, held, out _ );
 	}
 
@@ -513,28 +516,28 @@ public sealed class ContainerInventory : Component
 	}
 
 	[Rpc.Host]
-	void RpcHostPlaceHalf( int slotIndex, string resourceId, int count )
+	void RpcHostPlaceHalf( int slotIndex, string resourceId, int count, int wear )
 	{
 		if ( !Networking.IsHost )
 			return;
-		var held = MakeHeld( resourceId, count );
+		var held = MakeHeld( resourceId, count, wear );
 		TryPlaceHalf( slotIndex, ref held );
 	}
 
 	[Rpc.Host]
-	void RpcHostAbsorbStack( string resourceId, int count )
+	void RpcHostAbsorbStack( string resourceId, int count, int wear )
 	{
 		if ( !Networking.IsHost )
 			return;
-		var held = MakeHeld( resourceId, count );
+		var held = MakeHeld( resourceId, count, wear );
 		TryAbsorbStack( ref held );
 	}
 
-	static InventoryCursorStack MakeHeld( string resourceId, int count )
+	static InventoryCursorStack MakeHeld( string resourceId, int count, int wear = 0 )
 	{
 		var held = new InventoryCursorStack();
 		if ( !string.IsNullOrWhiteSpace( resourceId ) && count > 0 )
-			held.Set( ResourceCatalog.NormalizeResourceId( resourceId ), count );
+			held.Set( ResourceCatalog.NormalizeResourceId( resourceId ), count, wear );
 		return held;
 	}
 }

@@ -114,6 +114,8 @@ public static class BuildModuleDimensions
 		["chest"] = new( 1f, 0.6f, 0.75f ),
 		["augment_station"] = new( 1f, 0.6f, 0.75f ),
 		["furniture_campfire"] = new( 0.35f, 0.35f, 0.35f ),
+		// Workbench: 2 m wide, 1 m deep, 1 m tall (tool repair + workbench recipes).
+		["workbench"] = new( 2f, 1f, 1f ),
 	};
 
 	static float HalfUnitsFor( float meters ) =>

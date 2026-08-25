@@ -498,6 +498,13 @@ public sealed class ToolBuildHammer : Component
 		if ( _selectedData is null )
 			return;
 
+		if ( ToolDurability.IsActiveToolBroken( Pawn ) )
+		{
+			if ( LogBuildMode )
+				Log.Info( "[ToolBuildHammer] Place rejected: hammer broken — repair at a workbench." );
+			return;
+		}
+
 		if ( !_previewValid || _previewRoot is null || !_previewRoot.IsValid() )
 		{
 			if ( LogBuildMode )
@@ -522,6 +529,9 @@ public sealed class ToolBuildHammer : Component
 
 	void TryRepairLookedAtBuildPiece()
 	{
+		if ( ToolDurability.IsActiveToolBroken( Pawn ) )
+			return;
+
 		if ( !BuildPlacementUtility.TryGetViewRay( Pawn, out var origin, out var direction ) )
 			return;
 

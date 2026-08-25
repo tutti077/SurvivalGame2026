@@ -259,6 +259,22 @@
       ]
     },
     {
+      "id": "workbench",
+      "displayName": "Workbench",
+      "icon": "",
+      "prefab": "prefabs/build/workbench.prefab",
+      "fallbackColor": "0.79,0.64,0.44,1",
+      "halfWidth": 50,
+      "halfHeight": 25,
+      "halfDepth": 25,
+      "costs": [
+        {
+          "resourceId": "resource_woodBasic",
+          "amount": 10
+        }
+      ]
+    },
+    {
       "id": "augment_station",
       "displayName": "Augment Station",
       "icon": "",

@@ -50,6 +50,9 @@ public sealed class CombatAuthority : Component
 		// After Rpc.Host stacks unwind — push path overlays / swing anim via NetworkManager Broadcast.
 		PlayerCombat.FlushDeferredSwingVisualBroadcasts( scene );
 		PlayerAnimation.FlushDeferredSwingAnimBroadcasts( scene );
+
+		// Torch/lantern passive durability drain (per-hotbar host-authority checks inside).
+		EquippedToolDrainAuthority.HostTick( scene );
 	}
 
 	/// <summary>

@@ -109,7 +109,7 @@ public partial class PlayerCombat
 
 		if ( Input.Pressed( PrimaryAttackAction ) && !_bowCharging )
 		{
-			if ( !OwnerHasAmmoForEquippedBow() )
+			if ( !OwnerHasAmmoForEquippedBow() || IsActiveMainHandBroken() )
 				return;
 
 			_bowCharging = true;
@@ -246,6 +246,9 @@ public partial class PlayerCombat
 		if ( !EquipmentCatalog.HasAction( weaponId, EquippedItemActions.PrimaryRanged ) )
 			return;
 
+		if ( IsActiveMainHandBroken() )
+			return;
+
 		if ( !AmmoCatalog.TryGetWeaponAmmoType( weaponId, out var ammoType ) )
 			return;
 
@@ -278,6 +281,9 @@ public partial class PlayerCombat
 
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
 		ArrowProjectile.HostSpawn( scene, origin, velocity, damage, GameObject, this, ammoId );
+
+		// Bow durability: 1 tick per shot fired, hit or miss.
+		HostAddWearToActiveMainHand();
 	}
 
 	Vector3 ApplyBowInaccuracy( Vector3 aimDir, float charge01, uint seed )

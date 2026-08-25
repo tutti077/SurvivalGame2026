@@ -73,6 +73,10 @@ public partial class PlayerCombat
 		if ( IsAuthoritativeMeleeBlocking || IsCombatActionLocked )
 			return false;
 
+		// Broken weapons cannot swing — repair at a workbench first.
+		if ( IsActiveMainHandBroken() )
+			return false;
+
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
 		return scene.IsValid();
 	}
@@ -1145,6 +1149,10 @@ public partial class PlayerCombat
 
 			if ( !_pc.IsValid() || !_pc.GameObject.IsValid() )
 				return;
+
+			// Weapon durability: 1 tick per swing that connected with anything (hit or blocked).
+			if ( !_visualOnly && _anyHit )
+				_pc.HostAddWearToActiveMainHand();
 
 			if ( !_visualOnly )
 			{

@@ -172,6 +172,110 @@ public sealed class PlayerCrafting : Component
 		return true;
 	}
 
+	/// <summary>Local UI check: any tool in hotbar or bag with wear (drives the workbench repair button).</summary>
+	public bool HasDamagedTool()
+	{
+		var hotbar = Components.Get<PlayerHotbar>();
+		if ( hotbar is not null )
+		{
+			for ( var i = 0; i < PlayerHotbar.SlotCount; i++ )
+			{
+				if ( ToolDurability.IsDamaged( hotbar.GetSlot( i ) ) )
+					return true;
+			}
+		}
+
+		if ( _inventory is null )
+			_inventory = Components.Get<PlayerInventory>();
+
+		if ( _inventory is not null )
+		{
+			for ( var i = 0; i < _inventory.SlotCount; i++ )
+			{
+				if ( ToolDurability.IsDamaged( _inventory.GetSlot( i ) ) )
+					return true;
+			}
+		}
+
+		return false;
+	}
+
+	/// <summary>Workbench repair click: restore the most-damaged tool (hotbar + bag) to full, for free.</summary>
+	public bool OwnerTryRepairDamagedTool()
+	{
+		if ( _inventory is null )
+			_inventory = Components.Get<PlayerInventory>();
+
+		if ( _inventory is null || !_inventory.IsLocalManagingClient() )
+			return false;
+
+		if ( _inventory.HasHostAuthority )
+			return HostTryRepairMostDamagedTool();
+
+		RpcHostRepairDamagedTool();
+		return true;
+	}
+
+	[Rpc.Host]
+	void RpcHostRepairDamagedTool()
+	{
+		if ( !Networking.IsHost )
+			return;
+
+		if ( Rpc.Caller is { } caller
+		     && GameObject.Network is { Active: true, Owner: { } owner }
+		     && caller.Id != owner.Id )
+			return;
+
+		HostTryRepairMostDamagedTool();
+	}
+
+	public bool HostTryRepairMostDamagedTool()
+	{
+		if ( _inventory is null )
+			_inventory = Components.Get<PlayerInventory>();
+
+		if ( _inventory is null || !_inventory.HasHostAuthority )
+			return false;
+
+		var hotbar = Components.Get<PlayerHotbar>();
+		var bestWear = 0;
+		var bestHotbarIndex = -1;
+		var bestBagIndex = -1;
+
+		if ( hotbar is not null )
+		{
+			for ( var i = 0; i < PlayerHotbar.SlotCount; i++ )
+			{
+				var slot = hotbar.GetSlot( i );
+				if ( ToolDurability.IsDamaged( slot ) && slot.Wear > bestWear )
+				{
+					bestWear = slot.Wear;
+					bestHotbarIndex = i;
+				}
+			}
+		}
+
+		for ( var i = 0; i < _inventory.SlotCount; i++ )
+		{
+			var slot = _inventory.GetSlot( i );
+			if ( ToolDurability.IsDamaged( slot ) && slot.Wear > bestWear )
+			{
+				bestWear = slot.Wear;
+				bestHotbarIndex = -1;
+				bestBagIndex = i;
+			}
+		}
+
+		if ( bestHotbarIndex >= 0 )
+			return hotbar.HostClearWear( bestHotbarIndex );
+
+		if ( bestBagIndex >= 0 )
+			return _inventory.HostClearWear( bestBagIndex );
+
+		return false;
+	}
+
 	static List<CraftingIngredient> BuildIngredients( CraftingRecipe recipe )
 	{
 		var list = new List<CraftingIngredient>();
