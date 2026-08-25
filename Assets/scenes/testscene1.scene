@@ -203,6 +203,14 @@
             },
             "Property": "Position",
             "Value": "0,-160,64"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "a334750f-a7f9-4e36-9c2d-563b96bda182"
+            },
+            "Property": "WingsuitDeployForwardGraceSeconds",
+            "Value": 0.5
           }
         ],
         "MovedObjects": []

@@ -23,11 +23,11 @@ partial class PlayerMovement
 	[Property, Group( "Wingsuit" ), Title( "Roll return (deg/s)" ), Range( 0f, 120f ), Step( 5f )]
 	public float WingsuitRollReturn { get; set; } = 55f;
 
-	[Property, Group( "Wingsuit" ), Title( "Min pitch (deg, nose up)" ), Range( -80f, 0f ), Step( 1f )]
-	public float WingsuitMinPitch { get; set; } = -65f;
+	[Property, Group( "Wingsuit" ), Title( "Min pitch (deg, nose up)" ), Range( -90f, 0f ), Step( 1f )]
+	public float WingsuitMinPitch { get; set; } = -90f;
 
-	[Property, Group( "Wingsuit" ), Title( "Max pitch (deg, nose down)" ), Range( 0f, 85f ), Step( 1f )]
-	public float WingsuitMaxPitch { get; set; } = 75f;
+	[Property, Group( "Wingsuit" ), Title( "Max pitch (deg, nose down)" ), Range( 0f, 90f ), Step( 1f )]
+	public float WingsuitMaxPitch { get; set; } = 90f;
 
 	[Property, Group( "Wingsuit" ), Title( "Fallback open pitch (no camera)" ), Range( -20f, 60f ), Step( 1f )]
 	public float WingsuitOpenPitch { get; set; } = 18f;
@@ -62,20 +62,60 @@ partial class PlayerMovement
 	/// <summary>
 	/// Fraction of gravity charged against airspeed while climbing. 1 = full ballistic trade:
 	/// climb height is bounded by v²/2g, so how far you can pull up depends on entry speed.
-	/// Below 1 the dive/climb pump generates free energy (never need to land).
+	/// Must stay at or above <see cref="WingsuitDiveAccelScale"/> — if diving pays out more than
+	/// climbing charges, the dive/climb pump generates free energy and the player never lands.
+	/// Slightly above 1 so every pump cycle ends lower than it began.
 	/// </summary>
 	[Property, Group( "Wingsuit" ), Title( "Climb cost scale" ), Range( 0f, 2f ), Step( 0.05f )]
-	public float WingsuitClimbCostScale { get; set; } = 1f;
+	public float WingsuitClimbCostScale { get; set; } = 1.15f;
 
-	/// <summary>Straight-down dive gains speed at this multiple of gravity (freefall = 1.0).</summary>
+	/// <summary>
+	/// Straight-down dive gains speed at this multiple of gravity (freefall = 1.0). Keep at 1:
+	/// anything above it mints energy against the climb cost (see <see cref="WingsuitClimbCostScale"/>).
+	/// </summary>
 	[Property, Group( "Wingsuit" ), Title( "Dive accel scale" ), Range( 0f, 3f ), Step( 0.05f )]
-	public float WingsuitDiveAccelScale { get; set; } = 1.5f;
+	public float WingsuitDiveAccelScale { get; set; } = 1f;
 
+	/// <summary>
+	/// Bonus speed near the efficient glide pitch, <b>only while genuinely descending</b> — it
+	/// models a clean glide converting sink into airspeed, not an engine. It used to fire at level
+	/// attitude too, where it beat base drag and held ~3200 u/s at zero sink forever: the core of
+	/// the never-needs-to-land bug.
+	/// </summary>
 	[Property, Group( "Wingsuit" ), Title( "Cruise accel scale" ), Range( 0f, 1f ), Step( 0.01f )]
 	public float WingsuitCruiseAccelScale { get; set; } = 0.22f;
 
+	/// <summary>
+	/// Forward distance per unit of height in level (blue) flight — the flight path tilts down by
+	/// this ratio while airspeed stays untouched, so a level attitude still sinks and range is
+	/// bounded by altitude without slowing travel. This is the "must come down" rule: bleeding
+	/// <i>speed</i> in level flight ruined travel and kept altitude; a glide slope drains altitude
+	/// and keeps travel. Fades out where a dive supplies its own descent and where a climb is
+	/// paying the ballistic cost. Lesser wingsuit tiers lower this to shorten their legs.
+	/// </summary>
+	[Property, Group( "Wingsuit" ), Title( "Glide ratio (distance : height)" ), Range( 1f, 12f ), Step( 0.5f )]
+	public float WingsuitGlideRatio { get; set; } = 5f;
+
 	[Property, Group( "Wingsuit" ), Title( "Min airborne before deploy (s)" ), Range( 0.2f, 3f ), Step( 0.05f )]
 	public float WingsuitMinAirborneSeconds { get; set; } = 0.9f;
+
+	/// <summary>
+	/// Nose-down (W) input is ignored this long after deploy. W is almost always still held from
+	/// the sprint that carried the player off the cliff — for the first beat it means "I was
+	/// running", not "dive", and honoring it slammed the opening pitch straight down.
+	/// </summary>
+	[Property, Group( "Wingsuit" ), Title( "Deploy dive-input grace (s)" ), Range( 0f, 2f ), Step( 0.05f )]
+	public float WingsuitDeployForwardGraceSeconds { get; set; } = 0.5f;
+
+	/// <summary>
+	/// After the stall nose-over reaches full dive, the wing holds off biting for this long — the
+	/// player is in true gravity free fall, dropping and building fall speed, not in a steerable
+	/// glide with locked input. Control and glide return together at the end, so the comeback
+	/// timing feels identical while the height is already genuinely gone: a pull-up then has to
+	/// turn real downward momentum instead of cancelling a dive that never fell.
+	/// </summary>
+	[Property, Group( "Wingsuit" ), Title( "Stall free-fall hold (s)" ), Range( 0f, 3f ), Step( 0.05f )]
+	public float WingsuitStallFreefallHoldSeconds { get; set; } = 0.5f;
 
 	[Property, Group( "Wingsuit" ), Title( "Crash min speed" ), Range( 50f, 2000f ), Step( 25f )]
 	public float WingsuitCrashMinSpeed { get; set; } = 180f;
@@ -119,6 +159,12 @@ partial class PlayerMovement
 	bool _wingsuitGravityOverrideActive;
 	/// <summary>True after a hard nose-up stall — full gravity until tipped back into a dive.</summary>
 	bool _wingsuitGravityPlummet;
+
+	/// <summary>When the suit last opened — anchors the deploy dive-input grace window.</summary>
+	float _wingsuitDeployTime;
+
+	/// <summary>When the nose-over reached full dive — anchors the free-fall hold before air bites.</summary>
+	float _wingsuitNoseOverDoneTime = float.MinValue;
 
 	/// <summary>
 	/// After air-stow / crash: not gliding, but still waiting for ground to re-enter walk.
@@ -238,6 +284,7 @@ partial class PlayerMovement
 		_wingsuitYaw = yaw;
 		_wingsuitPitch = Math.Clamp( pitch, WingsuitMinPitch, WingsuitMaxPitch );
 		_wingsuitFreefallAwaitingLand = false;
+		_wingsuitDeployTime = Time.Now;
 		WingsuitDeployed = true;
 	}
 
@@ -452,6 +499,18 @@ partial class PlayerMovement
 		var pitchInput = (Input.Down( "Forward" ) ? 1f : 0f) + (Input.Down( "Backward" ) ? -1f : 0f);
 		var rollInput = (Input.Down( "Left" ) ? -1f : 0f) + (Input.Down( "Right" ) ? 1f : 0f);
 
+		// W still held from the sprint off the cliff is not a dive request — see the grace property.
+		if ( pitchInput > 0f && Time.Now - _wingsuitDeployTime < WingsuitDeployForwardGraceSeconds )
+			pitchInput = 0f;
+
+		// Stalled: the suit has quit flying. Controls are dead while the nose drops through on its
+		// own (see the plummet branch) — the player gets them back once air catches in the dive.
+		if ( _wingsuitGravityPlummet )
+		{
+			pitchInput = 0f;
+			rollInput = 0f;
+		}
+
 		_wingsuitPitch = Math.Clamp(
 			_wingsuitPitch + pitchInput * WingsuitPitchRate * dt,
 			WingsuitMinPitch,
@@ -505,6 +564,7 @@ partial class PlayerMovement
 			if ( v.Length < WingsuitStallSpeed * 0.35f )
 			{
 				_wingsuitGravityPlummet = true;
+				_wingsuitNoseOverDoneTime = float.MinValue;
 				SetWingsuitGlideGravity( body, glideNoGravity: false );
 				body.Velocity = Vector3.Lerp( v, gDir * Math.Max( v.Length, 80f ), 0.55f );
 				GameObject.WorldRotation = Rotation.LookAt( nose, glideRot.Up );
@@ -519,16 +579,34 @@ partial class PlayerMovement
 		if ( _wingsuitGravityPlummet )
 		{
 			SetWingsuitGlideGravity( body, glideNoGravity: false );
+
+			// The stalled suit noses over by itself, all the way to the full dive — the player
+			// pushed past what the wing could hold, so the wing decides the exit. Twice the manual
+			// pitch rate: a stall throws the nose down, it doesn't ease it. Gravity builds real
+			// fall speed the whole way.
+			_wingsuitPitch = Math.Min( _wingsuitPitch + WingsuitPitchRate * 2f * dt, WingsuitMaxPitch );
+			glideRot = BuildWingsuitGlideRotation();
+			nose = glideRot.Forward.Normal;
+
 			GameObject.WorldRotation = Rotation.LookAt( nose, glideRot.Up );
 			Transform.ClearInterpolation();
 
-			// Tip back into a dive to catch air again with whatever fall speed you have.
-			if ( alongNose > 0.18f )
+			// Bottom of the nose-over: the wing does not bite yet. Free fall holds for a beat so
+			// the drop is already real — then glide and control return together, as a max-pitch
+			// dive carrying the accumulated fall speed. Pulling back up (S) carries the player on
+			// the heading they had, but now it has to turn genuine downward momentum.
+			if ( _wingsuitPitch >= WingsuitMaxPitch - 0.5f )
 			{
-				_wingsuitGravityPlummet = false;
-				var fallSpeed = body.Velocity.Length;
-				_wingsuitSpeedLimit = Math.Max( _wingsuitSpeedLimit, Math.Max( fallSpeed, WingsuitStallSpeed ) );
-				SetWingsuitGlideGravity( body, glideNoGravity: true );
+				if ( _wingsuitNoseOverDoneTime == float.MinValue )
+					_wingsuitNoseOverDoneTime = Time.Now;
+
+				if ( Time.Now - _wingsuitNoseOverDoneTime >= WingsuitStallFreefallHoldSeconds )
+				{
+					_wingsuitGravityPlummet = false;
+					var fallSpeed = body.Velocity.Length;
+					_wingsuitSpeedLimit = Math.Max( _wingsuitSpeedLimit, Math.Max( fallSpeed, WingsuitStallSpeed ) );
+					SetWingsuitGlideGravity( body, glideNoGravity: true );
+				}
 			}
 
 			return;
@@ -566,8 +644,9 @@ partial class PlayerMovement
 			speed = Math.Max( 0f, speed - gMag * noseUpAmount * WingsuitClimbCostScale * dt );
 		}
 
+		// Cruise assist only while sinking (nose ≳ 5° down) — descent is the suit's one fuel tank.
 		var efficient = Math.Clamp( 1f - MathF.Abs( _wingsuitPitch - 22f ) / 40f, 0f, 1f );
-		if ( efficient > 0.2f && alongNose >= -0.05f )
+		if ( efficient > 0.2f && alongNose > 0.08f )
 			speed += gMag * WingsuitCruiseAccelScale * efficient * dt;
 
 		speed *= MathF.Exp( -WingsuitBaseDrag * (1.05f - 0.55f * efficient) * dt );
@@ -578,7 +657,16 @@ partial class PlayerMovement
 		var speedRatio = Math.Clamp( speed / stallRef, 0f, 1.5f );
 		var glideAuthority = Math.Clamp( 1f - MathF.Exp( -2.4f * speedRatio ), 0f, 1f );
 
-		var glideVel = nose * Math.Max( speed, 0f );
+		// Blue-phase glide slope: a level attitude flies a descending path. The direction tilts
+		// down by 1/GlideRatio at the same airspeed — magnitude untouched, so travel speed is
+		// preserved and only altitude drains. Strongest in the flat band, fading toward a dive
+		// (which sinks by itself) and toward a climb (which is already paying gravity for height).
+		var glideDir = nose;
+		var blueness = 1f - Math.Clamp( MathF.Abs( alongNose ) / 0.35f, 0f, 1f );
+		if ( blueness > 1e-3f && WingsuitGlideRatio > 0.1f )
+			glideDir = ( nose + Vector3.Down * (blueness / WingsuitGlideRatio) ).Normal;
+
+		var glideVel = glideDir * Math.Max( speed, 0f );
 		var fallVel = vel + gravity * dt;
 		vel = Vector3.Lerp( fallVel, glideVel, glideAuthority );
 
@@ -590,6 +678,7 @@ partial class PlayerMovement
 		if ( speed < WingsuitStallSpeed * 0.25f && noseUpAmount > 0.35f )
 		{
 			_wingsuitGravityPlummet = true;
+			_wingsuitNoseOverDoneTime = float.MinValue;
 			SetWingsuitGlideGravity( body, glideNoGravity: false );
 			body.Velocity = vel;
 			GameObject.WorldRotation = Rotation.LookAt( nose, glideRot.Up );
