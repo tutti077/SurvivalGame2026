@@ -53,9 +53,9 @@ static class BuildSnapAlignment
 		out Transform placement )
 	{
 		placement = default;
-		var orientedRot = alignedYaw * BuildModuleDimensions.GetPrefabLocalRotation( placingPieceId );
+		var orientedRot = alignedYaw;
 		var scale = BuildModuleDimensions.GetPieceLocalScale( placingPieceId );
-		var colliderHalf = BuildColliderSnap.PrefabColliderSize * 0.5f;
+		var colliderHalf = BuildColliderSnap.GetColliderHalfForPiece( placingPieceId );
 
 		var a0 = BuildColliderSnap.GetCornerSnapWorldOffset(
 			placingPieceId, placingEdge.CornerA, orientedRot, scale, colliderHalf );

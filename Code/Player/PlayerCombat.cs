@@ -225,7 +225,7 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc forward scale (start)" )]
 	public float MeleeAttackForwardArcForwardScaleStart { get; set; } = 1f;
 
-	/// <summary>Legacy cos scale (path uses lateral-matched reach; kept for prefab compatibility).</summary>
+	/// <summary>Cos scale at mid-stroke; <see cref="MeleeAttackForwardArcForwardScaleStart"/> ramps into this. Read every overhead swing by <c>MeleeAttackPath</c>.</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc forward scale" )]
 	public float MeleeAttackForwardArcForwardScale { get; set; } = 1f;
 
@@ -233,13 +233,6 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc vertical scale" )]
 	public float MeleeAttackForwardArcVerticalScale { get; set; } = 1.02f;
 
-	/// <summary>Legacy — no longer drives pivot; kept for prefab revert. See head pivot locals below.</summary>
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pivot forward start (× range, legacy)" )]
-	public float MeleeAttackForwardPivotForwardStartFraction { get; set; } = 0.035f;
-
-	/// <summary>Legacy — no longer drives pivot; kept for prefab revert. See head pivot locals below.</summary>
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pivot forward end (× range, legacy)" )]
-	public float MeleeAttackForwardPivotForwardEndFraction { get; set; } = 0.09f;
 
 	/// <summary>Overhead arc pivot: combat-local +X from body origin at stroke start (head/shoulder, not weapon reach).</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pivot forward local (start)" )]

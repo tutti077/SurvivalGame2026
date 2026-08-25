@@ -19,20 +19,6 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "World" ), Title( "Lowland Height Max (m)" ), Range( 20f, 2000f ), Step( 10f ), Description( "Non-mountain dry land scales sculpted base height to this ceiling (default 200 m). Mountains blend to Max Terrain Height." )]
 	public float LandRollingHeightMaxMeters { get; set; } = 200f;
 
-	[Property, Group( "World" ), Title( "Land Rolling Macro Frequency" ), Range( 0.1f, 4f ), Step( 0.05f ), Description( "Legacy — unused; rolling hills come from continental/hill/valley base noise." )]
-	public float LandRollingMacroFrequency { get; set; } = 0.55f;
-
-	[Property, Group( "World" ), Title( "Land Rolling Macro Octaves" ), Range( 1, 6 ), Step( 1 ), Description( "Legacy — unused." )]
-	public int LandRollingMacroOctaves { get; set; } = 4;
-
-	[Property, Group( "World" ), Title( "Land Rolling Detail Frequency Scale" ), Range( 1f, 6f ), Step( 0.25f ), Description( "Legacy — unused." )]
-	public float LandRollingDetailFrequencyScale { get; set; } = 2.5f;
-
-	[Property, Group( "World" ), Title( "Land Rolling Detail Amplitude (0–1)" ), Range( 0f, 0.3f ), Step( 0.01f ), Description( "Legacy — unused." )]
-	public float LandRollingDetailAmplitude01 { get; set; } = 0.12f;
-
-	[Property, Group( "World" ), Title( "Normalize Land Rolling Heights" ), Description( "Legacy — no longer changes output. Lowlands always use sculpted base height capped at Lowland Height Max." )]
-	public bool NormalizeLandRollingHeights { get; set; }
 
 	[Property, Group( "World" ), Title( "Hill Wavelength (m)" ), Range( 80f, 5000f ), Step( 20f ), Description( "Rolling hill size in world meters (~400 m shows relief on 64 m chunks)." )]
 	public float HillWavelengthMeters { get; set; } = 400f;

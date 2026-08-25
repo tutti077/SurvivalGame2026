@@ -126,4 +126,11 @@ public sealed partial class TerrainPreviewSettings
 	/// <summary>Old Clover gentle-roll knobs — superseded by Voronoi hill spacing / micro meters.</summary>
 	public float BiomeCloverRollFrequency { get; set; } = 4.5f;
 	public float BiomeCloverRollAmplitude01 { get; set; } = 0.09f;
+
+	/// <summary>Old land-rolling macro/detail knobs — lowlands use sculpted base height capped at Lowland Height Max.</summary>
+	public float LandRollingMacroFrequency { get; set; } = 0.55f;
+	public int LandRollingMacroOctaves { get; set; } = 4;
+	public float LandRollingDetailFrequencyScale { get; set; } = 2.5f;
+	public float LandRollingDetailAmplitude01 { get; set; } = 0.12f;
+	public bool NormalizeLandRollingHeights { get; set; }
 }

@@ -25,15 +25,23 @@ public sealed class ToolBuildHammer : Component
 	public float ScrollYawStep { get; set; } = 45f;
 
 	/// <summary>
-	/// Shift + scroll. Fine steps only read on free / corner-held placements — a flush edge mate
+	/// Ctrl + scroll. Fine steps only read on free / corner-held placements — a flush edge mate
 	/// quantises yaw to 90°, so anything under a quarter turn is rounded away there.
 	/// </summary>
-	[Property, Group( "Placement" ), Title( "Shift Scroll Rotate Step (deg)" )]
+	[Property, Group( "Placement" ), Title( "Ctrl Scroll Rotate Step (deg)" )]
 	public float FineYawStep { get; set; } = 15f;
 	[Property, Group( "Debug" )] public bool FreeBuildEnabled { get; set; } = true;
-	[Property, Group( "Debug" )] public bool ShowSnapDebug { get; set; } = true;
+	[Property, Group( "Debug" )] public bool ShowSnapDebug { get; set; } = false;
 	[Property, Group( "Debug" )] public bool ShowBuildRayDebug { get; set; } = true;
 	[Property, Group( "Debug" )] public bool LogBuildMode { get; set; }
+
+	/// <summary>
+	/// Flip on to dump one snap/collider report for every catalog piece to the console, then it
+	/// resets itself. Use this when a piece's markers do not sit where the mesh does — the report
+	/// says whether the layout, the half extents or the pitch is the one disagreeing.
+	/// </summary>
+	[Property, Group( "Debug" ), Title( "Dump Snap Report" )]
+	public bool DumpSnapReport { get; set; }
 
 	public bool BlueprintModeEnabled { get; private set; } = true;
 	public bool IsBuildMenuOpen { get; private set; }
@@ -93,7 +101,9 @@ public sealed class ToolBuildHammer : Component
 				return "Auto";
 
 			if ( candidate.AnchorSnapIndex >= 0 && candidate.AnchorSnapIndex < _placingSnaps.Count )
-				return BuildSnapLayout.GetHoldLabel( _placingSnaps[candidate.AnchorSnapIndex].Role );
+				return BuildSnapLayout.GetHoldLabel(
+					_selectedPieceId,
+					_placingSnaps[candidate.AnchorSnapIndex].Role );
 
 			return "Auto";
 		}
@@ -115,6 +125,12 @@ public sealed class ToolBuildHammer : Component
 
 	protected override void OnUpdate()
 	{
+		if ( DumpSnapReport )
+		{
+			DumpSnapReport = false;
+			BuildSnapDebug.LogPieceReport();
+		}
+
 		base.OnUpdate();
 		if ( !IsLocalDriver() )
 			return;
@@ -308,10 +324,13 @@ public sealed class ToolBuildHammer : Component
 				var scroll = Input.MouseWheel.y;
 				if ( Math.Abs( scroll ) > 0.01f )
 				{
-					// Hardcoded physical Shift for fine rotate — not the rebindable Run action.
-					var fine = Input.Keyboard.Down( "shift" )
-					           || Input.Keyboard.Down( "leftshift" )
-					           || Input.Keyboard.Down( "rightshift" );
+					// Hardcoded physical Ctrl for fine rotate — not a rebindable action. Shift used to
+					// do this and collided with sprint.
+					var fine = Input.Keyboard.Down( "ctrl" )
+					           || Input.Keyboard.Down( "leftctrl" )
+					           || Input.Keyboard.Down( "rightctrl" )
+					           || Input.Keyboard.Down( "leftcontrol" )
+					           || Input.Keyboard.Down( "rightcontrol" );
 					var step = fine ? FineYawStep : ScrollYawStep;
 					_yawDegrees += scroll > 0f ? step : -step;
 				}
@@ -323,9 +342,11 @@ public sealed class ToolBuildHammer : Component
 			if ( IsRepairMode )
 				TryRepairLookedAtBuildPiece();
 			else
+			{
 				TryPlaceSelectedPiece();
 				RememberSnapVariantForSelected();
 			}
+		}
 	}
 
 	void UpdatePreview()
@@ -403,6 +424,7 @@ public sealed class ToolBuildHammer : Component
 		if ( ShowBuildRayDebug )
 			BuildSnapDebug.DrawPlacementRay( _lastPlacement, DrawRayLine, DrawSnapMark );
 
+		BuildSnapDebug.LogEdgeRejects = ShowSnapDebug;
 		if ( ShowSnapDebug )
 			DrawSnapMarks( scene );
 	}
@@ -410,7 +432,7 @@ public sealed class ToolBuildHammer : Component
 	void DrawSnapMarks( Scene scene )
 	{
 		var focus = Pawn.IsValid() ? Pawn.WorldPosition : _lastPlacement.Position;
-		var drawRadius = BuildRange + BuildModuleDimensions.ModuleUnits;
+		var drawRadius = BuildRange + BuildModuleDimensions.SnapModuleHalfUnits * 2f;
 
 		foreach ( var piece in scene.GetAllComponents<BuildPiece>() )
 		{

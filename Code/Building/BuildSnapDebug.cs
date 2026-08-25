@@ -9,6 +9,30 @@ static class BuildSnapDebug
 {
 	public static float SphereRadius => BuildModuleDimensions.SnapThinHalfUnits;
 
+	/// <summary>Mirrors ToolBuildHammer.ShowSnapDebug so the static snap code can log alongside the markers.</summary>
+	public static bool LogEdgeRejects { get; set; }
+
+	static double _nextRejectLog;
+	static string _lastRejectLine = string.Empty;
+
+	/// <summary>
+	/// Why a seam did not take. Throttled to once a second and deduplicated, so holding a piece
+	/// against a structure prints one readable line per situation instead of a wall of text.
+	/// </summary>
+	public static void LogEdgeReject( string placingPieceId, string targetPieceId, SnapEdgeId targetEdge, string reason )
+	{
+		if ( !LogEdgeRejects )
+			return;
+
+		var line = $"[snap] {placingPieceId} vs {targetPieceId} {targetEdge} edge — {reason}";
+		if ( line == _lastRejectLine && Time.Now < _nextRejectLog )
+			return;
+
+		_lastRejectLine = line;
+		_nextRejectLog = Time.Now + 1.0;
+		Log.Info( line );
+	}
+
 	public static readonly Color DefaultColor = new( 0.2f, 0.85f, 1f, 0.9f );
 	public static readonly Color ActiveColor = new( 1f, 0.92f, 0.15f, 1f );
 	public static readonly Color InvalidColor = new( 1f, 0.25f, 0.2f, 0.85f );
@@ -17,6 +41,40 @@ static class BuildSnapDebug
 	public static readonly Color RayHitColor = new( 1f, 0.92f, 0.15f, 1f );
 	public static readonly Color ProbeColor = new( 1f, 0.25f, 0.95f, 1f );
 	public static readonly Color AimDropColor = new( 1f, 0.55f, 0.12f, 0.95f );
+
+	/// <summary>
+	/// One-shot report: what the snap system believes about every catalog piece, next to what the
+	/// authored mesh says. Runs from a designer toggle, never from a tick — this is the "validate on
+	/// demand" path, not a per-frame check.
+	/// </summary>
+	public static void LogPieceReport()
+	{
+		BuildPieceCatalog.EnsureLoaded();
+		Log.Info( "[snap-report] pieceId | layout | thinAxis | longAxis  (axis: 0=X 1=Y 2=Z, -1=none)" );
+
+		foreach ( var data in BuildPieceCatalog.All )
+		{
+			if ( data is null || string.IsNullOrWhiteSpace( data.Id ) )
+				continue;
+
+			var id = data.Id;
+			var half = BuildColliderSnap.GetColliderHalfForPiece( id );
+			var pitch = BuildModuleDimensions.GetPrefabLocalRotation( id );
+
+			Log.Info( $"[snap-report] {id} | {BuildSnapLayout.GetKind( id )} | thin={BuildModuleDimensions.GetThinAxis( id )} | long={BuildModuleDimensions.GetLongAxis( id )}" );
+			Log.Info( $"[snap-report]   mesh size={BuildPieceModelCache.GetSize( id )} center={BuildPieceModelCache.GetCenter( id )}" );
+			Log.Info( $"[snap-report]   table size={BuildModuleDimensions.GetColliderScale( id )} | half used={half} | bakedPitch={BuildPieceVisual.UsesBakedMeshRotation( id )} pitch={pitch.Angles()}" );
+
+			var roles = BuildSnapLayout.GetRoles( id );
+			for ( var i = 0; i < roles.Count; i++ )
+			{
+				var role = roles[i];
+				var local = BuildColliderSnap.GetCornerSnapLocal( id, role, half );
+				var world = BuildColliderSnap.GetCornerSnapWorldOffset( id, role, Rotation.Identity, Vector3.One, half );
+				Log.Info( $"[snap-report]   {role} ({BuildSnapLayout.GetHoldLabel( id, role )}) local={local} worldOffset@yaw0={world}" );
+			}
+		}
+	}
 
 	public static void DrawPieceSnapPoints(
 		BuildPiece piece,
@@ -58,13 +116,12 @@ static class BuildSnapDebug
 		if ( placingSnaps is null || placingSnaps.Count == 0 || drawSphere is null )
 			return;
 
-		var pitch = BuildModuleDimensions.GetPrefabLocalRotation( pieceId );
-		var orientedRot = placement.Rotation * pitch;
+		var orientedRot = placement.Rotation;
 		for ( var i = 0; i < placingSnaps.Count; i++ )
 		{
 			var snap = placingSnaps[i];
 			var scale = BuildModuleDimensions.GetPieceLocalScale( pieceId );
-			var colliderHalf = BuildColliderSnap.PrefabColliderSize * 0.5f;
+			var colliderHalf = BuildColliderSnap.GetColliderHalfForPiece( pieceId );
 			var worldPos = placement.Position + BuildColliderSnap.GetCornerSnapWorldOffset(
 				pieceId,
 				snap.Role,

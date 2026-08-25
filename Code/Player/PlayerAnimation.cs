@@ -956,27 +956,15 @@ public sealed partial class PlayerAnimation : Component
 
 		_bodyRenderer ??= Components.Get<SkinnedModelRenderer>( FindMode.EverythingInSelfAndDescendants );
 
+		// Authored on the Body object in basicplayer.prefab with Target bound (Commandment #5).
 		_animHelper = Components.Get<CitizenAnimationHelper>( FindMode.EverythingInSelfAndDescendants );
-		if ( _animHelper is not null && _animHelper.IsValid() )
+		if ( _animHelper is null || !_animHelper.IsValid() )
 		{
-			if ( _animHelper.Target is null && _bodyRenderer is not null )
-				_animHelper.Target = _bodyRenderer;
+			Log.Warning( $"[PlayerAnimation] {GameObject.Name}: no CitizenAnimationHelper on the pawn — add one to the body renderer object on the prefab." );
 			return;
 		}
 
-		if ( _bodyRenderer is null || !_bodyRenderer.IsValid() )
-			return;
-
-		_animHelper = _bodyRenderer.Components.Get<CitizenAnimationHelper>();
-		if ( _animHelper is not null && _animHelper.IsValid() )
-		{
-			if ( _animHelper.Target is null )
-				_animHelper.Target = _bodyRenderer;
-			return;
-		}
-
-		_animHelper = _bodyRenderer.Components.Create<CitizenAnimationHelper>();
-		if ( _animHelper is not null && _animHelper.IsValid() )
+		if ( _animHelper.Target is null && _bodyRenderer is not null && _bodyRenderer.IsValid() )
 			_animHelper.Target = _bodyRenderer;
 	}
 }

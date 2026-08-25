@@ -1,9 +1,8 @@
 using Sandbox;
-using Sandbox.Movement;
 
 namespace Survival;
 
-/// <summary>Configures a scav (or player-clone) into a host-simulated enemy.</summary>
+/// <summary>Configures an entity prefab (scav and friends) into a host-simulated enemy.</summary>
 public static class EntityEnemySetup
 {
 	public static void Configure( GameObject root, EnemyType enemyType, int tier, float healthOverride = 0f )
@@ -14,57 +13,47 @@ public static class EntityEnemySetup
 		root.NetworkMode = NetworkMode.Object;
 		root.Enabled = true;
 
-		if ( root.Components.Get<PlayerController>() is not null )
-			StripPlayerSystems( root );
+		// Every component below is authored on the entity prefab (Commandment #5) — this only tunes them.
+		var vitals = Require<EntityVitals>( root );
+		var agent = Require<NavMeshAgent>( root );
+		var combat = Require<PlayerCombat>( root );
+		var entityCombat = Require<EntityCombat>( root );
+		var locomotion = Require<EntityLocomotion>( root );
+		var healthBar = Require<EnemyHealthBar>( root );
+		var brain = Require<EntityBrain>( root );
 
-		var vitals = GetOrCreate<EntityVitals>( root );
+		if ( vitals is null || agent is null || combat is null || entityCombat is null
+		     || locomotion is null || healthBar is null || brain is null )
+			return;
+
 		EntityArchetype.ApplyToVitals( vitals, enemyType, tier );
 		if ( healthOverride > 0f )
 			vitals.MaxHealth = healthOverride;
 		vitals.ResetToFull();
 
-		var agent = GetOrCreate<NavMeshAgent>( root );
 		agent.UpdatePosition = false;
 		agent.UpdateRotation = false;
 		agent.Acceleration = 800f;
 		agent.Enabled = true;
 		EntityArchetype.ApplyToAgent( agent, enemyType );
 
-		// Enemies are nav/locomotion driven — never leave Rigidbody gravity on (scav prefab defaults Gravity=true).
-		var rb = root.Components.Get<Rigidbody>();
-		if ( rb is not null )
-		{
-			rb.Gravity = false;
-			rb.MotionEnabled = false;
-		}
-
-		// Prefab ships a flat foot BoxCollider + capsule; the box skates on terrain and reads as horizontal walk.
-		DisableFlatFootBoxColliders( root );
-
 		var onNav = SnapToNavOrTerrain( root, agent );
 
-		var combat = GetOrCreate<PlayerCombat>( root );
 		combat.Enabled = true;
 		TryBindCombatAuthority( combat, root.Scene );
 
-		var entityCombat = GetOrCreate<EntityCombat>( root );
 		entityCombat.Combat = combat;
 		EntityArchetype.ApplyToCombat( entityCombat, enemyType );
 
-		GetOrCreate<EntityLocomotion>( root );
-		var locomotion = root.Components.Get<EntityLocomotion>();
-		if ( locomotion is not null )
-			locomotion.Agent = agent;
-		var healthBar = GetOrCreate<EnemyHealthBar>( root );
+		locomotion.Agent = agent;
 		healthBar.RefreshBinding();
 
-		var brain = GetOrCreate<EntityBrain>( root );
 		EntityArchetype.ApplyToBrain( brain, enemyType );
 		var perceptionId = EntityPerceptionCatalog.BuildEntityId( enemyType, tier );
 		brain.ApplyPerception( EntityPerceptionCatalog.Resolve( perceptionId ) );
 		brain.SetHomePosition( root.WorldPosition );
 		brain.Agent ??= agent;
-		brain.Locomotion ??= root.Components.Get<EntityLocomotion>();
+		brain.Locomotion ??= locomotion;
 		brain.Enabled = true;
 
 		// Wander needs nav — wait for bake if snap failed this frame.
@@ -86,60 +75,16 @@ public static class EntityEnemySetup
 		BuildNavMeshSync.EnsureBuildTraversalSettings( root.Scene );
 	}
 
-	static void DisableFlatFootBoxColliders( GameObject root )
-	{
-		foreach ( var box in root.Components.GetAll<BoxCollider>( FindMode.EverythingInSelfAndDescendants ) )
-		{
-			if ( box is null || !box.IsValid() )
-				continue;
 
-			// Foot box on scav is Scale ~16,16,36 Center z~18 — keep capsule only.
-			box.Enabled = false;
-		}
-	}
-
-	static void StripPlayerSystems( GameObject root )
-	{
-		Destroy<PlayerEquipment>( root );
-		Destroy<PlayerInventoryInteraction>( root );
-		Destroy<PlayerInventory>( root );
-		Destroy<PlayerHotbarController>( root );
-		Destroy<PlayerHotbar>( root );
-		Destroy<PlayerGameMenuController>( root );
-		Destroy<PlayerCrafting>( root );
-		Destroy<PlayerHandHarvest>( root );
-		Destroy<PlayerEquippedItem>( root );
-		Destroy<PlayerScreenHud>( root );
-		Destroy<ScreenPanel>( root );
-		Destroy<PlayerMovement>( root );
-		Destroy<PlayerVitals>( root );
-		Destroy<TrainingDummyAttackTelegraph>( root );
-		Destroy<MoveModeWalk>( root );
-		Destroy<MoveModeSwim>( root );
-		Destroy<MoveModeLadder>( root );
-		Destroy<PlayerController>( root );
-
-		var rb = root.Components.Get<Rigidbody>();
-		if ( rb is not null )
-		{
-			rb.Gravity = false;
-			rb.MotionEnabled = false;
-		}
-	}
-
-	static void Destroy<T>( GameObject root ) where T : Component
-	{
-		var component = root.Components.Get<T>();
-		component?.Destroy();
-	}
-
-	static T GetOrCreate<T>( GameObject root ) where T : Component, new()
+	/// <summary>Reads a component the entity prefab must already carry. Missing means the asset is wrong — say so, don't patch it at runtime.</summary>
+	static T Require<T>( GameObject root ) where T : Component
 	{
 		var existing = root.Components.Get<T>();
 		if ( existing is not null )
 			return existing;
 
-		return root.Components.Create<T>();
+		Log.Warning( $"[EntityEnemySetup] '{root.Name}' has no {typeof( T ).Name} — add it to the entity prefab; this spawn is skipped." );
+		return null;
 	}
 
 	static void TryBindCombatAuthority( PlayerCombat combat, Scene scene )

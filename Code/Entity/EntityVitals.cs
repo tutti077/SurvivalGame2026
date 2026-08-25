@@ -42,7 +42,6 @@ public sealed class EntityVitals : Component
 			return;
 
 		ResetToFull();
-		EnsureDamageReceiver();
 	}
 
 	public void ResetToFull()
@@ -69,13 +68,5 @@ public sealed class EntityVitals : Component
 			OnDied?.Invoke();
 
 		return afterArmor;
-	}
-
-	void EnsureDamageReceiver()
-	{
-		if ( Components.Get<DamageReceiver>() is not null )
-			return;
-
-		Components.Create<DamageReceiver>();
 	}
 }

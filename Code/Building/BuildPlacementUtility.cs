@@ -124,22 +124,9 @@ public static class BuildPlacementUtility
 			AimDropPosition = aimDrop,
 		};
 
-		var snapResult = TrySnapFromCandidates( candidates );
-		if ( snapResult is { } snapped && snapped.SnapCandidate is { } committed )
-		{
-			var aimOk = BuildSnapCrosshair.ShouldCommitSnap( committed, aimLand );
-			// Sticky lock: once Q/E-locked to a seam, keep that snap while aim stays near it
-			// so cycling doesn't reset when the face-commit band flickers.
-			var sticky = lockedSnapGroup is { } locked
-			             && committed.GroupKey.Equals( locked )
-			             && ( aimOk
-			                  || committed.RayScore.AimLandDistance
-			                  <= BuildSnapCrosshair.LookPastSnapCommitRadius * 1.5f );
-
-			if ( aimOk || sticky )
-				return snapped;
-		}
-
+		// Where the piece would sit with no snapping at all — the fallback returned when no snap
+		// commits (or none exists). No longer part of the snap commit decision itself; see
+		// BuildSnapCrosshair.ShouldCommitSnap.
 		var ground = ComputeGroundPlacement(
 			data,
 			placingSnaps,
@@ -151,6 +138,33 @@ public static class BuildPlacementUtility
 			yawDegrees,
 			maxRange,
 			snapAnchorVariantIndex );
+
+		var snapResult = TrySnapFromCandidates( candidates );
+		if ( snapResult is { } snapped && snapped.SnapCandidate is { } committed )
+		{
+			var aimOk = BuildSnapCrosshair.ShouldCommitSnap( committed, ground.Position );
+			// Sticky lock: once Q/E-locked to a seam, keep that snap while aim stays near it
+			// so cycling doesn't reset when the face-commit band flickers.
+			var sticky = lockedSnapGroup is { } locked
+			             && committed.GroupKey.Equals( locked )
+			             && ( aimOk
+			                  || committed.RayScore.AimLandDistance
+			                  <= BuildSnapCrosshair.AimCommitRadius * 1.5f );
+
+			if ( aimOk || sticky )
+				return snapped;
+
+			// A valid seam existed but did not commit — log both gate distances so a miss shows
+			// which one (aim vs proximity) was out of band and by how much.
+			BuildSnapDebug.LogEdgeReject(
+				data.Id,
+				committed.TargetPiece is { IsValid: true } tp ? tp.PieceId : "?",
+				committed.TargetEdgeId,
+				$"snap found ({committed.GroupKey}) but commit gate held it back — aim-land "
+				+ $"{committed.RayScore.AimLandDistance:0} vs {BuildSnapCrosshair.AimCommitRadius:0}, "
+				+ $"ghost move {Vector3.DistanceBetween( committed.Placement.Position, ground.Position ):0} "
+				+ $"vs {BuildSnapCrosshair.SnapEngageDistance:0}" );
+		}
 
 		var groundVariantCount = CountGroundHoldVariants( placingSnaps );
 		var groundIndex = groundVariantCount > 0
@@ -168,8 +182,7 @@ public static class BuildPlacementUtility
 		} );
 	}
 
-	public const int GroundHoldVariantCount = 5;
-
+	/// <summary>Centre, then one variant per snap the piece owns — three on a triangle, two on a beam.</summary>
 	static int CountGroundHoldVariants( IReadOnlyList<BuildSnapPoint> placingSnaps )
 	{
 		if ( placingSnaps is null || placingSnaps.Count == 0 )
@@ -311,9 +324,9 @@ public static class BuildPlacementUtility
 			if ( cornerOrdinal != holdVariantIndex )
 				continue;
 
-			var orientedRot = rotation * BuildModuleDimensions.GetPrefabLocalRotation( pieceId );
+			var orientedRot = rotation;
 			var scale = BuildModuleDimensions.GetPieceLocalScale( pieceId );
-			var half = BuildColliderSnap.PrefabColliderSize * 0.5f;
+			var half = BuildColliderSnap.GetColliderHalfForPiece( pieceId );
 			var cornerOffset = BuildColliderSnap.GetCornerSnapWorldOffset(
 				pieceId,
 				role,

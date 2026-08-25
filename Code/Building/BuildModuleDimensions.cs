@@ -5,33 +5,30 @@ namespace Survival;
 
 /// <summary>
 /// Strict build piece sizes in literal meters (X, Y, Z). Z-up.
-/// Prefab <see cref="BuildColliderSnap.PrefabColliderSize"/> is 50³ at scale 1; piece
-/// <see cref="DevBoxScale"/> is meters on each axis. Snap/overlap world sizes must use
-/// collider×scale (not <see cref="UnitsPerMeter"/>), or interior seams falsely collide /
-/// fall outside snap reach.
+/// Prefab <see cref="BuildColliderSnap.PrefabColliderSize"/> is 50 per meter on each axis;
+/// piece <see cref="GetColliderScale"/> bakes meters into <see cref="BoxCollider.Scale"/> while
+/// the root stays at scale 1. Snap/overlap world sizes read that collider half-extent directly.
 /// </summary>
 public static class BuildModuleDimensions
 {
+	/// <summary>World scale outside build snap: 40 engine units per meter (see <see cref="TerrainWorldUnits"/>). Build piece colliders use 50/m — see <see cref="BuildColliderSnap.PrefabColliderSize"/>.</summary>
 	public const float UnitsPerMeter = 40f;
 	/// <summary>Floor / wall module edge length (m). Floors are Module×Module; walls Module tall × Module wide.</summary>
 	public const float ModuleMeters = 2f;
 	public const float HalfModuleMeters = 1f;
 	public const float ThinMeters = 0.06f;
 	/// <summary>Square section of every post / beam (m).</summary>
-	public const float BeamMeters = 0.5f;
+	public const float BeamMeters = 0.2f;
 	/// <summary>
 	/// 45° roof slope length (m): √(Module²+Module²) so one roof covers the run+rise of a module
 	/// and two roofs meet in the middle across a 2-module span. Width stays <see cref="ModuleMeters"/>.
+	/// Rounded to 2.82 this landed the pitched corner snaps at ±0.997 m instead of ±1 m, which is a
+	/// 3 mm seam per module — the Blender kit already builds the hypotenuse at the exact value.
 	/// </summary>
-	public const float RoofSlopeMeters = 2.82f;
+	public const float RoofSlopeMeters = 2.8284271f;
 
 	/// <summary>Dev box at local scale 1 = 1 m edge.</summary>
 	public const float DevBoxEdgeMeters = 1f;
-
-	public const float ModuleUnits = ModuleMeters * UnitsPerMeter;
-	public const float ThinUnits = ThinMeters * UnitsPerMeter;
-	public const float ModuleHalfUnits = ModuleUnits * 0.5f;
-	public const float ThinHalfUnits = ThinUnits * 0.5f;
 
 	/// <summary>Half module in snap/collider world units (50×ModuleMeters/2).</summary>
 	public static float SnapModuleHalfUnits => HalfUnitsFor( ModuleMeters );
@@ -39,8 +36,6 @@ public static class BuildModuleDimensions
 	/// <summary>Half thin axis in snap/collider world units.</summary>
 	public static float SnapThinHalfUnits => HalfUnitsFor( ThinMeters );
 
-	/// <summary>Half roof slope-axis in snap/collider world units.</summary>
-	public static float SnapRoofSlopeHalfUnits => HalfUnitsFor( RoofSlopeMeters );
 
 	/// <summary>Tiny lift so pieces sit on the surface instead of clipping through.</summary>
 	public const float SurfaceContactBias = 0.25f;
@@ -96,14 +91,18 @@ public static class BuildModuleDimensions
 
 		// Roofs — width on X, slope on Y, thin on Z, pitched by RoofPrefabLocalRotation.
 		["build_wood_45roof"] = new( ModuleMeters, RoofSlopeMeters, ThinMeters ),
-		["build_wood_45roofInsideCorner"] = new( ModuleMeters, RoofSlopeMeters, ThinMeters ),
-		["build_wood_45roofOutsideCorner"] = new( ModuleMeters, RoofSlopeMeters, ThinMeters ),
+		// Folded corners fill the 2×2×2 module cube; mesh carries the hip / valley shape.
+		["build_wood_45roofInsideCorner"] = new( ModuleMeters, ModuleMeters, ModuleMeters ),
+		["build_wood_45roofOutsideCorner"] = new( ModuleMeters, ModuleMeters, ModuleMeters ),
 
-		// Stairs — full module box footprint and rise.
-		["build_wood_stairs"] = new( ModuleMeters, ModuleMeters, ModuleMeters ),
-		["build_wood_stairsSpiral"] = new( ModuleMeters, ModuleMeters, ModuleMeters ),
+		// Stairs — module footprint, half-module rise: 1 m climb per piece, so two stack into a
+		// storey and a flight can turn part way up. The two spirals are quarter turns in the same
+		// box, one each way.
+		["build_wood_stairs"] = new( ModuleMeters, ModuleMeters, HalfModuleMeters ),
+		["build_wood_stairsSpiralLeft"] = new( ModuleMeters, ModuleMeters, HalfModuleMeters ),
+		["build_wood_stairsSpiralRight"] = new( ModuleMeters, ModuleMeters, HalfModuleMeters ),
 
-		// Beams / posts — 0.5 m square section.
+		// Beams / posts — 0.2 m square section.
 		["build_wood_horizontalBeam_1m"] = new( HalfModuleMeters, BeamMeters, BeamMeters ),
 		["build_wood_horizontalBeam_2m"] = new( ModuleMeters, BeamMeters, BeamMeters ),
 		["build_wood_verticalBeam_1m"] = new( BeamMeters, BeamMeters, HalfModuleMeters ),
@@ -135,25 +134,43 @@ public static class BuildModuleDimensions
 
 	/// <summary>
 	/// Index of the axis a piece is flat on (0=X, 1=Y, 2=Z), or -1 when it is chunky on every axis.
-	/// Read from the size table rather than the id, so "which way is this plate thin" is answered by
-	/// the piece's real dimensions — a wall is thin on Y, a floor or roof on Z, and a beam (square
-	/// section) has no thin axis at all.
+	/// <para>
+	/// Measured from the extents the snap system actually places corners with — the authored mesh,
+	/// or the size table for baked-pitch pieces — so it can never disagree with where those corners
+	/// land. It used to look the piece up in the size table by id, which returned -1 for any id the
+	/// table missed and silently dropped that piece onto the <b>floor</b> corner layout: harmless for
+	/// a floor, which is what that layout describes, and wrong for every wall.
+	/// </para>
 	/// </summary>
-	public static int GetThinAxis( string pieceId )
+	public static int GetThinAxis( string pieceId ) =>
+		ResolveThinAxis( BuildColliderSnap.GetColliderHalfForPiece( pieceId ) );
+
+	/// <summary>
+	/// Flattest axis of a half-extent vector (0=X, 1=Y, 2=Z). Always names one — unlike
+	/// <see cref="ResolveThinAxis"/> this asks no "is it flat enough" question, because the corners
+	/// of a plate are on its two widest axes whatever the ratio happens to be.
+	/// </summary>
+	public static int ResolveFlattestAxis( Vector3 half )
 	{
-		if ( !TryGetSizeMeters( pieceId, out var size ) )
-			return -1;
+		if ( half.x <= half.y && half.x <= half.z )
+			return 0;
 
+		return half.y <= half.z ? 1 : 2;
+	}
+
+	/// <summary>Flat axis of a half-extent vector, or -1 when no side is thin enough to be a plate.</summary>
+	public static int ResolveThinAxis( Vector3 half )
+	{
 		var thin = 0;
-		if ( size.y < size.x ) thin = 1;
-		if ( size.z < (thin == 1 ? size.y : size.x) ) thin = 2;
+		if ( half.y < half.x ) thin = 1;
+		if ( half.z < (thin == 1 ? half.y : half.x) ) thin = 2;
 
-		var thinValue = thin switch { 0 => size.x, 1 => size.y, _ => size.z };
+		var thinValue = thin switch { 0 => half.x, 1 => half.y, _ => half.z };
 		var otherMin = thin switch
 		{
-			0 => Math.Min( size.y, size.z ),
-			1 => Math.Min( size.x, size.z ),
-			_ => Math.Min( size.x, size.y ),
+			0 => Math.Min( half.y, half.z ),
+			1 => Math.Min( half.x, half.z ),
+			_ => Math.Min( half.x, half.y ),
 		};
 
 		// Only a genuine plate counts — needs to be well under half the next-smallest side.
@@ -168,15 +185,16 @@ public static class BuildModuleDimensions
 	/// Used to place the two <see cref="BuildSnapRole.AxisStart"/> / <see cref="BuildSnapRole.AxisEnd"/>
 	/// snaps, so a vertical post gets bottom/top and a horizontal beam gets its two ends.
 	/// </summary>
-	public static int GetLongAxis( string pieceId )
+	public static int GetLongAxis( string pieceId ) =>
+		ResolveLongAxis( BuildColliderSnap.GetColliderHalfForPiece( pieceId ) );
+
+	/// <summary>Longest axis of a half-extent vector — the run of a beam or post.</summary>
+	public static int ResolveLongAxis( Vector3 half )
 	{
-		if ( !TryGetSizeMeters( pieceId, out var size ) )
+		if ( half.z >= half.x && half.z >= half.y )
 			return 2;
 
-		if ( size.z >= size.x && size.z >= size.y )
-			return 2;
-
-		return size.x >= size.y ? 0 : 1;
+		return half.x >= half.y ? 0 : 1;
 	}
 
 	public static bool TryGetHalfExtents( string pieceId, out Vector3 halfExtents )
@@ -197,6 +215,10 @@ public static class BuildModuleDimensions
 
 	public static Rotation GetPrefabLocalRotation( string pieceId )
 	{
+		// Hip / valley corners are already folded in the mesh — pitching them again would double-rotate.
+		if ( BuildPieceFamily.IsCorner( pieceId ) )
+			return Rotation.Identity;
+
 		if ( BuildPieceFamily.IsRoof( pieceId ) )
 			return RoofPrefabLocalRotation;
 
@@ -218,10 +240,18 @@ public static class BuildModuleDimensions
 
 	public static Vector3 RotateLocalOffset( Rotation rotation, Vector3 local ) => rotation * local;
 
-	public static Vector3 GetPieceLocalScale( string pieceId ) =>
-		DevBoxScale( GetSizeMeters( pieceId ) );
+	/// <summary>Root transform scale — always 1; sizing lives on the box collider.</summary>
+	public static Vector3 GetPieceLocalScale( string pieceId ) => Vector3.One;
 
-	/// <summary>Local scale for dev box — one scale unit = one meter on that axis.</summary>
+	/// <summary>BoxCollider.Scale per axis: 50 world units per meter on that axis.</summary>
+	public static Vector3 GetColliderScale( string pieceId ) =>
+		DevBoxScale( GetSizeMeters( pieceId ) ) * BuildColliderSnap.PrefabColliderSize;
+
+	/// <summary>Collider-local half extents (same space as snap corner math).</summary>
+	public static Vector3 GetColliderHalfLocal( string pieceId ) =>
+		GetColliderScale( pieceId ) * 0.5f;
+
+	/// <summary>Meters per axis — multiplied by <see cref="BuildColliderSnap.PrefabColliderSize"/> for the box.</summary>
 	public static Vector3 DevBoxScale( Vector3 sizeMeters ) =>
 		new(
 			sizeMeters.x / DevBoxEdgeMeters,

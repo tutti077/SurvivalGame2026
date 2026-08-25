@@ -98,18 +98,25 @@ public static class BuildPrefabUtility
 		return null;
 	}
 
-	/// <summary>World yaw from placement; roof pitch applied once here (callers pass yaw-only rotation).</summary>
+	/// <summary>World yaw from placement. Pitch baked in mesh stays off the root transform.</summary>
 	public static void ApplyStandardPieceTransform( GameObject instance, string pieceId, Transform worldTransform )
 	{
 		if ( instance is null || !instance.IsValid() )
 			return;
 
 		var yawOnly = Rotation.FromYaw( worldTransform.Rotation.Angles().yaw );
-		var pitch = BuildModuleDimensions.GetPrefabLocalRotation( pieceId );
+		var pitch = BuildPieceVisual.UsesBakedMeshRotation( pieceId )
+			? Rotation.Identity
+			: BuildModuleDimensions.GetPrefabLocalRotation( pieceId );
 
-		instance.LocalScale = BuildModuleDimensions.DevBoxScale( BuildModuleDimensions.GetSizeMeters( pieceId ) );
+		instance.LocalScale = Vector3.One;
 		instance.LocalRotation = Rotation.Identity;
 		instance.WorldPosition = worldTransform.Position;
 		instance.WorldRotation = yawOnly * pitch;
+
+		BuildPieceVisual.Ensure( instance, pieceId );
+
+		var preview = instance.Tags.Has( "buildpreview" );
+		BuildPieceCollider.Ensure( instance, pieceId, preview );
 	}
 }

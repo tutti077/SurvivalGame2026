@@ -167,8 +167,6 @@ public sealed partial class PlayerInventoryInteraction : Component
 	/// <summary>HUD root used for the drag ghost layer (created lazily on first drag).</summary>
 	public void SetDragLayerRoot( Panel dragRoot ) => _dragLayerRoot = dragRoot;
 
-	/// <summary>Legacy alias for <see cref="SetDragLayerRoot"/>.</summary>
-	public void BindDragLayer( Panel dragRoot ) => SetDragLayerRoot( dragRoot );
 
 	void EnsureDragLayer()
 	{

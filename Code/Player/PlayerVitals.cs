@@ -92,19 +92,6 @@ public sealed class PlayerVitals : Component
 	bool IsHostOrOffline =>
 		GameObject.Network is not { Active: true } || Networking.IsHost;
 
-	/// <summary>
-	/// <see cref="CombatAuthority.TryFindDamageable"/> requires a <see cref="DamageReceiver"/> on the hit hierarchy; keep one on the pawn root next to this component.
-	/// </summary>
-	void EnsureDamageReceiverForMelee()
-	{
-		if ( GameObject.IsProxy )
-			return;
-
-		if ( Components.Get<DamageReceiver>() is not null )
-			return;
-
-		GameObject.Components.Create<DamageReceiver>();
-	}
 
 	protected override void OnUpdate()
 	{
@@ -147,8 +134,6 @@ public sealed class PlayerVitals : Component
 	{
 		base.OnStart();
 		_jumpStaminaChargedThisAirborne = false;
-
-		EnsureDamageReceiverForMelee();
 
 		if ( GameObject.IsProxy && !Networking.IsHost )
 			return;

@@ -123,9 +123,16 @@ static class BuildSnapPlacement
 		float maxRange )
 	{
 		var hasEdgeSeams = false;
-		for ( var ei = 0; ei < BuildSnapEdge.ThinPlaneEdges.Length; ei++ )
+		var targetEdges = BuildSnapLayout.GetEdges( targetPiece.PieceId );
+		for ( var ei = 0; ei < targetEdges.Count; ei++ )
 		{
-			var targetEdge = BuildSnapEdge.ThinPlaneEdges[ei];
+			var targetEdge = targetEdges[ei];
+
+			// A triangle is missing one plate corner, so one of the four named edges is really a
+			// single corner with open air past it. Mating to it would pin the piece against nothing.
+			if ( !BuildSnapLayout.HasEdge( targetPiece.PieceId, targetEdge ) )
+				continue;
+
 			var placingEdgeIds = BuildSnapCompatibility.GetPlacingEdgesForTarget(
 				placingData.Id,
 				targetPiece.PieceId,
@@ -164,7 +171,9 @@ static class BuildSnapPlacement
 					    t1.Position,
 					    edgeAim,
 					    aimLand,
-					    yawDegrees ) )
+					    yawDegrees,
+					    placingEdgeIds,
+					    rayOrigin ) )
 					hasEdgeSeams = true;
 
 				continue;
@@ -181,19 +190,15 @@ static class BuildSnapPlacement
 				if ( !BuildSnapEdge.TryGetEdge( placingEdgeIds[pi], out var placingEdge ) )
 					continue;
 
+				if ( !BuildSnapLayout.HasEdge( placingData.Id, placingEdge ) )
+					continue;
+
 				var sameEdge = BuildSnapCompatibility.UsesSameEdgeAlignment(
 					placingData.Id,
 					targetPiece.PieceId,
 					placingEdge.Id,
 					targetEdge.Id,
 					targetPiece );
-
-				var targetZForAim = targetPiece.GameObject.WorldPosition.z;
-				var lookingDownRoof = aimLand.z < targetZForAim - 8f || rayDir.z < -0.12f;
-				var lookingUpRoof = aimLand.z > targetZForAim + 8f || rayDir.z > 0.12f;
-				var preferHangDownOnFloor = IsRoof( placingData.Id )
-				                           && IsFloor( targetPiece.PieceId )
-				                           && lookingDownRoof;
 
 				if ( !TryAlignToEdge(
 					     placingData.Id,
@@ -204,9 +209,12 @@ static class BuildSnapPlacement
 					     t1.Position,
 					     yawDegrees,
 					     sameEdge,
-					     preferHangDownOnFloor,
 					     out var placement ) )
+				{
+					BuildSnapDebug.LogEdgeReject( placingData.Id, targetPiece.PieceId, targetEdge.Id,
+						$"no flush fit for the {placingEdge.Id} lip at yaw {yawDegrees:0}" );
 					continue;
+				}
 
 				if ( !BuildSnapCompatibility.IsValidEdgePlacement(
 					     placingData.Id,
@@ -215,7 +223,11 @@ static class BuildSnapPlacement
 					     targetEdge,
 					     placement,
 					     targetPiece ) )
+				{
+					BuildSnapDebug.LogEdgeReject( placingData.Id, targetPiece.PieceId, targetEdge.Id,
+						$"{placingEdge.Id} lip rejected as an invalid placement" );
 					continue;
+				}
 
 				var score = ScorePlacingEdge(
 					placingData.Id,
@@ -233,54 +245,47 @@ static class BuildSnapPlacement
 					score = edgeAim;
 
 				// Abutting the opposite lip extends the structure; mating the same-named lip lays the
-				// piece back over the target. Both can fit, and leaving the tie to the [N,S,E,W] scan
-				// order meant a piece joined on one side and overlapped on the mirrored side — that is
-				// why a roof took a seam on its right but not its left. Small enough that the roof
-				// elevation biases below still decide real preferences.
-				score = score with
+				// piece back over the target. Only meaningful when both pieces name their edges in the
+				// same frame — between families they do not. A wall's North and South are its top and
+				// bottom, a floor's are two of its four sides, so comparing them scores a wall's lip
+				// against a floor edge by nothing better than the letter it was given: the floor's
+				// north and south seams got a preference and its east and west got none. That is a
+				// standing asymmetry between otherwise identical edges of the same deck.
+				if ( BuildSnapCompatibility.IsSameEdgeFamily( placingData.Id, targetPiece.PieceId ) )
 				{
-					Combined = score.Combined
-					           + ( placingEdge.Id == BuildSnapEdge.GetOpposite( targetEdge.Id ) ? -1f : 1f ),
-				};
-
-				if ( IsRoof( placingData.Id ) && IsRoof( targetPiece.PieceId ) )
-				{
-					var placeZ = placement.Position.z;
-					if ( lookingDownRoof )
-						score = score with { Combined = score.Combined + ( placeZ < targetZForAim ? -28f : 28f ) };
-					else if ( lookingUpRoof )
-						score = score with { Combined = score.Combined + ( placeZ > targetZForAim ? -28f : 28f ) };
-				}
-
-				if ( IsRoof( placingData.Id ) && IsWall( targetPiece.PieceId ) )
-				{
-					var preferred = BuildSnapCompatibility.RoofBottomLip;
 					score = score with
 					{
-						Combined = score.Combined + ( placingEdge.Id == preferred ? -40f : 40f ),
+						Combined = score.Combined
+						           + ( placingEdge.Id == BuildSnapEdge.GetOpposite( targetEdge.Id ) ? -1f : 1f ),
 					};
 				}
 
-				if ( IsRoof( placingData.Id ) && IsFloor( targetPiece.PieceId ) )
-				{
-					var placeZ = placement.Position.z;
-					var elev = BuildSnapCompatibility.ScoreRoofElevation(
-						placingData.Id,
-						placement,
-						targetPiece,
-						preferHangDown: preferHangDownOnFloor );
-					// Hang-down mates the ridge (North); sit-above mates the eave (South).
-					var preferred = preferHangDownOnFloor
-						? BuildSnapCompatibility.RoofTopLip
-						: BuildSnapCompatibility.RoofBottomLip;
-					var lipBias = placingEdge.Id == preferred ? -24f : 24f;
-					var lookBias = 0f;
-					if ( preferHangDownOnFloor )
-						lookBias = placeZ < targetZForAim ? -28f : 28f;
-					else if ( lookingUpRoof )
-						lookBias = placeZ > targetZForAim ? -28f : 28f;
+				// Join as much of the piece as the seam allows. A 1 m wall brought to a 2 m wall's
+				// edge should sit flush along its whole height at the end you are aiming at, not meet
+				// it at a corner and hang off into space — both fit, and without this the corner mate
+				// wins whenever it happens to sit marginally nearer the crosshair.
+				var contact = ScoreEdgeContact(
+					placingData.Id,
+					placingEdge,
+					placement,
+					t0.Position,
+					t1.Position );
+				score = score with { Combined = score.Combined - contact * EdgeContactWeight };
 
-					score = score with { Combined = score.Combined + elev + lipBias + lookBias };
+				// The piece goes on the side of the target you are looking at. One rule, applied to
+				// every pair, replacing the per-family elevation and look biases that used to sit
+				// here — those each encoded a guess about one combination and disagreed at the
+				// seams, which is how a wall sank into a deck you were stood on top of and a roof
+				// hung under a wall top you were aiming at.
+				// Landing through the target, away from the player, is not a worse mate — it is not a
+				// mate. Scoring it merely expensively still let it win whenever it was the only
+				// candidate that survived, which is how a wall kept ending up under a deck being
+				// looked at from on top.
+				if ( ScoreThroughFacePenalty( placement, targetPiece, rayOrigin ) > 0f )
+				{
+					BuildSnapDebug.LogEdgeReject( placingData.Id, targetPiece.PieceId, targetEdge.Id,
+						$"{placingEdge.Id} lip lands through the face, away from you" );
+					continue;
 				}
 
 				if ( !hasAbut || score.Combined < bestAbutScore )
@@ -296,7 +301,7 @@ static class BuildSnapPlacement
 			// No flush mate: either the lips are different lengths or the player scrolled off-axis.
 			// Mate corner-to-corner rather than dropping the snap.
 			if ( !hasAbut && edgeAim.IsValid
-			     && TryPickMatingEdge( placingEdgeIds, targetEdge.Id, out bestPlacingEdge )
+			     && TryPickMatingEdge( placingData.Id, placingEdgeIds, targetEdge.Id, out bestPlacingEdge )
 			     && TryCornerMateToEdge(
 				     placingData.Id,
 				     bestPlacingEdge,
@@ -304,7 +309,13 @@ static class BuildSnapPlacement
 				     t1.Position,
 				     aimLand,
 				     yawDegrees,
-				     out bestPlacement ) )
+				     out bestPlacement )
+			     // This path produces one placement and skips the scoring loop above, so the face
+			     // rule has to be asked here too — otherwise it is a way in for exactly the mate the
+			     // scoring exists to reject, which is how a wall still went under a deck being looked
+			     // at from on top. It also runs far more often now that a snap may not turn the piece:
+			     // when nothing fits at the player's rotation, everything lands here.
+			     && ScoreThroughFacePenalty( bestPlacement, targetPiece, rayOrigin ) <= 0f )
 			{
 				hasAbut = true;
 				bestScore = edgeAim;
@@ -350,9 +361,127 @@ static class BuildSnapPlacement
 	}
 
 	/// <summary>
+	/// The placing corner that completes a flush edge at this rotation, found by testing real
+	/// geometry rather than trusting edge names — names live in each piece's own frame and carry no
+	/// world meaning across a seam (a floor's "north" is one of its four sides, a wall's is its top).
+	/// Every end that measures flush is a candidate; overlap directions are rejected, and when more
+	/// than one honest fit remains (a perpendicular T can extend to either side of the seam) the one
+	/// extending toward the player's side wins. Null when nothing verifies — mismatched lip lengths,
+	/// or an off-axis yaw the player is deliberately holding.
+	/// </summary>
+	static BuildSnapRole? FindFlushRole(
+		string placingPieceId,
+		string targetPieceId,
+		BuildPiece targetPiece,
+		SnapEdge targetEdge,
+		IReadOnlyList<SnapEdgeId> placingEdgeIds,
+		Transform attachWorld,
+		Vector3 farTargetWorld,
+		float yawDegrees,
+		Vector3 rayOrigin )
+	{
+		if ( placingEdgeIds is null )
+			return null;
+
+		var sameFamily = BuildSnapCompatibility.IsSameEdgeFamily( placingPieceId, targetPieceId );
+
+		// A wall's East/West edges are its two vertical ENDS, and edge names live in the piece's own
+		// frame — they say nothing about world sides. Demanding the name-opposite end (old rule) only
+		// works where two parallel walls face each other; at a run's END post, the one wall that owns
+		// the seam names it from its own frame, and when that name demanded the held wall's far end,
+		// the piece mated extending the wrong way — the "flipped last wall" that a 180° rotation
+		// (which swaps the held piece's edge names) appeared to fix. Both vertical ends are offered
+		// here and geometry chooses below.
+		var wallSideSeam = IsWall( placingPieceId ) && IsWall( targetPieceId )
+		                   && targetEdge.Id is SnapEdgeId.East or SnapEdgeId.West;
+
+		var seamMid = ( attachWorld.Position + farTargetWorld ) * 0.5f;
+		var outward = ( seamMid - targetPiece.GameObject.WorldPosition ).WithZ( 0f );
+		outward = outward.LengthSquared > 1e-6f ? outward.Normal : Vector3.Zero;
+		var toPlayer = ( rayOrigin - seamMid ).WithZ( 0f );
+		toPlayer = toPlayer.LengthSquared > 1e-6f ? toPlayer.Normal : Vector3.Zero;
+
+		BuildSnapRole? best = null;
+		var bestSide = float.MinValue;
+
+		for ( var i = 0; i < placingEdgeIds.Count; i++ )
+		{
+			if ( !BuildSnapEdge.TryGetEdge( placingEdgeIds[i], out var placingEdge ) )
+				continue;
+
+			if ( !BuildSnapLayout.HasEdge( placingPieceId, placingEdge ) )
+				continue;
+
+			if ( wallSideSeam )
+			{
+				// A vertical seam takes a vertical end — either of them; never a horizontal lip.
+				if ( placingEdge.Id is not (SnapEdgeId.East or SnapEdgeId.West) )
+					continue;
+			}
+			else if ( !( IsWall( placingPieceId ) && IsFloor( targetPieceId ) ) )
+			{
+				// Parallel-face pairs keep the name gate: opposite edge extends, same edge overlaps.
+				// Cross-family wall-on-floor is exempt — its lips share no frame with the floor.
+				var sameEdgeAlignment = BuildSnapCompatibility.UsesSameEdgeAlignment(
+					placingPieceId, targetPieceId, placingEdge.Id, targetEdge.Id, targetPiece );
+				var wantsOpposite = placingEdge.Id == BuildSnapEdge.GetOpposite( targetEdge.Id );
+				var wantsSame = placingEdge.Id == targetEdge.Id;
+				if ( sameEdgeAlignment ? !wantsSame : !wantsOpposite )
+					continue;
+			}
+
+			for ( var swap = 0; swap < 2; swap++ )
+			{
+				var anchorRole = swap == 0 ? placingEdge.CornerA : placingEdge.CornerB;
+				var farRole = swap == 0 ? placingEdge.CornerB : placingEdge.CornerA;
+
+				if ( !TryAlignToSnap(
+					     placingPieceId,
+					     new BuildSnapPoint( anchorRole, Vector3.Zero, Rotation.Identity ),
+					     attachWorld,
+					     targetPiece,
+					     yawDegrees,
+					     out var placement ) )
+					continue;
+
+				var farWorld = GetPlacingSnapWorld( placingPieceId, farRole, placement );
+				if ( Vector3.DistanceBetween( farWorld, farTargetWorld ) > BuildSnapEdge.EdgeAlignTolerance )
+					continue;
+
+				if ( !BuildSnapCompatibility.IsValidEdgePlacement(
+					     placingPieceId, targetPieceId, placingEdge, targetEdge, placement, targetPiece ) )
+					continue;
+
+				if ( !sameFamily )
+					return anchorRole;   // Cross-family: one honest fit, take it.
+
+				// Same family: several ends can measure "flush" on the same seam, so geometry picks.
+				// A vertical wall end is direction-blind (both corners on one plumb line), which let a
+				// mate lying back OVER the built wall read as flush ("connects the far snap points").
+				var offset = ( placement.Position - seamMid ).WithZ( 0f );
+				if ( Vector3.Dot( offset, outward ) < -BuildSnapEdge.EdgeAlignTolerance )
+					continue;   // Lays back over the target — overlap in a flush fit's clothes.
+
+				// A perpendicular T can extend to either side of the seam; both are honest joins.
+				// Default to the side the player is on — they hold the piece where they stand, and
+				// rotation / Q&E still reach the far side deliberately.
+				var side = Vector3.Dot( offset, toPlayer );
+				if ( best is null || side > bestSide )
+				{
+					best = anchorRole;
+					bestSide = side;
+				}
+			}
+		}
+
+		return best;
+	}
+
+	/// <summary>
 	/// Corner on the placing piece that meets <paramref name="anchorRole"/> when the two pieces sit
 	/// square across the seam — the same corner mirrored across the seam's own axis. Reads only the
-	/// seam, never the yaw.
+	/// seam, never the yaw. Fallback only, for pairs <see cref="FindFlushRole"/> finds no verified fit
+	/// for (mismatched lip lengths, an off-axis yaw the player is deliberately holding).
 	/// </summary>
 	static BuildSnapRole MirrorRoleAcrossEdge( BuildSnapRole anchorRole, SnapEdgeId targetEdge )
 	{
@@ -393,7 +522,9 @@ static class BuildSnapPlacement
 		Vector3 targetWorldB,
 		BuildSnapCrosshair.RayTargetScore edgeAim,
 		Vector3 aimLand,
-		float yawDegrees )
+		float yawDegrees,
+		IReadOnlyList<SnapEdgeId> placingEdgeIds,
+		Vector3 rayOrigin )
 	{
 		// Which end of the seam is anchored follows the crosshair, not the rotation.
 		var attachRole = Vector3.DistanceBetween( aimLand, targetWorldB )
@@ -402,10 +533,44 @@ static class BuildSnapPlacement
 			: targetEdge.CornerA;
 
 		if ( FindSnapIndex( targetPiece.SnapPoints, attachRole ) < 0 )
+		{
+			BuildSnapDebug.LogEdgeReject( placingData.Id, targetPiece.PieceId, targetEdge.Id,
+				$"target has no {attachRole} snap to attach to" );
+			return false;
+		}
+
+		var wallOnWall = IsWall( placingData.Id ) && IsWall( targetPiece.PieceId );
+
+		// A wall's South edge is its bottom lip: mating anything to it hangs the new wall below the
+		// built one — buried in the ground on any ground-level build. Aiming low on a wall's face
+		// put this seam closest and it won the group pick ("upside-down T"). Never offer it.
+		if ( wallOnWall && targetEdge.Id == SnapEdgeId.South )
 			return false;
 
 		var attachWorld = targetPiece.GetSnapWorldTransform( FindSnap( targetPiece, attachRole ) );
-		var squareRole = MirrorRoleAcrossEdge( attachRole, targetEdge.Id );
+		var farTargetWorld = attachRole == targetEdge.CornerA ? targetWorldB : targetWorldA;
+
+		var flushRole = FindFlushRole(
+			placingData.Id,
+			targetPiece.PieceId,
+			targetPiece,
+			targetEdge,
+			placingEdgeIds,
+			attachWorld,
+			farTargetWorld,
+			yawDegrees,
+			rayOrigin );
+
+		// The North edge is the top lip — a real stack when the held wall lies flush along it, junk
+		// when the held wall is perpendicular (no flush fit exists on a horizontal edge, and the
+		// fallback would hang a diagonal corner mate there). With both lips constrained, the vertical
+		// side edges own a perpendicular join from either side of the built wall.
+		if ( wallOnWall && targetEdge.Id == SnapEdgeId.North && flushRole is null )
+			return false;
+
+		// Mirror table is the fallback when geometry cannot verify a fit at this rotation
+		// (mismatched lip lengths, an off-axis yaw the player is deliberately holding).
+		var squareRole = flushRole ?? MirrorRoleAcrossEdge( attachRole, targetEdge.Id );
 		var added = false;
 
 		for ( var i = 0; i < placingSnaps.Count; i++ )
@@ -453,20 +618,35 @@ static class BuildSnapPlacement
 	/// Lip to mate when no flush fit exists: the one that would have abutted this seam head-on.
 	/// </summary>
 	static bool TryPickMatingEdge(
+		string placingPieceId,
 		IReadOnlyList<SnapEdgeId> placingEdgeIds,
 		SnapEdgeId targetEdge,
 		out SnapEdge placingEdge )
 	{
+		placingEdge = default;
 		var opposite = BuildSnapEdge.GetOpposite( targetEdge );
 		for ( var i = 0; i < placingEdgeIds.Count; i++ )
 		{
-			if ( placingEdgeIds[i] == opposite )
-				return BuildSnapEdge.TryGetEdge( opposite, out placingEdge );
+			if ( placingEdgeIds[i] == opposite
+			     && TryGetOwnedEdge( placingPieceId, opposite, out placingEdge ) )
+				return true;
 		}
 
-		placingEdge = default;
-		return placingEdgeIds.Count > 0 && BuildSnapEdge.TryGetEdge( placingEdgeIds[0], out placingEdge );
+		// Head-on lip is missing on this piece (a triangle has only two full edges) — take any
+		// other offered lip it does have rather than dropping the seam.
+		for ( var i = 0; i < placingEdgeIds.Count; i++ )
+		{
+			if ( TryGetOwnedEdge( placingPieceId, placingEdgeIds[i], out placingEdge ) )
+				return true;
+		}
+
+		return false;
 	}
+
+	/// <summary>An edge the placing piece actually has both corners for (see triangles).</summary>
+	static bool TryGetOwnedEdge( string placingPieceId, SnapEdgeId edgeId, out SnapEdge edge ) =>
+		BuildSnapEdge.TryGetEdge( edgeId, out edge )
+		&& BuildSnapLayout.HasEdge( placingPieceId, edge );
 
 	/// <summary>
 	/// Q/E hold variants for an aimed seam. <b>One</b> built corner is the attach point for all of
@@ -618,12 +798,27 @@ static class BuildSnapPlacement
 		var anchorIndex = FindSnapIndex( placingSnaps, anchorRole );
 		var targetIndex = FindSnapIndex( targetPiece.SnapPoints, targetRole );
 
-		// Prefer floor mates when placing walls so perimeter wall tops don't steal interior seams.
+		// Tie-break only, not an override: a ±25/40 bias here used to beat any real aim-distance
+		// difference outright, so a wall corner-joining an adjacent wall always lost to that wall's
+		// own floor mate — even when the corner was plainly the closer, better-aimed candidate. That
+		// is why a third wall could never close a corner: whichever edge of the floor was in reach
+		// (varying with the player's angle, which is why it looked direction-dependent) always won,
+		// landing the new wall on the same seam the existing wall already occupied. Small enough now
+		// to only settle genuine near-ties.
 		var scoreBias = 0f;
 		if ( IsWall( placingPieceId ) && IsFloor( targetPiece.PieceId ) )
-			scoreBias -= 25f;
+			scoreBias -= 3f;
 		else if ( IsWall( placingPieceId ) && IsWall( targetPiece.PieceId ) )
-			scoreBias += 40f;
+		{
+			scoreBias += 3f;
+
+			// The corner of a wall belongs to both its top lip (stack a storey) and its side edge
+			// (close a corner), so aiming there scores both seams nearly alike. Prefer the side join;
+			// the stack stays one Q/E away. The isEdgeSnap guard matters: point-snap candidates carry
+			// targetEdge as default, which reads as North and would collect this penalty by accident.
+			if ( isEdgeSnap && targetEdge == SnapEdgeId.North )
+				scoreBias += 20f;
+		}
 
 		CandidateScratch.Add( new BuildSnapCandidate
 		{
@@ -645,9 +840,9 @@ static class BuildSnapPlacement
 		BuildSnapRole role,
 		Transform placement )
 	{
-		var orientedRot = placement.Rotation * BuildModuleDimensions.GetPrefabLocalRotation( placingPieceId );
+		var orientedRot = placement.Rotation;
 		var scale = BuildModuleDimensions.GetPieceLocalScale( placingPieceId );
-		var half = BuildColliderSnap.PrefabColliderSize * 0.5f;
+		var half = BuildColliderSnap.GetColliderHalfForPiece( placingPieceId );
 		return placement.Position + BuildColliderSnap.GetCornerSnapWorldOffset(
 			placingPieceId,
 			role,
@@ -687,7 +882,7 @@ static class BuildSnapPlacement
 
 		var anchorRole = placingSnaps[candidate.AnchorSnapIndex].Role;
 
-		if ( candidate.IsEdgeSnap && TryGetEdgeForCorner( anchorRole, out var edge ) )
+		if ( candidate.IsEdgeSnap && TryGetEdgeForCorner( placingPieceId, anchorRole, out var edge ) )
 		{
 			var a = GetPlacingSnapWorld( placingPieceId, edge.CornerA, candidate.Placement );
 			var b = GetPlacingSnapWorld( placingPieceId, edge.CornerB, candidate.Placement );
@@ -697,20 +892,119 @@ static class BuildSnapPlacement
 		return GetPlacingSnapWorld( placingPieceId, anchorRole, candidate.Placement );
 	}
 
-	static bool TryGetEdgeForCorner( BuildSnapRole corner, out SnapEdge edge )
+	static bool TryGetEdgeForCorner( string pieceId, BuildSnapRole corner, out SnapEdge edge )
 	{
-		for ( var i = 0; i < BuildSnapEdge.ThinPlaneEdges.Length; i++ )
+		var edges = BuildSnapLayout.GetEdges( pieceId );
+		for ( var i = 0; i < edges.Count; i++ )
 		{
-			var candidate = BuildSnapEdge.ThinPlaneEdges[i];
-			if ( candidate.CornerA == corner || candidate.CornerB == corner )
-			{
-				edge = candidate;
-				return true;
-			}
+			var candidate = edges[i];
+			if ( candidate.CornerA != corner && candidate.CornerB != corner )
+				continue;
+
+			// Skip the seam a triangle's cut corner would complete — it has no far end.
+			if ( !BuildSnapLayout.HasEdge( pieceId, candidate ) )
+				continue;
+
+			edge = candidate;
+			return true;
 		}
 
 		edge = default;
 		return false;
+	}
+
+	/// <summary>
+	/// Greater than 0 when the placement ends up <b>through</b> the target, on the opposite side of
+	/// its face from the player — a wall carried on past a deck you are stood on top of. Zero for
+	/// anything at or in front of the face, so a wall continuing the run alongside its neighbour is
+	/// left alone rather than discouraged.
+	/// <para>
+	/// The face normal is the target's own flat axis, not the direction from its centre to the aim
+	/// point. That was the earlier mistake: on a 3-unit-thick deck the aim point sits barely above
+	/// the centre and up to a half-module out from it, so centre-to-aim is very nearly horizontal
+	/// and told us which <i>edge</i> was being aimed at rather than which <i>face</i>. Standing on
+	/// the deck and sinking through it both scored about +1, so nothing separated them.
+	/// </para>
+	/// </summary>
+	static float ScoreThroughFacePenalty( Transform placement, BuildPiece targetPiece, Vector3 rayOrigin )
+	{
+		if ( targetPiece is null || !targetPiece.IsValid() )
+			return 0f;
+
+		var half = BuildColliderSnap.GetColliderHalfForPiece( targetPiece.PieceId );
+		var flat = BuildModuleDimensions.ResolveThinAxis( half );
+		if ( flat < 0 )
+			return 0f;   // Beams and cubes have no face to be on the wrong side of.
+
+		var localNormal = flat switch
+		{
+			0 => new Vector3( 1f, 0f, 0f ),
+			1 => new Vector3( 0f, 1f, 0f ),
+			_ => new Vector3( 0f, 0f, 1f ),
+		};
+
+		var center = targetPiece.GameObject.WorldPosition;
+		var normal = BuildColliderSnap.GetSnapWorldRotation( targetPiece.GameObject, targetPiece.PieceId )
+			* localNormal;
+
+		// Point the normal at whichever side the player is standing on.
+		if ( Vector3.Dot( rayOrigin - center, normal ) < 0f )
+			normal = -normal;
+
+		var advance = Vector3.Dot( placement.Position - center, normal );
+		if ( advance >= 0f )
+			return 0f;
+
+		return Math.Clamp( -advance / BuildModuleDimensions.SnapModuleHalfUnits, 0f, 1f );
+	}
+
+	/// <summary>
+	/// How strongly a flush join is preferred over a corner meeting. Sized to outrank the lip and
+	/// look-direction biases below it, so contact decides first and those only break ties between
+	/// mates that join the same amount.
+	/// </summary>
+	const float EdgeContactWeight = 60f;
+
+	/// <summary>
+	/// Fraction (0–1) of the shorter lip that is actually in contact with the target seam once the
+	/// piece is placed. Lips that line up but sit apart score 0, so a corner-to-corner meeting can
+	/// never read as a face join.
+	/// </summary>
+	static float ScoreEdgeContact(
+		string placingPieceId,
+		SnapEdge placingEdge,
+		Transform placement,
+		Vector3 targetA,
+		Vector3 targetB )
+	{
+		var axis = targetB - targetA;
+		var axisLen = axis.Length;
+		if ( axisLen < 1e-3f )
+			return 0f;
+
+		var scale = BuildModuleDimensions.GetPieceLocalScale( placingPieceId );
+		var half = BuildColliderSnap.GetColliderHalfForPiece( placingPieceId );
+		var a = placement.Position + BuildColliderSnap.GetCornerSnapWorldOffset(
+			placingPieceId, placingEdge.CornerA, placement.Rotation, scale, half );
+		var b = placement.Position + BuildColliderSnap.GetCornerSnapWorldOffset(
+			placingPieceId, placingEdge.CornerB, placement.Rotation, scale, half );
+
+		var dir = axis / axisLen;
+		var pa = Vector3.Dot( a - targetA, dir );
+		var pb = Vector3.Dot( b - targetA, dir );
+
+		// Off-seam distance: a lip parallel to the target but standing away from it is not touching.
+		var gapA = Vector3.DistanceBetween( a, targetA + dir * Math.Clamp( pa, 0f, axisLen ) );
+		var gapB = Vector3.DistanceBetween( b, targetA + dir * Math.Clamp( pb, 0f, axisLen ) );
+		if ( Math.Max( gapA, gapB ) > BuildSnapEdge.EdgeAlignTolerance )
+			return 0f;
+
+		var lo = Math.Max( 0f, Math.Min( pa, pb ) );
+		var hi = Math.Min( axisLen, Math.Max( pa, pb ) );
+		var overlap = Math.Max( 0f, hi - lo );
+
+		var shorter = Math.Min( axisLen, Math.Abs( pb - pa ) );
+		return shorter < 1e-3f ? 0f : Math.Clamp( overlap / shorter, 0f, 1f );
 	}
 
 	static BuildSnapCrosshair.RayTargetScore ScorePlacingEdge(
@@ -803,29 +1097,6 @@ static class BuildSnapPlacement
 		Vector3 targetWorldB,
 		float yawDegrees,
 		bool sameEdgeAlignment,
-		out Transform placement ) =>
-		TryAlignToEdge(
-			placingPieceId,
-			placingEdge,
-			targetPiece,
-			targetEdge,
-			targetWorldA,
-			targetWorldB,
-			yawDegrees,
-			sameEdgeAlignment,
-			preferHangDownOnFloor: false,
-			out placement );
-
-	public static bool TryAlignToEdge(
-		string placingPieceId,
-		SnapEdge placingEdge,
-		BuildPiece targetPiece,
-		SnapEdge targetEdge,
-		Vector3 targetWorldA,
-		Vector3 targetWorldB,
-		float yawDegrees,
-		bool sameEdgeAlignment,
-		bool preferHangDownOnFloor,
 		out Transform placement )
 	{
 		placement = default;
@@ -857,57 +1128,34 @@ static class BuildSnapPlacement
 			if ( BuildSnapAlignment.OffGridYawDegrees( targetPiece, yawDegrees ) > FlushYawToleranceDegrees )
 				return false;
 
-			// Edge direction defines orientation — try all 90° steps so interior E/W seams
-			// still fit when scroll yaw was left on a N/S wall (and vice versa).
-			// When several yaws fit (common for pitched roofs), keep sit-above or hang-down
-			// according to aim instead of the first geometric match.
-			var baseYaw = BuildSnapAlignment.GetEdgeSnapYaw( targetPiece, yawDegrees );
-			var found = false;
-			var bestScore = float.MaxValue;
-			var hang = preferHangDownOnFloor && roofOnFloor;
-			for ( var step = 0; step < 4; step++ )
-			{
-				var alignedYaw = Rotation.FromYaw( baseYaw.Angles().yaw + step * 90f );
-				if ( !BuildSnapAlignment.TryFitEdge(
-					     placingPieceId,
-					     placingEdge,
-					     targetWorldA,
-					     targetWorldB,
-					     alignedYaw,
-					     out var candidate ) )
-					continue;
+			// A snap moves the piece; it does not turn it. The player owns rotation via scroll, and
+			// this only rounds it to the target's 90° grid so the mate can sit flush. This used to
+			// search all four quarter turns and keep the best-scoring one, which let a snap spin a
+			// wall away from the way the player had it pointed — the seam fit, but not the piece the
+			// player was holding. There is one candidate now: theirs. If it does not fit at that
+			// rotation, that is the correct answer, and scrolling round is how you get the mate.
+			var alignedYaw = BuildSnapAlignment.GetEdgeSnapYaw( targetPiece, yawDegrees );
 
-				if ( !BuildSnapCompatibility.IsValidEdgePlacement(
-					     placingPieceId,
-					     targetPiece.PieceId,
-					     placingEdge,
-					     targetEdge,
-					     candidate,
-					     targetPiece ) )
-					continue;
+			if ( !BuildSnapAlignment.TryFitEdge(
+				     placingPieceId,
+				     placingEdge,
+				     targetWorldA,
+				     targetWorldB,
+				     alignedYaw,
+				     out var candidate ) )
+				return false;
 
-				var elev = IsRoof( placingPieceId )
-					? BuildSnapCompatibility.ScoreRoofElevation(
-						placingPieceId,
-						candidate,
-						targetPiece,
-						preferHangDown: hang )
-					: 0f;
-				// Prefer the step closest to where the player has actually scrolled. Ordering by
-				// step index instead made rotation jump between fits and re-snap elsewhere.
-				var yawOffset = Math.Abs( BuildSnapAlignment.DeltaDegrees(
-					alignedYaw.Angles().yaw,
-					yawDegrees ) );
-				var score = elev + yawOffset * 0.01f;
-				if ( !found || score < bestScore )
-				{
-					placement = candidate;
-					bestScore = score;
-					found = true;
-				}
-			}
+			if ( !BuildSnapCompatibility.IsValidEdgePlacement(
+				     placingPieceId,
+				     targetPiece.PieceId,
+				     placingEdge,
+				     targetEdge,
+				     candidate,
+				     targetPiece ) )
+				return false;
 
-			return found;
+			placement = candidate;
+			return true;
 		}
 
 		return BuildSnapAlignment.TryFitEdge(
@@ -930,10 +1178,9 @@ static class BuildSnapPlacement
 		placement = default;
 		var alignedYaw = GetPlacementYaw( yawDegrees );
 
-		var pitch = BuildModuleDimensions.GetPrefabLocalRotation( placingPieceId );
-		var orientedRot = alignedYaw * pitch;
+		var orientedRot = alignedYaw;
 		var scale = BuildModuleDimensions.GetPieceLocalScale( placingPieceId );
-		var colliderHalf = BuildColliderSnap.PrefabColliderSize * 0.5f;
+		var colliderHalf = BuildColliderSnap.GetColliderHalfForPiece( placingPieceId );
 		var anchorOffset = BuildColliderSnap.GetCornerSnapWorldOffset(
 			placingPieceId,
 			anchorSnap.Role,
@@ -966,9 +1213,9 @@ static class BuildSnapPlacement
 	{
 		placement = default;
 		var alignedYaw = GetPlacementYaw( yawDegrees );
-		var orientedRot = alignedYaw * BuildModuleDimensions.GetPrefabLocalRotation( placingPieceId );
+		var orientedRot = alignedYaw;
 		var scale = BuildModuleDimensions.GetPieceLocalScale( placingPieceId );
-		var colliderHalf = BuildColliderSnap.PrefabColliderSize * 0.5f;
+		var colliderHalf = BuildColliderSnap.GetColliderHalfForPiece( placingPieceId );
 
 		// Anchor on whichever end of the seam the crosshair is nearer — the corner being pointed at.
 		var aimNearerB = Vector3.DistanceBetween( aimLand, targetWorldB )

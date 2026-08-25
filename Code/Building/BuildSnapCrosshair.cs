@@ -29,18 +29,21 @@ public static class BuildSnapCrosshair
 		BuildModuleDimensions.SnapModuleHalfUnits * 4f;
 
 	/// <summary>
-	/// Aim must be this close to a seam/corner to <b>commit</b> to snap while looking
-	/// at the piece face. ~10% of half-module — mid-face stays free for crooked stacking.
+	/// How close the crosshair's aim-land point must be to a seam for a snap to commit by aim —
+	/// one of the two gates in <see cref="ShouldCommitSnap"/> (the other is
+	/// <see cref="SnapEngageDistance"/>, on the ghost itself).
 	/// </summary>
-	public static float SnapCommitRadius =>
-		BuildModuleDimensions.SnapModuleHalfUnits * 0.1f;
+	public static float AimCommitRadius =>
+		BuildModuleDimensions.SnapModuleHalfUnits * 0.425f;
 
 	/// <summary>
-	/// When the aim lands <b>past / beside</b> a piece (not on its face), allow a wider
-	/// band so the far edge is still reachable by looking just beyond it.
+	/// How far a snap may pull the held ghost to seat it. Half a metre — the piece engages while it
+	/// is hovering about that close to where the seam wants it, however loosely the crosshair itself
+	/// is aimed. Distance between the candidate placement and the free (unsnapped) ghost position is
+	/// exactly the distance the mating snap points are apart, since both use the same rotation.
 	/// </summary>
-	public static float LookPastSnapCommitRadius =>
-		BuildModuleDimensions.SnapModuleHalfUnits * 0.85f;
+	public static float SnapEngageDistance =>
+		BuildModuleDimensions.SnapModuleHalfUnits * 0.5f;
 
 	public readonly struct RayTargetScore
 	{
@@ -55,106 +58,34 @@ public static class BuildSnapCrosshair
 	}
 
 	/// <summary>
-	/// Tight face band vs wider look-past band. Mid-face stays free; far edges work when
-	/// aiming just past the piece onto the ground beyond.
+	/// Does the held piece snap to this seam? Two ways in, either is enough:
+	/// <para>
+	/// <b>Aim</b> — the crosshair's aim-land point is within <see cref="AimCommitRadius"/>
+	/// of the seam. You looked right at the joint, so the joint engages.
+	/// </para>
+	/// <para>
+	/// <b>Proximity</b> — the snap would move the ghost no more than <see cref="SnapEngageDistance"/>
+	/// from where it is already hovering. The piece is nearly seated, so it seats — however loosely
+	/// the crosshair is aimed. This is the distance between the mating snap points themselves
+	/// (candidate and ghost share a rotation, so the centre delta and the snap-point delta are the
+	/// same number). Aim alone was not enough: holding a wall against a seam while the crosshair
+	/// rested a metre down the face left a perfectly seated ghost refusing to click in.
+	/// </para>
 	/// </summary>
-	public static bool ShouldCommitSnap( BuildSnapCandidate candidate, Vector3 aimLand )
+	public static bool ShouldCommitSnap( BuildSnapCandidate candidate, Vector3 freePlacementPosition )
 	{
 		if ( !candidate.RayScore.IsValid )
 			return false;
 
 		var piece = candidate.TargetPiece;
 		if ( piece is null || !piece.IsValid() || !piece.GameObject.IsValid() )
-			return candidate.RayScore.AimLandDistance <= LookPastSnapCommitRadius;
-
-		// Pitched roofs: the "face" isn't a flat XY deck, so planar on-face tests fail and
-		// block top/bottom lip snaps. Commit from aim→seam distance with the look-past band.
-		if ( BuildPieceFamily.IsRoof( piece.PieceId ) )
-			return candidate.RayScore.AimLandDistance <= LookPastSnapCommitRadius;
-
-		// Walls are the thing you aim at when there is no deck to aim at, so the tight mid-face
-		// band would leave a lone wall unsnappable. The free-placement carve-out only matters for
-		// decks you stand on, so keep the wide band for upright faces.
-		if ( BuildModuleDimensions.IsThinOnY( piece.PieceId ) )
-			return candidate.RayScore.AimLandDistance <= LookPastSnapCommitRadius;
-
-		if ( !TryPlanarEdgeDistance( piece, aimLand, out var edgeDist, out var onFace ) )
-		{
-			// Aim probe floating near a high seam (no solid hit) — use the wider band.
-			return candidate.RayScore.AimLandDistance <= LookPastSnapCommitRadius;
-		}
-
-		return onFace
-			? edgeDist <= SnapCommitRadius
-			: edgeDist <= LookPastSnapCommitRadius;
-	}
-
-	/// <summary>
-	/// Planar distance from aim to the piece rectangle edge (inside = dist to nearest side;
-	/// outside = dist to boundary). <paramref name="onFace"/> when aim projects onto the deck.
-	/// </summary>
-	static bool TryPlanarEdgeDistance(
-		BuildPiece piece,
-		Vector3 aimLand,
-		out float edgeDist,
-		out bool onFace )
-	{
-		edgeDist = float.MaxValue;
-		onFace = false;
-
-		var go = piece.GameObject;
-		var half = piece.HalfExtents;
-		if ( half.x < 1e-4f || half.y < 1e-4f || half.z < 1e-4f )
 			return false;
 
-		// HalfExtents are world-sized; ignore LocalScale so we compare in meters-of-extents space.
-		var delta = go.WorldRotation.Inverse * (aimLand - go.WorldPosition);
-		var isWall = BuildModuleDimensions.IsThinOnY( piece.PieceId );
+		if ( candidate.RayScore.AimLandDistance <= AimCommitRadius )
+			return true;
 
-		float planX;
-		float planY;
-		float halfX;
-		float halfY;
-		float thinAbs;
-		float thinLimit;
-		if ( isWall )
-		{
-			planX = delta.x;
-			planY = delta.z;
-			halfX = half.x;
-			halfY = half.z;
-			thinAbs = Math.Abs( delta.y );
-			thinLimit = half.y + BuildModuleDimensions.SnapModuleHalfUnits * 0.35f;
-		}
-		else
-		{
-			planX = delta.x;
-			planY = delta.y;
-			halfX = half.x;
-			halfY = half.y;
-			thinAbs = Math.Abs( delta.z );
-			// Ground just past / below a floor still counts as look-past.
-			thinLimit = half.z + BuildModuleDimensions.SnapModuleHalfUnits * 0.75f;
-		}
-
-		if ( thinAbs > thinLimit )
-			return false;
-
-		edgeDist = DistanceToRectEdge( planX, planY, halfX, halfY );
-		onFace = Math.Abs( planX ) <= halfX && Math.Abs( planY ) <= halfY;
-		return true;
-	}
-
-	static float DistanceToRectEdge( float x, float y, float halfX, float halfY )
-	{
-		var ax = Math.Abs( x );
-		var ay = Math.Abs( y );
-		if ( ax <= halfX && ay <= halfY )
-			return Math.Min( halfX - ax, halfY - ay );
-
-		var dx = Math.Max( 0f, ax - halfX );
-		var dy = Math.Max( 0f, ay - halfY );
-		return MathF.Sqrt( dx * dx + dy * dy );
+		return Vector3.DistanceBetween( candidate.Placement.Position, freePlacementPosition )
+		       <= SnapEngageDistance;
 	}
 
 	/// <summary>

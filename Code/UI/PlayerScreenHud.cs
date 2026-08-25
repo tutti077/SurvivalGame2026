@@ -274,8 +274,6 @@ public sealed class PlayerScreenHud : PanelComponent
 		RefreshVitals();
 
 		_built = true;
-
-		GameObject.Components.Create<NavMeshDebugDraw>();
 	}
 
 	void BuildVitals( Panel root )

@@ -18,6 +18,9 @@ static class BuildSnapCompatibility
 		if ( anchorRole == BuildSnapRole.Unknown || targetRole == BuildSnapRole.Unknown )
 			return false;
 
+		if ( BuildSnapLayout.IsFoldRole( anchorRole ) || BuildSnapLayout.IsFoldRole( targetRole ) )
+			return FoldCanConnect( anchorRole, targetRole );
+
 		// A beam end mates the opposite end of another beam (stacking posts, chaining rails) and
 		// any plate corner, so a post can carry a floor or wall corner.
 		if ( BuildSnapLayout.IsAxisRole( anchorRole ) || BuildSnapLayout.IsAxisRole( targetRole ) )
@@ -46,15 +49,29 @@ static class BuildSnapCompatibility
 		SnapEdgeId.West,
 	};
 
-	static readonly SnapEdgeId[] BottomLipOnly =
+	/// <summary>Both wall lips against a deck edge — stand on it or hang under it, aim side decides.</summary>
+	static readonly SnapEdgeId[] WallDeckLips =
 	{
 		SnapEdgeId.South,
+		SnapEdgeId.North,
 	};
 
 	static readonly SnapEdgeId[] LevelLips =
 	{
 		SnapEdgeId.South,
 		SnapEdgeId.North,
+	};
+
+	/// <summary>
+	/// Roof onto a wall top, eave first. <see cref="LevelLips"/> is ridge-first, which is what this
+	/// case used to be handed even though its own comment said the eave should lead — so Q/E index 0
+	/// seated the high lip on the wall and the roof reared up instead of sitting on it. Ordered from
+	/// <see cref="RoofBottomLip"/> / <see cref="RoofTopLip"/> so it tracks them if the pitch changes.
+	/// </summary>
+	static readonly SnapEdgeId[] RoofOnWallLips =
+	{
+		SnapEdgeId.North,   // RoofBottomLip — low eave, sits on the wall top
+		SnapEdgeId.South,   // RoofTopLip — ridge, still reachable by cycling
 	};
 
 	public static IReadOnlyList<SnapEdgeId> GetPlacingEdgesForTarget(
@@ -74,8 +91,10 @@ static class BuildSnapCompatibility
 
 		if ( IsWall( placingPieceId ) && IsFloor( targetPieceId ) )
 		{
-			// Bottom lip only — North (top) on a floor edge sinks the wall through the deck.
-			return BottomLipOnly;
+			// Both lips are offered and the aim-side score in BuildSnapPlacement picks: stood on the
+			// deck when you are above it, hung beneath when you are under it. Deciding here instead
+			// meant this pair answered the question differently from every other pair.
+			return WallDeckLips;
 		}
 
 		if ( IsFloor( placingPieceId ) && IsWall( targetPieceId ) )
@@ -86,11 +105,11 @@ static class BuildSnapCompatibility
 
 		if ( IsRoof( placingPieceId ) && IsWall( targetPieceId ) )
 		{
+			// Only the wall's top edge carries a roof.
 			if ( targetEdge != SnapEdgeId.North )
 				return Empty;
 
-			// Bottom lip first so default / Q/E index 0 seats the eave on the wall top.
-			return LevelLips;
+			return RoofOnWallLips;
 		}
 
 		if ( IsRoof( placingPieceId ) && IsFloor( targetPieceId ) )
@@ -130,8 +149,10 @@ static class BuildSnapCompatibility
 		SnapEdgeId targetEdge,
 		BuildPiece targetPiece )
 	{
+		// A wall's lip against a deck is chosen by which side of the deck you are on, not by which
+		// letter the seam happens to carry — the two pieces do not share an edge frame.
 		if ( IsWall( placingPieceId ) && IsFloor( targetPieceId ) )
-			return placingEdge == SnapEdgeId.South;
+			return false;
 
 		if ( IsRoof( placingPieceId ) && IsFloor( targetPieceId ) )
 			return false;
@@ -157,82 +178,26 @@ static class BuildSnapCompatibility
 		Transform placement,
 		BuildPiece targetPiece )
 	{
-		// Wall top-lip on a floor edge buries half the wall in the deck — never allow it.
+		// Wall on a floor edge: the bottom lip always works. The top lip is only honest when the
+		// whole wall ends up under the deck — that is the deliberate build-downward case. Anywhere
+		// else it buries half the wall in the floor.
 		if ( IsWall( placingPieceId ) && IsFloor( targetPieceId ) && placingEdge.Id != SnapEdgeId.South )
-			return false;
+		{
+			if ( placingEdge.Id != SnapEdgeId.North || targetPiece is null || !targetPiece.IsValid() )
+				return false;
+
+			return placement.Position.z < targetPiece.GameObject.WorldPosition.z;
+		}
 
 		// Roof↔floor: allow sit-above and hang-down; aim scoring picks which.
 		return true;
 	}
 
-	/// <summary>
-	/// Lower is better — used to pick among several yaw fits that all mate an edge.
-	/// When <paramref name="preferHangDown"/>, prefer plates hanging below the floor edge.
-	/// </summary>
-	public static float ScoreRoofElevation(
-		string roofPieceId,
-		Transform roofPlacement,
-		BuildPiece targetPiece,
-		bool preferHangDown = false )
-	{
-		if ( targetPiece is null || !targetPiece.IsValid() )
-			return 0f;
+	/// <summary>High ridge lip after prefab pitch (−45° X, local South edge at +Z).</summary>
+	public static SnapEdgeId RoofTopLip => SnapEdgeId.South;
 
-		// Roof↔roof: no above/below bias — downward chains must score fairly.
-		if ( IsRoof( targetPiece.PieceId ) )
-			return 0f;
-
-		var floorZ = targetPiece.GameObject.WorldPosition.z;
-		var centerZ = roofPlacement.Position.z;
-		var avgZ = GetSnapCornersAverageWorldZ( roofPieceId, roofPlacement );
-
-		if ( preferHangDown )
-		{
-			// Prefer center below the deck (raised-lip mate); penalize sit-above.
-			var abovePenalty = centerZ >= floorZ - BuildModuleDimensions.SnapThinHalfUnits ? 500f : 0f;
-			return abovePenalty + ( avgZ - floorZ ) + ( centerZ - floorZ );
-		}
-
-		// Strongly prefer center above the floor; then prefer higher average.
-		var belowPenalty = centerZ < floorZ ? 500f : 0f;
-		return belowPenalty - ( avgZ - floorZ ) - ( centerZ - floorZ );
-	}
-
-	/// <summary>Ridge / upper lip — mates a floor edge so the plate hangs downward.</summary>
-	public static SnapEdgeId RoofTopLip => SnapEdgeId.North;
-
-	public static float GetSnapCornersAverageWorldZ( string pieceId, Transform placement )
-	{
-		var sum = 0f;
-		var count = 0;
-		foreach ( var role in CornerRoles )
-		{
-			sum += GetCornerWorldZ( pieceId, placement, role );
-			count++;
-		}
-
-		return count > 0 ? sum / count : placement.Position.z;
-	}
-
-	static readonly BuildSnapRole[] CornerRoles =
-	{
-		BuildSnapRole.CornerNorthEast,
-		BuildSnapRole.CornerNorthWest,
-		BuildSnapRole.CornerSouthEast,
-		BuildSnapRole.CornerSouthWest,
-	};
-
-	static float GetCornerWorldZ( string pieceId, Transform placement, BuildSnapRole role )
-	{
-		var orientedRot = placement.Rotation * BuildModuleDimensions.GetPrefabLocalRotation( pieceId );
-		var scale = BuildModuleDimensions.GetPieceLocalScale( pieceId );
-		var half = BuildColliderSnap.PrefabColliderSize * 0.5f;
-		return placement.Position.z
-		       + BuildColliderSnap.GetCornerSnapWorldOffset( pieceId, role, orientedRot, scale, half ).z;
-	}
-
-	/// <summary>Lower eave lip for pitched roofs (North = ridge / upper lip).</summary>
-	public static SnapEdgeId RoofBottomLip => SnapEdgeId.South;
+	/// <summary>Low eave lip after prefab pitch (local North edge at −Z).</summary>
+	public static SnapEdgeId RoofBottomLip => SnapEdgeId.North;
 
 	static bool IsWallFloorEdgePair( SnapEdgeId placingEdge, SnapEdgeId targetEdge ) =>
 		( targetEdge, placingEdge ) switch
@@ -253,4 +218,39 @@ static class BuildSnapCompatibility
 
 	/// <summary>Stairs share the roof's lip rules — both climb between levels.</summary>
 	static bool IsRoof( string pieceId ) => BuildPieceFamily.IsRampLike( pieceId );
+
+	static bool FoldCanConnect( BuildSnapRole a, BuildSnapRole b )
+	{
+		if ( BuildSnapLayout.IsFoldRole( a ) && BuildSnapLayout.IsFoldRole( b ) )
+		{
+			return a switch
+			{
+				BuildSnapRole.Fold0 => b == BuildSnapRole.Fold2,
+				BuildSnapRole.Fold1 => b == BuildSnapRole.Fold3,
+				BuildSnapRole.Fold2 => b == BuildSnapRole.Fold0,
+				BuildSnapRole.Fold3 => b == BuildSnapRole.Fold1,
+				_ => false,
+			};
+		}
+
+		var fold = BuildSnapLayout.IsFoldRole( a ) ? a : b;
+		var plate = BuildSnapLayout.IsFoldRole( a ) ? b : a;
+		if ( !IsPlateCorner( plate ) )
+			return false;
+
+		return fold switch
+		{
+			BuildSnapRole.Fold0 => plate == BuildSnapRole.CornerSouthWest,
+			BuildSnapRole.Fold1 => plate == BuildSnapRole.CornerSouthEast,
+			BuildSnapRole.Fold2 => plate == BuildSnapRole.CornerNorthEast,
+			BuildSnapRole.Fold3 => plate == BuildSnapRole.CornerNorthWest,
+			_ => false,
+		};
+	}
+
+	static bool IsPlateCorner( BuildSnapRole role ) =>
+		role is BuildSnapRole.CornerNorthEast
+			or BuildSnapRole.CornerNorthWest
+			or BuildSnapRole.CornerSouthEast
+			or BuildSnapRole.CornerSouthWest;
 }

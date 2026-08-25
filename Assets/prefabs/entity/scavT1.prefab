@@ -23,7 +23,7 @@
         "AngularDamping": 1,
         "EnableImpactDamage": false,
         "EnhancedCcd": true,
-        "Gravity": true,
+        "Gravity": false,
         "GravityScale": 1,
         "ImpactDamage": 0,
         "LinearDamping": 0.1,
@@ -474,7 +474,7 @@
           {
             "__type": "Sandbox.BoxCollider",
             "__guid": "5e6f7081-92a3-1234-ef01-345678901234",
-            "__enabled": true,
+            "__enabled": false,
             "Flags": 0,
             "Center": "0,0,18",
             "ColliderFlags": 0,

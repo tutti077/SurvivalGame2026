@@ -6,7 +6,7 @@
     "Name": "augment_station",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
-    "Scale": "1,0.6,0.75",
+    "Scale": "1,1,1",
     "Tags": "buildpiece,grapple",
     "Enabled": true,
     "NetworkMode": 1,
@@ -63,7 +63,7 @@
         "OnTriggerEnter": null,
         "OnTriggerExit": null,
         "RollingResistance": null,
-        "Scale": "50,50,50",
+        "Scale": "50,30,37.5",
         "Static": true,
         "Surface": null,
         "SurfaceVelocity": "0,0,0"

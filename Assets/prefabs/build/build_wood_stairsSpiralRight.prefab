@@ -1,12 +1,12 @@
 {
   "RootObject": {
-    "__guid": "278ef154-1d6c-57fe-90c9-5f22133000aa",
+    "__guid": "40d04882-bc6d-4608-8cfa-e04c5f733d05",
     "__version": 2,
     "Flags": 0,
-    "Name": "build_wood_stairsSpiral",
+    "Name": "build_wood_stairsSpiralRight",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
-    "Scale": "2,2,2",
+    "Scale": "1,1,1",
     "Tags": "buildpiece,grapple",
     "Enabled": true,
     "NetworkMode": 1,
@@ -17,16 +17,16 @@
     "Components": [
       {
         "__type": "Sandbox.ModelRenderer",
-        "__guid": "90ab4f19-c14f-5131-b817-d33eabafab64",
+        "__guid": "04868265-56d5-4228-be37-b33ed3786f49",
         "__enabled": true,
         "Flags": 0,
         "BodyGroups": 18446744073709551615,
         "CreateAttachments": false,
         "LodOverride": null,
         "MaterialGroup": null,
-        "MaterialOverride": "materials/build/floor.vmat",
+        "MaterialOverride": null,
         "Materials": null,
-        "Model": "models/dev/box.vmdl",
+        "Model": "models/building/build_wood_stairsspiralright.vmdl",
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
@@ -44,7 +44,7 @@
       },
       {
         "__type": "Sandbox.BoxCollider",
-        "__guid": "0881857a-f079-5ab9-ad21-93942b12c705",
+        "__guid": "be0185c7-4abb-4da1-b316-1234f4911bd8",
         "__enabled": true,
         "Flags": 0,
         "Center": "0,0,0",
@@ -63,14 +63,14 @@
         "OnTriggerEnter": null,
         "OnTriggerExit": null,
         "RollingResistance": null,
-        "Scale": "50,50,50",
+        "Scale": "100,100,50",
         "Static": true,
         "Surface": null,
         "SurfaceVelocity": "0,0,0"
       },
       {
         "__type": "Survival.BuildPiece",
-        "__guid": "5bdde70d-3936-5bfb-a650-845ac134e290",
+        "__guid": "d5806e9f-90fa-4b0c-992e-41a2ef421021",
         "__enabled": true,
         "Flags": 0,
         "IsBlueprint": false,
@@ -80,7 +80,7 @@
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null,
-        "PieceId": "build_wood_stairsSpiral"
+        "PieceId": "build_wood_stairsSpiralRight"
       }
     ],
     "Children": [],

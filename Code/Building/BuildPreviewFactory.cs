@@ -2,6 +2,10 @@ using Sandbox;
 
 namespace Survival;
 
+/// <summary>
+/// Fallback when a catalog prefab cannot be cloned. Uses the same visual path as real prefabs
+/// (<see cref="BuildPieceVisual"/>) — not the dev box.
+/// </summary>
 static class BuildPreviewFactory
 {
 	public static GameObject CreatePlaceholder( Scene scene, BuildPieceData data, Transform worldTransform, string name )
@@ -11,9 +15,7 @@ static class BuildPreviewFactory
 		if ( scene.IsValid() )
 			go.Parent = scene;
 
-		var renderer = go.Components.Create<ModelRenderer>();
-		renderer.Model = Model.Load( "models/dev/box.vmdl" );
-		renderer.Tint = BuildPieceCatalog.ParseFallbackColor( data?.FallbackColor ).WithAlpha( 0.55f );
+		go.Components.Create<BoxCollider>().Scale = BuildColliderSnap.PrefabColliderSize;
 
 		BuildPrefabUtility.ApplyStandardPieceTransform( go, pieceId, worldTransform );
 

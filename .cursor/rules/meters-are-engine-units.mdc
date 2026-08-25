@@ -3,9 +3,19 @@ description: World space uses meters 1:1 — never scale user meter values by Un
 alwaysApply: true
 ---
 
-# Meters = engine units (Commandment #4)
+# Meters are the design language (Commandment #4)
 
-SurvivalGame2026 treats **1 world unit as 1 meter**. When the user says **10m**, **100m**, or **“100×100 plane”**, use **10**, **100**, or scale **(100, 100, …)** in scene transforms, colliders, orbit radii, disk sizes, and designer-facing properties — **not** a converted value.
+SurvivalGame2026 writes **designer-facing values in meters**: a property named `…Meters` holds exactly the number the user said. **10m** → `10`, **100m** → `100`. Never pre-scale that number in the property, in JSON, or in a hand-typed scene transform.
+
+The world itself is **not** 1:1 — s&box inherits Source units. Conversion happens **once**, inside the system that owns the value:
+
+| Space | Factor | Converter |
+|-------|--------|-----------|
+| Terrain, environment, sky, fly-cam, harvest, containers, grapple | 40 u/m | `TerrainWorldUnits.MetersToEngine` |
+| Pawn distances (shove, bow range, wingsuit) | ≈40 u/m | `BodyHeight / 1.8` |
+| Build pieces only — snap math, piece colliders | **50 u/m** | `BuildColliderSnap.PrefabColliderSize` |
+
+A number that has already been converted — a mesh AABB, a `BuildPieceModelCache` extent, a `BoxCollider.Scale` — is in final world units. **Do not scale it a second time.**
 
 ## Do
 
