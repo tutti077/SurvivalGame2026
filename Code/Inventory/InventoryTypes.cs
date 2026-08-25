@@ -15,6 +15,12 @@ public struct InventorySlot
 	/// </summary>
 	public int Wear { get; set; }
 
+	/// <summary>
+	/// Display name of the player who crafted this item (equipment only; empty = untracked).
+	/// Travels with the stack like <see cref="Wear"/> so a traded tool keeps its maker.
+	/// </summary>
+	public string CrafterName { get; set; }
+
 	public bool IsEmpty => string.IsNullOrWhiteSpace( ResourceId ) || Count <= 0;
 
 	public static InventorySlot Empty => default;

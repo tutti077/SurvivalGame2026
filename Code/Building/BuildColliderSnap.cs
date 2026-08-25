@@ -48,9 +48,16 @@ static class BuildColliderSnap
 	/// </summary>
 	public static Vector3 GetColliderSizeInMeshFrame( string pieceId )
 	{
-		var half = GetColliderHalfForPiece( pieceId );
-		return new Vector3( half.y, half.x, half.z ) * 2f;
+		return ToMeshFrameHalf( GetColliderHalfForPiece( pieceId ) ) * 2f;
 	}
+
+	/// <summary>
+	/// Table-frame half extents → the frame the mesh occupies (the <see cref="KitMeshYaw"/>
+	/// quarter turn swaps X and Y). Any test against a piece's root-local solid must use this
+	/// frame — the placed collider does (see <see cref="GetColliderSizeInMeshFrame"/>).
+	/// </summary>
+	public static Vector3 ToMeshFrameHalf( Vector3 tableFrameHalf ) =>
+		new( tableFrameHalf.y, tableFrameHalf.x, tableFrameHalf.z );
 
 	public static Vector3 GetColliderHalfForPiece( string pieceId )
 	{

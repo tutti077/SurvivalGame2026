@@ -10,6 +10,9 @@ public sealed class ResourceDefinitionData
 
 	public string DisplayName { get; set; } = string.Empty;
 
+	/// <summary>Optional flavor/help text shown in the item hover tooltip.</summary>
+	public string Description { get; set; } = string.Empty;
+
 	public string Icon { get; set; } = string.Empty;
 
 	public int MaxStack { get; set; } = 64;

@@ -159,7 +159,10 @@ public sealed class PlayerCrafting : Component
 		if ( !_inventory.HostTryConsumeResources( scaledIngredients ) )
 			return false;
 
-		if ( !_inventory.HostTryAddResource( recipe.Id, outputTotal ) )
+		// Equipment remembers its maker (shown in the item tooltip); bulk resources stay untagged.
+		var crafterName = EquipmentCatalog.TryGet( recipe.Id, out _ ) ? ResolveCrafterName() : null;
+
+		if ( !_inventory.HostTryAddResource( recipe.Id, outputTotal, wear: 0, crafterName: crafterName ) )
 		{
 			if ( LogCrafting )
 				Log.Warning( $"[PlayerCrafting] {GameObject.Name}: crafted '{recipeId}' but inventory could not fit output." );
@@ -170,6 +173,15 @@ public sealed class PlayerCrafting : Component
 			Log.Info( $"[PlayerCrafting] {GameObject.Name}: crafted {outputTotal} {recipe.Id}." );
 
 		return true;
+	}
+
+	/// <summary>Display name of the player who owns this pawn (host resolves at craft time).</summary>
+	string ResolveCrafterName()
+	{
+		if ( GameObject.Network is { Active: true, Owner: { } owner } )
+			return owner.DisplayName ?? string.Empty;
+
+		return Connection.Local?.DisplayName ?? string.Empty;
 	}
 
 	/// <summary>Local UI check: any tool in hotbar or bag with wear (drives the workbench repair button).</summary>

@@ -58,11 +58,6 @@ public static class BuildModuleDimensions
 
 	public static Vector3 RoofHalfExtents => HalfExtentsFor( RoofSizeMeters );
 
-	/// <summary>Storage chest: 1 m wide, 0.6 m deep, 0.75 m tall.</summary>
-	public static Vector3 ChestSizeMeters => new( 1f, 0.6f, 0.75f );
-
-	public static Vector3 ChestHalfExtents => HalfExtentsFor( ChestSizeMeters );
-
 	/// <summary>Campfire: small uniform sphere (meters on each axis).</summary>
 	public static Vector3 CampfireSizeMeters => new( 0.35f, 0.35f, 0.35f );
 
@@ -111,7 +106,8 @@ public static class BuildModuleDimensions
 		["build_wood_45Beam_2m"] = new( ModuleMeters, BeamMeters, BeamMeters ),
 
 		// Furniture / stations (unchanged by the wood rename).
-		["chest"] = new( 1f, 0.6f, 0.75f ),
+		// Chest: 1 m long, 0.5 m wide, 0.5 m tall.
+		["chest"] = new( 1f, 0.5f, 0.5f ),
 		["augment_station"] = new( 1f, 0.6f, 0.75f ),
 		["furniture_campfire"] = new( 0.35f, 0.35f, 0.35f ),
 		// Workbench: 2 m wide, 1 m deep, 1 m tall (tool repair + workbench recipes).

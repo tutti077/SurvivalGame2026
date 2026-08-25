@@ -9,6 +9,9 @@ public struct InventoryCursorStack
 	/// <summary>Durability uses consumed by the held item (0 = fresh). Rides along so drags keep wear.</summary>
 	public int Wear { get; set; }
 
+	/// <summary>Crafter display name carried by the held item (equipment only; empty = untracked).</summary>
+	public string CrafterName { get; set; }
+
 	public bool IsEmpty => string.IsNullOrWhiteSpace( ResourceId ) || Count <= 0;
 
 	public void Clear()
@@ -16,13 +19,15 @@ public struct InventoryCursorStack
 		ResourceId = null;
 		Count = 0;
 		Wear = 0;
+		CrafterName = null;
 	}
 
-	public void Set( string resourceId, int count, int wear = 0 )
+	public void Set( string resourceId, int count, int wear = 0, string crafterName = null )
 	{
 		ResourceId = resourceId;
 		Count = count;
 		Wear = wear;
+		CrafterName = crafterName;
 	}
 
 	public bool CanStack( string resourceId ) =>

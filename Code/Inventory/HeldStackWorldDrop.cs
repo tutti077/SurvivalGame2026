@@ -31,7 +31,7 @@ public static class HeldStackWorldDrop
 
 		spawnPos = SnapSpawnAboveGround( scene, owner, spawnPos );
 
-		var instance = TrySpawnWorldDrop( scene, held.ResourceId, dropCount, spawnPos, owner, applyDropperSelfPickupDelay: true, wear: held.Wear );
+		var instance = TrySpawnWorldDrop( scene, held.ResourceId, dropCount, spawnPos, owner, applyDropperSelfPickupDelay: true, wear: held.Wear, crafterName: held.CrafterName );
 		if ( instance is null || !instance.IsValid() )
 			return false;
 
@@ -62,7 +62,7 @@ public static class HeldStackWorldDrop
 
 		spawnPos = SnapSpawnAboveGround( scene, owner, spawnPos );
 
-		var instance = TrySpawnWorldDrop( scene, held.ResourceId, held.Count, spawnPos, owner, applyDropperSelfPickupDelay: true, wear: held.Wear );
+		var instance = TrySpawnWorldDrop( scene, held.ResourceId, held.Count, spawnPos, owner, applyDropperSelfPickupDelay: true, wear: held.Wear, crafterName: held.CrafterName );
 		if ( instance is null || !instance.IsValid() )
 			return false;
 
@@ -83,14 +83,15 @@ public static class HeldStackWorldDrop
 		Vector3 worldPosition,
 		GameObject ignoreHierarchy = null,
 		bool applyDropperSelfPickupDelay = false,
-		int wear = 0 )
+		int wear = 0,
+		string crafterName = null )
 	{
 		if ( !scene.IsValid() || string.IsNullOrWhiteSpace( resourceId ) || count <= 0 )
 			return null;
 
 		worldPosition = SnapSpawnAboveGround( scene, ignoreHierarchy, worldPosition );
 
-		var instance = SpawnDropPrefab( scene, resourceId, count, worldPosition, ignoreHierarchy, applyDropperSelfPickupDelay, wear );
+		var instance = SpawnDropPrefab( scene, resourceId, count, worldPosition, ignoreHierarchy, applyDropperSelfPickupDelay, wear, crafterName );
 		return instance is not null && instance.IsValid() ? instance : null;
 	}
 
@@ -101,7 +102,8 @@ public static class HeldStackWorldDrop
 		Vector3 worldPosition,
 		GameObject ignoreHierarchy,
 		bool applyDropperSelfPickupDelay,
-		int wear = 0 )
+		int wear = 0,
+		string crafterName = null )
 	{
 		var instance = BuildPrefabUtility.GetTemplate( DropPrefabPath )?.Clone();
 		if ( instance is null || !instance.IsValid() )
@@ -122,7 +124,7 @@ public static class HeldStackWorldDrop
 		var scale = 0.24f + Sandbox.Game.Random.Float( 0f, 0.1f );
 		instance.LocalScale = new Vector3( scale, scale, scale );
 
-		PrepareSpawnedDrop( instance, resourceId, count, ignoreHierarchy, applyDropperSelfPickupDelay, wear );
+		PrepareSpawnedDrop( instance, resourceId, count, ignoreHierarchy, applyDropperSelfPickupDelay, wear, crafterName );
 		instance.Enabled = true;
 		HostNetworkSpawn.TrySpawn( instance );
 		return instance;
@@ -145,13 +147,14 @@ public static class HeldStackWorldDrop
 		int count,
 		GameObject ignoreHierarchy,
 		bool applyDropperSelfPickupDelay,
-		int wear = 0 )
+		int wear = 0,
+		string crafterName = null )
 	{
 		foreach ( var definition in instance.Components.GetAll<ResourceItemDefinition>( FindMode.EverythingInSelf ) )
 			definition?.Destroy();
 
 		var drop = instance.Components.Get<WorldDroppedResource>() ?? instance.Components.Create<WorldDroppedResource>();
-		drop.Configure( resourceId, count, wear );
+		drop.Configure( resourceId, count, wear, crafterName );
 		if ( applyDropperSelfPickupDelay )
 			drop.SetDropper( ignoreHierarchy );
 

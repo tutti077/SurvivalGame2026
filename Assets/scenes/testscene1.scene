@@ -203,14 +203,6 @@
             },
             "Property": "Position",
             "Value": "0,-160,64"
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "a334750f-a7f9-4e36-9c2d-563b96bda182"
-            },
-            "Property": "WingsuitDeployForwardGraceSeconds",
-            "Value": 0.5
           }
         ],
         "MovedObjects": []
@@ -450,144 +442,6 @@
           "Static": true,
           "Surface": null,
           "SurfaceVelocity": "0,0,0"
-        }
-      ],
-      "Children": []
-    },
-    {
-      "__guid": "a0bae24a-4e92-4868-8bbb-1d863107940f",
-      "__version": 2,
-      "Flags": 0,
-      "Name": "Cube (1)",
-      "Position": "3301.13672,-10656,704",
-      "Rotation": "0,0,0.707106769,0.707106769",
-      "Scale": "0.5,10,0.5",
-      "Tags": "grapple",
-      "Enabled": true,
-      "NetworkMode": 2,
-      "NetworkFlags": 0,
-      "NetworkOrphaned": 0,
-      "NetworkTransmit": true,
-      "OwnerTransfer": 1,
-      "Components": [
-        {
-          "__type": "Sandbox.ModelRenderer",
-          "__guid": "1bf4d273-a905-448b-a84b-2bac3c21e532",
-          "__enabled": true,
-          "Flags": 0,
-          "BodyGroups": 18446744073709551615,
-          "CreateAttachments": false,
-          "LodOverride": null,
-          "MaterialGroup": null,
-          "MaterialOverride": null,
-          "Materials": null,
-          "Model": "models/dev/box.vmdl",
-          "OnComponentDestroy": null,
-          "OnComponentDisabled": null,
-          "OnComponentEnabled": null,
-          "OnComponentFixedUpdate": null,
-          "OnComponentStart": null,
-          "OnComponentUpdate": null,
-          "RenderOptions": {
-            "GameLayer": true,
-            "OverlayLayer": false,
-            "BloomLayer": false,
-            "AfterUILayer": false
-          },
-          "RenderType": "On",
-          "Tint": "0.10698,0.09155,0.09155,1"
-        }
-      ],
-      "Children": []
-    },
-    {
-      "__guid": "b6465b92-2f72-41e8-8f16-12970998144c",
-      "__version": 2,
-      "Flags": 0,
-      "Name": "Cube (2)",
-      "Position": "3310,-11488,704",
-      "Rotation": "0,0,0.707106769,0.707106769",
-      "Scale": "0.5,10,0.5",
-      "Tags": "grapple",
-      "Enabled": true,
-      "NetworkMode": 2,
-      "NetworkFlags": 0,
-      "NetworkOrphaned": 0,
-      "NetworkTransmit": true,
-      "OwnerTransfer": 1,
-      "Components": [
-        {
-          "__type": "Sandbox.ModelRenderer",
-          "__guid": "3bf130f7-438d-4dca-9525-2fc38821cea2",
-          "__enabled": true,
-          "Flags": 0,
-          "BodyGroups": 18446744073709551615,
-          "CreateAttachments": false,
-          "LodOverride": null,
-          "MaterialGroup": null,
-          "MaterialOverride": null,
-          "Materials": null,
-          "Model": "models/dev/box.vmdl",
-          "OnComponentDestroy": null,
-          "OnComponentDisabled": null,
-          "OnComponentEnabled": null,
-          "OnComponentFixedUpdate": null,
-          "OnComponentStart": null,
-          "OnComponentUpdate": null,
-          "RenderOptions": {
-            "GameLayer": true,
-            "OverlayLayer": false,
-            "BloomLayer": false,
-            "AfterUILayer": false
-          },
-          "RenderType": "On",
-          "Tint": "0.10698,0.09155,0.09155,1"
-        }
-      ],
-      "Children": []
-    },
-    {
-      "__guid": "e55f4527-69ba-42a5-b16e-00572c53cabb",
-      "__version": 2,
-      "Flags": 0,
-      "Name": "Cube (3)",
-      "Position": "2560,-12256,704",
-      "Rotation": "0,0,0,1",
-      "Scale": "0.5,10,0.5",
-      "Tags": "grapple",
-      "Enabled": true,
-      "NetworkMode": 2,
-      "NetworkFlags": 0,
-      "NetworkOrphaned": 0,
-      "NetworkTransmit": true,
-      "OwnerTransfer": 1,
-      "Components": [
-        {
-          "__type": "Sandbox.ModelRenderer",
-          "__guid": "c527ce56-fee2-4913-ac73-4644448ec93a",
-          "__enabled": true,
-          "Flags": 0,
-          "BodyGroups": 18446744073709551615,
-          "CreateAttachments": false,
-          "LodOverride": null,
-          "MaterialGroup": null,
-          "MaterialOverride": null,
-          "Materials": null,
-          "Model": "models/dev/box.vmdl",
-          "OnComponentDestroy": null,
-          "OnComponentDisabled": null,
-          "OnComponentEnabled": null,
-          "OnComponentFixedUpdate": null,
-          "OnComponentStart": null,
-          "OnComponentUpdate": null,
-          "RenderOptions": {
-            "GameLayer": true,
-            "OverlayLayer": false,
-            "BloomLayer": false,
-            "AfterUILayer": false
-          },
-          "RenderType": "On",
-          "Tint": "0.10698,0.09155,0.09155,1"
         }
       ],
       "Children": []
@@ -1247,7 +1101,8 @@
         "b1010004-1111-4111-8111-111111111141": "c8e4f012-3456-7890-abcd-ef1234567802",
         "b1010004-1111-4111-8111-111111111142": "c8e4f012-3456-7890-abcd-ef1234567803",
         "b1010004-1111-4111-8111-111111111143": "c8e4f012-3456-7890-abcd-ef1234567804",
-        "b1010004-1111-4111-8111-111111111144": "c8e4f012-3456-7890-abcd-ef1234567805"
+        "b1010004-1111-4111-8111-111111111144": "c8e4f012-3456-7890-abcd-ef1234567805",
+        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1eea3"
       }
     },
     {
@@ -142989,6 +142844,144 @@
               },
               "RenderType": "On",
               "Tint": "0.09767,0.09222,0.09222,1"
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "e55f4527-69ba-42a5-b16e-00572c53cabb",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Cube (3)",
+          "Position": "7597.91553,-15776,-9384",
+          "Rotation": "0,0,0,1",
+          "Scale": "0.5,10,0.5",
+          "Tags": "grapple",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "Sandbox.ModelRenderer",
+              "__guid": "c527ce56-fee2-4913-ac73-4644448ec93a",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyGroups": 18446744073709551615,
+              "CreateAttachments": false,
+              "LodOverride": null,
+              "MaterialGroup": null,
+              "MaterialOverride": null,
+              "Materials": null,
+              "Model": "models/dev/box.vmdl",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "RenderOptions": {
+                "GameLayer": true,
+                "OverlayLayer": false,
+                "BloomLayer": false,
+                "AfterUILayer": false
+              },
+              "RenderType": "On",
+              "Tint": "0.10698,0.09155,0.09155,1"
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "b6465b92-2f72-41e8-8f16-12970998144c",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Cube (2)",
+          "Position": "8347.91602,-15008,-9384",
+          "Rotation": "0,0,0.707106769,0.707106769",
+          "Scale": "0.5,10,0.5",
+          "Tags": "grapple",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "Sandbox.ModelRenderer",
+              "__guid": "3bf130f7-438d-4dca-9525-2fc38821cea2",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyGroups": 18446744073709551615,
+              "CreateAttachments": false,
+              "LodOverride": null,
+              "MaterialGroup": null,
+              "MaterialOverride": null,
+              "Materials": null,
+              "Model": "models/dev/box.vmdl",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "RenderOptions": {
+                "GameLayer": true,
+                "OverlayLayer": false,
+                "BloomLayer": false,
+                "AfterUILayer": false
+              },
+              "RenderType": "On",
+              "Tint": "0.10698,0.09155,0.09155,1"
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "a0bae24a-4e92-4868-8bbb-1d863107940f",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Cube (1)",
+          "Position": "8339.05273,-14176,-9384",
+          "Rotation": "0,0,0.707106769,0.707106769",
+          "Scale": "0.5,10,0.5",
+          "Tags": "grapple",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "Sandbox.ModelRenderer",
+              "__guid": "1bf4d273-a905-448b-a84b-2bac3c21e532",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyGroups": 18446744073709551615,
+              "CreateAttachments": false,
+              "LodOverride": null,
+              "MaterialGroup": null,
+              "MaterialOverride": null,
+              "Materials": null,
+              "Model": "models/dev/box.vmdl",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "RenderOptions": {
+                "GameLayer": true,
+                "OverlayLayer": false,
+                "BloomLayer": false,
+                "AfterUILayer": false
+              },
+              "RenderType": "On",
+              "Tint": "0.10698,0.09155,0.09155,1"
             }
           ],
           "Children": []

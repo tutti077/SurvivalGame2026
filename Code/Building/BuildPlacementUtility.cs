@@ -288,7 +288,8 @@ public static class BuildPlacementUtility
 			};
 		}
 
-		var isValid = !OverlapsExistingPieces( scene, ignorePreview, position, rotation, half );
+		// Overlap runs in the mesh frame — the frame the placed colliders actually occupy.
+		var isValid = !OverlapsExistingPieces( scene, ignorePreview, position, rotation, BuildColliderSnap.ToMeshFrameHalf( half ) );
 
 		return new BuildPlacementResult
 		{
@@ -482,6 +483,7 @@ public static class BuildPlacementUtility
 		return hit.Tags.Has( "buildpreview" );
 	}
 
+	/// <summary><paramref name="halfExtents"/> must be mesh-frame halves (see <see cref="BuildColliderSnap.ToMeshFrameHalf"/>) — the same frame placed colliders occupy.</summary>
 	public static bool OverlapsExistingPieces(
 		Scene scene,
 		GameObject ignorePreview,
@@ -503,7 +505,8 @@ public static class BuildPlacementUtility
 			if ( ignoreHierarchy.IsValid() && piece.GameObject == ignoreHierarchy )
 				continue;
 
-			if ( Overlaps( candidate, halfExtents, piece.GameObject.WorldTransform, piece.HalfExtents ) )
+			// piece.HalfExtents is table-frame; the piece's solid sits in the mesh frame (X/Y swapped).
+			if ( Overlaps( candidate, halfExtents, piece.GameObject.WorldTransform, BuildColliderSnap.ToMeshFrameHalf( piece.HalfExtents ) ) )
 				return true;
 		}
 

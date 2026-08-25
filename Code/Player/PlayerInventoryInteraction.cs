@@ -234,6 +234,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		TickWorkbenchAccess();
 		TickCampfireAccess();
 		TickTimeTrialAccess();
+		TickItemTooltip();
 
 		// While the game menu is open, Attack1 drag finish is owned by InventoryMenuInputOverlay
 		// (soft cursor). Finishing here with Mouse.Position cancels bag→hotbar drops.
@@ -610,7 +611,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 
 		if ( host.OwnerTryPickupAll( slot.SlotIndex, out var picked ) && !picked.IsEmpty )
 		{
-			_held.Set( picked.ResourceId, picked.Count, picked.Wear );
+			_held.Set( picked.ResourceId, picked.Count, picked.Wear, picked.CrafterName );
 			_dragSourceHost = host;
 			_dragSourceSlot = slot.SlotIndex;
 			_dropHoverSlot = slot;
@@ -740,7 +741,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
 			return HeldStackWorldDrop.TryDropAtPlayer( GameObject, ref held, dropCount );
 
-		RpcRequestPlayerWorldDrop( sourceHost?.GridId ?? string.Empty, sourceSlot, held.ResourceId, dropCount, held.Wear );
+		RpcRequestPlayerWorldDrop( sourceHost?.GridId ?? string.Empty, sourceSlot, held.ResourceId, dropCount, held.Wear, held.CrafterName ?? string.Empty );
 		held.Count -= dropCount;
 		if ( held.Count <= 0 )
 			held.Clear();
@@ -748,13 +749,13 @@ public sealed partial class PlayerInventoryInteraction : Component
 	}
 
 	[Rpc.Host]
-	void RpcRequestPlayerWorldDrop( string sourceGridId, int sourceSlot, string resourceId, int count, int wear )
+	void RpcRequestPlayerWorldDrop( string sourceGridId, int sourceSlot, string resourceId, int count, int wear, string crafter )
 	{
 		if ( !Networking.IsHost )
 			return;
 
 		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear );
+		held.Set( resourceId, count, wear, crafter );
 		if ( HeldStackWorldDrop.TryDropAtPlayer( GameObject, ref held, count ) )
 			return;
 
@@ -818,19 +819,19 @@ public sealed partial class PlayerInventoryInteraction : Component
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
 			return HeldStackWorldDrop.TryDrop( GameObject, ref held, GetDropProbeScreenPosition() );
 
-		RpcRequestHotbarWorldDrop( sourceSlot, held.ResourceId, held.Count, held.Wear, GetDropProbeScreenPosition() );
+		RpcRequestHotbarWorldDrop( sourceSlot, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, GetDropProbeScreenPosition() );
 		held.Clear();
 		return true;
 	}
 
 	[Rpc.Host]
-	void RpcRequestHotbarWorldDrop( int sourceSlot, string resourceId, int count, int wear, Vector2 screenPosition )
+	void RpcRequestHotbarWorldDrop( int sourceSlot, string resourceId, int count, int wear, string crafter, Vector2 screenPosition )
 	{
 		if ( !Networking.IsHost )
 			return;
 
 		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear );
+		held.Set( resourceId, count, wear, crafter );
 		if ( HeldStackWorldDrop.TryDrop( GameObject, ref held, screenPosition ) )
 			return;
 
@@ -937,7 +938,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		var wasEmpty = _held.IsEmpty;
 		if ( wasEmpty )
 		{
-			_held.Set( taken.ResourceId, taken.Count, taken.Wear );
+			_held.Set( taken.ResourceId, taken.Count, taken.Wear, taken.CrafterName );
 			RememberHeldReturnSlot( host, slotIndex );
 		}
 		else
@@ -977,7 +978,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		var wasEmpty = _held.IsEmpty;
 		if ( wasEmpty )
 		{
-			_held.Set( taken.ResourceId, taken.Count, taken.Wear );
+			_held.Set( taken.ResourceId, taken.Count, taken.Wear, taken.CrafterName );
 			RememberHeldReturnSlot( host, slotIndex );
 		}
 		else
@@ -1153,7 +1154,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 			return false;
 
 		var held = new InventoryCursorStack();
-		held.Set( picked.ResourceId, picked.Count, picked.Wear );
+		held.Set( picked.ResourceId, picked.Count, picked.Wear, picked.CrafterName );
 		var movedAny = false;
 
 		// Distribute across merge targets, then empties (finders only return slots with room).
