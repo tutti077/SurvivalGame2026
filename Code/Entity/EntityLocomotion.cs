@@ -70,6 +70,8 @@ public sealed class EntityLocomotion : Component
 	bool _brainOwnsFacing;
 	bool _hasTravelHint;
 	Vector3 _travelHintWorld;
+	Vector3 _lastWishDir;
+	double _lastWishAt;
 	float _fallSpeed;
 	float _fallStartZ;
 	float _intendedMaxSpeed = 220f;
@@ -237,18 +239,18 @@ public sealed class EntityLocomotion : Component
 			return;
 
 		Agent ??= Components.Get<NavMeshAgent>();
+
+		// Stick feet before measuring velocity so Z corrections don't pulse the walk anim.
+		// Runs even without a skinned body — placeholder animals still need terrain Z.
+		if ( !_isFalling )
+			GlueFeetToTerrain( force: false );
+
 		EnsureAnimHelper();
 		if ( AnimHelper is null )
 			return;
 
 		var dt = Math.Max( Time.Delta, 1e-4f );
 		var position = GameObject.WorldPosition;
-
-		// Stick feet before measuring velocity so Z corrections don't pulse the walk anim.
-		if ( !_isFalling )
-			GlueFeetToTerrain( force: false );
-
-		position = GameObject.WorldPosition;
 		var velocity = (position - _lastPosition) / dt;
 		_lastPosition = position;
 
@@ -395,6 +397,8 @@ public sealed class EntityLocomotion : Component
 		if ( wish.LengthSquared > 16f )
 		{
 			desire = wish.Normal;
+			_lastWishDir = desire;
+			_lastWishAt = Time.NowDouble;
 			// If the path wish drives into a wall, face along the wall toward the look target instead.
 			if ( TrySteerAlongWall( desire, out var steered ) )
 			{
@@ -402,6 +406,17 @@ public sealed class EntityLocomotion : Component
 				return true;
 			}
 
+			return true;
+		}
+
+		// Wish died because the turn gate zeroed MaxSpeed — keep turning toward the path direction
+		// we were on. Falling back to look/hint here oscillates when the path disagrees with the
+		// straight line to the target (speed toggles 0↔full every frame, net movement zero).
+		if ( Agent.IsNavigating
+		     && Time.NowDouble - _lastWishAt < 0.6
+		     && _lastWishDir.LengthSquared > 0.5f )
+		{
+			desire = _lastWishDir;
 			return true;
 		}
 

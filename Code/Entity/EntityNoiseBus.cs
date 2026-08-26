@@ -23,6 +23,15 @@ public static class EntityNoiseBus
 			heard++;
 		}
 
+		foreach ( var animal in scene.GetAllComponents<AnimalBrain>() )
+		{
+			if ( animal is null || !animal.IsValid() || !animal.Active )
+				continue;
+
+			animal.TryHearNoise( worldPosition, kind, source );
+			heard++;
+		}
+
 		var srcName = source is { IsValid: true } ? source.Name : "?";
 		EntityPerceptionDebug.LogNoise( $"emit {kind} from {srcName} brainsNotified={heard}" );
 	}

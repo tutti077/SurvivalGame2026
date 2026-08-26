@@ -375,6 +375,65 @@
       ]
     },
     {
+      "__guid": "d4e50001-1111-4111-8111-0000000000aa",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "AnimalSpawner",
+      "Position": "551.382141,-407.447479,34",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Survival.AnimalSpawnButton",
+          "__guid": "d4e50001-1111-4111-8111-0000000000bb",
+          "__enabled": true,
+          "Flags": 0,
+          "InputAction": "SpawnAnimal",
+          "LogStateDebug": true,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "PrefabPath": "prefabs/entity/fox.prefab",
+          "SpawnHealth": 0,
+          "SpawnPoint": {
+            "_type": "gameobject",
+            "go": "d4e50001-1111-4111-8111-0000000000cc"
+          },
+          "Species": "Fox"
+        }
+      ],
+      "Children": [
+        {
+          "__guid": "d4e50001-1111-4111-8111-0000000000cc",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "AnimalSpawnPoint",
+          "Position": "0,0,0",
+          "Rotation": "0,0,0,1",
+          "Scale": "1,1,1",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [],
+          "Children": []
+        }
+      ]
+    },
+    {
       "__guid": "6ad70641-3c6c-4402-9c85-9a4969af4764",
       "__version": 2,
       "Flags": 0,

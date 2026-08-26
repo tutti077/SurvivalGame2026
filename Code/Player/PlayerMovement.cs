@@ -829,21 +829,20 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 	/// <summary>
 	/// Hardcoded physical keys (not the rebindable Run action): = / + zoom in, - zoom out.
-	/// Numpad +/- included. Shift+= is fine — we listen for equals and add.
+	/// Engine key names are Source button codes minus the KEY_ prefix: equal, minus, pad_plus, pad_minus.
+	/// Shift+= is fine — the physical key is still "equal".
 	/// </summary>
 	static bool IsCameraZoomKeyPressed( bool zoomIn )
 	{
 		if ( zoomIn )
 		{
-			return Input.Keyboard.Pressed( "equals" )
-			       || Input.Keyboard.Pressed( "+" )
-			       || Input.Keyboard.Pressed( "add" )
+			return Input.Keyboard.Pressed( "equal" )
+			       || Input.Keyboard.Pressed( "pad_plus" )
 			       || Input.Pressed( "CameraZoomIn" );
 		}
 
 		return Input.Keyboard.Pressed( "minus" )
-		       || Input.Keyboard.Pressed( "-" )
-		       || Input.Keyboard.Pressed( "subtract" )
+		       || Input.Keyboard.Pressed( "pad_minus" )
 		       || Input.Pressed( "CameraZoomOut" );
 	}
 

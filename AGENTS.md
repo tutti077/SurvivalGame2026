@@ -52,6 +52,13 @@ Sword **colliders must not** be the source of HP damage (use them for VFX / clas
 - **Population** (`Assets/data/biome_population.json`, `BiomePopulationCatalog` / `BiomePopulationScatter`): density by world-grid `spacingMeters` + `spawnWeight` per biome (not per-chunk); `respawn: false` = mini-boss (permanent death). Hooked from `TerrainWorldManager` on chunk load **inside collision range**. Clover Hills default: ~1 `scavT1` per **250 m**. Optional `near` anchor reserved for later.
 - **Streamed terrain**: default is a **uniform square** around the camera (`StreamRadiusChunks`, e.g. 8 ≈ 512 m) — same distance in all directions, no look pop-in. Unload uses `StreamUnloadMarginChunks` hysteresis (keep until outside radius + margin) so load/unload don’t thrash at the same edge. Optional forward-cone mode remains for later. Entity population only inside `CollisionRangeMeters`.
 
+### Animal AI (shared state machine)
+
+- **`AnimalBrain`** (`Code/Entity/Animals/`) is the single state machine every animal species runs: `Idle / Wander / Graze / Alerted / Tracking / Attacking / Fleeing` inside one master `TickStateMachine()`. Species never get their own brain classes.
+- Per-species tuning lives in **`Assets/data/animal_behaviors.json`** (`AnimalBehaviorCatalog`, meters/seconds, converted once at load). The `threatResponse` field picks the transition set: **flee** (prey: any sight/sound → run from last-sensed position, calm when far), **harass** (fox 1 bite / coyote 2 bites: track → lunge → bite → flee → resume tracking when the player backs off), **predator** (lynx/wolf/bear: track → attack until target dies; flee at `fleeHealthFraction`, turn and fight if pressed inside `reengageRangeMeters`).
+- Threats are plain **GameObjects** (not player-typed) — other entities can scare animals via `AnimalBrain.NotifyThreat`. Hearing rides the existing `EntityNoiseBus`; sight is an interval FOV+LOS scan via `EntitySight`.
+- Animal prefabs carry `EntityVitals` + `DamageReceiver` (player weapons already damage them), `NavMeshAgent`, `EntityLocomotion`, `AnimalBrain`. Spawn via `AnimalSetup.Configure` (`AnimalSpawnButton` for tests, input action `SpawnAnimal`).
+
 ## Commandment #2 — End every assistant reply with “what you need to do”
 
 When the Cursor assistant sends a **final** message in this repo, it must end with a short **“What’s needed from you”** section: concrete follow-ups (prefab/scene steps, testing to run, settings to verify, decisions only you can make). If there is genuinely nothing, say **Nothing required on your side for this change.**

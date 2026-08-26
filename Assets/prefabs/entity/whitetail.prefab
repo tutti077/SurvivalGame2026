@@ -1,9 +1,9 @@
 {
   "RootObject": {
-    "__guid": "c38d434a-c528-4a1d-8885-6b4f3e0cfded",
+    "__guid": "b2e10000-1111-4111-9111-000000000000",
     "__version": 2,
     "Flags": 0,
-    "Name": "fox",
+    "Name": "whitetail",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
     "Scale": "1,1,1",
@@ -17,7 +17,7 @@
     "Components": [
       {
         "__type": "Sandbox.Rigidbody",
-        "__guid": "a1f00001-0001-4001-8001-000000000001",
+        "__guid": "b2e10001-0001-4001-8001-000000000001",
         "__enabled": true,
         "Flags": 0,
         "AngularDamping": 1,
@@ -35,8 +35,8 @@
           "Yaw": true,
           "Roll": true
         },
-        "MassCenterOverride": "0,0,12",
-        "MassOverride": 60,
+        "MassCenterOverride": "0,0,26",
+        "MassOverride": 150,
         "MinImpactDamageSpeed": 500,
         "MotionEnabled": false,
         "OnComponentDestroy": null,
@@ -52,7 +52,7 @@
       },
       {
         "__type": "Sandbox.NavMeshAgent",
-        "__guid": "a1f00001-0001-4001-8001-000000000002",
+        "__guid": "b2e10001-0001-4001-8001-000000000002",
         "__enabled": true,
         "Flags": 0,
         "Acceleration": 800,
@@ -61,7 +61,7 @@
         "AutoTraverseLinks": true,
         "ForbiddenAreas": [],
         "Height": 64,
-        "MaxSpeed": 280,
+        "MaxSpeed": 320,
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
@@ -75,7 +75,7 @@
       },
       {
         "__type": "Survival.DamageReceiver",
-        "__guid": "a1f00001-0001-4001-8001-000000000003",
+        "__guid": "b2e10001-0001-4001-8001-000000000003",
         "__enabled": true,
         "Flags": 0,
         "DamageMultiplier": 1,
@@ -88,12 +88,12 @@
       },
       {
         "__type": "Survival.EntityVitals",
-        "__guid": "a1f00001-0001-4001-8001-000000000004",
+        "__guid": "b2e10001-0001-4001-8001-000000000004",
         "__enabled": true,
         "Flags": 0,
         "ArmorFlat": 0,
         "EnemyType": "Scav",
-        "MaxHealth": 40,
+        "MaxHealth": 60,
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
@@ -104,13 +104,13 @@
       },
       {
         "__type": "Survival.EntityLocomotion",
-        "__guid": "a1f00001-0001-4001-8001-000000000005",
+        "__guid": "b2e10001-0001-4001-8001-000000000005",
         "__enabled": true,
         "Flags": 0,
         "Agent": {
           "_type": "component",
-          "component_id": "a1f00001-0001-4001-8001-000000000002",
-          "go": "c38d434a-c528-4a1d-8885-6b4f3e0cfded",
+          "component_id": "b2e10001-0001-4001-8001-000000000002",
+          "go": "b2e10000-1111-4111-9111-000000000000",
           "component_type": "NavMeshAgent"
         },
         "AnimHelper": null,
@@ -123,26 +123,26 @@
         "OnComponentUpdate": null,
         "Vitals": {
           "_type": "component",
-          "component_id": "a1f00001-0001-4001-8001-000000000004",
-          "go": "c38d434a-c528-4a1d-8885-6b4f3e0cfded",
+          "component_id": "b2e10001-0001-4001-8001-000000000004",
+          "go": "b2e10000-1111-4111-9111-000000000000",
           "component_type": "EntityVitals"
         }
       },
       {
         "__type": "Survival.AnimalBrain",
-        "__guid": "a1f00001-0001-4001-8001-000000000006",
+        "__guid": "b2e10001-0001-4001-8001-000000000006",
         "__enabled": true,
         "Flags": 0,
         "Agent": {
           "_type": "component",
-          "component_id": "a1f00001-0001-4001-8001-000000000002",
-          "go": "c38d434a-c528-4a1d-8885-6b4f3e0cfded",
+          "component_id": "b2e10001-0001-4001-8001-000000000002",
+          "go": "b2e10000-1111-4111-9111-000000000000",
           "component_type": "NavMeshAgent"
         },
         "Locomotion": {
           "_type": "component",
-          "component_id": "a1f00001-0001-4001-8001-000000000005",
-          "go": "c38d434a-c528-4a1d-8885-6b4f3e0cfded",
+          "component_id": "b2e10001-0001-4001-8001-000000000005",
+          "go": "b2e10000-1111-4111-9111-000000000000",
           "component_type": "EntityLocomotion"
         },
         "LogStateDebug": false,
@@ -152,24 +152,24 @@
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null,
-        "Species": "Fox",
+        "Species": "Whitetail",
         "Vitals": {
           "_type": "component",
-          "component_id": "a1f00001-0001-4001-8001-000000000004",
-          "go": "c38d434a-c528-4a1d-8885-6b4f3e0cfded",
+          "component_id": "b2e10001-0001-4001-8001-000000000004",
+          "go": "b2e10000-1111-4111-9111-000000000000",
           "component_type": "EntityVitals"
         }
       }
     ],
     "Children": [
       {
-        "__guid": "a1f00002-0002-4002-8002-000000000001",
+        "__guid": "b2e10002-0002-4002-8002-000000000001",
         "__version": 2,
         "Flags": 0,
         "Name": "Body",
-        "Position": "0,0,9",
+        "Position": "0,0,26",
         "Rotation": "0,0,0,1",
-        "Scale": "0.8,0.3,0.35",
+        "Scale": "1.6,0.5,1.1",
         "Tags": "",
         "Enabled": true,
         "NetworkMode": 1,
@@ -180,7 +180,7 @@
         "Components": [
           {
             "__type": "Sandbox.ModelRenderer",
-            "__guid": "c8bdf57c-bfc9-4f8a-89f2-580e0e2a1298",
+            "__guid": "b2e10003-0003-4003-8003-000000000001",
             "__enabled": true,
             "Flags": 0,
             "BodyGroups": 18446744073709551615,
@@ -203,13 +203,13 @@
               "AfterUILayer": false
             },
             "RenderType": "On",
-            "Tint": "0.9,0.42,0.13,1"
+            "Tint": "0.45,0.3,0.18,1"
           }
         ],
         "Children": []
       },
       {
-        "__guid": "a1f00002-0002-4002-8002-000000000002",
+        "__guid": "b2e10002-0002-4002-8002-000000000002",
         "__version": 2,
         "Flags": 1,
         "Name": "Colliders",
@@ -226,10 +226,10 @@
         "Components": [
           {
             "__type": "Sandbox.BoxCollider",
-            "__guid": "a1f00003-0003-4003-8003-000000000001",
+            "__guid": "b2e10003-0003-4003-8003-000000000002",
             "__enabled": true,
             "Flags": 0,
-            "Center": "0,0,9",
+            "Center": "0,0,26",
             "ColliderFlags": 0,
             "Elasticity": null,
             "Friction": 0,
@@ -245,7 +245,7 @@
             "OnTriggerEnter": null,
             "OnTriggerExit": null,
             "RollingResistance": null,
-            "Scale": "36,14,18",
+            "Scale": "70,22,50",
             "Static": false,
             "Surface": null,
             "SurfaceVelocity": "0,0,0"

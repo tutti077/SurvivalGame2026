@@ -108,7 +108,8 @@ public static class EntityEnemySetup
 		}
 	}
 
-	static bool SnapToNavOrTerrain( GameObject root, NavMeshAgent agent )
+	/// <summary>Ground + nav placement shared with <see cref="AnimalSetup"/>.</summary>
+	public static bool SnapToNavOrTerrain( GameObject root, NavMeshAgent agent )
 	{
 		if ( agent is null || !agent.IsValid() )
 			return false;
@@ -138,7 +139,8 @@ public static class EntityEnemySetup
 		return false;
 	}
 
-	static bool TrySnapToPhysicsGround( Scene scene, GameObject root, Vector3 near, out Vector3 feet )
+	/// <summary>Ground placement shared with <see cref="AnimalSetup"/> (animals skip the nav half).</summary>
+	public static bool TrySnapToPhysicsGround( Scene scene, GameObject root, Vector3 near, out Vector3 feet )
 	{
 		feet = near;
 		if ( !scene.IsValid() )
