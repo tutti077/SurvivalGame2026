@@ -1,0 +1,43 @@
+Next up I want to add a taming system to the game. 
+
+We can attempt to tame the fox to start. It should require a specific food they like, for now we can use blueberry as the food.
+We'll need a chest filled with all the various foods we have, cooked and uncooked, itll help for dev testing as we go. Put it right next to the tools chest youve created as well. Give full stacks of all food items if you can even fit it in the chest.
+
+To tame a creature it must be in the wandering state, if its attacking or tracking or whatever then it should ignore the food on the ground right near it. This will make it so players must trap and leave the animal be to tame itself basically.
+
+Once the creature is in wandering state and comes within 3m of the food item it likes then it should turn and walk slowly directly toward it, consume the item. The creature is now tamed. 
+Some creatures will require to eat multiple times to be considered tamed. 
+
+After a creature eats a food item we set a 1-3m timer before itll eat another. 
+Bigger creatures can require up to 3 food items to be eaten to be considered tamed. 
+
+Fox is just one and done i think. 
+
+
+Once tame we should show an animation coming from the animal, just a single heart that floats up a little that shows that the animal is no longer feral and is domesticated.
+
+This whole taming thing also comes with our breeding mechanics.
+To breed animals you must have 2 of the same kind, and if you walk up to them and feed them their favorite food (gives E prompt when food item is equipped in hotbar), then they both enter the "breeding" state where they will actively search out other breeding partners. 
+It should just appear as wandering unless theres one within a 10m range where the animals would walk right toward each other and "breed" for 5 seconds before a little baby of the same animals pops out. Just going to be a smaller version of it really. 
+
+Once animals are born then they need to mature before they can be slaughtered for goods or to be used for more breeding. Some animals will just go from baby to mature, others will have a teenager stage where theyre still not ready but to show theyre getting there.
+This will vary from animal to animal, but feeding it additional food should speed it up 25% for a portion of time.
+
+For the fox lets say it takes 5 min to get to fully grown. 
+Fox has no alternate teen stage so it just goes from baby to mature. 
+While a baby the fox just wanders and grazes
+
+Once the 5 min runs out then it should change the model and its meta data to signify its a fully matured fox.
+If you feed the fox during this 5 minutes then I want it to cut off 1m from the timer, but prevent it from accepting more food for a whole minute as well.
+If you force feed it as often as we can then it should only take 2 whole minutes by feeding it 3 times total.
+
+5 min > feed
+4 min > 3 min
+3 min > feed
+2 min > 1 min
+1 min > feed
+0 min or done growing and is now fully mature.
+
+
+
+Onced animals are tamed we should make it so they just do wander > graze state while the player is near, so only other harmful entities will alert it. 
