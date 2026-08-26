@@ -5,7 +5,8 @@ namespace Survival;
 
 /// <summary>
 /// Shared player-local combat-space attack path for host hits and debug overlay on <see cref="PlayerCombat"/>.
-/// Local axes: +X forward, +Y up, +Z right — L/R uses yaw-only horizontal basis; overhead uses yaw + influenced pitch.
+/// Local axes: +X forward, +Y up, +Z right — every attack basis carries yaw + camera pitch 1:1 (clamped to the up/down caps),
+/// rotating about the shoulder-height pitch pivot (see <see cref="GetPitchPivotHeightLocal"/>), not the pawn origin.
 /// </summary>
 public static class MeleeAttackPath
 {
@@ -273,7 +274,7 @@ public static class MeleeAttackPath
 				0f );
 		}
 
-		TransformLocalToWorld( attacker, combatBasis, pivotLocal, pivotLocal, out var pivotWorld, out _ );
+		TransformLocalToWorld( attacker, pc, attackType, combatBasis, pivotLocal, pivotLocal, out var pivotWorld, out _ );
 		return pivotWorld;
 	}
 
@@ -347,7 +348,7 @@ public static class MeleeAttackPath
 		out Vector3 heelWorld )
 	{
 		EvaluateLocalBlade( pc, attackType, arcProgress01, out var tipLocal, out var heelLocal );
-		TransformLocalToWorld( attacker, combatBasis, tipLocal, heelLocal, out tipWorld, out heelWorld );
+		TransformLocalToWorld( attacker, pc, attackType, combatBasis, tipLocal, heelLocal, out tipWorld, out heelWorld );
 	}
 
 	public static void EvaluateLocalBlade(
@@ -366,7 +367,7 @@ public static class MeleeAttackPath
 	}
 
 	/// <summary>
-	/// Side slash: arc in local XZ (forward/right); yaw-only combat basis. Height from <see cref="PlayerCombat.MeleeAttackZaxisStart"/> + tilt only.
+	/// Side slash: arc in local XZ (forward/right); basis pitch tips the plane. Height from <see cref="PlayerCombat.MeleeAttackZaxisStart"/> + tilt.
 	/// </summary>
 	static void EvaluateLateralLocal(
 		PlayerCombat pc,
@@ -460,6 +461,15 @@ public static class MeleeAttackPath
 		float startDeg,
 		float endDeg,
 		float t,
+		out Vector3 tipLocal ) =>
+		ComputeForwardTip( pc, startDeg, endDeg, t, applyLean: true, out tipLocal );
+
+	static void ComputeForwardTip(
+		PlayerCombat pc,
+		float startDeg,
+		float endDeg,
+		float t,
+		bool applyLean,
 		out Vector3 tipLocal )
 	{
 		t = Math.Clamp( t, 0f, 1f );
@@ -478,7 +488,8 @@ public static class MeleeAttackPath
 		tipLocal = new Vector3( arcForward, arcUp, pc.MeleeAttackForwardPlaneRightOffset );
 
 		ApplyForwardPlaneTilt( ref tipLocal, pc.ServerEyeHeight, pc.MeleeAttackTiltDegreesForward * Deg2Rad );
-		ApplyForwardPitchLean( ref tipLocal, pc, pivot );
+		if ( applyLean )
+			ApplyForwardPitchLean( ref tipLocal, pc, pivot );
 		ClampForwardLocalFromPivot( ref tipLocal, pivot, range * 1.14f * reachScale, pc );
 	}
 
@@ -564,8 +575,42 @@ public static class MeleeAttackPath
 		return t * t * (3f - 2f * t);
 	}
 
+	/// <summary>
+	/// Distance from the pitch pivot to the mid-swing (arc 0°) blade tip, including the forward offset.
+	/// This is the sphere radius the cursor-alignment solve intersects with the camera ray; lean is skipped so the solve cannot recurse into itself.
+	/// </summary>
+	internal static float GetMidSwingTipRadius( PlayerCombat pc, byte attackType )
+	{
+		Vector3 tipLocal;
+		if ( attackType == MeleeAttackTypes.Forward )
+		{
+			GetForwardArcDegreeSpan( pc, out var startDeg, out var endDeg );
+			var t = ArcDegreeToProgress01( startDeg, endDeg, 0f );
+			ComputeForwardTip( pc, startDeg, endDeg, t, applyLean: false, out tipLocal );
+		}
+		else
+		{
+			GetArcDegreeSpan( pc, attackType, out var startDeg, out var endDeg );
+			var t = ArcDegreeToProgress01( startDeg, endDeg, 0f );
+			ComputeLateralTip( pc, attackType, startDeg, endDeg, t, out tipLocal );
+		}
+
+		var pivotY = GetPitchPivotHeightLocal( pc, attackType );
+		var dx = tipLocal.x + pc.GetMeleeSwingForwardOffsetUnits();
+		var dy = tipLocal.y - pivotY;
+		return MathF.Sqrt( dx * dx + dy * dy );
+	}
+
+	/// <summary>Height on the pawn the pitched basis rotates about — shoulder-adjacent so tipping the swing never pushes the arc off the body.</summary>
+	internal static float GetPitchPivotHeightLocal( PlayerCombat pc, byte attackType ) =>
+		attackType == MeleeAttackTypes.Forward
+			? pc.ServerEyeHeight + pc.MeleeAttackForwardPivotUpFromEye
+			: pc.ServerEyeHeight + pc.MeleeAttackZaxisStart;
+
 	static void TransformLocalToWorld(
 		GameObject attacker,
+		PlayerCombat pc,
+		byte attackType,
 		Rotation combatBasis,
 		Vector3 tipLocal,
 		Vector3 heelLocal,
@@ -579,11 +624,13 @@ public static class MeleeAttackPath
 			return;
 		}
 
-		var origin = attacker.WorldPosition;
+		var pivotY = GetPitchPivotHeightLocal( pc, attackType );
+		var forwardPush = pc.GetMeleeSwingForwardOffsetUnits();
+		var origin = attacker.WorldPosition + Vector3.Up * pivotY;
 		var forward = combatBasis.Forward;
 		var up = combatBasis.Up;
 		var right = combatBasis.Right;
-		tipWorld = origin + forward * tipLocal.x + up * tipLocal.y + right * tipLocal.z;
-		heelWorld = origin + forward * heelLocal.x + up * heelLocal.y + right * heelLocal.z;
+		tipWorld = origin + forward * (tipLocal.x + forwardPush) + up * (tipLocal.y - pivotY) + right * tipLocal.z;
+		heelWorld = origin + forward * (heelLocal.x + forwardPush) + up * (heelLocal.y - pivotY) + right * heelLocal.z;
 	}
 }

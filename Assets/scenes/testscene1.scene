@@ -441,7 +441,7 @@
       "Position": "-2310.35449,0,0",
       "Rotation": "0,0,0,1",
       "Scale": "400,400,100",
-      "Tags": "grapple",
+      "Tags": "",
       "Enabled": true,
       "NetworkMode": 1,
       "NetworkFlags": 0,
@@ -915,15 +915,12 @@
           "MeleeAttackForwardArcTotalDegrees": 168,
           "MeleeAttackForwardArcVerticalScale": 1.12,
           "MeleeAttackForwardLeanPitchInfluence": 0.55,
-          "MeleeAttackForwardMaxPitchDegrees": 38,
           "MeleeAttackForwardMaxReachFraction": 0.92,
-          "MeleeAttackForwardMinPitchDegrees": -38,
           "MeleeAttackForwardPathReachScale": 0.94,
-          "MeleeAttackForwardPitchInfluence": 0.42,
           "MeleeAttackForwardPivotForwardLocal": 8,
           "MeleeAttackForwardPivotForwardLocalEnd": 10,
           "MeleeAttackForwardPivotRightOffset": 0,
-          "MeleeAttackForwardPivotUpFromEye": -8,
+          "MeleeAttackForwardPivotUpFromEye": 0,
           "MeleeAttackForwardPlaneRightOffset": 12,
           "MeleeAttackForwardReachActiveMultiplier": 1,
           "MeleeAttackForwardReachEndMultiplier": 0.95,
@@ -969,6 +966,9 @@
           "MeleeSweepSubstepLength": 12,
           "MeleeSwingDragBadPenalty": 0.15,
           "MeleeSwingDragGoodBonus": 0.15,
+          "MeleeSwingForwardOffsetMeters": 0.2,
+          "MeleeSwingMaxPitchDegrees": 60,
+          "MeleeSwingMinPitchDegrees": -60,
           "MeleeVictimStaminaDrainOnHit": 0,
           "MeleeWeaponBaseDamage": 30,
           "MeleeWindupDuration": 0.22,
@@ -140503,7 +140503,16 @@
       },
       "__PrefabIdToInstanceId": {
         "c38d434a-c528-4a1d-8885-6b4f3e0cfded": "b7dc81b8-7dda-4008-987b-e3e462b174d9",
-        "c8bdf57c-bfc9-4f8a-89f2-580e0e2a1298": "50c66d49-44f1-4b10-b2c9-af14afd9904e"
+        "c8bdf57c-bfc9-4f8a-89f2-580e0e2a1298": "50c66d49-44f1-4b10-b2c9-af14afd9904e",
+        "a1f00002-0002-4002-8002-000000000001": "e30a9356-bfda-8a85-87d5-dee82d01862b",
+        "a1f00002-0002-4002-8002-000000000002": "664136bf-ed50-8ede-b316-e180ea0daf8c",
+        "a1f00001-0001-4001-8001-000000000001": "e7939cd2-78a0-88dd-b8bb-ca2ace808e67",
+        "a1f00001-0001-4001-8001-000000000002": "03c67d18-6196-83e7-9330-11754d02b9c1",
+        "a1f00001-0001-4001-8001-000000000003": "4d5a86e2-44ff-873f-badf-b5e457d3de86",
+        "a1f00001-0001-4001-8001-000000000004": "b99a658d-986d-8faf-81a3-0d5e371840ea",
+        "a1f00001-0001-4001-8001-000000000005": "7b97d968-35fc-8f76-be62-c930d6bdc327",
+        "a1f00001-0001-4001-8001-000000000006": "3204d372-1476-819c-82af-84f37528942f",
+        "a1f00003-0003-4003-8003-000000000001": "dfd388dc-dcf9-8991-a762-546d5193f6ea"
       }
     },
     {
@@ -141255,6 +141264,133 @@
               "Static": false,
               "Surface": null,
               "SurfaceVelocity": "0,0,0"
+            }
+          ],
+          "Children": []
+        }
+      ]
+    },
+    {
+      "__guid": "d361a751-5d19-4a16-a6bc-4db24720e090",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "Controls Board",
+      "Position": "-992,832,128",
+      "Rotation": "0,0,0,1",
+      "Scale": "30,0.300000012,5",
+      "Tags": "grapple",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Sandbox.ModelRenderer",
+          "__guid": "645072e5-bac1-48b3-9418-7ed05f4a26b2",
+          "__enabled": true,
+          "Flags": 0,
+          "BodyGroups": 18446744073709551615,
+          "CreateAttachments": false,
+          "LodOverride": null,
+          "MaterialGroup": null,
+          "MaterialOverride": null,
+          "Materials": null,
+          "Model": "models/dev/box.vmdl",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "RenderOptions": {
+            "GameLayer": true,
+            "OverlayLayer": false,
+            "BloomLayer": false,
+            "AfterUILayer": false
+          },
+          "RenderType": "On",
+          "Tint": "0.02791,0.02765,0.02765,1"
+        }
+      ],
+      "Children": [
+        {
+          "__guid": "577c1a11-d62c-4ab1-bca3-ae0422ea46a9",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Object",
+          "Position": "-18.1841125,-26.666666,11.2799988",
+          "Rotation": "0,0,0.707106769,0.707106769",
+          "Scale": "0.0333333351,3.33333325,0.200000003",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "Sandbox.TextRenderer",
+              "__guid": "52947dbb-4b42-4ca0-9659-d8b6cebf062f",
+              "__enabled": true,
+              "Flags": 0,
+              "__version": 2,
+              "Billboard": "None",
+              "BlendMode": "Normal",
+              "FogStrength": 1,
+              "HorizontalAlignment": "Center",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "RenderOptions": {
+                "GameLayer": true,
+                "OverlayLayer": false,
+                "BloomLayer": false,
+                "AfterUILayer": false
+              },
+              "Scale": 1,
+              "TextScope": {
+                "Text": "n = spawn animal\nj = return to last teleport\nk = spawn entity\n",
+                "TextColor": "1,1,1,1",
+                "FontName": "Poppins",
+                "FontSize": 32,
+                "FontWeight": 400,
+                "FontItalic": false,
+                "FontVariantNumeric": "Normal",
+                "LineHeight": 1,
+                "LetterSpacing": 0,
+                "WordSpacing": 0,
+                "FilterMode": "Bilinear",
+                "FontSmooth": "Auto",
+                "Outline": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,0,1,1"
+                },
+                "Shadow": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,0,0,1",
+                  "Offset": "4,4"
+                },
+                "OutlineUnder": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,1,0,1"
+                },
+                "ShadowUnder": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,0,0,1",
+                  "Offset": "4,4"
+                }
+              },
+              "VerticalAlignment": "Center"
             }
           ],
           "Children": []

@@ -55,7 +55,7 @@ public readonly record struct AttackReleaseIntent
 	/// <summary>Combat-path yaw (degrees) when submitted; unset (NaN) = derive from view forward.</summary>
 	public float CombatBasisYawDegrees { get; init; }
 
-	/// <summary>View pitch (degrees) when submitted; unset (NaN) = derive from view forward.</summary>
+	/// <summary>Cursor-aligned swing pitch (degrees) when submitted; unset (NaN) = derive from view forward.</summary>
 	public float CombatBasisPitchDegrees { get; init; }
 }
 

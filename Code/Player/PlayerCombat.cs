@@ -201,7 +201,7 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Tilt forward (° right-plane offset)" )]
 	public float MeleeAttackTiltDegreesForward { get; set; } = 10f;
 
-	/// <summary>Baseline offset along world up from <see cref="ServerEyeHeight"/> for L/R slashes (yaw-only basis; pitch ignored).</summary>
+	/// <summary>Baseline offset along combat-basis up from <see cref="ServerEyeHeight"/> for L/R slashes (basis pitch tips the whole arc).</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Side slash start height" )]
 	public float MeleeAttackZaxisStart { get; set; } = -10f;
 
@@ -242,9 +242,9 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pivot forward local (end)" )]
 	public float MeleeAttackForwardPivotForwardLocalEnd { get; set; } = 10f;
 
-	/// <summary>Added to <see cref="ServerEyeHeight"/> for arc pivot height (negative ≈ neck/shoulder beside head).</summary>
+	/// <summary>Added to <see cref="ServerEyeHeight"/> for arc pivot height (0 = eye level; negative ≈ neck/shoulder beside head).</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pivot up from eye" )]
-	public float MeleeAttackForwardPivotUpFromEye { get; set; } = -8f;
+	public float MeleeAttackForwardPivotUpFromEye { get; set; } = 0f;
 
 	/// <summary>Combat-local right offset for arc pivot only (blade still uses plane right offset).</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pivot right offset" )]
@@ -266,15 +266,25 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward lean pitch influence" )]
 	public float MeleeAttackForwardLeanPitchInfluence { get; set; } = 0.55f;
 
-	/// <summary>How much camera pitch steers the overhead arc (0 = yaw only, 1 = full pitch).</summary>
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward pitch influence" )]
-	public float MeleeAttackForwardPitchInfluence { get; set; } = 0.42f;
+	float _meleeSwingForwardOffsetMeters = 0.2f;
 
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward min pitch (° look-up cap)" )]
-	public float MeleeAttackForwardMinPitchDegrees { get; set; } = -38f;
+	/// <summary>Pushes every melee arc away from the body along the swing basis forward. Designer meters → pawn units via BodyHeight/1.8.</summary>
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Swing forward offset (m)" )]
+	public float MeleeSwingForwardOffsetMeters
+	{
+		get => _meleeSwingForwardOffsetMeters;
+		set
+		{
+			_meleeSwingForwardOffsetMeters = value;
+			_meleeSwingForwardOffsetUnitsCache = float.NaN;
+		}
+	}
 
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward max pitch (° look-down cap)" )]
-	public float MeleeAttackForwardMaxPitchDegrees { get; set; } = 38f;
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Swing min pitch (° look-up cap)" )]
+	public float MeleeSwingMinPitchDegrees { get; set; } = -50f;
+
+	[Property, Group( "Combat — Melee (attack action)" ), Title( "Swing max pitch (° look-down cap)" )]
+	public float MeleeSwingMaxPitchDegrees { get; set; } = 50f;
 
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "EarlyActive damage penalty (−)" )]
 	public float MeleeEarlyActiveDamagePenalty { get; set; } = 0.15f;
@@ -433,8 +443,8 @@ public partial class PlayerCombat : Component
 
 	/// <summary>When set, non-local attack/block paths use intent yaw instead of pawn body rotation.</summary>
 	float? _meleeIntentBasisYawOverride;
-	bool _meleeIntentForwardPitchCaptured;
-	float _meleeIntentForwardStartPitchDegrees;
+	bool _meleeIntentPitchCaptured;
+	float _meleeIntentStartPitchDegrees;
 
 	bool _windupTelegraphActive;
 	byte _windupTelegraphAttackType;
@@ -738,7 +748,7 @@ public partial class PlayerCombat : Component
 			PostSwingDragScreenY = drag.y,
 			ViewForwardOnRelease = GetViewDirectionForIntent(),
 			CombatBasisYawDegrees = GetMeleeCombatBasisYaw( attackType ),
-			CombatBasisPitchDegrees = GetCameraPitchDegrees()
+			CombatBasisPitchDegrees = GetMeleeCursorAlignedPitchDegrees( attackType )
 		};
 
 		_primaryPostReleaseDragAccum = default;
@@ -1085,16 +1095,78 @@ public partial class PlayerCombat : Component
 		return WorldRotation.Angles().pitch;
 	}
 
-	/// <summary>Camera pitch clamped and scaled for overhead arcs — not used for L/R slashes.</summary>
-	public float GetMeleeForwardInfluencedPitchDegrees()
+	/// <summary>Swing pitch clamped to the up/down caps — aims the arc so the blade crosses exactly where the crosshair sits.</summary>
+	public float GetMeleeSwingPitchDegrees( byte attackType )
 	{
-		var min = Math.Min( MeleeAttackForwardMinPitchDegrees, MeleeAttackForwardMaxPitchDegrees );
-		var max = Math.Max( MeleeAttackForwardMinPitchDegrees, MeleeAttackForwardMaxPitchDegrees );
-		var pitch = _meleeIntentForwardPitchCaptured
-			? _meleeIntentForwardStartPitchDegrees
-			: Math.Clamp( GetCameraPitchDegrees(), min, max );
-		var influence = Math.Clamp( MeleeAttackForwardPitchInfluence, 0f, 1f );
-		return pitch * influence;
+		if ( _meleeIntentPitchCaptured )
+			return _meleeIntentStartPitchDegrees;
+
+		return ClampMeleeSwingPitchDegrees( GetMeleeCursorAlignedPitchDegrees( attackType ) );
+	}
+
+	float _meleeCursorPitchCacheDegrees;
+	float _meleeCursorPitchCacheTime = -1f;
+	byte _meleeCursorPitchCacheAttackType;
+
+	/// <summary>
+	/// Pitch that puts the mid-swing blade tip ON the camera ray: intersects the crosshair ray with the sphere of
+	/// swing reach around the pitch pivot (cached per frame), so the tip projects onto the crosshair pixel in first
+	/// and third person alike. Ray outside reach = closest approach; no camera = raw camera pitch.
+	/// </summary>
+	public float GetMeleeCursorAlignedPitchDegrees( byte attackType )
+	{
+		var cam = IsLocalCombatDriver() ? ResolveIntentCamera() : default;
+		if ( !cam.IsValid() )
+			return GetCameraPitchDegrees();
+
+		if ( _meleeCursorPitchCacheTime == Time.Now && _meleeCursorPitchCacheAttackType == attackType )
+			return _meleeCursorPitchCacheDegrees;
+
+		var pivotWorld = WorldPosition + Vector3.Up * MeleeAttackPath.GetPitchPivotHeightLocal( this, attackType );
+		var radius = MeleeAttackPath.GetMidSwingTipRadius( this, attackType );
+
+		var camPos = cam.WorldPosition;
+		var dir = cam.WorldRotation.Forward;
+		var toCam = camPos - pivotWorld;
+		var b = Vector3.Dot( toCam, dir );
+		var disc = b * b - (toCam.LengthSquared - radius * radius);
+
+		// Far ray-sphere intersection when the crosshair ray crosses the reach sphere; closest approach otherwise.
+		var along = disc >= 0f ? -b + MathF.Sqrt( disc ) : MathF.Max( 0f, -b );
+		var toAim = camPos + dir * along - pivotWorld;
+
+		var pitch = along > 1e-3f && toAim.LengthSquared > 1e-6f
+			? Rotation.LookAt( toAim.Normal ).Angles().pitch
+			: GetCameraPitchDegrees();
+
+		_meleeCursorPitchCacheTime = Time.Now;
+		_meleeCursorPitchCacheAttackType = attackType;
+		_meleeCursorPitchCacheDegrees = pitch;
+		return pitch;
+	}
+
+	float _meleeSwingForwardOffsetUnitsCache = float.NaN;
+
+	/// <summary>Engine-unit forward push for melee arcs — <see cref="MeleeSwingForwardOffsetMeters"/> converted once per pawn (BodyHeight/1.8).</summary>
+	public float GetMeleeSwingForwardOffsetUnits()
+	{
+		if ( float.IsNaN( _meleeSwingForwardOffsetUnitsCache ) )
+		{
+			var controller = GameObject.Components.Get<PlayerController>();
+			var bodyHeight = controller is not null && controller.IsValid()
+				? Math.Max( 24f, controller.BodyHeight )
+				: 72f;
+			_meleeSwingForwardOffsetUnitsCache = Math.Max( 0f, _meleeSwingForwardOffsetMeters ) * (bodyHeight / 1.8f);
+		}
+
+		return _meleeSwingForwardOffsetUnitsCache;
+	}
+
+	float ClampMeleeSwingPitchDegrees( float rawPitchDegrees )
+	{
+		var min = Math.Min( MeleeSwingMinPitchDegrees, MeleeSwingMaxPitchDegrees );
+		var max = Math.Max( MeleeSwingMinPitchDegrees, MeleeSwingMaxPitchDegrees );
+		return Math.Clamp( rawPitchDegrees, min, max );
 	}
 
 	/// <summary>
@@ -1111,23 +1183,14 @@ public partial class PlayerCombat : Component
 		}
 
 		_meleeIntentBasisYawOverride = ResolveIntentCombatBasisYaw( intent, attackType );
-		if ( attackType == MeleeAttackTypes.Forward )
-		{
-			var min = Math.Min( MeleeAttackForwardMinPitchDegrees, MeleeAttackForwardMaxPitchDegrees );
-			var max = Math.Max( MeleeAttackForwardMinPitchDegrees, MeleeAttackForwardMaxPitchDegrees );
-			var pitch = Math.Clamp( ResolveIntentViewPitchDegrees( intent ), min, max );
-			var influence = Math.Clamp( MeleeAttackForwardPitchInfluence, 0f, 1f );
-			_meleeIntentForwardStartPitchDegrees = pitch * influence;
-			_meleeIntentForwardPitchCaptured = true;
-		}
-		else
-			_meleeIntentForwardPitchCaptured = false;
+		_meleeIntentStartPitchDegrees = ClampMeleeSwingPitchDegrees( ResolveIntentViewPitchDegrees( intent ) );
+		_meleeIntentPitchCaptured = true;
 	}
 
 	internal void ClearMeleeAttackBasisFromIntent()
 	{
 		_meleeIntentBasisYawOverride = null;
-		_meleeIntentForwardPitchCaptured = false;
+		_meleeIntentPitchCaptured = false;
 	}
 
 	static float ResolveIntentCombatBasisYaw( in AttackReleaseIntent intent, byte attackType )
@@ -1163,30 +1226,15 @@ public partial class PlayerCombat : Component
 		return Rotation.LookAt( forward.Normal ).Angles().pitch;
 	}
 
-	Rotation GetMeleeForwardCombatBasisRotation()
-	{
-		var aim = GetCameraAimRotation();
-		var yaw = aim.Angles().yaw;
-		var pitch = GetMeleeForwardInfluencedPitchDegrees();
-		return new Angles( pitch, yaw, 0f ).ToRotation();
-	}
-
-	/// <summary>L/R combat basis: camera yaw projected on the horizontal plane — pitch ignored.</summary>
-	Rotation GetMeleeLateralCombatBasisRotation() => GetCameraYawRotation();
-
-	/// <summary>Live aim for melee paths — yaw-only for L/R; yaw + influenced pitch for overhead.</summary>
+	/// <summary>Live aim for melee paths — camera yaw plus influenced pitch for every swing type.</summary>
 	public Rotation GetMeleeCombatBasisRotation( byte attackType )
 	{
-		if ( _meleeIntentBasisYawOverride is { } intentYaw )
-			return GetMeleeCombatBasisRotationForYaw( attackType, intentYaw );
-
-		return attackType == MeleeAttackTypes.Forward
-			? GetMeleeForwardCombatBasisRotation()
-			: GetMeleeLateralCombatBasisRotation();
+		var yaw = _meleeIntentBasisYawOverride ?? GetCameraAimRotation().Angles().yaw;
+		return GetMeleeCombatBasisRotationForYaw( attackType, yaw );
 	}
 
 	/// <summary>Live aim for melee paths when attack type is unknown — yaw-only horizontal basis.</summary>
-	public Rotation GetMeleeCombatBasisRotation() => GetMeleeLateralCombatBasisRotation();
+	public Rotation GetMeleeCombatBasisRotation() => GetCameraYawRotation();
 
 	internal static byte NormalizeCardinalBlockDirection( byte dir ) =>
 		dir is (SwingDirs.Left or SwingDirs.Right or SwingDirs.Up) ? dir : SwingDirs.Up;
@@ -1195,14 +1243,9 @@ public partial class PlayerCombat : Component
 	public float GetMeleeCombatBasisYaw( byte attackType ) =>
 		GetMeleeCombatBasisRotation( attackType ).Angles().yaw;
 
-	/// <summary>Combat basis with an explicit yaw (pitch rules unchanged for overhead).</summary>
-	public Rotation GetMeleeCombatBasisRotationForYaw( byte attackType, float yawDegrees )
-	{
-		if ( attackType == MeleeAttackTypes.Forward )
-			return new Angles( GetMeleeForwardInfluencedPitchDegrees(), yawDegrees, 0f ).ToRotation();
-
-		return new Angles( 0f, yawDegrees, 0f ).ToRotation();
-	}
+	/// <summary>Combat basis with an explicit yaw; pitch comes from the shared cursor-aligned swing pitch.</summary>
+	public Rotation GetMeleeCombatBasisRotationForYaw( byte attackType, float yawDegrees ) =>
+		new Angles( GetMeleeSwingPitchDegrees( attackType ), yawDegrees, 0f ).ToRotation();
 
 	float _forwardMeleeStartPitchDegrees;
 	bool _forwardMeleeStartPitchCaptured;
@@ -1212,7 +1255,7 @@ public partial class PlayerCombat : Component
 		if ( attackType != MeleeAttackTypes.Forward )
 			return;
 
-		_forwardMeleeStartPitchDegrees = GetMeleeForwardInfluencedPitchDegrees();
+		_forwardMeleeStartPitchDegrees = GetMeleeSwingPitchDegrees( MeleeAttackTypes.Forward );
 		_forwardMeleeStartPitchCaptured = true;
 	}
 
@@ -1227,7 +1270,7 @@ public partial class PlayerCombat : Component
 		if ( !_forwardMeleeStartPitchCaptured )
 			return 0f;
 
-		var delta = GetMeleeForwardInfluencedPitchDegrees() - _forwardMeleeStartPitchDegrees;
+		var delta = GetMeleeSwingPitchDegrees( MeleeAttackTypes.Forward ) - _forwardMeleeStartPitchDegrees;
 		return delta * Math.Clamp( MeleeAttackForwardLeanPitchInfluence, 0f, 1.5f );
 	}
 
@@ -1344,7 +1387,7 @@ public partial class PlayerCombat : Component
 			PostSwingDragScreenX = 0f,
 			PostSwingDragScreenY = 0f,
 			CombatBasisYawDegrees = GetMeleeCombatBasisYaw( attackType ),
-			CombatBasisPitchDegrees = GetCameraPitchDegrees()
+			CombatBasisPitchDegrees = GetMeleeCursorAlignedPitchDegrees( attackType )
 		};
 		return true;
 	}
