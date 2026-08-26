@@ -317,7 +317,8 @@ partial class PlayerMovement
 		TickGrappleControllerOverride();
 		TickGrapplePlayerTargetValidity();
 
-		if ( !GrappleAttached )
+		// Mantle broke the rope this instant — no winch / stamina while the host detach lands.
+		if ( !GrappleAttached || IsGrappleLedgePulling )
 			return;
 
 		PollLengthHoldState();
@@ -588,6 +589,10 @@ partial class PlayerMovement
 
 		// No re-attaching out of a hit reaction — the rope is gone for that whole window.
 		if ( IsHitReactionActive() )
+			return;
+
+		// Mid ledge pull: no new rope until the vault finishes.
+		if ( IsGrappleLedgePulling )
 			return;
 
 		if ( IsGrappleVictimCooldownActive() )
@@ -1629,7 +1634,8 @@ partial class PlayerMovement
 
 	void DrawRopeIfNeeded()
 	{
-		if ( !DrawDebugRope || !GrappleAttached )
+		// Ledge mantle broke the rope this instant — don't draw it while the host detach lands.
+		if ( !DrawDebugRope || !GrappleAttached || IsGrappleLedgePulling )
 			return;
 
 		var from = ResolveLeftArmWorldPoint();

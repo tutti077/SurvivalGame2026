@@ -571,6 +571,10 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			if ( _controller is null )
 				_controller = Components.Get<PlayerController>();
 
+			// Pro scheme: Space while hanging near a standable lip is a ledge grab, not a hop
+			// (grounded / scheme / target gates live inside).
+			TryStartGrappleLedgeGrabFromJumpPress();
+
 			if ( _controller is not null && !_controller.IsOnGround )
 				ClearActionIfPressed( JumpInputAction );
 
@@ -578,6 +582,10 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			if ( GrappleControlSchemeStore.IsTrainingWheels )
 				ClearActionIfPressed( JumpInputAction );
 		}
+
+		// Mid ledge pull: Space is already spent, no hop on arrival.
+		if ( IsGrappleLedgePulling )
+			ClearActionIfPressed( JumpInputAction );
 
 		TickWingsuitJumpGate();
 
@@ -1070,6 +1078,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		TickGrappleFixedUpdate();
 		ApplyGrappleRopeConstraint( Time.Delta );
+		TickGrappleLedgePull( Time.Delta );
 		TickWingsuitAirborneTimer( Time.Delta );
 		TickWingsuitFlight( Time.Delta );
 		TickWingsuitFreefallHandoff();
@@ -1152,7 +1161,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 	void ApplyGrappleRopeConstraint( float dt )
 	{
-		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f )
+		// Ledge mantle broke the rope this instant — never fight the pull while the detach lands.
+		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f || IsGrappleLedgePulling )
 		{
 			_grapplePrevRopeLength = 0f;
 			_grappleRopeTaut = false;

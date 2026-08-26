@@ -130,6 +130,7 @@ public sealed partial class PlayerAnimation : Component
 		EnsureAnimTargets();
 		TickSyncedSwingPresentation();
 		TickHitReactionPose();
+		TickLedgeMantlePose();
 		TickHoldPose();
 		TickLateralSwingPlaybackRestore();
 		TickMeleeSwingPresentationExpiry();
@@ -152,6 +153,7 @@ public sealed partial class PlayerAnimation : Component
 		EnsureAnimTargets();
 		TickSyncedSwingPresentation();
 		TickHitReactionPose();
+		TickLedgeMantlePose();
 		TickHoldPose();
 		TickMeleeDemoStickTransform();
 	}
@@ -308,8 +310,8 @@ public sealed partial class PlayerAnimation : Component
 
 	void TickHoldPose()
 	{
-		// Hit reaction: the flail sequence owns the body and the sword is gone for the whole window.
-		if ( _hitReactionPoseActive )
+		// Hit reaction / ledge mantle: the sequence owns the body and the sword is gone for the window.
+		if ( _hitReactionPoseActive || _ledgeMantlePoseActive )
 		{
 			DestroyMeleeDemoStick();
 			return;
