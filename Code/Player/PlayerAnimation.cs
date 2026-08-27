@@ -41,6 +41,25 @@ public sealed partial class PlayerAnimation : Component
 	[Property, Group( "Animation" ), Title( "Play melee swing animation" )]
 	public bool PlayMeleeSwingAnimation { get; set; } = true;
 
+	/// <summary>
+	/// Owner's screen only: past this look-up pitch the local model + held props fade out (and back in
+	/// when the camera drops below the ridge again), so a steep upward camera never stares up the model.
+	/// Other peers see the pawn unchanged (Tint/RenderType are not networked).
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Hide body on steep look-up" )]
+	public bool HideBodyOnSteepLookUp { get; set; } = true;
+
+	/// <summary>Steeper (more negative) = the camera must be lower / closer before the fade starts.</summary>
+	[Property, Group( "Animation" ), Title( "Look-up hide pitch (°, negative = up)" ), Range( -89f, 0f ), Step( 1f )]
+	public float HideBodyLookUpPitchDegrees { get; set; } = -35f;
+
+	[Property, Group( "Animation" ), Title( "Look-up fade duration (s)" ), Range( 0.1f, 3f ), Step( 0.1f )]
+	public float HideBodyLookUpFadeSeconds { get; set; } = 1f;
+
+	/// <summary>0 = fully visible, 1 = fully hidden; eased toward the look-up state each frame.</summary>
+	float _lookUpHideFade01;
+	bool _lookUpHideApplied;
+
 	/// <summary>Playback multiplier on the body during left/right swings (&lt;1 = slower).</summary>
 	[Property, Group( "Animation" ), Title( "Lateral swing playback rate" ), Range( 0.5f, 1f ), Step( 0.05f )]
 	public float MeleeLateralSwingPlaybackRate { get; set; } = 0.85f;
@@ -134,6 +153,131 @@ public sealed partial class PlayerAnimation : Component
 		TickHoldPose();
 		TickLateralSwingPlaybackRestore();
 		TickMeleeSwingPresentationExpiry();
+		TickLookUpBodyHide();
+		TickCombatFacingPresentation( advance: true );
+	}
+
+	bool _combatFacingApplied;
+	float _combatFacingYaw;
+
+	/// <summary>How fast the model turns back to locomotion facing after combat releases it (higher = quicker hand-back).</summary>
+	[Property, Group( "Animation" ), Title( "Combat facing release turn rate (°/s)" ), Range( 90f, 1440f ), Step( 30f )]
+	public float CombatFacingReleaseDegreesPerSecond { get; set; } = 540f;
+
+	/// <summary>
+	/// Presentation-only combat facing: rotates the RENDERER child (never the physics root — the
+	/// controller and rigidbody interpolation fight root writes, which showed as facing spazz).
+	/// Runs from OnUpdate (advancing) and OnPreRender (re-apply) so it lands last before render.
+	/// When combat releases the facing, the model LINGERS on the last combat yaw while standing —
+	/// resetting instantly popped the model a second time at recovery — and only eases back to the
+	/// root's facing once locomotion actually moves the pawn (or the root is already aligned).
+	/// </summary>
+	void TickCombatFacingPresentation( bool advance )
+	{
+		var body = ResolveBody();
+		if ( body is null || !body.IsValid() || body.GameObject == GameObject )
+			return;
+
+		var combat = ResolveCombat();
+		if ( combat is not null && combat.Enabled && combat.TryGetCombatFacingYaw( out var activeYaw ) )
+		{
+			_combatFacingYaw = activeYaw;
+			_combatFacingApplied = true;
+			body.GameObject.WorldRotation = new Angles( 0f, _combatFacingYaw, 0f ).ToRotation();
+			return;
+		}
+
+		if ( !_combatFacingApplied )
+			return;
+
+		var rootYaw = GameObject.WorldRotation.Angles().yaw;
+		var delta = NormalizeYawDeltaDegrees( rootYaw - _combatFacingYaw );
+
+		if ( advance )
+		{
+			var controller = GameObject.Components.Get<PlayerController>();
+			var moving = controller is not null && controller.IsValid()
+			             && controller.Velocity.WithZ( 0f ).Length > 20f;
+
+			if ( moving || MathF.Abs( delta ) < 3f )
+			{
+				var step = Math.Max( 30f, CombatFacingReleaseDegreesPerSecond ) * Time.Delta;
+				if ( MathF.Abs( delta ) <= step )
+				{
+					_combatFacingApplied = false;
+					body.GameObject.LocalRotation = Rotation.Identity;
+					return;
+				}
+
+				_combatFacingYaw += MathF.Sign( delta ) * step;
+			}
+		}
+
+		body.GameObject.WorldRotation = new Angles( 0f, _combatFacingYaw, 0f ).ToRotation();
+	}
+
+	static float NormalizeYawDeltaDegrees( float delta )
+	{
+		while ( delta > 180f )
+			delta -= 360f;
+		while ( delta < -180f )
+			delta += 360f;
+		return delta;
+	}
+
+	/// <summary>Owner-only, third person: fade the local model out while the camera pitches steeply upward, back in below the threshold.</summary>
+	void TickLookUpBodyHide()
+	{
+		if ( GameObject.IsProxy )
+			return;
+
+		var controller = GameObject.Components.Get<PlayerController>();
+		var isLocalOwner = controller is not null && controller.Enabled
+		                   && ( GameObject.Network is not { Active: true } n
+		                        || (n.Owner is null ? Networking.IsHost : n.IsOwner) );
+
+		var wantHide = HideBodyOnSteepLookUp
+		               && isLocalOwner
+		               && controller is { ThirdPerson: true }
+		               && controller.EyeAngles.pitch <= HideBodyLookUpPitchDegrees;
+
+		var fadeStep = Time.Delta / Math.Clamp( HideBodyLookUpFadeSeconds, 0.05f, 10f );
+		_lookUpHideFade01 = Math.Clamp( _lookUpHideFade01 + (wantHide ? fadeStep : -fadeStep), 0f, 1f );
+
+		// Fully visible steady state: one restore pass, then idle.
+		if ( _lookUpHideFade01 <= 0f )
+		{
+			if ( !_lookUpHideApplied )
+				return;
+
+			ApplyLookUpHideToRenderers( 1f, ModelRenderer.ShadowRenderType.On );
+			_lookUpHideApplied = false;
+			return;
+		}
+
+		// Mid-fade: alpha tint; fully faded: shadow-only so the mesh stops rendering entirely
+		// (shadow stays). Re-asserted every frame so a held prop spawned mid-fade is caught too.
+		var alpha = 1f - _lookUpHideFade01;
+		var renderType = _lookUpHideFade01 >= 1f
+			? ModelRenderer.ShadowRenderType.ShadowsOnly
+			: ModelRenderer.ShadowRenderType.On;
+		ApplyLookUpHideToRenderers( alpha, renderType );
+		_lookUpHideApplied = true;
+	}
+
+	void ApplyLookUpHideToRenderers( float alpha, ModelRenderer.ShadowRenderType renderType )
+	{
+		foreach ( var renderer in Components.GetAll<ModelRenderer>( FindMode.EverythingInSelfAndDescendants ) )
+		{
+			if ( renderer is null || !renderer.IsValid() )
+				continue;
+
+			if ( renderer.RenderType != renderType )
+				renderer.RenderType = renderType;
+
+			if ( MathF.Abs( renderer.Tint.a - alpha ) > 0.003f )
+				renderer.Tint = renderer.Tint.WithAlpha( alpha );
+		}
 	}
 
 	PlayerCombat ResolveCombat()
@@ -155,6 +299,8 @@ public sealed partial class PlayerAnimation : Component
 		TickHitReactionPose();
 		TickLedgeMantlePose();
 		TickHoldPose();
+		// Facing before the stick transform so the held prop follows the rotated body this frame.
+		TickCombatFacingPresentation( advance: false );
 		TickMeleeDemoStickTransform();
 	}
 

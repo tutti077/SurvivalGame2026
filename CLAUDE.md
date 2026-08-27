@@ -178,6 +178,7 @@ Assets/prefabs/ player/basicplayer · entity/scavT1 · build/* · environment/*
 - Host authority: `CombatAuthority` (melee), `VitalsAuthority` (pools), `BuildAuthority` (placement).
   Clients send intent; the host validates and broadcasts.
 - Melee damage never comes from weapon colliders — only from the phased server attack on
-  `PlayerCombat`. See `AGENTS.md` for the full windup → Early/Active/Late → recovery contract.
+  `PlayerCombat`. See `AGENTS.md` for the full windup → charge → active → recovery contract;
+  per-class timings live in `Assets/data/melee_weapon_classes.json`.
 - Hit reaction lives on `PlayerAnimation`, not `PlayerCombat`, and must tick from both `OnUpdate`
   and `OnPreRender` so proxies expire it.

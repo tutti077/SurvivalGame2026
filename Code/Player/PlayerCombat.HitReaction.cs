@@ -26,11 +26,6 @@ public partial class PlayerCombat
 	internal void OnHitReactionBegan()
 	{
 		ClearCombatRecoveryPresentation( pushOwnerClear: false );
-
-		if ( !_primarySwingPhaseActive )
-			return;
-
-		_primarySwingPhaseActive = false;
-		_primaryPostReleaseDragAccum = default;
+		ClearQueuedAttackPress();
 	}
 }

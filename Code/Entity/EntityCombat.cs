@@ -295,7 +295,6 @@ public sealed class EntityCombat : Component
 			SwingVerticalHint = swingVert,
 			SwingDir = _nextSwingDir,
 			AttackType = Combat.ResolveAttackTypeFromCursorDir( _nextSwingDir ),
-			StaminaPrepaidMax = 0f,
 			CombatBasisYawDegrees = basisAngles.yaw,
 			CombatBasisPitchDegrees = basisAngles.pitch
 		};

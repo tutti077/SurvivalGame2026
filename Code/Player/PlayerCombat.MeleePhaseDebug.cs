@@ -111,8 +111,6 @@ public partial class PlayerCombat
 		}
 		if ( ServerHasActiveMeleeAttackAction )
 			return "server melee active";
-		if ( _primarySwingPhaseActive )
-			return "client swing drag window";
 		if ( Components.Get<PlayerAnimation>() is { IsMeleeSwingAnimBusy: true } anim )
 			return $"swing anim rem={anim.GetMeleeAttackAnimBusyRemainingSeconds():0.000}s";
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost && _ownerExpectsHostMeleeBusy )

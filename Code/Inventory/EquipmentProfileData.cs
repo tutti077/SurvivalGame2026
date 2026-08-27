@@ -26,6 +26,17 @@ public sealed class EquipmentProfileData
 
 	public bool TwoHanded { get; set; }
 
+	/// <summary>
+	/// Melee timing class from <c>data/melee_weapon_classes.json</c> (oneHanded / twoHanded / spear / dagger).
+	/// Empty on a PrimaryMelee item falls back to <see cref="MeleeWeaponClassCatalog.DefaultClassId"/>.
+	/// </summary>
+	[JsonPropertyName( "weaponClass" )]
+	public string WeaponClass { get; set; } = string.Empty;
+
+	/// <summary>Optional per-weapon melee timing overrides — only fields present in JSON replace the class value.</summary>
+	[JsonPropertyName( "meleeOverrides" )]
+	public MeleeTimingOverridesData MeleeOverrides { get; set; }
+
 	[JsonPropertyName( "hotbarEquipable" )]
 	public bool HotbarEquipable { get; set; } = true;
 

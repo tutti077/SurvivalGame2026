@@ -134,28 +134,9 @@ public sealed class CombatAuthority : Component
 		if ( pc is null )
 			return RejectResult( AttackReleaseDebugCode.RejectAttackerMissingPlayerCombat, "attacker has no PlayerCombat" );
 
-		var prepaid = Math.Clamp( intent.StaminaPrepaidMax, 0f, pc.PrimaryAttackStaminaHeavyCost );
 		var pv = attacker.Components.Get<PlayerVitals>();
 
-		var refundPrepaidOnEarlyFail = prepaid > 1e-4f;
-		void RefundPrimaryAttackPrepaid()
-		{
-			if ( !refundPrepaidOnEarlyFail || pv is null || !attacker.IsValid() )
-				return;
-
-			if ( VitalsAuthority.Instance is { } vAuthRefund )
-				vAuthRefund.TryApplyDeltas( attacker, 0f, prepaid, pv );
-			else
-				pv.RequestVitalsDelta( 0f, prepaid );
-
-			refundPrepaidOnEarlyFail = false;
-		}
-
-		AttackReleaseResult Fail( int code, string detail )
-		{
-			RefundPrimaryAttackPrepaid();
-			return RejectResult( code, detail );
-		}
+		static AttackReleaseResult Fail( int code, string detail ) => RejectResult( code, detail );
 
 		// The pawn keeps its PlayerCombat with empty hands (shove is a player ability), so the swing
 		// needs its own gate. Host-side equipment is authoritative here — it is the same lookup that
@@ -217,42 +198,13 @@ public sealed class CombatAuthority : Component
 					$"need {staminaCost:0.#} stamina, attacker has no PlayerVitals" );
 			}
 
-			if ( prepaid > 1e-4f )
+			if ( VitalsAuthority.Instance is { } vAuth )
 			{
-				var settle = prepaid - staminaCost;
-				refundPrepaidOnEarlyFail = false;
-				if ( VitalsAuthority.Instance is { } vAuth )
-				{
-					if ( !vAuth.TryApplyDeltas( attacker, 0f, settle, pv ) )
-					{
-						refundPrepaidOnEarlyFail = true;
-						return Fail( AttackReleaseDebugCode.RejectInsufficientStamina,
-							$"stamina settle prepaid={prepaid:0.#} actual={staminaCost:0.#}" );
-					}
-				}
-				else
-				{
-					if ( !pv.RequestVitalsDelta( 0f, settle ) )
-					{
-						refundPrepaidOnEarlyFail = true;
-						return Fail( AttackReleaseDebugCode.RejectInsufficientStamina,
-							"stamina settle rejected (no VitalsAuthority)" );
-					}
-				}
-
-				if ( LogMeleeStaminaSettlement )
-					Log.Info( $"[CombatAuthority/Stamina] {attacker.Name} settle prepaid={prepaid:0.#} hold={holdSeconds:0.###}s actual={staminaCost:0.#} Δ={settle:+0.#;-0.#;0} → st={pv.CurrentStamina:0.#}/{pv.CurrentStaminaMax:0.#}" );
-			}
-			else if ( VitalsAuthority.Instance is { } vAuthLegacy )
-			{
-				if ( !vAuthLegacy.TryApplyDeltas( attacker, 0f, -staminaCost, pv ) )
+				if ( !vAuth.TryApplyDeltas( attacker, 0f, -staminaCost, pv ) )
 				{
 					return Fail( AttackReleaseDebugCode.RejectInsufficientStamina,
 						$"need {staminaCost:0.#} st, have {pv.CurrentStamina:0.#}" );
 				}
-
-				if ( LogMeleeStaminaSettlement )
-					Log.Info( $"[CombatAuthority/Stamina] {attacker.Name} drain hold={holdSeconds:0.###}s cost={staminaCost:0.#} → st={pv.CurrentStamina:0.#}/{pv.CurrentStaminaMax:0.#}" );
 			}
 			else
 			{
@@ -267,10 +219,10 @@ public sealed class CombatAuthority : Component
 					return Fail( AttackReleaseDebugCode.RejectInsufficientStamina,
 						"stamina spend rejected" );
 				}
-
-				if ( LogMeleeStaminaSettlement )
-					Log.Info( $"[CombatAuthority/Stamina] {attacker.Name} drain hold={holdSeconds:0.###}s cost={staminaCost:0.#} → st={pv.CurrentStamina:0.#}/{pv.CurrentStaminaMax:0.#}" );
 			}
+
+			if ( LogMeleeStaminaSettlement )
+				Log.Info( $"[CombatAuthority/Stamina] {attacker.Name} drain hold={holdSeconds:0.###}s cost={staminaCost:0.#} → st={pv.CurrentStamina:0.#}/{pv.CurrentStaminaMax:0.#}" );
 		}
 
 		var swingAuth = ServerNormalizeSwingFromXz( intent.SwingFromX, intent.SwingFromY, attacker.WorldRotation );
@@ -291,7 +243,7 @@ public sealed class CombatAuthority : Component
 			DamageDealt = 0f,
 			TargetGameObjectId = Guid.Empty,
 			DebugCode = AttackReleaseDebugCode.OkMeleeSweepStarted,
-			DebugDetail = $"scheduled host sweep seq={intent.IntentSequence} type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} wind={pc.GetMeleeWindupDuration( isHeavy ):0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( pc, attackType, isHeavy ):0.###}s rec={pc.MeleeRecoveryDuration:0.###}s{swingNote}"
+			DebugDetail = $"scheduled host sweep seq={intent.IntentSequence} type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} wind={pc.GetMeleeWindupSeconds():0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( pc, attackType, isHeavy ):0.###}s rec={pc.GetMeleeRecoverySeconds( isHeavy ):0.###}s{swingNote}"
 		};
 	}
 

@@ -1,0 +1,88 @@
+{
+  "classes": [
+    {
+      "classId": "oneHanded",
+      "displayName": "One-Handed",
+      "windupSeconds": 0.22,
+      "chargeSeconds": 0.48,
+      "activeSeconds": 0.1,
+      "heavyActiveSeconds": 0.15,
+      "recoverySeconds": 0.1,
+      "heavyRecoverySeconds": 0.12,
+      "reachForwardMeters": 1.9,
+      "reachLateralMeters": 1.9,
+      "staminaLightCost": 8,
+      "staminaHeavyCost": 15
+    },
+    {
+      "classId": "twoHanded",
+      "displayName": "Two-Handed",
+      "windupSeconds": 0.32,
+      "chargeSeconds": 0.55,
+      "activeSeconds": 0.14,
+      "heavyActiveSeconds": 0.2,
+      "recoverySeconds": 0.25,
+      "heavyRecoverySeconds": 0.3,
+      "reachForwardMeters": 2.2,
+      "reachLateralMeters": 2.2,
+      "staminaLightCost": 12,
+      "staminaHeavyCost": 22
+    },
+    {
+      "classId": "spear",
+      "displayName": "Spear",
+      "windupSeconds": 0.26,
+      "chargeSeconds": 0.5,
+      "activeSeconds": 0.12,
+      "heavyActiveSeconds": 0.16,
+      "recoverySeconds": 0.18,
+      "heavyRecoverySeconds": 0.22,
+      "reachForwardMeters": 2.6,
+      "reachLateralMeters": 1.6,
+      "staminaLightCost": 9,
+      "staminaHeavyCost": 16
+    },
+    {
+      "classId": "trainingDummy",
+      "displayName": "Training Dummy",
+      "windupSeconds": 0.22,
+      "chargeSeconds": 0.13,
+      "activeSeconds": 0.1,
+      "heavyActiveSeconds": 0.15,
+      "recoverySeconds": 0.28,
+      "heavyRecoverySeconds": 0.45,
+      "reachForwardMeters": 1.9,
+      "reachLateralMeters": 1.9,
+      "staminaLightCost": 8,
+      "staminaHeavyCost": 15
+    },
+    {
+      "classId": "scavT1",
+      "displayName": "Scav Claws (T1)",
+      "windupSeconds": 0.35,
+      "chargeSeconds": 0.31,
+      "activeSeconds": 0.22,
+      "heavyActiveSeconds": 0.22,
+      "recoverySeconds": 0.4,
+      "heavyRecoverySeconds": 0.4,
+      "reachForwardMeters": 1.9,
+      "reachLateralMeters": 1.9,
+      "staminaLightCost": 8,
+      "staminaHeavyCost": 15
+    },
+    {
+      "classId": "dagger",
+      "displayName": "Dagger",
+      "windupSeconds": 0.12,
+      "chargeSeconds": 0.35,
+      "activeSeconds": 0.07,
+      "heavyActiveSeconds": 0.1,
+      "recoverySeconds": 0.05,
+      "heavyRecoverySeconds": 0.08,
+      "reachForwardMeters": 1.3,
+      "reachLateralMeters": 1.2,
+      "staminaLightCost": 5,
+      "staminaHeavyCost": 9
+    }
+  ]
+}

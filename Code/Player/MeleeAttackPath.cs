@@ -14,33 +14,12 @@ public static class MeleeAttackPath
 
 	public static float GetActiveDurationSeconds( PlayerCombat pc, byte attackType, bool isHeavy = false )
 	{
-		GetPhaseDurations( pc, isHeavy, out var early, out var active, out var late );
 		_ = attackType;
-		return Math.Max( 0.04f, early + active + late );
-	}
-
-	public static void GetPhaseDurations( PlayerCombat pc, out float early, out float active, out float late ) =>
-		GetPhaseDurations( pc, isHeavy: false, out early, out active, out late );
-
-	public static void GetPhaseDurations( PlayerCombat pc, bool isHeavy, out float early, out float active, out float late )
-	{
-		if ( isHeavy )
-		{
-			early = Math.Max( 0f, pc.MeleeHeavyEarlyActiveDuration );
-			active = Math.Max( 0f, pc.MeleeHeavyActiveDuration );
-			late = Math.Max( 0f, pc.MeleeHeavyLateActiveDuration );
-			return;
-		}
-
-		early = Math.Max( 0f, pc.MeleeEarlyActiveDuration );
-		active = Math.Max( 0f, pc.MeleeActiveDuration );
-		late = Math.Max( 0f, pc.MeleeLateActiveDuration );
+		return Math.Max( 0.04f, pc.GetMeleeActiveSeconds( isHeavy ) );
 	}
 
 	public static float GetAttackRange( PlayerCombat pc, byte attackType ) =>
-		attackType == MeleeAttackTypes.Forward
-			? Math.Max( 8f, pc.MeleeAttackRangeForward )
-			: Math.Max( 8f, pc.MeleeAttackRangeLeftRight );
+		Math.Max( 8f, pc.GetMeleeAttackRangeUnits( attackType ) );
 
 	public static void GetArcDegreeSpan( PlayerCombat pc, byte attackType, out float startDeg, out float endDeg )
 	{
@@ -70,44 +49,13 @@ public static class MeleeAttackPath
 		endDeg = startDeg - total;
 	}
 
-	/// <summary>Time-based EarlyActive / Active / LateActive / Recovery from elapsed seconds after the active swing begins.</summary>
+	/// <summary>Windup / Active / Recovery from elapsed seconds after the active sweep begins.</summary>
 	public static byte ClassifyActiveState( PlayerCombat pc, byte attackType, float activeElapsedSeconds, bool isHeavy = false )
 	{
 		activeElapsedSeconds = Math.Max( 0f, activeElapsedSeconds );
-		GetPhaseDurations( pc, isHeavy, out var earlyDur, out var activeDur, out var lateDur );
-		var earlyEnd = earlyDur;
-		var activePhaseEnd = earlyDur + activeDur;
-		var latePhaseEnd = earlyDur + activeDur + lateDur;
-		if ( activeElapsedSeconds <= earlyEnd + 1e-5f )
-			return MeleeAttackStates.EarlyActive;
-		if ( activeElapsedSeconds <= activePhaseEnd + 1e-5f )
+		if ( activeElapsedSeconds <= GetActiveDurationSeconds( pc, attackType, isHeavy ) + 1e-5f )
 			return MeleeAttackStates.Active;
-		if ( activeElapsedSeconds <= latePhaseEnd + 1e-5f )
-			return MeleeAttackStates.LateActive;
 		return MeleeAttackStates.Recovery;
-	}
-
-	/// <summary>Time-based state from normalized active progress (0–1 over full active window).</summary>
-	public static byte ClassifyActiveStateFromProgress( PlayerCombat pc, byte attackType, float activeProgress01, bool isHeavy = false )
-	{
-		activeProgress01 = Math.Clamp( activeProgress01, 0f, 1f );
-		var total = GetActiveDurationSeconds( pc, attackType, isHeavy );
-		return ClassifyActiveState( pc, attackType, activeProgress01 * total, isHeavy );
-	}
-
-	/// <summary>Elapsed seconds (from active start) where EarlyActive→Active, Active→LateActive, and LateActive→Recovery begin.</summary>
-	public static void GetPhaseBoundaryElapsedSeconds( PlayerCombat pc, byte attackType, out float activePhaseStart, out float latePhaseStart, bool isHeavy = false )
-	{
-		GetPhaseDurations( pc, isHeavy, out var earlyDur, out var activeDur, out _ );
-		activePhaseStart = earlyDur;
-		latePhaseStart = earlyDur + activeDur;
-	}
-
-	/// <summary>End of the timed active window (early + active + late) in seconds from active start.</summary>
-	public static float GetLatePhaseEndElapsedSeconds( PlayerCombat pc, byte attackType, bool isHeavy = false )
-	{
-		GetPhaseDurations( pc, isHeavy, out var earlyDur, out var activeDur, out var lateDur );
-		return earlyDur + activeDur + lateDur;
 	}
 
 	public static float ActiveProgressFromElapsed( PlayerCombat pc, byte attackType, float activeElapsedSeconds, bool isHeavy = false )
@@ -204,50 +152,12 @@ public static class MeleeAttackPath
 		return Math.Min( sampleCount, Math.Max( 1, (int)MathF.Ceiling( activeProgress01 * sampleCount - 1e-4f ) ) );
 	}
 
-	/// <summary>Invokes <paramref name="perSampleIndex"/> for each new arc sample revealed since the last draw (contiguous, no gaps).</summary>
-	public static void ForEachNewlyRevealedArcSampleIndex(
-		PlayerCombat pc,
-		byte attackType,
-		float degreeStep,
-		float lastProgress01,
-		float currentProgress01,
-		Action<int> perSampleIndex )
-	{
-		if ( perSampleIndex is null )
-			return;
-
-		currentProgress01 = Math.Clamp( currentProgress01, 0f, 1f );
-		if ( currentProgress01 < 1e-5f )
-			return;
-
-		var count = GetArcPathSampleCount( pc, attackType, degreeStep );
-		var currentEnd = RevealedArcSampleExclusiveEnd( currentProgress01, count );
-		var lastEnd = lastProgress01 < 0f ? 0 : RevealedArcSampleExclusiveEnd( lastProgress01, count );
-
-		for ( var i = lastEnd; i < currentEnd; i++ )
-			perSampleIndex( i );
-	}
-
-	/// <summary>Yaw bucket 0…(360/<paramref name="degreeStep"/>−1) for full-turn debug (e.g. 72 at 5°).</summary>
-	public static int YawDegreesToDebugBucket( float yawDegrees, float degreeStep )
-	{
-		degreeStep = Math.Max( 1f, degreeStep );
-		var bucketCount = Math.Max( 1, (int)MathF.Round( 360f / degreeStep ) );
-		var yaw = Angles.NormalizeAngle( yawDegrees );
-		var bucket = (int)MathF.Floor( (yaw + 180f) / degreeStep );
-		return Math.Clamp( bucket, 0, bucketCount - 1 );
-	}
-
 	/// <summary>Signed yaw bucket for debug keying; keeps continuous turning steps at <paramref name="degreeStep"/> spacing.</summary>
 	public static int QuantizeYawDegrees( float yawDegrees, float degreeStep )
 	{
 		degreeStep = Math.Max( 1f, degreeStep );
 		return (int)MathF.Round( Angles.NormalizeAngle( yawDegrees ) / degreeStep );
 	}
-
-	/// <summary>Pack (arc sample index, yaw bucket) into a stable key for deduping debug rays.</summary>
-	public static long PackArcYawDebugKey( int sampleIndex, int yawBucket ) =>
-		((long)sampleIndex << 32) ^ (uint)yawBucket;
 
 	/// <summary>Max rotation debug spokes for a full 360° turn (e.g. 72 at 5°).</summary>
 	public static int GetRotationDebugSpokeCount( float degreeStep ) =>
@@ -301,14 +211,6 @@ public static class MeleeAttackPath
 		GetArcDegreeSpan( pc, attackType, out var startDeg, out var endDeg );
 		var t = ArcDegreeToProgress01( startDeg, endDeg, arcDegree );
 		EvaluateWorldBlade( attacker, pc, attackType, t, combatBasis, out tipWorld, out heelWorld );
-	}
-
-	/// <summary>Which timed phase this arc degree belongs to if the stroke reached this point on the path (0°→end° maps to early→late).</summary>
-	public static byte ClassifyActiveStateForArcDegree( PlayerCombat pc, byte attackType, float arcDegree )
-	{
-		GetArcDegreeSpan( pc, attackType, out var startDeg, out var endDeg );
-		var progress01 = ArcDegreeToProgress01( startDeg, endDeg, arcDegree );
-		return ClassifyActiveStateFromProgress( pc, attackType, progress01 );
 	}
 
 	/// <summary>Invokes <paramref name="perDegree"/> for each debug step along the arc (inclusive endpoints).</summary>
@@ -489,7 +391,6 @@ public static class MeleeAttackPath
 
 		ApplyForwardPlaneTilt( ref tipLocal, pc.ServerEyeHeight, pc.MeleeAttackTiltDegreesForward * Deg2Rad );
 		if ( applyLean )
-			ApplyForwardPitchLean( ref tipLocal, pc, pivot );
 		ClampForwardLocalFromPivot( ref tipLocal, pivot, range * 1.14f * reachScale, pc );
 	}
 
@@ -523,28 +424,6 @@ public static class MeleeAttackPath
 			return Lerp( start, active, SmoothStep( progress01 / 0.5f ) );
 
 		return Lerp( active, end, SmoothStep( (progress01 - 0.5f) / 0.5f ) );
-	}
-
-	static void ApplyForwardPitchLean( ref Vector3 local, PlayerCombat pc, Vector3 swingPivotLocal )
-	{
-		var leanDeg = pc.GetForwardMeleePitchLeanDegrees();
-		if ( MathF.Abs( leanDeg ) < 0.01f )
-			return;
-
-		var pivot = new Vector2( swingPivotLocal.x, swingPivotLocal.y );
-		local = RotateLocalXYAbout( pivot, leanDeg * Deg2Rad, local );
-	}
-
-	static Vector3 RotateLocalXYAbout( Vector2 pivot, float rad, Vector3 p )
-	{
-		var x = p.x - pivot.x;
-		var y = p.y - pivot.y;
-		var c = MathF.Cos( rad );
-		var s = MathF.Sin( rad );
-		return new Vector3(
-			pivot.x + x * c - y * s,
-			pivot.y + x * s + y * c,
-			p.z );
 	}
 
 	static void ApplyForwardPlaneTilt( ref Vector3 p, float chestY, float tiltRad )

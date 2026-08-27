@@ -10,6 +10,11 @@ struct MeleeAttackDebugDrawScratch
 	internal Vector3 LastLeadTipWorld;
 	internal bool HasLastLeadTip;
 	internal float LastArcProgress01;
+	/// <summary>Basis yaw/pitch and pawn position when the last arc slice was painted — new slices interpolate from here.</summary>
+	internal float LastEmitBasisYaw;
+	internal float LastEmitBasisPitch;
+	internal Vector3 LastEmitPawnPos;
+	internal bool HasLastEmitBasisYaw;
 	internal HashSet<long> DrawnArcYawKeys;
 	internal HashSet<int> DrawnRelativeYawStepIndices;
 	internal float SwingBasisYaw;
@@ -26,6 +31,7 @@ struct MeleeAttackDebugDrawScratch
 	{
 		HasLastLeadTip = false;
 		LastArcProgress01 = -1f;
+		HasLastEmitBasisYaw = false;
 		DrawnArcYawKeys?.Clear();
 		DrawnRelativeYawStepIndices?.Clear();
 		HasSwingBasisYaw = false;
@@ -38,7 +44,7 @@ struct MeleeAttackDebugDrawScratch
 }
 
 /// <summary>
-/// Host-side phased primary melee (windup → EarlyActive/Active/LateActive sweeps → recovery). Lives on <see cref="PlayerCombat"/> per Commandment #1.
+/// Host-side phased primary melee (remaining windup → active sweep → outcome recovery). Lives on <see cref="PlayerCombat"/> per Commandment #1.
 /// </summary>
 public partial class PlayerCombat
 {
@@ -88,70 +94,29 @@ public partial class PlayerCombat
 	public byte ResolveAttackTypeFromCursorDir( byte cursorDir ) =>
 		MeleeAttackTypes.FromCursorDir( cursorDir, SouthpawSwing );
 
+	/// <summary>Heavy attack: the button was held for the class windup plus its full charge time.</summary>
 	public bool IsHeavyAttackForHoldDuration( float holdSeconds ) =>
-		holdSeconds + 1e-5f >= Math.Max( 0f, MeleeHeavyAttackHoldThreshold );
+		holdSeconds + 1e-5f >= GetMeleeWeaponTimings().HeavyHoldThresholdSeconds;
 
 	public float GetMeleeWeaponBaseDamage() =>
 		MeleeWeaponBaseDamage > 0f ? MeleeWeaponBaseDamage : AttackCombatConstants.DefaultMeleeWeaponDamage;
 
-	public float GetMeleeDamageForState( byte attackState, bool isHeavy, byte swingDir, Vector2 postDragScreen )
+	public float GetMeleeDamage( bool isHeavy )
 	{
-		var raw = GetMeleeWeaponBaseDamage()
-		          * ComputeMeleeCombatDamageMultiplier( swingDir, postDragScreen, isHeavy, attackState );
+		var raw = GetMeleeWeaponBaseDamage() * ComputeMeleeCombatDamageMultiplier( isHeavy );
 		return MathF.Round( raw, MidpointRounding.AwayFromZero );
 	}
 
-	public float GetMeleeDamageForState( byte attackState, bool isHeavy, in AttackReleaseIntent intent ) =>
-		GetMeleeDamageForState( attackState, isHeavy, intent.SwingDir,
-			new Vector2( intent.PostSwingDragScreenX, intent.PostSwingDragScreenY ) );
+	/// <summary>Global combat damage multiplier (base + heavy bonus).</summary>
+	public float ComputeMeleeCombatDamageMultiplier( bool isHeavy ) =>
+		MeleeCombatDamageMultiplier.Compute( isHeavy, MeleeHeavyAttackDamageBonus, MeleeBaseCombatDamageMultiplier );
 
-	/// <summary>Global combat damage multiplier (1.0 + drag + phase penalties + heavy bonus).</summary>
-	public float ComputeMeleeCombatDamageMultiplier( byte swingDir, Vector2 postDragScreen, bool isHeavy, byte attackState ) =>
-		MeleeCombatDamageMultiplier.Compute(
-			swingDir,
-			postDragScreen,
-			SwingDragGoodPixels,
-			MeleeSwingDragGoodBonus,
-			MeleeSwingDragBadPenalty,
-			isHeavy,
-			MeleeHeavyAttackDamageBonus,
-			attackState,
-			MeleeEarlyActiveDamagePenalty,
-			MeleeLateActiveDamageBonus,
-			MeleeBaseCombatDamageMultiplier );
-
-	public float ComputeMeleeCombatDamageMultiplier( in AttackReleaseIntent intent, bool isHeavy, byte attackState ) =>
-		ComputeMeleeCombatDamageMultiplier( intent.SwingDir,
-			new Vector2( intent.PostSwingDragScreenX, intent.PostSwingDragScreenY ), isHeavy, attackState );
-
-	public float ComputeMeleeCombatDamageMultiplier( byte swingDir, Vector2 postDragScreen, bool isHeavy ) =>
-		ComputeMeleeCombatDamageMultiplier( swingDir, postDragScreen, isHeavy, MeleeAttackStates.Active );
-
-	public float ComputeMeleeCombatDamageMultiplier( in AttackReleaseIntent intent, bool isHeavy ) =>
-		ComputeMeleeCombatDamageMultiplier( intent, isHeavy, MeleeAttackStates.Active );
-
-	public float GetMeleeStaggerMultiplierForState( byte attackState )
-	{
-		if ( attackState == MeleeAttackStates.EarlyActive )
-			return Math.Max( 0f, MeleeEarlyActiveStaggerMultiplier );
-		if ( attackState == MeleeAttackStates.Active )
-			return Math.Max( 0f, MeleeActiveStaggerMultiplier );
-		if ( attackState == MeleeAttackStates.LateActive )
-			return Math.Max( 0f, MeleeLateActiveStaggerMultiplier );
-		return 0f;
-	}
-
-	public float GetMeleeStaggerForState( byte attackState ) =>
-		Math.Max( 0f, MeleeBaseStagger ) * GetMeleeStaggerMultiplierForState( attackState );
+	public float GetMeleeStagger() => Math.Max( 0f, MeleeBaseStagger );
 
 	public Color GetMeleeDebugColorForState( byte attackState )
 	{
-		if ( attackState == MeleeAttackStates.EarlyActive )
-			return new Color( 0.55f, 0.78f, 1f, 0.92f );
 		if ( attackState == MeleeAttackStates.Active )
 			return new Color( 1f, 0.85f, 0.1f, 0.92f );
-		if ( attackState == MeleeAttackStates.LateActive )
-			return new Color( 1f, 0.35f, 0.25f, 0.92f );
 		if ( attackState == MeleeAttackStates.Windup )
 			return new Color( 0.55f, 0.55f, 0.62f, 0.45f );
 		return new Color( 0.7f, 0.7f, 0.7f, 0.5f );
@@ -205,9 +170,9 @@ public partial class PlayerCombat
 
 		var attackType = ResolveAttackTypeFromIntent( intent );
 		LogMeleePhasePulse( "Swing start",
-			$"type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} hold={holdSeconds:0.###}s wind={GetMeleeWindupDuration( isHeavy ):0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( this, attackType, isHeavy ):0.###}s seq={intent.IntentSequence}" );
+			$"type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} hold={holdSeconds:0.###}s windRemaining={_serverMeleeAttack.WindupRemainingSeconds:0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( this, attackType, isHeavy ):0.###}s seq={intent.IntentSequence}" );
 		LogMeleePhaseEnter( "windup start",
-			$"duration={GetMeleeWindupDuration( isHeavy ):0.###}s" );
+			$"remaining={_serverMeleeAttack.WindupRemainingSeconds:0.###}s (class windup {GetMeleeWindupSeconds():0.###}s − hold)" );
 
 		EmitSwingNoiseIfPlayer();
 		animation?.PlayMeleeSwingAttack( attackType, broadcastFromHost: true, isHeavy: isHeavy );
@@ -290,7 +255,6 @@ public partial class PlayerCombat
 			return;
 
 		ClearMeleeAttackBasisFromIntent();
-		ClearForwardMeleeStartPitch();
 		_serverMeleeAttack = null;
 		SetMeleeAttackCommitmentLock( false );
 		NotifyOwnerMeleeBusyCleared( "host cancel" );
@@ -371,6 +335,12 @@ public partial class PlayerCombat
 	{
 		// One companion per swing: a duplicate intent (broadcast + owner backup) must not restart the fan.
 		if ( _clientSwingTracePlayback is { } active && active.IntentSequence == intent.IntentSequence )
+			return;
+
+		// Listen-server host: the authority runtime already draws this swing on this machine. The HostOnly
+		// broadcast also runs locally, and letting it spawn a second visual companion (starting a frame
+		// late on its own clock) mid-swing painted the fan twice with an offset — visible seams.
+		if ( _serverMeleeAttack is { } authority && authority.IntentSequence == intent.IntentSequence )
 			return;
 
 		var hold = Math.Max( 0f, (float)( intent.ReleasedGlobalSeconds - intent.PressedGlobalSeconds ) );
@@ -515,31 +485,63 @@ public partial class PlayerCombat
 
 		if ( drawOverlay )
 		{
-			var yawBucket = MeleeAttackPath.QuantizeYawDegrees( currentBasisYaw, degreeStep );
-			var isHeavy = _clientSwingTracePlayback?.IsHeavy ?? _serverMeleeAttack?.IsHeavy ?? false;
-			var lastProgress = scratch.LastArcProgress01;
+			var currentBasisPitch = GetMeleeSwingPitchDegrees( attackType );
+			var currentPawnPos = GameObject.WorldPosition;
+			var hadPrev = scratch.LastArcProgress01 >= 0f && scratch.HasLastEmitBasisYaw;
+			var lastProgress = Math.Max( 0f, scratch.LastArcProgress01 );
+			var prevYaw = hadPrev ? scratch.LastEmitBasisYaw : currentBasisYaw;
+			var prevPitch = hadPrev ? scratch.LastEmitBasisPitch : currentBasisPitch;
+			var prevPawnPos = hadPrev ? scratch.LastEmitPawnPos : currentPawnPos;
+			var yawSpan = hadPrev ? NormalizeDegreesDelta( currentBasisYaw - prevYaw ) : 0f;
+			var pitchSpan = hadPrev ? currentBasisPitch - prevPitch : 0f;
+			var pawnTravel = (currentPawnPos - prevPawnPos).Length;
+			var progressSpan = Math.Max( 0f, activeProgress01 - lastProgress );
 
-			// Contiguous catch-up: short Early/Late windows + low FPS used to skip most ~1° samples.
-			MeleeAttackPath.ForEachNewlyRevealedArcSampleIndex(
-				this,
-				attackType,
-				degreeStep,
-				lastProgress,
-				activeProgress01,
-				sampleIndex =>
+			// The active window is only a few frames long, so each frame reveals one large contiguous
+			// slice of the fan. On the local pawn the swing pose is LIVE — camera yaw/pitch move
+			// mid-drag and the pawn itself translates (jumping / falling / strafing) — so painting a
+			// slice at a single frame's pose left seams wherever the pose jumped between frames.
+			// Subdivide the slice by whichever moved most (arc progress, yaw, pitch, or pawn travel)
+			// and interpolate the full pose along it — the same between-frames interpolation the
+			// damage sweep already does — so the painted fan cannot seam.
+			var arcSteps = (int)MathF.Ceiling( progressSpan * Math.Max( 1, sampleCount - 1 ) );
+			var basisSteps = (int)MathF.Ceiling( MathF.Max( MathF.Abs( yawSpan ), MathF.Abs( pitchSpan ) ) / degreeStep );
+			var travelSteps = (int)MathF.Ceiling( pawnTravel / 4f );
+			var stepCount = Math.Max( arcSteps, Math.Max( basisSteps, travelSteps ) );
+
+			if ( stepCount > 0 || !hadPrev )
+			{
+				stepCount = Math.Max( 1, stepCount );
+				for ( var step = hadPrev ? 1 : 0; step <= stepCount; step++ )
 				{
-					var arcProgress = MeleeAttackPath.ArcSampleIndexToProgress01( sampleCount, sampleIndex );
-					var phase = MeleeAttackPath.ClassifyActiveStateFromProgress( this, attackType, arcProgress, isHeavy );
-					var key = MeleeAttackPath.PackArcYawDebugKey( sampleIndex, yawBucket ) ^ ((long)phase << 56);
+					var f = step / (float)stepCount;
+					var arcProgress = lastProgress + progressSpan * f;
+					var sampleYaw = prevYaw + yawSpan * f;
+					var samplePitch = prevPitch + pitchSpan * f;
+					var samplePos = Vector3.Lerp( prevPawnPos, currentPawnPos, f );
+					var key = (long)HashCode.Combine(
+						(int)MathF.Round( arcProgress * Math.Max( 1, sampleCount - 1 ) ),
+						MeleeAttackPath.QuantizeYawDegrees( sampleYaw, degreeStep ),
+						(int)MathF.Floor( samplePos.x / 8f ),
+						(int)MathF.Floor( samplePos.y / 8f ),
+						(int)MathF.Floor( samplePos.z / 8f ) );
 					if ( !drawnArcYawKeys.Add( key ) )
-						return;
+						continue;
 
-					EmitMeleeDebugPathRay( attackType, currentBasisYaw, arcProgress, phase, drawOverlay,
-						overlayDuration, hitRadius, drawSpheres );
-				} );
+					EmitMeleeDebugPathRay( attackType, sampleYaw, arcProgress, MeleeAttackStates.Active, drawOverlay,
+						overlayDuration, hitRadius, drawSpheres, samplePitch, samplePos - currentPawnPos );
+				}
+			}
+
+			// Bookkeeping advances only when a slice was actually painted — a frame where the overlay
+			// gate flickers off no longer swallows its span forever (that painted permanent slits);
+			// the next painting frame catches the whole span up instead.
+			scratch.LastEmitBasisYaw = currentBasisYaw;
+			scratch.LastEmitBasisPitch = currentBasisPitch;
+			scratch.LastEmitPawnPos = currentPawnPos;
+			scratch.HasLastEmitBasisYaw = true;
+			scratch.LastArcProgress01 = activeProgress01;
 		}
-
-		scratch.LastArcProgress01 = activeProgress01;
 
 		if ( !MeleeDebugDrawRotationSpokes )
 			return;
@@ -641,14 +643,14 @@ public partial class PlayerCombat
 		if ( !_hasLockedPrimaryAttackDir )
 			return false;
 
-		if ( !Input.Down( PrimaryAttackAction ) && !_primary.Down && !_primarySwingPhaseActive )
+		if ( !Input.Down( PrimaryAttackAction ) && !_primary.Down )
 			return false;
 
 		if ( IsBlockPreventingAttack() || IsCombatActionLocked )
 			return false;
 
 		// Chain-busy without a real press channel = fake black bar (common when ownerExpects stuck).
-		if ( IsMeleeAttackChainBusy() && !_primary.Down && !_primarySwingPhaseActive )
+		if ( IsMeleeAttackChainBusy() && !_primary.Down )
 			return false;
 
 		attackType = ResolveAttackTypeFromCursorDir( _lockedPrimaryAttackSwingDir );
@@ -791,15 +793,26 @@ public partial class PlayerCombat
 		bool drawOverlay,
 		float overlayDuration,
 		float hitRadius,
-		bool drawSpheres )
+		bool drawSpheres,
+		float? basisPitchDegrees = null,
+		Vector3 worldOffset = default )
 	{
 		if ( !drawOverlay )
 			return;
 
-		var basis = GetMeleeCombatBasisRotationForYaw( attackType, basisYaw );
+		// Interpolated slice painting passes its own pitch — reading the live cursor pitch here made
+		// consecutive slices sit on differently tilted planes (visible seams on the local pawn).
+		var basis = basisPitchDegrees is { } pitch
+			? new Angles( ClampMeleeSwingPitchDegrees( pitch ), basisYaw, 0f ).ToRotation()
+			: GetMeleeCombatBasisRotationForYaw( attackType, basisYaw );
 		var origin = MeleeAttackPath.GetSwingPivotWorld( GameObject, this, attackType, basis );
 		var spokeColor = GetMeleeDebugColorForState( attackStateForDraw ).WithAlpha( 0.42f );
 		MeleeAttackPath.EvaluateWorldBlade( GameObject, this, attackType, arcProgress01, basis, out var tip, out _ );
+
+		// The blade transform anchors at the pawn's CURRENT position; interpolated slice painting shifts
+		// the ray back toward where the pawn was mid-frame (jumping / strafing between frames).
+		origin += worldOffset;
+		tip += worldOffset;
 		var drawTip = tip;
 		if ( TryGetDebugGuardLineClipPoint( origin, tip, out var guardClipPoint ) )
 			drawTip = guardClipPoint;
@@ -855,7 +868,7 @@ public partial class PlayerCombat
 			var basis = GetMeleeCombatBasisRotation( attackType );
 			heel = MeleeBladeHeel.IsValid()
 				? MeleeBladeHeel.WorldPosition
-				: tip - basis.Forward * Math.Max( 8f, MeleeAttackRangeForward * MeleeBladeHeelFraction );
+				: tip - basis.Forward * Math.Max( 8f, GetMeleeAttackRangeUnits( attackType ) * MeleeBladeHeelFraction );
 			return;
 		}
 
@@ -872,7 +885,6 @@ public partial class PlayerCombat
 		readonly bool _isHeavy;
 		readonly float _windup;
 		readonly float _active;
-		readonly float _recovery;
 		readonly float _radius;
 		readonly float _substep;
 		readonly string _swingNote;
@@ -881,7 +893,6 @@ public partial class PlayerCombat
 		readonly bool _allowMultiple;
 		readonly int _maxTargets;
 		bool _loggedAttackPhase;
-		bool _loggedBuiltinRecovery;
 
 		readonly HashSet<Guid> _hitVictims = new();
 
@@ -896,7 +907,6 @@ public partial class PlayerCombat
 		bool _wasParried;
 		bool _completionSent;
 		int _targetsHitCount;
-		float _prevActiveElapsed;
 		bool _stopHitValidation;
 		MeleeAttackDebugDrawScratch _debugDrawScratch;
 
@@ -915,9 +925,12 @@ public partial class PlayerCombat
 			_instanceId = _nextMeleeAttackInstanceId++;
 			_isHeavy = isHeavy;
 			_visualOnly = visualOnly;
-			_windup = pc.GetMeleeWindupDuration( isHeavy );
+			// Windup elapses while the button is held: a long hold releases straight into the sweep,
+			// a quick click still plays the remaining lift before damage starts.
+			_windup = Math.Max( 0f, pc.GetMeleeWindupSeconds() - Math.Max( 0f, holdSeconds ) );
+			if ( !visualOnly )
+				_windup *= pc.ServerConsumeInitiativeWindupMultiplier();
 			_active = MeleeAttackPath.GetActiveDurationSeconds( pc, _attackType, isHeavy );
-			_recovery = Math.Max( 0f, pc.MeleeRecoveryDuration );
 			_radius = Math.Max( 2f, pc.MeleeHitVolumeThickness );
 			_substep = Math.Max( 4f, pc.MeleeSweepSubstepLength );
 			_swingNote = swingNote;
@@ -932,6 +945,9 @@ public partial class PlayerCombat
 		internal byte AttackType => _attackType;
 
 		internal ushort IntentSequence => _intent.IntentSequence;
+
+		/// <summary>Windup left to play after release (class windup minus hold, times initiative).</summary>
+		internal float WindupRemainingSeconds => _windup;
 
 		internal bool IsInWindupPhase
 		{
@@ -954,8 +970,7 @@ public partial class PlayerCombat
 			if ( elapsed >= activeEnd )
 				return 1f;
 			var activeLen = Math.Max( 1e-4f, _active );
-			var activeElapsed = Math.Min( elapsed - windEnd, MeleeAttackPath.GetLatePhaseEndElapsedSeconds( _pc, _attackType, _isHeavy ) );
-			return Math.Clamp( activeElapsed / activeLen, 0f, 1f );
+			return Math.Clamp( (elapsed - windEnd) / activeLen, 0f, 1f );
 		}
 
 		internal bool Tick( Scene scene )
@@ -976,7 +991,6 @@ public partial class PlayerCombat
 			var elapsed = (float)( Time.NowDouble - _startedAtSandbox );
 			var windEnd = _windup;
 			var activeEnd = windEnd + _active;
-			var totalEnd = activeEnd + _recovery;
 
 			// Path overlay: visual-only replay draws for clients. Authority also draws unless a
 			// visual companion is already running (avoids double lines on listen-server host).
@@ -1002,60 +1016,37 @@ public partial class PlayerCombat
 			if ( elapsed >= activeEnd )
 			{
 				_debugDrawScratch.Reset();
-				if ( elapsed < totalEnd )
-				{
-					if ( !_visualOnly && !_loggedBuiltinRecovery && _recovery > 1e-4f )
-					{
-						_loggedBuiltinRecovery = true;
-						_pc.LogMeleePhaseEnter( "recover phase",
-							$"builtin MeleeRecoveryDuration={_recovery:0.###}s" );
-					}
-
-					return true;
-				}
-
 				TrySendCompletion();
 				return false;
 			}
 
 			var activeLen = Math.Max( 1e-4f, _active );
-			var activeElapsed = elapsed - windEnd;
-			var latePhaseEnd = MeleeAttackPath.GetLatePhaseEndElapsedSeconds( _pc, _attackType, _isHeavy );
-			activeElapsed = Math.Min( activeElapsed, latePhaseEnd );
+			var activeElapsed = Math.Min( elapsed - windEnd, activeLen );
 			var activeT01 = Math.Clamp( activeElapsed / activeLen, 0f, 1f );
-			var segState = MeleeAttackPath.ClassifyActiveState( _pc, _attackType, activeElapsed, _isHeavy );
+			const byte segState = MeleeAttackStates.Active;
 
 			_pc.SampleServerMeleeBladeWorld( _attackType, activeT01, out var tip, out var heel );
-			if ( MeleeAttackStates.DealsDamage( segState ) )
-			{
-				_pc.AdvanceAttackPath( _attackType, activeT01, segState, _pc.GetMeleeCombatBasisYaw( _attackType ),
-					ref _debugDrawScratch, allowOverlay );
-			}
+			_pc.AdvanceAttackPath( _attackType, activeT01, segState, _pc.GetMeleeCombatBasisYaw( _attackType ),
+				ref _debugDrawScratch, allowOverlay );
 
 			if ( !_havePrevSample )
 			{
 				_prevTip = tip;
 				_prevHeel = heel;
 				_havePrevSample = true;
-				_prevActiveElapsed = activeElapsed;
 				return true;
 			}
 
-			if ( !_visualOnly && !_stopHitValidation && MeleeAttackStates.DealsDamage( segState ) )
+			if ( !_visualOnly && !_stopHitValidation )
 			{
-				var midElapsed = (_prevActiveElapsed + activeElapsed) * 0.5f;
-				var hitState = MeleeAttackPath.ClassifyActiveState( _pc, _attackType, midElapsed, _isHeavy );
-				// Edge of LateActive can classify mid-sample as Recovery — still use the live segment state.
-				if ( !MeleeAttackStates.DealsDamage( hitState ) )
-					hitState = segState;
-
-				var damage = _pc.GetMeleeDamageForState( hitState, _isHeavy, _intent );
-				var stagger = _pc.GetMeleeStaggerForState( hitState );
+				const byte hitState = MeleeAttackStates.Active;
+				var damage = _pc.GetMeleeDamage( _isHeavy );
+				var stagger = _pc.GetMeleeStagger();
 				var hitRadius = Math.Max( 2f, _pc.MeleeHitVolumeThickness );
 				var basis = _pc.GetMeleeCombatBasisRotation( _attackType );
 				var rayOrigin = MeleeAttackPath.GetSwingPivotWorld( attacker, _pc, _attackType, basis );
 
-				// Primary: sweep tip+heel motion between frames (catches LateActive tunneling that
+				// Primary: sweep tip+heel motion between frames (catches late-sweep tunneling that
 				// a single pivot→tip spoke misses when the blade has already swung through the body).
 				_stopHitValidation = MeleeAttackSweep.SphereSweepBladeSegment(
 					scene,
@@ -1115,7 +1106,6 @@ public partial class PlayerCombat
 				}
 			}
 
-			_prevActiveElapsed = activeElapsed;
 			_prevTip = tip;
 			_prevHeel = heel;
 			return true;
@@ -1141,11 +1131,7 @@ public partial class PlayerCombat
 			_completionSent = true;
 
 			if ( _pc.IsValid() )
-			{
 				_pc.ClearMeleeAttackBasisFromIntent();
-				if ( _attackType == MeleeAttackTypes.Forward )
-					_pc.ClearForwardMeleeStartPitch();
-			}
 
 			if ( !_pc.IsValid() || !_pc.GameObject.IsValid() )
 				return;

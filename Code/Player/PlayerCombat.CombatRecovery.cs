@@ -13,15 +13,6 @@ public partial class PlayerCombat
 	[Property, Group( "Combat — Recovery" ), Title( "Attacker recovery after block/parry (s)" )]
 	public float RecoveryAttackerBlockedSeconds { get; set; } = 0.3f;
 
-	[Property, Group( "Combat — Recovery" ), Title( "Attacker soft pistol after miss (s)" ), Description( "Short pistol after return frames. Total soft lock = anim remainder + this." )]
-	public float RecoveryAttackerMissSeconds { get; set; } = 0.1f;
-
-	[Property, Group( "Combat — Recovery" ), Title( "Attacker soft pistol after clean hit (s)" ), Description( "Short pistol after return frames. Total soft lock = anim remainder + this." )]
-	public float RecoveryAttackerMissOrHitSeconds { get; set; } = 0.1f;
-
-	[Property, Group( "Combat — Recovery" ), Title( "Attacker soft pistol after heavy miss/hit (s)" ), Description( "Short pistol after heavy return frames." )]
-	public float RecoveryAttackerHeavyOrShoveMissSeconds { get; set; } = 0.12f;
-
 	[Property, Group( "Combat — Recovery" ), Title( "Blocker recovery after heavy block (s)" )]
 	public float RecoveryBlockerHeavyBlockSeconds { get; set; } = 0.4f;
 
@@ -443,22 +434,45 @@ public partial class PlayerCombat
 
 		if ( outcome.WasBlocked || outcome.WasParried )
 		{
+			ServerClearInitiative();
 			ServerBeginCombatRecovery( RecoveryAttackerBlockedSeconds, CombatRecoveryAnim.Rpg2hAttackMoving );
 			return;
 		}
 
-		if ( outcome.IsHeavy )
+		var recovery = GetMeleeRecoverySeconds( outcome.IsHeavy );
+
+		// Initiative: a clean hit arms the speed bonus — this swing's recovery and the next
+		// attack's windup both run at InitiativeSpeedMultiplier.
+		if ( outcome.AnyHit )
 		{
-			ServerBeginCombatRecovery( RecoveryAttackerHeavyOrShoveMissSeconds, CombatRecoveryAnim.Pistol2hStandingIdle );
-			return;
+			ServerArmInitiative();
+			recovery *= Math.Clamp( InitiativeSpeedMultiplier, 0.1f, 1f );
 		}
 
-		if ( !outcome.AnyHit )
-		{
-			ServerBeginCombatRecovery( RecoveryAttackerMissSeconds, CombatRecoveryAnim.Pistol2hStandingIdle );
-			return;
-		}
+		ServerBeginCombatRecovery( recovery, CombatRecoveryAnim.Pistol2hStandingIdle );
+	}
 
-		ServerBeginCombatRecovery( RecoveryAttackerMissOrHitSeconds, CombatRecoveryAnim.Pistol2hStandingIdle );
+	/// <summary>Sandbox time until the initiative windup bonus stays armed (set by a clean hit).</summary>
+	double _initiativeArmedUntilSandbox;
+
+	/// <summary>Host: arm initiative for <see cref="InitiativeWindowSeconds"/> after a clean hit.</summary>
+	internal void ServerArmInitiative()
+	{
+		if ( InitiativeSpeedMultiplier >= 1f - 1e-4f || InitiativeWindowSeconds <= 1e-4f )
+			return;
+
+		_initiativeArmedUntilSandbox = Time.NowDouble + Math.Max( 0f, InitiativeWindowSeconds );
+	}
+
+	internal void ServerClearInitiative() => _initiativeArmedUntilSandbox = 0;
+
+	/// <summary>Host: windup multiplier for the next attack. Consuming disarms — only one follow-up benefits per hit.</summary>
+	internal float ServerConsumeInitiativeWindupMultiplier()
+	{
+		if ( Time.NowDouble >= _initiativeArmedUntilSandbox )
+			return 1f;
+
+		_initiativeArmedUntilSandbox = 0;
+		return Math.Clamp( InitiativeSpeedMultiplier, 0.1f, 1f );
 	}
 }

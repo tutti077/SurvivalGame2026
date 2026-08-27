@@ -53,7 +53,7 @@ public partial class PlayerCombat : Component, PlayerController.IEvents
 		if ( menu is not null && menu.IsMenuOpen )
 			return false;
 
-		if ( ServerHasActiveMeleeAttackAction || _primarySwingPhaseActive || _primary.Down )
+		if ( ServerHasActiveMeleeAttackAction || _primary.Down )
 			return true;
 
 		if ( Input.Down( PrimaryAttackAction ) )

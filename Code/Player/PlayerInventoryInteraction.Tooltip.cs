@@ -186,9 +186,11 @@ public sealed partial class PlayerInventoryInteraction
 			lines.Add( ($"Damage: {stats.Damage:0.#}", TooltipStatColor) );
 
 		var combat = Components.Get<PlayerCombat>();
-		if ( EquipmentCatalog.HasAction( profile.ResourceId, EquippedItemActions.PrimaryMelee ) && combat is not null )
+		if ( EquipmentCatalog.HasAction( profile.ResourceId, EquippedItemActions.PrimaryMelee ) )
 		{
-			lines.Add( ($"Swing windup: {combat.GetMeleeWindupDuration( false ):0.00}s light / {combat.GetMeleeWindupDuration( true ):0.00}s heavy", TooltipStatColor) );
+			// Timings come from this item's weapon class row, not from whatever is currently in hand.
+			var timings = MeleeWeaponClassCatalog.Resolve( profile.WeaponClass, profile.MeleeOverrides );
+			lines.Add( ($"Windup {timings.WindupSeconds:0.00}s · charge {timings.ChargeSeconds:0.00}s · reach {timings.ReachForwardMeters:0.0}m", TooltipStatColor) );
 		}
 
 		if ( EquipmentCatalog.HasAction( profile.ResourceId, EquippedItemActions.PrimaryRanged ) && combat is not null )

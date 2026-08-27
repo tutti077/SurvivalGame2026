@@ -64,6 +64,12 @@ public partial class PlayerCombat
 	[Property, Group( "Combat — Block" ), Title( "Parry window (s)" ), Range( 0f, 0.5f ), Step( 0.01f ), Description( "Block started within this many seconds of the hit = perfect parry. Block viz lines are white during this window." )]
 	public float MeleeBlockParryWindowSeconds { get; set; } = 0.2f;
 
+	[Property, Group( "Combat — Block" ), Title( "Standard block free hold (s)" ), Range( 0f, 10f ), Step( 0.25f ), Description( "From block start (parry window included): holding guard costs nothing for this long. Past it the long block phase drains stamina." )]
+	public float StandardBlockFreeSeconds { get; set; } = 2f;
+
+	[Property, Group( "Combat — Block" ), Title( "Long block stamina drain (/s)" ), Range( 0f, 30f ), Step( 0.5f ), Description( "Stamina per second while the guard is held past the standard phase. Empty stamina breaks the block (forces re-press). 0 = never drains." )]
+	public float LongBlockStaminaPerSecond { get; set; } = 5f;
+
 	[Property, Group( "Combat — Block" ), Title( "Log rejected blocks to console" )]
 	public bool LogMeleeBlockRejectionsToConsole { get; set; }
 
@@ -152,6 +158,30 @@ public partial class PlayerCombat
 
 		if ( _postBlockRecoveryRemaining > 0f )
 			_postBlockRecoveryRemaining = MathF.Max( 0f, _postBlockRecoveryRemaining - Time.Delta );
+
+		ServerTickLongBlockStaminaDrain();
+	}
+
+	/// <summary>Host: long block phase — guard held past the free window drains stamina; empty stamina breaks the block.</summary>
+	void ServerTickLongBlockStaminaDrain()
+	{
+		if ( !_authoritativeMeleeBlockActive || LongBlockStaminaPerSecond <= 1e-4f )
+			return;
+
+		if ( _serverBlockStartedAtSandbox <= 0d
+		     || Time.NowDouble - _serverBlockStartedAtSandbox < Math.Max( 0f, StandardBlockFreeSeconds ) )
+			return;
+
+		var vitals = Components.Get<PlayerVitals>();
+		if ( vitals is null )
+			return;
+
+		var drain = LongBlockStaminaPerSecond * Time.Delta;
+		if ( drain <= 0f )
+			return;
+
+		if ( !vitals.TrySpendStamina( drain ) )
+			ConsumeAuthoritativeMeleeBlock( attackWasHeavy: false );
 	}
 
 	internal void OnBlockPressCommitGuardDirection()
@@ -167,7 +197,7 @@ public partial class PlayerCombat
 			return;
 
 		var blockHeld = LocalBlockInputActive();
-		var attacking = _primary.Down || _primarySwingPhaseActive || ServerHasActiveMeleeAttackAction;
+		var attacking = _primary.Down || ServerHasActiveMeleeAttackAction;
 
 		if ( blockHeld )
 		{
@@ -196,7 +226,7 @@ public partial class PlayerCombat
 
 	void CancelAllAttackActivity()
 	{
-		CancelPrimarySwingPhase();
+		ClearQueuedAttackPress();
 		Components.Get<PlayerAnimation>()?.CancelMeleeAttackWindupHold();
 		ServerCancelMeleeAttack();
 		// Pure clients never run ServerCancelMeleeAttack locally — still unlock Attack1 immediately.

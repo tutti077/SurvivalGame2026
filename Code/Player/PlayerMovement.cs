@@ -50,6 +50,15 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	/// </summary>
 	[Property, Group( "Stamina - Regen" )] public float StaminaRegenDelayOverrideSeconds { get; set; } = -1f;
 
+	/// <summary>
+	/// Valheim-style facing: with no attack/block held (third person), orbiting the camera leaves the
+	/// body facing where it was. Holding Attack1/Attack2 restores stock look-follow so guard and aim
+	/// turn with the camera (a blocker must physically turn — no free 360° guard). First person keeps
+	/// the prefab behavior. Implemented by runtime-driving <see cref="PlayerController.RotationAngleLimit"/>.
+	/// </summary>
+	[Property, Group( "Camera" ), Title( "Free look orbit (third person)" )]
+	public bool FreeLookOrbitEnabled { get; set; } = true;
+
 	[Property, Group( "Camera" ), Title( "Scroll wheel zoom" ), Description( "Off by default — scroll selects hotbar. Use +/- for zoom." )]
 	public bool CameraScrollZoomEnabled { get; set; } = false;
 
@@ -765,6 +774,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			return;
 
 		PollCameraScrollZoom();
+		TickFreeLookBodyRotationMode();
 
 		// Melee walk-lock / grapple-air mute (do not clear held sprint while jumping).
 		SuppressBlockedSprintInput();
@@ -774,6 +784,27 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// Only catch large over-length desync after MoveModeWalk moves us.
 		ApplyGrappleOverLengthCatchup();
 		TickWingsuitDebugDraw();
+	}
+
+	float _designRotationAngleLimit = -1f;
+
+	/// <summary>See <see cref="FreeLookOrbitEnabled"/> — swaps the controller's rotation catch-up limit per frame.</summary>
+	void TickFreeLookBodyRotationMode()
+	{
+		_controller ??= Components.Get<PlayerController>();
+		if ( _controller is null || !_controller.IsValid() )
+			return;
+
+		if ( _designRotationAngleLimit < 0f )
+			_designRotationAngleLimit = _controller.RotationAngleLimit;
+
+		var combat = Components.Get<PlayerCombat>();
+		var combatHold = Input.Down( combat?.PrimaryAttackAction ?? "Attack1" )
+		                 || Input.Down( combat?.BlockAction ?? "Attack2" );
+
+		var freeOrbit = FreeLookOrbitEnabled && _controller.ThirdPerson && !combatHold;
+		// 180° = the yaw difference can never exceed the limit, so the body never turns from look alone.
+		_controller.RotationAngleLimit = freeOrbit ? 180f : _designRotationAngleLimit;
 	}
 
 	void PollCameraScrollZoom()

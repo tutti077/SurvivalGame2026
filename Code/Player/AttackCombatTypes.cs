@@ -7,7 +7,6 @@ namespace Survival;
 /// Camera uses explicit floats so RPC/codegen reliably carries world positions (some builds are picky about <see cref="Vector3"/> on structs).
 /// Swing-from uses two floats for horizontal XZ for the same RPC reliability; vertical arc intent is a separate float so it is not confused with <see cref="SwingFromY"/> (world +Z on XZ).
 /// <see cref="SwingDirs"/> is authoritative for discrete **L / R / U only** (no forward); floats mirror that for traces.
-/// Post-release <see cref="PostSwingDragScreenX"/>/<see cref="PostSwingDragScreenY"/> feed <see cref="MeleeCombatDamageMultiplier"/> on the host.
 /// </remarks>
 public readonly record struct AttackReleaseIntent
 {
@@ -45,12 +44,6 @@ public readonly record struct AttackReleaseIntent
 
 	/// <summary>Locked attack pattern from cursor via <see cref="PlayerCombat.ResolveAttackTypeFromCursorDir"/> (informational; host re-resolves from <see cref="SwingDir"/>).</summary>
 	public byte AttackType { get; init; }
-
-	/// <summary>Legacy prepaid cap (0 = host debits stamina once on release from hold duration via <see cref="PlayerCombat.GetPrimaryAttackStaminaCostForHoldDuration"/>).</summary>
-	public float StaminaPrepaidMax { get; init; }
-
-	public float PostSwingDragScreenX { get; init; }
-	public float PostSwingDragScreenY { get; init; }
 
 	/// <summary>Combat-path yaw (degrees) when submitted; unset (NaN) = derive from view forward.</summary>
 	public float CombatBasisYawDegrees { get; init; }
@@ -202,93 +195,17 @@ public static class AttackCombatConstants
 }
 
 /// <summary>
-/// Global melee combat damage multiplier: starts at <see cref="Standard"/> (1.0), then bonuses/penalties are added.
-/// Follow-through drag, heavy attack, etc. — see <see cref="Compute"/> on <see cref="PlayerCombat"/>.
+/// Global melee combat damage multiplier: starts at <see cref="Standard"/> (1.0); a heavy attack adds its bonus.
 /// </summary>
 public static class MeleeCombatDamageMultiplier
 {
 	public const float Standard = 1f;
 
-	/// <summary>
-	/// Unit screen-space drag that scores as good follow-through for the locked swing (+x right, +y down).
-	/// </summary>
-	public static Vector2 GoodDragUnitScreen( byte swingDir )
+	public static float Compute( bool isHeavy, float heavyBonus, float baseMultiplier = Standard )
 	{
-		if ( swingDir == SwingDirs.Left )
-			return new Vector2( -1f, 0f );
-		if ( swingDir == SwingDirs.Right )
-			return new Vector2( 1f, 0f );
-		return new Vector2( 0f, 1f );
-	}
-
-	/// <summary>Opposite “bad” drag direction for the same swing.</summary>
-	public static Vector2 BadDragUnitScreen( byte swingDir )
-	{
-		if ( swingDir == SwingDirs.Left )
-			return new Vector2( 1f, 0f );
-		if ( swingDir == SwingDirs.Right )
-			return new Vector2( -1f, 0f );
-		return new Vector2( 0f, -1f );
-	}
-
-	/// <summary>
-	/// Builds the combat multiplier: base + drag + phase adjustments + heavy bonus (all additive).
-	/// </summary>
-	public static float Compute(
-		byte lockedSwingDir,
-		Vector2 dragScreen,
-		float clearDragPixels,
-		float goodBonus,
-		float badPenalty,
-		bool isHeavy,
-		float heavyBonus,
-		byte attackState,
-		float earlyActivePenalty,
-		float lateActiveBonus,
-		float baseMultiplier = Standard )
-	{
-		var total = baseMultiplier
-		            + EvaluateDragBonus( lockedSwingDir, dragScreen, clearDragPixels, goodBonus, badPenalty )
-		            + EvaluatePhaseAdjustment( attackState, earlyActivePenalty, lateActiveBonus );
+		var total = baseMultiplier;
 		if ( isHeavy )
 			total += heavyBonus;
 		return Math.Max( 0f, total );
-	}
-
-	static float EvaluatePhaseAdjustment( byte attackState, float earlyActivePenalty, float lateActiveBonus )
-	{
-		if ( attackState == MeleeAttackStates.EarlyActive )
-			return -Math.Max( 0f, earlyActivePenalty );
-		if ( attackState == MeleeAttackStates.LateActive )
-			return Math.Max( 0f, lateActiveBonus );
-		return 0f;
-	}
-
-	static float EvaluateDragBonus(
-		byte lockedSwingDir,
-		Vector2 dragScreen,
-		float clearDragPixels,
-		float goodBonus,
-		float badPenalty )
-	{
-		clearDragPixels = Math.Max( 1f, clearDragPixels );
-		goodBonus = Math.Max( 0f, goodBonus );
-		badPenalty = Math.Max( 0f, badPenalty );
-
-		var gU = GoodDragUnitScreen( lockedSwingDir );
-		var bU = BadDragUnitScreen( lockedSwingDir );
-		var good = MathF.Max( 0f, Vector2.Dot( dragScreen, gU ) );
-		var bad = MathF.Max( 0f, Vector2.Dot( dragScreen, bU ) );
-
-		if ( good < clearDragPixels && bad < clearDragPixels )
-			return 0f;
-
-		if ( bad >= clearDragPixels && bad > good )
-			return -badPenalty;
-
-		if ( good >= clearDragPixels && good >= bad )
-			return goodBonus;
-
-		return 0f;
 	}
 }

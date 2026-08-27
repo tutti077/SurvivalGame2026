@@ -32,29 +32,26 @@ public static class MeleeAttackTypes
 	}
 }
 
+/// <summary>Attack timeline phases: windup (no damage) → active (the sweep deals damage) → recovery.</summary>
 public static class MeleeAttackStates
 {
 	public const byte Windup = 0;
-	public const byte EarlyActive = 1;
-	public const byte Active = 2;
-	public const byte LateActive = 3;
-	public const byte Recovery = 4;
+	public const byte Active = 1;
+	public const byte Recovery = 2;
 
 	public static string Label( byte state )
 	{
 		return state switch
 		{
 			Windup => "Windup",
-			EarlyActive => "EarlyActive",
 			Active => "Active",
-			LateActive => "LateActive",
 			Recovery => "Recovery",
 			_ => "?"
 		};
 	}
 
 	public static bool DealsDamage( byte state ) =>
-		state is EarlyActive or Active or LateActive;
+		state == Active;
 }
 
 /// <summary>Server-authoritative hit data for one target during one attack instance.</summary>

@@ -50,6 +50,7 @@ public partial class PlayerCombat
 				return;
 		}
 
+		BeginShoveFacingLock();
 		OwnerRequestShove();
 	}
 
@@ -230,7 +231,7 @@ public partial class PlayerCombat
 	/// <summary>Owner + host: drop in-flight sword intents so Attack1 during kick does not fire at unlock.</summary>
 	void CancelAttackIntentsForShoveRecovery()
 	{
-		CancelPrimarySwingPhase();
+		ClearQueuedAttackPress();
 		Components.Get<PlayerAnimation>()?.CancelMeleeAttackWindupHold();
 		LogShoveAnim( "cancel in-flight attack intents (kick recovery owns the window)" );
 	}

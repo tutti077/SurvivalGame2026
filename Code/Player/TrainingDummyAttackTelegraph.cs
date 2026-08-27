@@ -200,7 +200,6 @@ public sealed class TrainingDummyAttackTelegraph : Component
 			SwingVerticalHint = swingVert,
 			SwingDir = _nextSwingDir,
 			AttackType = Combat.ResolveAttackTypeFromCursorDir( _nextSwingDir ),
-			StaminaPrepaidMax = 0f,
 			CombatBasisYawDegrees = basisAngles.yaw,
 			CombatBasisPitchDegrees = basisAngles.pitch
 		};
@@ -272,8 +271,8 @@ public sealed class TrainingDummyAttackTelegraph : Component
 
 	Color ResolveTelegraphColor()
 	{
-		// Black flash = player light windup window (mirrors MeleeWindupDuration).
-		var flashWindow = Combat is not null ? Combat.GetMeleeWindupDuration( isHeavy: false ) : 0f;
+		// Black flash = player light windup window (mirrors the class windup).
+		var flashWindow = Combat is not null ? Combat.GetMeleeWindupSeconds() : 0f;
 		if ( flashWindow > 1e-4f && _telegraphActive && Time.NowDouble >= _phaseEndsAt - flashWindow )
 			return new Color( 0.02f, 0.02f, 0.02f, 0.98f );
 
