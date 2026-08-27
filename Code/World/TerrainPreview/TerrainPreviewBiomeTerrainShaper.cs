@@ -126,29 +126,46 @@ static class TerrainPreviewBiomeTerrainShaper
 	}
 
 	/// <summary>
-	/// Choppy surface grit in world meters. Mix of smooth FBM + hash cells so bumps read on ~2 m verts.
+	/// Rounded surface bumps in world meters — smooth interpolated FBM only. Un-interpolated hash
+	/// cells step ±amp between neighbours, which the 2 m vertex grid renders as vertical spikes.
+	/// FBM averages toward flat, so the sum is gained up and soft-clipped so bumps actually reach
+	/// ±amplitude; a slow envelope varies how bumpy each stretch is so the ground rolls in patches.
 	/// </summary>
 	static float SampleCloverSurfaceGritMeters( int seed, float worldX, float worldY, float waveMeters, float ampMeters )
 	{
-		waveMeters = Math.Max( 2.5f, waveMeters );
-		ampMeters = Math.Max( 0.5f, ampMeters );
+		// Below ~8 m wavelength the vertex grid (2 m near, 4 m far LOD) aliases the noise into spikes.
+		waveMeters = Math.Max( 8f, waveMeters );
+		ampMeters = Math.Max( 0.25f, ampMeters );
 
 		var fx = worldX / waveMeters;
 		var fy = worldY / waveMeters;
-		var fine = TerrainPreviewNoise.Fbm( seed, fx, fy, 4, 2.2f, 0.55f );
-		var finer = TerrainPreviewNoise.Fbm( seed + 3, fx * 2.4f, fy * 2.4f, 3, 2.3f, 0.5f );
 
-		// Sharp cell noise (less smoothed) — this is what you feel underfoot.
-		var cx = (int)MathF.Floor( worldX / (waveMeters * 0.55f) );
-		var cy = (int)MathF.Floor( worldY / (waveMeters * 0.55f) );
-		var sharp = TerrainPreviewNoise.Hash01( seed + 9, cx, cy );
-		var sharp2 = TerrainPreviewNoise.Hash01( seed + 11, cx / 2, cy / 2 );
+		// Domain warp — bumps drift, stretch and cluster instead of reading as evenly-spaced noise blobs.
+		var warpX = (TerrainPreviewNoise.Fbm( seed + 13, fx * 0.6f, fy * 0.6f, 2 ) - 0.5f) * 1.1f;
+		var warpY = (TerrainPreviewNoise.Fbm( seed + 17, fx * 0.6f, fy * 0.6f, 2 ) - 0.5f) * 1.1f;
+		var broad = (TerrainPreviewNoise.Fbm( seed, fx + warpX, fy + warpY, 4, 2f, 0.5f ) - 0.5f) * 2f;
 
-		var signed = ((fine - 0.5f) * 2f * 0.4f)
-			+ ((finer - 0.5f) * 2f * 0.35f)
-			+ ((sharp - 0.5f) * 2f * 0.35f)
-			+ ((sharp2 - 0.5f) * 2f * 0.2f);
-		return signed * ampMeters;
+		// Finer ripple riding on the main bumps — floored at 8 m for the same aliasing reason.
+		var fineWave = Math.Max( 8f, waveMeters * 0.4f );
+		var fine = (TerrainPreviewNoise.Fbm( seed + 3, worldX / fineWave, worldY / fineWave, 3, 2f, 0.5f ) - 0.5f) * 2f;
+
+		// Dense small-bump layer near the aliasing floor — most of the "more of them".
+		var micro = (TerrainPreviewNoise.Fbm( seed + 23, worldX / 9f, worldY / 9f, 2, 2f, 0.5f ) - 0.5f) * 2f;
+
+		var signed = SoftClip( ((broad * 0.7f) + (fine * 0.5f) + (micro * 0.35f)) * 1.9f );
+
+		// ~6× wavelength envelope: bumpiness varies by stretch (up to 1.3× amp), never dead flat.
+		var envelope = TerrainPreviewNoise.Fbm( seed + 7, fx / 6f, fy / 6f, 2 );
+		var amount = 0.35f + (Math.Clamp( envelope, 0f, 1f ) * 0.95f);
+
+		return signed * ampMeters * amount;
+	}
+
+	/// <summary>Smooth monotonic clip of ±1.5 → ±1 (zero slope at the rails) — no flat clamp shelves.</summary>
+	static float SoftClip( float x )
+	{
+		x = Math.Clamp( x, -1.5f, 1.5f );
+		return x - ((x * x * x) / 6.75f);
 	}
 
 	static int _cloverMicroProbeLogged;
@@ -340,20 +357,20 @@ static class TerrainPreviewBiomeTerrainShaper
 	static float Lerp( float a, float b, float t ) => a + ((b - a) * t);
 
 	/// <summary>
-	/// Tuned preview JSON often omits micro fields → deserialize as 0. Treat invalid as loud defaults
-	/// so grit is obvious without requiring a re-Generate.
+	/// Tuned preview JSON often omits micro fields → deserialize as 0. Invalid values fall back to
+	/// gentle rolling-bump defaults (short wavelengths alias into spikes on the 2 m vertex grid).
 	/// </summary>
 	static float ResolveCloverMicroWavelengthMeters( float configured )
 	{
-		if ( configured < 2.5f || configured > 80f )
-			return 4f;
+		if ( configured < 8f || configured > 80f )
+			return 24f;
 		return configured;
 	}
 
 	static float ResolveCloverMicroAmplitudeMeters( float configured )
 	{
-		if ( configured < 0.4f || configured > 12f )
-			return 6f;
+		if ( configured < 0.25f || configured > 6f )
+			return 1.5f;
 		return configured;
 	}
 }

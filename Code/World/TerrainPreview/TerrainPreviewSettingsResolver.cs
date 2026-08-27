@@ -90,7 +90,14 @@ public static class TerrainPreviewSettingsResolver
 
 		settings = null;
 		sourceLabel = null;
-		Log.Info( $"[Terrain] Preview bundle not used ({status})" );
+
+		// No pointer file = fresh checkout, expected. A pointer naming a missing/broken bundle means
+		// the settings source silently changed — same seed will generate different terrain.
+		if ( status == "missing .latest_preview.json" )
+			Log.Info( $"[Terrain] Preview bundle not used ({status})" );
+		else
+			Log.Warning( $"[Terrain] Preview bundle pointer is stale ({status}) — falling back; same seed may no longer reproduce the same terrain." );
+
 		return false;
 	}
 

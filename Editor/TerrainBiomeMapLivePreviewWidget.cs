@@ -30,7 +30,7 @@ sealed class TerrainBiomeMapLivePreviewWidget : Widget
 		if ( manager is null || !manager.IsValid )
 			return;
 
-		var map = manager.BiomePreviewMap;
+		var map = manager.GetHudBiomeMapTexture();
 		var streamMoved = manager.HasStreamPosition && manager.StreamWorldPosition != _lastStreamPosition;
 		var headingChanged = (manager.StreamLookDirectionMap - _lastStreamLookDirection).LengthSquared > 0.0001f;
 		var chunksChanged = manager.LoadedChunkCount != _lastLoadedChunkCount;
@@ -56,7 +56,7 @@ sealed class TerrainBiomeMapLivePreviewWidget : Widget
 		if ( manager is null || !manager.IsValid )
 			return;
 
-		var map = manager.BiomePreviewMap;
+		var map = manager.GetHudBiomeMapTexture();
 		if ( !map.IsValid() )
 			return;
 

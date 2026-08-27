@@ -23,7 +23,8 @@ public static class TerrainMeshBuilder
 		int verticesPerSide,
 		float maxTerrainHeightMeters,
 		int heightSmoothPasses = 1,
-		float heightSmoothStrength01 = 0.38f )
+		float heightSmoothStrength01 = 0.38f,
+		int borderLatticeVerticesPerSide = 0 )
 	{
 		backend ??= TerrainPreviewBackendRegistry.Active;
 		verticesPerSide = Math.Clamp( verticesPerSide, 4, 256 );
@@ -65,6 +66,8 @@ public static class TerrainMeshBuilder
 				maxHeightSample = Math.Max( maxHeightSample, heightMeters );
 			}
 		}
+
+		SnapBordersToCoarseLattice( heights, verticesPerSide, borderLatticeVerticesPerSide );
 
 		TerrainPreviewChunkHeightSmooth.ApplyInteriorGrid(
 			heights, verticesPerSide, heightSmoothPasses, heightSmoothStrength01 );
@@ -192,6 +195,44 @@ public static class TerrainMeshBuilder
 			Material = material,
 			LocalBounds = bounds,
 		};
+	}
+
+	/// <summary>
+	/// Snap border vertices that are not on the shared coarse lattice onto the straight line between
+	/// their coarse neighbours. Every chunk edge then carries identical geometry regardless of the
+	/// LOD mix on either side — full↔far seams become watertight with no neighbor tracking.
+	/// </summary>
+	static void SnapBordersToCoarseLattice( float[] heights, int verticesPerSide, int latticeVerticesPerSide )
+	{
+		if ( latticeVerticesPerSide <= 1 || latticeVerticesPerSide >= verticesPerSide )
+			return;
+
+		if ( (verticesPerSide - 1) % (latticeVerticesPerSide - 1) != 0 )
+			return;
+
+		var ratio = (verticesPerSide - 1) / (latticeVerticesPerSide - 1);
+		SnapBorderLine( heights, verticesPerSide, ratio, startIndex: 0, stride: 1 );
+		SnapBorderLine( heights, verticesPerSide, ratio, startIndex: (verticesPerSide - 1) * verticesPerSide, stride: 1 );
+		SnapBorderLine( heights, verticesPerSide, ratio, startIndex: 0, stride: verticesPerSide );
+		SnapBorderLine( heights, verticesPerSide, ratio, startIndex: verticesPerSide - 1, stride: verticesPerSide );
+	}
+
+	static void SnapBorderLine( float[] heights, int count, int ratio, int startIndex, int stride )
+	{
+		// Lattice verts (offset 0) are never written, so reading them mid-loop stays canonical.
+		for ( var i = 1; i < count - 1; i++ )
+		{
+			var offset = i % ratio;
+			if ( offset == 0 )
+				continue;
+
+			var i0 = i - offset;
+			var i1 = Math.Min( i0 + ratio, count - 1 );
+			var t = offset / (float)ratio;
+			var h0 = heights[startIndex + (i0 * stride)];
+			var h1 = heights[startIndex + (i1 * stride)];
+			heights[startIndex + (i * stride)] = h0 + ((h1 - h0) * t);
+		}
 	}
 
 	static Vector3 ComputeNormal( float[] heights, int verticesPerSide, int index, float step )

@@ -407,11 +407,11 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Biome Terrain" ), Title( "Clover Hill Warp Amp (0–1 of clover max)" ), Range( 0.02f, 0.2f ), Step( 0.01f ), Description( "Extra FBM so hills aren't perfect radial dishes." )]
 	public float BiomeCloverHillWarpAmplitude01 { get; set; } = 0.08f;
 
-	[Property, Group( "Biome Terrain" ), Title( "Clover Micro Wavelength (m)" ), Range( 2.5f, 40f ), Step( 0.5f ), Description( "Tiny grit cell size. ~4 m reads on 2 m verts. 0 in old bundles → default 4." )]
-	public float BiomeCloverMicroWavelengthMeters { get; set; } = 4f;
+	[Property, Group( "Biome Terrain" ), Title( "Clover Micro Wavelength (m)" ), Range( 8f, 80f ), Step( 1f ), Description( "Rolling ground-bump size. Below ~8 m the 2 m vertex grid turns bumps into spikes. 0 in old bundles → default 24." )]
+	public float BiomeCloverMicroWavelengthMeters { get; set; } = 24f;
 
-	[Property, Group( "Biome Terrain" ), Title( "Clover Micro Amplitude (m)" ), Range( 0.5f, 12f ), Step( 0.25f ), Description( "Surface grit height (±meters). Loud on purpose. 0 in old bundles → default 6." )]
-	public float BiomeCloverMicroAmplitudeMeters { get; set; } = 6f;
+	[Property, Group( "Biome Terrain" ), Title( "Clover Micro Amplitude (m)" ), Range( 0.25f, 6f ), Step( 0.25f ), Description( "Ground-bump height (±meters), varied across the biome by a slow envelope. 0 in old bundles → default 1.5." )]
+	public float BiomeCloverMicroAmplitudeMeters { get; set; } = 1.5f;
 
 	[Property, Group( "Biome Terrain" ), Title( "Clover Shape Blend (0–1)" ), Range( 0.25f, 1f ), Step( 0.05f )]
 	public float BiomeCloverShapeBlend01 { get; set; } = 0.95f;

@@ -156,6 +156,10 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 			_previewStatus.Text =
 				$"Biome map ready — {manager.EffectiveBiomePreviewResolution}px, {manager.EffectiveMetersPerPixel:0.##} m/px, seed {mapSeed}{staleNote}{streamNote}";
 		}
+		else if ( manager.GetHudBiomeMapTexture().IsValid() )
+		{
+			_previewStatus.Text = $"Showing saved WorldSaves/{manager.WorldName}/biome_map.png — Regenerate to rebuild for seed {manager.WorldSeed}{streamNote}";
+		}
 		else if ( manager.IsMapGenerating || manager.MapGenerationProgress01 > 0f )
 		{
 			_previewStatus.Text = $"{manager.MapGenerationStatus}{streamNote}";

@@ -71,6 +71,8 @@ public sealed class TerrainWorldManager : Component
 	public float StreamHighPriorityRadiusChunks { get; set; } = 2f;
 	[Property, Group( "Chunks" ), Title( "Stream Mesh LOD" ), Description( "Coarser height grid for distant streamed chunks (17 verts = 4 m steps, aligns with 33-vert edges)." )]
 	public bool StreamMeshLodEnabled { get; set; } = true;
+	[Property, Group( "Chunks" ), Title( "LOD Demote Margin (chunks)" ), Range( 0.5f, 6f ), Step( 0.25f ), Description( "Hysteresis: chunks promote to full detail inside High-Priority Radius and demote back to far LOD only beyond radius + this margin — no flip-flopping at the boundary." )]
+	public float StreamLodDemoteMarginChunks { get; set; } = 2f;
 	[Property, Group( "Chunks" ), Title( "Far Stream Vertices Per Side" ), Range( 9, 65 ), Step( 4 ), Description( "Height samples for chunks outside the full-detail radius (17 ≈ 4 m on 64 m chunks)." )]
 	public int StreamFarVerticesPerSide { get; set; } = 17;
 	[Property, Group( "Chunks" ), Title( "Mesh Border Prefetch" ), Range( 0.05f, 0.5f ), Step( 0.05f ), Description( "Reserved for future border-only mesh LOD." )]
@@ -218,6 +220,7 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Preview Map" ), ReadOnly] public Vector2 StreamLookDirectionMap { get; private set; }
 
 	readonly Dictionary<TerrainChunkCoord, LoadedChunk> _loaded = new();
+	readonly Dictionary<TerrainChunkCoord, float> _chunkGroundZMeters = new();
 
 	void UpdateBiomePreviewStaleState()
 	{
@@ -252,6 +255,7 @@ public sealed class TerrainWorldManager : Component
 	int _lastChunkSeed = int.MinValue;
 	TerrainChunkCoord _lastStreamRefreshChunk;
 	int _lastStreamRefreshHeadingBucket = int.MinValue;
+	float _lastStreamRefreshElevationMeters = float.MinValue;
 	bool _isWorldLoading;
 	bool _initialChunksQueued;
 	TerrainPreviewSettings _generationSettings;
@@ -267,6 +271,7 @@ public sealed class TerrainWorldManager : Component
 
 	bool _worldLoadStarted;
 	bool _waitingForHostWorld;
+	bool _autoMapGenStarted;
 
 	protected override void OnStart()
 	{
@@ -327,6 +332,7 @@ public sealed class TerrainWorldManager : Component
 
 		TryRefreshStreamChunks();
 		ProcessStreamChunkQueue();
+		TickBackgroundMapGeneration();
 		if ( IsWorldAuthority() && EntityPopulationEnabled )
 			BiomePopulationRespawnQueue.Tick();
 		UpdateBiomePreviewStaleState();
@@ -489,14 +495,19 @@ public sealed class TerrainWorldManager : Component
 			settings.TotalWorldRadiusMeters,
 			chunkSize );
 
+		// Vertical LOD: climbing/diving changes 3D distances without crossing a chunk in XY.
+		var elevationChanged =
+			MathF.Abs( streamPosMeters.z - _lastStreamRefreshElevationMeters ) > chunkSize * 0.75f;
+
 		// Uniform radius: only refresh when the player moves to a new chunk (look direction irrelevant).
 		if ( !UseForwardConeStreaming )
 		{
-			if ( chunk == _lastStreamRefreshChunk )
+			if ( chunk == _lastStreamRefreshChunk && !elevationChanged )
 				return;
 
 			_lastStreamRefreshChunk = chunk;
 			_lastStreamRefreshHeadingBucket = int.MinValue;
+			_lastStreamRefreshElevationMeters = streamPosMeters.z;
 			RefreshChunks( streamPosMeters, viewRotation );
 			return;
 		}
@@ -511,11 +522,14 @@ public sealed class TerrainWorldManager : Component
 
 		// Cone mode: ~60° buckets so looking around does not thrash every few degrees.
 		var headingBucket = (int)MathF.Floor( (headingDegrees + 180f) / 60f );
-		if ( chunk == _lastStreamRefreshChunk && headingBucket == _lastStreamRefreshHeadingBucket )
+		if ( chunk == _lastStreamRefreshChunk
+			&& headingBucket == _lastStreamRefreshHeadingBucket
+			&& !elevationChanged )
 			return;
 
 		_lastStreamRefreshChunk = chunk;
 		_lastStreamRefreshHeadingBucket = headingBucket;
+		_lastStreamRefreshElevationMeters = streamPosMeters.z;
 		RefreshChunks( streamPosMeters, viewRotation );
 	}
 
@@ -614,7 +628,9 @@ public sealed class TerrainWorldManager : Component
 		IsMapGenerating = false;
 	}
 
-	public void StartBiomePreviewGeneration()
+	public void StartBiomePreviewGeneration() => StartBiomePreviewGeneration( 0 );
+
+	void StartBiomePreviewGeneration( int maxResolution )
 	{
 		if ( _previewJob is not null )
 			return;
@@ -623,6 +639,8 @@ public sealed class TerrainWorldManager : Component
 
 		var settings = BuildGenerationSettings();
 		var resolution = ComputeBiomePreviewResolution();
+		if ( maxResolution > 0 )
+			resolution = Math.Min( resolution, maxResolution );
 		EffectiveBiomePreviewResolution = resolution;
 		EffectiveMetersPerPixel = WorldDiameterMeters / resolution;
 
@@ -665,13 +683,56 @@ public sealed class TerrainWorldManager : Component
 		}
 	}
 
-	void TickMapGeneration()
+	// Background (mid-gameplay) minimap raster: one pipeline sample costs ~30 µs, so one 1024-px row
+	// is already ~a frame. Cap resolution and stop after a few ms; the frame budget stays intact.
+	const int BackgroundMapMaxResolution = 512;
+	const float BackgroundMapBudgetMs = 4f;
+
+	/// <summary>
+	/// After load, build the biome map in the background when this world has neither a saved PNG nor
+	/// a generated texture — menu-created worlds otherwise never get a minimap with
+	/// <see cref="RegeneratePreviewOnStart"/> off. Time-budgeted per frame, reduced resolution;
+	/// press Regenerate in the inspector for a full-resolution bake.
+	/// </summary>
+	void TickBackgroundMapGeneration()
+	{
+		if ( _previewJob is not null )
+		{
+			TickMapGeneration( BackgroundMapBudgetMs );
+			return;
+		}
+
+		if ( _autoMapGenStarted )
+			return;
+
+		_autoMapGenStarted = true;
+		if ( BiomePreviewMap.IsValid() )
+			return;
+
+		if ( FileSystem.Data.FileExists( WorldSaveIO.GetBiomeMapRelativePath( WorldName ) ) )
+			return;
+
+		Log.Info( $"[TerrainWorldManager] No biome map for '{WorldName}' — generating minimap in background." );
+		StartBiomePreviewGeneration( BackgroundMapMaxResolution );
+	}
+
+	void TickMapGeneration() => TickMapGeneration( float.MaxValue );
+
+	void TickMapGeneration( float budgetMs )
 	{
 		if ( _previewJob is null )
 			return;
 
-		var rows = Math.Clamp( PreviewMapRowsPerFrame, 4, 512 );
-		_previewJob.Step( rows );
+		var maxRows = Math.Clamp( PreviewMapRowsPerFrame, 4, 512 );
+		var stopwatch = Stopwatch.StartNew();
+		var rows = 0;
+		while ( rows < maxRows && !_previewJob.IsComplete )
+		{
+			_previewJob.Step( 1 );
+			rows++;
+			if ( stopwatch.Elapsed.TotalMilliseconds >= budgetMs )
+				break;
+		}
 
 		MapGenerationProgress01 = _previewJob.Progress01;
 		MapGenerationStatus =
@@ -685,6 +746,7 @@ public sealed class TerrainWorldManager : Component
 
 	void BeginWorldLoad()
 	{
+		_autoMapGenStarted = false;
 		_initialChunksQueued = false;
 		_isWorldLoading = true;
 		IsWorldLoading = true;
@@ -901,7 +963,8 @@ public sealed class TerrainWorldManager : Component
 			if ( _loaded.ContainsKey( coord ) )
 				continue;
 
-			if ( ChunkDistanceMeters( coord, streamPos, worldRadius, chunkSize ) <= priorityRadius )
+			// 3D: hovering high above should not force synchronous full-detail builds below.
+			if ( ChunkLodDistanceMeters( coord, streamPos, settings, chunkSize ) <= priorityRadius )
 				_streamSortScratch.Add( coord );
 		}
 
@@ -933,6 +996,45 @@ public sealed class TerrainWorldManager : Component
 		return new Vector3( center.x - streamPos.x, center.y - streamPos.y, 0f ).Length;
 	}
 
+	/// <summary>
+	/// 3D distance for mesh LOD only — altitude counts, so climbing demotes the ground below and
+	/// diving promotes it. Colliders and entity population stay on horizontal range: physics under a
+	/// falling player must never switch off because they are high up.
+	/// </summary>
+	float ChunkLodDistanceMeters(
+		TerrainChunkCoord coord,
+		Vector3 streamPosMeters,
+		TerrainPreviewSettings settings,
+		float chunkSize )
+	{
+		var worldRadius = settings.TotalWorldRadiusMeters;
+		var horizontal = ChunkDistanceMeters( coord, streamPosMeters, worldRadius, chunkSize );
+		var dz = streamPosMeters.z - GetChunkGroundZMeters( coord, settings, worldRadius, chunkSize );
+		return MathF.Sqrt( (horizontal * horizontal) + (dz * dz) );
+	}
+
+	float GetChunkGroundZMeters(
+		TerrainChunkCoord coord,
+		TerrainPreviewSettings settings,
+		float worldRadius,
+		float chunkSize )
+	{
+		if ( _chunkGroundZMeters.TryGetValue( coord, out var cached ) )
+			return cached;
+
+		var groundZ = settings.SeaLevelMeters;
+		if ( _backend is not null )
+		{
+			var center = TerrainChunkStreaming.GetChunkCenterWorld( coord, worldRadius, chunkSize );
+			var sample = _backend.Sample( settings, center.x, center.y );
+			if ( sample.IsInsideWorld )
+				groundZ = sample.HeightMeters;
+		}
+
+		_chunkGroundZMeters[coord] = groundZ;
+		return groundZ;
+	}
+
 	void ProcessInitialChunkQueue()
 	{
 		var maxChunks = Math.Clamp( ChunksPerFrame, 1, 12 );
@@ -952,7 +1054,9 @@ public sealed class TerrainWorldManager : Component
 				continue;
 			}
 
-			LoadChunk( coord, _loadSettings, _loadStreamPos, visible: true, useStreamLod: false );
+			// Same distance-based LOD as streaming — the world starts in its steady state instead of
+			// all-full-detail followed by a wave of demotions on the first refresh.
+			LoadChunk( coord, _loadSettings, _loadStreamPos, visible: true, useStreamLod: true );
 			_initialChunksLoaded++;
 			built++;
 		}
@@ -1135,13 +1239,24 @@ public sealed class TerrainWorldManager : Component
 			if ( entry.GameObject is null || !entry.GameObject.IsValid() )
 				continue;
 
+			// Horizontal for colliders/entities; 3D (altitude counts) for mesh LOD.
 			var distance = ChunkDistanceMeters( entry.Coord, streamPosMeters, worldRadius, chunkSize );
-			var desiredVerts = ResolveChunkVerticesPerSide( distance, chunkSize, useStreamLod: true );
+			var lodDistance = ChunkLodDistanceMeters( entry.Coord, streamPosMeters, settings, chunkSize );
+			var desiredVerts = ResolveChunkVerticesPerSide( lodDistance, chunkSize, useStreamLod: true );
 			var wantVegetation = ShouldScatterVegetation( desiredVerts );
 
 			// Remesh in place — never destroy/respawn trees when LOD changes (that was the "2nd layer").
-			if ( entry.VerticesPerSide != desiredVerts )
+			// Distance-based both ways, with hysteresis: promote inside the priority radius, demote
+			// only beyond radius + demote margin, so boundary chunks never flip-flop. Watertight
+			// border lattice keeps both transitions tear-free.
+			if ( desiredVerts > entry.VerticesPerSide )
+			{
 				RemeshChunkLod( entry, settings, streamPosMeters, desiredVerts, distance );
+			}
+			else if ( entry.VerticesPerSide > desiredVerts && lodDistance >= ResolveLodDemoteDistanceMeters( chunkSize ) )
+			{
+				RemeshChunkLod( entry, settings, streamPosMeters, desiredVerts, distance );
+			}
 
 			if ( wantVegetation && !entry.HasVegetation )
 			{
@@ -1209,7 +1324,8 @@ public sealed class TerrainWorldManager : Component
 			verticesPerSide,
 			MaxTerrainHeightMeters,
 			smoothPasses,
-			ChunkHeightSmoothStrength01 );
+			ChunkHeightSmoothStrength01,
+			ResolveBorderLatticeVerticesPerSide( verticesPerSide ) );
 
 		if ( built.Model is null || !built.Model.IsValid )
 			return;
@@ -1307,7 +1423,8 @@ public sealed class TerrainWorldManager : Component
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
 		var worldRadius = settings.TotalWorldRadiusMeters;
 		var distance = ChunkDistanceMeters( coord, streamPos, worldRadius, chunkSize );
-		var verticesPerSide = ResolveChunkVerticesPerSide( distance, chunkSize, useStreamLod );
+		var lodDistance = ChunkLodDistanceMeters( coord, streamPos, settings, chunkSize );
+		var verticesPerSide = ResolveChunkVerticesPerSide( lodDistance, chunkSize, useStreamLod );
 		var smoothPasses = useStreamLod && verticesPerSide < ChunkVerticesPerSide
 			? 0
 			: ChunkHeightSmoothPasses;
@@ -1320,7 +1437,8 @@ public sealed class TerrainWorldManager : Component
 			verticesPerSide,
 			MaxTerrainHeightMeters,
 			smoothPasses,
-			ChunkHeightSmoothStrength01 );
+			ChunkHeightSmoothStrength01,
+			ResolveBorderLatticeVerticesPerSide( verticesPerSide ) );
 
 		if ( built.Model is null || !built.Model.IsValid )
 		{
@@ -1523,6 +1641,22 @@ public sealed class TerrainWorldManager : Component
 		return farDetail;
 	}
 
+	float ResolveLodDemoteDistanceMeters( float chunkSize )
+		=> chunkSize * (Math.Clamp( StreamHighPriorityRadiusChunks, 1f, 4f )
+			+ Math.Clamp( StreamLodDemoteMarginChunks, 0.5f, 6f ));
+
+	/// <summary>
+	/// Shared border lattice for chunk edges: every chunk (any LOD) snaps its border verts onto the
+	/// far-LOD grid, so full↔far seams are watertight without knowing neighbor LODs.
+	/// </summary>
+	int ResolveBorderLatticeVerticesPerSide( int verticesPerSide )
+	{
+		if ( !StreamMeshLodEnabled )
+			return 0;
+
+		return Math.Min( verticesPerSide, Math.Clamp( StreamFarVerticesPerSide, 9, verticesPerSide ) );
+	}
+
 	void UnloadChunk( TerrainChunkCoord coord )
 	{
 		if ( !_loaded.TryGetValue( coord, out var entry ) )
@@ -1545,6 +1679,8 @@ public sealed class TerrainWorldManager : Component
 		LoadedChunkCount = 0;
 		MeshedChunkCount = 0;
 		_lastStreamRefreshHeadingBucket = int.MinValue;
+		_lastStreamRefreshElevationMeters = float.MinValue;
+		_chunkGroundZMeters.Clear();
 		BiomePopulationRegistry.Clear();
 		BiomePopulationRespawnQueue.Clear();
 		InvalidateMinimapHostCache();

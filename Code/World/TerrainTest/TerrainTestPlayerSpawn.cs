@@ -14,6 +14,7 @@ namespace Survival;
 public sealed class TerrainTestPlayerSpawn : Component
 {
 	public const string DefaultGrappleResourceId = "basic_hook";
+	public const string DefaultWingsuitResourceId = "basic_wingsuit";
 
 	[Property, Title( "View camera (fly cam)" )] public GameObject ViewCamera { get; set; }
 
@@ -26,6 +27,12 @@ public sealed class TerrainTestPlayerSpawn : Component
 
 	[Property, Title( "Grapple resource id" )]
 	public string GrappleResourceId { get; set; } = DefaultGrappleResourceId;
+
+	[Property, Title( "Equip wingsuit on L spawn" )]
+	public bool EquipWingsuitOnPlayable { get; set; } = true;
+
+	[Property, Title( "Wingsuit resource id" )]
+	public string WingsuitResourceId { get; set; } = DefaultWingsuitResourceId;
 
 	[Property, Title( "Infinite stamina on L spawn" )]
 	public bool InfiniteStaminaOnPlayable { get; set; } = true;
@@ -247,7 +254,7 @@ public sealed class TerrainTestPlayerSpawn : Component
 		if ( vitals is not null && vitals.IsValid() && InfiniteStaminaOnPlayable )
 			vitals.InfiniteStaminaDebug = true;
 
-		if ( !EquipGrappleOnPlayable )
+		if ( !EquipGrappleOnPlayable && !EquipWingsuitOnPlayable )
 			return;
 
 		EquipmentCatalog.EnsureLoaded();
@@ -255,18 +262,33 @@ public sealed class TerrainTestPlayerSpawn : Component
 		var equipment = root.Components.Get<PlayerEquipment>( FindMode.EverythingInSelfAndDescendants );
 		if ( equipment is null || !equipment.IsValid() )
 		{
-			Log.Warning( "[TerrainTestPlayerSpawn] Playable has no PlayerEquipment — cannot equip hook." );
+			Log.Warning( "[TerrainTestPlayerSpawn] Playable has no PlayerEquipment — cannot equip hook/wingsuit." );
 			return;
 		}
 
-		var resourceId = string.IsNullOrWhiteSpace( GrappleResourceId )
-			? DefaultGrappleResourceId
-			: GrappleResourceId.Trim();
+		if ( EquipGrappleOnPlayable )
+		{
+			var grappleId = string.IsNullOrWhiteSpace( GrappleResourceId )
+				? DefaultGrappleResourceId
+				: GrappleResourceId.Trim();
 
-		if ( !equipment.HostAcceptClientGrappleEquip( resourceId ) )
-			Log.Warning( $"[TerrainTestPlayerSpawn] Failed to equip '{resourceId}' on playable." );
-		else
-			Log.Info( $"[TerrainTestPlayerSpawn] Equipped '{resourceId}' in Grapple slot." );
+			if ( !equipment.HostAcceptClientGrappleEquip( grappleId ) )
+				Log.Warning( $"[TerrainTestPlayerSpawn] Failed to equip '{grappleId}' on playable." );
+			else
+				Log.Info( $"[TerrainTestPlayerSpawn] Equipped '{grappleId}' in Grapple slot." );
+		}
+
+		if ( EquipWingsuitOnPlayable )
+		{
+			var wingsuitId = string.IsNullOrWhiteSpace( WingsuitResourceId )
+				? DefaultWingsuitResourceId
+				: WingsuitResourceId.Trim();
+
+			if ( !equipment.HostAcceptClientWingsuitEquip( wingsuitId ) )
+				Log.Warning( $"[TerrainTestPlayerSpawn] Failed to equip '{wingsuitId}' on playable." );
+			else
+				Log.Info( $"[TerrainTestPlayerSpawn] Equipped '{wingsuitId}' in Wingsuit slot." );
+		}
 	}
 
 	void ConfigureScaleReferencePawn( GameObject root )

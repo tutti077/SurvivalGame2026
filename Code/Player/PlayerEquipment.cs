@@ -437,6 +437,13 @@ public sealed partial class PlayerEquipment : Component
 	/// Host: accept a client-reported Grapple equip during attach validation when paperdoll RPC lagged.
 	/// </summary>
 	public bool HostAcceptClientGrappleEquip( string resourceId )
+		=> HostAcceptClientSlotEquip( resourceId, EquipmentSlot.Grapple, "grapple", "Grapple" );
+
+	/// <summary>Host: equip a wingsuit directly (terrain-test L spawn, debug flows).</summary>
+	public bool HostAcceptClientWingsuitEquip( string resourceId )
+		=> HostAcceptClientSlotEquip( resourceId, EquipmentSlot.Wingsuit, "wingsuit", "Wingsuit" );
+
+	bool HostAcceptClientSlotEquip( string resourceId, EquipmentSlot slot, string slotName, string actionName )
 	{
 		if ( !HasHostAuthority )
 			return false;
@@ -448,26 +455,26 @@ public sealed partial class PlayerEquipment : Component
 		if ( !EquipmentCatalog.TryGet( resourceId, out var profile ) || profile is null )
 			return false;
 
-		if ( !IsGrappleProfile( profile ) )
+		if ( !ProfileMatchesSlot( profile, slotName, actionName ) )
 			return false;
 
-		ApplySlotLocal( EquipmentSlot.Grapple, CreateEquippedStack( resourceId ) );
+		ApplySlotLocal( slot, CreateEquippedStack( resourceId ) );
 		return true;
 	}
 
-	static bool IsGrappleProfile( EquipmentProfileData profile )
+	static bool ProfileMatchesSlot( EquipmentProfileData profile, string slotName, string actionName )
 	{
 		if ( profile is null )
 			return false;
 
-		if ( string.Equals( profile.Slot, "grapple", StringComparison.OrdinalIgnoreCase ) )
+		if ( string.Equals( profile.Slot, slotName, StringComparison.OrdinalIgnoreCase ) )
 			return true;
 
 		if ( profile.AllowedSlots is not null )
 		{
 			for ( var i = 0; i < profile.AllowedSlots.Count; i++ )
 			{
-				if ( string.Equals( profile.AllowedSlots[i], "grapple", StringComparison.OrdinalIgnoreCase ) )
+				if ( string.Equals( profile.AllowedSlots[i], slotName, StringComparison.OrdinalIgnoreCase ) )
 					return true;
 			}
 		}
@@ -476,7 +483,7 @@ public sealed partial class PlayerEquipment : Component
 		{
 			for ( var i = 0; i < profile.Actions.Count; i++ )
 			{
-				if ( string.Equals( profile.Actions[i], "Grapple", StringComparison.OrdinalIgnoreCase ) )
+				if ( string.Equals( profile.Actions[i], actionName, StringComparison.OrdinalIgnoreCase ) )
 					return true;
 			}
 		}
