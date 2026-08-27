@@ -15,13 +15,13 @@ partial class PlayerMovement
 	public bool WingsuitEnabled { get; set; } = true;
 
 	[Property, Group( "Wingsuit" ), Title( "Pitch rate (deg/s)" ), Range( 30f, 180f ), Step( 5f )]
-	public float WingsuitPitchRate { get; set; } = 75f;
+	public float WingsuitPitchRate { get; set; } = 120f;
 
 	[Property, Group( "Wingsuit" ), Title( "Roll rate (deg/s)" ), Range( 30f, 180f ), Step( 5f )]
-	public float WingsuitRollRate { get; set; } = 100f;
+	public float WingsuitRollRate { get; set; } = 160f;
 
 	[Property, Group( "Wingsuit" ), Title( "Roll return (deg/s)" ), Range( 0f, 120f ), Step( 5f )]
-	public float WingsuitRollReturn { get; set; } = 55f;
+	public float WingsuitRollReturn { get; set; } = 85f;
 
 	[Property, Group( "Wingsuit" ), Title( "Min pitch (deg, nose up)" ), Range( -90f, 0f ), Step( 1f )]
 	public float WingsuitMinPitch { get; set; } = -90f;
@@ -39,7 +39,24 @@ partial class PlayerMovement
 	public float WingsuitBankTurnRate { get; set; } = 110f;
 
 	[Property, Group( "Wingsuit" ), Title( "Steer authority (1/s)" ), Range( 0.5f, 8f ), Step( 0.1f )]
-	public float WingsuitSteerAuthority { get; set; } = 4f;
+	public float WingsuitSteerAuthority { get; set; } = 6f;
+
+	/// <summary>
+	/// Control response multiplier at max speed (pitch / roll / bank-turn rates). 1 = speed never
+	/// dulls the controls; lower = the faster you fly, the more you fight your own momentum to turn.
+	/// Full response at stall speed, easing quadratically down to this floor at max speed.
+	/// </summary>
+	[Property, Group( "Wingsuit" ), Title( "Turn response at max speed (0-1)" ), Range( 0.05f, 1f ), Step( 0.05f )]
+	public float WingsuitMinTurnResponse { get; set; } = 0.3f;
+
+	/// <summary>Quadratic falloff: mid speeds keep most of their agility, the top end gets heavy.</summary>
+	float GetWingsuitTurnResponse( float speed )
+	{
+		var floor = Math.Clamp( WingsuitMinTurnResponse, 0.05f, 1f );
+		var span = Math.Max( 1f, WingsuitMaxSpeed - WingsuitStallSpeed );
+		var t = Math.Clamp( (speed - WingsuitStallSpeed) / span, 0f, 1f );
+		return 1f - (1f - floor) * t * t;
+	}
 
 	/// <summary>
 	/// Dive speed cap ≈ 1.5× what a long freefall actually reaches (~3200 with gravity 850 and
@@ -106,6 +123,10 @@ partial class PlayerMovement
 	/// </summary>
 	[Property, Group( "Wingsuit" ), Title( "Deploy dive-input grace (s)" ), Range( 0f, 2f ), Step( 0.05f )]
 	public float WingsuitDeployForwardGraceSeconds { get; set; } = 0.5f;
+
+	/// <summary>After stowing the wingsuit, it cannot be reopened for this long (no open-close flutter).</summary>
+	[Property, Group( "Wingsuit" ), Title( "Redeploy cooldown (s)" ), Range( 0f, 10f ), Step( 0.5f )]
+	public float WingsuitRedeployCooldownSeconds { get; set; } = 3f;
 
 	/// <summary>
 	/// After the stall nose-over reaches full dive, the wing holds off biting for this long — the
@@ -242,9 +263,15 @@ partial class PlayerMovement
 		if ( GrappleAttached )
 			return;
 
+		// Cooldown after a stow: leave the jump press for other systems (double-jump augments).
+		if ( Time.Now - _wingsuitStowedTime < Math.Max( 0f, WingsuitRedeployCooldownSeconds ) )
+			return;
+
 		DeployWingsuit();
 		ClearActionIfPressed( JumpInputAction );
 	}
+
+	float _wingsuitStowedTime = float.MinValue;
 
 	void DeployWingsuit()
 	{
@@ -252,6 +279,9 @@ partial class PlayerMovement
 			return;
 
 		if ( GrappleAttached )
+			return;
+
+		if ( Time.Now - _wingsuitStowedTime < Math.Max( 0f, WingsuitRedeployCooldownSeconds ) )
 			return;
 
 		var body = Components.Get<Rigidbody>();
@@ -286,6 +316,13 @@ partial class PlayerMovement
 		_wingsuitFreefallAwaitingLand = false;
 		_wingsuitDeployTime = Time.Now;
 		WingsuitDeployed = true;
+
+		// Snap the pawn onto the camera-facing glide attitude NOW — the first physics tick applies
+		// the same rotation, but waiting for it showed the old facing for a beat at deploy.
+		var deployGlideRot = BuildWingsuitGlideRotation();
+		GameObject.WorldRotation = Rotation.LookAt( deployGlideRot.Forward.Normal, deployGlideRot.Up );
+		Transform.ClearInterpolation();
+		Components.Get<PlayerAnimation>()?.ReleaseCombatFacingOverride();
 	}
 
 	void StowWingsuit( bool keepMomentum )
@@ -294,6 +331,7 @@ partial class PlayerMovement
 			return;
 
 		WingsuitDeployed = false;
+		_wingsuitStowedTime = Time.Now;
 		_wingsuitPitch = 0f;
 		_wingsuitRoll = 0f;
 		_wingsuitSpeedLimit = 0f;
@@ -511,15 +549,23 @@ partial class PlayerMovement
 			rollInput = 0f;
 		}
 
+		var body = Components.Get<Rigidbody>();
+		if ( body is null || !body.IsValid() )
+			return;
+
+		// Faster = heavier controls: the same stick input changes attitude less per second, so
+		// turning at speed feels like fighting your own momentum.
+		var turnResponse = GetWingsuitTurnResponse( body.Velocity.Length );
+
 		_wingsuitPitch = Math.Clamp(
-			_wingsuitPitch + pitchInput * WingsuitPitchRate * dt,
+			_wingsuitPitch + pitchInput * WingsuitPitchRate * turnResponse * dt,
 			WingsuitMinPitch,
 			WingsuitMaxPitch );
 
 		if ( MathF.Abs( rollInput ) > 1e-3f )
 		{
 			_wingsuitRoll = Math.Clamp(
-				_wingsuitRoll + rollInput * WingsuitRollRate * dt,
+				_wingsuitRoll + rollInput * WingsuitRollRate * turnResponse * dt,
 				-WingsuitMaxRoll,
 				WingsuitMaxRoll );
 		}
@@ -533,14 +579,10 @@ partial class PlayerMovement
 		}
 
 		var bankFrac = WingsuitMaxRoll > 1e-3f ? _wingsuitRoll / WingsuitMaxRoll : 0f;
-		_wingsuitYaw -= bankFrac * WingsuitBankTurnRate * dt;
+		_wingsuitYaw -= bankFrac * WingsuitBankTurnRate * turnResponse * dt;
 
 		var glideRot = BuildWingsuitGlideRotation();
 		var nose = glideRot.Forward.Normal;
-
-		var body = Components.Get<Rigidbody>();
-		if ( body is null || !body.IsValid() )
-			return;
 
 		var gravity = Scene.IsValid() ? Scene.PhysicsWorld.Gravity : Vector3.Down * 800f;
 		if ( gravity.LengthSquared < 1e-4f )
@@ -674,8 +716,15 @@ partial class PlayerMovement
 		if ( plummet > 1e-3f )
 			vel += gravity * plummet * plummet * dt;
 
-		// Soft stall with no airspeed → commit to gravity plummet (same as invert).
-		if ( speed < WingsuitStallSpeed * 0.25f && noseUpAmount > 0.35f )
+		// Stall is pure airspeed: below stall speed the wing cannot hold altitude and it noses over
+		// into the gravity plummet — level flight included, no attitude or hold-time requirement.
+		// Maintaining elevation therefore requires keeping speed above WingsuitStallSpeed. The steep
+		// zoom-climb branch above is the one exception (its own deeper threshold, so trading speed
+		// for height still works); the deploy grace stops a slow opening from stalling before air
+		// catches the wing.
+		if ( speed < WingsuitStallSpeed
+		     && noseUpAmount < WingsuitInvertStallNoseUp
+		     && Time.Now - _wingsuitDeployTime > Math.Max( 0.25f, WingsuitDeployForwardGraceSeconds ) )
 		{
 			_wingsuitGravityPlummet = true;
 			_wingsuitNoseOverDoneTime = float.MinValue;

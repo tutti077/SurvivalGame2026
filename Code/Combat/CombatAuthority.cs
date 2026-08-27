@@ -243,7 +243,7 @@ public sealed class CombatAuthority : Component
 			DamageDealt = 0f,
 			TargetGameObjectId = Guid.Empty,
 			DebugCode = AttackReleaseDebugCode.OkMeleeSweepStarted,
-			DebugDetail = $"scheduled host sweep seq={intent.IntentSequence} type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} wind={pc.GetMeleeWindupSeconds():0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( pc, attackType, isHeavy ):0.###}s rec={pc.GetMeleeRecoverySeconds( isHeavy ):0.###}s{swingNote}"
+			DebugDetail = $"scheduled host sweep seq={intent.IntentSequence} type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} wind={pc.GetMeleeWindupSeconds():0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( pc, attackType, isHeavy ):0.###}s{swingNote}"
 		};
 	}
 

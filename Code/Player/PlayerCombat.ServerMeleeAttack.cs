@@ -94,9 +94,17 @@ public partial class PlayerCombat
 	public byte ResolveAttackTypeFromCursorDir( byte cursorDir ) =>
 		MeleeAttackTypes.FromCursorDir( cursorDir, SouthpawSwing );
 
-	/// <summary>Heavy attack: the button was held for the class windup plus its full charge time.</summary>
-	public bool IsHeavyAttackForHoldDuration( float holdSeconds ) =>
-		holdSeconds + 1e-5f >= GetMeleeWeaponTimings().HeavyHoldThresholdSeconds;
+	/// <summary>
+	/// Heavy attack: the button was held for the effective windup plus the full charge time.
+	/// With initiative armed the shorter initiative windup applies (sheet: heavy with initiative =
+	/// initiativeWindup + charge); non-host owners predict with the base windup.
+	/// </summary>
+	public bool IsHeavyAttackForHoldDuration( float holdSeconds )
+	{
+		var t = GetMeleeWeaponTimings();
+		var windup = ServerIsInitiativeArmed ? t.InitiativeWindupSeconds : t.WindupSeconds;
+		return holdSeconds + 1e-5f >= windup + t.ChargeSeconds;
+	}
 
 	public float GetMeleeWeaponBaseDamage() =>
 		MeleeWeaponBaseDamage > 0f ? MeleeWeaponBaseDamage : AttackCombatConstants.DefaultMeleeWeaponDamage;
@@ -926,10 +934,13 @@ public partial class PlayerCombat
 			_isHeavy = isHeavy;
 			_visualOnly = visualOnly;
 			// Windup elapses while the button is held: a long hold releases straight into the sweep,
-			// a quick click still plays the remaining lift before damage starts.
-			_windup = Math.Max( 0f, pc.GetMeleeWindupSeconds() - Math.Max( 0f, holdSeconds ) );
-			if ( !visualOnly )
-				_windup *= pc.ServerConsumeInitiativeWindupMultiplier();
+			// a quick click still plays the remaining lift before damage starts. Initiative swaps in
+			// the class initiativeWindupSeconds (consumed — one follow-up per clean hit).
+			var timings = pc.GetMeleeWeaponTimings();
+			var windupBase = !visualOnly && pc.ServerConsumeInitiativeArmed()
+				? timings.InitiativeWindupSeconds
+				: timings.WindupSeconds;
+			_windup = Math.Max( 0f, windupBase - Math.Max( 0f, holdSeconds ) );
 			_active = MeleeAttackPath.GetActiveDurationSeconds( pc, _attackType, isHeavy );
 			_radius = Math.Max( 2f, pc.MeleeHitVolumeThickness );
 			_substep = Math.Max( 4f, pc.MeleeSweepSubstepLength );

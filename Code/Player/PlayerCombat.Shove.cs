@@ -187,7 +187,7 @@ public partial class PlayerCombat
 		if ( receiver is not null )
 			receiver.TakeDamage( Math.Max( 0f, ShoveDamage ), this );
 
-		defenderAnimation?.ServerBeginHitReaction( RecoveryShoveVictimSeconds );
+		defenderAnimation?.ServerBeginHitReaction( RecoveryDefenderShoveSeconds );
 		ServerBeginShoveAttackerRecovery();
 	}
 
@@ -312,7 +312,7 @@ public partial class PlayerCombat
 			return;
 
 		ConsumeAuthoritativeMeleeBlock( attackWasHeavy: false, wasPerfectParry: false );
-		ServerBeginHitReaction( RecoveryBlockerShoveBlockSeconds );
+		ServerBeginHitReaction( RecoveryDefenderShoveBlockSeconds );
 		Log.Info( $"[MeleeBlock] shove-vs-block {GameObject.Name} from {attacker?.GameObject?.Name}" );
 	}
 }

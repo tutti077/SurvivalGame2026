@@ -10,19 +10,20 @@ namespace Survival;
 /// </summary>
 public partial class PlayerCombat
 {
-	[Property, Group( "Combat — Recovery" ), Title( "Attacker recovery after block/parry (s)" )]
-	public float RecoveryAttackerBlockedSeconds { get; set; } = 0.3f;
+	// Attacker outcome recoveries (miss/hit/blocked/parried) live in melee_weapon_classes.json per
+	// weapon class — the properties below cover the pawn-level reactions that have no weapon class:
+	// shove and the defender side of blocks.
 
-	[Property, Group( "Combat — Recovery" ), Title( "Blocker recovery after heavy block (s)" )]
-	public float RecoveryBlockerHeavyBlockSeconds { get; set; } = 0.4f;
+	[Property, Group( "Combat — Timings" ), Title( "Defender recovery after heavy block (s)" )]
+	public float RecoveryDefenderHeavyBlockSeconds { get; set; } = 0.4f;
 
-	[Property, Group( "Combat — Recovery" ), Title( "Blocker recovery after shove-vs-block (s)" )]
-	public float RecoveryBlockerShoveBlockSeconds { get; set; } = 0.5f;
+	[Property, Group( "Combat — Timings" ), Title( "Defender recovery after shove-vs-block (s)" )]
+	public float RecoveryDefenderShoveBlockSeconds { get; set; } = 0.5f;
 
-	[Property, Group( "Combat — Recovery" ), Title( "Victim recovery after shove (unblocked) (s)" )]
-	public float RecoveryShoveVictimSeconds { get; set; } = 1.2f;
+	[Property, Group( "Combat — Timings" ), Title( "Defender recovery after shove (unblocked) (s)" )]
+	public float RecoveryDefenderShoveSeconds { get; set; } = 1.2f;
 
-	[Property, Group( "Combat — Recovery" ), Title( "Shove combat lock (s)" ), Description( "After shove: lock sword/block/shove until this elapses AND the punch clip finishes. Attack1 during the kick is ignored (no buffered sword swing)." ), Range( 0.1f, 2f ), Step( 0.05f )]
+	[Property, Group( "Combat — Timings" ), Title( "Attacker shove combat lock (s)" ), Description( "After shove: lock sword/block/shove until this elapses AND the punch clip finishes. Attack1 during the kick is ignored (no buffered sword swing)." ), Range( 0.1f, 2f ), Step( 0.05f )]
 	public float RecoveryShoveCombatLockSeconds { get; set; } = 0.8f;
 
 	float _combatRecoveryRemaining;
@@ -427,38 +428,50 @@ public partial class PlayerCombat
 			CombatState = CombatState.PostAttack;
 	}
 
+	/// <summary>Attacker outcome recovery per the class combat timings: miss / hit / blocked / parried.</summary>
 	void ApplyAttackerRecoveryFromFinish( in MeleeAttackFinishOutcome outcome )
 	{
 		if ( outcome.IsShove )
 			return;
 
-		if ( outcome.WasBlocked || outcome.WasParried )
+		var t = GetMeleeWeaponTimings();
+
+		if ( outcome.WasParried )
 		{
 			ServerClearInitiative();
-			ServerBeginCombatRecovery( RecoveryAttackerBlockedSeconds, CombatRecoveryAnim.Rpg2hAttackMoving );
+			ServerBeginCombatRecovery( t.RecoveryParriedSeconds, CombatRecoveryAnim.Rpg2hAttackMoving );
 			return;
 		}
 
-		var recovery = GetMeleeRecoverySeconds( outcome.IsHeavy );
-
-		// Initiative: a clean hit arms the speed bonus — this swing's recovery and the next
-		// attack's windup both run at InitiativeSpeedMultiplier.
-		if ( outcome.AnyHit )
+		if ( outcome.WasBlocked )
 		{
-			ServerArmInitiative();
-			recovery *= Math.Clamp( InitiativeSpeedMultiplier, 0.1f, 1f );
+			ServerClearInitiative();
+			ServerBeginCombatRecovery( t.RecoveryBlockedSeconds, CombatRecoveryAnim.Rpg2hAttackMoving );
+			return;
 		}
 
-		ServerBeginCombatRecovery( recovery, CombatRecoveryAnim.Pistol2hStandingIdle );
+		if ( outcome.AnyHit )
+		{
+			// Initiative arms on a clean hit — its reward is the class hit recovery (shorter than
+			// miss) plus initiativeWindupSeconds on the follow-up attack.
+			ServerArmInitiative();
+			ServerBeginCombatRecovery( t.RecoveryHitSeconds, CombatRecoveryAnim.Pistol2hStandingIdle );
+			return;
+		}
+
+		ServerBeginCombatRecovery( t.RecoveryMissSeconds, CombatRecoveryAnim.Pistol2hStandingIdle );
 	}
 
 	/// <summary>Sandbox time until the initiative windup bonus stays armed (set by a clean hit).</summary>
 	double _initiativeArmedUntilSandbox;
 
+	/// <summary>Host: initiative currently armed — the next attack winds up with the class `initiativeWindupSeconds`.</summary>
+	internal bool ServerIsInitiativeArmed => Time.NowDouble < _initiativeArmedUntilSandbox;
+
 	/// <summary>Host: arm initiative for <see cref="InitiativeWindowSeconds"/> after a clean hit.</summary>
 	internal void ServerArmInitiative()
 	{
-		if ( InitiativeSpeedMultiplier >= 1f - 1e-4f || InitiativeWindowSeconds <= 1e-4f )
+		if ( InitiativeWindowSeconds <= 1e-4f )
 			return;
 
 		_initiativeArmedUntilSandbox = Time.NowDouble + Math.Max( 0f, InitiativeWindowSeconds );
@@ -466,13 +479,13 @@ public partial class PlayerCombat
 
 	internal void ServerClearInitiative() => _initiativeArmedUntilSandbox = 0;
 
-	/// <summary>Host: windup multiplier for the next attack. Consuming disarms — only one follow-up benefits per hit.</summary>
-	internal float ServerConsumeInitiativeWindupMultiplier()
+	/// <summary>Host: consume the armed initiative for an attack start — only one follow-up benefits per hit.</summary>
+	internal bool ServerConsumeInitiativeArmed()
 	{
-		if ( Time.NowDouble >= _initiativeArmedUntilSandbox )
-			return 1f;
+		if ( !ServerIsInitiativeArmed )
+			return false;
 
 		_initiativeArmedUntilSandbox = 0;
-		return Math.Clamp( InitiativeSpeedMultiplier, 0.1f, 1f );
+		return true;
 	}
 }

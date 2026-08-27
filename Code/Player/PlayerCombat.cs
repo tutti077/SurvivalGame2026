@@ -90,16 +90,12 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee" ), Title( "Fallback weapon class" )]
 	public string FallbackWeaponClass { get; set; } = MeleeWeaponClassCatalog.DefaultClassId;
 
-	/// <summary>Multiplies the next windup and the post-swing recovery after a clean hit (0.8 = 20% faster). 1 disables initiative.</summary>
-	[Property, Group( "Combat — Initiative" ), Title( "Initiative speed multiplier" ), Range( 0.4f, 1f ), Step( 0.05f )]
-	public float InitiativeSpeedMultiplier { get; set; } = 0.8f;
-
-	/// <summary>How long after a clean hit the windup bonus stays armed for the follow-up attack.</summary>
-	[Property, Group( "Combat — Initiative" ), Title( "Initiative window (s)" ), Range( 0f, 5f ), Step( 0.1f )]
+	/// <summary>How long after a clean hit initiative stays armed — while armed, the next attack uses the class `initiativeWindupSeconds`.</summary>
+	[Property, Group( "Combat — Timings" ), Title( "Initiative window (s)" ), Range( 0f, 5f ), Step( 0.1f )]
 	public float InitiativeWindowSeconds { get; set; } = 2f;
 
 	/// <summary>An Attack1 press while the swing/recovery is still busy queues one follow-up light attack, if it is at most this old when the chain frees up. 0 disables queueing.</summary>
-	[Property, Group( "Combat — Melee" ), Title( "Queued attack max age (s)" ), Range( 0f, 2f ), Step( 0.05f )]
+	[Property, Group( "Combat — Timings" ), Title( "Queued attack max age (s)" ), Range( 0f, 2f ), Step( 0.05f )]
 	public float QueuedAttackMaxAgeSeconds { get; set; } = 0.75f;
 
 	string _resolvedTimingsEquippedId;
@@ -111,13 +107,32 @@ public partial class PlayerCombat : Component
 	/// <see cref="MeleeWeaponClassCatalog"/> profile (+ per-weapon overrides). Cached until the
 	/// equipped item or the catalog changes.
 	/// </summary>
+	float _timingsFrameStamp = -1f;
+	MeleeWeaponTimings _timingsThisFrame;
+
 	public MeleeWeaponTimings GetMeleeWeaponTimings()
 	{
-		MeleeWeaponClassCatalog.EnsureLoaded();
+		// Hot path: called per arc sample during a swing (hundreds/frame). Resolve at most once per
+		// frame — inspector tuning still applies on the very next frame.
+		if ( _timingsFrameStamp == Time.Now )
+			return _timingsThisFrame;
+
 		var equippedId = Components.Get<PlayerEquippedItem>()?.EquippedResourceId ?? string.Empty;
-		if ( _resolvedTimingsCatalogVersion == MeleeWeaponClassCatalog.Version
-		     && string.Equals( _resolvedTimingsEquippedId, equippedId, StringComparison.OrdinalIgnoreCase ) )
-			return _resolvedTimings;
+
+		// Inspector library present → resolve LIVE every call so play-mode tuning hits the next
+		// swing immediately. The cache only serves the JSON-file path.
+		var liveLibrary = MeleeWeaponTimingLibrary.Instance is { } lib && lib.IsValid();
+		if ( !liveLibrary )
+		{
+			MeleeWeaponClassCatalog.EnsureLoaded();
+			if ( _resolvedTimingsCatalogVersion == MeleeWeaponClassCatalog.Version
+			     && string.Equals( _resolvedTimingsEquippedId, equippedId, StringComparison.OrdinalIgnoreCase ) )
+			{
+				_timingsThisFrame = _resolvedTimings;
+				_timingsFrameStamp = Time.Now;
+				return _resolvedTimings;
+			}
+		}
 
 		string classId = null;
 		MeleeTimingOverridesData overrides = null;
@@ -130,10 +145,17 @@ public partial class PlayerCombat : Component
 		if ( string.IsNullOrWhiteSpace( classId ) )
 			classId = FallbackWeaponClass;
 
-		_resolvedTimings = MeleeWeaponClassCatalog.Resolve( classId, overrides );
-		_resolvedTimingsEquippedId = equippedId;
-		_resolvedTimingsCatalogVersion = MeleeWeaponClassCatalog.Version;
-		return _resolvedTimings;
+		var resolved = MeleeWeaponClassCatalog.Resolve( classId, overrides );
+		if ( !liveLibrary )
+		{
+			_resolvedTimings = resolved;
+			_resolvedTimingsEquippedId = equippedId;
+			_resolvedTimingsCatalogVersion = MeleeWeaponClassCatalog.Version;
+		}
+
+		_timingsThisFrame = resolved;
+		_timingsFrameStamp = Time.Now;
+		return resolved;
 	}
 
 	[Property, Group( "Combat — Melee (attack action)" )] public GameObject MeleeBladeTip { get; set; }
@@ -157,12 +179,6 @@ public partial class PlayerCombat : Component
 		return isHeavy ? t.HeavyActiveSeconds : t.ActiveSeconds;
 	}
 
-	/// <summary>Post-swing recovery seconds for the equipped weapon class (added after the swing animation's return frames).</summary>
-	public float GetMeleeRecoverySeconds( bool isHeavy )
-	{
-		var t = GetMeleeWeaponTimings();
-		return isHeavy ? t.HeavyRecoverySeconds : t.RecoverySeconds;
-	}
 
 	/// <summary>Blade reach in engine units for this attack type — class meters converted once per pawn (BodyHeight/1.8).</summary>
 	public float GetMeleeAttackRangeUnits( byte attackType )
@@ -192,8 +208,14 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Max targets hit" )]
 	public int MeleeMaxTargetsHit { get; set; } = 1;
 
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Lateral arc total (°)" )]
-	public float MeleeLateralArcTotalDegrees { get; set; } = 150f;
+	/// <summary>Lateral slash span (°) — from the weapon class (`lateralArcDegrees` in melee_weapon_classes.json).</summary>
+	public float GetMeleeLateralArcDegrees() => GetMeleeWeaponTimings().LateralArcDegrees;
+
+	/// <summary>Overhead arc span (°) — from the weapon class (`forwardArcTotalDegrees`).</summary>
+	public float GetMeleeForwardArcTotalDegrees() => GetMeleeWeaponTimings().ForwardArcTotalDegrees;
+
+	/// <summary>Overhead arc start angle (°, 0 = forward, 90 = up) — from the weapon class (`forwardArcStartDegrees`).</summary>
+	public float GetMeleeForwardArcStartDegrees() => GetMeleeWeaponTimings().ForwardArcStartDegrees;
 
 	/// <summary>
 	/// Spacing along the attack path and per degree of body turn (1 = one ray every 1° along the arc; 150° → ~151 samples).
@@ -224,14 +246,6 @@ public partial class PlayerCombat : Component
 	/// <summary>Scales overhead +X reach vs lateral-matched path (1 = same; lower = shorter forward).</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward path reach scale" )]
 	public float MeleeAttackForwardPathReachScale { get; set; } = 0.94f;
-
-	/// <summary>Overhead arc span (°) — default matches <see cref="MeleeLateralArcTotalDegrees"/>; end = start − total.</summary>
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc total (°)" )]
-	public float MeleeAttackForwardArcTotalDegrees { get; set; } = 158f;
-
-	/// <summary>Start angle on vertical arc (0° = +X forward, 90° = +Y up). End = start − arc total. Higher = more up at windup.</summary>
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc start (°)" )]
-	public float MeleeAttackForwardArcStartDegrees { get; set; } = 146f;
 
 	/// <summary>Cos scale at windup; ramps to <see cref="MeleeAttackForwardArcForwardScale"/> by mid-stroke.</summary>
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Forward arc forward scale (start)" )]
@@ -297,7 +311,6 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Base stagger" )]
 	public float MeleeBaseStagger { get; set; } = 0.45f;
 
-	[Property, Group( "Combat — Melee (attack action)" )] public float MeleeVictimStaminaDrainOnHit { get; set; }
 
 	[Property, Group( "Combat — Melee (attack action)" )] public float MeleeBladeHeelFraction { get; set; } = 0.22f;
 
@@ -417,6 +430,7 @@ public partial class PlayerCombat : Component
 	byte _lockedPrimaryAttackSwingDir;
 	bool _hasLockedPrimaryAttackDir;
 	bool _wasPrimaryAttackButtonDownLastFrame;
+	bool _wasPrimaryChannelDownLastFrame;
 	/// <summary>Attack1 pressed while the chain was busy — fires one follow-up light attack when the chain frees (aged by <see cref="QueuedAttackMaxAgeSeconds"/>).</summary>
 	bool _hasQueuedAttackPress;
 	double _queuedAttackPressedAtSandbox;
@@ -549,10 +563,10 @@ public partial class PlayerCombat : Component
 
 		MaybeFireQueuedAttackPress();
 
-		// Only a fresh press on an idle timeline starts an attack — holding through the busy window
-		// deliberately does not auto-charge the next swing.
-		_primary.Step( PrimaryAttackAction, CanStartPrimaryAttack, CanContinuePrimaryAttack, GetViewDirectionForIntent, GetCameraPositionForIntent, GetPrimaryAttackRules(), OnOwnerValidPrimaryAttackRelease );
-		_block.Step( BlockAction, CanStartBlock, CanContinueBlock, GetViewDirectionForIntent, GetCameraPositionForIntent, GetBlockRules(), OnOwnerValidBlockRelease );
+		// Held starts allowed on both channels: holding through recovery/cooldown begins the next
+		// attack windup / block guard the first frame the timings permit.
+		_primary.Step( PrimaryAttackAction, CanStartPrimaryAttack, CanContinuePrimaryAttack, GetViewDirectionForIntent, GetCameraPositionForIntent, GetPrimaryAttackRules(), OnOwnerValidPrimaryAttackRelease, allowHeldStart: true );
+		_block.Step( BlockAction, CanStartBlock, CanContinueBlock, GetViewDirectionForIntent, GetCameraPositionForIntent, GetBlockRules(), OnOwnerValidBlockRelease, allowHeldStart: true );
 
 		var blockStartedThisFrame = _block.Down && !_wasBlockButtonDownLastFrame;
 		if ( blockStartedThisFrame )
@@ -564,14 +578,17 @@ public partial class PlayerCombat : Component
 
 		_wasBlockButtonDownLastFrame = _block.Down;
 
-		// Lock attack direction on press / first held frame. Skip lock while chain-busy — otherwise
-		// clients show a fake black telegraph with no _primary channel (busy gate blocked CanStart)
-		// and never fire arc/damage.
+		// Lock attack direction on press / first held frame / channel held-start (holding through
+		// recovery begins a fresh windup the frame it unlocks). Skip lock while chain-busy —
+		// otherwise clients show a fake black telegraph with no _primary channel and never fire.
 		var primaryAttackHeld = Input.Down( PrimaryAttackAction );
 		var chainBusy = IsMeleeAttackChainBusy();
+		var primaryChannelStarted = _primary.Down && !_wasPrimaryChannelDownLastFrame;
 		if ( !IsBlockPreventingAttack()
 		     && !chainBusy
-		     && (Input.Pressed( PrimaryAttackAction ) || (primaryAttackHeld && !_wasPrimaryAttackButtonDownLastFrame)) )
+		     && (Input.Pressed( PrimaryAttackAction )
+		         || (primaryAttackHeld && !_wasPrimaryAttackButtonDownLastFrame)
+		         || primaryChannelStarted) )
 		{
 			LockPreparedPrimaryAttackDirection();
 			// Only start the windup clip when the combat channel actually accepted the press.
@@ -591,6 +608,7 @@ public partial class PlayerCombat : Component
 			primaryAttackHeld && !IsBlockPreventingAttack() );
 
 		_wasPrimaryAttackButtonDownLastFrame = primaryAttackHeld;
+		_wasPrimaryChannelDownLastFrame = _primary.Down;
 
 		if ( Input.Released( PrimaryAttackAction ) )
 			_hasLockedPrimaryAttackDir = false;
@@ -788,8 +806,10 @@ public partial class PlayerCombat : Component
 	bool IsBlockPreventingAttack() =>
 		LocalBlockInputActive() || IsAuthoritativeMeleeBlocking;
 
+	// Consumed-awaiting-release stays a hard gate: a broken/eaten block requires an actual release
+	// before re-guarding — held-start must not bypass that, only the cooldown/recovery wait.
 	protected virtual bool CanStartBlock() =>
-		!IsCombatActionLocked && _postBlockRecoveryRemaining <= 0.001f;
+		!IsCombatActionLocked && !_meleeBlockConsumedAwaitingRelease;
 
 	protected virtual bool CanContinueBlock() =>
 		!IsCombatActionLocked && !_meleeBlockConsumedAwaitingRelease;
@@ -1315,6 +1335,9 @@ public partial class PlayerCombat : Component
 		_shoveFacingUntilSandbox = Time.NowDouble + Math.Max( 0.1f, RecoveryShoveCombatLockSeconds );
 	}
 
+	/// <summary>True while a committed swing is in flight (basis pinned) — movement freezes root rotation for its duration.</summary>
+	internal bool IsSwingFacingPinned => _meleeIntentBasisYawOverride is not null;
+
 	/// <summary>
 	/// Yaw the pawn's VISUAL should face right now, when a combat action owns the facing. Pure data —
 	/// no transform writes here. <see cref="PlayerAnimation"/> applies it to the renderer child only
@@ -1779,7 +1802,7 @@ public partial class PlayerCombat : Component
 				? (float)( until - RealTime.GlobalNow )
 				: 0f;
 
-		public void Step( string actionName, Func<bool> canStart, Func<bool> canContinue, Func<Vector3> getViewDirection, Func<Vector3> getCameraPosition, CombatChannelRules rules, Action<CombatButtonIntentSnapshot> onValidRelease = null )
+		public void Step( string actionName, Func<bool> canStart, Func<bool> canContinue, Func<Vector3> getViewDirection, Func<Vector3> getCameraPosition, CombatChannelRules rules, Action<CombatButtonIntentSnapshot> onValidRelease = null, bool allowHeldStart = false )
 		{
 			_onValidRelease = onValidRelease;
 
@@ -1787,7 +1810,10 @@ public partial class PlayerCombat : Component
 			var pressed = Input.Pressed( actionName );
 			var released = Input.Released( actionName );
 
-			if ( pressed && !Down )
+			// allowHeldStart: a press swallowed by cooldown/recovery is not lost — keep holding and
+			// the channel begins the first frame the gates open (block/attack start as fast as the
+			// timings allow instead of demanding a perfectly timed re-press).
+			if ( !Down && (pressed || (allowHeldStart && wantsDown)) )
 			{
 				if ( _nextPressAllowedAtGlobal is { } notBefore && RealTime.GlobalNow < notBefore )
 					return;

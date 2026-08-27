@@ -787,6 +787,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	}
 
 	float _designRotationAngleLimit = -1f;
+	float _designRotationSpeed = -1f;
 
 	/// <summary>See <see cref="FreeLookOrbitEnabled"/> — swaps the controller's rotation catch-up limit per frame.</summary>
 	void TickFreeLookBodyRotationMode()
@@ -797,6 +798,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		if ( _designRotationAngleLimit < 0f )
 			_designRotationAngleLimit = _controller.RotationAngleLimit;
+		if ( _designRotationSpeed < 0f )
+			_designRotationSpeed = _controller.RotationSpeed;
 
 		var combat = Components.Get<PlayerCombat>();
 		var combatHold = Input.Down( combat?.PrimaryAttackAction ?? "Attack1" )
@@ -805,6 +808,14 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		var freeOrbit = FreeLookOrbitEnabled && _controller.ThirdPerson && !combatHold;
 		// 180° = the yaw difference can never exceed the limit, so the body never turns from look alone.
 		_controller.RotationAngleLimit = freeOrbit ? 180f : _designRotationAngleLimit;
+
+		// While a swing is IN FLIGHT, near-stop the controller rotating the ROOT: walking mid-swing
+		// kept turning the root toward movement, which wobbled the pinned renderer child and fed
+		// turn params that blended the attack clip out early (overheads visibly died halfway).
+		// NEVER exactly 0 — stock controllers commonly special-case RotationSpeed <= 0 as "turn
+		// instantly", which spun the model toward the walk direction during lateral swings.
+		var swingInFlight = combat is not null && combat.Enabled && combat.IsSwingFacingPinned;
+		_controller.RotationSpeed = swingInFlight ? 0.001f : _designRotationSpeed;
 	}
 
 	void PollCameraScrollZoom()
@@ -931,13 +942,20 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		if ( !tr.Hit || !tr.GameObject.IsValid() )
 		{
+			CameraBumpingGround = false;
 			cam.WorldPosition = target;
 			return;
 		}
 
+		// Upward-facing hit normal = the camera boom is being shortened by the ground, not a wall.
+		CameraBumpingGround = tr.Normal.z > 0.5f;
+
 		// Keep a bit of air off the hit surface so we don't sit inside the occluder.
 		cam.WorldPosition = tr.HitPosition + tr.Normal * Math.Max( 4f, radius );
 	}
+
+	/// <summary>True while the third-person camera trace is pushed in by a ground-like surface (feeds the look-up body fade).</summary>
+	public bool CameraBumpingGround { get; private set; }
 
 	void TickRunNoiseForEntities()
 	{

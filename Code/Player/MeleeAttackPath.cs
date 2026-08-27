@@ -25,7 +25,7 @@ public static class MeleeAttackPath
 	{
 		if ( attackType == MeleeAttackTypes.Left )
 		{
-			var half = Math.Max( 1f, pc.MeleeLateralArcTotalDegrees ) * 0.5f;
+			var half = Math.Max( 1f, pc.GetMeleeLateralArcDegrees() ) * 0.5f;
 			startDeg = -half;
 			endDeg = half;
 			return;
@@ -33,7 +33,7 @@ public static class MeleeAttackPath
 
 		if ( attackType == MeleeAttackTypes.Right )
 		{
-			var half = Math.Max( 1f, pc.MeleeLateralArcTotalDegrees ) * 0.5f;
+			var half = Math.Max( 1f, pc.GetMeleeLateralArcDegrees() ) * 0.5f;
 			startDeg = half;
 			endDeg = -half;
 			return;
@@ -44,8 +44,8 @@ public static class MeleeAttackPath
 
 	static void GetForwardArcDegreeSpan( PlayerCombat pc, out float startDeg, out float endDeg )
 	{
-		var total = Math.Clamp( pc.MeleeAttackForwardArcTotalDegrees, 90f, 180f );
-		startDeg = pc.MeleeAttackForwardArcStartDegrees;
+		var total = Math.Clamp( pc.GetMeleeForwardArcTotalDegrees(), 90f, 180f );
+		startDeg = pc.GetMeleeForwardArcStartDegrees();
 		endDeg = startDeg - total;
 	}
 

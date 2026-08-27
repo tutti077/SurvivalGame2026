@@ -27,7 +27,7 @@ public partial class PlayerCombat
 		ConsumeAuthoritativeMeleeBlock( attackWasHeavy: wasHeavy, wasPerfectParry: wasParry );
 
 		if ( !wasParry && wasHeavy )
-			ServerBeginHitReaction( RecoveryBlockerHeavyBlockSeconds );
+			ServerBeginHitReaction( RecoveryDefenderHeavyBlockSeconds );
 
 		Log.Info(
 			$"[MeleeBlock] outcome {GameObject.Name}: {outcome.OutcomeId} tier={outcome.Tier} "
@@ -79,8 +79,6 @@ public partial class PlayerCombat
 	[Property, Group( "Combat — Block" ), Title( "Parry window color" ), Description( "Block guard lines while still inside the perfect-parry timing window." )]
 	public Color BlockParryWindowColor { get; set; } = Color.White;
 
-	[Property, Group( "Combat — Block" ), Title( "Post-block recovery (s)" )]
-	public float PostBlockRecoveryDuration { get; set; } = 0.35f;
 
 	bool _authoritativeMeleeBlockActive;
 	byte _authoritativeMeleeBlockDirection = SwingDirs.Up;
@@ -118,7 +116,6 @@ public partial class PlayerCombat
 	/// <summary>Committed block pose (L/R/U); morphs only when teardrop cardinal changes, not on look rotation.</summary>
 	byte _heldBlockGuardDir = SwingDirs.Up;
 
-	float _postBlockRecoveryRemaining;
 	float _postAttackRecoveryRemaining;
 
 	double _serverBlockStartedAtSandbox;
@@ -149,15 +146,10 @@ public partial class PlayerCombat
 	internal int GetBlockGuardSampleCount() =>
 		(int)Math.Clamp( BlockGuardSampleCount, 4f, 48f );
 
-	internal bool ServerIsInPostBlockRecovery() => _postBlockRecoveryRemaining > 0.001f;
-
 	internal void ServerTickMeleeBlockTimers()
 	{
 		if ( !IsServerSideForMeleeAuthority() )
 			return;
-
-		if ( _postBlockRecoveryRemaining > 0f )
-			_postBlockRecoveryRemaining = MathF.Max( 0f, _postBlockRecoveryRemaining - Time.Delta );
 
 		ServerTickLongBlockStaminaDrain();
 	}
@@ -203,11 +195,6 @@ public partial class PlayerCombat
 		{
 			CombatState = CombatState.Blocking;
 			_postAttackRecoveryRemaining = 0f;
-		}
-		else if ( _postBlockRecoveryRemaining > 0f )
-		{
-			_postBlockRecoveryRemaining = MathF.Max( 0f, _postBlockRecoveryRemaining - Time.Delta );
-			CombatState = CombatState.PostBlocking;
 		}
 		else if ( attacking )
 		{
@@ -410,10 +397,6 @@ public partial class PlayerCombat
 		_ = attackWasHeavy;
 		SetAuthoritativeMeleeBlockState( false, _authoritativeMeleeBlockDirection );
 
-		// Successful parry: no post-block recovery. Other blocks also skip the old flat timer —
-		// heavy uses combat recovery; light ends the hold only.
-		_postBlockRecoveryRemaining = 0f;
-
 		if ( GameObject.Network is { Active: true } )
 			RpcOwnerMeleeBlockConsumed( wasPerfectParry );
 		else
@@ -428,7 +411,6 @@ public partial class PlayerCombat
 	{
 		_meleeBlockConsumedAwaitingRelease = true;
 		_lastSentBlockActive = false;
-		_postBlockRecoveryRemaining = 0f;
 		CombatState = wasPerfectParry ? CombatState.Idle : CombatState.PostBlocking;
 	}
 

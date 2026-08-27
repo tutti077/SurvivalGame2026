@@ -172,11 +172,31 @@ public sealed partial class PlayerAnimation : Component
 	/// resetting instantly popped the model a second time at recovery — and only eases back to the
 	/// root's facing once locomotion actually moves the pawn (or the root is already aligned).
 	/// </summary>
+	/// <summary>Instantly drop the combat-facing override/linger — a movement mode (wingsuit) owns the root now.</summary>
+	public void ReleaseCombatFacingOverride()
+	{
+		if ( !_combatFacingApplied )
+			return;
+
+		_combatFacingApplied = false;
+		var body = ResolveBody();
+		if ( body is not null && body.IsValid() && body.GameObject != GameObject )
+			body.GameObject.LocalRotation = Rotation.Identity;
+	}
+
 	void TickCombatFacingPresentation( bool advance )
 	{
 		var body = ResolveBody();
 		if ( body is null || !body.IsValid() || body.GameObject == GameObject )
 			return;
+
+		// Wingsuit flight rotates the whole root (pitch/roll included) — an upright yaw override on
+		// the child would fight it and pin the model sideways mid-glide.
+		if ( Components.Get<PlayerMovement>() is { IsWingsuitDeployed: true } )
+		{
+			ReleaseCombatFacingOverride();
+			return;
+		}
 
 		var combat = ResolveCombat();
 		if ( combat is not null && combat.Enabled && combat.TryGetCombatFacingYaw( out var activeYaw ) )
@@ -196,8 +216,11 @@ public sealed partial class PlayerAnimation : Component
 		if ( advance )
 		{
 			var controller = GameObject.Components.Get<PlayerController>();
-			var moving = controller is not null && controller.IsValid()
-			             && controller.Velocity.WithZ( 0f ).Length > 20f;
+			var rigidbody = Components.Get<Rigidbody>();
+			var moving = ( controller is not null && controller.IsValid()
+			               && controller.Velocity.WithZ( 0f ).Length > 20f )
+			             || ( rigidbody is not null && rigidbody.IsValid()
+			                  && rigidbody.Velocity.WithZ( 0f ).Length > 20f );
 
 			if ( moving || MathF.Abs( delta ) < 3f )
 			{
@@ -236,9 +259,14 @@ public sealed partial class PlayerAnimation : Component
 		                   && ( GameObject.Network is not { Active: true } n
 		                        || (n.Owner is null ? Networking.IsHost : n.IsOwner) );
 
+		// Fade only when the pawn is standing on the ground AND the camera boom is actually being
+		// squeezed against the ground — a steep look-up in open air (jumping, gliding, high orbit
+		// distance with clearance) keeps the model visible.
+		var movement = Components.Get<PlayerMovement>();
 		var wantHide = HideBodyOnSteepLookUp
 		               && isLocalOwner
-		               && controller is { ThirdPerson: true }
+		               && controller is { ThirdPerson: true, IsOnGround: true }
+		               && movement is { CameraBumpingGround: true }
 		               && controller.EyeAngles.pitch <= HideBodyLookUpPitchDegrees;
 
 		var fadeStep = Time.Delta / Math.Clamp( HideBodyLookUpFadeSeconds, 0.05f, 10f );
