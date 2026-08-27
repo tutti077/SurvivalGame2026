@@ -1,0 +1,13 @@
+Next up I want to add a special attack to the weapons. 
+To trigger it we can use the Q key. That means that when youre grappling you cant use special attacks, which is understandable because theyll be ridiculously flamboyant or whatever.
+
+For the sword its going to be a stab. The stab should go in the direction youre looking just like all the other attacks.
+
+Since theres no arc to it itll be a little more complicated to change the attack arc stuff to work with that. 
+
+I want the player to do a little lunge forward, starting like .2s before the attack does. 
+The attack should extend just a tad further than where the sword swings to, distance wise. 
+When we draw the yellow debug lines for the damage tracking bit I think it should just show spheres being created in the direction of the stab.
+
+
+Ask questions as you need to get this design down. 

@@ -1,0 +1,23 @@
+Next item on the list I want to add the farming system to the game. 
+
+To farm you must use the hoe tool to till the dirt, which means you can only farm on Dirt material. We have no terrain materials yet but maybe you can consider our entire plane in testscene1 dirt?
+
+From there we need a hoe tool, which when pointed at the ground shows a square area that will be converted to tilled soil. (make it appear as light brown instead of our current color. 
+
+Once that works we need to make seeds to place on the dirt.
+
+When any seeds are in your inventory and you point your cursor at tilled soil it should prompt the player "E to sow". While the seed is equipped and the player is walking around trying to place it I want us to show a little transparent model of what the seed would look like if planted.
+If not pointing at tilled soil then it should be transparent and red. If possible to sow there then it should just be a little transparent version of the model. 
+It should sow 1 seed exactly where the mouse is pointed when clicked. 
+
+Plants cant be within a certain range of each other, maybe .3m? If the player is attempting to place one within that .3m diameter then it should just not prompt to sow and we can show a red seed model instead. 
+
+Plants all take varying amounts of time to mature. To start just make the first one we add take 10s to mature to fully grown. we'll eventually have many maturity forms, maybe 4 total:
+
+- Freshly sown
+- seedling
+- juvenile
+- matured
+
+
+
