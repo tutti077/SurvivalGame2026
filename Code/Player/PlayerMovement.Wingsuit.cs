@@ -217,7 +217,8 @@ partial class PlayerMovement
 		if ( _controller is null )
 			return;
 
-		if ( _controller.IsOnGround )
+		// Swimming is not airborne — otherwise leaving water grants an instant deploy.
+		if ( _controller.IsOnGround || _controller.IsSwimming )
 		{
 			_wingsuitAirborneSeconds = 0f;
 			return;
@@ -251,6 +252,10 @@ partial class PlayerMovement
 			return;
 
 		if ( _controller is null || _controller.IsOnGround )
+			return;
+
+		// The suit is for air — never deploys from water.
+		if ( _controller.IsSwimming )
 			return;
 
 		// Block short hops — must be airborne longer than a normal jump.
@@ -359,6 +364,18 @@ partial class PlayerMovement
 	}
 
 	/// <summary>
+	/// Water entry while deployed: put the suit away and hand straight to the swim —
+	/// velocity untouched so the pawn submerges exactly like a plain jump-in.
+	/// </summary>
+	void StowWingsuitIntoWater()
+	{
+		StowWingsuit( keepMomentum: true );
+		// No land handoff in water — the swim mode owns the pawn from here.
+		_wingsuitFreefallAwaitingLand = false;
+		_wingsuitAirborneSeconds = 0f;
+	}
+
+	/// <summary>
 	/// Ground contact while still deployed: stow then finish the land handoff.
 	/// </summary>
 	void StowWingsuitOnGround()
@@ -385,6 +402,14 @@ partial class PlayerMovement
 			body.Gravity = true;
 
 		UprightWingsuitBodyYaw();
+
+		// Splashdown during freefall: the swim owns the pawn — no land snap, velocity untouched.
+		if ( _controller is not null && _controller.IsSwimming )
+		{
+			_wingsuitFreefallAwaitingLand = false;
+			_wingsuitAirborneSeconds = 0f;
+			return;
+		}
 
 		var onGround = _controller is not null && _controller.IsOnGround;
 		// Tight touch only — do not use the 28m glide skim distance (that would snap from altitude).
@@ -516,6 +541,13 @@ partial class PlayerMovement
 		if ( _controller is not null && _controller.IsOnGround )
 		{
 			StowWingsuitOnGround();
+			return;
+		}
+
+		// Splashdown: water ends the flight, momentum carries into the swim.
+		if ( _controller is not null && _controller.IsSwimming )
+		{
+			StowWingsuitIntoWater();
 			return;
 		}
 

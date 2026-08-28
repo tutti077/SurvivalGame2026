@@ -1,0 +1,13 @@
+Layer0
+{
+	shader "shaders/tempwater.shader"
+
+	ShallowColor "[0.160000 0.500000 0.520000]"
+	DeepColor "[0.050000 0.200000 0.280000]"
+	MurkDistance "480.000"
+	WaterRoughness "0.050"
+	RefractionStrength "0.350"
+	RippleScale "24.000"
+	RippleSpeed "1.000"
+	RippleStrength "0.080"
+}

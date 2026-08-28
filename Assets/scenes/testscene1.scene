@@ -141560,6 +141560,133 @@
       ]
     },
     {
+      "__guid": "b7437f8d-ce7d-4198-b888-ee8c1fb13635",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "Water Billboard",
+      "Position": "-4256,6112,137.656372",
+      "Rotation": "0,0,0,1",
+      "Scale": "5,0.300000012,5",
+      "Tags": "grapple",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Sandbox.ModelRenderer",
+          "__guid": "8ebea15d-998e-4821-95d4-f17df9912e2c",
+          "__enabled": true,
+          "Flags": 0,
+          "BodyGroups": 18446744073709551615,
+          "CreateAttachments": false,
+          "LodOverride": null,
+          "MaterialGroup": null,
+          "MaterialOverride": null,
+          "Materials": null,
+          "Model": "models/dev/box.vmdl",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "RenderOptions": {
+            "GameLayer": true,
+            "OverlayLayer": false,
+            "BloomLayer": false,
+            "AfterUILayer": false
+          },
+          "RenderType": "On",
+          "Tint": "0.02791,0.02765,0.02765,1"
+        }
+      ],
+      "Children": [
+        {
+          "__guid": "4377405e-744d-4665-bacc-d7b11f5f8d43",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Object",
+          "Position": "6.4000001,-26.666666,-1.93127441",
+          "Rotation": "0,0,0.707106769,0.707106769",
+          "Scale": "0.0333333351,3.33333325,0.200000003",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "Sandbox.TextRenderer",
+              "__guid": "5d41bfb0-7e91-493f-94e1-2155f75ecd4b",
+              "__enabled": true,
+              "Flags": 0,
+              "__version": 2,
+              "Billboard": "None",
+              "BlendMode": "Normal",
+              "FogStrength": 1,
+              "HorizontalAlignment": "Center",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "RenderOptions": {
+                "GameLayer": true,
+                "OverlayLayer": false,
+                "BloomLayer": false,
+                "AfterUILayer": false
+              },
+              "Scale": 1,
+              "TextScope": {
+                "Text": "Water >>>",
+                "TextColor": "1,1,1,1",
+                "FontName": "Poppins",
+                "FontSize": 32,
+                "FontWeight": 400,
+                "FontItalic": false,
+                "FontVariantNumeric": "Normal",
+                "LineHeight": 1,
+                "LetterSpacing": 0,
+                "WordSpacing": 0,
+                "FilterMode": "Bilinear",
+                "FontSmooth": "Auto",
+                "Outline": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,0,1,1"
+                },
+                "Shadow": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,0,0,1",
+                  "Offset": "4,4"
+                },
+                "OutlineUnder": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,1,0,1"
+                },
+                "ShadowUnder": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,0,0,1",
+                  "Offset": "4,4"
+                }
+              },
+              "VerticalAlignment": "Center"
+            }
+          ],
+          "Children": []
+        }
+      ]
+    },
+    {
       "__guid": "aad0e7ff-07a1-4a34-bf45-068342ab6fd1",
       "__version": 2,
       "Flags": 0,
@@ -147083,24 +147210,6 @@
       }
     },
     {
-      "__guid": "204d338e-d684-42b3-845b-a23322efe9f9",
-      "__version": 2,
-      "Flags": 0,
-      "Name": "waterSample",
-      "Position": "-1276.25269,3152.05029,0",
-      "Rotation": "0,0,0,1",
-      "Scale": "1,1,1",
-      "Tags": "",
-      "Enabled": true,
-      "NetworkMode": 2,
-      "NetworkFlags": 0,
-      "NetworkOrphaned": 0,
-      "NetworkTransmit": true,
-      "OwnerTransfer": 1,
-      "Components": [],
-      "Children": []
-    },
-    {
       "__guid": "77b534f6-02f3-47f3-8095-f98896c8f004",
       "__version": 2,
       "__Prefab": "environment_rockspire2.prefab",
@@ -147153,6 +147262,118 @@
         "f71abb5b-ca58-46e4-ae48-e3ac15ac74ef": "a6d74cd6-8854-4558-a3a5-14ac243112d6",
         "d5f06b10-3d94-4b7f-88ed-71f63c61546c": "f21b35c3-fa5f-4121-bf24-ba5e5592c5d0"
       }
+    },
+    {
+      "__guid": "204d338e-d684-42b3-845b-a23322efe9f9",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "waterSample",
+      "Position": "-3424,6208,224",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "water",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Sandbox.BoxCollider",
+          "__guid": "4478cb9e-65c4-4a52-a73a-38110c0c3c0d",
+          "__enabled": true,
+          "Flags": 0,
+          "Center": "0,0,-125",
+          "ColliderFlags": 0,
+          "Elasticity": null,
+          "Friction": null,
+          "IsTrigger": true,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "OnObjectTriggerEnter": null,
+          "OnObjectTriggerExit": null,
+          "OnTriggerEnter": null,
+          "OnTriggerExit": null,
+          "RollingResistance": null,
+          "Scale": "1000,1000,250",
+          "Static": true,
+          "Surface": null,
+          "SurfaceVelocity": "0,0,0"
+        },
+        {
+          "__type": "Sandbox.WaterVolume",
+          "__guid": "35c78715-1f69-4f04-b430-203a483b71f3",
+          "__enabled": true,
+          "Flags": 0,
+          "AngularDrag": 0.1,
+          "FluidDensity": 1000,
+          "FluidVelocity": "0,0,0",
+          "IgnoreTags": "player",
+          "LinearDrag": 0.02,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "SurfaceOffset": 0,
+          "WaveAmplitude": 0,
+          "WaveFrequency": 0.5
+        }
+      ],
+      "Children": [
+        {
+          "__guid": "c7b1a1a6-876c-49df-8f34-9e2abf49057b",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "waterBox",
+          "Position": "0,0,-128",
+          "Rotation": "0,0,0,1",
+          "Scale": "20,20,5",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "Sandbox.ModelRenderer",
+              "__guid": "4e6f3894-55db-4947-9bef-c995190f8dc2",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyGroups": 18446744073709551615,
+              "CreateAttachments": false,
+              "LodOverride": null,
+              "MaterialGroup": null,
+              "MaterialOverride": null,
+              "Materials": null,
+              "Model": "models/dev/box.vmdl",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "RenderOptions": {
+                "GameLayer": true,
+                "OverlayLayer": false,
+                "BloomLayer": false,
+                "AfterUILayer": false
+              },
+              "RenderType": "On",
+              "Tint": "0,0.18333,1,0.31"
+            }
+          ],
+          "Children": []
+        }
+      ]
     }
   ],
   "SceneProperties": {
