@@ -248,6 +248,16 @@ public sealed partial class PlayerAnimation : Component
 		return delta;
 	}
 
+	/// <summary>Actual world yaw of the Body renderer child (facing diagnostics) — null when the renderer sits on the root.</summary>
+	internal float? GetBodyVisualYawDegrees()
+	{
+		var body = ResolveBody();
+		if ( body is null || !body.IsValid() || body.GameObject == GameObject )
+			return null;
+
+		return body.GameObject.WorldRotation.Angles().yaw;
+	}
+
 	/// <summary>Owner-only, third person: fade the local model out while the camera pitches steeply upward, back in below the threshold.</summary>
 	void TickLookUpBodyHide()
 	{

@@ -179,12 +179,29 @@ public partial class PlayerCombat : Component
 		return isHeavy ? t.HeavyActiveSeconds : t.ActiveSeconds;
 	}
 
+	/// <summary>Active thrust seconds for the Q special attack (class `specialActiveSeconds`).</summary>
+	public float GetMeleeSpecialActiveSeconds() =>
+		GetMeleeWeaponTimings().SpecialActiveSeconds;
+
+	/// <summary>Special attack windup for the equipped class (`specialWindupSeconds`; initiative swaps the shorter value on the host).</summary>
+	public float GetMeleeSpecialWindupSeconds() =>
+		GetMeleeWeaponTimings().SpecialWindupSeconds;
+
+	/// <summary>Stamina cost of the Q special attack (class `specialStaminaCost`).</summary>
+	public float GetSpecialAttackStaminaCost() =>
+		GetMeleeWeaponTimings().SpecialStaminaCost;
 
 	/// <summary>Blade reach in engine units for this attack type — class meters converted once per pawn (BodyHeight/1.8).</summary>
 	public float GetMeleeAttackRangeUnits( byte attackType )
 	{
 		var t = GetMeleeWeaponTimings();
-		var meters = attackType == MeleeAttackTypes.Forward ? t.ReachForwardMeters : t.ReachLateralMeters;
+		// Stab reaches a tad past the forward swing (`specialReachBonusMeters` on top of forward reach).
+		var meters = attackType switch
+		{
+			MeleeAttackTypes.Stab => t.ReachForwardMeters + t.SpecialReachBonusMeters,
+			MeleeAttackTypes.Forward => t.ReachForwardMeters,
+			_ => t.ReachLateralMeters
+		};
 		return meters * GetPawnUnitsPerMeter();
 	}
 
@@ -553,6 +570,10 @@ public partial class PlayerCombat : Component
 
 		_combatNetDiag = $"netActive={GameObject.Network is { Active: true }} isHost={Networking.IsHost}";
 
+		// Q special attack (stab) — requires the melee item gate above; Q is the grapple detract key
+		// while attached, so the input tick refuses it mid-grapple.
+		TickOwnerSpecialAttackInput();
+
 		// A press while the swing / sweep / recovery is still running queues exactly one follow-up
 		// light attack; it fires below the moment the chain frees (or expires if it gets stale).
 		if ( Input.Pressed( PrimaryAttackAction ) && IsMeleeAttackChainBusy() )
@@ -604,8 +625,9 @@ public partial class PlayerCombat : Component
 			_hasLockedPrimaryAttackDir = false;
 		}
 
+		// The special charge holds the frozen windup pose the same way a held Attack1 does.
 		Components.Get<PlayerAnimation>()?.TickMeleeAttackWindupHold(
-			primaryAttackHeld && !IsBlockPreventingAttack() );
+			(primaryAttackHeld || IsSpecialAttackCharging) && !IsBlockPreventingAttack() );
 
 		_wasPrimaryAttackButtonDownLastFrame = primaryAttackHeld;
 		_wasPrimaryChannelDownLastFrame = _primary.Down;
@@ -1366,7 +1388,7 @@ public partial class PlayerCombat : Component
 			return true;
 		}
 
-		if ( IsLocalCombatDriver() && (_primary.Down || IsBowCharging) )
+		if ( IsLocalCombatDriver() && (_primary.Down || IsBowCharging || IsSpecialAttackCharging) )
 		{
 			yawDegrees = GetCameraYawRotation().Angles().yaw;
 			return true;
@@ -1511,6 +1533,10 @@ public partial class PlayerCombat : Component
 	bool IsMeleeAttackChainBusy()
 	{
 		if ( IsCombatActionLocked )
+			return true;
+
+		// A charging special owns the pawn until it auto-fires (Attack1 presses queue as usual).
+		if ( IsSpecialAttackCharging )
 			return true;
 
 		if ( ServerHasActiveMeleeAttackAction )
@@ -1737,6 +1763,14 @@ public partial class PlayerCombat : Component
 		y += 16f;
 		DebugOverlay.ScreenText( new Vector2( debugScreenX, y ),
 			$"last block rel: {CombatAuthority.FormatSwingLog( _blockReleaseSwingXz, _blockReleaseSwingVerticalHint, _blockReleaseSwingDir )}",
+			size: 12f );
+		y += 16f;
+		// Facing diagnostics: if faceTarget == body while the model LOOKS rotated, the rotation is
+		// baked in the animation clip, not the facing write.
+		var faceTarget = TryGetCombatFacingYaw( out var facingYaw ) ? $"{facingYaw:0.#}" : "—";
+		var bodyYaw = Components.Get<PlayerAnimation>()?.GetBodyVisualYawDegrees() is { } by ? $"{by:0.#}" : "—";
+		DebugOverlay.ScreenText( new Vector2( debugScreenX, y ),
+			$"facing: target={faceTarget} body={bodyYaw} root={WorldRotation.Angles().yaw:0.#} cam={GetCameraAimRotation().Angles().yaw:0.#}",
 			size: 12f );
 		y += 16f;
 		DebugOverlay.ScreenText( new Vector2( debugScreenX, y ), "[ last server result ]", size: 12f );

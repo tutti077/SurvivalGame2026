@@ -214,6 +214,8 @@ public partial class PlayerCombat
 	void CancelAllAttackActivity()
 	{
 		ClearQueuedAttackPress();
+		// Raising the guard also cancels a charging special before it can auto-fire.
+		ClearSpecialAttackChargeState();
 		Components.Get<PlayerAnimation>()?.CancelMeleeAttackWindupHold();
 		ServerCancelMeleeAttack();
 		// Pure clients never run ServerCancelMeleeAttack locally — still unlock Attack1 immediately.

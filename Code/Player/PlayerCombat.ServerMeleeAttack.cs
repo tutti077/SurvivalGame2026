@@ -88,7 +88,7 @@ public partial class PlayerCombat
 	}
 
 	public byte ResolveAttackTypeFromIntent( in AttackReleaseIntent intent ) =>
-		ResolveAttackTypeFromCursorDir( intent.SwingDir );
+		intent.IsSpecial ? MeleeAttackTypes.Stab : ResolveAttackTypeFromCursorDir( intent.SwingDir );
 
 	/// <summary>Resolves attack type from cursor cardinal using <see cref="SouthpawSwing"/> (call once when attack starts).</summary>
 	public byte ResolveAttackTypeFromCursorDir( byte cursorDir ) =>
@@ -112,6 +112,13 @@ public partial class PlayerCombat
 	public float GetMeleeDamage( bool isHeavy )
 	{
 		var raw = GetMeleeWeaponBaseDamage() * ComputeMeleeCombatDamageMultiplier( isHeavy );
+		return MathF.Round( raw, MidpointRounding.AwayFromZero );
+	}
+
+	/// <summary>Damage of the Q special attack — base weapon damage × class `specialDamageMultiplier`.</summary>
+	public float GetMeleeSpecialDamage()
+	{
+		var raw = GetMeleeWeaponBaseDamage() * Math.Max( 0f, GetMeleeWeaponTimings().SpecialDamageMultiplier );
 		return MathF.Round( raw, MidpointRounding.AwayFromZero );
 	}
 
@@ -439,6 +446,13 @@ public partial class PlayerCombat
 		var overlayDuration = GetMeleeDebugOverlayDrawDuration();
 		var degreeStep = GetMeleeAttackArcDegreeStep();
 
+		// Stab has no arc fan — its overlay is spheres marching outward along the thrust.
+		if ( attackType == MeleeAttackTypes.Stab )
+		{
+			AdvanceStabAttackPathOverlay( activeProgress01, attackState, drawOverlay, overlayDuration, ref scratch );
+			return;
+		}
+
 		if ( activeProgress01 > 1e-5f && MeleeAttackStates.DealsDamage( attackState ) )
 		{
 			UpdateAttackPathSamples( attackType, currentBasisYaw, activeProgress01, attackState, degreeStep,
@@ -465,6 +479,39 @@ public partial class PlayerCombat
 			else if ( trailLen > maxTrailLen )
 				scratch.HasLastLeadTip = false;
 		}
+
+		scratch.LastLeadTipWorld = liveTip;
+		scratch.HasLastLeadTip = true;
+	}
+
+	/// <summary>
+	/// Stab overlay: spheres created outward along the thrust line as the active window advances —
+	/// the sphere row IS the damage volume (radius = <see cref="MeleeHitVolumeThickness"/> like the sweep).
+	/// </summary>
+	void AdvanceStabAttackPathOverlay(
+		float activeProgress01,
+		byte attackState,
+		bool drawOverlay,
+		float overlayDuration,
+		ref MeleeAttackDebugDrawScratch scratch )
+	{
+		if ( !drawOverlay || !MeleeAttackStates.DealsDamage( attackState ) || activeProgress01 <= 1e-5f )
+			return;
+
+		SampleServerMeleeBladeWorld( MeleeAttackTypes.Stab, activeProgress01, out var liveTip, out _ );
+		var color = GetMeleeDebugColorForState( attackState ).WithAlpha( 0.5f );
+		var radius = Math.Max( 2f, MeleeHitVolumeThickness );
+
+		if ( scratch.HasLastLeadTip )
+		{
+			var delta = liveTip - scratch.LastLeadTipWorld;
+			var spacing = Math.Max( radius * 1.5f, 6f );
+			var steps = Math.Max( 1, (int)MathF.Ceiling( delta.Length / spacing ) );
+			for ( var i = 1; i <= steps; i++ )
+				DebugOverlay.Sphere( new Sphere( scratch.LastLeadTipWorld + delta * (i / (float)steps), radius ), color, overlayDuration );
+		}
+		else
+			DebugOverlay.Sphere( new Sphere( liveTip, radius ), color, overlayDuration );
 
 		scratch.LastLeadTipWorld = liveTip;
 		scratch.HasLastLeadTip = true;
@@ -646,6 +693,15 @@ public partial class PlayerCombat
 
 		if ( ServerHasActiveMeleeAttackInWindup( out attackType, out basisYaw, out isHeavy ) )
 			return true;
+
+		// Special charge: black stab telegraph for the whole chargeup (the host plays no windup after it).
+		if ( IsSpecialAttackCharging )
+		{
+			attackType = MeleeAttackTypes.Stab;
+			basisYaw = GetMeleeCombatBasisYaw( MeleeAttackTypes.Stab );
+			isHeavy = false;
+			return true;
+		}
 
 		// Press / hold: black (light) or white (heavy) aim bar before release.
 		if ( !_hasLockedPrimaryAttackDir )
@@ -900,6 +956,9 @@ public partial class PlayerCombat
 		readonly bool _visualOnly;
 		readonly bool _allowMultiple;
 		readonly int _maxTargets;
+		readonly bool _isSpecial;
+		readonly float _specialLungeAtSeconds;
+		bool _specialLungeApplied;
 		bool _loggedAttackPhase;
 
 		readonly HashSet<Guid> _hitVictims = new();
@@ -929,18 +988,25 @@ public partial class PlayerCombat
 			_pc = pc;
 			_intent = intent;
 			_attackType = pc.ResolveAttackTypeFromIntent( intent );
+			_isSpecial = _attackType == MeleeAttackTypes.Stab;
 			_sequence = intent.IntentSequence;
 			_instanceId = _nextMeleeAttackInstanceId++;
 			_isHeavy = isHeavy;
 			_visualOnly = visualOnly;
 			// Windup elapses while the button is held: a long hold releases straight into the sweep,
 			// a quick click still plays the remaining lift before damage starts. Initiative swaps in
-			// the class initiativeWindupSeconds (consumed — one follow-up per clean hit).
+			// the class initiativeWindupSeconds (consumed — one follow-up per clean hit). The special
+			// attack is an instant press (hold 0) with its own class windup pair.
 			var timings = pc.GetMeleeWeaponTimings();
-			var windupBase = !visualOnly && pc.ServerConsumeInitiativeArmed()
-				? timings.InitiativeWindupSeconds
-				: timings.WindupSeconds;
+			var initiativeArmed = !visualOnly && pc.ServerConsumeInitiativeArmed();
+			var windupBase = _isSpecial
+				? ( initiativeArmed ? timings.SpecialInitiativeWindupSeconds : timings.SpecialWindupSeconds )
+				: ( initiativeArmed ? timings.InitiativeWindupSeconds : timings.WindupSeconds );
 			_windup = Math.Max( 0f, windupBase - Math.Max( 0f, holdSeconds ) );
+			// Special: the lunge fires this long before the active window opens (windup-relative).
+			_specialLungeAtSeconds = _isSpecial
+				? Math.Max( 0f, _windup - Math.Max( 0f, pc.SpecialLungeLeadSeconds ) )
+				: 0f;
 			_active = MeleeAttackPath.GetActiveDurationSeconds( pc, _attackType, isHeavy );
 			_radius = Math.Max( 2f, pc.MeleeHitVolumeThickness );
 			_substep = Math.Max( 4f, pc.MeleeSweepSubstepLength );
@@ -1003,6 +1069,13 @@ public partial class PlayerCombat
 			var windEnd = _windup;
 			var activeEnd = windEnd + _active;
 
+			// Special stab: authoritative lunge, timed to land shortly before the thrust goes active.
+			if ( _isSpecial && !_visualOnly && !_specialLungeApplied && elapsed >= _specialLungeAtSeconds )
+			{
+				_specialLungeApplied = true;
+				_pc.ServerApplySpecialLunge();
+			}
+
 			// Path overlay: visual-only replay draws for clients. Authority also draws unless a
 			// visual companion is already running (avoids double lines on listen-server host).
 			var allowOverlay = _visualOnly
@@ -1051,7 +1124,7 @@ public partial class PlayerCombat
 			if ( !_visualOnly && !_stopHitValidation )
 			{
 				const byte hitState = MeleeAttackStates.Active;
-				var damage = _pc.GetMeleeDamage( _isHeavy );
+				var damage = _isSpecial ? _pc.GetMeleeSpecialDamage() : _pc.GetMeleeDamage( _isHeavy );
 				var stagger = _pc.GetMeleeStagger();
 				var hitRadius = Math.Max( 2f, _pc.MeleeHitVolumeThickness );
 				var basis = _pc.GetMeleeCombatBasisRotation( _attackType );

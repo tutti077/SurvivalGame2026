@@ -50,6 +50,9 @@ public readonly record struct AttackReleaseIntent
 
 	/// <summary>Cursor-aligned swing pitch (degrees) when submitted; unset (NaN) = derive from view forward.</summary>
 	public float CombatBasisPitchDegrees { get; init; }
+
+	/// <summary>Q special attack (stab): class special timings/cost, never heavy, resolves to <see cref="MeleeAttackTypes.Stab"/>.</summary>
+	public bool IsSpecial { get; init; }
 }
 
 /// <summary>Only three melee swing directions (no forward).</summary>
@@ -108,6 +111,7 @@ public static class AttackReleaseDebugCode
 	public const int OkMeleeSweepStarted = 15;
 	public const int RejectMeleeBusy = 16;
 	public const int RejectNoMeleeItemEquipped = 17;
+	public const int RejectSpecialUnavailable = 18;
 }
 
 public interface IDamageable

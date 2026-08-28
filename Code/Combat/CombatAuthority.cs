@@ -189,7 +189,20 @@ public sealed class CombatAuthority : Component
 		if ( !pc.ServerCanBeginMeleeAttackAction() )
 			return Fail( AttackReleaseDebugCode.RejectMeleeBusy, "melee attack action busy or cannot begin on host" );
 
-		var staminaCost = pc.GetPrimaryAttackStaminaCostForHoldDuration( holdSeconds );
+		// Special stab: grounded only (it lunges), and never while grappling (Q is the rope detract key).
+		if ( intent.IsSpecial )
+		{
+			if ( attacker.Components.Get<PlayerMovement>() is { GrappleAttached: true } )
+				return Fail( AttackReleaseDebugCode.RejectSpecialUnavailable, "special attack unavailable while grappling" );
+
+			var attackerController = attacker.Components.Get<PlayerController>();
+			if ( attackerController is null || !attackerController.IsOnGround )
+				return Fail( AttackReleaseDebugCode.RejectSpecialUnavailable, "special attack requires being grounded" );
+		}
+
+		var staminaCost = intent.IsSpecial
+			? pc.GetSpecialAttackStaminaCost()
+			: pc.GetPrimaryAttackStaminaCostForHoldDuration( holdSeconds );
 		if ( staminaCost > 1e-4f )
 		{
 			if ( pv is null )
@@ -227,10 +240,11 @@ public sealed class CombatAuthority : Component
 
 		var swingAuth = ServerNormalizeSwingFromXz( intent.SwingFromX, intent.SwingFromY, attacker.WorldRotation );
 		var swingVert = ServerClampSwingVertical( intent.SwingVerticalHint );
-		var isHeavy = pc.IsHeavyAttackForHoldDuration( holdSeconds );
+		// The special stab is never heavy — instant press, no charge.
+		var isHeavy = !intent.IsSpecial && pc.IsHeavyAttackForHoldDuration( holdSeconds );
 		var attackType = pc.ResolveAttackTypeFromIntent( intent );
 		var swingNote =
-			$" {FormatSwingLog( swingAuth, swingVert, intent.SwingDir )} type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} hold={holdSeconds:0.###}s";
+			$" {FormatSwingLog( swingAuth, swingVert, intent.SwingDir )} type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} special={intent.IsSpecial} hold={holdSeconds:0.###}s";
 
 		pc.ServerStartMeleeAttackAction( intent, holdSeconds, isHeavy, swingNote );
 

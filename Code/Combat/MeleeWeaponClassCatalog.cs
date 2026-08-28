@@ -43,14 +43,23 @@ public sealed class MeleeWeaponClassData
 
 	public float RecoveryParriedSeconds { get; set; } = 0.4f;
 
-	// --- Combat timings: special attack + light combo (STAGED — data reserved; the special-attack
-	// input and combo chaining are not implemented yet, these fields are read by nothing) ---
+	// --- Combat timings: special attack (Q — straight stab in the look direction with a short lunge) ---
 
 	public float SpecialWindupSeconds { get; set; } = 0.3f;
 
 	public float SpecialInitiativeWindupSeconds { get; set; } = 0.2f;
 
 	public float SpecialActiveSeconds { get; set; } = 0.25f;
+
+	public float SpecialStaminaCost { get; set; } = 18f;
+
+	/// <summary>Combat damage multiplier for the special attack (light = 1.0, heavy = 1.0 + heavy bonus).</summary>
+	public float SpecialDamageMultiplier { get; set; } = 1.5f;
+
+	/// <summary>Extra thrust reach beyond <see cref="ReachForwardMeters"/>, in meters — the stab pokes a tad past where the swing reaches.</summary>
+	public float SpecialReachBonusMeters { get; set; } = 0.3f;
+
+	// --- Combat timings: light combo (STAGED — combo chaining is not implemented; read by nothing) ---
 
 	public float ComboWindupSeconds { get; set; } = 0.1f;
 
@@ -93,6 +102,9 @@ public sealed class MeleeTimingOverridesData
 	public float? SpecialWindupSeconds { get; set; }
 	public float? SpecialInitiativeWindupSeconds { get; set; }
 	public float? SpecialActiveSeconds { get; set; }
+	public float? SpecialStaminaCost { get; set; }
+	public float? SpecialDamageMultiplier { get; set; }
+	public float? SpecialReachBonusMeters { get; set; }
 	public float? ComboWindupSeconds { get; set; }
 	public float? ComboActiveSeconds { get; set; }
 	public float? ComboLastHitExtraRecoverySeconds { get; set; }
@@ -121,6 +133,9 @@ public readonly struct MeleeWeaponTimings
 	public float SpecialWindupSeconds { get; init; }
 	public float SpecialInitiativeWindupSeconds { get; init; }
 	public float SpecialActiveSeconds { get; init; }
+	public float SpecialStaminaCost { get; init; }
+	public float SpecialDamageMultiplier { get; init; }
+	public float SpecialReachBonusMeters { get; init; }
 	public float ComboWindupSeconds { get; init; }
 	public float ComboActiveSeconds { get; init; }
 	public float ComboLastHitExtraRecoverySeconds { get; init; }
@@ -255,6 +270,9 @@ public static class MeleeWeaponClassCatalog
 			SpecialWindupSeconds = Math.Max( 0f, overrides?.SpecialWindupSeconds ?? data.SpecialWindupSeconds ),
 			SpecialInitiativeWindupSeconds = Math.Max( 0f, overrides?.SpecialInitiativeWindupSeconds ?? data.SpecialInitiativeWindupSeconds ),
 			SpecialActiveSeconds = Math.Max( 0.04f, overrides?.SpecialActiveSeconds ?? data.SpecialActiveSeconds ),
+			SpecialStaminaCost = Math.Max( 0f, overrides?.SpecialStaminaCost ?? data.SpecialStaminaCost ),
+			SpecialDamageMultiplier = Math.Max( 0f, overrides?.SpecialDamageMultiplier ?? data.SpecialDamageMultiplier ),
+			SpecialReachBonusMeters = Math.Max( 0f, overrides?.SpecialReachBonusMeters ?? data.SpecialReachBonusMeters ),
 			ComboWindupSeconds = Math.Max( 0f, overrides?.ComboWindupSeconds ?? data.ComboWindupSeconds ),
 			ComboActiveSeconds = Math.Max( 0.04f, overrides?.ComboActiveSeconds ?? data.ComboActiveSeconds ),
 			ComboLastHitExtraRecoverySeconds = Math.Max( 0f, overrides?.ComboLastHitExtraRecoverySeconds ?? data.ComboLastHitExtraRecoverySeconds ),

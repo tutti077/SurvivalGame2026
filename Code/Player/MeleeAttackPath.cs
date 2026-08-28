@@ -14,7 +14,9 @@ public static class MeleeAttackPath
 
 	public static float GetActiveDurationSeconds( PlayerCombat pc, byte attackType, bool isHeavy = false )
 	{
-		_ = attackType;
+		if ( attackType == MeleeAttackTypes.Stab )
+			return Math.Max( 0.04f, pc.GetMeleeSpecialActiveSeconds() );
+
 		return Math.Max( 0.04f, pc.GetMeleeActiveSeconds( isHeavy ) );
 	}
 
@@ -23,6 +25,14 @@ public static class MeleeAttackPath
 
 	public static void GetArcDegreeSpan( PlayerCombat pc, byte attackType, out float startDeg, out float endDeg )
 	{
+		// Stab has no arc — a synthetic 0→1 span keeps the shared progress mappers linear.
+		if ( attackType == MeleeAttackTypes.Stab )
+		{
+			startDeg = 0f;
+			endDeg = 1f;
+			return;
+		}
+
 		if ( attackType == MeleeAttackTypes.Left )
 		{
 			var half = Math.Max( 1f, pc.GetMeleeLateralArcDegrees() ) * 0.5f;
@@ -262,10 +272,41 @@ public static class MeleeAttackPath
 	{
 		arcProgress01 = Math.Clamp( arcProgress01, 0f, 1f );
 
-		if ( attackType == MeleeAttackTypes.Forward )
+		if ( attackType == MeleeAttackTypes.Stab )
+			EvaluateStabLocal( pc, arcProgress01, out tipLocal, out heelLocal );
+		else if ( attackType == MeleeAttackTypes.Forward )
 			EvaluateForwardLocal( pc, arcProgress01, out tipLocal, out heelLocal );
 		else
 			EvaluateLateralLocal( pc, attackType, arcProgress01, out tipLocal, out heelLocal );
+	}
+
+	/// <summary>Fraction of full stab reach where the blade tip starts the thrust (blade already in front of the body).</summary>
+	const float StabStartReachFraction = 0.35f;
+
+	/// <summary>
+	/// Special stab: straight thrust on local +X at side-slash height; the tip travels from
+	/// <see cref="StabStartReachFraction"/> of reach to full reach over the active window. Basis pitch
+	/// aims the line 1:1 (rotating about the shoulder pivot), so the thrust goes where the crosshair looks.
+	/// </summary>
+	static void EvaluateStabLocal(
+		PlayerCombat pc,
+		float t,
+		out Vector3 tipLocal,
+		out Vector3 heelLocal )
+	{
+		ComputeStabTip( pc, t, out tipLocal );
+
+		var range = GetAttackRange( pc, MeleeAttackTypes.Stab );
+		var heelBack = Math.Clamp( pc.MeleeBladeHeelFraction, 0.04f, 0.6f ) * range;
+		heelLocal = tipLocal - new Vector3( heelBack, 0f, 0f );
+	}
+
+	static void ComputeStabTip( PlayerCombat pc, float t, out Vector3 tipLocal )
+	{
+		t = Math.Clamp( t, 0f, 1f );
+		var range = GetAttackRange( pc, MeleeAttackTypes.Stab );
+		var forward = Lerp( range * StabStartReachFraction, range, t );
+		tipLocal = new Vector3( forward, pc.ServerEyeHeight + pc.MeleeAttackZaxisStart, 0f );
 	}
 
 	/// <summary>
@@ -461,7 +502,12 @@ public static class MeleeAttackPath
 	internal static float GetMidSwingTipRadius( PlayerCombat pc, byte attackType )
 	{
 		Vector3 tipLocal;
-		if ( attackType == MeleeAttackTypes.Forward )
+		if ( attackType == MeleeAttackTypes.Stab )
+		{
+			// Aim the cursor solve at full extension — where the stab actually lands.
+			ComputeStabTip( pc, 1f, out tipLocal );
+		}
+		else if ( attackType == MeleeAttackTypes.Forward )
 		{
 			GetForwardArcDegreeSpan( pc, out var startDeg, out var endDeg );
 			var t = ArcDegreeToProgress01( startDeg, endDeg, 0f );

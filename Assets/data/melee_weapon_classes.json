@@ -2,8 +2,10 @@
   // Combat timings per weapon class — the attack pattern is windup → charge → active → outcome recovery.
   // "initiativeWindupSeconds" replaces "windupSeconds" while initiative is armed (a recent clean hit).
   // Outcome recoveries are the attacker's lock after the swing resolves (added after anim return frames).
-  // STAGED (read by nothing yet): special* (special attack) and combo* (light attack combo) — the
-  // inputs/chaining for those are not implemented; the numbers are reserved here so tuning stays in one place.
+  // special* — the Q special attack (straight stab): windup/active timings, stamina, damage multiplier,
+  // and "specialReachBonusMeters" added on top of reachForwardMeters for the thrust.
+  // STAGED (read by nothing yet): combo* (light attack combo) — chaining is not implemented; the
+  // numbers are reserved here so tuning stays in one place.
   "classes": [
     {
       "classId": "oneHanded",
@@ -20,6 +22,9 @@
       "specialWindupSeconds": 0.3,
       "specialInitiativeWindupSeconds": 0.2,
       "specialActiveSeconds": 0.1,
+      "specialStaminaCost": 18,
+      "specialDamageMultiplier": 1.5,
+      "specialReachBonusMeters": 0.3,
       "comboWindupSeconds": 0.1,
       "comboActiveSeconds": 0.2,
       "comboLastHitExtraRecoverySeconds": 0.1,
@@ -46,6 +51,9 @@
       "specialWindupSeconds": 0.42,
       "specialInitiativeWindupSeconds": 0.32,
       "specialActiveSeconds": 0.14,
+      "specialStaminaCost": 26,
+      "specialDamageMultiplier": 1.5,
+      "specialReachBonusMeters": 0.33,
       "comboWindupSeconds": 0.16,
       "comboActiveSeconds": 0.11,
       "comboLastHitExtraRecoverySeconds": 0.1,
@@ -72,6 +80,9 @@
       "specialWindupSeconds": 0.36,
       "specialInitiativeWindupSeconds": 0.26,
       "specialActiveSeconds": 0.12,
+      "specialStaminaCost": 19,
+      "specialDamageMultiplier": 1.5,
+      "specialReachBonusMeters": 0.4,
       "comboWindupSeconds": 0.13,
       "comboActiveSeconds": 0.1,
       "comboLastHitExtraRecoverySeconds": 0.1,
@@ -98,6 +109,9 @@
       "specialWindupSeconds": 0.32,
       "specialInitiativeWindupSeconds": 0.22,
       "specialActiveSeconds": 0.1,
+      "specialStaminaCost": 18,
+      "specialDamageMultiplier": 1.5,
+      "specialReachBonusMeters": 0.3,
       "comboWindupSeconds": 0.11,
       "comboActiveSeconds": 0.08,
       "comboLastHitExtraRecoverySeconds": 0.1,
@@ -124,6 +138,9 @@
       "specialWindupSeconds": 0.45,
       "specialInitiativeWindupSeconds": 0.35,
       "specialActiveSeconds": 0.22,
+      "specialStaminaCost": 18,
+      "specialDamageMultiplier": 1.5,
+      "specialReachBonusMeters": 0.3,
       "comboWindupSeconds": 0.25,
       "comboActiveSeconds": 0.18,
       "comboLastHitExtraRecoverySeconds": 0.1,
@@ -150,6 +167,9 @@
       "specialWindupSeconds": 0.22,
       "specialInitiativeWindupSeconds": 0.12,
       "specialActiveSeconds": 0.07,
+      "specialStaminaCost": 11,
+      "specialDamageMultiplier": 1.5,
+      "specialReachBonusMeters": 0.2,
       "comboWindupSeconds": 0.06,
       "comboActiveSeconds": 0.06,
       "comboLastHitExtraRecoverySeconds": 0.1,

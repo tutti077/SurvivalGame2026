@@ -1,0 +1,7 @@
+classId,displayName,windupSeconds,initiativeWindupSeconds,chargeSeconds,activeSeconds,heavyActiveSeconds,recoveryMissSeconds,recoveryHitSeconds,recoveryBlockedSeconds,recoveryParriedSeconds,specialWindupSeconds,specialInitiativeWindupSeconds,specialActiveSeconds,specialStaminaCost,specialDamageMultiplier,specialReachBonusMeters,comboWindupSeconds,comboActiveSeconds,comboLastHitExtraRecoverySeconds,reachForwardMeters,reachLateralMeters,staminaLightCost,staminaHeavyCost,lateralArcDegrees,forwardArcTotalDegrees,forwardArcStartDegrees
+oneHanded,One-Handed,0.2,0.1,0.2,0.1,0.1,0.3,0.2,0.2,0.4,0.3,0.2,0.1,18,1.5,0.3,0.1,0.2,0.1,1.9,1.9,8,15,150,158,146
+twoHanded,Two-Handed,0.32,0.16,0.55,0.14,0.2,0.45,0.3,0.3,0.6,0.42,0.32,0.14,26,1.5,0.33,0.16,0.11,0.1,2.2,2.2,12,22,170,165,150
+spear,Spear,0.26,0.13,0.5,0.12,0.16,0.35,0.25,0.25,0.5,0.36,0.26,0.12,19,1.5,0.4,0.13,0.1,0.1,2.6,1.6,9,16,70,110,125
+trainingDummy,Training Dummy,0.22,0.11,0.13,0.1,0.15,0.28,0.28,0.28,0.45,0.32,0.22,0.1,18,1.5,0.3,0.11,0.08,0.1,1.9,1.9,8,15,150,168,118
+scavT1,Scav Claws (T1),0.35,0.25,0.31,0.22,0.22,0.45,0.4,0.4,0.55,0.45,0.35,0.22,18,1.5,0.3,0.25,0.18,0.1,1.9,1.9,8,15,150,158,146
+dagger,Dagger,0.12,0.06,0.35,0.07,0.1,0.15,0.1,0.1,0.25,0.22,0.12,0.07,11,1.5,0.2,0.06,0.06,0.1,1.3,1.2,5,9,110,120,130

@@ -10,6 +10,9 @@ public static class MeleeAttackTypes
 	public const byte Right = 1;
 	public const byte Forward = 2;
 
+	/// <summary>Special attack (Q): straight thrust along the look direction — never selected from the cursor.</summary>
+	public const byte Stab = 3;
+
 	/// <summary>
 	/// Maps cursor cardinal to attack type. Default: right→Right, left→Left, up→Forward.
 	/// When <paramref name="southpawSwing"/> is true, left/right are swapped (legacy inverted mapping).
@@ -28,6 +31,7 @@ public static class MeleeAttackTypes
 		if ( attackType == Left ) return "LeftAttack";
 		if ( attackType == Right ) return "RightAttack";
 		if ( attackType == Forward ) return "ForwardAttack";
+		if ( attackType == Stab ) return "StabAttack";
 		return "?";
 	}
 }
