@@ -676,6 +676,27 @@
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null
+      },
+      {
+        "__type": "Survival.PlayerFishing",
+        "__guid": "3b7f2a91-6c44-4e0d-9a12-58f0cbd7e2a1",
+        "__enabled": true,
+        "Flags": 0,
+        "BarBounceDamping": 0.35,
+        "BarGravity": 2.6,
+        "BarHoldAccel": 3.2,
+        "BarSize01": 0.22,
+        "BiteDelaySeconds": 3,
+        "CastAction": "Attack1",
+        "CastLevelRangeMeters": 12,
+        "CatchRequiredSeconds": 10,
+        "LineBreakDistanceMeters": 30,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null
       }
     ],
     "Children": [

@@ -364,6 +364,16 @@ public static class EquipmentCatalog
 
 		yield return new EquipmentProfileData
 		{
+			ResourceId = "fishing_rod",
+			DisplayName = "Fishing Rod",
+			Slot = "mainHand",
+			AllowedSlots = { "mainHand" },
+			Actions = { "Fish" },
+			HotbarEquipable = true,
+		};
+
+		yield return new EquipmentProfileData
+		{
 			ResourceId = "basic_bow",
 			DisplayName = "Basic Bow",
 			Slot = "mainHand",

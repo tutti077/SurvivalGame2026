@@ -141,6 +141,22 @@
                 ]
               },
               {
+                "id": "fishing_rod",
+                "displayName": "Fishing Rod",
+                "icon": "ui/items/fishing_rod.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 },
+                  { "resourceId": "resource_plantFiber", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Cast into water and win the tug to land a fish" },
+                  { "label": "Type", "value": "Fishing Rod" }
+                ]
+              },
+              {
                 "id": "arrow_wood",
                 "displayName": "Wooden Arrow",
                 "icon": "ui/items/arrow_wood.png",

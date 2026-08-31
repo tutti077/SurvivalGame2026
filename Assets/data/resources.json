@@ -22,6 +22,13 @@
       "fallbackColor": "0.45,0.32,0.18,1"
     },
     {
+      "id": "raw_fish",
+      "displayName": "Raw Fish",
+      "icon": "ui/items/raw_fish.png",
+      "maxStack": 10,
+      "fallbackColor": "0.35,0.62,0.78,1"
+    },
+    {
       "id": "resource_sand",
       "displayName": "Sand",
       "icon": "ui/items/resource_sand.png",

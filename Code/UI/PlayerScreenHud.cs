@@ -37,6 +37,8 @@ public sealed class PlayerScreenHud : PanelComponent
 	MenuPageNavigator _pageNavigator;
 	BuildMenuHud _buildMenuHud;
 	BuildSnapReadoutHud _buildSnapReadout;
+	PlayerFishing _fishing;
+	FishingMinigameHud _fishingHud;
 	ScreenPanel _hudScreen;
 	bool _deferScreenPanelCamera;
 	bool _built;
@@ -135,6 +137,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_minimapHud?.Tick();
 		_buildMenuHud?.Tick();
 		_buildSnapReadout?.Tick();
+		_fishingHud?.Tick( _fishing );
 		RefreshFoodSlots();
 		if ( _inventoryInteraction?.FocusedCampfire is not null
 		     || _inventoryInteraction?.FocusedTimeTrialStand is not null )
@@ -257,6 +260,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		BuildHotbar( Panel );
 		BuildBuildMenu( Panel );
 		BuildGrappleControlPrompt( Panel );
+		BuildFishingMinigame( Panel );
 
 		if ( screen is not null )
 		{
@@ -805,6 +809,19 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_buildSnapReadout = new BuildSnapReadoutHud( _equipment );
 		_buildSnapReadout.Build( root );
+	}
+
+	void BuildFishingMinigame( Panel root )
+	{
+		_fishing = FindOnAncestors<PlayerFishing>();
+		if ( _fishing is null )
+		{
+			Log.Warning( $"[PlayerScreenHud] {GameObject.Name}: no PlayerFishing — fishing minigame HUD skipped." );
+			return;
+		}
+
+		_fishingHud = new FishingMinigameHud();
+		_fishingHud.Build( root );
 	}
 
 	void BuildGameMenu( Panel root )

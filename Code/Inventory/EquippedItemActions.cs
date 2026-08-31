@@ -14,4 +14,6 @@ public enum EquippedItemActions
 	Wingsuit = 1 << 4,
 	/// <summary>Hold-to-charge ranged fire (bow). Does not enable melee teardrop / sword paths.</summary>
 	PrimaryRanged = 1 << 5,
+	/// <summary>Fishing rod cast / minigame (<see cref="PlayerFishing"/>). No melee or ranged paths.</summary>
+	Fish = 1 << 6,
 }
