@@ -188,6 +188,48 @@ public static class ResourceDefinitionCatalog
 			: 64;
 	}
 
+	/// <summary>True when this row is a catchable fish (<c>"fish": true</c> in resources.json).</summary>
+	public static bool IsFish( string resourceId ) =>
+		TryGet( resourceId, out var data ) && data.Fish;
+
+	/// <summary>
+	/// Weighted pick across every <c>"fish": true</c> row. Called once per landed catch, so the
+	/// linear scan is cheaper than keeping a parallel list in sync with catalog reloads.
+	/// </summary>
+	public static bool TryRollFish( Random rng, out string resourceId )
+	{
+		EnsureLoaded();
+		resourceId = string.Empty;
+		if ( rng is null )
+			return false;
+
+		var total = 0;
+		for ( var i = 0; i < Resources.Count; i++ )
+		{
+			if ( Resources[i] is { Fish: true } fish )
+				total += Math.Max( 1, fish.FishWeight );
+		}
+
+		if ( total <= 0 )
+			return false;
+
+		var roll = rng.Next( total );
+		for ( var i = 0; i < Resources.Count; i++ )
+		{
+			if ( Resources[i] is not { Fish: true } fish )
+				continue;
+
+			roll -= Math.Max( 1, fish.FishWeight );
+			if ( roll >= 0 )
+				continue;
+
+			resourceId = ResourceCatalog.NormalizeResourceId( fish.Id );
+			return !string.IsNullOrWhiteSpace( resourceId );
+		}
+
+		return false;
+	}
+
 	public static void ApplyTo( ResourceItemDefinition definition, ResourceDefinitionData data )
 	{
 		if ( definition is null || data is null || string.IsNullOrWhiteSpace( data.Id ) )

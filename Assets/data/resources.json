@@ -1,4 +1,4 @@
-{
+﻿{
   "resources": [
     {
       "id": "resource_stone",
@@ -22,11 +22,280 @@
       "fallbackColor": "0.45,0.32,0.18,1"
     },
     {
-      "id": "raw_fish",
-      "displayName": "Raw Fish",
-      "icon": "ui/items/raw_fish.png",
+      "id": "fish_bluegill",
+      "displayName": "Bluegill",
+      "description": "Small, scrappy panfish. Bites at almost anything.",
+      "icon": "ui/items/fish_bluegill.png",
       "maxStack": 10,
-      "fallbackColor": "0.35,0.62,0.78,1"
+      "fallbackColor": "0.25,0.38,0.50,1",
+      "fish": true,
+      "fishWeight": 100,
+      // Trainer fish: frequent, small, lazy moves that never leave the middle.
+      "fishMotion": {
+        "baseMovesPerSecond": 0.9,
+        "urgency": 0.7,
+        "maxMovesPerSecond": 2,
+        "upBias": 0.5,
+        "jumpMin": 0.08,
+        "jumpMax": 0.18,
+        "dartSpeed": 0.75,
+        "driftSpeed": 0.04,
+        "driftDirection": -1,
+        "bandMin": 0.1,
+        "bandMax": 0.8,
+        "wobbleAmplitude": 0.045,
+        "wobbleSpeed": 1.9,
+        "startHeight": 0.4
+      }
+    },
+    {
+      "id": "fish_sunfish",
+      "displayName": "Sunfish",
+      "description": "Bright little disc of a fish. Common in the shallows.",
+      "icon": "ui/items/fish_sunfish.png",
+      "maxStack": 10,
+      "fallbackColor": "0.31,0.49,0.42,1",
+      "fish": true,
+      "fishWeight": 95,
+      // Bolts to the very top, then slides back down to be caught on the way.
+      "fishMotion": {
+        "baseMovesPerSecond": 0.12,
+        "urgency": 0.9,
+        "maxMovesPerSecond": 2.5,
+        "upBias": 0.92,
+        "openingJump": 0.7,
+        "openingUpBias": 1,
+        "jumpMin": 0.4,
+        "jumpMax": 0.7,
+        "dartSpeed": 2.6,
+        "driftSpeed": 0.22,
+        "driftDirection": -1,
+        "bandMin": 0,
+        "bandMax": 1,
+        "wobbleAmplitude": 0.04,
+        "wobbleSpeed": 1.6,
+        "startHeight": 0.3
+      }
+    },
+    {
+      "id": "fish_perch",
+      "displayName": "Perch",
+      "description": "Banded gold flanks. Travels in schools.",
+      "icon": "ui/items/fish_perch.png",
+      "maxStack": 10,
+      "fallbackColor": "0.82,0.65,0.22,1",
+      "fish": true,
+      "fishWeight": 90,
+      // Steady mid-water ladder — small hops, no surprises.
+      "fishMotion": {
+        "baseMovesPerSecond": 0.75,
+        "urgency": 0.9,
+        "maxMovesPerSecond": 2.2,
+        "upBias": 0.52,
+        "jumpMin": 0.1,
+        "jumpMax": 0.24,
+        "dartSpeed": 1,
+        "driftSpeed": 0.05,
+        "driftDirection": -1,
+        "bandMin": 0.08,
+        "bandMax": 0.88,
+        "wobbleAmplitude": 0.045,
+        "wobbleSpeed": 1.5,
+        "startHeight": 0.45
+      }
+    },
+    {
+      "id": "fish_bass",
+      "displayName": "Bass",
+      "description": "Heavy-bodied ambush hunter. Fights the line hard.",
+      "icon": "ui/items/fish_bass.png",
+      "maxStack": 10,
+      "fallbackColor": "0.37,0.48,0.23,1",
+      "fish": true,
+      "fishWeight": 70,
+      // Holds still, then one big committed run. Readable but strong.
+      "fishMotion": {
+        "baseMovesPerSecond": 0.22,
+        "urgency": 1.6,
+        "maxMovesPerSecond": 2,
+        "upBias": 0.55,
+        "jumpMin": 0.28,
+        "jumpMax": 0.5,
+        "dartSpeed": 1.7,
+        "driftSpeed": 0.07,
+        "driftDirection": -1,
+        "bandMin": 0.05,
+        "bandMax": 0.95,
+        "wobbleAmplitude": 0.055,
+        "wobbleSpeed": 0.8,
+        "startHeight": 0.4
+      }
+    },
+    {
+      "id": "fish_pickerel",
+      "displayName": "Pickerel",
+      "description": "Chain-marked and quick. A pike in miniature.",
+      "icon": "ui/items/fish_pickerel.png",
+      "maxStack": 10,
+      "fallbackColor": "0.44,0.52,0.26,1",
+      "fish": true,
+      "fishWeight": 55,
+      // Twitchy short-range darts that rarely settle.
+      "fishMotion": {
+        "baseMovesPerSecond": 1.2,
+        "urgency": 1.5,
+        "maxMovesPerSecond": 3.5,
+        "upBias": 0.5,
+        "jumpMin": 0.1,
+        "jumpMax": 0.22,
+        "dartSpeed": 2,
+        "driftSpeed": 0.03,
+        "driftDirection": 1,
+        "bandMin": 0.1,
+        "bandMax": 0.9,
+        "wobbleAmplitude": 0.05,
+        "wobbleSpeed": 2.3,
+        "startHeight": 0.5
+      }
+    },
+    {
+      "id": "fish_trout",
+      "displayName": "Trout",
+      "description": "Speckled red along the flank. Prefers cold, moving water.",
+      "icon": "ui/items/fish_trout.png",
+      "maxStack": 10,
+      "fallbackColor": "0.48,0.39,0.25,1",
+      "fish": true,
+      "fishWeight": 50,
+      // Rides high and works the upper half in medium hops.
+      "fishMotion": {
+        "baseMovesPerSecond": 0.7,
+        "urgency": 1.1,
+        "maxMovesPerSecond": 2.4,
+        "upBias": 0.62,
+        "jumpMin": 0.14,
+        "jumpMax": 0.3,
+        "dartSpeed": 1.35,
+        "driftSpeed": 0.09,
+        "driftDirection": -1,
+        "bandMin": 0.25,
+        "bandMax": 1,
+        "wobbleAmplitude": 0.045,
+        "wobbleSpeed": 1.7,
+        "startHeight": 0.55
+      }
+    },
+    {
+      "id": "fish_catfish",
+      "displayName": "Catfish",
+      "description": "Whiskered bottom feeder. All muscle and no hurry.",
+      "icon": "ui/items/fish_catfish.png",
+      "maxStack": 10,
+      "fallbackColor": "0.43,0.40,0.36,1",
+      "fish": true,
+      "fishWeight": 35,
+      // Surfaces once at the start, then never rises above the bottom two thirds again.
+      "fishMotion": {
+        "baseMovesPerSecond": 0.28,
+        "urgency": 1.4,
+        "maxMovesPerSecond": 1.8,
+        "upBias": 0.42,
+        "openingJump": 0.62,
+        "openingUpBias": 1,
+        "jumpMin": 0.2,
+        "jumpMax": 0.45,
+        "dartSpeed": 1.5,
+        "driftSpeed": 0.1,
+        "driftDirection": -1,
+        "bandMin": 0,
+        "bandMax": 1,
+        "settleBandMax": 0.66,
+        "settleTriggerHeight": 0.85,
+        "wobbleAmplitude": 0.06,
+        "wobbleSpeed": 0.6,
+        "startHeight": 0.3
+      }
+    },
+    {
+      "id": "fish_walleye",
+      "displayName": "Walleye",
+      "description": "Glassy-eyed night hunter. A prize on the line.",
+      "icon": "ui/items/fish_walleye.png",
+      "maxStack": 10,
+      "fallbackColor": "0.60,0.56,0.29,1",
+      "fish": true,
+      "fishWeight": 25,
+      // Deep sulker — long stillness, sudden lunge, sinks straight back down.
+      "fishMotion": {
+        "baseMovesPerSecond": 0.16,
+        "urgency": 2.4,
+        "maxMovesPerSecond": 2.6,
+        "upBias": 0.6,
+        "jumpMin": 0.3,
+        "jumpMax": 0.52,
+        "dartSpeed": 2.2,
+        "driftSpeed": 0.22,
+        "driftDirection": -1,
+        "bandMin": 0,
+        "bandMax": 0.85,
+        "wobbleAmplitude": 0.05,
+        "wobbleSpeed": 0.9,
+        "startHeight": 0.25
+      }
+    },
+    {
+      "id": "fish_pike",
+      "displayName": "Pike",
+      "description": "Long, toothy and mean. Runs the moment it feels steel.",
+      "icon": "ui/items/fish_pike.png",
+      "maxStack": 10,
+      "fallbackColor": "0.29,0.42,0.25,1",
+      "fish": true,
+      "fishWeight": 20,
+      // Ambush predator: freezes a long time, then crosses most of the meter at speed.
+      "fishMotion": {
+        "baseMovesPerSecond": 0.12,
+        "urgency": 2.8,
+        "maxMovesPerSecond": 3,
+        "upBias": 0.5,
+        "jumpMin": 0.45,
+        "jumpMax": 0.75,
+        "dartSpeed": 3,
+        "driftSpeed": 0.05,
+        "driftDirection": -1,
+        "bandMin": 0,
+        "bandMax": 1,
+        "wobbleAmplitude": 0.045,
+        "wobbleSpeed": 0.7,
+        "startHeight": 0.5
+      }
+    },
+    {
+      "id": "fish_eel",
+      "displayName": "Eel",
+      "description": "Rope of dark muscle. Rare, and never comes up quietly.",
+      "icon": "ui/items/fish_eel.png",
+      "maxStack": 10,
+      "fallbackColor": "0.29,0.27,0.20,1",
+      "fish": true,
+      "fishWeight": 10,
+      // Never stops moving, but slowly — a constant climb broken by short drops.
+      "fishMotion": {
+        "baseMovesPerSecond": 1.2,
+        "urgency": 0.4,
+        "maxMovesPerSecond": 2.6,
+        "upBias": 0.7,
+        "jumpMin": 0.1,
+        "jumpMax": 0.26,
+        "dartSpeed": 0.9,
+        "driftSpeed": 0.16,
+        "driftDirection": -1,
+        "bandMin": 0,
+        "bandMax": 0.9,
+        "wobbleAmplitude": 0.07,
+        "wobbleSpeed": 1.3,
+        "startHeight": 0.2
+      }
     },
     {
       "id": "resource_sand",

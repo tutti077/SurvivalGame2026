@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Sandbox;
 using Sandbox.UI;
 
@@ -28,6 +28,7 @@ public sealed class FishingMinigameHud
 	Panel _bar;
 	Panel _progressFill;
 	bool _visible;
+	Color _appliedFishColor = FishColor;
 
 	public void Build( Panel parent )
 	{
@@ -116,6 +117,14 @@ public sealed class FishingMinigameHud
 		fishTopPx = Math.Clamp( fishTopPx, 0f, TrackHeight - FishSize );
 		_fishMarker.Style.Top = Length.Pixels( fishTopPx );
 		_fishMarker.Style.Set( "margin-left", $"{-FishSize * 0.5f}px" );
+
+		// Each species carries its own colour so the fight reads differently per fish.
+		var speciesColor = fishing.MinigameFishColor;
+		if ( speciesColor != _appliedFishColor )
+		{
+			_appliedFishColor = speciesColor;
+			_fishMarker.Style.BackgroundColor = speciesColor;
+		}
 
 		_progressFill.Style.Height = Length.Percent( Math.Clamp( fishing.MinigameProgress01, 0f, 1f ) * 100f );
 	}

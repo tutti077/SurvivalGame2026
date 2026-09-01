@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Sandbox;
 
 namespace Survival;
@@ -6,14 +6,13 @@ namespace Survival;
 /// <summary>
 /// Fishing rod flow for the owning pawn: cast → bobber flight → float → bite (fixed delay for now)
 /// → Stardew-style tension minigame. The bobber and line are owner-local visuals; only the final
-/// catch grant goes through the host (<see cref="HostGrantCatch"/>). Bait/ammo and per-fish tables
-/// come later — every catch currently awards one <see cref="CatchResourceId"/>.
+/// catch grant goes through the host, which rolls the species from the <c>"fish": true</c> rows in
+/// <c>data/resources.json</c>. Bait/ammo comes later.
 /// </summary>
 [Title( "Player Fishing" )]
 public sealed class PlayerFishing : Component
 {
 	const string BobberModelPath = "models/dev/sphere.vmdl";
-	const string CatchResourceId = "raw_fish";
 	const float MaxFlightSeconds = 6f;
 
 	[Property, Group( "Input" )] public string CastAction { get; set; } = "Attack1";
@@ -60,12 +59,26 @@ public sealed class PlayerFishing : Component
 
 	// Minigame state — all normalized 0..1 on the meter (0 = bottom).
 	float _fishPos01;
-	float _fishTarget01;
-	float _fishSpeed01;
-	double _fishNextRetargetAt;
 	float _barPos01;
 	float _barVelocity01;
 	float _progress01;
+
+	// Which species is on the hook, and how it swims. Chosen when the fish bites so the fight
+	// matches the prize; the host re-checks the id before granting it.
+	string _hookedFishId = string.Empty;
+	Color _hookedFishColor = new( 0.95f, 0.55f, 0.15f );
+	FishMotionData _motion = new();
+
+	// Dart/drift state for the hazard-rate motion model. The anchor is what darts and drifts;
+	// _fishPos01 is the anchor plus idle sway, and is what the HUD and the hit test both use.
+	float _fishAnchor01;
+	float _sinceLastDart;
+	float _dartTarget01;
+	bool _dartActive;
+	bool _openingDartDone;
+	bool _fishSettled;
+	float _wobblePhase;
+	double _minigameStartedAt;
 
 	readonly Random _rng = new();
 
@@ -92,6 +105,9 @@ public sealed class PlayerFishing : Component
 
 	/// <summary>True this frame when the green bar covers the fish (HUD highlight).</summary>
 	public bool MinigameBarOnFish => IsMinigameActive && IsBarOnFish();
+
+	/// <summary>Species colour for the meter marker, so each fish reads differently.</summary>
+	public Color MinigameFishColor => _hookedFishColor;
 
 	protected override void OnStart()
 	{
@@ -294,10 +310,23 @@ public sealed class PlayerFishing : Component
 
 	void StartMinigame()
 	{
-		_fishPos01 = 0.5f;
-		_fishTarget01 = 0.5f;
-		_fishSpeed01 = 0.5f;
-		_fishNextRetargetAt = 0;
+		ResolveHookedFish();
+
+		_fishPos01 = Math.Clamp( _motion.StartHeight, 0f, 1f );
+		_fishAnchor01 = _fishPos01;
+		_wobblePhase = (float)( _rng.NextDouble() * MathF.PI * 2f );
+		_minigameStartedAt = Time.NowDouble;
+		_sinceLastDart = 0f;
+		_dartTarget01 = _fishPos01;
+		_dartActive = false;
+		_openingDartDone = false;
+		_fishSettled = false;
+
+		// Commit the entrance move immediately. Waiting for the first random trigger let the drift
+		// pull the fish down first, so a "surfaces once" species could miss the surface entirely.
+		ResolveBand( out var bandMin, out var bandMax );
+		BeginDart( bandMin, bandMax );
+
 		_barPos01 = 0f;
 		_barVelocity01 = 0f;
 		_progress01 = 0.2f;
@@ -313,17 +342,7 @@ public sealed class PlayerFishing : Component
 		if ( dt <= 1e-6f )
 			return;
 
-		// Fish: dart to a new spot every so often, with a light wobble in between.
-		if ( Time.NowDouble >= _fishNextRetargetAt )
-		{
-			_fishTarget01 = (float)_rng.NextDouble();
-			_fishSpeed01 = MathX.Lerp( 0.35f, 1.2f, (float)_rng.NextDouble() );
-			_fishNextRetargetAt = Time.NowDouble + MathX.Lerp( 0.5f, 1.5f, (float)_rng.NextDouble() );
-		}
-
-		var wobble = MathF.Sin( (float)Time.NowDouble * 5.1f ) * 0.02f;
-		_fishPos01 = MathX.Approach( _fishPos01, _fishTarget01, _fishSpeed01 * dt );
-		_fishPos01 = Math.Clamp( _fishPos01 + wobble * dt * 10f, 0f, 1f );
+		TickFishMotion( dt );
 
 		// Bar: hold to thrust up, gravity pulls down, hard bounce off the top.
 		var barSize = MinigameBarSize01;
@@ -367,6 +386,125 @@ public sealed class PlayerFishing : Component
 		}
 	}
 
+	/// <summary>Pick the species on the hook and load its swim profile from resources.json.</summary>
+	void ResolveHookedFish()
+	{
+		if ( !ResourceDefinitionCatalog.TryRollFish( _rng, out _hookedFishId )
+		     || !ResourceDefinitionCatalog.TryGet( _hookedFishId, out var data ) )
+		{
+			_hookedFishId = string.Empty;
+			_motion = new FishMotionData();
+			_hookedFishColor = new Color( 0.95f, 0.55f, 0.15f );
+			return;
+		}
+
+		_motion = data.FishMotion ?? new FishMotionData();
+		_hookedFishColor = ResourceDefinitionCatalog.ParseFallbackColor( data.FallbackColor );
+	}
+
+	/// <summary>
+	/// Hold-then-dart swimming. The chance of a dart climbs exponentially with time held still, so
+	/// the pause itself telegraphs the move; between darts the fish coasts along its drift, which is
+	/// what turns "big upward dart + downward drift" into a bolt-and-sink personality.
+	/// </summary>
+	void TickFishMotion( float dt )
+	{
+		// One-shot ceiling drop — "surfaces once, then never goes that high again".
+		if ( !_fishSettled && _motion.SettleBandMax < 1f && _fishPos01 >= _motion.SettleTriggerHeight )
+			_fishSettled = true;
+
+		ResolveBand( out var bandMin, out var bandMax );
+
+		_sinceLastDart += dt;
+
+		if ( !_dartActive )
+		{
+			var rate = Math.Min(
+				Math.Max( 0.01f, _motion.MaxMovesPerSecond ),
+				Math.Max( 0f, _motion.BaseMovesPerSecond ) * MathF.Exp( Math.Max( 0f, _motion.Urgency ) * _sinceLastDart ) );
+
+			// Poisson trial for this frame — frame-rate independent.
+			if ( _rng.NextDouble() < 1.0 - Math.Exp( -rate * dt ) )
+				BeginDart( bandMin, bandMax );
+		}
+
+		if ( _dartActive )
+		{
+			// Re-clamp every frame: when the band tightens mid-dart (a species settling after its
+			// one trip to the surface) the old target sits outside the new band, the fish can never
+			// reach it, and it would stick to the band edge forever instead of resuming.
+			_dartTarget01 = Math.Clamp( _dartTarget01, bandMin, bandMax );
+
+			// Ease out of the dart instead of stopping dead on arrival — a constant-speed slide to
+			// an exact halt is what made the fish read as a mechanical block.
+			var remaining = MathF.Abs( _dartTarget01 - _fishAnchor01 );
+			var ease = Math.Clamp( remaining / 0.15f, 0.3f, 1f );
+
+			_fishAnchor01 = MathX.Approach( _fishAnchor01, _dartTarget01, Math.Max( 0.05f, _motion.DartSpeed ) * ease * dt );
+			if ( MathF.Abs( _fishAnchor01 - _dartTarget01 ) <= 0.005f )
+				_dartActive = false;
+		}
+		else
+		{
+			_fishAnchor01 += Math.Max( 0f, _motion.DriftSpeed ) * Math.Sign( _motion.DriftDirection ) * dt;
+		}
+
+		_fishAnchor01 = Math.Clamp( _fishAnchor01, bandMin, bandMax );
+
+		// Idle sway: two out-of-phase sines so the path is never a straight line and never repeats
+		// on an obvious beat. Applied to the real position, so what you see is what you must cover.
+		var t = (float)( Time.NowDouble - _minigameStartedAt );
+		var speed = Math.Max( 0f, _motion.WobbleSpeed );
+		var sway = MathF.Sin( t * speed * 2.7f + _wobblePhase ) * 0.6f
+		           + MathF.Sin( t * speed * 1.13f + _wobblePhase * 1.7f ) * 0.4f;
+
+		_fishPos01 = Math.Clamp( _fishAnchor01 + sway * Math.Max( 0f, _motion.WobbleAmplitude ), bandMin, bandMax );
+	}
+
+	/// <summary>Vertical slice of the meter the fish may occupy right now (tightens once settled).</summary>
+	void ResolveBand( out float bandMin, out float bandMax )
+	{
+		bandMin = Math.Clamp( _motion.BandMin, 0f, 1f );
+		bandMax = Math.Clamp( _fishSettled ? _motion.SettleBandMax : _motion.BandMax, 0f, 1f );
+		if ( bandMax < bandMin )
+			bandMax = bandMin;
+	}
+
+	void BeginDart( float bandMin, float bandMax )
+	{
+		// The opening dart can override the bias, so a species can make an entrance (surface once)
+		// and then behave completely differently for the rest of the fight.
+		var opening = !_openingDartDone;
+		var bias = opening && _motion.OpeningUpBias >= 0f ? _motion.OpeningUpBias : _motion.UpBias;
+
+		var lo = Math.Min( _motion.JumpMin, _motion.JumpMax );
+		var hi = Math.Max( _motion.JumpMin, _motion.JumpMax );
+		var distance = opening && _motion.OpeningJump >= 0f
+			? _motion.OpeningJump
+			: MathX.Lerp( lo, hi, (float)_rng.NextDouble() );
+
+		_openingDartDone = true;
+		var up = _rng.NextDouble() < Math.Clamp( bias, 0f, 1f );
+
+		// If the fish is already jammed against the wall it wants to move toward, flip it. Otherwise
+		// the target clamps onto its own position, the dart completes instantly, and a biased fish
+		// sits frozen at the edge doing nothing.
+		const float minRoom = 0.05f;
+		var room = up ? bandMax - _fishAnchor01 : _fishAnchor01 - bandMin;
+		if ( room < minRoom )
+		{
+			up = !up;
+			room = up ? bandMax - _fishAnchor01 : _fishAnchor01 - bandMin;
+		}
+
+		// In a band too tight for the full jump, take what room there is rather than nothing.
+		distance = Math.Min( distance, Math.Max( 0f, room ) );
+
+		_dartTarget01 = Math.Clamp( _fishAnchor01 + ( up ? distance : -distance ), bandMin, bandMax );
+		_dartActive = true;
+		_sinceLastDart = 0f;
+	}
+
 	bool IsBarOnFish()
 	{
 		var halfFish = 0.03f;
@@ -379,15 +517,15 @@ public sealed class PlayerFishing : Component
 	{
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
 		{
-			HostGrantCatch();
+			HostGrantCatch( _hookedFishId );
 			return;
 		}
 
-		RpcHostGrantCatch();
+		RpcHostGrantCatch( _hookedFishId ?? string.Empty );
 	}
 
 	[Rpc.Host]
-	void RpcHostGrantCatch()
+	void RpcHostGrantCatch( string foughtFishId )
 	{
 		if ( !Networking.IsHost || !GameObject.IsValid() )
 			return;
@@ -396,10 +534,15 @@ public sealed class PlayerFishing : Component
 		     && !ConnectionIdentity.SameClient( caller, owner ) )
 			return;
 
-		HostGrantCatch();
+		HostGrantCatch( foughtFishId );
 	}
 
-	void HostGrantCatch()
+	/// <summary>
+	/// The owner picks the species at bite time so the fight matches the prize, and sends it here as
+	/// intent. The host still decides what lands: an id that is not a real fish row is discarded and
+	/// re-rolled, so a tampered client can bias which fish it fights but can never invent an item.
+	/// </summary>
+	void HostGrantCatch( string foughtFishId )
 	{
 		// One check on the commit: a catch only lands while a rod is actually in the main hand.
 		var equipment = Components.Get<PlayerEquipment>();
@@ -407,7 +550,15 @@ public sealed class PlayerFishing : Component
 		if ( !EquipmentCatalog.HasAction( mainHandId, EquippedItemActions.Fish ) )
 			return;
 
-		Components.Get<PlayerInventory>()?.HostTryAddResource( CatchResourceId, 1 );
+		var caughtId = ResourceCatalog.NormalizeResourceId( foughtFishId ?? string.Empty );
+		if ( !ResourceDefinitionCatalog.IsFish( caughtId )
+		     && !ResourceDefinitionCatalog.TryRollFish( _rng, out caughtId ) )
+		{
+			Log.Warning( "[PlayerFishing] No fish rows in resources.json — catch granted nothing." );
+			return;
+		}
+
+		Components.Get<PlayerInventory>()?.HostTryAddResource( caughtId, 1 );
 	}
 
 	// ── Bobber / line visuals ────────────────────────────────────────────────
