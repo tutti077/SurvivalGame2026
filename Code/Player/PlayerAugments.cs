@@ -114,14 +114,6 @@ public sealed class PlayerAugments : Component
 		return Math.Max( 1f, def.JumpHeightMultiplier );
 	}
 
-	public float GetLateralDashMeters()
-	{
-		if ( !TryGetInstalledDefinition( AugmentAbility.LateralDash, out var def ) )
-			return 0f;
-
-		return Math.Max( 0f, def.DashMeters );
-	}
-
 	/// <summary>Craft at the station: consume ingredients from bag, grant output into the augment bank.</summary>
 	public bool OwnerTryCraft( string augmentId )
 	{

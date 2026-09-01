@@ -226,18 +226,6 @@ public static class AugmentCatalog
 		},
 		new()
 		{
-			Id = "augment_lateral_dash_legs",
-			DisplayName = "Lateral Dash Legs",
-			Icon = "ui/items/resource_woodBasic.png",
-			Description = "Grounded A/D + Jump dashes sideways instead of jumping.",
-			Slot = "LegQuads",
-			Ability = "LateralDash",
-			DashMeters = 3f,
-			MaxStack = 1,
-			Ingredients = { new CraftingIngredient { ResourceId = "resource_woodBasic", Amount = 1 } },
-		},
-		new()
-		{
 			Id = "augment_double_jump_legs",
 			DisplayName = "Double Jump Legs",
 			Icon = "ui/items/resource_woodBasic.png",

@@ -365,6 +365,10 @@ public sealed class PlayerVitals : Component
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
 			return 0f;
 
+		// Dodge roll i-frames: the whole hit is ignored while the authority's roll window holds.
+		if ( Components.Get<PlayerMovement>() is { IsDodgeRollInvulnerable: true } )
+			return 0f;
+
 		var auth = VitalsAuthority.Instance;
 		if ( auth is not null )
 		{

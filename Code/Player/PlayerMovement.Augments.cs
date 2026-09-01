@@ -3,21 +3,9 @@ using Sandbox;
 
 namespace Survival;
 
-/// <summary>Augment-driven jump / dash abilities (Jump Legs, Lateral Dash, Double Jump).</summary>
+/// <summary>Augment-driven jump abilities (Jump Legs, Double Jump).</summary>
 public sealed partial class PlayerMovement
 {
-	[Property, Group( "Augments" ), Title( "Lateral dash input Left" )]
-	public string AugmentDashLeftAction { get; set; } = "Left";
-
-	[Property, Group( "Augments" ), Title( "Lateral dash input Right" )]
-	public string AugmentDashRightAction { get; set; } = "Right";
-
-	[Property, Group( "Augments" ), Title( "Forward (blocks dash)" )]
-	public string AugmentDashBlockForwardAction { get; set; } = "Forward";
-
-	[Property, Group( "Augments" ), Title( "Back (blocks dash)" )]
-	public string AugmentDashBlockBackAction { get; set; } = "Backward";
-
 	bool _doubleJumpUsed;
 	bool _wasGroundedForDoubleJump = true;
 	bool _pendingJumpLegsScale;
@@ -56,16 +44,6 @@ public sealed partial class PlayerMovement
 		if ( GrappleAttached )
 			return;
 
-		// Lateral dash: grounded + A/D without W/S → dash instead of jump.
-		if ( _controller.IsOnGround && augments.HasAbility( AugmentAbility.LateralDash ) )
-		{
-			if ( TryConsumeLateralDash( augments ) )
-			{
-				ClearActionIfPressed( JumpInputAction );
-				return;
-			}
-		}
-
 		// Air hop: any time while airborne until used once this flight (jump-launch or walk-off).
 		if ( !_controller.IsOnGround
 		     && augments.HasAbility( AugmentAbility.DoubleJump )
@@ -94,41 +72,6 @@ public sealed partial class PlayerMovement
 		}
 
 		_wasGroundedForDoubleJump = grounded;
-	}
-
-	bool TryConsumeLateralDash( PlayerAugments augments )
-	{
-		var left = !string.IsNullOrWhiteSpace( AugmentDashLeftAction ) && Input.Down( AugmentDashLeftAction );
-		var right = !string.IsNullOrWhiteSpace( AugmentDashRightAction ) && Input.Down( AugmentDashRightAction );
-		if ( left == right )
-			return false;
-
-		var forward = !string.IsNullOrWhiteSpace( AugmentDashBlockForwardAction ) && Input.Down( AugmentDashBlockForwardAction );
-		var back = !string.IsNullOrWhiteSpace( AugmentDashBlockBackAction ) && Input.Down( AugmentDashBlockBackAction );
-		if ( forward || back )
-			return false;
-
-		var meters = augments.GetLateralDashMeters();
-		if ( meters <= 1e-4f )
-			return false;
-
-		// Camera yaw so A/D match what the player sees (pawn Right can face the opposite way).
-		var rightDir = Rotation.FromYaw( _controller.EyeAngles.yaw ).Right.WithZ( 0f );
-		if ( rightDir.LengthSquared < 1e-6f )
-			rightDir = GameObject.WorldRotation.Right.WithZ( 0f );
-		if ( rightDir.LengthSquared < 1e-6f )
-			return false;
-
-		rightDir = rightDir.Normal;
-		var dir = left ? -rightDir : rightDir;
-
-		PredictFlatDashMeters( dir, meters );
-		if ( GameObject.Network is { Active: true } )
-			RpcHostAugmentLateralDash( dir, meters );
-		else
-			ApplyFlatDashMeters( dir, meters );
-
-		return true;
 	}
 
 	bool TryPerformDoubleJump()
@@ -188,26 +131,5 @@ public sealed partial class PlayerMovement
 	void OnAugmentLanded()
 	{
 		_doubleJumpUsed = false;
-	}
-
-	[Rpc.Host]
-	void RpcHostAugmentLateralDash( Vector3 flatDir, float meters )
-	{
-		if ( !Networking.IsHost || !GameObject.IsValid() )
-			return;
-
-		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
-		     && !ConnectionIdentity.SameClient( caller, owner ) )
-			return;
-
-		var augments = ResolveAugments();
-		if ( augments is null || !augments.HasAbility( AugmentAbility.LateralDash ) )
-			return;
-
-		_controller ??= Components.Get<PlayerController>();
-		if ( _controller is null || !_controller.IsOnGround )
-			return;
-
-		ApplyFlatDashMeters( flatDir, Math.Min( meters, Math.Max( 0f, augments.GetLateralDashMeters() ) ) );
 	}
 }

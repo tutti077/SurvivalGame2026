@@ -9,7 +9,7 @@ public enum AugmentAbility
 {
 	None = 0,
 	JumpHeight = 1,
-	LateralDash = 2,
+	// 2 was LateralDash — retired when the dodge roll became core movement.
 	DoubleJump = 3,
 }
 
@@ -37,9 +37,6 @@ public sealed class AugmentDefinition
 
 	[JsonPropertyName( "jumpHeightMultiplier" )]
 	public float JumpHeightMultiplier { get; set; } = 1f;
-
-	[JsonPropertyName( "dashMeters" )]
-	public float DashMeters { get; set; } = 3f;
 
 	public List<CraftingIngredient> Ingredients { get; set; } = new();
 	public List<CraftingStatLine> Stats { get; set; } = new();

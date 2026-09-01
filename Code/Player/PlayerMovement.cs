@@ -558,7 +558,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 				Input.SetAction( "Attack1", false );
 		}
 
-		// Augment air hop / dash must see Jump before stamina or wingsuit clear it.
+		// Dodge roll and the augment air hop must see Jump before stamina or wingsuit clear it;
+		// roll first so A/D/S + Space is a roll, never a jump.
+		TickDodgeRollGate();
 		TickAugmentJumpGates();
 
 		// Before PlayerController.Jump: strip downhill -Z so SubtractDirection doesn't
@@ -614,6 +616,11 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	public void OnJumped()
 	{
 		if ( !IsLocalMovementDriver() || _vitals is null )
+			return;
+
+		// Fixed-tick race: the controller can consume a roll press (A/D/S + Space) as a jump before
+		// the frame's PreInput gate sees it — convert that hop into the roll. No stamina, no jump anim path.
+		if ( TryConvertJumpIntoDodgeRoll() )
 			return;
 
 		// Jump may SubtractDirection along the ground normal after PreInput — scrub boost, keep sprint.
