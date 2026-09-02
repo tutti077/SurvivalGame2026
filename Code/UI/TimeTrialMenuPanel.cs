@@ -351,20 +351,47 @@ public sealed class TimeTrialMenuPanel : Panel
 	}
 }
 
-/// <summary>Clickable row/chip using mouse-down (more reliable than onclick while HUD rebuilds).</summary>
+/// <summary>
+/// Clickable row/chip with a depress visual: mouse-down squashes the button, the action fires on
+/// mouse-UP. Firing on release also catches a first click whose DOWN got swallowed while the
+/// menu was still taking over the cursor (the "have to click twice" complaint).
+/// </summary>
 sealed class TimeTrialClickPanel : Panel
 {
 	public Action Clicked;
 
 	public override bool WantsMouseInput() => true;
 
+	static bool IsClickButton( string button ) => button is "mouseleft" or "mouse1" or "Attack1";
+
 	protected override void OnMouseDown( MousePanelEvent e )
 	{
 		base.OnMouseDown( e );
-		if ( e.Button is "mouseleft" or "mouse1" or "Attack1" )
+		if ( !IsClickButton( e.Button ) )
+			return;
+
+		if ( Clicked is not null )
 		{
-			Clicked?.Invoke();
-			e.StopPropagation();
+			Style.Set( "transform", "scale(0.93)" );
+			Style.Opacity = 0.8f;
 		}
+
+		e.StopPropagation();
+	}
+
+	protected override void OnMouseUp( MousePanelEvent e )
+	{
+		base.OnMouseUp( e );
+		if ( !IsClickButton( e.Button ) )
+			return;
+
+		if ( Clicked is not null )
+		{
+			Style.Set( "transform", "scale(1)" );
+			Style.Opacity = 1f;
+		}
+
+		Clicked?.Invoke();
+		e.StopPropagation();
 	}
 }

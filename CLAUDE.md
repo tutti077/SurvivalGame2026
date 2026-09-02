@@ -157,6 +157,8 @@ Code/
                 (+ their partials), melee path/sweep/block helpers, equipment, hand harvest,
                 inventory interaction, build hammer
   Combat/       CombatAuthority (host melee validation), ArrowProjectile
+  Crew/         CrewRegistry (host static registry — player data, survives scene loads) + PlayerCrew (per-pawn sync on the player prefab)
+  Arena/        ArenaSession (crew-vs-crew battles, queue + matchmaking), ArenaMenuButton
   Vitals/       VitalsAuthority (host pools), regen gates
   Entity/       EntityBrain · EntityLocomotion · EntityCombat · perception, nav
   Building/     Build piece catalog, snap layout/placement/compatibility, nav sync

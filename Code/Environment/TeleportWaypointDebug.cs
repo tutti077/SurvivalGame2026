@@ -32,7 +32,7 @@ public sealed class TeleportWaypointDebug : Component
 			return;
 
 		var movement = pawn.Components.Get<PlayerMovement>();
-		if ( movement is { TimeTrialInputLocked: true } )
+		if ( movement is { EventInputLocked: true } )
 			return;
 
 		if ( !TeleportPad.TryGetLastArrival( pawn, out var pos, out var rot, out var pad ) )

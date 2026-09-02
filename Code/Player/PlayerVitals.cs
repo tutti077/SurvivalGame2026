@@ -525,6 +525,11 @@ public sealed class PlayerVitals : Component
 		if ( !IsHostOrOffline || CurrentHealth > 0.001f )
 			return;
 
+		// Arena deaths keep loot, skip normal respawn, and turn the pawn into a ghost spectator
+		// until the battle ends (ArenaSession restores pools + position afterwards).
+		if ( ArenaSession.HostTryInterceptDeath( this ) )
+			return;
+
 		_deathCount++;
 		if ( LogDamageAppliedToConsole )
 			Log.Info( $"[Death] {GameObject.Name} died (death #{_deathCount})" );
@@ -572,6 +577,42 @@ public sealed class PlayerVitals : Component
 			var logPos = hasSpawn ? spawnPos : GameObject.WorldPosition;
 			Log.Info( $"{VitalsLogPrefix()} Death → respawn for {GameObject.Name} at {logPos} (HP/ST restored)." );
 		}
+	}
+
+	/// <summary>
+	/// Host-only, arena match end: teleport back to the pre-match spot with full pools on every
+	/// machine. Same replication contract as the death respawn (broadcast + owner transform snap).
+	/// </summary>
+	public void HostArenaRestoreAndTeleport( Vector3 worldPosition, Rotation worldRotation )
+	{
+		if ( !IsHostOrOffline )
+			return;
+
+		var hostSimulatesTransform = GameObject.Network is not { Active: true } || !GameObject.IsProxy;
+		if ( hostSimulatesTransform )
+			ApplyRespawnTransform( worldPosition, worldRotation );
+
+		var auth = VitalsAuthority.Instance;
+		VitalsSnapshot snap;
+		if ( auth is not null )
+		{
+			var restored = auth.RegisterAndGetSnapshot( GameObject, MaxHealth, MaxStamina, forceFullPoolsAndResetRegenClocks: true );
+			snap = restored ?? new VitalsSnapshot( MaxHealth, MaxHealth, MaxStamina, MaxStamina );
+		}
+		else
+			snap = new VitalsSnapshot( MaxHealth, MaxHealth, MaxStamina, MaxStamina );
+
+		ApplyLocalSnapshot( snap, allowDeathRespawn: false );
+
+		if ( GameObject.Network is { Active: true } net )
+		{
+			RpcBroadcastDeathRespawn( worldPosition, worldRotation, snap.Health, snap.HealthMax, snap.Stamina, snap.StaminaMax );
+			if ( net.Owner is { } owner && !ConnectionIdentity.SameClient( owner, Connection.Local ) )
+				RpcOwnerDeathRespawnTransform( worldPosition, worldRotation );
+		}
+
+		if ( LogVitalsNetworking )
+			Log.Info( $"{VitalsLogPrefix()} Arena restore for {GameObject.Name} at {worldPosition} (HP/ST full)." );
 	}
 
 	/// <summary>Host/offline: one-line damage log (attacker → victim, rounded damage, HP left).</summary>

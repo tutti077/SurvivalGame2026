@@ -35,7 +35,7 @@ public sealed partial class PlayerInventoryInteraction
 	void TickTimeTrialAccess()
 	{
 		var menuOpen = _menu is not null && _menu.IsMenuOpen;
-		var pressed = !menuOpen
+		var pressed = !menuOpen && !IsArenaMenuOpen
 		              && (Input.Pressed( TimeTrialUseAction ) || Input.Pressed( "HandHarvest" ));
 
 		TickTimeTrialFocusPrompt( menuOpen, force: pressed );
@@ -98,7 +98,7 @@ public sealed partial class PlayerInventoryInteraction
 		if ( FocusedTimeTrialMenuButton is not null && !FocusedTimeTrialMenuButton.IsValid() )
 			SetFocusedTimeTrialMenu( null, null );
 
-		if ( inventoryMenuOpen || IsBuildHammerPreviewing() || IsTimeTrialMenuOpen )
+		if ( inventoryMenuOpen || IsBuildHammerPreviewing() || IsTimeTrialMenuOpen || IsArenaMenuOpen )
 		{
 			if ( !IsTimeTrialMenuOpen )
 				SetFocusedTimeTrialMenu( null, null );

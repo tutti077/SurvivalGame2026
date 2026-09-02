@@ -43,6 +43,7 @@ public sealed class PlayerCrosshair : Component
 	PlayerCombat _combat;
 	PlayerEquipment _equipment;
 	PlayerGameMenuController _menu;
+	PlayerInventoryInteraction _interaction;
 
 	protected override void OnStart()
 	{
@@ -53,6 +54,7 @@ public sealed class PlayerCrosshair : Component
 		_combat = Components.Get<PlayerCombat>( FindMode.EverythingInSelf );
 		_equipment = Components.Get<PlayerEquipment>( FindMode.EverythingInSelf );
 		_menu = Components.Get<PlayerGameMenuController>( FindMode.EverythingInSelf );
+		_interaction = Components.Get<PlayerInventoryInteraction>( FindMode.EverythingInSelf );
 	}
 
 	protected override void OnPreRender()
@@ -63,6 +65,14 @@ public sealed class PlayerCrosshair : Component
 			return;
 
 		if ( _menu is not null && _menu.IsMenuOpen )
+			return;
+
+		// Cursor-owning modals: only the mouse cursor should show, not the aim ring.
+		if ( _interaction is { IsTimeTrialMenuOpen: true } or { IsArenaMenuOpen: true } )
+			return;
+
+		// Grapple control-scheme prompt (per-machine first-use choice).
+		if ( GrappleControlSchemeStore.NeedsChoice && _movement?.HasGrappleEquipped() == true )
 			return;
 
 		var cam = BuildViewCamera.Resolve( GameObject );

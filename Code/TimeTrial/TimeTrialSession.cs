@@ -6,8 +6,9 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Host-authoritative time trial on <c>TimeTrialStand</c>: menu-driven solo / 1v1 lobby,
-/// variation routes, countdown, race, per-variation leaderboard.
+/// Host-authoritative time trial living on the Time Trials menu button object: menu-driven
+/// solo / 1v1 lobby, variation routes, countdown, race, per-variation leaderboard.
+/// Spawn offsets are local to this button object.
 /// </summary>
 [Title( "Time Trial Session" )]
 public sealed class TimeTrialSession : Component
@@ -22,10 +23,10 @@ public sealed class TimeTrialSession : Component
 	[Property, Group( "Spawns" ), Title( "Solo Start Local Offset" )]
 	public Vector3 SoloStartLocalOffset { get; set; } = new( 0f, 0f, 40f );
 
-	[Property, Group( "Spawns" ), Title( "2P Left Local Offset (from 1v1 button)" )]
+	[Property, Group( "Spawns" ), Title( "2P Left Local Offset (from this button)" )]
 	public Vector3 TwoPlayerLeftLocalOffset { get; set; } = new( 0f, -60f, 0f );
 
-	[Property, Group( "Spawns" ), Title( "2P Right Local Offset (from 1v1 button)" )]
+	[Property, Group( "Spawns" ), Title( "2P Right Local Offset (from this button)" )]
 	public Vector3 TwoPlayerRightLocalOffset { get; set; } = new( 0f, 60f, 0f );
 
 	[Property, Group( "Spawns" ), Title( "Face Target (optional)" )]
@@ -57,7 +58,6 @@ public sealed class TimeTrialSession : Component
 
 	readonly List<RacerState> _racers = new();
 	readonly List<int> _activeRouteOrders = new();
-	GameObject _twoPlayerButton;
 	double _countdownBeatAt;
 	int _countdownValue;
 	double _finishedUntil;
@@ -106,7 +106,6 @@ public sealed class TimeTrialSession : Component
 	{
 		base.OnStart();
 		TimeTrialVariationCatalog.EnsureLoaded();
-		CacheTwoPlayerButton();
 
 		// Object-mode session so [Sync] lobby state + Broadcast RPCs reach joining clients.
 		if ( Networking.IsHost )
@@ -139,21 +138,6 @@ public sealed class TimeTrialSession : Component
 				if ( Time.NowDouble >= _finishedUntil )
 					HostResetToIdle();
 				break;
-		}
-	}
-
-	void CacheTwoPlayerButton()
-	{
-		foreach ( var renderer in Scene.GetAllComponents<ModelRenderer>() )
-		{
-			if ( renderer?.GameObject is not { IsValid: true } go )
-				continue;
-			if ( go.Name.Contains( "1v1", StringComparison.OrdinalIgnoreCase )
-			     || go.Name.Contains( "2player", StringComparison.OrdinalIgnoreCase ) )
-			{
-				_twoPlayerButton = go;
-				return;
-			}
 		}
 	}
 
@@ -591,17 +575,10 @@ public sealed class TimeTrialSession : Component
 		if ( r.Root is null || !r.Root.IsValid() )
 			return;
 
-		Vector3 worldPos;
-		if ( _racers.Count == 1 )
-		{
-			worldPos = GameObject.WorldPosition + GameObject.WorldRotation * SoloStartLocalOffset;
-		}
-		else
-		{
-			var button = _twoPlayerButton is { IsValid: true } ? _twoPlayerButton : GameObject;
-			var local = index == 0 ? TwoPlayerLeftLocalOffset : TwoPlayerRightLocalOffset;
-			worldPos = button.WorldPosition + button.WorldRotation * local;
-		}
+		var local = _racers.Count == 1
+			? SoloStartLocalOffset
+			: index == 0 ? TwoPlayerLeftLocalOffset : TwoPlayerRightLocalOffset;
+		var worldPos = GameObject.WorldPosition + GameObject.WorldRotation * local;
 
 		var facePos = ResolveFaceWorldPosition();
 		var flat = (facePos - worldPos).WithZ( 0f );
@@ -611,7 +588,7 @@ public sealed class TimeTrialSession : Component
 
 		var movement = r.Root.Components.Get<PlayerMovement>();
 		if ( movement is not null )
-			movement.HostApplyTimeTrialSpawn( worldPos, yaw );
+			movement.HostApplyEventSpawn( worldPos, yaw );
 		else
 		{
 			r.Root.WorldPosition = worldPos;
@@ -642,7 +619,7 @@ public sealed class TimeTrialSession : Component
 			return;
 
 		var movement = root.Components.Get<PlayerMovement>();
-		movement?.HostSetTimeTrialFrozen( frozen );
+		movement?.HostSetEventFrozen( frozen );
 	}
 
 	void HostResetToIdle()

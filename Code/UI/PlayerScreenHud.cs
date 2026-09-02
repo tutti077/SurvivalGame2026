@@ -66,6 +66,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	Label _timeTrialBanner;
 	double _timeTrialBannerUntil;
 	TimeTrialMenuPanel _timeTrialMenu;
+	ArenaMenuPanel _arenaMenu;
 	Panel _timeTrialLbRoot;
 	Label _timeTrialLbTitle;
 	Label _timeTrialLbBody;
@@ -140,11 +141,15 @@ public sealed class PlayerScreenHud : PanelComponent
 		_fishingHud?.Tick( _fishing );
 		RefreshFoodSlots();
 		if ( _inventoryInteraction?.FocusedCampfire is not null
-		     || _inventoryInteraction?.FocusedTimeTrialStand is not null )
+		     || _inventoryInteraction?.FocusedTimeTrialStand is not null
+		     || _inventoryInteraction?.FocusedArenaMenuButton is not null )
 			OnInteractionPromptChanged();
 
 		if ( _timeTrialMenu is not null && _inventoryInteraction is { IsTimeTrialMenuOpen: true } )
 			_timeTrialMenu.TickOpen();
+
+		if ( _arenaMenu is not null && _inventoryInteraction is { IsArenaMenuOpen: true } )
+			_arenaMenu.TickOpen();
 
 		TickGrappleControlPrompt();
 
@@ -184,12 +189,15 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedCampfireChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged -= OnTimeTrialMenuOpenChanged;
+			_inventoryInteraction.FocusedArenaButtonChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.ArenaMenuOpenChanged -= OnArenaMenuOpenChanged;
 			_inventoryInteraction.AugmentStationChanged -= OnAugmentStationChanged;
 			_inventoryInteraction.FocusedWorkbenchChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.WorkbenchChanged -= OnWorkbenchChanged;
 		}
 		if ( _handHarvest is not null )
 			_handHarvest.FocusedNodeChanged -= OnInteractionPromptChanged;
+		ArenaSession.LocalArenaTextChanged -= OnTimeTrialBanner;
 		TimeTrialSession.LocalCountdownTextChanged -= OnTimeTrialCountdown;
 		TimeTrialSession.LocalRaceElapsedChanged -= OnTimeTrialElapsed;
 		TimeTrialSession.LocalFinishBannerChanged -= OnTimeTrialBanner;
@@ -530,6 +538,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
+			_inventoryInteraction.FocusedArenaButtonChanged += OnInteractionPromptChanged;
 		}
 		if ( _equipment is not null )
 			_equipment.EquipmentChanged += OnEquipmentToolChanged;
@@ -596,8 +605,11 @@ public sealed class PlayerScreenHud : PanelComponent
 		{
 			_timeTrialMenu = new TimeTrialMenuPanel( _inventoryInteraction ) { Parent = root };
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
+			_arenaMenu = new ArenaMenuPanel( _inventoryInteraction ) { Parent = root };
+			_inventoryInteraction.ArenaMenuOpenChanged += OnArenaMenuOpenChanged;
 		}
 
+		ArenaSession.LocalArenaTextChanged += OnTimeTrialBanner;
 		TimeTrialSession.LocalCountdownTextChanged += OnTimeTrialCountdown;
 		TimeTrialSession.LocalRaceElapsedChanged += OnTimeTrialElapsed;
 		TimeTrialSession.LocalFinishBannerChanged += OnTimeTrialBanner;
@@ -618,8 +630,9 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		var menuOpen = _menuController is { IsMenuOpen: true };
 		var trialOpen = _inventoryInteraction is { IsTimeTrialMenuOpen: true };
+		var arenaOpen = _inventoryInteraction is { IsArenaMenuOpen: true };
 		var equipped = _movement is not null && _movement.HasGrappleEquipped();
-		var want = equipped && GrappleControlSchemeStore.NeedsChoice && !menuOpen && !trialOpen;
+		var want = equipped && GrappleControlSchemeStore.NeedsChoice && !menuOpen && !trialOpen && !arenaOpen;
 
 		_grappleControlPrompt?.SetOpen( want );
 
@@ -669,6 +682,10 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _inventoryInteraction is { IsTimeTrialMenuOpen: true } )
 			return;
 
+		// Arena menu owns the cursor the same way the time trial menu does.
+		if ( _inventoryInteraction is { IsArenaMenuOpen: true } )
+			return;
+
 		if ( _grapplePromptController is not null && _grapplePromptController.IsValid() )
 			_grapplePromptController.UseLookControls = _grapplePromptSavedLook;
 
@@ -678,6 +695,12 @@ public sealed class PlayerScreenHud : PanelComponent
 	void OnTimeTrialMenuOpenChanged()
 	{
 		_timeTrialMenu?.SetOpen( _inventoryInteraction is { IsTimeTrialMenuOpen: true } );
+		OnInteractionPromptChanged();
+	}
+
+	void OnArenaMenuOpenChanged()
+	{
+		_arenaMenu?.SetOpen( _inventoryInteraction is { IsArenaMenuOpen: true } );
 		OnInteractionPromptChanged();
 	}
 
@@ -888,7 +911,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_sections.Add( _skillsSection );
 		_skillsSection.Build( _menuSkillsCenterRoot );
 
-		_mapSection = new MapMenuSection();
+		_mapSection = new MapMenuSection( _inventoryInteraction );
 		_sections.Add( _mapSection );
 		_mapSection.Build( _menuMapRoot );
 
@@ -926,6 +949,8 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
+			_inventoryInteraction.FocusedArenaButtonChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.ArenaMenuOpenChanged += OnArenaMenuOpenChanged;
 			_inventoryInteraction.AugmentStationChanged += OnAugmentStationChanged;
 			_inventoryInteraction.FocusedWorkbenchChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.WorkbenchChanged += OnWorkbenchChanged;
@@ -1056,14 +1081,18 @@ public sealed class PlayerScreenHud : PanelComponent
 		var focusedWorkbench = _inventoryInteraction?.FocusedWorkbench;
 		var focusedStand = _inventoryInteraction?.FocusedTimeTrialStand;
 		var menuOpen = _inventoryInteraction is { IsTimeTrialMenuOpen: true };
+		var focusedArenaButton = _inventoryInteraction?.FocusedArenaMenuButton;
+		var arenaMenuOpen = _inventoryInteraction is { IsArenaMenuOpen: true };
 		var focusedCampfire = _inventoryInteraction?.FocusedCampfire;
 		var showOpen = (focusedContainer is not null && focusedContainer.IsValid())
 		               || (focusedStation is not null && focusedStation.IsValid())
 		               || (focusedWorkbench is not null && focusedWorkbench.IsValid());
 		var showTrial = !menuOpen && !showOpen && focusedStand is not null && focusedStand.IsValid();
-		var showCampfire = !showOpen && !showTrial && focusedCampfire is not null && focusedCampfire.IsValid();
-		var showHarvest = !showOpen && !showTrial && !showCampfire && _handHarvest?.FocusedNode is not null;
-		var show = showOpen || showTrial || showCampfire || showHarvest;
+		var showArena = !arenaMenuOpen && !showOpen && !showTrial
+		                && focusedArenaButton is not null && focusedArenaButton.IsValid();
+		var showCampfire = !showOpen && !showTrial && !showArena && focusedCampfire is not null && focusedCampfire.IsValid();
+		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && _handHarvest?.FocusedNode is not null;
+		var show = showOpen || showTrial || showArena || showCampfire || showHarvest;
 
 		if ( _promptKeyLabel is not null )
 			_promptKeyLabel.Text = "E";
@@ -1091,6 +1120,10 @@ public sealed class PlayerScreenHud : PanelComponent
 				_promptLabel.Text = focusedStand.Phase == TimeTrialPhase.WaitingForPlayers
 					? "Open Time Trial Queue"
 					: "Time Trials";
+			}
+			else if ( showArena )
+			{
+				_promptLabel.Text = "Arena";
 			}
 			else if ( showCampfire )
 			{
@@ -1323,7 +1356,16 @@ public sealed class PlayerScreenHud : PanelComponent
 
 	void OnMenuMouseWheel( Vector2 wheel )
 	{
-		if ( _menuController is null || _craftingSection is null )
+		if ( _menuController is null )
+			return;
+
+		if ( string.Equals( _menuController.ActivePageId, MenuPageIds.Map, StringComparison.OrdinalIgnoreCase ) )
+		{
+			_mapSection?.ApplyWheel( wheel );
+			return;
+		}
+
+		if ( _craftingSection is null )
 			return;
 
 		if ( !string.Equals( _menuController.ActivePageId, MenuPageIds.Crafting, StringComparison.OrdinalIgnoreCase ) )
@@ -1347,6 +1389,9 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		if ( string.Equals( page, MenuPageIds.Settings, StringComparison.OrdinalIgnoreCase ) )
 			return _settingsSection?.TryInvokeAtScreen( screenPos ) ?? false;
+
+		if ( string.Equals( page, MenuPageIds.Map, StringComparison.OrdinalIgnoreCase ) )
+			return _mapSection?.TrySelectAtScreen( screenPos ) ?? false;
 
 		return false;
 	}

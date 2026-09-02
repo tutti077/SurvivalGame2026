@@ -1,0 +1,61 @@
+Next up I want to work on our armor system. 
+We have 6 armor pieces, head chest arms hands legs feet. These line up with the paperdoll in the equipment section.
+This is how the armor should reduce damage.
+We can change the weapon damage setup after this so it all makes sense. 
+
+Some armors will be heavier than others, ranging from light to medium to heavy weight.
+We can figure out what that means later but i think itll just affect the run speed of the player,
+
+.95 for light
+.85 for medium
+.75 for heavy armor, maybe something like that?
+We can fine tune those later. 
+
+We'll eventually have armor set bonuses, but for the first few armors we wont have bonuses at all. Itll affect things that relate to combat or movement so itll need to communicate with player vitals etc. just so youre aware.
+
+I added a leather armor set, make each piece give 1 armor. 
+
+I also realize I want a slot for cloaks/capes. Can you update the paperdoll to support that extra slot going forward?
+
+Idk what you can use for the model side of things on the player but maybe they have some clothes you can attempt to throw on the player? no worries if that bits hard its just a model.
+
+
+
+Heres how it should work, math wise.
+
+Inputs:
+D = incoming physical damage
+A = total armor from all equipped pieces
+
+If D <= 0:
+    finalDamage = 0
+
+Else if A <= 0:
+    finalDamage = D
+
+Else if A < D / 2:
+    finalDamage = D - A
+
+Else:
+    finalDamage = (D * D) / (4 * A)
+
+
+
+100 damage, 20 armor:
+20 < 100 / 2
+Final = 100 - 20
+Final = 80 damage
+
+100 damage, 50 armor:
+50 >= 100 / 2
+Final = 100² / (4 × 50)
+Final = 10,000 / 200
+Final = 50 damage
+
+100 damage, 100 armor:
+Final = 100² / (4 × 100)
+Final = 25 damage
+
+20 damage, 50 armor:
+Final = 20² / (4 × 50)
+Final = 2 damage

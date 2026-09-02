@@ -130,34 +130,42 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 	bool _sprintHeldReportedToHostLast;
 
-	/// <summary>Host-synced: countdown freeze for time trials (no move / jump / grapple / wingsuit).</summary>
+	/// <summary>Host-synced: staged-event freeze (time trial countdown, arena countdown) — no move / jump / grapple / wingsuit.</summary>
 	[Sync( SyncFlags.FromHost )]
-	public bool TimeTrialInputLocked { get; private set; }
+	public bool EventInputLocked { get; private set; }
 
-	public void HostSetTimeTrialFrozen( bool frozen )
+	public void HostSetEventFrozen( bool frozen )
 	{
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
 			return;
 
-		TimeTrialInputLocked = frozen;
-		ApplyTimeTrialFreezeLocal( frozen );
+		EventInputLocked = frozen;
+		ApplyEventFreezeLocal( frozen );
 		if ( GameObject.Network is { Active: true } )
-			RpcOwnerApplyTimeTrialFreeze( frozen );
+			RpcOwnerApplyEventFreeze( frozen );
 	}
 
 	[Rpc.Owner]
-	void RpcOwnerApplyTimeTrialFreeze( bool frozen )
+	void RpcOwnerApplyEventFreeze( bool frozen )
 	{
-		ApplyTimeTrialFreezeLocal( frozen );
+		ApplyEventFreezeLocal( frozen );
 	}
 
-	void ApplyTimeTrialFreezeLocal( bool frozen )
+	void ApplyEventFreezeLocal( bool frozen )
 	{
-		if ( !frozen )
-			return;
-
 		_controller ??= Components.Get<PlayerController>();
 		var body = _controller?.Body ?? Components.Get<Rigidbody>();
+
+		if ( !frozen )
+		{
+			// The freeze zeroes velocity every frame, so a pawn frozen mid-air (arena spawns sit
+			// above their pad) can put its physics body to sleep — it then floats after "FIGHT!"
+			// until input wakes it. Wake it explicitly so gravity drops it immediately.
+			if ( body is not null && body.IsValid() && body.Sleeping )
+				body.Sleeping = false;
+			return;
+		}
+
 		if ( body is not null && body.IsValid() )
 			body.Velocity = Vector3.Zero;
 
@@ -165,24 +173,24 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			DetachGrappleForHitReaction();
 	}
 
-	/// <summary>Host places a racer at the countdown pads; owning clients apply via <see cref="RpcOwnerApplyTimeTrialSpawn"/>.</summary>
-	public void HostApplyTimeTrialSpawn( Vector3 worldPos, Rotation worldRot )
+	/// <summary>Host places a pawn at a staged-event spawn (time trial pads, arena start); owning clients apply via <see cref="RpcOwnerApplyEventSpawn"/>.</summary>
+	public void HostApplyEventSpawn( Vector3 worldPos, Rotation worldRot )
 	{
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
 			return;
 
-		ApplyTimeTrialSpawnLocal( worldPos, worldRot );
+		ApplyEventSpawnLocal( worldPos, worldRot );
 		if ( GameObject.Network is { Active: true } )
-			RpcOwnerApplyTimeTrialSpawn( worldPos, worldRot );
+			RpcOwnerApplyEventSpawn( worldPos, worldRot );
 	}
 
 	[Rpc.Owner]
-	void RpcOwnerApplyTimeTrialSpawn( Vector3 worldPos, Rotation worldRot )
+	void RpcOwnerApplyEventSpawn( Vector3 worldPos, Rotation worldRot )
 	{
-		ApplyTimeTrialSpawnLocal( worldPos, worldRot );
+		ApplyEventSpawnLocal( worldPos, worldRot );
 	}
 
-	void ApplyTimeTrialSpawnLocal( Vector3 worldPos, Rotation worldRot )
+	void ApplyEventSpawnLocal( Vector3 worldPos, Rotation worldRot )
 	{
 		GameObject.WorldPosition = worldPos;
 		GameObject.WorldRotation = worldRot;
@@ -535,7 +543,10 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() || _vitals is null )
 			return;
 
-		if ( TimeTrialInputLocked )
+		if ( PreInputArenaSpectate() )
+			return;
+
+		if ( EventInputLocked )
 		{
 			ClearActionIfPressed( JumpInputAction );
 			if ( !string.IsNullOrWhiteSpace( SprintInputAction ) )
@@ -765,6 +776,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	{
 		base.OnUpdate();
 
+		// All machines: arena ghost hide/show; owner also flies the ghost.
+		TickArenaSpectate();
+
 		if ( IsLocalMovementDriver() && _vitals is not null )
 		{
 			UpdateSprintStaminaHoldAndFlushOnRelease();
@@ -813,8 +827,6 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		                 || Input.Down( combat?.BlockAction ?? "Attack2" );
 
 		var freeOrbit = FreeLookOrbitEnabled && _controller.ThirdPerson && !combatHold;
-		// 180° = the yaw difference can never exceed the limit, so the body never turns from look alone.
-		_controller.RotationAngleLimit = freeOrbit ? 180f : _designRotationAngleLimit;
 
 		// While a swing is IN FLIGHT, near-stop the controller rotating the ROOT: walking mid-swing
 		// kept turning the root toward movement, which wobbled the pinned renderer child and fed
@@ -822,6 +834,12 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// NEVER exactly 0 — stock controllers commonly special-case RotationSpeed <= 0 as "turn
 		// instantly", which spun the model toward the walk direction during lateral swings.
 		var swingInFlight = combat is not null && combat.Enabled && combat.IsSwingFacingPinned;
+
+		// 180° = the yaw difference can never exceed the limit, so the body never turns from look
+		// alone. Swings need this too: the controller HARD-corrects past RotationAngleLimit no
+		// matter how low RotationSpeed is, which is what still spun the model when strafing with
+		// WASD mid-swing. No model rotation during a swing, ever.
+		_controller.RotationAngleLimit = freeOrbit || swingInFlight ? 180f : _designRotationAngleLimit;
 		_controller.RotationSpeed = swingInFlight ? 0.001f : _designRotationSpeed;
 	}
 

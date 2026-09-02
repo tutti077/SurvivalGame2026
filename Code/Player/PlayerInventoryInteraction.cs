@@ -234,6 +234,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		TickWorkbenchAccess();
 		TickCampfireAccess();
 		TickTimeTrialAccess();
+		TickArenaAccess();
 		TickItemTooltip();
 
 		// While the game menu is open, Attack1 drag finish is owned by InventoryMenuInputOverlay

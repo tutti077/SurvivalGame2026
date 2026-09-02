@@ -3,15 +3,21 @@ using Sandbox.UI;
 
 namespace Survival;
 
-/// <summary>Centered world map panel — TerrainWorld biome preview + stream marker.</summary>
+/// <summary>Centered world map panel — crew column (invites, nearby players) + TerrainWorld biome preview.</summary>
 public sealed class MapMenuSection : IPlayerMenuSection
 {
 	public string SectionId => "map";
 
 	readonly TerrainWorldMapFace _face = new();
+	readonly CrewMapPanel _crewPanel;
 	Panel _sectionRoot;
 	bool _menuOpen;
 	bool _panelVisible;
+
+	public MapMenuSection( PlayerInventoryInteraction interaction )
+	{
+		_crewPanel = new CrewMapPanel( interaction );
+	}
 
 	public void Build( Panel menuColumn )
 	{
@@ -47,7 +53,20 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		hint.Style.FontColor = new Color( 0.55f, 0.58f, 0.64f );
 		hint.Style.FontSize = Length.Pixels( 13f );
 
-		_face.Build( _sectionRoot, sizePixels: 0f, fillParent: true );
+		var content = new Panel { Parent = _sectionRoot };
+		content.Style.Set( "flex-direction", "row" );
+		content.Style.Set( "align-items", "stretch" );
+		content.Style.Set( "flex-grow", "1" );
+		content.Style.Width = Length.Percent( 100 );
+
+		_crewPanel.Build( content );
+
+		var mapHost = new Panel { Parent = content };
+		mapHost.Style.Set( "flex-direction", "column" );
+		mapHost.Style.Set( "flex-grow", "1" );
+		mapHost.Style.Height = Length.Percent( 100 );
+
+		_face.Build( mapHost, sizePixels: 0f, fillParent: true );
 		UpdateVisibility();
 	}
 
@@ -71,9 +90,28 @@ public sealed class MapMenuSection : IPlayerMenuSection
 			return;
 
 		_face.Tick();
+		_crewPanel.Tick();
 	}
 
 	public void OnMenuGlobalMouseUp() { }
+
+	/// <summary>Soft-cursor Attack1 on the map page — routed from the menu input overlay.</summary>
+	public bool TrySelectAtScreen( Vector2 screenPos )
+	{
+		if ( !_menuOpen || !_panelVisible )
+			return false;
+
+		return _crewPanel.TryClickAtScreen( screenPos );
+	}
+
+	/// <summary>Menu mouse wheel on the map page — scrolls the nearby players list.</summary>
+	public void ApplyWheel( Vector2 wheel )
+	{
+		if ( !_menuOpen || !_panelVisible )
+			return;
+
+		_crewPanel.ApplyNearbyWheel( wheel );
+	}
 
 	void UpdateVisibility()
 	{

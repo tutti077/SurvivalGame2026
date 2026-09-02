@@ -616,6 +616,12 @@
         "OnComponentUpdate": null
       },
       {
+        "__type": "Survival.PlayerCrew",
+        "__guid": "d4e5f6a7-b8c9-4a1b-9c2d-3e4f5a6b7c8d",
+        "__enabled": true,
+        "Flags": 0
+      },
+      {
         "__type": "Survival.PlayerHandHarvest",
         "__guid": "e7a1b2c3-4d5e-6f70-8192-a3b4c5d6e7f8",
         "__enabled": true,

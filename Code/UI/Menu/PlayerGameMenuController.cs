@@ -109,6 +109,10 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 	PlayerVitals _vitals;
 
+	PlayerInventoryInteraction _modalInteraction;
+
+	PlayerMovement _cursorGateMovement;
+
 	PlayerController _controller;
 
 	bool _savedUseLookControls = true;
@@ -464,7 +468,22 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 			return;
 
+		// The time trial / arena menus own the cursor exactly like this menu does. This method
+		// runs every frame while OUR menu is closed, so without this stand-down it re-enables
+		// look controls + hides the mouse over their capture — who wins depended on component
+		// update order, which is why the fight looked machine-specific.
+		_modalInteraction ??= Components.Get<PlayerInventoryInteraction>();
+		if ( _modalInteraction is { IsTimeTrialMenuOpen: true } or { IsArenaMenuOpen: true } )
+			return;
 
+		// So does the grapple control-scheme prompt (per-machine first-use choice, shown while a
+		// grapple is equipped and no scheme has been picked on this machine).
+		if ( GrappleControlSchemeStore.NeedsChoice )
+		{
+			_cursorGateMovement ??= Components.Get<PlayerMovement>();
+			if ( _cursorGateMovement is not null && _cursorGateMovement.HasGrappleEquipped() )
+				return;
+		}
 
 		ResolveController();
 

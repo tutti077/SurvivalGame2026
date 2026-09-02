@@ -161,18 +161,6 @@ public sealed partial class PlayerAnimation : Component
 	bool _combatFacingApplied;
 	float _combatFacingYaw;
 
-	/// <summary>How fast the model turns back to locomotion facing after combat releases it (higher = quicker hand-back).</summary>
-	[Property, Group( "Animation" ), Title( "Combat facing release turn rate (°/s)" ), Range( 90f, 1440f ), Step( 30f )]
-	public float CombatFacingReleaseDegreesPerSecond { get; set; } = 540f;
-
-	/// <summary>
-	/// Presentation-only combat facing: rotates the RENDERER child (never the physics root — the
-	/// controller and rigidbody interpolation fight root writes, which showed as facing spazz).
-	/// Runs from OnUpdate (advancing) and OnPreRender (re-apply) so it lands last before render.
-	/// When combat releases the facing, the model LINGERS on the last combat yaw while standing —
-	/// resetting instantly popped the model a second time at recovery — and only eases back to the
-	/// root's facing once locomotion actually moves the pawn (or the root is already aligned).
-	/// </summary>
 	/// <summary>Instantly drop the combat-facing override/linger — a movement mode (wingsuit) owns the root now.</summary>
 	public void ReleaseCombatFacingOverride()
 	{
@@ -185,6 +173,11 @@ public sealed partial class PlayerAnimation : Component
 			body.GameObject.LocalRotation = Rotation.Identity;
 	}
 
+	/// <summary>
+	/// Presentation-only combat facing: rotates the RENDERER child (never the physics root — the
+	/// controller and rigidbody interpolation fight root writes, which showed as facing spazz).
+	/// Runs from OnUpdate (advancing) and OnPreRender (re-apply) so it lands last before render.
+	/// </summary>
 	void TickCombatFacingPresentation( bool advance )
 	{
 		var body = ResolveBody();
@@ -211,42 +204,20 @@ public sealed partial class PlayerAnimation : Component
 		if ( !_combatFacingApplied )
 			return;
 
-		var rootYaw = GameObject.WorldRotation.Angles().yaw;
-		var delta = NormalizeYawDeltaDegrees( rootYaw - _combatFacingYaw );
-
-		if ( advance )
+		if ( !advance )
 		{
-			var controller = GameObject.Components.Get<PlayerController>();
-			var rigidbody = Components.Get<Rigidbody>();
-			var moving = ( controller is not null && controller.IsValid()
-			               && controller.Velocity.WithZ( 0f ).Length > 20f )
-			             || ( rigidbody is not null && rigidbody.IsValid()
-			                  && rigidbody.Velocity.WithZ( 0f ).Length > 20f );
-
-			if ( moving || MathF.Abs( delta ) < 3f )
-			{
-				var step = Math.Max( 30f, CombatFacingReleaseDegreesPerSecond ) * Time.Delta;
-				if ( MathF.Abs( delta ) <= step )
-				{
-					_combatFacingApplied = false;
-					body.GameObject.LocalRotation = Rotation.Identity;
-					return;
-				}
-
-				_combatFacingYaw += MathF.Sign( delta ) * step;
-			}
+			// Keep the pinned yaw through OnPreRender until the owning OnUpdate hands back.
+			body.GameObject.WorldRotation = new Angles( 0f, _combatFacingYaw, 0f ).ToRotation();
+			return;
 		}
 
-		body.GameObject.WorldRotation = new Angles( 0f, _combatFacingYaw, 0f ).ToRotation();
-	}
-
-	static float NormalizeYawDeltaDegrees( float delta )
-	{
-		while ( delta > 180f )
-			delta -= 360f;
-		while ( delta < -180f )
-			delta += 360f;
-		return delta;
+		// Combat no longer owns the facing: hand the body back to the PlayerController EXACTLY
+		// where the swing pinned it, with NO rotation writes. The controller rotates the BODY
+		// CHILD (the physics root never turns — it keeps its spawn yaw forever), so any blend
+		// toward "root facing" here turned the waist toward the SPAWN direction after every
+		// swing. Standing still, the model lingers on the swing facing; once the player moves,
+		// the controller turns the body toward locomotion at its design rate.
+		_combatFacingApplied = false;
 	}
 
 	/// <summary>Actual world yaw of the Body renderer child (facing diagnostics) — null when the renderer sits on the root.</summary>
