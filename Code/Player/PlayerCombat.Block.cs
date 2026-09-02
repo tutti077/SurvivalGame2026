@@ -385,6 +385,23 @@ public partial class PlayerCombat
 		}
 	}
 
+	/// <summary>
+	/// Dodge roll started: the roll's i-frames + reposition replace the guard, so drop it the same
+	/// way a consumed block does — the held Block button stops guarding and re-guarding needs an
+	/// actual re-press. Owner-side input semantics only; the regular block sync tick reports the
+	/// drop to the host, and <see cref="TickCombatStateMachine"/> leaves Blocking on its own.
+	/// </summary>
+	internal void OnDodgeRollStarted()
+	{
+		if ( !IsLocalCombatDriver() )
+			return;
+
+		// Only when the button is actually held — the flag is cleared by Input.Released, so setting
+		// it with the button up would silently eat the player's next block press.
+		if ( _block.Down )
+			_meleeBlockConsumedAwaitingRelease = true;
+	}
+
 	internal void NotifyAuthoritativeMeleeBlockIntercepted()
 	{
 		if ( !IsServerSideForMeleeAuthority() )

@@ -142997,7 +142997,7 @@
               "OnComponentUpdate": null,
               "RenderOptions": {
                 "GameLayer": true,
-                "OverlayLayer": true,
+                "OverlayLayer": false,
                 "BloomLayer": false,
                 "AfterUILayer": false
               },
@@ -143048,7 +143048,7 @@
           "__version": 2,
           "Flags": 0,
           "Name": "TreesLabel",
-          "Position": "5124.64209,-2688,-9908.1709",
+          "Position": "5124.64209,-2697.72437,-9908.1709",
           "Rotation": "0,0,0.707106769,0.707106769",
           "Scale": "1,1,1",
           "Tags": "",
@@ -143077,7 +143077,7 @@
               "OnComponentUpdate": null,
               "RenderOptions": {
                 "GameLayer": true,
-                "OverlayLayer": true,
+                "OverlayLayer": false,
                 "BloomLayer": false,
                 "AfterUILayer": false
               },
@@ -143128,7 +143128,7 @@
           "__version": 2,
           "Flags": 0,
           "Name": "CeilingLabel",
-          "Position": "5282.74121,-2688,-9908.1709",
+          "Position": "5282.74121,-2697.89136,-9908.1709",
           "Rotation": "0,0,0.707106769,0.707106769",
           "Scale": "1,1,1",
           "Tags": "",
@@ -143157,7 +143157,7 @@
               "OnComponentUpdate": null,
               "RenderOptions": {
                 "GameLayer": true,
-                "OverlayLayer": true,
+                "OverlayLayer": false,
                 "BloomLayer": false,
                 "AfterUILayer": false
               },
@@ -143208,7 +143208,7 @@
           "__version": 2,
           "Flags": 0,
           "Name": "ArenaLabel",
-          "Position": "5485.91553,-2688,-9908.1709",
+          "Position": "5485.91553,-2697.89355,-9908.1709",
           "Rotation": "0,0,0.707106769,0.707106769",
           "Scale": "1,1,1",
           "Tags": "",
@@ -143237,7 +143237,7 @@
               "OnComponentUpdate": null,
               "RenderOptions": {
                 "GameLayer": true,
-                "OverlayLayer": true,
+                "OverlayLayer": false,
                 "BloomLayer": false,
                 "AfterUILayer": false
               },
@@ -143288,7 +143288,7 @@
           "__version": 2,
           "Flags": 0,
           "Name": "JungleGymLabel",
-          "Position": "4966.54248,-2688,-9864",
+          "Position": "4964.54639,-2694.75977,-9864",
           "Rotation": "0,0,0.707106769,0.707106769",
           "Scale": "1,1,1",
           "Tags": "",
@@ -143317,7 +143317,87 @@
               "OnComponentUpdate": null,
               "RenderOptions": {
                 "GameLayer": true,
-                "OverlayLayer": true,
+                "OverlayLayer": false,
+                "BloomLayer": false,
+                "AfterUILayer": false
+              },
+              "Scale": 1,
+              "TextScope": {
+                "Text": "Jungly\nGym\nvvvvv",
+                "TextColor": "1,1,1,1",
+                "FontName": "Poppins",
+                "FontSize": 32,
+                "FontWeight": 400,
+                "FontItalic": false,
+                "FontVariantNumeric": "Normal",
+                "LineHeight": 1,
+                "LetterSpacing": 0,
+                "WordSpacing": 0,
+                "FilterMode": "Bilinear",
+                "FontSmooth": "Auto",
+                "Outline": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,0,1,1"
+                },
+                "Shadow": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,0,0,1",
+                  "Offset": "4,4"
+                },
+                "OutlineUnder": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,1,0,1"
+                },
+                "ShadowUnder": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,0,0,1",
+                  "Offset": "4,4"
+                }
+              },
+              "VerticalAlignment": "Top"
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "67f213d7-b4f3-46b6-9fd0-d4ac09441265",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "JungleGymLabel",
+          "Position": "4964.54639,-2697.07495,-9864",
+          "Rotation": "0,0,0.707106769,0.707106769",
+          "Scale": "1,1,1",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "Sandbox.TextRenderer",
+              "__guid": "5300ae84-aa37-4372-ab09-6b43c0e8ee39",
+              "__enabled": true,
+              "Flags": 0,
+              "__version": 2,
+              "Billboard": "None",
+              "BlendMode": "Normal",
+              "FogStrength": 1,
+              "HorizontalAlignment": "Center",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "RenderOptions": {
+                "GameLayer": true,
+                "OverlayLayer": false,
                 "BloomLayer": false,
                 "AfterUILayer": false
               },
@@ -147906,7 +147986,7 @@
                 "BloomLayer": false,
                 "AfterUILayer": false
               },
-              "RenderType": "On",
+              "RenderType": "Off",
               "Tint": "0,0,0,0.36"
             },
             {
@@ -147978,7 +148058,7 @@
                 "BloomLayer": false,
                 "AfterUILayer": false
               },
-              "RenderType": "On",
+              "RenderType": "Off",
               "Tint": "0,0,0,0.36"
             },
             {
@@ -148050,7 +148130,7 @@
                 "BloomLayer": false,
                 "AfterUILayer": false
               },
-              "RenderType": "On",
+              "RenderType": "Off",
               "Tint": "0,0,0,0.36"
             },
             {
@@ -148122,7 +148202,7 @@
                 "BloomLayer": false,
                 "AfterUILayer": false
               },
-              "RenderType": "On",
+              "RenderType": "Off",
               "Tint": "0,0,0,0.36"
             },
             {

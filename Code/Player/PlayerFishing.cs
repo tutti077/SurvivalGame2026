@@ -5,9 +5,10 @@ namespace Survival;
 
 /// <summary>
 /// Fishing rod flow for the owning pawn: cast → bobber flight → float → bite (fixed delay for now)
-/// → Stardew-style tension minigame. The bobber and line are owner-local visuals; only the final
-/// catch grant goes through the host, which rolls the species from the <c>"fish": true</c> rows in
-/// <c>data/resources.json</c>. Bait/ammo comes later.
+/// → Stardew-style tension minigame. The owner simulates the bobber locally and syncs its position,
+/// so every machine renders the line and bobber; only the final catch grant goes through the host,
+/// which rolls the species from the <c>"fish": true</c> rows in <c>data/resources.json</c>.
+/// Bait/ammo comes later.
 /// </summary>
 [Title( "Player Fishing" )]
 public sealed class PlayerFishing : Component
@@ -51,7 +52,14 @@ public sealed class PlayerFishing : Component
 
 	FishingState _state = FishingState.Idle;
 
+	/// <summary>Owner-authored: a bobber is out. Remotes render line + bobber from this.</summary>
+	[Sync] bool NetBobberOut { get; set; }
+
+	/// <summary>Owner-authored world position of the bobber, updated every owner frame while out.</summary>
+	[Sync] Vector3 NetBobberPosition { get; set; }
+
 	GameObject _bobber;
+	GameObject _remoteBobber;
 	Vector3 _bobberVelocity;
 	float _waterSurfaceZ;
 	double _castStartedAt;
@@ -120,6 +128,7 @@ public sealed class PlayerFishing : Component
 	protected override void OnDestroy()
 	{
 		DestroyBobber();
+		DestroyRemoteBobber();
 		base.OnDestroy();
 	}
 
@@ -128,8 +137,21 @@ public sealed class PlayerFishing : Component
 		base.OnUpdate();
 
 		if ( _vitals is null || !_vitals.IsLocalInputOwnedPawn() )
+		{
+			TickRemoteBobberPresentation();
 			return;
+		}
 
+		TickOwnerFishing();
+
+		// Publish after every owner path (including cancels) so remotes never keep a stale bobber.
+		NetBobberOut = _state != FishingState.Idle && _bobber is { IsValid: true };
+		if ( NetBobberOut )
+			NetBobberPosition = _bobber.WorldPosition;
+	}
+
+	void TickOwnerFishing()
+	{
 		var hasRod = _equipped is not null && _equipped.HasAction( EquippedItemActions.Fish );
 		if ( !hasRod || _vitals.CurrentHealth <= 0f )
 		{
@@ -173,8 +195,35 @@ public sealed class PlayerFishing : Component
 				return;
 			}
 
-			DrawFishingLine();
+			if ( _bobber is { IsValid: true } )
+				DrawFishingLine( _bobber.WorldPosition );
 		}
+	}
+
+	/// <summary>Non-owner machines: mirror the owner's bobber from sync and draw the line to it.</summary>
+	void TickRemoteBobberPresentation()
+	{
+		if ( !NetBobberOut )
+		{
+			DestroyRemoteBobber();
+			return;
+		}
+
+		if ( _remoteBobber is null || !_remoteBobber.IsValid() )
+			_remoteBobber = CreateBobber( NetBobberPosition );
+
+		// Synced positions arrive stepped — ease toward the latest so flight reads as motion.
+		var t = 1f - MathF.Exp( -14f * Math.Max( 1e-4f, Time.Delta ) );
+		_remoteBobber.WorldPosition = Vector3.Lerp( _remoteBobber.WorldPosition, NetBobberPosition, t );
+		DrawFishingLine( _remoteBobber.WorldPosition );
+	}
+
+	void DestroyRemoteBobber()
+	{
+		if ( _remoteBobber is { IsValid: true } )
+			_remoteBobber.Destroy();
+
+		_remoteBobber = null;
 	}
 
 	protected override void OnFixedUpdate()
@@ -601,13 +650,9 @@ public sealed class PlayerFishing : Component
 		_state = FishingState.Idle;
 	}
 
-	void DrawFishingLine()
+	void DrawFishingLine( Vector3 end )
 	{
-		if ( _bobber is null || !_bobber.IsValid() )
-			return;
-
 		var tip = ResolveRodTipPosition();
-		var end = _bobber.WorldPosition;
 
 		// Sagging quadratic curve so the line reads as slack string, not a laser.
 		var sag = Math.Clamp( ( end - tip ).Length * 0.12f, 2f, 30f );

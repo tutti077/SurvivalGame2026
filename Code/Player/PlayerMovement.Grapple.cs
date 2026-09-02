@@ -315,7 +315,7 @@ partial class PlayerMovement
 	{
 		TickGrappleReleaseWeight();
 		TickGrappleControllerOverride();
-		TickGrapplePlayerTargetValidity();
+		TickGrappledByPlayerPull();
 
 		// Mantle broke the rope this instant — no winch / stamina while the host detach lands.
 		if ( !GrappleAttached || IsGrappleLedgePulling )
@@ -595,7 +595,7 @@ partial class PlayerMovement
 		if ( IsGrappleLedgePulling )
 			return;
 
-		if ( IsGrappleVictimCooldownActive() )
+		if ( IsGrappleVictimCooldownActive() || IsHeldByPlayerGrapple )
 			return;
 
 		if ( !HasValidAimTarget )
@@ -605,7 +605,14 @@ partial class PlayerMovement
 			return;
 		}
 
-		RequestAttach( AimHitWorldPoint );
+		// Tell the host WHO we aimed at, not just where — a player attach must never be inferred
+		// from proximity, or a bystander near the hit point steals the hook.
+		var intendedPlayerId = Guid.Empty;
+		if ( _hasStickyAim && _stickyAimObject.IsValid() && _stickyAimObject != GameObject
+		     && _stickyAimObject.Components.Get<PlayerMovement>() is not null )
+			intendedPlayerId = _stickyAimObject.Id;
+
+		RequestAttach( AimHitWorldPoint, intendedPlayerId );
 	}
 
 	void LogAimRejectReason()
@@ -932,14 +939,6 @@ partial class PlayerMovement
 		return false;
 	}
 
-	static bool IsSameGrappleObject( GameObject a, GameObject b )
-	{
-		if ( !a.IsValid() || !b.IsValid() )
-			return false;
-
-		return ResolveGrappleRoot( a ) == ResolveGrappleRoot( b );
-	}
-
 	SceneTraceResult TraceAimRay( Vector3 origin, Vector3 direction, float castDistance )
 	{
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
@@ -961,10 +960,10 @@ partial class PlayerMovement
 	}
 
 	/// <summary>
-	/// Host check: client snap must be in range on a tagged surface.
-	/// Avoids host-camera aim (scene.Camera is the host view for remote pawns).
+	/// Host check: client snap must be in range on a tagged surface, or on the exact player the
+	/// client aimed at. Avoids host-camera aim (scene.Camera is the host view for remote pawns).
 	/// </summary>
-	bool TryValidateAttachPoint( Vector3 clientHitPoint, out Vector3 validatedPoint, out float length, out Guid playerTargetId )
+	bool TryValidateAttachPoint( Vector3 clientHitPoint, Guid intendedPlayerId, out Vector3 validatedPoint, out float length, out Guid playerTargetId )
 	{
 		validatedPoint = default;
 		length = 0f;
@@ -974,12 +973,13 @@ partial class PlayerMovement
 			return false;
 
 		var surfaceSlack = TerrainWorldUnits.MetersToEngine( 3f );
-		var playerSlack = TerrainWorldUnits.MetersToEngine( 0.85f );
 
-		if ( TryFindGrapplePlayerNearPoint( clientHitPoint, playerSlack, out var playerRoot, out var playerAttach )
-		     && IsGrappleablePlayer( playerRoot )
-		     && IsWithinGrappleRange( playerAttach ) )
+		// Player attach only when the client named a target — never inferred from proximity.
+		if ( intendedPlayerId != Guid.Empty )
 		{
+			if ( !TryValidatePlayerAttach( intendedPlayerId, clientHitPoint, out var playerRoot, out var playerAttach ) )
+				return false;
+
 			validatedPoint = playerAttach;
 			length = Vector3.DistanceBetween( GameObject.WorldPosition, playerAttach );
 			playerTargetId = playerRoot.Id;
@@ -1006,9 +1006,12 @@ partial class PlayerMovement
 		}
 
 		// Local/host play: still allow the richer aim-trace path when this pawn owns the view.
-		if ( IsLocalMovementDriver() && TryTraceGrappleAim( out var hostPoint, out _, out var hostLen, out _, out _, out _ ) )
+		// Never let it resolve onto a player — without an intended target id that would attach a
+		// static rope at a pawn's position instead of a real player hook.
+		if ( IsLocalMovementDriver() && TryTraceGrappleAim( out var hostPoint, out var hostObject, out var hostLen, out _, out _, out _ ) )
 		{
-			if ( Vector3.DistanceBetween( hostPoint, clientHitPoint ) <= surfaceSlack && IsWithinGrappleRange( hostPoint ) )
+			var hitPlayer = hostObject.IsValid() && hostObject.Components.Get<PlayerMovement>() is not null;
+			if ( !hitPlayer && Vector3.DistanceBetween( hostPoint, clientHitPoint ) <= surfaceSlack && IsWithinGrappleRange( hostPoint ) )
 			{
 				validatedPoint = hostPoint;
 				length = hostLen;
@@ -1287,7 +1290,9 @@ partial class PlayerMovement
 	void TickGrappleControllerOverride()
 	{
 		_controller ??= Components.Get<PlayerController>();
-		var airborne = GrappleAttached && _controller is not null && _controller.IsValid() && !_controller.IsOnGround;
+		// Player attach is not a swing — the attacker keeps normal air friction and damping.
+		var airborne = GrappleAttached && !IsPlayerGrappleAttach
+		               && _controller is not null && _controller.IsValid() && !_controller.IsOnGround;
 		ApplyGrappleControllerOverride( airborne );
 	}
 
@@ -1373,7 +1378,7 @@ partial class PlayerMovement
 		_vitals.RequestVitalsDelta( 0f, -debt );
 	}
 
-	void RequestAttach( Vector3 hitPoint )
+	void RequestAttach( Vector3 hitPoint, Guid intendedPlayerId )
 	{
 		if ( AttachStaminaCost > 0f && _vitals is not null && !_vitals.CanAffordStamina( AttachStaminaCost ) )
 		{
@@ -1386,11 +1391,11 @@ partial class PlayerMovement
 
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
 		{
-			ServerTryAttach( hitPoint, grappleId );
+			ServerTryAttach( hitPoint, grappleId, intendedPlayerId );
 			return;
 		}
 
-		RpcRequestAttach( hitPoint, grappleId );
+		RpcRequestAttach( hitPoint, grappleId, intendedPlayerId );
 	}
 
 	void RequestDetach()
@@ -1416,7 +1421,7 @@ partial class PlayerMovement
 	}
 
 	[Rpc.Host]
-	void RpcRequestAttach( Vector3 hitPoint, string clientGrappleResourceId )
+	void RpcRequestAttach( Vector3 hitPoint, string clientGrappleResourceId, Guid intendedPlayerId )
 	{
 		if ( !Networking.IsHost || !GameObject.IsValid() )
 			return;
@@ -1425,7 +1430,7 @@ partial class PlayerMovement
 		     && !ConnectionIdentity.SameClient( caller, owner ) )
 			return;
 
-		ServerTryAttach( hitPoint, clientGrappleResourceId );
+		ServerTryAttach( hitPoint, clientGrappleResourceId, intendedPlayerId );
 	}
 
 	[Rpc.Host]
@@ -1454,12 +1459,12 @@ partial class PlayerMovement
 		ServerAdjustLength( deltaEngine );
 	}
 
-	void ServerTryAttach( Vector3 clientHitPoint, string clientGrappleResourceId = null )
+	void ServerTryAttach( Vector3 clientHitPoint, string clientGrappleResourceId = null, Guid intendedPlayerId = default )
 	{
 		if ( GrappleAttached )
 			return;
 
-		if ( IsGrappleVictimCooldownActive() )
+		if ( IsGrappleVictimCooldownActive() || IsHeldByPlayerGrapple )
 			return;
 
 		if ( !HasGrappleEquipped() )
@@ -1479,7 +1484,7 @@ partial class PlayerMovement
 				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host mirrored client grapple '{clientGrappleResourceId}'." );
 		}
 
-		if ( !TryValidateAttachPoint( clientHitPoint, out var validatedPoint, out var length, out var playerTargetId ) )
+		if ( !TryValidateAttachPoint( clientHitPoint, intendedPlayerId, out var validatedPoint, out var length, out var playerTargetId ) )
 		{
 			if ( LogGrapple )
 				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host rejected attach." );
@@ -1502,7 +1507,7 @@ partial class PlayerMovement
 		{
 			GrappleAttachPlayerId = playerTargetId;
 			GrappleAttachLocalOffset = target.WorldTransform.PointToLocal( validatedPoint );
-			target.Components.Get<PlayerMovement>()?.HostNotifyGrappledByPlayer();
+			target.Components.Get<PlayerMovement>()?.HostNotifyGrappledByPlayer( GameObject.Id );
 		}
 
 		if ( LogGrapple )
@@ -1543,6 +1548,11 @@ partial class PlayerMovement
 	{
 		if ( !GrappleAttached )
 			return;
+
+		// Rope held a player — release them before the attach state is wiped.
+		if ( GrappleAttachPlayerId != Guid.Empty
+		     && TryResolveGrapplePlayerTarget( GrappleAttachPlayerId, out var heldPlayer ) )
+			heldPlayer.Components.Get<PlayerMovement>()?.HostClearGrappledBy( GameObject.Id );
 
 		GrappleAttached = false;
 		GrappleAttachWorldPoint = default;

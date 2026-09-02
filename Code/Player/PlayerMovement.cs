@@ -416,7 +416,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		// Rope or wingsuit owns your speed up here. Walk/Run stay at 0 so held Shift cannot raise
 		// the air-control target and add swing speed — sprint is a walking thing, not a swinging one.
-		if ( WingsuitDeployed || (GrappleAttached && !_controller.IsOnGround) )
+		// Holding a player is not a swing: the attacker keeps full ground/air locomotion.
+		if ( WingsuitDeployed || (GrappleAttached && !IsPlayerGrappleAttach && !_controller.IsOnGround) )
 		{
 			if ( !_walkSpeedMuteActive )
 			{
@@ -570,7 +571,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		}
 
 		// Dodge roll and the augment air hop must see Jump before stamina or wingsuit clear it;
-		// roll first so A/D/S + Space is a roll, never a jump.
+		// roll first so Block/Crouch (+A/D) + Space is a roll, never a jump.
 		TickDodgeRollGate();
 		TickAugmentJumpGates();
 
@@ -588,7 +589,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			ClearActionIfPressed( JumpInputAction );
 
 		// Jump while grappled: no mid-air hop off the rope (both schemes).
-		if ( GrappleAttached )
+		// Holding a player: normal jumping stays, and there is no ledge to mantle onto.
+		if ( GrappleAttached && !IsPlayerGrappleAttach )
 		{
 			if ( _controller is null )
 				_controller = Components.Get<PlayerController>();
@@ -629,8 +631,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() || _vitals is null )
 			return;
 
-		// Fixed-tick race: the controller can consume a roll press (A/D/S + Space) as a jump before
-		// the frame's PreInput gate sees it — convert that hop into the roll. No stamina, no jump anim path.
+		// Fixed-tick race: the controller can consume a roll press (Block/Crouch + Space) as a jump
+		// before the frame's PreInput gate sees it — convert that hop into the roll. No stamina, no jump anim path.
 		if ( TryConvertJumpIntoDodgeRoll() )
 			return;
 
@@ -1137,6 +1139,11 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	{
 		base.OnFixedUpdate();
 
+		// Host-side: a client attacker's pawn is a proxy here, so the local-driver gate below
+		// would starve the player-hook validity checks (target lost / downed / out of range).
+		TickGrapplePlayerTargetValidity();
+		TickGrappledByValidity();
+
 		if ( !IsLocalMovementDriver() )
 			return;
 
@@ -1217,7 +1224,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 	void ApplyGrappleOverLengthCatchup()
 	{
-		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f )
+		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f || IsPlayerGrappleAttach )
 			return;
 
 		var attach = ResolveGrappleAttachWorldPoint();
@@ -1236,7 +1243,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	void ApplyGrappleRopeConstraint( float dt )
 	{
 		// Ledge mantle broke the rope this instant — never fight the pull while the detach lands.
-		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f || IsGrappleLedgePulling )
+		// Player attach: the VICTIM is reeled (PlayerMovement.GrapplePlayer.cs); the attacker is
+		// never constrained, so a hooked player can't drag the rope holder around.
+		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f || IsGrappleLedgePulling || IsPlayerGrappleAttach )
 		{
 			_grapplePrevRopeLength = 0f;
 			_grappleRopeTaut = false;
@@ -1578,7 +1587,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		_grappleSteerX = 0f;
 		_grappleSteerY = 0f;
 
-		if ( !GrappleAttached )
+		// Player attach never swings — WASD stays with MoveModeWalk.
+		if ( !GrappleAttached || IsPlayerGrappleAttach )
 			return;
 
 		_controller ??= Components.Get<PlayerController>();
@@ -1692,7 +1702,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 	void TryKillGrappleOnCollision( Collision collision )
 	{
-		if ( !GrappleAttached || !IsLocalMovementDriver() )
+		// Player attach: walking into things while dragging someone must not break the rope.
+		if ( !GrappleAttached || IsPlayerGrappleAttach || !IsLocalMovementDriver() )
 			return;
 
 		var other = collision.Other.GameObject;
