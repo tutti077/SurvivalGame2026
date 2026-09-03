@@ -238,6 +238,21 @@ public static class BuildPlacementUtility
 		var trace = TraceBuildRay( scene, pawn, ignorePreview, rayOrigin, end );
 		if ( trace.Hit )
 		{
+			// Stations and furniture (non-structural pieces) are not build surfaces — red ghost,
+			// no placement. Without this the piece placed and instantly collapsed (a bench gives
+			// no support), which reads as a bug instead of a rule.
+			if ( IsNonStructuralPieceHit( trace.GameObject ) )
+			{
+				return new BuildPlacementResult
+				{
+					HasSurfaceHit = true,
+					IsValid = false,
+					Position = trace.HitPosition + Vector3.Up * sitHalf,
+					Rotation = rotation,
+					SurfaceNormal = Vector3.Up,
+				};
+			}
+
 			hasSurface = true;
 			normal = trace.Normal.Normal;
 			if ( normal.LengthSquared < 1e-8f )
@@ -366,7 +381,10 @@ public static class BuildPlacementUtility
 			.WithoutTags( "player" )
 			.Run();
 
-		if ( downTrace.Hit && !IsIgnoredTraceHit( downTrace.GameObject, ignorePreview ) && !IsPlayerTraceHit( downTrace.GameObject ) )
+		if ( downTrace.Hit
+		     && !IsIgnoredTraceHit( downTrace.GameObject, ignorePreview )
+		     && !IsPlayerTraceHit( downTrace.GameObject )
+		     && !IsNonStructuralPieceHit( downTrace.GameObject ) )
 		{
 			foundSurface = true;
 			return downTrace.HitPosition + Vector3.Up * sitHalfZ;
@@ -476,7 +494,23 @@ public static class BuildPlacementUtility
 		return false;
 	}
 
-	static bool IsIgnoredTraceHit( GameObject hit, GameObject ignorePreview )
+	/// <summary>The hit is a placed non-structural build piece (station, chest, campfire) — never a build surface.</summary>
+	static bool IsNonStructuralPieceHit( GameObject hit )
+	{
+		for ( var current = hit; current.IsValid(); current = current.Parent )
+		{
+			var piece = current.Components.Get<BuildPiece>();
+			if ( piece is null )
+				continue;
+
+			if ( piece.IsPreviewGhost )
+				return false;
+
+			return BuildPieceCatalog.TryGet( piece.PieceId, out var data ) && !data.IsStructural;
+		}
+
+		return false;
+	}
 	{
 		if ( hit is null || !hit.IsValid() )
 			return true;
