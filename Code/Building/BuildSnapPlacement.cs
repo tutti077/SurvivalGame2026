@@ -62,6 +62,11 @@ static class BuildSnapPlacement
 			if ( ignorePreview.IsValid() && targetPiece.GameObject == ignorePreview )
 				continue;
 
+			// Stations / furniture are not build surfaces — they give no support, so offering
+			// their seams only invites place-then-collapse.
+			if ( BuildPieceCatalog.TryGet( targetPiece.PieceId, out var targetData ) && !targetData.IsStructural )
+				continue;
+
 			var hasEdgeSeams = CollectEdgeCandidates(
 				placingData,
 				placingSnaps,

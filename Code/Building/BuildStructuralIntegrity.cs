@@ -303,17 +303,49 @@ public static class BuildStructuralIntegrity
 	}
 
 	/// <summary>
-	/// Adjacency: expanded world-AABB overlap. Deliberately generous — connectivity that is a
-	/// little forgiving costs nothing (support still decays by real center distance), while a
-	/// missed contact bricks a whole piece family, which is exactly what the pitched roofs did
-	/// under the old oriented-box test.
+	/// Adjacency: AABB broad-phase, then an oriented-box contact test (face-axis SAT, both frames)
+	/// in each piece's snap frame. Plain AABB overlap was the fast first cut, but a 45° beam's AABB
+	/// is a fat box around its whole diagonal — pieces floating well clear of the actual beam
+	/// "touched" it and inherited support. The face-axis test is exact for parallel/snapped pieces
+	/// and only slightly conservative on crossed diagonals (skipped cross axes over-connect, never
+	/// under-connect — a missed real contact bricks a piece family, an extra one just shares
+	/// support it plausibly should).
 	/// </summary>
 	static bool Touches( BuildPiece a, BuildPiece b )
 	{
 		if ( !BoundsCache.TryGetValue( a, out var boundsA ) || !BoundsCache.TryGetValue( b, out var boundsB ) )
 			return false;
 
-		return BoundsOverlap( Expand( boundsA, ContactToleranceUnits ), boundsB );
+		if ( !BoundsOverlap( Expand( boundsA, ContactToleranceUnits ), boundsB ) )
+			return false;
+
+		var posA = a.GameObject.WorldPosition;
+		var posB = b.GameObject.WorldPosition;
+		var rotA = BuildColliderSnap.GetSnapWorldRotation( a.GameObject, a.PieceId );
+		var rotB = BuildColliderSnap.GetSnapWorldRotation( b.GameObject, b.PieceId );
+		var halfA = BuildColliderSnap.GetColliderHalfForPiece( a.PieceId );
+		var halfB = BuildColliderSnap.GetColliderHalfForPiece( b.PieceId );
+
+		return TouchesInFrame( posA, rotA, halfA, posB, rotB, halfB )
+		       && TouchesInFrame( posB, rotB, halfB, posA, rotA, halfA );
+	}
+
+	/// <summary>Face-axis separation test in A's frame — B's oriented halves projected onto A's axes.</summary>
+	static bool TouchesInFrame( Vector3 posA, Rotation rotA, Vector3 halfA, Vector3 posB, Rotation rotB, Vector3 halfB )
+	{
+		var delta = rotA.Inverse * (posB - posA);
+		var rel = rotA.Inverse * rotB;
+		var bx = rel * new Vector3( halfB.x, 0f, 0f );
+		var by = rel * new Vector3( 0f, halfB.y, 0f );
+		var bz = rel * new Vector3( 0f, 0f, halfB.z );
+
+		var ex = Math.Abs( bx.x ) + Math.Abs( by.x ) + Math.Abs( bz.x );
+		var ey = Math.Abs( bx.y ) + Math.Abs( by.y ) + Math.Abs( bz.y );
+		var ez = Math.Abs( bx.z ) + Math.Abs( by.z ) + Math.Abs( bz.z );
+
+		return Math.Abs( delta.x ) < halfA.x + ex + ContactToleranceUnits
+		       && Math.Abs( delta.y ) < halfA.y + ey + ContactToleranceUnits
+		       && Math.Abs( delta.z ) < halfA.z + ez + ContactToleranceUnits;
 	}
 
 	static HashSet<BuildPiece> CollectComponent( List<BuildPiece> seeds )
