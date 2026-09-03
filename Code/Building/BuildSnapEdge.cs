@@ -9,6 +9,8 @@ public enum SnapEdgeId
 	South,
 	East,
 	West,
+	/// <summary>A triangle's hypotenuse — only pieces whose own edge list declares it have one.</summary>
+	Diagonal,
 }
 
 /// <summary>Two corner snaps forming one thin-edge side of a piece.</summary>
@@ -38,6 +40,8 @@ static class BuildSnapEdge
 			SnapEdgeId.South => SnapEdgeId.North,
 			SnapEdgeId.East => SnapEdgeId.West,
 			SnapEdgeId.West => SnapEdgeId.East,
+			// A hypotenuse mates another hypotenuse (two triangles → one square).
+			SnapEdgeId.Diagonal => SnapEdgeId.Diagonal,
 			_ => SnapEdgeId.North,
 		};
 

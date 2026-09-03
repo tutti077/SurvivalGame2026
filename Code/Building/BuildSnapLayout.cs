@@ -237,9 +237,62 @@ public static class BuildSnapLayout
 			_ => NoRoles,
 		};
 
-	/// <summary>Thin edges this piece exposes — folded corners use their own slope/ground seams.</summary>
-	public static IReadOnlyList<SnapEdge> GetEdges( string pieceId ) =>
-		FoldEdges.TryGetValue( pieceId, out var edges ) ? edges : BuildSnapEdge.ThinPlaneEdges;
+	/// <summary>
+	/// The triangle pieces' real edges: the two straight sides the cut corner leaves intact, plus
+	/// the hypotenuse (<see cref="SnapEdgeId.Diagonal"/>) joining the two corners adjacent to the
+	/// cut. Only pieces listed here own a Diagonal — a full plate has all four corners, so a
+	/// corner-existence test alone would wrongly grant it a phantom diagonal seam.
+	/// </summary>
+	static readonly Dictionary<string, SnapEdge[]> TriangleEdges = new( StringComparer.OrdinalIgnoreCase )
+	{
+		// Cut NE → straight South + West, hypotenuse NW–SE.
+		["build_wood_triangleFloor"] =
+		[
+			new() { Id = SnapEdgeId.South, CornerA = BuildSnapRole.CornerSouthWest, CornerB = BuildSnapRole.CornerSouthEast },
+			new() { Id = SnapEdgeId.West, CornerA = BuildSnapRole.CornerNorthWest, CornerB = BuildSnapRole.CornerSouthWest },
+			new() { Id = SnapEdgeId.Diagonal, CornerA = BuildSnapRole.CornerNorthWest, CornerB = BuildSnapRole.CornerSouthEast },
+		],
+		// Cut NW (gable full height on +X) → straight South (bottom) + East (tall side), slope SW–NE.
+		["build_wood_45wallLeft"] =
+		[
+			new() { Id = SnapEdgeId.South, CornerA = BuildSnapRole.CornerSouthWest, CornerB = BuildSnapRole.CornerSouthEast },
+			new() { Id = SnapEdgeId.East, CornerA = BuildSnapRole.CornerNorthEast, CornerB = BuildSnapRole.CornerSouthEast },
+			new() { Id = SnapEdgeId.Diagonal, CornerA = BuildSnapRole.CornerSouthWest, CornerB = BuildSnapRole.CornerNorthEast },
+		],
+		// Cut NE (gable full height on -X) → straight South (bottom) + West (tall side), slope NW–SE.
+		["build_wood_45wallRight"] =
+		[
+			new() { Id = SnapEdgeId.South, CornerA = BuildSnapRole.CornerSouthWest, CornerB = BuildSnapRole.CornerSouthEast },
+			new() { Id = SnapEdgeId.West, CornerA = BuildSnapRole.CornerNorthWest, CornerB = BuildSnapRole.CornerSouthWest },
+			new() { Id = SnapEdgeId.Diagonal, CornerA = BuildSnapRole.CornerNorthWest, CornerB = BuildSnapRole.CornerSouthEast },
+		],
+	};
+
+	/// <summary>Thin edges this piece exposes — triangles and folded corners use their own lists.</summary>
+	public static IReadOnlyList<SnapEdge> GetEdges( string pieceId )
+	{
+		if ( TriangleEdges.TryGetValue( pieceId, out var triangleEdges ) )
+			return triangleEdges;
+
+		return FoldEdges.TryGetValue( pieceId, out var edges ) ? edges : BuildSnapEdge.ThinPlaneEdges;
+	}
+
+	/// <summary>This piece's edge with the given id, from its own edge list (the only place a Diagonal can come from).</summary>
+	public static bool TryGetPieceEdge( string pieceId, SnapEdgeId edgeId, out SnapEdge edge )
+	{
+		var edges = GetEdges( pieceId );
+		for ( var i = 0; i < edges.Count; i++ )
+		{
+			if ( edges[i].Id == edgeId )
+			{
+				edge = edges[i];
+				return true;
+			}
+		}
+
+		edge = default;
+		return false;
+	}
 
 	public static bool TryGetFoldSnapLocal( string pieceId, BuildSnapRole role, out Vector3 local )
 	{

@@ -236,6 +236,72 @@ public static class BuildModuleDimensions
 		return Math.Max( 0f, -minZ ) + SurfaceContactBias;
 	}
 
+	/// <summary>Corners within this many units of the lowest count as ground contact (covers a plate's thickness pair).</summary>
+	const float GroundContactCornerTolerance = 6f;
+
+	/// <summary>
+	/// XY offset from the piece origin to the centroid of its ground-contact corners — the lowest
+	/// corners of the solid in the snap frame (yaw × kit quarter-turn × baked pitch). Zero for
+	/// axis-aligned pieces, whose contact sits under the origin; for pitched roofs and 45° beams
+	/// it names the low edge / low tip, i.e. the part that actually rests on the ground. Free
+	/// placement holds the ghost by this point so the contact spot rides the crosshair instead of
+	/// the piece hanging a meter to one side of it.
+	/// </summary>
+	public static Vector3 GetGroundContactOffsetXY( string pieceId, Rotation placementRotation )
+	{
+		var half = BuildColliderSnap.GetColliderHalfForPiece( pieceId );
+
+		// Hip / valley corners fill a full module cube in the size table, so box corners see no
+		// tilt — their real resting points are the authored fold vertices (a valley rests on its
+		// single low gutter vertex, a hip on its low ring). Same source and composition
+		// GetLowestWorldZOffset uses, so the hold point and the ground-sit height always agree.
+		if ( BuildSnapLayout.GetKind( pieceId ) == BuildSnapLayoutKind.FoldedRoofCorners )
+		{
+			var roles = BuildSnapLayout.GetRoles( pieceId );
+			var fullRot = BuildColliderSnap.GetSnapFrame( pieceId, placementRotation );
+			var foldOffsets = new Vector3[roles.Count];
+			for ( var i = 0; i < roles.Count; i++ )
+				foldOffsets[i] = BuildColliderSnap.GetCornerSnapWorldOffset( pieceId, roles[i], fullRot, Vector3.One, half );
+
+			return ContactCentroidXY( foldOffsets );
+		}
+
+		var rotation = BuildColliderSnap.GetSnapFrame( pieceId, placementRotation );
+		var offsets = new Vector3[8];
+		var index = 0;
+		for ( var xi = -1; xi <= 1; xi += 2 )
+		for ( var yi = -1; yi <= 1; yi += 2 )
+		for ( var zi = -1; zi <= 1; zi += 2 )
+			offsets[index++] = rotation * new Vector3( xi * half.x, yi * half.y, zi * half.z );
+
+		return ContactCentroidXY( offsets );
+	}
+
+	/// <summary>XY centroid of the lowest offsets (within the contact tolerance of the minimum).</summary>
+	static Vector3 ContactCentroidXY( Vector3[] offsets )
+	{
+		var minZ = float.MaxValue;
+		foreach ( var offset in offsets )
+			minZ = Math.Min( minZ, offset.z );
+
+		var sum = Vector3.Zero;
+		var count = 0;
+		foreach ( var offset in offsets )
+		{
+			if ( offset.z > minZ + GroundContactCornerTolerance )
+				continue;
+
+			sum += offset;
+			count++;
+		}
+
+		if ( count == 0 )
+			return Vector3.Zero;
+
+		var centroid = sum / count;
+		return new Vector3( centroid.x, centroid.y, 0f );
+	}
+
 	public static Vector3 RotateLocalOffset( Rotation rotation, Vector3 local ) => rotation * local;
 
 	/// <summary>Root transform scale — always 1; sizing lives on the box collider.</summary>

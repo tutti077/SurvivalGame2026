@@ -47,6 +47,8 @@ static class BuildSnapCompatibility
 		SnapEdgeId.South,
 		SnapEdgeId.East,
 		SnapEdgeId.West,
+		// Only triangle pieces own a Diagonal (per-piece edge lists) — everything else filters it out.
+		SnapEdgeId.Diagonal,
 	};
 
 	/// <summary>Both wall lips against a deck edge — stand on it or hang under it, aim side decides.</summary>
@@ -124,8 +126,12 @@ static class BuildSnapCompatibility
 			return LevelLips;
 		}
 
+		// Both wall lips against a roof lip, aim decides — same rule as wall-on-floor decks. The old
+		// name-opposite single answer only produced "stand up from the eave" and "hang under the
+		// ridge": edge names share no frame across the pair, so at the ridge the one lip it offered
+		// was the hanging one and a wall could never stand on a roof peak.
 		if ( IsWall( placingPieceId ) && IsRoof( targetPieceId ) )
-			return new[] { BuildSnapEdge.GetOpposite( targetEdge ) };
+			return WallDeckLips;
 
 		if ( IsRoof( placingPieceId ) && IsRoof( targetPieceId ) )
 		{

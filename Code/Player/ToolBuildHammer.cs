@@ -53,6 +53,14 @@ public sealed class ToolBuildHammer : Component
 	public event Action BuildMenuOpenChanged;
 	public event Action BlueprintModeChanged;
 
+	/// <summary>Structural support of the aimed-at piece while the hammer is out (HUD readout).</summary>
+	public bool HasHoverSupport { get; private set; }
+	public float HoverSupportFraction { get; private set; }
+	public Color HoverSupportColor { get; private set; }
+	public float HoverSupportValue { get; private set; }
+	public float HoverSupportMax { get; private set; }
+	public int HoverSupportPercent => (int)Math.Round( HoverSupportFraction * 100f );
+
 	GameObject _pawn;
 	PlayerVitals _vitals;
 	PlayerGameMenuController _menu;
@@ -75,6 +83,7 @@ public sealed class ToolBuildHammer : Component
 	bool _openMenuHeld;
 	bool _demolishedThisHold;
 	double _openMenuHoldStarted;
+	BuildPiece _hoverSupportPiece;
 
 	public void BindPawn( GameObject pawn ) => _pawn = pawn;
 
@@ -119,6 +128,7 @@ public sealed class ToolBuildHammer : Component
 
 	protected override void OnDestroy()
 	{
+		ClearSupportHover();
 		DestroyPreview();
 		base.OnDestroy();
 	}
@@ -137,6 +147,7 @@ public sealed class ToolBuildHammer : Component
 
 		if ( _menu is not null && _menu.IsMenuOpen )
 		{
+			ClearSupportHover();
 			if ( IsBuildMenuOpen )
 				SetBuildMenuOpen( false );
 			return;
@@ -144,9 +155,13 @@ public sealed class ToolBuildHammer : Component
 
 		PollBuildMenuInput();
 		if ( IsBuildMenuOpen )
+		{
+			ClearSupportHover();
 			return;
+		}
 
 		PollHammerInput();
+		UpdateSupportHover();
 
 		if ( !IsPlacingPiece )
 			return;
@@ -563,6 +578,49 @@ public sealed class ToolBuildHammer : Component
 
 		equipment.OwnerRequestDestroyBuildPiece( piece.GameObject.Id );
 		return true;
+	}
+
+	/// <summary>Hover feedback: tint the aimed-at piece by its support and publish the HUD readout.</summary>
+	void UpdateSupportHover()
+	{
+		BuildPiece target = null;
+		if ( BuildPlacementUtility.TryGetViewRay( Pawn, out var origin, out var direction ) )
+		{
+			var scene = ResolveScene();
+			if ( scene.IsValid() )
+			{
+				// Scene-authored / pre-feature pieces get their one-time full solve here (host no-ops after).
+				if ( Networking.IsHost )
+					BuildStructuralIntegrity.EnsureInitialized( scene );
+
+				if ( BuildPlacementUtility.TryTraceBuildPiece( scene, Pawn, _previewRoot, origin, direction, BuildRange, out var piece )
+				     && BuildStructuralIntegrity.TryGetSupportDisplay( piece, out var fraction, out var color ) )
+				{
+					target = piece;
+					HoverSupportFraction = fraction;
+					HoverSupportColor = color;
+					HoverSupportValue = piece.Support;
+					HoverSupportMax = BuildPieceCatalog.GetMaterialForPiece( piece.PieceId )?.MaxSupport ?? 0f;
+				}
+			}
+		}
+
+		if ( _hoverSupportPiece != target && _hoverSupportPiece is { IsValid: true } )
+			_hoverSupportPiece.ClearSupportTint();
+
+		_hoverSupportPiece = target;
+		HasHoverSupport = target is not null;
+		if ( target is not null )
+			target.ApplySupportTint( HoverSupportColor );
+	}
+
+	void ClearSupportHover()
+	{
+		if ( _hoverSupportPiece is { IsValid: true } )
+			_hoverSupportPiece.ClearSupportTint();
+
+		_hoverSupportPiece = null;
+		HasHoverSupport = false;
 	}
 
 	PlayerEquipment ResolveEquipment()

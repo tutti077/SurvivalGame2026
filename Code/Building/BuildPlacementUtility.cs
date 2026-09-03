@@ -288,8 +288,9 @@ public static class BuildPlacementUtility
 			};
 		}
 
-		// Overlap runs in the mesh frame — the frame the placed colliders actually occupy.
-		var isValid = !OverlapsExistingPieces( scene, ignorePreview, position, rotation, BuildColliderSnap.ToMeshFrameHalf( half ) );
+		// Overlap runs in the snap frame — yaw × kit quarter-turn × baked pitch — so a pitched
+		// roof is tested as the tilted plate it is, not as a flat slab at its center height.
+		var isValid = !OverlapsExistingPieces( scene, ignorePreview, data.Id, position, rotation, half );
 
 		return new BuildPlacementResult
 		{
@@ -311,8 +312,11 @@ public static class BuildPlacementUtility
 		Rotation rotation,
 		int holdVariantIndex )
 	{
+		// Default hold: the ghost hangs by its ground-contact centroid, not its box center — a
+		// pitched roof's contact edge sits a meter from its origin, and holding by origin left the
+		// piece dangling beside the crosshair. Zero offset for axis-aligned pieces.
 		if ( holdVariantIndex <= 0 || placingSnaps is null || placingSnaps.Count == 0 )
-			return centerPosition;
+			return centerPosition - BuildModuleDimensions.GetGroundContactOffsetXY( pieceId, rotation );
 
 		var cornerOrdinal = 0;
 		for ( var i = 0; i < placingSnaps.Count; i++ )
@@ -483,16 +487,22 @@ public static class BuildPlacementUtility
 		return hit.Tags.Has( "buildpreview" );
 	}
 
-	/// <summary><paramref name="halfExtents"/> must be mesh-frame halves (see <see cref="BuildColliderSnap.ToMeshFrameHalf"/>) — the same frame placed colliders occupy.</summary>
+	/// <summary>
+	/// <paramref name="tableFrameHalf"/> is the piece's table-frame half extents — the snap frame
+	/// applied here (<see cref="BuildColliderSnap.GetSnapFrame"/>) already carries the kit-mesh
+	/// quarter turn AND the baked prefab pitch, so pitched roofs and 45° braces are tested as the
+	/// tilted plates they are instead of flat slabs at their center height.
+	/// </summary>
 	public static bool OverlapsExistingPieces(
 		Scene scene,
 		GameObject ignorePreview,
+		string placingPieceId,
 		Vector3 position,
 		Rotation rotation,
-		Vector3 halfExtents,
+		Vector3 tableFrameHalf,
 		GameObject ignoreHierarchy = null )
 	{
-		var candidate = new Transform( position, rotation );
+		var candidate = new Transform( position, BuildColliderSnap.GetSnapFrame( placingPieceId, rotation ) );
 
 		foreach ( var piece in scene.GetAllComponents<BuildPiece>() )
 		{
@@ -505,8 +515,10 @@ public static class BuildPlacementUtility
 			if ( ignoreHierarchy.IsValid() && piece.GameObject == ignoreHierarchy )
 				continue;
 
-			// piece.HalfExtents is table-frame; the piece's solid sits in the mesh frame (X/Y swapped).
-			if ( Overlaps( candidate, halfExtents, piece.GameObject.WorldTransform, BuildColliderSnap.ToMeshFrameHalf( piece.HalfExtents ) ) )
+			var target = new Transform(
+				piece.GameObject.WorldPosition,
+				BuildColliderSnap.GetSnapWorldRotation( piece.GameObject, piece.PieceId ) );
+			if ( Overlaps( candidate, tableFrameHalf, target, BuildColliderSnap.GetColliderHalfForPiece( piece.PieceId ) ) )
 				return true;
 		}
 
@@ -519,7 +531,16 @@ public static class BuildPlacementUtility
 	/// </summary>
 	static float OverlapContactSkin => BuildModuleDimensions.SnapThinHalfUnits;
 
-	static bool Overlaps( Transform a, Vector3 halfA, Transform b, Vector3 halfB )
+	/// <summary>
+	/// Symmetric box test: both boxes must overlap in each other's frame. For same-orientation
+	/// pairs (snapped kit pieces, parallel pitched roofs) this is exact; for rotated pairs the
+	/// one-frame version alone over-reports — a thin plate seen from a rotated neighbor's frame
+	/// sums like a chunk — and that false positive is what kept free-placed roofs apart.
+	/// </summary>
+	static bool Overlaps( Transform a, Vector3 halfA, Transform b, Vector3 halfB ) =>
+		OverlapsInFrame( a, halfA, b, halfB ) && OverlapsInFrame( b, halfB, a, halfA );
+
+	static bool OverlapsInFrame( Transform a, Vector3 halfA, Transform b, Vector3 halfB )
 	{
 		var delta = a.Rotation.Inverse * (b.Position - a.Position);
 		var skin = OverlapContactSkin;

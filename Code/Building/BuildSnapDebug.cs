@@ -142,11 +142,11 @@ static class BuildSnapDebug
 			return;
 
 		drawLine( placement.RayOrigin, placement.RayEnd, RayColor );
-		drawSphere( placement.RayOrigin, Color.White, 5f );
+		drawSphere( placement.RayOrigin, Color.White, 2f );
 
 		if ( placement.HasRayHit )
 		{
-			drawSphere( placement.RayHitPosition, RayHitColor, 9f );
+			drawSphere( placement.RayHitPosition, RayHitColor, 3.5f );
 			var hitToOrigin = ( placement.RayOrigin - placement.RayHitPosition ).Normal;
 			if ( hitToOrigin.LengthSquared > 1e-8f )
 			{
@@ -158,12 +158,12 @@ static class BuildSnapDebug
 		}
 		else
 		{
-			drawSphere( placement.RayEnd, RayColor.WithAlpha( 0.45f ), 7f );
+			drawSphere( placement.RayEnd, RayColor.WithAlpha( 0.45f ), 3f );
 		}
 
-		drawSphere( placement.ProbePosition, ProbeColor, 11f );
+		drawSphere( placement.ProbePosition, ProbeColor, 4.5f );
 
 		if ( !placement.HasRayHit )
-			drawSphere( placement.AimDropPosition, AimDropColor, 7f );
+			drawSphere( placement.AimDropPosition, AimDropColor, 3f );
 	}
 }

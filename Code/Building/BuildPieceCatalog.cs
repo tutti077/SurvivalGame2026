@@ -28,6 +28,9 @@ public static class BuildPieceCatalog
 
 		new( StringComparer.OrdinalIgnoreCase );
 
+	static readonly Dictionary<string, BuildMaterialData> MaterialsById =
+		new( StringComparer.OrdinalIgnoreCase );
+
 
 
 	static bool _loaded;
@@ -178,7 +181,7 @@ public static class BuildPieceCatalog
 
 
 
-		if ( !TryParsePieces( json, out var parsed ) || parsed.Count == 0 )
+		if ( !TryParsePieces( json, out var parsed, out var materials ) || parsed.Count == 0 )
 
 			return false;
 
@@ -189,6 +192,8 @@ public static class BuildPieceCatalog
 		Pieces.AddRange( parsed );
 
 		RebuildLookup();
+
+		ApplyMaterials( materials );
 
 		_sourceJson = json;
 
@@ -298,6 +303,8 @@ public static class BuildPieceCatalog
 
 		RebuildLookup();
 
+		ApplyMaterials( null );
+
 		_isFallbackOnly = true;
 
 		_loaded = true;
@@ -317,6 +324,15 @@ public static class BuildPieceCatalog
 		TryGet( pieceId, out var data ) && data.IsRepairTool;
 
 
+
+	/// <summary>Structural material for a piece, or null when the piece has none (furniture) or is unknown.</summary>
+	public static BuildMaterialData GetMaterialForPiece( string pieceId )
+	{
+		if ( !TryGet( pieceId, out var data ) || !data.IsStructural )
+			return null;
+
+		return MaterialsById.TryGetValue( data.MaterialId, out var material ) ? material : BuildMaterialData.DefaultWood;
+	}
 
 	public static bool TryGet( string pieceId, out BuildPieceData data )
 
@@ -392,7 +408,7 @@ public static class BuildPieceCatalog
 
 
 
-				if ( !TryParsePieces( json, out var parsed ) || parsed.Count == 0 )
+				if ( !TryParsePieces( json, out var parsed, out var materials ) || parsed.Count == 0 )
 
 					continue;
 
@@ -403,6 +419,8 @@ public static class BuildPieceCatalog
 				Pieces.AddRange( parsed );
 
 				RebuildLookup();
+
+				ApplyMaterials( materials );
 
 				_sourceJson = json;
 
@@ -430,11 +448,13 @@ public static class BuildPieceCatalog
 
 
 
-	static bool TryParsePieces( string json, out List<BuildPieceData> parsed )
+	static bool TryParsePieces( string json, out List<BuildPieceData> parsed, out List<BuildMaterialData> materials )
 
 	{
 
 		parsed = null;
+
+		materials = null;
 
 		try
 
@@ -445,6 +465,8 @@ public static class BuildPieceCatalog
 			if ( file?.BuildPieces is null || file.BuildPieces.Count == 0 )
 
 				return false;
+
+			materials = file.Materials;
 
 
 
@@ -592,6 +614,8 @@ public static class BuildPieceCatalog
 
 			FallbackColor = "0.52,0.48,0.42,1",
 
+			MaterialId = "wood",
+
 		};
 
 		var wallHalf = BuildModuleDimensions.WallHalfExtents;
@@ -616,6 +640,8 @@ public static class BuildPieceCatalog
 
 			FallbackColor = "0.62,0.58,0.52,1",
 
+			MaterialId = "wood",
+
 		};
 
 		var roofHalf = BuildModuleDimensions.RoofHalfExtents;
@@ -639,6 +665,8 @@ public static class BuildPieceCatalog
 			HalfDepth = roofHalf.z,
 
 			FallbackColor = "0.48,0.36,0.28,1",
+
+			MaterialId = "wood",
 
 		};
 
@@ -684,6 +712,28 @@ public static class BuildPieceCatalog
 
 		public List<BuildPieceData> BuildPieces { get; set; } = new();
 
+		public List<BuildMaterialData> Materials { get; set; } = new();
+
+	}
+
+	static void ApplyMaterials( List<BuildMaterialData> materials )
+	{
+		MaterialsById.Clear();
+		if ( materials is not null )
+		{
+			for ( var i = 0; i < materials.Count; i++ )
+			{
+				var entry = materials[i];
+				if ( entry is null || string.IsNullOrWhiteSpace( entry.Id ) )
+					continue;
+
+				MaterialsById[entry.Id] = entry;
+			}
+		}
+
+		// Structural pieces must always resolve a material — wood is the baseline.
+		if ( !MaterialsById.ContainsKey( "wood" ) )
+			MaterialsById["wood"] = BuildMaterialData.DefaultWood;
 	}
 
 }

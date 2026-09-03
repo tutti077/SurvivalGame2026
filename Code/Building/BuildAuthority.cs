@@ -44,7 +44,17 @@ public static class BuildAuthority
 		BuildSnapPlacement.InvalidatePieceCache();
 		BuildNavMeshSync.OnBuildPieceChanged( scene, spawned );
 
-		// Build hammer durability: 1 tick per successful placement.
+		// Valheim-style: placement always succeeds, then the solver may collapse the piece
+		// (and anything that only stood because of intermediate state) immediately.
+		BuildStructuralIntegrity.HostOnPlaced( piece );
+		if ( !spawned.IsValid() )
+		{
+			// Nothing was actually built — the swing is free (durability only ticks on real effect).
+			spawned = null;
+			return true;
+		}
+
+		// Build hammer durability: 1 tick per placement that actually stood.
 		ToolDurability.HostAddWearToActiveTool( placer );
 
 		return true;
@@ -75,6 +85,7 @@ public static class BuildAuthority
 			return false;
 
 		var scene = target.Scene;
+		var removedRoot = target.GameObject;
 		var bounds = target.GameObject.GetBounds();
 		if ( bounds.Size.LengthSquared < 1f )
 			bounds = BBox.FromPositionAndSize( target.GameObject.WorldPosition, 120f );
@@ -83,6 +94,10 @@ public static class BuildAuthority
 		BuildSnapPlacement.InvalidatePieceCache();
 		if ( scene.IsValid() )
 			BuildNavMeshSync.OnBuildPieceBoundsChanged( scene, bounds );
+
+		// Re-solve what the piece used to touch — collapses anything it solely held up. The root is
+		// passed so the deferred-destroyed piece can't keep supporting the structure this frame.
+		BuildStructuralIntegrity.HostOnRemoved( scene, bounds, removedRoot );
 
 		return true;
 	}

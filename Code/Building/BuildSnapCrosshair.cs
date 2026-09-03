@@ -34,16 +34,19 @@ public static class BuildSnapCrosshair
 	/// <see cref="SnapEngageDistance"/>, on the ghost itself).
 	/// </summary>
 	public static float AimCommitRadius =>
-		BuildModuleDimensions.SnapModuleHalfUnits * 0.425f;
+		BuildModuleDimensions.SnapModuleHalfUnits * 0.3f;
 
 	/// <summary>
-	/// How far a snap may pull the held ghost to seat it. Half a metre — the piece engages while it
-	/// is hovering about that close to where the seam wants it, however loosely the crosshair itself
-	/// is aimed. Distance between the candidate placement and the free (unsnapped) ghost position is
-	/// exactly the distance the mating snap points are apart, since both use the same rotation.
+	/// How far a snap may pull the held ghost to seat it (0.3 m — was 0.5 m, which together with
+	/// the old wider <see cref="AimCommitRadius"/> made it impossible to free-place close to an
+	/// existing piece: aiming anywhere near its base kept capturing the bottom seam). The piece
+	/// engages while hovering about this close to where the seam wants it, however loosely the
+	/// crosshair itself is aimed. Distance between the candidate placement and the free (unsnapped)
+	/// ghost position is exactly the distance the mating snap points are apart, since both use the
+	/// same rotation.
 	/// </summary>
 	public static float SnapEngageDistance =>
-		BuildModuleDimensions.SnapModuleHalfUnits * 0.5f;
+		BuildModuleDimensions.SnapModuleHalfUnits * 0.3f;
 
 	public readonly struct RayTargetScore
 	{

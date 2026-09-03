@@ -37,6 +37,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	MenuPageNavigator _pageNavigator;
 	BuildMenuHud _buildMenuHud;
 	BuildSnapReadoutHud _buildSnapReadout;
+	BuildSupportReadoutHud _buildSupportReadout;
 	PlayerFishing _fishing;
 	FishingMinigameHud _fishingHud;
 	ScreenPanel _hudScreen;
@@ -138,6 +139,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_minimapHud?.Tick();
 		_buildMenuHud?.Tick();
 		_buildSnapReadout?.Tick();
+		_buildSupportReadout?.Tick();
 		_fishingHud?.Tick( _fishing );
 		RefreshFoodSlots();
 		if ( _inventoryInteraction?.FocusedCampfire is not null
@@ -832,6 +834,9 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_buildSnapReadout = new BuildSnapReadoutHud( _equipment );
 		_buildSnapReadout.Build( root );
+
+		_buildSupportReadout = new BuildSupportReadoutHud( _equipment );
+		_buildSupportReadout.Build( root );
 	}
 
 	void BuildFishingMinigame( Panel root )

@@ -187,10 +187,7 @@ static class BuildSnapPlacement
 
 			for ( var pi = 0; pi < placingEdgeIds.Count; pi++ )
 			{
-				if ( !BuildSnapEdge.TryGetEdge( placingEdgeIds[pi], out var placingEdge ) )
-					continue;
-
-				if ( !BuildSnapLayout.HasEdge( placingData.Id, placingEdge ) )
+				if ( !TryGetOwnedEdge( placingData.Id, placingEdgeIds[pi], out var placingEdge ) )
 					continue;
 
 				var sameEdge = BuildSnapCompatibility.UsesSameEdgeAlignment(
@@ -406,10 +403,7 @@ static class BuildSnapPlacement
 
 		for ( var i = 0; i < placingEdgeIds.Count; i++ )
 		{
-			if ( !BuildSnapEdge.TryGetEdge( placingEdgeIds[i], out var placingEdge ) )
-				continue;
-
-			if ( !BuildSnapLayout.HasEdge( placingPieceId, placingEdge ) )
+			if ( !TryGetOwnedEdge( placingPieceId, placingEdgeIds[i], out var placingEdge ) )
 				continue;
 
 			if ( wallSideSeam )
@@ -643,9 +637,13 @@ static class BuildSnapPlacement
 		return false;
 	}
 
-	/// <summary>An edge the placing piece actually has both corners for (see triangles).</summary>
+	/// <summary>
+	/// An edge the placing piece actually owns, resolved from its own edge list — the only source a
+	/// <see cref="SnapEdgeId.Diagonal"/> can come from (a full plate has all four corners, so a
+	/// corner-existence test alone would grant it a phantom diagonal).
+	/// </summary>
 	static bool TryGetOwnedEdge( string placingPieceId, SnapEdgeId edgeId, out SnapEdge edge ) =>
-		BuildSnapEdge.TryGetEdge( edgeId, out edge )
+		BuildSnapLayout.TryGetPieceEdge( placingPieceId, edgeId, out edge )
 		&& BuildSnapLayout.HasEdge( placingPieceId, edge );
 
 	/// <summary>
@@ -779,6 +777,47 @@ static class BuildSnapPlacement
 		}
 	}
 
+	/// <summary>
+	/// Origins closer than this (units) count as the same spot for the co-location veto. The
+	/// duplicate-in-place candidate this kills lands EXACTLY on the existing piece (snap math is
+	/// exact), so this only needs to absorb float noise — keep it well under the ~1.5-unit minimum
+	/// separation of two free-placed walls, or stacking on either of a close pair gets vetoed too.
+	/// </summary>
+	const float CoLocationOriginEpsilon = 0.5f;
+
+	/// <summary>
+	/// True when placing this candidate would drop a piece of the same type at an existing piece's
+	/// exact origin and orientation — a duplicate in place, never a placement anyone wants offered.
+	/// Different yaw/pitch at the same origin stays allowed (crossed walls, X-braces).
+	/// </summary>
+	static bool IsLikePieceCoLocation( Scene scene, GameObject ignorePreview, string placingPieceId, Transform placement )
+	{
+		RefreshPieceScratch( scene );
+		for ( var i = 0; i < PieceScratch.Count; i++ )
+		{
+			var piece = PieceScratch[i];
+			if ( piece is null || !piece.IsValid() || piece.IsPreviewGhost )
+				continue;
+
+			if ( ignorePreview.IsValid() && piece.GameObject == ignorePreview )
+				continue;
+
+			if ( !string.Equals( piece.PieceId, placingPieceId, StringComparison.OrdinalIgnoreCase ) )
+				continue;
+
+			if ( (piece.GameObject.WorldPosition - placement.Position).LengthSquared
+			     > CoLocationOriginEpsilon * CoLocationOriginEpsilon )
+				continue;
+
+			var existing = piece.GameObject.WorldRotation;
+			if ( (existing.Forward - placement.Rotation.Forward).LengthSquared < 0.01f
+			     && (existing.Up - placement.Rotation.Up).LengthSquared < 0.01f )
+				return true;
+		}
+
+		return false;
+	}
+
 	static void TryAddCandidate(
 		string placingPieceId,
 		Scene scene,
@@ -794,7 +833,18 @@ static class BuildSnapPlacement
 		int cycleOrder )
 	{
 		// Snap points are never consumed — multiple pieces may mate to the same built snaps.
-		// Overlap is not used to void snap candidates (ground placement still checks overlap).
+		// Overlap is not used to void snap candidates (ground placement still checks overlap),
+		// with one exception: a like-piece co-location. Mating a lip to the same-named lip
+		// reproduces the piece exactly in place (a wall sharing an existing wall's bottom snaps),
+		// and that junk candidate must never win auto-snap. It stays IN the list as an invalid
+		// member — the grouper prefers groups with a valid mate and the ghost shows red if cycled
+		// onto it — because dropping it made the Q/E count (and the held anchor, via the index
+		// modulo) flicker with yaw: fine-rotating a triangle floor through the one duplicating
+		// yaw went 3/3 → 2/2 → 3/3 and silently changed which corner was held. Same type + same
+		// origin + same orientation only — an X-brace of two 45° beams, and two triangle floors
+		// closing a square at 180°, share an origin on purpose.
+		var coLocated = IsLikePieceCoLocation( scene, ignorePreview, placingPieceId, placement );
+
 		var anchorIndex = FindSnapIndex( placingSnaps, anchorRole );
 		var targetIndex = FindSnapIndex( targetPiece.SnapPoints, targetRole );
 
@@ -822,7 +872,7 @@ static class BuildSnapPlacement
 
 		CandidateScratch.Add( new BuildSnapCandidate
 		{
-			IsValid = true,
+			IsValid = !coLocated,
 			IsEdgeSnap = isEdgeSnap,
 			TargetEdgeId = targetEdge,
 			Placement = placement,
@@ -1107,11 +1157,12 @@ static class BuildSnapPlacement
 		var roofOnFloor = IsRoof( placingPieceId ) && IsFloor( targetPiece.PieceId );
 		var floorOnRoof = IsFloor( placingPieceId ) && IsRoof( targetPiece.PieceId );
 		var roofOnRoof = IsRoof( placingPieceId ) && IsRoof( targetPiece.PieceId );
+		var wallOnRoof = IsWall( placingPieceId ) && IsRoof( targetPiece.PieceId );
 		// Multi-lip families expose several placing edges for Q/E — don't force opposite-only.
 		// Wall↔wall is NOT one of them: for a flat plate, mating a lip to the same-named lip is an
 		// exact overlap, and because ties keep the first fit in [N,S,E,W] order that overlap won
 		// auto-placement for the target's top and right edges.
-		if ( !wallOnFloor && !roofOnFloor && !floorOnRoof && !roofOnRoof )
+		if ( !wallOnFloor && !roofOnFloor && !floorOnRoof && !roofOnRoof && !wallOnRoof )
 		{
 			if ( !sameEdgeAlignment && placingEdge.Id != BuildSnapEdge.GetOpposite( targetEdge.Id ) )
 				return false;

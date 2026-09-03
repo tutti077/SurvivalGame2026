@@ -15,7 +15,12 @@ public sealed class BuildPiece : Component
 	[Property] public string PieceId { get; set; } = string.Empty;
 	[Property] public bool IsBlueprint { get; set; }
 
+	/// <summary>Structural support (host-solved, see <see cref="BuildStructuralIntegrity"/>) — synced for client hover display.</summary>
+	[Sync] public float Support { get; set; }
+
 	public bool IsPreviewGhost { get; private set; }
+
+	bool _supportTintApplied;
 
 	Vector3 _halfExtents = BuildModuleDimensions.FloorHalfExtents;
 	readonly List<BuildSnapPoint> _snapPoints = new();
@@ -112,6 +117,32 @@ public sealed class BuildPiece : Component
 		}
 
 		ApplyVisualTint();
+	}
+
+	/// <summary>Hammer hover: color a placed piece by its support gradient.</summary>
+	public void ApplySupportTint( Color tint )
+	{
+		if ( IsPreviewGhost )
+			return;
+
+		_supportTintApplied = true;
+		ApplyTint( tint );
+	}
+
+	/// <summary>
+	/// Restore a placed piece's renderers after hover ends — back to the catalog fallback color,
+	/// which is what <see cref="BuildPieceVisual"/> tints placed pieces with.
+	/// </summary>
+	public void ClearSupportTint()
+	{
+		if ( !_supportTintApplied )
+			return;
+
+		_supportTintApplied = false;
+		var restore = BuildPieceCatalog.TryGet( PieceId, out var data )
+			? BuildPieceCatalog.ParseFallbackColor( data.FallbackColor )
+			: Color.White;
+		ApplyTint( restore );
 	}
 
 	void ApplyTint( Color tint )
