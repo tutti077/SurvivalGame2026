@@ -252,7 +252,7 @@
         "MeleeDebugDrawEnabled": true,
         "MeleeDebugDrawRotationSpokes": false,
         "MeleeDebugDrawSamplePointsEnabled": true,
-        "MeleeDebugOverlayDuration": 3,
+        "MeleeDebugOverlayDuration": 1,
         "MeleeHeavyAttackDamageBonus": 0.3,
         "MeleeHitVolumeThickness": 2,
         "MeleeMaxTargetsHit": 1,
