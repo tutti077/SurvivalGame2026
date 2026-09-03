@@ -8,5 +8,11 @@ public sealed class QuestRowPanel : Panel
 	public QuestMenuSection Section { get; init; }
 	public string QuestId { get; init; }
 
+	/// <summary>Title label (dimmed while locked).</summary>
+	public Label NameLabel { get; set; }
+
+	/// <summary>Right-aligned Locked / Active / Done tag.</summary>
+	public Label StatusLabel { get; set; }
+
 	public override bool WantsMouseInput() => false;
 }

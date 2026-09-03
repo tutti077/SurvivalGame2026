@@ -439,6 +439,9 @@ public sealed class PlayerAugments : Component
 	{
 		ApplyInstalledLocal( slot, stack );
 
+		if ( !string.IsNullOrWhiteSpace( stack.ResourceId ) && stack.Count > 0 )
+			Components.Get<PlayerQuests>()?.OwnerReport( QuestEventIds.AugmentInstalled, stack.ResourceId );
+
 		if ( HasHostAuthority )
 		{
 			PushFullStateToOwner();

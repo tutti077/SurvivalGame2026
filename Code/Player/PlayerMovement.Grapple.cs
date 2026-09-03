@@ -1502,6 +1502,7 @@ partial class PlayerMovement
 		GrappleAttachWorldPoint = validatedPoint;
 		GrappleRopeLengthEngine = length;
 		ClearGrapplePlayerAttachState();
+		Components.Get<PlayerQuests>()?.HostReport( QuestEventIds.GrappleAttached );
 
 		if ( playerTargetId != Guid.Empty && TryResolveGrapplePlayerTarget( playerTargetId, out var target ) )
 		{

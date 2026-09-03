@@ -15,7 +15,7 @@ public sealed class StarterKitChestFill : Component
 		"basic_hook",
 		"basic_wingsuit",
 		"build_hammer",
-		"basic_sword",
+		"club_wood",
 	};
 
 	[Property, Title( "Sets of each item" ), Range( 1, 8 ), Step( 1 )]

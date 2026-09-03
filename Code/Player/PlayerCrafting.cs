@@ -172,6 +172,8 @@ public sealed class PlayerCrafting : Component
 		if ( LogCrafting )
 			Log.Info( $"[PlayerCrafting] {GameObject.Name}: crafted {outputTotal} {recipe.Id}." );
 
+		Components.Get<PlayerQuests>()?.HostReport( QuestEventIds.ItemCrafted, recipe.Id, outputTotal );
+
 		return true;
 	}
 

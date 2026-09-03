@@ -511,6 +511,9 @@ public static class BuildPlacementUtility
 
 		return false;
 	}
+
+	/// <summary>The hit is the pawn's own placement ghost (or any preview-tagged object) — never a build surface.</summary>
+	static bool IsIgnoredTraceHit( GameObject hit, GameObject ignorePreview )
 	{
 		if ( hit is null || !hit.IsValid() )
 			return true;

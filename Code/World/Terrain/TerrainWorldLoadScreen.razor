@@ -36,8 +36,19 @@
 		SyncFullscreenBounds();
 	}
 
+	Vector2 _syncedScreenSize;
+
+	/// <summary>Root bounds are set by hand, so they must follow window/viewport resizes.</summary>
+	protected override void OnUpdate()
+	{
+		base.OnUpdate();
+		if ( Screen.Size != _syncedScreenSize )
+			SyncFullscreenBounds();
+	}
+
 	void SyncFullscreenBounds()
 	{
+		_syncedScreenSize = Screen.Size;
 		if ( Panel is Sandbox.UI.RootPanel root )
 			root.PanelBounds = new Rect( 0, 0, Screen.Width, Screen.Height );
 	}

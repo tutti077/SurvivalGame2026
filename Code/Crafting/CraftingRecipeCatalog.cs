@@ -209,7 +209,7 @@ public static class CraftingRecipeCatalog
 			return;
 		}
 
-		Recipes.Add( CreateFallbackSword() );
+		Recipes.Add( CreateFallbackClub() );
 		_isFallbackOnly = true;
 		_loaded = true;
 		_loadedJsonHash = 0;
@@ -272,11 +272,11 @@ public static class CraftingRecipeCatalog
 		yield return "/data/crafting_recipes.json";
 	}
 
-	static CraftingRecipe CreateFallbackSword() => new()
+	static CraftingRecipe CreateFallbackClub() => new()
 	{
-		Id = "basic_sword",
-		DisplayName = "Sword",
-		Icon = "ui/items/basic_sword.png",
+		Id = "club_wood",
+		DisplayName = "Wooden Club",
+		Icon = "ui/items/club_wood.png",
 		Ingredients =
 		{
 			new CraftingIngredient { ResourceId = "resource_stone", Amount = 3 },

@@ -1,32 +1,288 @@
 {
   "quests": [
     {
-      "id": "welcome",
-      "displayName": "Welcome to the Wild",
-      "description": "Learn the basics of gathering and crafting to survive your first night.",
-      "task": "Hand-harvest 3 sticks and 2 rocks from resource nodes.",
-      "rewards": [ "25 XP", "Plant Fiber x1" ]
+      "id": "awakening",
+      "disabled": true,
+      "displayName": "Awakening",
+      "summary": "Exit your stasis pod",
+      "description": "Description to come...",
+      "requires": [],
+      "objectives": [ { "event": "pod_exited", "count": 1, "label": "Exit the pod you spawned in" } ]
     },
     {
-      "id": "craft_blade",
-      "displayName": "A Sharp Edge",
-      "description": "A simple sword will help you defend yourself and test combat systems.",
-      "task": "Craft a sword at the crafting station.",
-      "rewards": [ "50 XP", "Wood x3" ]
+      "id": "starting_from_scratch",
+      "displayName": "Starting From Scratch",
+      "summary": "Gather basic resources",
+      "description": "Description to come...",
+      "requires": [ "awakening" ],
+      "objectives": [
+        { "event": "resource_collected", "match": "resource_woodBasic", "count": 10, "label": "Collect wood" },
+        { "event": "resource_collected", "match": "resource_stone", "count": 10, "label": "Collect stone" }
+      ]
     },
     {
-      "id": "stock_up",
-      "displayName": "Stock the Pack",
-      "description": "Fill your inventory with mixed materials for future recipes.",
-      "task": "Hold at least 5 different resource stacks in your inventory at once.",
-      "rewards": [ "75 XP", "Rock x5" ]
+      "id": "even_the_odds",
+      "displayName": "Even the Odds",
+      "summary": "Craft a wooden club",
+      "description": "Description to come...",
+      "requires": [ "starting_from_scratch" ],
+      "objectives": [ { "event": "item_crafted", "match": "club_wood", "count": 1, "label": "Craft a wooden club" } ]
     },
     {
-      "id": "guard_training",
-      "displayName": "Guard Training",
-      "description": "Practice blocking attacks from the training dummy.",
-      "task": "Successfully block 3 melee attacks.",
-      "rewards": [ "40 XP", "Wood x2" ]
+      "id": "a_sharper_edge",
+      "displayName": "A Sharper Edge",
+      "summary": "Craft an axe",
+      "description": "Description to come...",
+      "requires": [ "even_the_odds" ],
+      "objectives": [ { "event": "item_crafted", "match": "axe_stone", "count": 1, "label": "Craft a stone axe" } ]
+    },
+    {
+      "id": "tree_surgeon",
+      "displayName": "Tree Surgeon",
+      "summary": "Chop your first tree down",
+      "description": "Description to come...",
+      "requires": [ "a_sharper_edge" ],
+      "objectives": [ { "event": "tree_chopped", "count": 1, "label": "Chop a tree into raw resources" } ]
+    },
+    {
+      "id": "woodchuck",
+      "displayName": "Woodchuck",
+      "summary": "Collect 50 pieces of wood",
+      "description": "Description to come...",
+      "requires": [ "tree_surgeon" ],
+      "objectives": [ { "event": "resource_collected", "match": "resource_woodBasic", "count": 50, "label": "Collect wood" } ]
+    },
+    {
+      "id": "no_roads_needed",
+      "displayName": "No Roads Needed",
+      "summary": "Use a Grapple Hook",
+      "description": "Description to come...",
+      "requires": [ "woodchuck" ],
+      "objectives": [ { "event": "grapple_attached", "count": 1, "label": "Hook onto something with the grapple" } ]
+    },
+    {
+      "id": "kindling_hope",
+      "displayName": "Kindling Hope",
+      "summary": "Build a campfire",
+      "description": "Description to come...",
+      "requires": [ "no_roads_needed" ],
+      "objectives": [ { "event": "piece_built", "match": "furniture_campfire", "count": 1, "label": "Place a campfire with the build hammer" } ]
+    },
+    {
+      "id": "leave_your_mark",
+      "disabled": true,
+      "displayName": "Leave Your Mark",
+      "summary": "Open your map and place a marker",
+      "description": "Description to come...",
+      "requires": [ "kindling_hope" ],
+      "objectives": [ { "event": "map_marker_placed", "count": 1, "label": "Place a marker on the map" } ]
+    },
+    {
+      "id": "living_off_the_land",
+      "displayName": "Living Off the Land",
+      "summary": "Find food",
+      "description": "Description to come...",
+      "requires": [ "leave_your_mark" ],
+      "objectives": [ { "event": "food_collected", "count": 1, "label": "Pick up any food item" } ]
+    },
+    {
+      "id": "rest_easy",
+      "displayName": "Rest Easy",
+      "summary": "Sleep in a bed",
+      "description": "Description to come...",
+      "requires": [ "living_off_the_land" ],
+      "objectives": [ { "event": "slept_in_bed", "count": 1, "label": "Sleep in a bed" } ]
+    },
+    {
+      "id": "stone_and_spark",
+      "displayName": "Stone and Spark",
+      "summary": "Find flint",
+      "description": "Description to come...",
+      "requires": [ "rest_easy" ],
+      "objectives": [ { "event": "resource_collected", "match": "resource_flint", "count": 1, "label": "Pick up a piece of flint" } ]
+    },
+    {
+      "id": "the_red_hunt",
+      "displayName": "The Red Hunt",
+      "summary": "Kill 5 red fox",
+      "description": "Description to come...",
+      "requires": [],
+      "side": true,
+      "objectives": [ { "event": "entity_killed", "match": "fox", "count": 5, "label": "Kill red foxes" } ]
+    },
+    {
+      "id": "proving_grounds",
+      "displayName": "Proving Grounds",
+      "summary": "Kill 5 white tail",
+      "description": "Description to come...",
+      "requires": [],
+      "side": true,
+      "objectives": [ { "event": "entity_killed", "match": "whitetail", "count": 5, "label": "Kill white tail deer" } ]
+    },
+    {
+      "id": "clover_runs_red",
+      "displayName": "Clover Runs Red",
+      "summary": "Kill 5 Scavs",
+      "description": "Description to come...",
+      "requires": [],
+      "side": true,
+      "objectives": [ { "event": "entity_killed", "match": "scav", "count": 5, "label": "Kill scavs" } ]
+    },
+    {
+      "id": "tool_time",
+      "displayName": "Tool Time",
+      "summary": "Craft one of every kind of tool",
+      "description": "Description to come...",
+      "requires": [ "stone_and_spark" ],
+      "objectives": [
+        { "event": "item_crafted", "match": "axe_stone", "count": 1, "label": "Craft an axe" },
+        { "event": "item_crafted", "match": "pickaxe_stone", "count": 1, "label": "Craft a pickaxe" },
+        { "event": "item_crafted", "match": "hoe_stone", "count": 1, "label": "Craft a hoe" }
+      ]
+    },
+    {
+      "id": "suit_up",
+      "displayName": "Suit Up",
+      "summary": "Craft a new set of armor",
+      "description": "Description to come...",
+      "requires": [ "tool_time" ],
+      "objectives": [ { "event": "armor_set_equipped", "count": 1, "label": "Wear a full set of any armor" } ]
+    },
+    {
+      "id": "human_improved",
+      "displayName": "Human, Improved",
+      "summary": "Augment yourself",
+      "description": "Description to come...",
+      "requires": [ "suit_up" ],
+      "objectives": [ { "event": "augment_installed", "count": 1, "label": "Install any augment" } ]
+    },
+    {
+      "id": "and_beyond",
+      "displayName": "And Beyond!",
+      "summary": "Use a Wingsuit",
+      "description": "Description to come...",
+      "requires": [ "human_improved" ],
+      "objectives": [ { "event": "wingsuit_deployed", "count": 1, "label": "Deploy a wingsuit" } ]
+    },
+    {
+      "id": "boss_1",
+      "displayName": "Boss1",
+      "summary": "Kill <First Boss>",
+      "description": "Description to come...",
+      "requires": [ "and_beyond" ],
+      "objectives": [ { "event": "entity_killed", "match": "boss_1", "count": 1, "label": "Kill <First Boss>" } ]
+    },
+    {
+      "id": "biome_2",
+      "displayName": "Biome 2!",
+      "summary": "Enter the Redwood Forest Biome",
+      "description": "Description to come...",
+      "requires": [ "boss_1" ],
+      "objectives": [ { "event": "biome_entered", "match": "RedwoodForest", "count": 1, "label": "Enter the Redwood Forest" } ]
+    },
+    {
+      "id": "boss_2",
+      "displayName": "Boss2",
+      "summary": "Kill <Second Boss>",
+      "description": "Description to come...",
+      "requires": [ "biome_2" ],
+      "objectives": [ { "event": "entity_killed", "match": "boss_2", "count": 1, "label": "Kill <Second Boss>" } ]
+    },
+    {
+      "id": "biome_3",
+      "displayName": "Biome 3!",
+      "summary": "Enter the Amber Dunes Biome",
+      "description": "Description to come...",
+      "requires": [ "boss_2" ],
+      "objectives": [ { "event": "biome_entered", "match": "AmberDunes", "count": 1, "label": "Enter the Amber Dunes" } ]
+    },
+    {
+      "id": "boss_3",
+      "displayName": "Boss3",
+      "summary": "Kill <Third Boss>",
+      "description": "Description to come...",
+      "requires": [ "biome_3" ],
+      "objectives": [ { "event": "entity_killed", "match": "boss_3", "count": 1, "label": "Kill <Third Boss>" } ]
+    },
+    {
+      "id": "biome_4",
+      "displayName": "Biome 4!",
+      "summary": "Enter the Ivory Alps Biome",
+      "description": "Description to come...",
+      "requires": [ "boss_3" ],
+      "objectives": [ { "event": "biome_entered", "match": "IvoryAlps", "count": 1, "label": "Enter the Ivory Alps" } ]
+    },
+    {
+      "id": "boss_4",
+      "displayName": "Boss4",
+      "summary": "Kill <Fourth Boss>",
+      "description": "Description to come...",
+      "requires": [ "biome_4" ],
+      "objectives": [ { "event": "entity_killed", "match": "boss_4", "count": 1, "label": "Kill <Fourth Boss>" } ]
+    },
+    {
+      "id": "biome_5",
+      "displayName": "Biome 5!",
+      "summary": "Enter the Azure Coast Biome",
+      "description": "Description to come...",
+      "requires": [ "boss_4" ],
+      "objectives": [ { "event": "biome_entered", "match": "AzureCoast", "count": 1, "label": "Enter the Azure Coast" } ]
+    },
+    {
+      "id": "boss_5",
+      "displayName": "Boss5",
+      "summary": "Kill <Fifth Boss>",
+      "description": "Description to come...",
+      "requires": [ "biome_5" ],
+      "objectives": [ { "event": "entity_killed", "match": "boss_5", "count": 1, "label": "Kill <Fifth Boss>" } ]
+    },
+    {
+      "id": "biome_6",
+      "displayName": "Biome 6!",
+      "summary": "Enter the Ocean Biome",
+      "description": "Description to come...",
+      "requires": [ "boss_5" ],
+      "objectives": [ { "event": "biome_entered", "match": "Ocean", "count": 1, "label": "Enter the Ocean" } ]
+    },
+    {
+      "id": "boss_6",
+      "displayName": "Boss6",
+      "summary": "Kill <Sixth Boss>",
+      "description": "Description to come...",
+      "requires": [ "biome_6" ],
+      "objectives": [ { "event": "entity_killed", "match": "boss_6", "count": 1, "label": "Kill <Sixth Boss>" } ]
+    },
+    {
+      "id": "biome_7",
+      "displayName": "Biome 7!",
+      "summary": "Enter the BlackWater Biome",
+      "description": "Description to come...",
+      "requires": [ "boss_6" ],
+      "objectives": [ { "event": "biome_entered", "match": "Blackwater", "count": 1, "label": "Enter the Blackwater" } ]
+    },
+    {
+      "id": "boss_7",
+      "displayName": "Boss7",
+      "summary": "Kill <Seventh Boss>",
+      "description": "Description to come...",
+      "requires": [ "biome_7" ],
+      "objectives": [ { "event": "entity_killed", "match": "boss_7", "count": 1, "label": "Kill <Seventh Boss>" } ]
+    },
+    {
+      "id": "biome_8",
+      "displayName": "Biome 8!",
+      "summary": "Enter the Skyfall Biome",
+      "description": "Description to come...",
+      "requires": [ "boss_7" ],
+      "objectives": [ { "event": "biome_entered", "match": "Skyfall", "count": 1, "label": "Enter Skyfall" } ]
+    },
+    {
+      "id": "boss_8",
+      "displayName": "Boss8",
+      "summary": "Kill <Eighth Boss>",
+      "description": "Description to come...",
+      "requires": [ "biome_8" ],
+      "objectives": [ { "event": "entity_killed", "match": "boss_8", "count": 1, "label": "Kill <Eighth Boss>" } ]
     }
   ]
 }

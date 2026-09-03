@@ -114,6 +114,8 @@ public sealed class ChopableTree : Component
 		if ( LogChop )
 			Log.Info( $"[ChopableTree] {GameObject.Name}: broken — dropped {count}x {resourceId}." );
 
+		PlayerQuests.FindOnAttacker( attacker )?.HostReport( QuestEventIds.TreeChopped );
+
 		var identity = Components.Get<WorldScatterIdentity>( FindMode.EverythingInSelfAndAncestors );
 		if ( identity is not null && !string.IsNullOrWhiteSpace( identity.StableKey ) )
 			WorldScatterIdentity.HostBroadcastBroken( identity.StableKey );

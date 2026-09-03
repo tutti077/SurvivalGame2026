@@ -5,7 +5,7 @@ using Sandbox;
 
 namespace Survival;
 
-/// <summary>Loads quests from <c>data/quests.json</c> with built-in fallbacks.</summary>
+/// <summary>Loads quest definitions from <c>data/quests.json</c> (file order is display order).</summary>
 public static class QuestCatalog
 {
 	const string QuestsFilePath = "data/quests.json";
@@ -13,6 +13,7 @@ public static class QuestCatalog
 	static readonly List<QuestDefinition> Quests = new();
 	static bool _loaded;
 	static int _loadedJsonHash;
+	static int _contentVersion;
 
 	public static IReadOnlyList<QuestDefinition> All
 	{
@@ -23,11 +24,57 @@ public static class QuestCatalog
 		}
 	}
 
+	/// <summary>Bumps whenever the quest list is replaced — UI rebuilds rows when this changes.</summary>
+	public static int ContentVersion
+	{
+		get
+		{
+			EnsureLoaded();
+			return _contentVersion;
+		}
+	}
+
 	public static void ForceReload()
 	{
 		_loaded = false;
 		_loadedJsonHash = 0;
 		ReloadFromDisk();
+		QuestTracker.Invalidate();
+	}
+
+	/// <summary>
+	/// Re-read <c>data/quests.json</c> if its text changed since the last load. Called when the quest
+	/// menu opens (infrequent) so JSON edits and hot reloads — which keep static state — show up
+	/// without a restart.
+	/// </summary>
+	public static void ReloadIfChanged()
+	{
+		if ( !_loaded )
+		{
+			ReloadFromDisk();
+			return;
+		}
+
+		var hash = TryReadJsonHash();
+		if ( hash == 0 || hash == _loadedJsonHash )
+			return;
+
+		ForceReload();
+	}
+
+	static int TryReadJsonHash()
+	{
+		if ( !FileSystem.Mounted.FileExists( QuestsFilePath ) )
+			return 0;
+
+		try
+		{
+			return StringComparer.Ordinal.GetHashCode( FileSystem.Mounted.ReadAllText( QuestsFilePath ) );
+		}
+		catch
+		{
+			return 0;
+		}
 	}
 
 	public static QuestDefinition Get( string questId )
@@ -55,28 +102,25 @@ public static class QuestCatalog
 
 	static void ReloadFromDisk()
 	{
-		var jsonHash = TryReadJsonHash();
 		_loaded = true;
-		_loadedJsonHash = jsonHash;
+		_contentVersion++;
 		Quests.Clear();
 
-		if ( TryLoadFromFile() )
-			return;
-
-		LoadFallback();
-	}
-
-	static bool TryLoadFromFile()
-	{
 		if ( !FileSystem.Mounted.FileExists( QuestsFilePath ) )
-			return false;
+		{
+			Log.Warning( $"[QuestCatalog] Missing {QuestsFilePath} — no quests loaded." );
+			return;
+		}
 
 		try
 		{
 			var json = FileSystem.Mounted.ReadAllText( QuestsFilePath );
+			_loadedJsonHash = StringComparer.Ordinal.GetHashCode( json );
 			var root = JsonSerializer.Deserialize<QuestFileRoot>( json, JsonOptions );
-			if ( root?.Quests is null || root.Quests.Count == 0 )
-				return false;
+			if ( root?.Quests is null )
+				return;
+
+			var disabledIds = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
 
 			for ( var i = 0; i < root.Quests.Count; i++ )
 			{
@@ -84,58 +128,34 @@ public static class QuestCatalog
 				if ( quest is null || string.IsNullOrWhiteSpace( quest.Id ) )
 					continue;
 
+				if ( quest.Disabled )
+				{
+					disabledIds.Add( quest.Id );
+					continue;
+				}
+
+				quest.Requires ??= new List<string>();
+				quest.Objectives ??= new List<QuestObjective>();
+				quest.Rewards ??= new List<string>();
+
+				if ( quest.Objectives.Count == 0 )
+					Log.Warning( $"[QuestCatalog] Quest '{quest.Id}' has no objectives and can never complete." );
+
 				Quests.Add( quest );
 			}
 
-			return Quests.Count > 0;
+			// A disabled quest must not block the chain: drop it from every prerequisite list.
+			if ( disabledIds.Count > 0 )
+			{
+				for ( var i = 0; i < Quests.Count; i++ )
+					Quests[i].Requires.RemoveAll( disabledIds.Contains );
+
+				Log.Info( $"[QuestCatalog] Disabled quests skipped: {string.Join( ", ", disabledIds )}." );
+			}
 		}
 		catch ( Exception ex )
 		{
 			Log.Warning( $"[QuestCatalog] Failed to parse {QuestsFilePath}: {ex.Message}" );
-			return false;
-		}
-	}
-
-	static void LoadFallback()
-	{
-		Quests.Add( new QuestDefinition
-		{
-			Id = "welcome",
-			DisplayName = "Welcome to the Wild",
-			Description = "Learn the basics of gathering and crafting to survive your first night.",
-			Task = "Hand-harvest 3 sticks and 2 rocks from resource nodes.",
-			Rewards = new List<string> { "25 XP", "Plant Fiber x1" }
-		} );
-		Quests.Add( new QuestDefinition
-		{
-			Id = "craft_blade",
-			DisplayName = "A Sharp Edge",
-			Description = "A simple sword will help you defend yourself and test combat systems.",
-			Task = "Craft a sword at the crafting station.",
-			Rewards = new List<string> { "50 XP", "Wood x3" }
-		} );
-		Quests.Add( new QuestDefinition
-		{
-			Id = "stock_up",
-			DisplayName = "Stock the Pack",
-			Description = "Fill your inventory with mixed materials for future recipes.",
-			Task = "Hold at least 5 different resource stacks in your inventory at once.",
-			Rewards = new List<string> { "75 XP", "Rock x5" }
-		} );
-	}
-
-	static int TryReadJsonHash()
-	{
-		if ( !FileSystem.Mounted.FileExists( QuestsFilePath ) )
-			return 0;
-
-		try
-		{
-			return FileSystem.Mounted.ReadAllText( QuestsFilePath ).GetHashCode();
-		}
-		catch
-		{
-			return 0;
 		}
 	}
 

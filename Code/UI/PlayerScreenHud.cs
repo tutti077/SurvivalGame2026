@@ -119,6 +119,14 @@ public sealed class PlayerScreenHud : PanelComponent
 			return;
 		}
 
+		if ( _menuController is not null && _menuController.IsMenuOpen
+		     && string.Equals( _menuController.ActivePageId, MenuPageIds.Quests, StringComparison.OrdinalIgnoreCase )
+		     && _questsSection is not null )
+		{
+			_questsSection.ApplyListWheel( value );
+			return;
+		}
+
 		base.OnMouseWheel( value );
 	}
 
@@ -927,8 +935,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		_craftingSection = new CraftingMenuSection( _inventory, _crafting );
 		_sections.Add( _craftingSection );
 		_craftingSection.Build( _leftMenuColumn );
-		_menuInputOverlay.BindCraftingWheel( _craftingSection.ApplyRecipeListWheel );
-		_menuInputOverlay.BindCraftingScrollbar( _craftingSection.TryHandleScrollbarPointer );
+		_menuInputOverlay.BindCraftingWheel( OnMenuMouseWheel );
+		_menuInputOverlay.BindCraftingScrollbar( OnMenuScrollbarPointer );
 		_menuInputOverlay.BindCraftingRecipeSelect( OnMenuRecipeSelectAtScreen );
 		_menuInputOverlay.BindCraftingCraftPointer( OnMenuCraftPointerAtScreen );
 		_menuInputOverlay.BindTabSelect( _pageNavigator.TrySelectTabAtScreen );
@@ -1359,6 +1367,17 @@ public sealed class PlayerScreenHud : PanelComponent
 			section.Refresh();
 	}
 
+	/// <summary>Overlay Attack1 on a list scrollbar — whichever scrollable page is open owns it.</summary>
+	bool OnMenuScrollbarPointer( Vector2 screenPos, bool pressed )
+	{
+		if ( _menuController is not null
+		     && string.Equals( _menuController.ActivePageId, MenuPageIds.Quests, StringComparison.OrdinalIgnoreCase )
+		     && _questsSection is not null )
+			return _questsSection.TryHandleScrollbarPointer( screenPos, pressed );
+
+		return _craftingSection is not null && _craftingSection.TryHandleScrollbarPointer( screenPos, pressed );
+	}
+
 	void OnMenuMouseWheel( Vector2 wheel )
 	{
 		if ( _menuController is null )
@@ -1367,6 +1386,12 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( string.Equals( _menuController.ActivePageId, MenuPageIds.Map, StringComparison.OrdinalIgnoreCase ) )
 		{
 			_mapSection?.ApplyWheel( wheel );
+			return;
+		}
+
+		if ( string.Equals( _menuController.ActivePageId, MenuPageIds.Quests, StringComparison.OrdinalIgnoreCase ) )
+		{
+			_questsSection?.ApplyListWheel( wheel );
 			return;
 		}
 

@@ -57,6 +57,9 @@ public static class BuildAuthority
 		// Build hammer durability: 1 tick per placement that actually stood.
 		ToolDurability.HostAddWearToActiveTool( placer );
 
+		if ( !blueprint )
+			placer.Components.Get<PlayerQuests>()?.HostReport( QuestEventIds.PieceBuilt, pieceId );
+
 		return true;
 	}
 

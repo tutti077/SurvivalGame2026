@@ -61,9 +61,6 @@ public sealed class CraftingRecipe
 	[JsonPropertyName( "stations" )]
 	public List<string> Stations { get; set; } = new();
 
-	/// <summary>Hold-to-craft duration in seconds. 0 = UI default.</summary>
-	[JsonPropertyName( "craftSeconds" )]
-	public float CraftSeconds { get; set; }
 
 	/// <summary>Items granted / space required for one craft.</summary>
 	public int TotalOutputAmount => Math.Max( 1, OutputAmount );
@@ -93,7 +90,6 @@ public sealed class CraftingRecipe
 		return string.Equals( stationId, Workbench.StationId, StringComparison.OrdinalIgnoreCase );
 	}
 
-	public float ResolvedCraftSeconds => CraftSeconds > 0.05f ? CraftSeconds : 0f;
 
 	/// <summary>How many output items fit in one inventory stack after crafting.</summary>
 	public int ResolvedMaxStack => MaxStack > 0 ? MaxStack : 1;

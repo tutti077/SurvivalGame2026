@@ -135,7 +135,7 @@ public static class SkillCatalog
 		{
 			Id = "crafting_focus",
 			DisplayName = "Crafting Focus",
-			Description = "Hold-to-craft completes slightly faster (future tuning hook).",
+			Description = "Crafting completes slightly faster (future tuning hook).",
 			Icon = "ui/items/resource_woodBasic.png",
 			X = 0.22f,
 			Y = 0.52f,
@@ -158,7 +158,7 @@ public static class SkillCatalog
 			Id = "blade_training",
 			DisplayName = "Blade Training",
 			Description = "Melee attacks cost less stamina on light swings (future tuning hook).",
-			Icon = "ui/items/basic_sword.png",
+			Icon = "ui/items/club_wood.png",
 			X = 0.38f,
 			Y = 0.76f,
 			Parents = new List<string> { "crafting_focus" }

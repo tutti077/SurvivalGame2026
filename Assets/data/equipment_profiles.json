@@ -1,8 +1,8 @@
 {
   "profiles": [
     {
-      "resourceId": "basic_sword",
-      "displayName": "Sword",
+      "resourceId": "club_wood",
+      "displayName": "Wooden Club",
       "slot": "mainHand",
       "allowedSlots": ["mainHand"],
       "actions": ["PrimaryMelee", "Block"],

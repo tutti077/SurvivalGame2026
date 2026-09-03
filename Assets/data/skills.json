@@ -33,7 +33,7 @@
     {
       "id": "crafting_focus",
       "displayName": "Crafting Focus",
-      "description": "Hold-to-craft completes slightly faster (future tuning hook).",
+      "description": "Crafting completes slightly faster (future tuning hook).",
       "icon": "ui/items/resource_woodBasic.png",
       "x": 0.22,
       "y": 0.52,
@@ -54,7 +54,7 @@
       "id": "blade_training",
       "displayName": "Blade Training",
       "description": "Melee attacks cost less stamina on light swings (future tuning hook).",
-      "icon": "ui/items/basic_sword.png",
+      "icon": "ui/items/club_wood.png",
       "x": 0.38,
       "y": 0.76,
       "parents": [ "crafting_focus" ],

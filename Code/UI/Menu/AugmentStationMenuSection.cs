@@ -12,7 +12,6 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 {
 	public const float SlotSize = 56f;
 	public const float SlotGap = 4f;
-	public const float CraftHoldSeconds = 1f;
 
 	public string SectionId => "augment_station";
 
@@ -30,7 +29,6 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 
 	Panel _sectionRoot;
 	Panel _craftButton;
-	Panel _craftProgressFill;
 	Label _detailName;
 	Label _detailDescription;
 	Panel _requirementsEntries;
@@ -40,9 +38,6 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 	string _selectedId;
 	bool _menuOpen;
 	bool _panelVisible;
-	bool _craftHoldActive;
-	bool _craftHoldCompleted;
-	float _craftHoldElapsed;
 	int _builtCatalogVersion = -1;
 	int _lastAugmentVersion = -1;
 
@@ -135,16 +130,7 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		_craftButton.Style.Set( "overflow", "hidden" );
 		_craftButton.Style.Set( "position", "relative" );
 
-		_craftProgressFill = new Panel { Parent = _craftButton };
-		_craftProgressFill.Style.Set( "position", "absolute" );
-		_craftProgressFill.Style.Set( "left", "0" );
-		_craftProgressFill.Style.Set( "top", "0" );
-		_craftProgressFill.Style.Set( "bottom", "0" );
-		_craftProgressFill.Style.Width = Length.Percent( 0 );
-		_craftProgressFill.Style.BackgroundColor = new Color( 0.35f, 0.7f, 0.45f, 0.55f );
-		_craftProgressFill.Style.Set( "pointer-events", "none" );
-
-		var craftLabel = new Label { Parent = _craftButton, Text = "Hold to Craft" };
+		var craftLabel = new Label { Parent = _craftButton, Text = "Craft" };
 		craftLabel.Style.FontColor = Color.White;
 		craftLabel.Style.FontSize = Length.Pixels( 15f );
 		craftLabel.Style.Set( "z-index", "1" );
@@ -411,61 +397,13 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 			return false;
 
 		if ( !_craftButton.IsInside( screenPos ) )
-		{
-			if ( !pressed )
-				CancelCraftHold();
 			return false;
-		}
 
-		if ( pressed )
-		{
-			BeginCraftHold();
-			return true;
-		}
-
-		CancelCraftHold();
-		return true;
-	}
-
-	void BeginCraftHold()
-	{
-		if ( _craftHoldActive )
-			return;
-
-		_craftHoldActive = true;
-		_craftHoldCompleted = false;
-		_craftHoldElapsed = 0f;
-	}
-
-	void CancelCraftHold()
-	{
-		_craftHoldActive = false;
-		_craftHoldCompleted = false;
-		_craftHoldElapsed = 0f;
-		if ( _craftProgressFill is not null )
-			_craftProgressFill.Style.Width = Length.Percent( 0 );
-	}
-
-	void AdvanceCraftHold()
-	{
-		if ( !_craftHoldActive || _craftHoldCompleted )
-			return;
-
-		_craftHoldElapsed += Time.Delta;
-		var t = Math.Clamp( _craftHoldElapsed / CraftHoldSeconds, 0f, 1f );
-		if ( _craftProgressFill is not null )
-			_craftProgressFill.Style.Width = Length.Percent( t * 100f );
-
-		if ( t < 1f )
-			return;
-
-		_craftHoldCompleted = true;
-		_craftHoldActive = false;
-		if ( _augments is not null && !string.IsNullOrWhiteSpace( _selectedId ) )
+		// Craft on the press itself — no hold.
+		if ( pressed && _augments is not null && !string.IsNullOrWhiteSpace( _selectedId ) )
 			_augments.OwnerTryCraft( _selectedId );
 
-		if ( _craftProgressFill is not null )
-			_craftProgressFill.Style.Width = Length.Percent( 0 );
+		return true;
 	}
 
 	public void Refresh()
@@ -495,8 +433,6 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 			AugmentCatalog.EnsureLoaded();
 			Refresh();
 		}
-		else
-			CancelCraftHold();
 
 		UpdateVisibility();
 	}
@@ -514,11 +450,9 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 
 		if ( ( _augments?.ContentsVersion ?? -1 ) != _lastAugmentVersion )
 			Refresh();
-
-		AdvanceCraftHold();
 	}
 
-	public void OnMenuGlobalMouseUp() => CancelCraftHold();
+	public void OnMenuGlobalMouseUp() { }
 
 	void UpdateVisibility()
 	{

@@ -36,7 +36,6 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	public const float ItemDescriptionFontSize = 12f * TextScale;
 	public const float SectionHeaderFontSize = 17f * TextScale;
 	public const float SectionEntryFontSize = 14f * TextScale;
-	public const float CraftHoldSeconds = 1f;
 
 	public string SectionId => "crafting";
 
@@ -45,8 +44,6 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	readonly List<RowUi> _rows = new();
 
 	Panel _sectionRoot;
-	Panel _craftOutline;
-	Panel _craftProgressFill;
 	Panel _craftButton;
 	Label _craftButtonLabel;
 	Panel _detailIcon;
@@ -61,9 +58,6 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	string _selectedRecipeId;
 	bool _menuOpen;
 	bool _panelVisible = true;
-	bool _craftHoldActive;
-	bool _craftHoldCompleted;
-	float _craftHoldElapsed;
 	bool _craftButtonPressedVisual;
 	int _builtRecipeContentVersion = -1;
 	bool _builtNearCampfire;
@@ -147,32 +141,9 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		craftWrap.Style.Set( "flex-shrink", "1" );
 		craftWrap.Style.Set( "min-width", "0" );
 
-		_craftOutline = new Panel { Parent = craftWrap };
-		_craftOutline.Style.Set( "position", "absolute" );
-		_craftOutline.Style.Set( "left", "-3px" );
-		_craftOutline.Style.Set( "top", "-3px" );
-		_craftOutline.Style.Set( "right", "-3px" );
-		_craftOutline.Style.Set( "bottom", "-3px" );
-		_craftOutline.Style.Set( "border-radius", "6px" );
-		_craftOutline.Style.Set( "border-width", "2px" );
-		_craftOutline.Style.Set( "border-color", "#9fd6a6" );
-		_craftOutline.Style.Set( "pointer-events", "none" );
-		_craftOutline.Style.Set( "opacity", "0" );
-
 		_craftButton = new CraftButtonPanel( this ) { Parent = craftWrap };
 		_craftButton.Style.Set( "position", "relative" );
 		_craftButton.Style.Set( "overflow", "hidden" );
-
-		_craftProgressFill = new Panel { Parent = _craftButton };
-		_craftProgressFill.Style.Set( "position", "absolute" );
-		_craftProgressFill.Style.Set( "left", "0" );
-		_craftProgressFill.Style.Set( "top", "0" );
-		_craftProgressFill.Style.Set( "bottom", "0" );
-		_craftProgressFill.Style.Width = Length.Percent( 0 );
-		_craftProgressFill.Style.Set( "z-index", "0" );
-		_craftProgressFill.Style.Set( "pointer-events", "none" );
-		_craftProgressFill.Style.BackgroundColor = new Color( 0.45f, 0.88f, 0.52f, 0.55f );
-		_craftProgressFill.Style.Set( "display", "none" );
 		_craftButton.Style.Set( "padding-left", $"{12f * LayoutScale}px" );
 		_craftButton.Style.Set( "padding-right", $"{12f * LayoutScale}px" );
 		_craftButton.Style.Set( "padding-top", $"{6f * LayoutScale}px" );
@@ -201,9 +172,11 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		detail.Style.PaddingBottom = Length.Pixels( 8f * LayoutScale );
 		detail.Style.Set( "border-bottom-width", "1px" );
 		detail.Style.Set( "border-bottom-color", "#383d47" );
-		detail.Style.Set( "flex-shrink", "1" );
-		detail.Style.Set( "min-height", "0" );
-		detail.Style.Set( "max-height", $"{DetailAreaMaxHeight}px" );
+		// Fixed height (not max-height): selecting a recipe must never resize the detail area or move the list.
+		detail.Style.Height = Length.Pixels( DetailAreaMaxHeight );
+		detail.Style.MinHeight = Length.Pixels( DetailAreaMaxHeight );
+		detail.Style.MaxHeight = Length.Pixels( DetailAreaMaxHeight );
+		detail.Style.Set( "flex-shrink", "0" );
 		detail.Style.Set( "overflow-y", "scroll" );
 
 		var detailRow = new Panel { Parent = detail };
@@ -409,24 +382,13 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( !IsScrollTargetActive )
 			return false;
 
+		// Scroll math only: rows hidden by the list's overflow keep their Box.Rect, so a per-row
+		// rect scan picked scrolled-away rows sitting under the detail area / craft button.
 		if ( _recipeListPanel is not null
 		     && _recipeListPanel.TryPickRowIndexAtScreen( screenPos, out var index )
 		     && index >= 0 && index < _rows.Count )
 		{
 			SelectRecipe( _rows[index].RecipeId );
-			return true;
-		}
-
-		for ( var i = 0; i < _rows.Count; i++ )
-		{
-			var row = _rows[i].Root;
-			if ( row is null || !row.IsValid() )
-				continue;
-
-			if ( !IsScreenPosInsidePanel( row, screenPos ) )
-				continue;
-
-			SelectRecipe( _rows[i].RecipeId );
 			return true;
 		}
 
@@ -450,13 +412,13 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 				return false;
 
 			SetButtonPressedVisual( true );
-			BeginCraftHold();
+			CraftSelectedOnClick();
 			return true;
 		}
 
-		if ( _craftHoldActive || _craftButtonPressedVisual )
+		if ( _craftButtonPressedVisual )
 		{
-			EndCraftHoldFromButtonRelease();
+			SetButtonPressedVisual( false );
 			return true;
 		}
 
@@ -552,7 +514,6 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		}
 		else
 		{
-			CancelCraftHold();
 			SetButtonPressedVisual( false );
 		}
 
@@ -591,63 +552,13 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		Refresh();
 	}
 
-	public void BeginCraftHold()
+	/// <summary>Craft fires on the press itself — no hold, no progress bar.</summary>
+	public void CraftSelectedOnClick()
 	{
 		if ( !CanCraftSelectedRecipe() )
 			return;
 
-		_craftHoldActive = true;
-		_craftHoldCompleted = false;
-		_craftHoldElapsed = 0f;
-		SetCraftHoldVisual( 0f );
-	}
-
-	public void CancelCraftHold()
-	{
-		_craftHoldActive = false;
-		_craftHoldCompleted = false;
-		SetCraftHoldVisual( 0f );
-	}
-
-	/// <summary>Called from <see cref="CraftButtonPanel.Tick"/> each frame while LMB hold is active.</summary>
-	public void AdvanceCraftHoldWhileHeld()
-	{
-		if ( !_craftHoldActive )
-			return;
-
-		AdvanceCraftHold();
-	}
-
-	void AdvanceCraftHold()
-	{
-		if ( !_craftHoldActive || _craftHoldCompleted )
-			return;
-
-		if ( !CanCraftSelectedRecipe() )
-		{
-			CancelCraftHold();
-			return;
-		}
-
-		_craftHoldElapsed += Time.Delta;
-		var duration = Math.Max( 0.05f, GetSelectedCraftHoldSeconds() );
-		var t = Math.Clamp( _craftHoldElapsed / duration, 0f, 1f );
-		SetCraftHoldVisual( t );
-
-		if ( t < 1f )
-			return;
-
-		_craftHoldCompleted = true;
 		TryCraftSelected();
-		CancelCraftHold();
-	}
-
-	public void EndCraftHoldFromButtonRelease()
-	{
-		if ( !_craftHoldCompleted )
-			CancelCraftHold();
-
-		SetButtonPressedVisual( false );
 	}
 
 	public void TickMenu( bool menuOpen )
@@ -672,36 +583,6 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_recipeListPanel?.EndThumbDrag();
 	}
 
-	void SetCraftHoldVisual( float progress )
-	{
-		if ( _craftProgressFill is not null && _craftProgressFill.IsValid() )
-		{
-			if ( progress <= 0f )
-			{
-				_craftProgressFill.Style.Width = Length.Percent( 0 );
-				_craftProgressFill.Style.Set( "display", "none" );
-			}
-			else
-			{
-				_craftProgressFill.Style.Set( "display", "flex" );
-				_craftProgressFill.Style.Width = Length.Percent( progress * 100f );
-			}
-		}
-
-		if ( _craftOutline is null || !_craftOutline.IsValid() )
-			return;
-
-		if ( progress <= 0f )
-		{
-			_craftOutline.Style.Set( "opacity", "0" );
-			return;
-		}
-
-		_craftOutline.Style.Set( "opacity", progress >= 1f ? "1" : "0.85" );
-		_craftOutline.Style.Set( "border-width", "2px" );
-		_craftOutline.Style.Set( "border-color", "#9fd6a6" );
-	}
-
 	public bool CanCraftSelectedRecipe()
 	{
 		var recipe = CraftingRecipeCatalog.Get( _selectedRecipeId );
@@ -720,15 +601,6 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 			return false;
 
 		return _inventory.CanFitResource( recipe.Id, recipe.TotalOutputAmount );
-	}
-
-	float GetSelectedCraftHoldSeconds()
-	{
-		var recipe = CraftingRecipeCatalog.Get( _selectedRecipeId );
-		if ( recipe is not null && recipe.ResolvedCraftSeconds > 0f )
-			return recipe.ResolvedCraftSeconds;
-
-		return CraftHoldSeconds;
 	}
 
 	bool IsNearCampfire() =>
@@ -816,7 +688,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_craftButton.Style.Set( "opacity", canCraft ? "1" : "0.45" );
 		if ( canCraft )
 		{
-			_craftButtonLabel.Text = "Hold to craft (LMB)";
+			_craftButtonLabel.Text = "Craft (LMB)";
 		}
 		else
 		{
@@ -997,12 +869,6 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 		public override bool WantsMouseInput() => false;
 
-		public override void Tick()
-		{
-			base.Tick();
-			_section.AdvanceCraftHoldWhileHeld();
-		}
-
 		protected override void OnMouseDown( MousePanelEvent e )
 		{
 			base.OnMouseDown( e );
@@ -1010,7 +876,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 				return;
 
 			_section.SetButtonPressedVisual( true );
-			_section.BeginCraftHold();
+			_section.CraftSelectedOnClick();
 		}
 
 		protected override void OnMouseUp( MousePanelEvent e )
@@ -1019,7 +885,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 			if ( e.Button != "mouseleft" )
 				return;
 
-			_section.EndCraftHoldFromButtonRelease();
+			_section.SetButtonPressedVisual( false );
 		}
 	}
 

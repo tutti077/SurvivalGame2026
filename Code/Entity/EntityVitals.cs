@@ -65,7 +65,11 @@ public sealed class EntityVitals : Component
 		OnDamaged?.Invoke( attacker );
 
 		if ( IsDead )
+		{
+			// Quest credit goes to the pawn that landed the killing blow (before OnDied destroys us).
+			PlayerQuests.HostReportKill( this, attacker );
 			OnDied?.Invoke();
+		}
 
 		return afterArmor;
 	}

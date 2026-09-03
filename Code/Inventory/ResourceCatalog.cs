@@ -22,7 +22,7 @@ public static class ResourceCatalog
 		new( System.StringComparer.OrdinalIgnoreCase )
 		{
 			["basic_hook"] = "ui/items/basic_hook.png",
-			["basic_sword"] = "ui/items/basic_sword.png",
+			["club_wood"] = "ui/items/club_wood.png",
 			["build_hammer"] = "ui/items/build_hammer.png",
 			["light_torch"] = "ui/items/light_torch.png",
 			["light_lantern"] = "ui/items/light_lantern.png",
@@ -56,9 +56,10 @@ public static class ResourceCatalog
 			["leather"] = "resource_leather",
 			["feathers"] = "resource_feathers",
 			["vines"] = "resource_vines",
-			["sword"] = "basic_sword",
-			["sample_sword"] = "basic_sword",
-			["item_sword"] = "basic_sword",
+			["sword"] = "club_wood",
+			["basic_sword"] = "club_wood",
+			["sample_sword"] = "club_wood",
+			["item_sword"] = "club_wood",
 			["building_hammer"] = "build_hammer",
 			["item_build_hammer"] = "build_hammer",
 			["item_building_hammer"] = "build_hammer",
@@ -214,7 +215,7 @@ public static class ResourceCatalog
 			["resource_leather"] = "ui/items/leather.png",
 			["resource_feathers"] = "ui/items/feathers.png",
 			["resource_vines"] = "ui/items/vines.png",
-			["basic_sword"] = "ui/items/item_sword.png",
+			["club_wood"] = "ui/items/club_wood.png",
 			["build_hammer"] = "ui/items/item_build_hammer.png",
 			["basic_hook"] = "ui/items/item_hook.png",
 		};

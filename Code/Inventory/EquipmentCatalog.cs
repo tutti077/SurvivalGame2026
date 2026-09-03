@@ -306,8 +306,8 @@ public static class EquipmentCatalog
 	{
 		yield return new EquipmentProfileData
 		{
-			ResourceId = "basic_sword",
-			DisplayName = "Sword",
+			ResourceId = "club_wood",
+			DisplayName = "Wooden Club",
 			Slot = "mainHand",
 			AllowedSlots = { "mainHand" },
 			Actions = { "PrimaryMelee", "Block" },

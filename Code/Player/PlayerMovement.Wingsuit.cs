@@ -321,6 +321,7 @@ partial class PlayerMovement
 		_wingsuitFreefallAwaitingLand = false;
 		_wingsuitDeployTime = Time.Now;
 		WingsuitDeployed = true;
+		Components.Get<PlayerQuests>()?.OwnerReport( QuestEventIds.WingsuitDeployed );
 
 		// Snap the pawn onto the camera-facing glide attitude NOW — the first physics tick applies
 		// the same rotation, but waiting for it showed the old facing for a beat at deploy.

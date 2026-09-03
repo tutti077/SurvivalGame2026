@@ -19,7 +19,7 @@ public interface IPlayerMenuSection
 	/// <summary>Whether this section is part of the current page layout (e.g. crafting column).</summary>
 	void SetPanelVisible( bool visible );
 
-	/// <summary>Per-frame while the menu is open (hold-to-craft progress, etc.).</summary>
+	/// <summary>Per-frame while the menu is open (list rebuilds, live state refresh, etc.).</summary>
 	void TickMenu( bool menuOpen );
 
 	/// <summary>Mouse released anywhere over the menu overlay.</summary>
