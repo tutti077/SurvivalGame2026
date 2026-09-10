@@ -30,6 +30,13 @@ public sealed class BuildPiece : Component
 
 	public bool IsPreviewGhost { get; private set; }
 
+	/// <summary>
+	/// Bumps whenever a placed piece enters or leaves the world on this machine (host and clients
+	/// alike — pieces network-spawn everywhere). Shelter caches (<see cref="Workbench.IsSheltered"/>)
+	/// re-probe only when this moves.
+	/// </summary>
+	public static int WorldVersion { get; private set; }
+
 	/// <summary>Has a structural material, so it can be attacked and can collapse.</summary>
 	public bool IsDestructible => BuildPieceCatalog.GetMaterialForPiece( PieceId ) is not null;
 
@@ -69,6 +76,20 @@ public sealed class BuildPiece : Component
 		}
 
 		ApplyVisualTint();
+	}
+
+	protected override void OnEnabled()
+	{
+		base.OnEnabled();
+		if ( !IsPreviewGhost )
+			WorldVersion++;
+	}
+
+	protected override void OnDisabled()
+	{
+		if ( !IsPreviewGhost )
+			WorldVersion++;
+		base.OnDisabled();
 	}
 
 	protected override void OnStart()
@@ -163,6 +184,8 @@ public sealed class BuildPiece : Component
 			return;
 
 		GameObject.Tags.Add( PlayerMovement.GrappleSurfaceTag );
+		// Shelter probes trace on this tag; prefabs carry it, placeholder spawns get it here.
+		GameObject.Tags.Add( ShelterProbe.BuildPieceTag );
 	}
 
 	public void RefreshSnapPoints()

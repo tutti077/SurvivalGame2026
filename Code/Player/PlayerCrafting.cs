@@ -166,6 +166,17 @@ public sealed class PlayerCrafting : Component
 			return false;
 		}
 
+		// Bench recipes (not hand-craftable, not campfire-gated) need a sheltered workbench in reach —
+		// an exposed bench does not work, and the client only ever sends intent.
+		if ( !free && !recipe.RequiresStation
+		     && !recipe.AppearsAtStation( InventoryStationId )
+		     && !Workbench.IsPlayerNearUsableWorkbench( GameObject ) )
+		{
+			if ( LogCrafting )
+				Log.Info( $"[PlayerCrafting] {GameObject.Name}: need a sheltered workbench for '{recipeId}'." );
+			return false;
+		}
+
 		var scaledIngredients = BuildIngredients( recipe );
 		var outputTotal = recipe.TotalOutputAmount;
 

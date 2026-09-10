@@ -10,7 +10,7 @@ namespace Survival;
 /// Movement input rules (jump/sprint actions and stamina gating choices) are owned by <see cref="PlayerMovement"/>, which calls this component to spend/check pool values.
 /// </summary>
 [Title( "Player Vitals" )]
-public sealed class PlayerVitals : Component
+public sealed partial class PlayerVitals : Component
 {
 	[Property] public float MaxHealth { get; set; } = 100f;
 
@@ -115,6 +115,8 @@ public sealed class PlayerVitals : Component
 			TryRunHostDeathRespawn();
 
 		MaintainInfiniteStaminaDebugDisplay();
+		TickStatusEffects( Time.Delta );
+		TickComfort();
 	}
 
 	void MaintainInfiniteStaminaDebugDisplay()
@@ -470,9 +472,25 @@ public sealed class PlayerVitals : Component
 	}
 
 	/// <summary>
-	/// Host/offline: set pool maxima (food buffs). Clamps current HP/stamina into the new caps.
+	/// Host/offline: the one place pool caps are assembled — base + active food bonus, scaled by
+	/// status-effect multipliers (rested). Food and status changes both end here. Clamps current
+	/// HP/stamina into the new caps.
 	/// </summary>
-	public void HostSetPoolMaxes( float healthMax, float staminaMax )
+	public void HostRecalculatePoolMaxes()
+	{
+		if ( !IsHostOrOffline )
+			return;
+
+		var foodHp = 0f;
+		var foodSt = 0f;
+		Components.Get<PlayerFood>()?.GetActiveFoodCapBonus( out foodHp, out foodSt );
+
+		HostApplyPoolMaxes(
+			( MaxHealth + foodHp ) * StatusMaxHealthMultiplier,
+			( MaxStamina + foodSt ) * StatusMaxStaminaMultiplier );
+	}
+
+	void HostApplyPoolMaxes( float healthMax, float staminaMax )
 	{
 		if ( !IsHostOrOffline )
 			return;
@@ -535,6 +553,7 @@ public sealed class PlayerVitals : Component
 			Log.Info( $"[Death] {GameObject.Name} died (death #{_deathCount})" );
 
 		_pendingDeathRespawnHost = false;
+		HostClearStatusEffects();
 
 		// Death loot: droppable resources leave the pawn here, at the death spot (equipment stays).
 		DeathLootBag.HostSpawnForDeath( GameObject );

@@ -26,6 +26,10 @@ public sealed class PlayerFood : Component
 	PlayerEquippedItem _equipped;
 	PlayerGameMenuController _menu;
 	float _regenCarry;
+	/// <summary>Extra food time earned from status effects (rested), pushed onto expiries in chunks so the synced doubles rarely rewrite.</summary>
+	float _durationBonusCarry;
+	/// <summary>Chunk size for <see cref="_durationBonusCarry"/> — one sync write per active slot every few seconds.</summary>
+	const float DurationBonusFlushSeconds = 5f;
 	string _lastHudKey = string.Empty;
 
 	bool IsLocalDriver()
@@ -103,6 +107,8 @@ public sealed class PlayerFood : Component
 		if ( changed )
 			HostRecalculateFoodCaps();
 
+		TickStatusDurationBonus( dt );
+
 		var regen = 0f;
 		for ( var i = 0; i < MaxFoodSlots; i++ )
 		{
@@ -124,6 +130,37 @@ public sealed class PlayerFood : Component
 		var apply = _regenCarry;
 		_regenCarry = 0f;
 		_vitals.RequestVitalsDelta( apply, 0f );
+	}
+
+	/// <summary>
+	/// Host: rested (and any other food-duration status effect) makes eaten food last longer. The
+	/// bonus accrues per frame and is added to every active slot's expiry in
+	/// <see cref="DurationBonusFlushSeconds"/> chunks.
+	/// </summary>
+	void TickStatusDurationBonus( float dt )
+	{
+		_vitals ??= Components.Get<PlayerVitals>();
+		var multiplier = _vitals?.StatusFoodDurationMultiplier ?? 1f;
+		if ( multiplier <= 1f + 1e-4f )
+		{
+			_durationBonusCarry = 0f;
+			return;
+		}
+
+		_durationBonusCarry += dt * ( multiplier - 1f );
+		if ( _durationBonusCarry < DurationBonusFlushSeconds )
+			return;
+
+		var bonus = _durationBonusCarry;
+		_durationBonusCarry = 0f;
+		for ( var i = 0; i < MaxFoodSlots; i++ )
+		{
+			GetSlot( i, out var id, out var expires );
+			if ( string.IsNullOrWhiteSpace( id ) || Time.NowDouble >= expires )
+				continue;
+
+			SetSlot( i, id, expires + bonus );
+		}
 	}
 
 	void TryOwnerEatActiveHotbarFood()
@@ -255,8 +292,14 @@ public sealed class PlayerFood : Component
 		if ( _vitals is null || !HasHostAuthority )
 			return;
 
-		var bonusHp = 0f;
-		var bonusSt = 0f;
+		_vitals.HostRecalculatePoolMaxes();
+	}
+
+	/// <summary>Flat max-HP / max-stamina bonus from the active food slots (vitals folds this into the pool caps).</summary>
+	public void GetActiveFoodCapBonus( out float bonusHealth, out float bonusStamina )
+	{
+		bonusHealth = 0f;
+		bonusStamina = 0f;
 		for ( var i = 0; i < MaxFoodSlots; i++ )
 		{
 			GetSlot( i, out var id, out var expires );
@@ -266,11 +309,9 @@ public sealed class PlayerFood : Component
 			if ( !FoodCatalog.TryGet( id, out var food ) )
 				continue;
 
-			bonusHp += Math.Max( 0f, food.MaxHealth );
-			bonusSt += Math.Max( 0f, food.MaxStamina );
+			bonusHealth += Math.Max( 0f, food.MaxHealth );
+			bonusStamina += Math.Max( 0f, food.MaxStamina );
 		}
-
-		_vitals.HostSetPoolMaxes( _vitals.MaxHealth + bonusHp, _vitals.MaxStamina + bonusSt );
 	}
 
 	void GetSlot( int index, out string id, out double expires )

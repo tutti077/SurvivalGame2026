@@ -153,15 +153,16 @@ Targets: `lakePatchCount` ≤ 24 · `medianLakeDiameterMeters` ≥ 600 · `lakeA
 
 ```
 Code/
-  Player/       PlayerMovement · PlayerVitals · PlayerCombat · PlayerAnimation · PlayerAugments
+  Player/       PlayerMovement · PlayerVitals (+ Comfort / StatusEffects partials) · PlayerCombat · PlayerAnimation · PlayerAugments
                 (+ their partials), melee path/sweep/block helpers, equipment, hand harvest,
                 inventory interaction, build hammer
   Combat/       CombatAuthority (host melee validation), ArrowProjectile
   Crew/         CrewRegistry (host static registry — player data, survives scene loads) + PlayerCrew (per-pawn sync on the player prefab)
   Arena/        ArenaSession (crew-vs-crew battles, queue + matchmaking), ArenaMenuButton
-  Vitals/       VitalsAuthority (host pools), regen gates
+  Vitals/       VitalsAuthority (host pools), regen gates, StatusEffectCatalog (Assets/data/status_effects.json)
   Entity/       EntityBrain (+ Breach partial: entities tear down build pieces) · EntityLocomotion · EntityCombat · perception, nav
-  Building/     Build piece catalog, snap layout/placement/compatibility, piece health, nav sync (+ BuildNavBakeSystem)
+  Building/     Build piece catalog, snap layout/placement/compatibility, piece health, nav sync (+ BuildNavBakeSystem),
+                ShelterProbe (global roof-above / walled-in checks; comfort + workbench gate)
   Inventory/    PlayerInventory · PlayerHotbar · containers · resource + equipment catalogs
   Crafting/ Food/ Quests/ Skills/ Augments/   JSON-backed catalogs (Assets/data/*.json)
   Hacks/        GameHacks — console-toggled dev flags (allCrafting), mirrored onto pawns via [Sync] for host checks

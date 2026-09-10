@@ -58,6 +58,45 @@ public static class GameHacks
 		SetAllCrafting( value );
 	}
 
+	/// <summary>
+	/// Usage: <c>status &lt;id&gt; &lt;seconds&gt;</c> applies a buff / debuff from
+	/// <c>data/status_effects.json</c> to your pawn (e.g. <c>status poisoned 10</c>);
+	/// <c>status &lt;id&gt; 0</c> removes it; <c>status clear</c> drops them all.
+	/// </summary>
+	[ConCmd( "status" )]
+	public static void ConCmdStatus( string effectId, float seconds )
+	{
+		if ( string.IsNullOrWhiteSpace( effectId ) )
+		{
+			Log.Info( "[Hacks] usage: status <id> <seconds> | status <id> 0 | status clear" );
+			return;
+		}
+
+		var vitals = FindLocalPawnVitals();
+		if ( vitals is null )
+		{
+			Log.Warning( "[Hacks] status: no local player pawn." );
+			return;
+		}
+
+		vitals.OwnerRequestDebugStatusEffect( effectId.Trim(), seconds );
+	}
+
+	static PlayerVitals FindLocalPawnVitals()
+	{
+		var scene = Sandbox.Game.ActiveScene;
+		if ( scene is null || !scene.IsValid() )
+			return null;
+
+		foreach ( var vitals in scene.GetAllComponents<PlayerVitals>() )
+		{
+			if ( vitals is not null && vitals.IsLocalInputOwnedPawn() )
+				return vitals;
+		}
+
+		return null;
+	}
+
 	/// <summary>Prints every hack flag and its current value.</summary>
 	[ConCmd( "hacks" )]
 	public static void ConCmdList()
@@ -65,6 +104,7 @@ public static class GameHacks
 		var sb = new StringBuilder();
 		sb.AppendLine( "[Hacks]" );
 		sb.Append( "  allCrafting  " ).AppendLine( AllCrafting ? "true" : "false" );
+		sb.AppendLine( "  status <id> <seconds>  apply a buff / debuff (status clear)" );
 		Log.Info( sb.ToString() );
 	}
 

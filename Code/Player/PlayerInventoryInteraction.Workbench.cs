@@ -40,7 +40,8 @@ public sealed partial class PlayerInventoryInteraction
 				return;
 			}
 
-			if ( !IsWorkbenchWithinKeepOpenRange() || Input.Pressed( ContainerUseAction ) )
+			// Roof torn down while crafting → the bench stops working, same as walking away.
+			if ( !IsWorkbenchWithinKeepOpenRange() || !OpenWorkbench.IsSheltered || Input.Pressed( ContainerUseAction ) )
 				_menu.SetMenuOpen( false );
 
 			return;
@@ -60,6 +61,10 @@ public sealed partial class PlayerInventoryInteraction
 			return;
 
 		if ( !TryTraceWorkbench( out var workbench ) )
+			return;
+
+		// Exposed bench: the prompt already reads "needs a roof"; E does nothing.
+		if ( !workbench.IsSheltered )
 			return;
 
 		OpenWorkbenchView( workbench );

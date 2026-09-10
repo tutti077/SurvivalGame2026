@@ -28,6 +28,10 @@ public sealed class Campfire : Component
 	[Property, Group( "Campfire" ), Title( "Add-fuel reach (m)" ), Range( 1f, 8f )]
 	public float AddFuelReachMeters { get; set; } = 3f;
 
+	/// <summary>Lit fire warms pawns this far away: first comfort tick on its own, second tick under a roof (see <see cref="PlayerVitals"/> comfort).</summary>
+	[Property, Group( "Campfire" ), Title( "Warmth range (m)" ), Range( 1f, 20f )]
+	public float WarmthRangeMeters { get; set; } = 5f;
+
 	[Property, Group( "Campfire" ), Title( "Lit color" )]
 	public Color LitColor { get; set; } = new( 1f, 0.45f, 0.12f );
 
@@ -177,6 +181,26 @@ public sealed class Campfire : Component
 			var meters = rangeMetersOverride ?? fire.CookingRangeMeters;
 			var range = TerrainWorldUnits.MetersToEngine( Math.Max( 0.5f, meters ) );
 			if ( (fire.GameObject.WorldPosition - origin).LengthSquared <= range * range )
+				return true;
+		}
+
+		return false;
+	}
+
+	/// <summary>A lit (fuelled) campfire has <paramref name="worldPosition"/> inside its <see cref="WarmthRangeMeters"/>.</summary>
+	public static bool IsLitCampfireWithinWarmth( Vector3 worldPosition )
+	{
+		for ( var i = 0; i < Active.Count; i++ )
+		{
+			var fire = Active[i];
+			if ( fire is null || !fire.IsValid() || !fire.GameObject.IsValid() )
+				continue;
+
+			if ( !fire.IsLit && fire.FuelUnits <= 0 )
+				continue;
+
+			var range = TerrainWorldUnits.MetersToEngine( Math.Max( 0.5f, fire.WarmthRangeMeters ) );
+			if ( (fire.GameObject.WorldPosition - worldPosition).LengthSquared <= range * range )
 				return true;
 		}
 

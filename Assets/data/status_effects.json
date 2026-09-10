@@ -1,0 +1,24 @@
+{
+  "effects": [
+    {
+      "id": "rested",
+      "displayName": "Rested",
+      "description": "Sheltered and warm. Timer holds while you stay comfortable.",
+      "icon": "ui/status/rested.png",
+      "fallbackColor": "0.95,0.78,0.3,1",
+      "isBuff": true,
+      "maxHealthPercent": 20,
+      "maxStaminaPercent": 20,
+      "foodDurationPercent": 20
+    },
+    {
+      "id": "poisoned",
+      "displayName": "Poisoned",
+      "description": "Venom is working through you.",
+      "icon": "ui/status/poisoned.png",
+      "fallbackColor": "0.3,0.8,0.35,1",
+      "isBuff": false,
+      "healthPerSecond": -5
+    }
+  ]
+}

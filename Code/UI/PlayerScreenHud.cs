@@ -51,6 +51,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	Panel _staminaRoot;
 	Panel _staminaFill;
 
+	StatusEffectsHud _statusEffectsHud;
 	Panel _foodSlotsRoot;
 	readonly Panel[] _foodSlotPanels = new Panel[PlayerFood.MaxFoodSlots];
 	readonly Label[] _foodSlotTimers = new Label[PlayerFood.MaxFoodSlots];
@@ -150,6 +151,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_buildSupportReadout?.Tick();
 		_fishingHud?.Tick( _fishing );
 		RefreshFoodSlots();
+		_statusEffectsHud?.Tick( _menuController is { IsMenuOpen: true } );
 		if ( _inventoryInteraction?.FocusedCampfire is not null
 		     || _inventoryInteraction?.FocusedTimeTrialStand is not null
 		     || _inventoryInteraction?.FocusedArenaMenuButton is not null )
@@ -221,6 +223,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		}
 
 		_hotbarHud?.Dispose();
+		_statusEffectsHud?.Dispose();
+		_statusEffectsHud = null;
 		_buildMenuHud = null;
 		_buildSnapReadout = null;
 		RestoreGrapplePromptCapture();
@@ -306,7 +310,16 @@ public sealed class PlayerScreenHud : PanelComponent
 		vitalsHost.Style.Set( "position", "absolute" );
 		vitalsHost.Style.Set( "left", "16px" );
 		vitalsHost.Style.Set( "bottom", "16px" );
+		vitalsHost.Style.Set( "flex-direction", "column" );
+		vitalsHost.Style.Set( "align-items", "flex-start" );
 		vitalsHost.Style.Set( "pointer-events", "none" );
+		// Above the menu overlay so the buff tooltip is never hidden behind a menu column.
+		vitalsHost.Style.Set( "z-index", ( ZGameMenu + 100 ).ToString() );
+
+		// Buff / debuff row sits above the bars in a fixed-height strip: the bars never move when
+		// effects come and go.
+		_statusEffectsHud = new StatusEffectsHud( _vitals );
+		_statusEffectsHud.Build( vitalsHost );
 
 		const float foodSlotSize = 36f;
 		const float foodSlotGap = 6f;
@@ -1126,7 +1139,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			}
 			else if ( focusedWorkbench is not null && focusedWorkbench.IsValid() )
 			{
-				_promptLabel.Text = "Open Workbench";
+				_promptLabel.Text = focusedWorkbench.IsSheltered ? "Open Workbench" : "Workbench needs a roof";
 			}
 			else if ( showTrial )
 			{
