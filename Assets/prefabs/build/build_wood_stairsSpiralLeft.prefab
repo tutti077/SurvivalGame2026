@@ -69,6 +69,19 @@
         "SurfaceVelocity": "0,0,0"
       },
       {
+        "__type": "Survival.DamageReceiver",
+        "__guid": "814f5244-635d-554e-b0e2-2e16db8a2a05",
+        "__enabled": true,
+        "Flags": 0,
+        "DamageMultiplier": 1,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null
+      },
+      {
         "__type": "Survival.BuildPiece",
         "__guid": "e1ab6f16-cb11-4771-be48-8da161b5db99",
         "__enabled": true,

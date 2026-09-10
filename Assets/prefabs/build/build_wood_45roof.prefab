@@ -53,6 +53,19 @@
         "Surface": null
       },
       {
+        "__type": "Survival.DamageReceiver",
+        "__guid": "f2dc0b0b-29b3-5305-bfe1-f140567192a8",
+        "__enabled": true,
+        "Flags": 0,
+        "DamageMultiplier": 1,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null
+      },
+      {
         "__type": "Survival.BuildPiece",
         "__guid": "2394777f-ce5c-5188-b952-f78eec464a7e",
         "__enabled": true,

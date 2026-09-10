@@ -251,23 +251,32 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_builtNearCampfire = nearCampfire;
 		_builtWorkbenchOpen = workbenchOpen;
 
+		var allCrafting = GameHacks.AllCrafting;
+
 		foreach ( var recipe in CraftingRecipeCatalog.All )
 		{
 			if ( recipe is null || string.IsNullOrWhiteSpace( recipe.Id ) )
 				continue;
 
-			if ( !recipe.IsUnlockedByDefault )
-				continue;
-
-			// Workbench view lists the bench's recipe set; the plain menu hides
-			// station-gated recipes until the station is nearby (campfire food).
 			if ( workbenchOpen )
 			{
-				if ( !recipe.AppearsAtStation( Workbench.StationId ) )
+				// Workbench view lists the bench's recipe set (unlocked only).
+				if ( !recipe.IsUnlockedByDefault || !recipe.AppearsAtStation( Workbench.StationId ) )
 					continue;
 			}
-			else if ( recipe.RequiresStation && !HasRequiredStation( recipe ) )
-				continue;
+			else if ( !allCrafting )
+			{
+				// Personal menu: hand-craftable recipes (stations lists "inventory"), plus
+				// station-gated recipes while that station is nearby (campfire food).
+				if ( !recipe.IsUnlockedByDefault )
+					continue;
+
+				var handCraftable = recipe.AppearsAtStation( PlayerCrafting.InventoryStationId );
+				var atStation = recipe.RequiresStation && HasRequiredStation( recipe );
+				if ( !handCraftable && !atStation )
+					continue;
+			}
+			// allCrafting hack: personal menu lists every recipe regardless of unlock / station.
 
 			var row = new CraftingRecipeRowPanel
 			{
@@ -359,6 +368,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	static int BuildRecipeListVersion( bool nearCampfire ) =>
 		CraftingRecipeCatalog.ContentVersion
 		^ (ResourceDefinitionCatalog.ContentVersion << 16)
+		^ (GameHacks.Version << 24)
 		^ (nearCampfire ? 1 << 30 : 0);
 
 	public void ApplyRecipeListWheel( Vector2 wheel )
@@ -594,11 +604,15 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( recipe is null || _inventory is null )
 			return false;
 
-		if ( recipe.RequiresStation && !HasRequiredStation( recipe ) )
-			return false;
+		// allCrafting hack: no station, no cost — only output space still matters.
+		if ( !GameHacks.AllCrafting )
+		{
+			if ( recipe.RequiresStation && !HasRequiredStation( recipe ) )
+				return false;
 
-		if ( !HasScaledResources( recipe ) )
-			return false;
+			if ( !HasScaledResources( recipe ) )
+				return false;
+		}
 
 		return _inventory.CanFitResource( recipe.Id, recipe.TotalOutputAmount );
 	}
@@ -693,7 +707,9 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		else
 		{
 			var recipe = CraftingRecipeCatalog.Get( _selectedRecipeId );
-			if ( recipe is not null && recipe.RequiresStation && !HasRequiredStation( recipe ) )
+			if ( GameHacks.AllCrafting )
+				_craftButtonLabel.Text = "Need space";
+			else if ( recipe is not null && recipe.RequiresStation && !HasRequiredStation( recipe ) )
 				_craftButtonLabel.Text = $"Need {recipe.RequiredStation} nearby";
 			else
 				_craftButtonLabel.Text = "Need materials / space";
@@ -796,6 +812,9 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( recipe.Ingredients is null || recipe.Ingredients.Count == 0 )
 			return lines;
 
+		// allCrafting hack: every ingredient costs 0 (host consumes nothing).
+		var free = GameHacks.AllCrafting;
+
 		for ( var i = 0; i < recipe.Ingredients.Count; i++ )
 		{
 			var ing = recipe.Ingredients[i];
@@ -804,7 +823,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 			var def = ResourceCatalog.Resolve( ing.ResourceId );
 			var have = _inventory?.CountResource( ing.ResourceId ) ?? 0;
-			var need = Math.Max( 1, ing.Amount );
+			var need = free ? 0 : Math.Max( 1, ing.Amount );
 			lines.Add( $"{have}/{need} {def.DisplayName}" );
 		}
 

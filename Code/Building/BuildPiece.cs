@@ -18,9 +18,29 @@ public sealed class BuildPiece : Component
 	/// <summary>Structural support (host-solved, see <see cref="BuildStructuralIntegrity"/>) — synced for client hover display.</summary>
 	[Sync] public float Support { get; set; }
 
+	/// <summary>
+	/// Hit points left (host-owned, synced for the hammer hover readout). Seeded from the material's
+	/// <see cref="BuildMaterialData.Health"/> when the piece is placed; furniture without a material
+	/// never takes damage. Only entities damage structures — see <see cref="HostApplyDamage"/>.
+	/// </summary>
+	[Sync, Change] public float Health { get; set; }
+
+	/// <summary>Colour a piece drifts toward as it loses hit points (blended by missing fraction).</summary>
+	static readonly Color DamageTint = new( 0.32f, 0.1f, 0.08f, 1f );
+
 	public bool IsPreviewGhost { get; private set; }
 
+	/// <summary>Has a structural material, so it can be attacked and can collapse.</summary>
+	public bool IsDestructible => BuildPieceCatalog.GetMaterialForPiece( PieceId ) is not null;
+
+	/// <summary>Material hit points, or 0 for furniture.</summary>
+	public float MaxHealth => BuildPieceCatalog.GetMaterialForPiece( PieceId )?.Health ?? 0f;
+
+	/// <summary>Host: health has been seeded and drained to nothing — the piece is being removed.</summary>
+	public bool IsBroken => _hostHealthSeeded && Health <= 0.001f;
+
 	bool _supportTintApplied;
+	bool _hostHealthSeeded;
 
 	Vector3 _halfExtents = BuildModuleDimensions.FloorHalfExtents;
 	readonly List<BuildSnapPoint> _snapPoints = new();
@@ -43,7 +63,10 @@ public sealed class BuildPiece : Component
 		if ( previewGhost )
 			GameObject.Tags.Remove( PlayerMovement.GrappleSurfaceTag );
 		else
+		{
 			EnsureGrappleSurfaceTag();
+			HostSeedHealth();
+		}
 
 		ApplyVisualTint();
 	}
@@ -60,6 +83,78 @@ public sealed class BuildPiece : Component
 
 		BuildPieceCollider.Ensure( GameObject, PieceId, previewGhost: false );
 		EnsureGrappleSurfaceTag();
+		HostSeedHealth();
+	}
+
+	bool IsHostAuthority =>
+		GameObject.IsValid() && !GameObject.IsProxy
+		&& (GameObject.Network is not { Active: true } || Networking.IsHost);
+
+	/// <summary>Host: give a fresh placed piece its material hit points (scene-authored pieces get theirs on start).</summary>
+	void HostSeedHealth()
+	{
+		if ( _hostHealthSeeded || !IsHostAuthority )
+			return;
+
+		var max = MaxHealth;
+		if ( max <= 0f )
+			return;
+
+		if ( Health <= 0f || Health > max )
+			Health = max;
+
+		_hostHealthSeeded = true;
+	}
+
+	/// <summary>
+	/// Host: melee damage from an entity swing (routed through <see cref="DamageReceiver"/>). Returns
+	/// what was actually taken. At zero the piece is removed through <see cref="BuildAuthority.HostRemovePiece"/>,
+	/// so nav rebakes and structural integrity cascades exactly as a hammer demolish would.
+	/// </summary>
+	public float HostApplyDamage( float amount, Component attacker )
+	{
+		if ( IsPreviewGhost || amount <= 0f || !IsHostAuthority )
+			return 0f;
+
+		HostSeedHealth();
+		if ( !_hostHealthSeeded || Health <= 0.001f )
+			return 0f;
+
+		var before = Health;
+		Health = Math.Max( 0f, Health - amount );
+		var dealt = before - Health;
+		Log.Info( $"[BuildPiece] {GameObject.Name} -{dealt:0.#} HP → {Health:0.#}/{MaxHealth:0}" );
+
+		if ( Health <= 0.001f )
+			BuildAuthority.HostRemovePiece( this );
+
+		return dealt;
+	}
+
+	/// <summary>[Change] callback for <see cref="Health"/> — host and clients darken the piece as it wears down.</summary>
+	void OnHealthChanged( float oldValue, float newValue ) => ApplyDamageTint();
+
+	/// <summary>Placed-piece resting colour: catalog fallback, pulled toward <see cref="DamageTint"/> by missing health.</summary>
+	Color RestingColor()
+	{
+		var restore = BuildPieceCatalog.TryGet( PieceId, out var data )
+			? BuildPieceCatalog.ParseFallbackColor( data.FallbackColor )
+			: Color.White;
+
+		var max = MaxHealth;
+		if ( max <= 0f || Health <= 0f || Health >= max - 0.5f )
+			return restore;
+
+		var missing = 1f - Math.Clamp( Health / max, 0f, 1f );
+		return Color.Lerp( restore, DamageTint, missing * 0.85f );
+	}
+
+	void ApplyDamageTint()
+	{
+		if ( IsPreviewGhost || _supportTintApplied || !GameObject.IsValid() )
+			return;
+
+		ApplyTint( RestingColor() );
 	}
 
 	void EnsureGrappleSurfaceTag()
@@ -139,10 +234,7 @@ public sealed class BuildPiece : Component
 			return;
 
 		_supportTintApplied = false;
-		var restore = BuildPieceCatalog.TryGet( PieceId, out var data )
-			? BuildPieceCatalog.ParseFallbackColor( data.FallbackColor )
-			: Color.White;
-		ApplyTint( restore );
+		ApplyTint( RestingColor() );
 	}
 
 	void ApplyTint( Color tint )

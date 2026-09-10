@@ -21,6 +21,9 @@ public sealed class BuildMaterialData
 	/// <summary>Fractional support lost per meter sideways — hanging below also uses this.</summary>
 	public float HorizontalLoss { get; set; } = 0.2f;
 
+	/// <summary>Hit points a placed piece of this material starts with (entity attacks only — see <see cref="BuildPiece.HostApplyDamage"/>).</summary>
+	public float Health { get; set; } = 100f;
+
 	/// <summary>Valheim wood — the fallback when JSON carries no materials.</summary>
 	public static BuildMaterialData DefaultWood => new()
 	{
@@ -29,5 +32,6 @@ public sealed class BuildMaterialData
 		MinSupport = 10f,
 		VerticalLoss = 0.125f,
 		HorizontalLoss = 0.2f,
+		Health = 100f,
 	};
 }

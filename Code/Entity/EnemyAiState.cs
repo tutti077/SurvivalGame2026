@@ -15,4 +15,6 @@ public enum EnemyAiState
 	Attacking = 4,
 	/// <summary>Low health — fleeing, then idle.</summary>
 	Retreating = 5,
+	/// <summary>Player unreachable behind / on top of build pieces — walking to and hitting structure to open a way in.</summary>
+	Breaching = 6,
 }

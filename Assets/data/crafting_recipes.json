@@ -40,6 +40,7 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,
+                "stations": [ "inventory", "workbench" ],
                 "ingredients": [
                   { "resourceId": "resource_woodBasic", "amount": 10 },
                   { "resourceId": "resource_plantFiber", "amount": 10 }
@@ -56,6 +57,7 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,
+                "stations": [ "inventory", "workbench" ],
                 "ingredients": [
                   { "resourceId": "crafted_rope", "amount": 1 },
                   { "resourceId": "resource_woodBasic", "amount": 5 },
@@ -76,6 +78,7 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,
+                "stations": [ "inventory", "workbench" ],
                 "ingredients": [
                   { "resourceId": "resource_woodBasic", "amount": 1 },
                   { "resourceId": "resource_resin", "amount": 1 },
@@ -103,6 +106,201 @@
                   { "label": "Type", "value": "One Handed" },
                 ]
               },
+              {
+                "id": "tool_hoe",
+                "displayName": "Hoe",
+                "icon": "ui/items/tool_hoe.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Tills soil for planting" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "axe_scrap",
+                "displayName": "Scrap Axe",
+                "icon": "ui/items/axe_scrap.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Axe hammered out of scrap" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "pickaxe_scrap",
+                "displayName": "Scrap Pickaxe",
+                "icon": "ui/items/pickaxe_scrap.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Pickaxe hammered out of scrap" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "axe_reforged",
+                "displayName": "Reforged Axe",
+                "icon": "ui/items/axe_reforged.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Reforged scrap axe with a proper edge" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "pickaxe_reforged",
+                "displayName": "Reforged Pickaxe",
+                "icon": "ui/items/pickaxe_reforged.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Reforged scrap pickaxe" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "axe_iron",
+                "displayName": "Iron Axe",
+                "icon": "ui/items/axe_iron.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Iron axe" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "pickaxe_iron",
+                "displayName": "Iron Pickaxe",
+                "icon": "ui/items/pickaxe_iron.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Iron pickaxe" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "axe_steel",
+                "displayName": "Arcsteel Axe",
+                "icon": "ui/items/axe_steel.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Arcsteel axe" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "pickaxe_steel",
+                "displayName": "Arcsteel Pickaxe",
+                "icon": "ui/items/pickaxe_steel.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Arcsteel pickaxe" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "axe_titanium",
+                "displayName": "Titanium Axe",
+                "icon": "ui/items/axe_titanium.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Titanium axe" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "pickaxe_titanium",
+                "displayName": "Titanium Pickaxe",
+                "icon": "ui/items/pickaxe_titanium.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Titanium pickaxe" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "axe_plasma",
+                "displayName": "Plasma Cutter",
+                "icon": "ui/items/axe_plasma.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Plasma cutter — fells anything" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "pickaxe_plasma",
+                "displayName": "Plasma Cracker",
+                "icon": "ui/items/pickaxe_plasma.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Plasma cracker — breaks any rock" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
 /*weapons*/   {
                 "id": "club_wood",
                 "displayName": "Wooden Club",
@@ -110,6 +308,7 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,
+                "stations": [ "inventory", "workbench" ],
                 "ingredients": [
                     { "resourceId": "resource_woodBasic", "amount": 1 }
                   //{ "resourceId": "resource_stone", "amount": 3 },
@@ -130,6 +329,7 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,
+                "stations": [ "inventory", "workbench" ],
                 "ingredients": [
                   { "resourceId": "resource_woodBasic", "amount": 1 }
                 ],
@@ -147,6 +347,7 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,
+                "stations": [ "inventory", "workbench" ],
                 "ingredients": [
                   { "resourceId": "resource_woodBasic", "amount": 1 },
                   { "resourceId": "resource_plantFiber", "amount": 2 }
@@ -165,6 +366,7 @@
                 "maxStack": 50,
                 "ammoType": "bow",
                 "damage": 5,
+                "stations": [ "inventory", "workbench" ],
                 "ingredients": [
                   { "resourceId": "resource_woodBasic", "amount": 1 }
                 ],
@@ -175,6 +377,443 @@
                   { "label": "Ammo", "value": "bow" }
                 ]
               },
+              {
+                "id": "spear_flint",
+                "displayName": "Flint Spear",
+                "icon": "ui/items/spear_flint.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "inventory", "workbench" ],
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Sharpened flint on a wooden shaft" },
+                  { "label": "Type", "value": "Two Handed" }
+                ]
+              },
+              {
+                "id": "bola_basic",
+                "displayName": "Bola",
+                "icon": "ui/items/bola_basic.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "inventory", "workbench" ],
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Weighted cords — tangles a target's legs" },
+                  { "label": "Type", "value": "Thrown" }
+                ]
+              },
+              {
+                "id": "sword_bone",
+                "displayName": "Bone Sword",
+                "icon": "ui/items/sword_bone.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Sharpened bone blade" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "sword_scrap",
+                "displayName": "Scrap Sword",
+                "icon": "ui/items/sword_scrap.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Blade ground from scrap" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "club_scrap",
+                "displayName": "Scrap Club",
+                "icon": "ui/items/club_scrap.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Club wrapped in scrap plate" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "fist_scrap",
+                "displayName": "Scrap Knuckles",
+                "icon": "ui/items/fist_scrap.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Scrap knuckle dusters" },
+                  { "label": "Type", "value": "Fist" }
+                ]
+              },
+              {
+                "id": "bow_quickdraw",
+                "displayName": "Quickdraw Bow",
+                "icon": "ui/items/bow_quickdraw.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Light bow with a fast draw" },
+                  { "label": "Type", "value": "Bow" }
+                ]
+              },
+              {
+                "id": "sword_reforged",
+                "displayName": "Reforged Sword",
+                "icon": "ui/items/sword_reforged.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Reforged scrap sword" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "mace_reforged",
+                "displayName": "Reforged Mace",
+                "icon": "ui/items/mace_reforged.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Reforged scrap mace" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "dagger_reforged",
+                "displayName": "Reforged Stiletto",
+                "icon": "ui/items/dagger_reforged.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Thin reforged stabbing blade" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "spear_reforged",
+                "displayName": "Reforged Pike",
+                "icon": "ui/items/spear_reforged.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Reforged scrap pike" },
+                  { "label": "Type", "value": "Two Handed" }
+                ]
+              },
+              {
+                "id": "sword_iron",
+                "displayName": "Iron Sword",
+                "icon": "ui/items/sword_iron.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Iron sword" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "club_iron",
+                "displayName": "Iron Mace",
+                "icon": "ui/items/club_iron.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Iron mace" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "fist_iron",
+                "displayName": "Spiked Knuckles",
+                "icon": "ui/items/fist_iron.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Iron spiked knuckles" },
+                  { "label": "Type", "value": "Fist" }
+                ]
+              },
+              {
+                "id": "bow_iron",
+                "displayName": "Iron Bow",
+                "icon": "ui/items/bow_iron.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Iron-limbed bow" },
+                  { "label": "Type", "value": "Bow" }
+                ]
+              },
+              {
+                "id": "spear_iron",
+                "displayName": "Iron Spear",
+                "icon": "ui/items/spear_iron.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Iron spear" },
+                  { "label": "Type", "value": "Two Handed" }
+                ]
+              },
+              {
+                "id": "sword_arcsteel",
+                "displayName": "Arcsteel Sword",
+                "icon": "ui/items/sword_arcsteel.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Arcsteel sword" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "club_arcsteel",
+                "displayName": "MorningStar",
+                "icon": "ui/items/club_arcsteel.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Arcsteel morning star" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "sword_titanium",
+                "displayName": "Titanium Sword",
+                "icon": "ui/items/sword_titanium.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Titanium sword" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "bow_long",
+                "displayName": "Long Bow",
+                "icon": "ui/items/bow_long.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Long bow — heavy draw, long reach" },
+                  { "label": "Type", "value": "Bow" }
+                ]
+              },
+              {
+                "id": "sword_pulse",
+                "displayName": "Pulse Blade",
+                "icon": "ui/items/sword_pulse.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Energized pulse blade" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "hammer_arcsteel",
+                "displayName": "Arc Hammer",
+                "icon": "ui/items/hammer_arcsteel.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Arcsteel war hammer" },
+                  { "label": "Type", "value": "Two Handed" }
+                ]
+              },
+              {
+                "id": "mace_arcsteel",
+                "displayName": "Coil Mace",
+                "icon": "ui/items/mace_arcsteel.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Coil-charged arcsteel mace" },
+                  { "label": "Type", "value": "One Handed" }
+                ]
+              },
+              {
+                "id": "greatsword_arcsteel",
+                "displayName": "Servo Greatsword",
+                "icon": "ui/items/greatsword_arcsteel.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Servo-assisted arcsteel greatsword" },
+                  { "label": "Type", "value": "Two Handed" }
+                ]
+              },
+              {
+                "id": "cyber_bladeSwarm",
+                "displayName": "Blade Swarm",
+                "icon": "ui/items/cyber_bladeSwarm.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Launches a swarm of blades" },
+                  { "label": "Type", "value": "Cyberware" }
+                ]
+              },
+              {
+                "id": "cyber_arcDischarge",
+                "displayName": "Arc Discharge",
+                "icon": "ui/items/cyber_arcDischarge.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Discharges an electric arc" },
+                  { "label": "Type", "value": "Cyberware" }
+                ]
+              },
+              {
+                "id": "cyber_fireball",
+                "displayName": "Fireball",
+                "icon": "ui/items/cyber_fireball.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Hurls a fireball" },
+                  { "label": "Type", "value": "Cyberware" }
+                ]
+              },
+              {
+                "id": "cyber_acid",
+                "displayName": "Battery Acid Spew",
+                "icon": "ui/items/cyber_acid.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Sprays battery acid" },
+                  { "label": "Type", "value": "Cyberware" }
+                ]
+              },
+              {
+                "id": "cyber_iceShard",
+                "displayName": "Ice Shard",
+                "icon": "ui/items/cyber_iceShard.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Fires a shard of ice" },
+                  { "label": "Type", "value": "Cyberware" }
+                ]
+              },
 /*resources*/ {
                 "id": "crafted_rope",
                 "displayName": "Rope",
@@ -182,6 +821,7 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 20,
+                "stations": [ "inventory", "workbench" ],
                 "ingredients": [
                   { "resourceId": "resource_plantFiber", "amount": 5 }
                 ],
@@ -347,9 +987,9 @@
                 ]
               },
               {
-                "id": "crafted_ingotSteel",
+                "id": "crafted_ingotArcsteel",
                 "displayName": "Steel Ingot",
-                "icon": "ui/items/crafted_ingotSteel.png",
+                "icon": "ui/items/crafted_ingotArcsteel.png",
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 20,
@@ -415,7 +1055,7 @@
                 "outputAmount": 2,
                 "maxStack": 10,
                 "ingredients": [
-                  { "resourceId": "crafted_ingotSteel", "amount": 2 },
+                  { "resourceId": "crafted_ingotArcsteel", "amount": 2 },
                   { "resourceId": "crafted_syntheticRubber", "amount": 2 }
 
                 ],
@@ -590,6 +1230,21 @@
                 ],
                 "stats": [
                   { "label": "Description", "value": "Pipes for crafting" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
+                "id": "crafted_carbonFiber",
+                "displayName": "Carbon Fiber",
+                "icon": "ui/items/crafted_carbonFiber.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Carbon Fiber for crafting" },
                   { "label": "Type", "value": "Resource" }
                 ]
               },

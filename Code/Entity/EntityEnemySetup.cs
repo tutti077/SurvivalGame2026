@@ -127,7 +127,8 @@ public static class EntityEnemySetup
 		// Streamed terrain often has no tiles yet — bake a local pad; deferred chunk bake retries via OnNavBakeComplete.
 		BuildNavMeshSync.EnsureNavAroundPoint( scene, spawnPos );
 
-		if ( EntityNavMeshUtility.EnsureAgentOnNavMesh( scene, agent, spawnPos ) )
+		// Spawn: the wide search is wanted here — population height can be well off the mesh.
+		if ( EntityNavMeshUtility.EnsureAgentOnNavMesh( scene, agent, spawnPos, maxSnap: 1024f ) )
 		{
 			agent.UpdatePosition = true;
 			return true;

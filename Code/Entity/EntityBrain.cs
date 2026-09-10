@@ -8,10 +8,11 @@ namespace Survival;
 /// <summary>
 /// Host-only enemy AI: Idle → Wander; Searching on noise;
 /// once alerted → always nav to the live player and attack until geometric LOS has been lost for
-/// <see cref="ChaseLosLostAbandonSeconds"/>; Retreating at low HP.
+/// <see cref="ChaseLosLostAbandonSeconds"/>; Retreating at low HP. Breaching (see
+/// <c>EntityBrain.Breach.cs</c>) when build pieces are what keeps the player out of reach.
 /// </summary>
 [Title( "Entity Brain" )]
-public sealed class EntityBrain : Component
+public sealed partial class EntityBrain : Component
 {
 	[Property] public EntityCombat EntityCombat { get; set; }
 	[Property] public EntityVitals Vitals { get; set; }
@@ -45,6 +46,9 @@ public sealed class EntityBrain : Component
 	EnemyAiState _state = EnemyAiState.Idle;
 	GameObject _target;
 	Vector3 _issuedNavGoal;
+	double _lastMoveIssuedAt;
+	/// <summary>A MoveTo this recent is still being computed — the agent reads "not navigating" meanwhile.</summary>
+	const double MoveIssueSettleSeconds = 0.6;
 	Vector3 _wanderGoal;
 	Vector3 _lastKnownPlayerPos;
 	Vector3 _stimulusPos;
@@ -92,6 +96,11 @@ public sealed class EntityBrain : Component
 	public float AlertMeter01 =>
 		_perception.AlertThreshold > 1e-3f ? Math.Clamp( _alertMeter / _perception.AlertThreshold, 0f, 1f ) : 0f;
 	public NavMeshPathStatus LastPathStatus { get; private set; }
+	/// <summary>
+	/// The last path physically runs through a wall / tree / rock. Nav can leak through thin
+	/// solids and still report Complete — that is not a route, it is a wall to breach.
+	/// </summary>
+	public bool LastPathCrossesSolid { get; private set; }
 	public string LastNavBlockReason { get; private set; } = "init";
 	public Vector3 LastNavGoal { get; private set; }
 	public IReadOnlyList<Vector3> LastPathPoints => _lastPathPoints;
@@ -123,6 +132,9 @@ public sealed class EntityBrain : Component
 		if ( Locomotion is not null )
 			Locomotion.Landed += OnLocomotionLanded;
 
+		if ( EntityCombat is not null )
+			EntityCombat.AttackCycleFinished += OnAttackCycleFinished;
+
 		// Population calls BeginAiNow (or WaitForNavThenStartAi). Don't auto-wander here.
 	}
 
@@ -137,6 +149,10 @@ public sealed class EntityBrain : Component
 		if ( Locomotion is not null )
 			Locomotion.Landed -= OnLocomotionLanded;
 
+		if ( EntityCombat is not null )
+			EntityCombat.AttackCycleFinished -= OnAttackCycleFinished;
+
+		BreachClaims.Release( this );
 	}
 
 	public void SetHomePosition( Vector3 home ) => HomePosition = home;
@@ -191,7 +207,7 @@ public sealed class EntityBrain : Component
 			return;
 
 		// Already hunting: noise does not fill the meter, but it DOES move the investigate / last-known goal.
-		if ( _state is EnemyAiState.Searching or EnemyAiState.Chasing )
+		if ( _state is EnemyAiState.Searching or EnemyAiState.Chasing or EnemyAiState.Breaching )
 		{
 			if ( TryAcceptNoiseForRetarget( noiseWorldPos, kind, out var heardAt ) )
 				RetargetInvestigationFromNoise( heardAt, source );
@@ -288,7 +304,7 @@ public sealed class EntityBrain : Component
 		else if ( !_target.IsValid() )
 			_target = FindNearestPlayer( ChaseAbandonRange );
 
-		if ( _state is EnemyAiState.Chasing or EnemyAiState.Attacking )
+		if ( _state is EnemyAiState.Chasing or EnemyAiState.Attacking or EnemyAiState.Breaching )
 		{
 			if ( _target.IsValid() )
 				RememberLastKnown( _target.WorldPosition );
@@ -302,12 +318,23 @@ public sealed class EntityBrain : Component
 	public void OnNavBakeComplete()
 	{
 		_needsImmediatePathCheck = true;
+		_validatedPathAt = -1d;
+		// Breaching: the nav now reflects the piece we (or a collapse) took out — ask at once whether
+		// the player is reachable, before committing to the next piece.
+		if ( _state == EnemyAiState.Breaching )
+			OnBreachNavRebaked();
+
 		Agent ??= Components.Get<NavMeshAgent>();
 		if ( Agent is null || !Agent.IsValid() || !Scene.IsValid() )
 			return;
 
 		if ( !EntityNavMeshUtility.EnsureAgentOnNavMesh( Scene, Agent, GameObject.WorldPosition ) )
+		{
+			// Already driving before this bake: keep driving from where we stand; the agent clamps.
+			if ( _agentOnNav )
+				Agent.UpdatePosition = true;
 			return;
+		}
 
 		_agentOnNav = true;
 		Agent.UpdatePosition = true;
@@ -325,8 +352,12 @@ public sealed class EntityBrain : Component
 
 	public void OnStructureBlockerChanged()
 	{
-		if ( _state is EnemyAiState.Chasing or EnemyAiState.Searching or EnemyAiState.Retreating )
+		if ( _state is EnemyAiState.Chasing or EnemyAiState.Searching or EnemyAiState.Retreating or EnemyAiState.Breaching )
 			_needsImmediatePathCheck = true;
+
+		// A piece fell (ours or theirs) — ask right away whether the player is reachable now.
+		if ( _state == EnemyAiState.Breaching )
+			_nextBreachRecheckAt = 0d;
 	}
 
 	void OnLocomotionLanded()
@@ -340,7 +371,11 @@ public sealed class EntityBrain : Component
 			return;
 
 		if ( !EntityNavMeshUtility.EnsureAgentOnNavMesh( Scene, Agent, GameObject.WorldPosition ) )
+		{
+			if ( _agentOnNav )
+				Agent.UpdatePosition = true;
 			return;
+		}
 
 		_agentOnNav = true;
 		Agent.UpdatePosition = true;
@@ -366,6 +401,15 @@ public sealed class EntityBrain : Component
 		_alertLocked = true;
 		// Taking hits while low HP interrupts flee so they can fight back briefly.
 		_retreatBlockedUntil = Time.NowDouble + 6d;
+
+		// Shot from behind / above the structure: keep tearing in; the next recheck (now) decides
+		// whether they have actually become reachable.
+		if ( _state == EnemyAiState.Breaching )
+		{
+			_nextBreachRecheckAt = 0d;
+			return;
+		}
+
 		EnterState( EnemyAiState.Chasing, player );
 	}
 
@@ -386,7 +430,7 @@ public sealed class EntityBrain : Component
 		TickNavSettle();
 
 		if ( _state is EnemyAiState.Idle or EnemyAiState.Wander or EnemyAiState.Searching
-		     or EnemyAiState.Chasing or EnemyAiState.Retreating )
+		     or EnemyAiState.Chasing or EnemyAiState.Retreating or EnemyAiState.Breaching )
 			TickAmbientAlert( Time.Delta );
 
 		if ( CanStartRetreat() )
@@ -428,9 +472,13 @@ public sealed class EntityBrain : Component
 			case EnemyAiState.Retreating:
 				TickRetreating();
 				break;
+			case EnemyAiState.Breaching:
+				TickBreaching();
+				break;
 		}
 
 		TickPerceptionDebug();
+		TickMovementTrace();
 	}
 
 	void TickAmbientAlert( float dt )
@@ -439,7 +487,7 @@ public sealed class EntityBrain : Component
 			return;
 
 		// Alerted: meter stays locked, but walk/sprint noise still retargets investigate / last-known.
-		if ( _state is EnemyAiState.Searching or EnemyAiState.Chasing )
+		if ( _state is EnemyAiState.Searching or EnemyAiState.Chasing or EnemyAiState.Breaching )
 		{
 			TickHuntNoiseRetarget();
 			return;
@@ -833,6 +881,10 @@ public sealed class EntityBrain : Component
 
 		_alertMeter = _perception.AlertThreshold;
 		_alertLocked = true;
+
+		// Mesh rebuilding after a placed / destroyed piece: track on foot for a second, then wait.
+		if ( TickManualChaseStep() )
+			return;
 		ApplyAgentSpeed( run: true );
 
 		// Seen = geometric LOS. Always nav to the live player while alerted.
@@ -848,7 +900,8 @@ public sealed class EntityBrain : Component
 		}
 
 		var dist = Vector3.DistanceBetween( GameObject.WorldPosition, _target.WorldPosition );
-		if ( dist <= AttackRange && hasLos )
+		// A player a floor above is "in range" by distance but out of reach — never attack the air under them.
+		if ( dist <= AttackRange && hasLos && IsWithinMeleeVertical( _target ) )
 		{
 			EnterState( EnemyAiState.Attacking, _target );
 			return;
@@ -864,19 +917,36 @@ public sealed class EntityBrain : Component
 
 		_nextChaseThinkAt = Time.NowDouble + ChaseThinkInterval;
 
-		if ( !ShouldRunPathCheck( dist ) )
-			return;
+		// Plain nav only (per Mark): the mesh is correct, so a door or stairs is found by pathing.
+		// A piece directly ahead is remembered as the preferred breach target, nothing more.
+		RememberPieceInWay();
 
-		TryIssueNavMove(
-			GetLiveChasePoint( _target ),
-			0f,
-			ClosePathCheckInterval,
-			LiveChaseRepathMoveThreshold );
+		if ( ShouldRunPathCheck( dist ) )
+		{
+			TryIssueNavMove(
+				GetLiveChasePoint( _target ),
+				0f,
+				ClosePathCheckInterval,
+				LiveChaseRepathMoveThreshold );
+		}
+
+		// No complete route to where the player stands → tear a way through, now (per Mark).
+		TickChaseBlockedDetection( dist );
 	}
 
-	/// <summary>Locomotion clipped a wall — request a fresh live repath, nothing else.</summary>
+	/// <summary>Locomotion clipped a wall — request a fresh live repath; remember a build piece so breaching can prefer it.</summary>
 	public void NotifyChasePhysicsBlocked( GameObject hit )
 	{
+		if ( _state is not (EnemyAiState.Chasing or EnemyAiState.Breaching) )
+			return;
+
+		var piece = BuildPlacementUtility.FindBuildPieceOnHierarchy( hit );
+		if ( piece is not null && piece.IsValid() )
+		{
+			_lastClipPiece = piece;
+			_lastClipPieceAt = Time.NowDouble;
+		}
+
 		if ( _state != EnemyAiState.Chasing )
 			return;
 
@@ -893,6 +963,7 @@ public sealed class EntityBrain : Component
 		_hasSearchGoal = false;
 		_chaseLastSeenAt = 0d;
 		_target = null;
+		ClearBreachState();
 		EnterState( EnemyAiState.Idle, forceIdleSeconds: _perception.PostLostIdleSeconds );
 	}
 
@@ -1015,7 +1086,7 @@ public sealed class EntityBrain : Component
 			return false;
 
 		var dist = Vector3.DistanceBetween( GameObject.WorldPosition, _target.WorldPosition );
-		if ( dist > AttackRange )
+		if ( dist > AttackRange || !IsWithinMeleeVertical( _target ) )
 			return false;
 
 		EnterState( EnemyAiState.Attacking, _target );
@@ -1070,7 +1141,7 @@ public sealed class EntityBrain : Component
 		}
 
 		// Only leave after the full attack cycle finished.
-		if ( dist > AttackRange * 1.75f || !hasLos )
+		if ( dist > AttackRange * 1.75f || !hasLos || !IsWithinMeleeVertical( _target ) )
 		{
 			EnterState( EnemyAiState.Chasing, _target );
 			return;
@@ -1141,6 +1212,13 @@ public sealed class EntityBrain : Component
 
 	void EnterState( EnemyAiState next, GameObject target = null, float? forceIdleSeconds = null )
 	{
+		// Manual tracking (stale mesh) took the body from the agent; any state change hands it back.
+		EndManualChase();
+
+		// A piece claim only means something while breaching.
+		if ( next != EnemyAiState.Breaching )
+			BreachClaims.Release( this );
+
 		_state = next;
 		_needsImmediatePathCheck = true;
 		_wanderStuckSince = 0d;
@@ -1202,6 +1280,7 @@ public sealed class EntityBrain : Component
 				_alertMeter = _perception.AlertThreshold;
 				_alertLocked = true;
 				_nextChaseThinkAt = Time.NowDouble;
+				ResetChaseProgress();
 				// Seed unseen clock only on a fresh chase — Attack↔Chase must not reset the 30s.
 				if ( _chaseLastSeenAt <= 0d )
 					_chaseLastSeenAt = Time.NowDouble;
@@ -1230,6 +1309,18 @@ public sealed class EntityBrain : Component
 				ApplyAgentSpeed( run: true );
 				_retreatStart = GameObject.WorldPosition;
 				_retreatGoal = BuildRetreatGoal();
+				break;
+			case EnemyAiState.Breaching:
+				// Piece + stand were chosen by BeginBreachPiece before entering.
+				EntityCombat?.SetEngaged( false );
+				if ( EntityCombat is not { IsMovementLocked: true } )
+					EntityCombat?.ResetCycle();
+				ApplyAgentSpeed( run: true );
+				_alertMeter = _perception.AlertThreshold;
+				_alertLocked = true;
+				_nextBreachRecheckAt = Time.NowDouble + BreachRecheckSeconds;
+				Locomotion?.SetLookTarget( null );
+				Locomotion?.SetPreferAimOverVelocity( false );
 				break;
 		}
 	}
@@ -1355,30 +1446,107 @@ public sealed class EntityBrain : Component
 		return path.Length < straight * 1.45f + 96f;
 	}
 
+	/// <summary>Spacing of the re-grounded samples along a path segment when checking for solids.</summary>
+	const float PathProbeStepUnits = 96f;
+	/// <summary>A path with the same endpoints and length as the last validated one reuses its verdict for this long.</summary>
+	const double PathValidationReuseSeconds = 1.5;
+	Vector3 _validatedPathStart;
+	Vector3 _validatedPathEnd;
+	float _validatedPathLength;
+	double _validatedPathAt = -1d;
+	bool _validatedPathCrosses;
+
+	/// <summary>
+	/// Does the nav path physically pass through something solid (a thin wall the mesh leaked
+	/// through)? Each segment is re-grounded every <see cref="PathProbeStepUnits"/> with a down
+	/// probe before the horizontal sweep. A string-pulled path has no point where a stair meets a
+	/// floor, so the raw segment from the stair foot to the floor sliced through the slab from
+	/// underneath and read as a wall — every route UP a structure was "blocked" and the entity
+	/// breached instead of climbing (per Mark: chase them up their own creation), and the route
+	/// through a hole it had just opened was vetoed the same way.
+	/// </summary>
 	bool PathCrossesSolid( EntityChaseRouting.NavPathQuery path )
 	{
 		if ( path.Points is null || path.Points.Count < 2 || !Scene.IsValid() )
 			return false;
 
+		var prev = GroundPathPoint( path.Points[0] );
 		for ( var i = 0; i < path.Points.Count - 1; i++ )
 		{
-			var a = path.Points[i] + Vector3.Up * 36f;
-			var b = path.Points[i + 1] + Vector3.Up * 36f;
-			var tr = Scene.Trace.Ray( a, b )
-				.Radius( 8f )
-				.UsePhysicsWorld()
-				.IgnoreGameObjectHierarchy( GameObject )
-				.Run();
+			var a = path.Points[i];
+			var b = path.Points[i + 1];
+			var flat = (b - a).WithZ( 0f ).Length;
+			var steps = Math.Max( 1, (int)MathF.Ceiling( flat / PathProbeStepUnits ) );
+			for ( var step = 1; step <= steps; step++ )
+			{
+				var sample = GroundPathPoint( Vector3.Lerp( a, b, step / (float)steps ) );
+				if ( SegmentHitsWall( prev, sample ) )
+					return true;
 
-			if ( !tr.Hit || !tr.GameObject.IsValid() )
-				continue;
-
-			// Floor hits are fine; vertical-ish walls are not.
-			if ( tr.Normal.z < 0.55f )
-				return true;
+				prev = sample;
+			}
 		}
 
 		return false;
+	}
+
+	/// <summary>
+	/// The sweep costs ~2 traces per 96 u of path; with a dozen entities re-pathing every 0.3 s that
+	/// was the second half of the "renav lag". A path whose endpoints and length match the last
+	/// validated one (the player has not moved, the mesh has not changed) reuses the verdict.
+	/// </summary>
+	bool PathCrossesSolidCached( EntityChaseRouting.NavPathQuery path )
+	{
+		var start = path.Points[0];
+		var end = path.Points[^1];
+		var now = Time.NowDouble;
+		var same = _validatedPathAt >= 0d
+		           && now - _validatedPathAt < PathValidationReuseSeconds
+		           && Vector3.DistanceBetween( start, _validatedPathStart ) < 48f
+		           && Vector3.DistanceBetween( end, _validatedPathEnd ) < 48f
+		           && MathF.Abs( path.Length - _validatedPathLength ) < 64f;
+		if ( same )
+			return _validatedPathCrosses;
+
+		_validatedPathCrosses = PathCrossesSolid( path );
+		_validatedPathStart = start;
+		_validatedPathEnd = end;
+		_validatedPathLength = path.Length;
+		_validatedPathAt = now;
+		return _validatedPathCrosses;
+	}
+
+	/// <summary>The walkable surface under a point along the path — a stair tread, a floor top, the ground.</summary>
+	Vector3 GroundPathPoint( Vector3 point )
+	{
+		var tr = Scene.Trace.Ray( point + Vector3.Up * 64f, point - Vector3.Up * 160f )
+			.UsePhysicsWorld()
+			.IgnoreGameObjectHierarchy( GameObject )
+			.WithoutTags( "player", "enemy" )
+			.Run();
+
+		return tr.Hit ? tr.HitPosition : point;
+	}
+
+	/// <summary>Body-height sweep between two grounded samples: a vertical-ish face that is not stairs / roof is a wall.</summary>
+	bool SegmentHitsWall( Vector3 from, Vector3 to )
+	{
+		var tr = Scene.Trace.Ray( from + Vector3.Up * 36f, to + Vector3.Up * 36f )
+			.Radius( 8f )
+			.UsePhysicsWorld()
+			.IgnoreGameObjectHierarchy( GameObject )
+			.WithoutTags( "player", "enemy" )
+			.Run();
+
+		if ( !tr.Hit || !tr.GameObject.IsValid() )
+			return false;
+
+		// Stairs / roofs are the route, not an obstacle — a riser face would fail the normal test.
+		if ( BuildPieceNavPolicy.IsWalkablePathObject( tr.GameObject ) )
+			return false;
+
+		// Floor hits are fine; vertical-ish walls are not.
+		return tr.Normal.z < 0.55f;
 	}
 
 	bool IsOccludedToStand( Vector3 origin, Vector3 stand )
@@ -1558,7 +1726,7 @@ public sealed class EntityBrain : Component
 	bool ShouldRunPathCheck( float distToTarget = float.MaxValue )
 	{
 		// Attack telegraphs lock feet; chase/break abort must still be able to repath.
-		if ( _state == EnemyAiState.Attacking && EntityCombat is { IsMovementLocked: true } )
+		if ( _state is (EnemyAiState.Attacking or EnemyAiState.Breaching) && EntityCombat is { IsMovementLocked: true } )
 			return false;
 
 		if ( _needsImmediatePathCheck )
@@ -1659,6 +1827,8 @@ public sealed class EntityBrain : Component
 
 		LastNavGoal = navGoal;
 		LastPathStatus = pathQuery.Status;
+		// Physics is the judge of a "complete" path: a leak through a wall must never read as a route.
+		LastPathCrossesSolid = pathQuery.HasPath && PathCrossesSolidCached( pathQuery );
 
 		_lastPathPoints.Clear();
 		if ( pathQuery.Points is not null )
@@ -1670,15 +1840,32 @@ public sealed class EntityBrain : Component
 			return pathQuery;
 		}
 
-		if ( Agent.IsNavigating && (_issuedNavGoal - navGoal).Length < 96f )
+		// IsNavigating reads false for the frames after a MoveTo while the path is computed; treating
+		// that as "not navigating" re-issued MoveTo on every think, the agent never settled, and the
+		// body — turned toward the look target in the gaps — crept along at the forward-only gate's
+		// 17 % (trace: real=37 wish=220 max=220, nav flipping).
+		var recentlyIssued = Time.NowDouble - _lastMoveIssuedAt < MoveIssueSettleSeconds;
+		if ( (Agent.IsNavigating || recentlyIssued) && (_issuedNavGoal - navGoal).Length < 96f )
 		{
 			LastNavBlockReason = "alreadyNavigating";
 			return pathQuery;
 		}
 
+		// The last MoveTo had its settle time and the agent still is not navigating: it was issued
+		// from an agent position that is not on the mesh (a clip / landing nudged it off), and a
+		// MoveTo from off-mesh silently does nothing — the trace showed 20 s of "moveIssued" with
+		// real=0 on a floor tile and on the stairs. Put the agent back on nav beside the body first.
+		if ( _lastMoveIssuedAt > 0d && !recentlyIssued && !Agent.IsNavigating )
+		{
+			if ( EntityNavMeshUtility.EnsureAgentOnNavMesh( Scene, Agent, GameObject.WorldPosition ) )
+				LastNavBlockReason = "agentReplaced";
+		}
+
 		// Retarget in place — avoid SyncAgentFromRoot every issue (yanks root sideways).
 		Agent.MoveTo( navGoal );
 		_issuedNavGoal = navGoal;
+		_lastMoveIssuedAt = Time.NowDouble;
+		Locomotion?.SetTravelHint( navGoal );
 		LastNavBlockReason = "moveIssued";
 
 		return pathQuery;
@@ -1735,6 +1922,14 @@ public sealed class EntityBrain : Component
 		return glued;
 	}
 
+	/// <summary>Last chase goal that was genuinely under the player's feet, for the off-nav grace.</summary>
+	Vector3 _lastOnNavChasePoint;
+	double _lastOnNavChaseAt = -1000d;
+	/// <summary>Feet test misses this long (jump arcs, poly seams, roof edge trim) before the goal may degrade.</summary>
+	const float OffNavGraceSeconds = 2.5f;
+	/// <summary>Grace only holds while the remembered spot is still near the player (not a stale teleport).</summary>
+	const float OffNavGraceMaxDrift = 320f;
+
 	Vector3 GetLiveChasePoint( GameObject target )
 	{
 		if ( target is null || !target.IsValid() || !Scene.IsValid() )
@@ -1743,7 +1938,33 @@ public sealed class EntityBrain : Component
 		var playerAnchor = EntityLocomotion.GetNavAnchorWorld( target );
 		var selfZ = GameObject.WorldPosition.z;
 
-		// Grappling / airborne: don't path to sky — chase the ground under their XY.
+		// Standing on nav — terrain or a build floor at any height — chase them THERE. Clamping to
+		// our own Z is what parked entities on the ground under a player on an upper floor; when
+		// no walkable way up exists the path comes back partial and breaching takes over.
+		// Tight box sample, not a radius projection: a random sample within 64 u of a roof edge
+		// lands on the ground below as often as on the roof, which read as "player off nav".
+		if ( EntityNavMeshUtility.TryFindNavAtFeet( Scene, playerAnchor, out var onFloor, vertical: StandingNavTolerance ) )
+		{
+			_chaseGoalReachesTarget = true;
+			_lastOnNavChasePoint = onFloor;
+			_lastOnNavChaseAt = Time.NowDouble;
+			return onFloor;
+		}
+
+		// Briefly off nav — a jump mid-run, a sprint across a poly seam, the trimmed strip at a roof
+		// edge. Keep hunting the last spot they truly stood on instead of instantly re-targeting the
+		// terrain under their XY: that flicker is what sent a roof chaser diving off the structure to
+		// the ground the moment the player hopped away after a missed swing.
+		if ( Time.NowDouble - _lastOnNavChaseAt <= OffNavGraceSeconds
+		     && Vector3.DistanceBetween( _lastOnNavChasePoint, playerAnchor ) <= OffNavGraceMaxDrift )
+		{
+			_chaseGoalReachesTarget = true;
+			return _lastOnNavChasePoint;
+		}
+
+		// Grappling / airborne / off-mesh: don't path to sky — chase the ground under their XY.
+		// That goal is NOT the player — breach logic treats it as blocked.
+		_chaseGoalReachesTarget = false;
 		if ( playerAnchor.z - selfZ > 96f )
 			playerAnchor = playerAnchor.WithZ( selfZ );
 
@@ -1791,6 +2012,7 @@ public sealed class EntityBrain : Component
 	void OnDeath()
 	{
 		_target = null;
+		BreachClaims.Release( this );
 		EntityCombat?.ResetCycle();
 		Agent?.Stop();
 		Enabled = false;

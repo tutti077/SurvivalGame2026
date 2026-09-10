@@ -133,6 +133,10 @@ public sealed class DamageReceiver : Component, IDamageable
 		if ( chop is not null && chop.Enabled )
 			return chop.ApplyChopDamage( scaled, attacker );
 
+		var piece = Components.Get<BuildPiece>() ?? BuildPlacementUtility.FindBuildPieceOnHierarchy( GameObject.Parent );
+		if ( piece is not null && piece.Enabled )
+			return piece.HostApplyDamage( scaled, attacker );
+
 		var vitals = Components.Get<PlayerVitals>() ?? FindVitalsInParents( GameObject.Parent );
 		if ( vitals is not null && vitals.Enabled )
 			return vitals.ApplyDamageAfterArmor( scaled, attacker );

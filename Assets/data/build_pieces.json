@@ -5,7 +5,8 @@
       "maxSupport": 100,
       "minSupport": 10,
       "verticalLoss": 0.125,
-      "horizontalLoss": 0.2
+      "horizontalLoss": 0.2,
+      "health": 30
     }
   ],
   "buildPieces": [

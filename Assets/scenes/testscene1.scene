@@ -140615,7 +140615,7 @@
               "IdValue": "c38d434a-c528-4a1d-8885-6b4f3e0cfded"
             },
             "Property": "Position",
-            "Value": "918.761963,259.30014,25"
+            "Value": "918.761963,259.30014,5.03082657"
           }
         ],
         "MovedObjects": []
@@ -147066,7 +147066,7 @@
             },
             {
               "__type": "Sandbox.ModelRenderer",
-              "__guid": "9026fbf3-e5fd-4b86-819f-b6371aa42518",
+              "__guid": "9c69085e-d8be-40ca-8cd0-c2525602906f",
               "__enabled": true,
               "Flags": 0,
               "BodyGroups": 18446744073709551615,
@@ -147093,7 +147093,7 @@
             },
             {
               "__type": "Sandbox.ModelCollider",
-              "__guid": "9a31b1bc-3f37-4cb3-b0af-46b480388de9",
+              "__guid": "7246b693-f606-411d-9b22-c90ac367bb05",
               "__enabled": true,
               "Flags": 0,
               "ColliderFlags": 0,
@@ -147118,7 +147118,7 @@
             },
             {
               "__type": "Sandbox.Rigidbody",
-              "__guid": "2b33a0fa-a557-47cb-ab5e-f4f28ba139d2",
+              "__guid": "a684b3d4-8ee1-4611-a033-db2673f84f54",
               "__enabled": true,
               "Flags": 0,
               "AngularDamping": 0,
@@ -148292,7 +148292,7 @@
       "AgentHeight": 64,
       "AgentRadius": 16,
       "AgentStepSize": 40,
-      "AgentMaxSlope": 50,
+      "AgentMaxSlope": 55,
       "ExcludedBodies": "",
       "IncludedBodies": "",
       "DeferGeneration": false,

@@ -59,6 +59,9 @@ public sealed class ToolBuildHammer : Component
 	public Color HoverSupportColor { get; private set; }
 	public float HoverSupportValue { get; private set; }
 	public float HoverSupportMax { get; private set; }
+	/// <summary>Hovered piece hit points (entity damage) — max is 0 for furniture.</summary>
+	public float HoverHealthValue { get; private set; }
+	public float HoverHealthMax { get; private set; }
 	public int HoverSupportPercent => (int)Math.Round( HoverSupportFraction * 100f );
 
 	GameObject _pawn;
@@ -84,6 +87,8 @@ public sealed class ToolBuildHammer : Component
 	bool _demolishedThisHold;
 	double _openMenuHoldStarted;
 	BuildPiece _hoverSupportPiece;
+	/// <summary>Scroll changed yaw and the next preview should verify the held snap didn't move.</summary>
+	bool _debugYawScrolled;
 
 	public void BindPawn( GameObject pawn ) => _pawn = pawn;
 
@@ -348,6 +353,7 @@ public sealed class ToolBuildHammer : Component
 					           || Input.Keyboard.Down( "rightcontrol" );
 					var step = fine ? FineYawStep : ScrollYawStep;
 					_yawDegrees += scroll > 0f ? step : -step;
+					_debugYawScrolled = true;
 				}
 			}
 		}
@@ -362,6 +368,38 @@ public sealed class ToolBuildHammer : Component
 				RememberSnapVariantForSelected();
 			}
 		}
+	}
+
+	/// <summary>
+	/// Scroll is rotation only — it must spin the ghost about the held snap, never re-seat it.
+	/// One line per scroll tick when that contract is broken: the held snap identity changed
+	/// (target piece / edge / corner, or which corner of the ghost is anchored), or the placement
+	/// did not move at all (a swallowed detent — two yaws collapsing onto one placement).
+	/// </summary>
+	void LogScrollSnapAnomaly( BuildSnapCandidate? before, BuildSnapCandidate? after )
+	{
+		static string Identity( BuildSnapCandidate? c ) =>
+			c is not { } v || v.TargetPiece is null || !v.TargetPiece.IsValid()
+				? "free"
+				: $"{v.TargetPiece.GameObject.Name}/{(v.IsEdgeSnap ? $"edge {v.TargetEdgeId}" : $"snap {v.TargetSnapIndex}")} anchor={v.AnchorSnapIndex} cycle={v.CycleOrder}";
+
+		var beforeId = Identity( before );
+		var afterId = Identity( after );
+
+		if ( beforeId != afterId )
+		{
+			Log.Info( $"[snap-scroll] yaw {_yawDegrees:0}° MOVED the held snap: {beforeId} → {afterId}" );
+			return;
+		}
+
+		if ( before is not { } a || after is not { } b )
+			return;
+
+		var samePos = (a.Placement.Position - b.Placement.Position).Length < 0.5f;
+		var sameRot = (a.Placement.Rotation.Forward - b.Placement.Rotation.Forward).LengthSquared < 1e-4f
+		              && (a.Placement.Rotation.Up - b.Placement.Rotation.Up).LengthSquared < 1e-4f;
+		if ( samePos && sameRot )
+			Log.Info( $"[snap-scroll] yaw {_yawDegrees:0}° produced NO change on {afterId} — swallowed detent" );
 	}
 
 	void UpdatePreview()
@@ -426,7 +464,15 @@ public sealed class ToolBuildHammer : Component
 		}
 		// Keep last index while free-aiming so the next same-type snap restores 1234.
 
+		var previousSnapCandidate = _activeSnapCandidate;
 		_activeSnapCandidate = _lastPlacement.SnapCandidate;
+
+		if ( _debugYawScrolled )
+		{
+			_debugYawScrolled = false;
+			if ( ShowSnapDebug )
+				LogScrollSnapAnomaly( previousSnapCandidate, _activeSnapCandidate );
+		}
 
 		_previewValid = _lastPlacement.IsValid;
 		EnsurePreviewObject( scene );
@@ -601,6 +647,8 @@ public sealed class ToolBuildHammer : Component
 					HoverSupportColor = color;
 					HoverSupportValue = piece.Support;
 					HoverSupportMax = BuildPieceCatalog.GetMaterialForPiece( piece.PieceId )?.MaxSupport ?? 0f;
+					HoverHealthValue = piece.Health;
+					HoverHealthMax = piece.MaxHealth;
 				}
 			}
 		}

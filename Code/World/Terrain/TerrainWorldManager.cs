@@ -326,7 +326,6 @@ public sealed class TerrainWorldManager : Component
 			ProcessWorldLoad();
 			UpdateStreamInspectorState();
 			EnsureMinimapScreen();
-			BuildNavMeshSync.TickPendingLocalBakes( Scene );
 			return;
 		}
 
@@ -338,7 +337,6 @@ public sealed class TerrainWorldManager : Component
 		UpdateBiomePreviewStaleState();
 		UpdateStreamInspectorState();
 		EnsureMinimapScreen();
-		BuildNavMeshSync.TickPendingLocalBakes( Scene );
 	}
 
 	void TryApplyHostWorldSession()

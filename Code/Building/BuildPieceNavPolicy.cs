@@ -1,4 +1,5 @@
 using System;
+using Sandbox;
 
 namespace Survival;
 
@@ -28,6 +29,17 @@ public static class BuildPieceNavPolicy
 			return BuildNavCategory.WalkablePath;
 
 		return BuildNavCategory.Blocking;
+	}
+
+	/// <summary>
+	/// Is this object (or an ancestor) a stairs / roof / bridge / gate piece — something entities
+	/// walk UP rather than through? Movement clips, path validation and the breach "in the way"
+	/// probe must never read a stair riser or a roof edge as a wall.
+	/// </summary>
+	public static bool IsWalkablePathObject( GameObject go )
+	{
+		var piece = BuildPlacementUtility.FindBuildPieceOnHierarchy( go );
+		return piece is not null && piece.IsValid() && GetCategory( piece.PieceId ) == BuildNavCategory.WalkablePath;
 	}
 
 	public static BBox ExpandForLocalBake( BBox bounds ) =>

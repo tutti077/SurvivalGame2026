@@ -128,13 +128,89 @@ static class EntityNavMeshUtility
 		return true;
 	}
 
-	public static bool EnsureAgentOnNavMesh( Scene scene, NavMeshAgent agent, Vector3 near )
+	/// <summary>
+	/// Is there walkable nav right where <paramref name="feet"/> is — the floor / roof / terrain the
+	/// player is standing on? Samples a tight box around the feet (never the ground a storey below),
+	/// so unlike the radius projections it cannot answer "yes" with a point under a roof edge or
+	/// "no" by random chance. Returns the closest sample found.
+	/// </summary>
+	public static bool TryFindNavAtFeet( Scene scene, Vector3 feet, out Vector3 onNav, float horizontal = 40f, float vertical = 32f, int attempts = 6 )
+	{
+		onNav = default;
+		if ( !scene.IsValid() )
+			return false;
+
+		var navMesh = scene.NavMesh;
+		if ( navMesh is null || !navMesh.IsEnabled )
+			return false;
+
+		var box = new BBox(
+			feet - new Vector3( horizontal, horizontal, vertical ),
+			feet + new Vector3( horizontal, horizontal, vertical ) );
+
+		var bestDist = float.MaxValue;
+		var found = false;
+		for ( var i = 0; i < attempts; i++ )
+		{
+			var sample = navMesh.GetRandomPoint( box );
+			if ( !sample.HasValue )
+				continue;
+
+			var dist = Vector3.DistanceBetween( sample.Value, feet );
+			if ( dist >= bestDist )
+				continue;
+
+			bestDist = dist;
+			onNav = sample.Value;
+			found = true;
+		}
+
+		return found;
+	}
+
+	/// <summary>
+	/// Put the agent on nav next to where it already is. Default: a tight box (±<paramref name="maxSnap"/>
+	/// u) that must be reachable without crossing a solid — the entity never moves more than a body
+	/// width, and never through a wall. The old behaviour (random sample out to 1024 u, then
+	/// WorldPosition = sample) ran on every nav rebake: the moment a wall was placed on the entity or
+	/// the wall it was hitting fell, it was yanked across the wall or 5 m away ("teleports away").
+	/// Spawn placement passes a large <paramref name="maxSnap"/> and keeps the wide search.
+	/// </summary>
+	public static bool EnsureAgentOnNavMesh( Scene scene, NavMeshAgent agent, Vector3 near, float maxSnap = 48f )
 	{
 		if ( agent is null || !agent.IsValid() || !scene.IsValid() )
 			return false;
 
-		if ( !TryProjectToNavMesh( scene, near, out var onNav, NavProjectTier.Full ) )
+		if ( maxSnap > 128f )
+		{
+			if ( !TryProjectToNavMesh( scene, near, out var far, NavProjectTier.Full, maxSnap ) )
+				return false;
+
+			agent.GameObject.WorldPosition = far;
+			agent.SetAgentPosition( far );
+			return true;
+		}
+
+		// Tight first; then a body-length wider. The strict version alone failed after a landing
+		// beside a wall, and a failed snap left UpdatePosition off — the agent kept pathing while
+		// the body never moved ("wedged" every 9 s with a complete route).
+		if ( !TryFindNavAtFeet( scene, near, out var onNav, horizontal: maxSnap, vertical: 48f )
+		     && !TryFindNavAtFeet( scene, near, out onNav, horizontal: maxSnap * 2.5f, vertical: 64f ) )
 			return false;
+
+		// Same side of any wall: a thin piece can sit inside a 48 u box.
+		var from = near + Vector3.Up * 40f;
+		var to = onNav + Vector3.Up * 40f;
+		if ( Vector3.DistanceBetween( from, to ) > 4f )
+		{
+			var trace = scene.Trace.Ray( from, to )
+				.UsePhysicsWorld()
+				.IgnoreGameObjectHierarchy( agent.GameObject )
+				.Run();
+			if ( trace.Hit && trace.GameObject.IsValid() && trace.Normal.z < 0.55f )
+				return false;
+		}
+
 		agent.GameObject.WorldPosition = onNav;
 		agent.SetAgentPosition( onNav );
 		return true;

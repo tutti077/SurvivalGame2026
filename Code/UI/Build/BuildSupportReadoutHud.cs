@@ -50,6 +50,8 @@ public sealed class BuildSupportReadoutHud
 			return;
 
 		var text = $"Support {hammer.HoverSupportPercent}%  ({hammer.HoverSupportValue:0.#} / {hammer.HoverSupportMax:0})";
+		if ( hammer.HoverHealthMax > 0f )
+			text += $"   HP {hammer.HoverHealthValue:0} / {hammer.HoverHealthMax:0}";
 		if ( text == _lastText )
 			return;
 

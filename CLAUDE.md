@@ -160,10 +160,11 @@ Code/
   Crew/         CrewRegistry (host static registry — player data, survives scene loads) + PlayerCrew (per-pawn sync on the player prefab)
   Arena/        ArenaSession (crew-vs-crew battles, queue + matchmaking), ArenaMenuButton
   Vitals/       VitalsAuthority (host pools), regen gates
-  Entity/       EntityBrain · EntityLocomotion · EntityCombat · perception, nav
-  Building/     Build piece catalog, snap layout/placement/compatibility, nav sync
+  Entity/       EntityBrain (+ Breach partial: entities tear down build pieces) · EntityLocomotion · EntityCombat · perception, nav
+  Building/     Build piece catalog, snap layout/placement/compatibility, piece health, nav sync (+ BuildNavBakeSystem)
   Inventory/    PlayerInventory · PlayerHotbar · containers · resource + equipment catalogs
   Crafting/ Food/ Quests/ Skills/ Augments/   JSON-backed catalogs (Assets/data/*.json)
+  Hacks/        GameHacks — console-toggled dev flags (allCrafting), mirrored onto pawns via [Sync] for host checks
   World/Terrain/        Streaming, chunk mesh, biome population, world save IO
   World/TerrainPreview/ Offline world generation pipeline + settings
   UI/           PlayerScreenHud, HUDs, Menu/ sections

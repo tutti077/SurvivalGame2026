@@ -87,6 +87,21 @@ public static class BuildAuthority
 		if ( !placer.IsValid() || target is null || !target.IsValid() || target.IsPreviewGhost )
 			return false;
 
+		HostRemovePiece( target );
+		return true;
+	}
+
+	/// <summary>
+	/// Host: take a placed piece out of the world with every bit of bookkeeping a removal needs —
+	/// snap cache, nav rebake (which also tells entities the structure changed) and the structural
+	/// re-solve that collapses whatever the piece solely held up. Hammer demolish and entity
+	/// damage (<see cref="BuildPiece.HostApplyDamage"/>) both end here.
+	/// </summary>
+	public static void HostRemovePiece( BuildPiece target )
+	{
+		if ( target is null || !target.IsValid() || target.IsPreviewGhost )
+			return;
+
 		var scene = target.Scene;
 		var removedRoot = target.GameObject;
 		var bounds = target.GameObject.GetBounds();
@@ -101,7 +116,5 @@ public static class BuildAuthority
 		// Re-solve what the piece used to touch — collapses anything it solely held up. The root is
 		// passed so the deferred-destroyed piece can't keep supporting the structure this frame.
 		BuildStructuralIntegrity.HostOnRemoved( scene, bounds, removedRoot );
-
-		return true;
 	}
 }

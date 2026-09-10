@@ -160,6 +160,9 @@ static class BuildSnapPlacement
 
 			// Plates (floors / walls / doors) take the static corner path: a fixed anchor and a fixed
 			// list, so scroll only spins the piece. Ramps still run the fitted path below.
+			// (Floor-on-roof briefly took this path too — the plate mirror table knows nothing about
+			// pitched seams and hung the floor from the wrong corner entirely. Reverted; that pair
+			// gets its own stable Auto inside the roof path instead.)
 			if ( !IsRoof( placingData.Id ) && !IsRoof( targetPiece.PieceId ) )
 			{
 				if ( !edgeAim.IsValid )
@@ -181,6 +184,68 @@ static class BuildSnapPlacement
 					    rayOrigin ) )
 					hasEdgeSeams = true;
 
+				continue;
+			}
+
+			// A held FLOOR against a roof seam: one stable corner joint, spun by scroll — never the
+			// yaw-refitted mate below. The refit swallowed the 180° flip (the opposite lip lands the
+			// identical footprint on a square plate) and re-picked the anchored corner as yaw crossed
+			// the seam axis, so scrolling on a roof/wall peak skipped detents and silently moved the
+			// held snap. Anchor = the seam corner nearer the crosshair (same rule as the Q/E holds);
+			// the mating lip's CornerA leads the cycle and every other corner stays one Q/E away.
+			if ( IsFloor( placingData.Id ) )
+			{
+				if ( !edgeAim.IsValid )
+					continue;
+
+				if ( !TryPickMatingEdge( placingData.Id, placingEdgeIds, targetEdge.Id, out var floorMatingEdge ) )
+					continue;
+
+				var floorAttachRole = Vector3.DistanceBetween( aimLand, t1.Position )
+				                      < Vector3.DistanceBetween( aimLand, t0.Position )
+					? targetEdge.CornerB
+					: targetEdge.CornerA;
+				if ( FindSnapIndex( targetPiece.SnapPoints, floorAttachRole ) < 0 )
+					continue;
+
+				var floorAttachWorld = targetPiece.GetSnapWorldTransform( FindSnap( targetPiece, floorAttachRole ) );
+				if ( TryAlignToSnap(
+					     placingData.Id,
+					     new BuildSnapPoint( floorMatingEdge.CornerA, Vector3.Zero, Rotation.Identity ),
+					     floorAttachWorld,
+					     targetPiece,
+					     yawDegrees,
+					     out var floorAutoPlacement ) )
+				{
+					TryAddCandidate(
+						placingData.Id,
+						scene,
+						ignorePreview,
+						targetPiece,
+						placingSnaps,
+						floorMatingEdge.CornerA,
+						floorAttachRole,
+						floorAutoPlacement,
+						edgeAim,
+						isEdgeSnap: true,
+						targetEdge.Id,
+						cycleOrder: 0 );
+					hasEdgeSeams = true;
+				}
+
+				CollectHoldCornerVariants(
+					placingData,
+					placingSnaps,
+					scene,
+					ignorePreview,
+					targetPiece,
+					targetEdge,
+					t0.Position,
+					t1.Position,
+					edgeAim,
+					aimLand,
+					yawDegrees,
+					skipRole: floorMatingEdge.CornerA );
 				continue;
 			}
 
@@ -668,7 +733,8 @@ static class BuildSnapPlacement
 		Vector3 targetWorldB,
 		BuildSnapCrosshair.RayTargetScore edgeAim,
 		Vector3 aimLand,
-		float yawDegrees )
+		float yawDegrees,
+		BuildSnapRole skipRole = BuildSnapRole.Unknown )
 	{
 		var attachRole = Vector3.DistanceBetween( aimLand, targetWorldB )
 		                 < Vector3.DistanceBetween( aimLand, targetWorldA )
@@ -680,6 +746,10 @@ static class BuildSnapPlacement
 		{
 			var anchorSnap = placingSnaps[i];
 			if ( anchorSnap.Role == BuildSnapRole.Unknown )
+				continue;
+
+			// Already added as the cycle-0 Auto candidate — a duplicate would inflate the Q/E count.
+			if ( skipRole != BuildSnapRole.Unknown && anchorSnap.Role == skipRole )
 				continue;
 
 			if ( !TryAlignToSnap(

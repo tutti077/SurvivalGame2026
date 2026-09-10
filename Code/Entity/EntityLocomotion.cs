@@ -10,9 +10,19 @@ public sealed class EntityLocomotion : Component
 {
 	const float BodyTraceRadius = 14f;
 	const float BodyTraceHeight = 48f;
+	/// <summary>Clearance kept between the body sphere and a wall after a clip — the next trace must start outside the solid.</summary>
+	const float ClipSurfaceGap = 1f;
 	const float EntityStandingHeight = 72f;
 	const float FallDamageHeightMultiplier = 5f;
 	const float FeetTraceLift = 8f;
+	/// <summary>
+	/// Support probes start this far above the feet so the ray begins ABOVE the next stair riser.
+	/// The old feet+8 start was inside any step taller than 8 u (StartedSolid), which read as
+	/// "never climb that" — entities could not walk up build stairs at all.
+	/// </summary>
+	const float StepProbeLift = 48f;
+	/// <summary>Tallest single step the feet glue may climb in one probe (mirrors nav AgentStepSize 40).</summary>
+	const float MaxStepUpUnits = 44f;
 	const float SupportTraceDepth = 128f;
 	const float FallTraceDepth = 512f;
 	const float MaxStandGap = 32f;
@@ -61,7 +71,13 @@ public sealed class EntityLocomotion : Component
 	TerrainWorldManager _cachedTerrain;
 	float _smoothedGroundZ;
 	bool _hasSmoothedGroundZ;
+	/// <summary>Feet are on a build piece (stairs / roof / floor) — follow its height at full speed, not the terrain ease.</summary>
+	bool _supportOnBuildPiece;
+	/// <summary>Climb / drop rate while on build pieces: a 45° roof at run speed needs ~220 u/s vertical.</summary>
+	const float PieceGroundFollowSpeed = 600f;
 	Vector3 _airVelocity;
+	Vector3 _pendingAirCarry;
+	double _pendingAirCarryUntil;
 	Vector3 _frozenAimWorld;
 	GameObject _lookTarget;
 	bool _isFalling;
@@ -125,6 +141,17 @@ public sealed class EntityLocomotion : Component
 	}
 
 	public void ClearTravelHint() => _hasTravelHint = false;
+
+	/// <summary>
+	/// Seed the horizontal carry for the next fall. When the brain walks the root off an edge on
+	/// purpose (drop-in attacks) the agent is stopped, so <see cref="BeginFall"/> would read a dead
+	/// wish and drop the body straight down at the lip instead of out over the target.
+	/// </summary>
+	public void SetPendingAirCarry( Vector3 velocity )
+	{
+		_pendingAirCarry = velocity.WithZ( 0f );
+		_pendingAirCarryUntil = Time.NowDouble + 0.5;
+	}
 
 	/// <summary>Brain sets this when applying walk/run speed — forward-only gate restores to it when aligned.</summary>
 	public void SetIntendedMaxSpeed( float speed )
@@ -308,6 +335,15 @@ public sealed class EntityLocomotion : Component
 		if ( ForwardOnlyNavigation && Agent is not null && Agent.IsValid() && Agent.IsNavigating )
 			return;
 
+		// Between MoveTo re-issues the agent reports "not navigating" for a few frames. Facing the
+		// look target there swung the body ~70° off the path; when the path resumed the forward-only
+		// gate saw the misalignment and crept at ~17 % — the chase-only crawl. Keep the path heading.
+		if ( ForwardOnlyNavigation && Time.NowDouble - _lastWishAt < 0.6 && _lastWishDir.LengthSquared > 0.5f )
+		{
+			SmoothFaceBodyToward( _lastWishDir, TurnDegreesPerSecond );
+			return;
+		}
+
 		if ( (_brainOwnsFacing || _preferAimOverVelocity) && _hasFrozenAim )
 		{
 			var toAim = (_frozenAimWorld - GameObject.WorldPosition).WithZ( 0 );
@@ -466,6 +502,10 @@ public sealed class EntityLocomotion : Component
 		if ( IsPlayerHierarchy( tr.GameObject ) )
 			return false;
 
+		// A stair riser ahead is the way up, not a wall to slide along.
+		if ( BuildPieceNavPolicy.IsWalkablePathObject( tr.GameObject ) )
+			return false;
+
 		if ( tr.Normal.z > 0.45f )
 			return false;
 
@@ -545,6 +585,14 @@ public sealed class EntityLocomotion : Component
 		var deltaZ = targetZ - currentZ;
 		var t = 1f - MathF.Exp( -GroundFollowRate * followRateScale * dt );
 		var desiredStep = deltaZ * t;
+		// Terrain eases (ridge pops); build pieces are followed at once so stairs and roofs can be run
+		// up — the exponential ease alone lags ~50 u behind a 45° roof at run speed (body inside slab).
+		if ( _supportOnBuildPiece )
+		{
+			var pieceStep = PieceGroundFollowSpeed * dt;
+			return currentZ + Math.Clamp( deltaZ, -pieceStep, pieceStep );
+		}
+
 		var maxUp = MaxGroundClimbSpeed * dt;
 		var maxDown = MaxGroundDropSpeed * dt;
 		var step = Math.Clamp( desiredStep, -maxDown, maxUp );
@@ -587,21 +635,35 @@ public sealed class EntityLocomotion : Component
 		{
 			groundZ = heightfieldZ;
 			var trace = TraceGround(
-				horizontalPoint + Vector3.Up * FeetTraceLift,
+				horizontalPoint + Vector3.Up * StepProbeLift,
 				horizontalPoint - Vector3.Up * SupportTraceDepth );
-			// Props / build pieces sit above the heightfield — use physics when clearly higher.
-			if ( trace.Hit && trace.HitPosition.z > heightfieldZ + 8f )
+			// Props / build pieces sit above the heightfield — use physics when clearly higher, but only
+			// within step reach of the current feet (never yank up onto a slab we cannot step onto). A
+			// probe that starts inside a solid (feet pushed into a wall) reports its own start — never
+			// climb that.
+			_supportOnBuildPiece = false;
+			if ( trace.Hit && !trace.StartedSolid
+			     && trace.HitPosition.z > heightfieldZ + 8f
+			     && trace.HitPosition.z <= horizontalPoint.z + MaxStepUpUnits )
+			{
 				groundZ = trace.HitPosition.z;
+				_supportOnBuildPiece = trace.GameObject.IsValid() && BuildPlacementUtility.FindBuildPieceOnHierarchy( trace.GameObject ) is not null;
+			}
+
 			return true;
 		}
 
 		var physics = TraceGround(
-			horizontalPoint + Vector3.Up * FeetTraceLift,
+			horizontalPoint + Vector3.Up * StepProbeLift,
 			horizontalPoint - Vector3.Up * SupportTraceDepth );
-		if ( !physics.Hit )
+		if ( !physics.Hit || physics.StartedSolid )
+			return false;
+
+		if ( physics.HitPosition.z > horizontalPoint.z + MaxStepUpUnits )
 			return false;
 
 		groundZ = physics.HitPosition.z;
+		_supportOnBuildPiece = physics.GameObject.IsValid() && BuildPlacementUtility.FindBuildPieceOnHierarchy( physics.GameObject ) is not null;
 		return true;
 	}
 
@@ -642,6 +704,10 @@ public sealed class EntityLocomotion : Component
 			Agent.UpdatePosition = false;
 			Agent.SetAgentPosition( GameObject.WorldPosition );
 		}
+
+		// Scripted walk-off (drop-in): the agent is already stopped, carry comes from the brain.
+		if ( _airVelocity.Length < 8f && Time.NowDouble < _pendingAirCarryUntil )
+			_airVelocity = _pendingAirCarry;
 	}
 
 	void TickFall()
@@ -670,6 +736,7 @@ public sealed class EntityLocomotion : Component
 		_isFalling = false;
 		_fallSpeed = 0f;
 		_airVelocity = Vector3.Zero;
+		_pendingAirCarryUntil = 0d;
 
 		if ( !TryResolveFeetPosition( landedPosition, out var feet ) )
 			feet = landedPosition;
@@ -684,11 +751,12 @@ public sealed class EntityLocomotion : Component
 		if ( Agent is not null && Agent.IsValid() )
 		{
 			Agent.SetAgentPosition( feet );
-			if ( Scene.IsValid()
-			     && EntityNavMeshUtility.EnsureAgentOnNavMesh( Scene, Agent, feet ) )
-				Agent.UpdatePosition = true;
-			else
-				Agent.UpdatePosition = false;
+			// Drive again either way: the agent clamps itself to the nearest poly, and the brain
+			// re-paths on Landed. Leaving UpdatePosition off after a failed snap froze the body
+			// while paths kept being issued.
+			if ( Scene.IsValid() )
+				EntityNavMeshUtility.EnsureAgentOnNavMesh( Scene, Agent, feet );
+			Agent.UpdatePosition = true;
 		}
 
 		if ( AnimHelper is not null )
@@ -723,16 +791,27 @@ public sealed class EntityLocomotion : Component
 		if ( Agent is not null && Agent.IsValid() && Agent.IsNavigating )
 			feet = Agent.AgentPosition.WithZ( GameObject.WorldPosition.z );
 
-		// Heightfield first on streamed terrain — physics can miss for a tick and trigger fall/land stutter.
-		if ( TrySampleTerrainGroundZ( feet, out groundZ ) )
-			return GameObject.WorldPosition.z - groundZ <= MaxStandGap + 24f;
+		// Physics first: a build piece under the feet IS support, however high above the terrain
+		// heightfield it sits. The old heightfield-first verdict declared "no support" as soon as an
+		// entity climbed ~56 u up stairs on streamed terrain — BeginFall stopped the agent and dropped
+		// it back down every tick, which is why entities never made it up ramps or roofs.
+		var trace = TraceGround( feet + Vector3.Up * StepProbeLift, feet - Vector3.Up * traceDepth );
+		if ( trace.Hit && !trace.StartedSolid )
+		{
+			groundZ = trace.HitPosition.z;
+			if ( GameObject.WorldPosition.z - groundZ <= MaxStandGap )
+				return true;
+		}
 
-		var trace = TraceGround( feet + Vector3.Up * FeetTraceLift, feet - Vector3.Up * traceDepth );
-		if ( !trace.Hit )
-			return false;
+		// Heightfield fallback on streamed terrain — physics can miss for a tick (fall/land stutter).
+		if ( TrySampleTerrainGroundZ( feet, out var heightfieldZ ) )
+		{
+			groundZ = heightfieldZ;
+			return GameObject.WorldPosition.z - heightfieldZ <= MaxStandGap + 24f;
+		}
 
-		groundZ = trace.HitPosition.z;
-		return GameObject.WorldPosition.z - groundZ <= MaxStandGap;
+		// Embedded probe with no heightfield: never start a fall from inside geometry.
+		return trace.Hit && trace.StartedSolid;
 	}
 
 	bool TryFindLanding( Vector3 targetPosition, out Vector3 landedPosition )
@@ -819,12 +898,10 @@ public sealed class EntityLocomotion : Component
 			return;
 		}
 
-		if ( delta.z > 1f )
-		{
-			_clipFromPosition = current;
-			return;
-		}
-
+		// Horizontal motion only. The old "delta.z > 1 = climbing, skip" gate fired on every nav
+		// height nudge (quantized tile heights vs the smoothed feet), which disabled the clip
+		// almost permanently — that, plus the flush-start sweep, is how scavs walked through walls.
+		// Ramps and stairs are still allowed below via the hit normal.
 		var horizontalDelta = delta.WithZ( 0 );
 		if ( horizontalDelta.LengthSquared < 0.25f )
 		{
@@ -832,7 +909,7 @@ public sealed class EntityLocomotion : Component
 			return;
 		}
 
-		var from = _clipFromPosition + Vector3.Up * BodyTraceHeight;
+		var from = _clipFromPosition.WithZ( current.z ) + Vector3.Up * BodyTraceHeight;
 		var to = current + Vector3.Up * BodyTraceHeight;
 		var trace = Scene.Trace.Ray( from, to )
 			.Radius( BodyTraceRadius )
@@ -867,6 +944,37 @@ public sealed class EntityLocomotion : Component
 			return;
 		}
 
+		// Stairs / roofs are walked up, never clipped against: a stair riser is a vertical face and
+		// read as a wall here, which pinned scavs at the first step.
+		if ( BuildPieceNavPolicy.IsWalkablePathObject( trace.GameObject ) )
+		{
+			_clipFromPosition = current;
+			return;
+		}
+
+		// The body sphere already overlaps the solid (the nav agent dragged us in, or an earlier clip
+		// left us flush). A started-solid sweep carries no usable normal — that was the tunnel: the
+		// zero normal read as "nothing to slide on" and the entity walked straight through walls.
+		// A thin ray from the last good spot still finds the face; failing that, hold position.
+		var embedded = trace.StartedSolid;
+		if ( embedded )
+		{
+			var thin = Scene.Trace.Ray( from, to )
+				.UsePhysicsWorld()
+				.IgnoreGameObjectHierarchy( GameObject )
+				.Run();
+			if ( thin.Hit && !thin.StartedSolid && thin.Normal.LengthSquared > 1e-4f
+			     && thin.GameObject.IsValid() && !IsPlayerHierarchy( thin.GameObject ) )
+			{
+				trace = thin;
+			}
+			else
+			{
+				HoldAtClipOrigin( current, trace.GameObject );
+				return;
+			}
+		}
+
 		// Walkable slopes / floors — allow.
 		if ( trace.Normal.z > 0.45f )
 		{
@@ -877,7 +985,7 @@ public sealed class EntityLocomotion : Component
 		var wallNormal = trace.Normal.WithZ( 0 );
 		if ( wallNormal.LengthSquared < 1e-4f )
 		{
-			_clipFromPosition = current;
+			HoldAtClipOrigin( current, trace.GameObject );
 			return;
 		}
 
@@ -888,19 +996,27 @@ public sealed class EntityLocomotion : Component
 			return;
 		}
 
-		// Soft slide off the wall — keep horizontal motion tangential; don't Agent.Stop
-		// (Stop + flank repath was the “jerk away / back up 5m” feel).
-		var intoWall = Vector3.Dot( horizontalDelta, wallNormal );
-		// intoWall is negative when driving into the wall — peel that component off + small gap.
-		var slid = current - wallNormal * (intoWall - 1.5f);
-		slid.z = current.z;
-		GameObject.WorldPosition = slid;
+		// Stop where the sphere first touched, a hair off the face — never closer than the body
+		// radius, or the next sweep starts inside the wall. Keep horizontal motion tangential; don't
+		// Agent.Stop (Stop + flank repath was the "jerk away / back up 5m" feel).
+		var stop = embedded ? _clipFromPosition.WithZ( current.z ) : trace.EndPosition - Vector3.Up * BodyTraceHeight;
+		var slid = (stop + wallNormal * ClipSurfaceGap).WithZ( current.z );
+		ApplyClippedPosition( slid, trace.GameObject );
+	}
+
+	/// <summary>Embedded with no face to slide on — stay at the last good spot rather than tunnel.</summary>
+	void HoldAtClipOrigin( Vector3 current, GameObject hit ) =>
+		ApplyClippedPosition( _clipFromPosition.WithZ( current.z ), hit );
+
+	void ApplyClippedPosition( Vector3 position, GameObject hit )
+	{
+		GameObject.WorldPosition = position;
 		Agent ??= Components.Get<NavMeshAgent>();
 		if ( Agent is not null && Agent.IsValid() )
-			Agent.SetAgentPosition( slid );
+			Agent.SetAgentPosition( position );
 
-		_clipFromPosition = slid;
-		_lastPosition = slid;
+		_clipFromPosition = position;
+		_lastPosition = position;
 
 		// Hit a wall while pathing — brief creep, not a permanent MaxSpeed=0 latch.
 		if ( Agent is not null && Agent.IsValid() && Agent.IsNavigating && ForwardOnlyNavigation )
@@ -911,7 +1027,7 @@ public sealed class EntityLocomotion : Component
 
 		_nextClipNotifyAt = Time.NowDouble + 0.4;
 		var brain = Components.Get<EntityBrain>();
-		brain?.NotifyChasePhysicsBlocked( trace.GameObject );
+		brain?.NotifyChasePhysicsBlocked( hit );
 	}
 
 	static bool IsTerrainChunkHierarchy( GameObject hit )

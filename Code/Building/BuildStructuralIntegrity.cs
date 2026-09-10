@@ -126,6 +126,25 @@ public static class BuildStructuralIntegrity
 		return true;
 	}
 
+	/// <summary>
+	/// Host: every structural piece physically connected to <paramref name="seed"/> (touching-neighbour
+	/// closure, the same graph the support solve walks). Event-driven — the breach selector asks
+	/// once per pick, never per frame. Empty when the seed has no material.
+	/// </summary>
+	public static HashSet<BuildPiece> GetConnectedPieces( BuildPiece seed )
+	{
+		var result = new HashSet<BuildPiece>();
+		if ( seed is null || !seed.IsValid() || seed.IsPreviewGhost )
+			return result;
+
+		var scene = seed.Scene;
+		if ( !scene.IsValid() || BuildPieceCatalog.GetMaterialForPiece( seed.PieceId ) is null )
+			return result;
+
+		BuildSpatialHash( scene );
+		return CollectComponent( new List<BuildPiece> { seed } );
+	}
+
 	// ── Display helpers (client-safe: read the synced Support) ─────────────────────────────
 
 	/// <summary>Support fraction (0 at collapse threshold, 1 at material max) and gradient color for a placed piece.</summary>
@@ -187,7 +206,7 @@ public static class BuildStructuralIntegrity
 			if ( BuildPieceCatalog.GetMaterialForPiece( piece.PieceId ) is null )
 				continue;
 
-			var bounds = ComputeWorldBounds( piece );
+			var bounds = BuildPieceGeometry.WorldBounds( piece );
 			BoundsCache[piece] = bounds;
 			InsertIntoCells( piece, bounds );
 		}
@@ -272,34 +291,6 @@ public static class BuildStructuralIntegrity
 			if ( Touches( piece, candidate ) )
 				result.Add( candidate );
 		}
-	}
-
-	/// <summary>
-	/// World AABB of the piece's true solid: table-frame halves swung through the snap frame
-	/// (<see cref="BuildColliderSnap.GetSnapWorldRotation"/>), which composes the kit-mesh quarter
-	/// turn AND the baked prefab pitch. Roofs and 45° beams carry their pitch in the mesh — their
-	/// root is yaw-only, so a root-rotation box lies flat across empty air and misses everything
-	/// the piece actually rests on. Built analytically (not GetBounds) so a piece spawned this
-	/// frame has correct bounds before its renderers settle.
-	/// </summary>
-	static BBox ComputeWorldBounds( BuildPiece piece )
-	{
-		var rotation = BuildColliderSnap.GetSnapWorldRotation( piece.GameObject, piece.PieceId );
-		var half = BuildColliderSnap.GetColliderHalfForPiece( piece.PieceId );
-		var position = piece.GameObject.WorldPosition;
-
-		var mins = new Vector3( float.MaxValue );
-		var maxs = new Vector3( float.MinValue );
-		for ( var xi = -1; xi <= 1; xi += 2 )
-		for ( var yi = -1; yi <= 1; yi += 2 )
-		for ( var zi = -1; zi <= 1; zi += 2 )
-		{
-			var corner = position + rotation * new Vector3( xi * half.x, yi * half.y, zi * half.z );
-			mins = Vector3.Min( mins, corner );
-			maxs = Vector3.Max( maxs, corner );
-		}
-
-		return new BBox( mins, maxs );
 	}
 
 	/// <summary>

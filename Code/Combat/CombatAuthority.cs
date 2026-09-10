@@ -431,6 +431,10 @@ public sealed class CombatAuthority : Component
 		if ( tree is not null )
 			return !tree.IsBroken;
 
+		var piece = ResolveBuildPieceForDamageReceiver( dmg );
+		if ( piece is not null )
+			return !piece.IsBroken;
+
 		return true;
 	}
 
@@ -442,7 +446,22 @@ public sealed class CombatAuthority : Component
 		     && victimVitals.GameObject.Network is not { Active: true } )
 			return false;
 
+		// Structures are only damaged by entities (breaching). A player's sword on a wall is not a
+		// hit at all — it must not consume the swing or tick durability; players use the hammer.
+		if ( ResolveBuildPieceForDamageReceiver( dmg ) is not null
+		     && attackerRoot.Components.Get<EntityBrain>() is null )
+			return false;
+
 		return true;
+	}
+
+	public static BuildPiece ResolveBuildPieceForDamageReceiver( DamageReceiver dmg )
+	{
+		if ( dmg is null || !dmg.GameObject.IsValid() )
+			return null;
+
+		var piece = BuildPlacementUtility.FindBuildPieceOnHierarchy( dmg.GameObject );
+		return piece is not null && piece.Enabled && !piece.IsPreviewGhost ? piece : null;
 	}
 
 	public static Guid ResolveMeleeVictimDedupId( DamageReceiver dmg )

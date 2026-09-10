@@ -8,7 +8,19 @@ namespace Survival;
 [Title( "Player Crafting" )]
 public sealed class PlayerCrafting : Component
 {
+	/// <summary>
+	/// Pseudo-station id for the player's personal (inventory) crafting menu. A recipe lists it in
+	/// <c>stations</c> to be hand-craftable; everything else defaults to the workbench.
+	/// </summary>
+	public const string InventoryStationId = "inventory";
+
 	[Property, Group( "Debug" )] public bool LogCrafting { get; set; }
+
+	/// <summary>
+	/// Owner's <see cref="GameHacks.AllCrafting"/> mirrored onto the pawn so the host honours it:
+	/// every recipe is craftable anywhere and costs nothing.
+	/// </summary>
+	[Sync] public bool AllCraftingHack { get; private set; }
 
 	PlayerInventory _inventory;
 	bool _requestedHostCatalogs;
@@ -28,6 +40,18 @@ public sealed class PlayerCrafting : Component
 		// Owner may not be ready on the first OnStart frame after NetworkSpawn.
 		if ( !_requestedHostCatalogs )
 			TryRequestHostCatalogs();
+
+		PushHackFlags();
+	}
+
+	/// <summary>Owner mirrors console hack flags onto the synced pawn state (cheap compare, writes only on change).</summary>
+	void PushHackFlags()
+	{
+		if ( GameObject.Network is { Active: true } net && !net.IsOwner )
+			return;
+
+		if ( AllCraftingHack != GameHacks.AllCrafting )
+			AllCraftingHack = GameHacks.AllCrafting;
 	}
 
 	void TryRequestHostCatalogs()
@@ -124,14 +148,17 @@ public sealed class PlayerCrafting : Component
 			return false;
 		}
 
-		if ( !recipe.IsUnlockedByDefault )
+		// allCrafting hack: the owner's flag (synced onto the pawn) waives unlock, station and cost.
+		var free = AllCraftingHack;
+
+		if ( !free && !recipe.IsUnlockedByDefault )
 		{
 			if ( LogCrafting )
 				Log.Warning( $"[PlayerCrafting] Recipe '{recipeId}' is locked." );
 			return false;
 		}
 
-		if ( recipe.RequiresStation
+		if ( !free && recipe.RequiresStation
 		     && !Campfire.IsPlayerNearLitOrFueledStation( GameObject, recipe.RequiredStation ) )
 		{
 			if ( LogCrafting )
@@ -142,7 +169,7 @@ public sealed class PlayerCrafting : Component
 		var scaledIngredients = BuildIngredients( recipe );
 		var outputTotal = recipe.TotalOutputAmount;
 
-		if ( !_inventory.HasResources( scaledIngredients ) )
+		if ( !free && !_inventory.HasResources( scaledIngredients ) )
 		{
 			if ( LogCrafting )
 				Log.Info( $"[PlayerCrafting] {GameObject.Name}: missing materials for '{recipeId}'." );
@@ -156,7 +183,7 @@ public sealed class PlayerCrafting : Component
 			return false;
 		}
 
-		if ( !_inventory.HostTryConsumeResources( scaledIngredients ) )
+		if ( !free && !_inventory.HostTryConsumeResources( scaledIngredients ) )
 			return false;
 
 		// Equipment remembers its maker (shown in the item tooltip); bulk resources stay untagged.
@@ -170,7 +197,7 @@ public sealed class PlayerCrafting : Component
 		}
 
 		if ( LogCrafting )
-			Log.Info( $"[PlayerCrafting] {GameObject.Name}: crafted {outputTotal} {recipe.Id}." );
+			Log.Info( $"[PlayerCrafting] {GameObject.Name}: crafted {outputTotal} {recipe.Id}{(free ? " (allCrafting hack, free)" : string.Empty)}." );
 
 		Components.Get<PlayerQuests>()?.HostReport( QuestEventIds.ItemCrafted, recipe.Id, outputTotal );
 
