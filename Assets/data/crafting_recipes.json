@@ -70,6 +70,23 @@
                   { "label": "Speed", "value": "1.0" }
                 ]
               },
+              {
+                "id": "tool_hoe",
+                "displayName": "Hoe",
+                "icon": "ui/items/tool_hoe.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "inventory", "workbench" ],
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 5 },
+                  { "resourceId": "resource_stone", "amount": 3 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Tills dirt into farm soil for sowing seeds" },
+                  { "label": "Type", "value": "Farming Tool" }
+                ]
+              },
 
               {
                 "id": "light_torch",

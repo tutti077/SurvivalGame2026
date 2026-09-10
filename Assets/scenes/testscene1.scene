@@ -632,7 +632,7 @@
       "Position": "-2310.35449,0,0",
       "Rotation": "0,0,0,1",
       "Scale": "400,400,100",
-      "Tags": "",
+      "Tags": "dirt",
       "Enabled": true,
       "NetworkMode": 1,
       "NetworkFlags": 0,
@@ -1276,18 +1276,35 @@
             "ContainerProperty": "Components",
             "IsContainerArray": true,
             "Data": {
-              "__type": "Survival.StarterKitChestFill",
+              "__type": "Survival.ChestKitFill",
               "__guid": "c8e4f012-3456-7890-abcd-ef1234567806",
               "__enabled": true,
               "Flags": 0,
+              "Items": [
+                  { "ResourceId": "basic_hook", "Count": 1 },
+                  { "ResourceId": "basic_wingsuit", "Count": 1 },
+                  { "ResourceId": "build_hammer", "Count": 1 },
+                  { "ResourceId": "club_wood", "Count": 1 },
+                  { "ResourceId": "basic_hook", "Count": 1 },
+                  { "ResourceId": "basic_wingsuit", "Count": 1 },
+                  { "ResourceId": "build_hammer", "Count": 1 },
+                  { "ResourceId": "club_wood", "Count": 1 },
+                  { "ResourceId": "basic_hook", "Count": 1 },
+                  { "ResourceId": "basic_wingsuit", "Count": 1 },
+                  { "ResourceId": "build_hammer", "Count": 1 },
+                  { "ResourceId": "club_wood", "Count": 1 },
+                  { "ResourceId": "basic_hook", "Count": 1 },
+                  { "ResourceId": "basic_wingsuit", "Count": 1 },
+                  { "ResourceId": "build_hammer", "Count": 1 },
+                  { "ResourceId": "club_wood", "Count": 1 }
+              ],
               "KitDisplayName": "Starter Kit",
               "OnComponentDestroy": null,
               "OnComponentDisabled": null,
               "OnComponentEnabled": null,
               "OnComponentFixedUpdate": null,
               "OnComponentStart": null,
-              "OnComponentUpdate": null,
-              "SetsOfEach": 4
+              "OnComponentUpdate": null
             }
           }
         ],
@@ -1327,6 +1344,336 @@
         "b1010004-1111-4111-8111-111111111143": "c8e4f012-3456-7890-abcd-ef1234567804",
         "b1010004-1111-4111-8111-111111111144": "c8e4f012-3456-7890-abcd-ef1234567805",
         "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1eea3"
+      }
+    },
+    {
+      "__guid": "c8e4fa01-3456-7890-abcd-ef1234567801",
+      "__version": 2,
+      "__Prefab": "prefabs/build/chest.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "c8e4fa01-3456-7890-abcd-ef1234567806"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111144"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.ChestKitFill",
+              "__guid": "c8e4fa01-3456-7890-abcd-ef1234567806",
+              "__enabled": true,
+              "Flags": 0,
+              "Items": [
+                  { "ResourceId": "tool_hoe", "Count": 1 },
+                  { "ResourceId": "seed_radish", "Count": 10 },
+                  { "ResourceId": "seed_daisy", "Count": 10 },
+                  { "ResourceId": "seed_blueberry", "Count": 10 },
+                  { "ResourceId": "seed_raspberry", "Count": 10 }
+              ],
+              "KitDisplayName": "Farming Kit",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "Property": "Name",
+            "Value": "FarmingChest"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "Property": "Position",
+            "Value": "160,80,8"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111144"
+            },
+            "Property": "DisplayName",
+            "Value": "Farming Kit"
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "b1010004-1111-4111-8111-111111111104": "c8e4fa01-3456-7890-abcd-ef1234567801",
+        "b1010004-1111-4111-8111-111111111141": "c8e4fa01-3456-7890-abcd-ef1234567802",
+        "b1010004-1111-4111-8111-111111111142": "c8e4fa01-3456-7890-abcd-ef1234567803",
+        "b1010004-1111-4111-8111-111111111143": "c8e4fa01-3456-7890-abcd-ef1234567804",
+        "b1010004-1111-4111-8111-111111111144": "c8e4fa01-3456-7890-abcd-ef1234567805",
+        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa01"
+      }
+    },
+    {
+      "__guid": "c8e4fa02-3456-7890-abcd-ef1234567801",
+      "__version": 2,
+      "__Prefab": "prefabs/build/chest.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "c8e4fa02-3456-7890-abcd-ef1234567806"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111144"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.ChestKitFill",
+              "__guid": "c8e4fa02-3456-7890-abcd-ef1234567806",
+              "__enabled": true,
+              "Flags": 0,
+              "Items": [
+                  { "ResourceId": "basic_bow", "Count": 1 },
+                  { "ResourceId": "arrow_wood", "Count": 50 },
+                  { "ResourceId": "arrow_wood", "Count": 50 }
+              ],
+              "KitDisplayName": "Archery",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "Property": "Name",
+            "Value": "ArcheryChest"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "Property": "Position",
+            "Value": "160,-80,8"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111144"
+            },
+            "Property": "DisplayName",
+            "Value": "Archery"
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "b1010004-1111-4111-8111-111111111104": "c8e4fa02-3456-7890-abcd-ef1234567801",
+        "b1010004-1111-4111-8111-111111111141": "c8e4fa02-3456-7890-abcd-ef1234567802",
+        "b1010004-1111-4111-8111-111111111142": "c8e4fa02-3456-7890-abcd-ef1234567803",
+        "b1010004-1111-4111-8111-111111111143": "c8e4fa02-3456-7890-abcd-ef1234567804",
+        "b1010004-1111-4111-8111-111111111144": "c8e4fa02-3456-7890-abcd-ef1234567805",
+        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa02"
+      }
+    },
+    {
+      "__guid": "c8e4fa03-3456-7890-abcd-ef1234567801",
+      "__version": 2,
+      "__Prefab": "prefabs/build/chest.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "c8e4fa03-3456-7890-abcd-ef1234567806"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111144"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.ChestKitFill",
+              "__guid": "c8e4fa03-3456-7890-abcd-ef1234567806",
+              "__enabled": true,
+              "Flags": 0,
+              "Items": [
+                  { "ResourceId": "fish_bluegill", "Count": 5 },
+                  { "ResourceId": "fish_sunfish", "Count": 5 },
+                  { "ResourceId": "fish_perch", "Count": 5 },
+                  { "ResourceId": "fish_bass", "Count": 5 },
+                  { "ResourceId": "fish_pickerel", "Count": 5 },
+                  { "ResourceId": "fish_trout", "Count": 5 },
+                  { "ResourceId": "fish_catfish", "Count": 5 },
+                  { "ResourceId": "fish_walleye", "Count": 5 },
+                  { "ResourceId": "fish_pike", "Count": 5 },
+                  { "ResourceId": "fish_eel", "Count": 5 }
+              ],
+              "KitDisplayName": "Fish",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "Property": "Name",
+            "Value": "FishChest"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "Property": "Position",
+            "Value": "160,160,8"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111144"
+            },
+            "Property": "DisplayName",
+            "Value": "Fish"
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "b1010004-1111-4111-8111-111111111104": "c8e4fa03-3456-7890-abcd-ef1234567801",
+        "b1010004-1111-4111-8111-111111111141": "c8e4fa03-3456-7890-abcd-ef1234567802",
+        "b1010004-1111-4111-8111-111111111142": "c8e4fa03-3456-7890-abcd-ef1234567803",
+        "b1010004-1111-4111-8111-111111111143": "c8e4fa03-3456-7890-abcd-ef1234567804",
+        "b1010004-1111-4111-8111-111111111144": "c8e4fa03-3456-7890-abcd-ef1234567805",
+        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa03"
+      }
+    },
+    {
+      "__guid": "c8e4fa04-3456-7890-abcd-ef1234567801",
+      "__version": 2,
+      "__Prefab": "prefabs/build/chest.prefab",
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "c8e4fa04-3456-7890-abcd-ef1234567806"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111144"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.ChestKitFill",
+              "__guid": "c8e4fa04-3456-7890-abcd-ef1234567806",
+              "__enabled": true,
+              "Flags": 0,
+              "Items": [
+                  { "ResourceId": "rawmeat_bird", "Count": 10 },
+                  { "ResourceId": "rawmeat_fox", "Count": 10 },
+                  { "ResourceId": "rawmeat_whitetail", "Count": 10 },
+                  { "ResourceId": "rawmeat_lynx", "Count": 10 },
+                  { "ResourceId": "food_roasted_bird", "Count": 5 },
+                  { "ResourceId": "food_roasted_fox", "Count": 5 },
+                  { "ResourceId": "food_roasted_whitetail", "Count": 5 },
+                  { "ResourceId": "food_roasted_lynx", "Count": 5 }
+              ],
+              "KitDisplayName": "Meats",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "Property": "Name",
+            "Value": "MeatChest"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "Property": "Position",
+            "Value": "160,-160,8"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111144"
+            },
+            "Property": "DisplayName",
+            "Value": "Meats"
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "b1010004-1111-4111-8111-111111111104": "c8e4fa04-3456-7890-abcd-ef1234567801",
+        "b1010004-1111-4111-8111-111111111141": "c8e4fa04-3456-7890-abcd-ef1234567802",
+        "b1010004-1111-4111-8111-111111111142": "c8e4fa04-3456-7890-abcd-ef1234567803",
+        "b1010004-1111-4111-8111-111111111143": "c8e4fa04-3456-7890-abcd-ef1234567804",
+        "b1010004-1111-4111-8111-111111111144": "c8e4fa04-3456-7890-abcd-ef1234567805",
+        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa04"
       }
     },
     {

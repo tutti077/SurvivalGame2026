@@ -192,6 +192,21 @@ public static class ResourceDefinitionCatalog
 	public static bool IsFish( string resourceId ) =>
 		TryGet( resourceId, out var data ) && data.Fish;
 
+	/// <summary>True when this row carries a <c>"seed"</c> block (sowable on tilled soil).</summary>
+	public static bool IsSeed( string resourceId ) =>
+		TryGet( resourceId, out var data ) && data.Seed is not null;
+
+	/// <summary>Plant data for a seed row; false for anything that is not a seed.</summary>
+	public static bool TryGetSeed( string resourceId, out FarmPlantData seed )
+	{
+		seed = null;
+		if ( !TryGet( resourceId, out var data ) || data.Seed is null )
+			return false;
+
+		seed = data.Seed;
+		return true;
+	}
+
 	/// <summary>
 	/// Weighted pick across every <c>"fish": true</c> row. Called once per landed catch, so the
 	/// linear scan is cheaper than keeping a parallel list in sync with catalog reloads.

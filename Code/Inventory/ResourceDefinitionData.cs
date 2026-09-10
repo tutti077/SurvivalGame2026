@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace Survival;
 
@@ -30,4 +30,8 @@ public sealed class ResourceDefinitionData
 	/// <summary>How this species swims in the fishing minigame. Null = playable defaults.</summary>
 	[JsonPropertyName( "fishMotion" )]
 	public FishMotionData FishMotion { get; set; }
+
+	/// <summary>Present on seed rows: sowable on tilled soil, grows the described plant (<see cref="PlayerFarming"/>).</summary>
+	[JsonPropertyName( "seed" )]
+	public FarmPlantData Seed { get; set; }
 }

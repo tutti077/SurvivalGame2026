@@ -77,8 +77,8 @@ public sealed class PlayerHandHarvest : Component
 			return;
 		}
 
-		// Build Q/E snap cycle owns E while the hammer preview is up.
-		if ( IsBuildHammerPreviewing() )
+		// Build Q/E snap cycle owns E while the hammer preview is up; farming owns it over a sow spot / ready plant.
+		if ( IsBuildHammerPreviewing() || FarmingOwnsUseKey() )
 		{
 			SetFocusedNode( null );
 			return;
@@ -104,6 +104,12 @@ public sealed class PlayerHandHarvest : Component
 	{
 		var hammer = Components.Get<PlayerEquipment>()?.GetActiveTool<ToolBuildHammer>();
 		return hammer is not null && hammer.IsPreviewingPlacePiece;
+	}
+
+	bool FarmingOwnsUseKey()
+	{
+		var farming = Components.Get<PlayerFarming>();
+		return farming is not null && farming.OwnsUseKey;
 	}
 
 	void TickWorldDropMagnet()

@@ -25,6 +25,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	PlayerVitals _vitals;
 	PlayerFood _food;
 	PlayerHandHarvest _handHarvest;
+	PlayerFarming _farming;
 	PlayerEquipment _equipment;
 	PlayerGameMenuController _menuController;
 	PlayerInventory _inventory;
@@ -209,6 +210,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		}
 		if ( _handHarvest is not null )
 			_handHarvest.FocusedNodeChanged -= OnInteractionPromptChanged;
+		if ( _farming is not null )
+			_farming.PromptChanged -= OnInteractionPromptChanged;
 		ArenaSession.LocalArenaTextChanged -= OnTimeTrialBanner;
 		TimeTrialSession.LocalCountdownTextChanged -= OnTimeTrialCountdown;
 		TimeTrialSession.LocalRaceElapsedChanged -= OnTimeTrialElapsed;
@@ -512,6 +515,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	void BuildHarvestPrompt( Panel root )
 	{
 		_handHarvest = FindOnAncestors<PlayerHandHarvest>();
+		_farming = FindOnAncestors<PlayerFarming>();
 		_equipment ??= FindOnAncestors<PlayerEquipment>();
 
 		if ( _handHarvest is null )
@@ -554,6 +558,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_promptLabel.Style.FontSize = Length.Pixels( 18f );
 
 		_handHarvest?.FocusedNodeChanged += OnInteractionPromptChanged;
+		_farming?.PromptChanged += OnInteractionPromptChanged;
 		if ( _inventoryInteraction is not null )
 		{
 			_inventoryInteraction.FocusedContainerChanged += OnInteractionPromptChanged;
@@ -1117,11 +1122,13 @@ public sealed class PlayerScreenHud : PanelComponent
 		var showArena = !arenaMenuOpen && !showOpen && !showTrial
 		                && focusedArenaButton is not null && focusedArenaButton.IsValid();
 		var showCampfire = !showOpen && !showTrial && !showArena && focusedCampfire is not null && focusedCampfire.IsValid();
-		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && _handHarvest?.FocusedNode is not null;
-		var show = showOpen || showTrial || showArena || showCampfire || showHarvest;
+		var farmingPrompt = _farming?.PromptText ?? string.Empty;
+		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && farmingPrompt.Length > 0;
+		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showFarming && _handHarvest?.FocusedNode is not null;
+		var show = showOpen || showTrial || showArena || showCampfire || showFarming || showHarvest;
 
 		if ( _promptKeyLabel is not null )
-			_promptKeyLabel.Text = "E";
+			_promptKeyLabel.Text = showFarming ? (_farming?.PromptKey ?? "E") : "E";
 
 		if ( _promptLabel is not null )
 		{
@@ -1156,6 +1163,10 @@ public sealed class PlayerScreenHud : PanelComponent
 				var fuel = focusedCampfire.FuelUnits;
 				var max = Math.Max( 1, focusedCampfire.MaxFuelUnits );
 				_promptLabel.Text = $"Add Wood ({fuel}/{max})";
+			}
+			else if ( showFarming )
+			{
+				_promptLabel.Text = farmingPrompt;
 			}
 			else
 			{

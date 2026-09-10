@@ -694,6 +694,23 @@
         "OnComponentUpdate": null
       },
       {
+        "__type": "Survival.PlayerFarming",
+        "__guid": "7c9e4f21-8a3b-4d56-b1e0-2f6a9c8d3e14",
+        "__enabled": true,
+        "Flags": 0,
+        "FocusScanIntervalSeconds": 0.1,
+        "LogFarming": false,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "SowAction": "Use",
+        "SowClickAction": "Attack1",
+        "SowReachMeters": 4
+      },
+      {
         "__type": "Survival.PlayerFishing",
         "__guid": "3b7f2a91-6c44-4e0d-9a12-58f0cbd7e2a1",
         "__enabled": true,

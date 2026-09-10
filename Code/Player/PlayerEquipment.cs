@@ -567,6 +567,8 @@ public sealed partial class PlayerEquipment : Component
 		{
 			if ( bindable is ToolBuildHammer hammer )
 				hammer.BindPawn( GameObject );
+			else if ( bindable is ToolHoe hoe )
+				hoe.BindPawn( GameObject );
 		}
 	}
 

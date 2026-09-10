@@ -165,6 +165,8 @@ Code/
                 ShelterProbe (global roof-above / walled-in checks; comfort + workbench gate)
   Inventory/    PlayerInventory · PlayerHotbar · containers · resource + equipment catalogs
   Crafting/ Food/ Quests/ Skills/ Augments/   JSON-backed catalogs (Assets/data/*.json)
+  Farming/      FarmingRules (dirt tag, tile size, spacing) · TilledSoil · FarmPlant (host-timed growth stages) · FarmingAuthority (host till / sow)
+                · seed rows live in resources.json ("seed" block); ToolHoe + PlayerFarming live in Player/
   Hacks/        GameHacks — console-toggled dev flags (allCrafting), mirrored onto pawns via [Sync] for host checks
   World/Terrain/        Streaming, chunk mesh, biome population, world save IO
   World/TerrainPreview/ Offline world generation pipeline + settings

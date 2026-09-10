@@ -16,4 +16,6 @@ public enum EquippedItemActions
 	PrimaryRanged = 1 << 5,
 	/// <summary>Fishing rod cast / minigame (<see cref="PlayerFishing"/>). No melee or ranged paths.</summary>
 	Fish = 1 << 6,
+	/// <summary>Hoe: till dirt into farm soil (<see cref="ToolHoe"/>). No melee or ranged paths.</summary>
+	Till = 1 << 7,
 }
