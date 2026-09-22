@@ -155,6 +155,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_statusEffectsHud?.Tick( _menuController is { IsMenuOpen: true } );
 		if ( _inventoryInteraction?.FocusedCampfire is not null
 		     || _inventoryInteraction?.FocusedDoor is not null
+		     || _inventoryInteraction?.FocusedTrap is not null
 		     || _inventoryInteraction?.FocusedTimeTrialStand is not null
 		     || _inventoryInteraction?.FocusedArenaMenuButton is not null )
 			OnInteractionPromptChanged();
@@ -567,6 +568,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedAugmentStationChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedDoorChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedTrapChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.FocusedArenaButtonChanged += OnInteractionPromptChanged;
@@ -982,6 +984,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedAugmentStationChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedDoorChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedTrapChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.FocusedArenaButtonChanged += OnInteractionPromptChanged;
@@ -1128,10 +1131,12 @@ public sealed class PlayerScreenHud : PanelComponent
 		var showCampfire = !showOpen && !showTrial && !showArena && focusedCampfire is not null && focusedCampfire.IsValid();
 		var focusedDoor = _inventoryInteraction?.FocusedDoor;
 		var showDoor = !showOpen && !showTrial && !showArena && !showCampfire && focusedDoor is not null && focusedDoor.IsValid();
+		var focusedTrap = _inventoryInteraction?.FocusedTrap;
+		var showTrap = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && focusedTrap is not null && focusedTrap.IsValid();
 		var farmingPrompt = _farming?.PromptText ?? string.Empty;
-		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && farmingPrompt.Length > 0;
-		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showFarming && _handHarvest?.FocusedNode is not null;
-		var show = showOpen || showTrial || showArena || showCampfire || showDoor || showFarming || showHarvest;
+		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && farmingPrompt.Length > 0;
+		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showFarming && _handHarvest?.FocusedNode is not null;
+		var show = showOpen || showTrial || showArena || showCampfire || showDoor || showTrap || showFarming || showHarvest;
 
 		if ( _promptKeyLabel is not null )
 			_promptKeyLabel.Text = showFarming ? (_farming?.PromptKey ?? "E") : "E";
@@ -1173,6 +1178,10 @@ public sealed class PlayerScreenHud : PanelComponent
 			else if ( showDoor )
 			{
 				_promptLabel.Text = focusedDoor.IsOpen ? "Close Door" : "Open Door";
+			}
+			else if ( showTrap )
+			{
+				_promptLabel.Text = focusedTrap.PromptText;
 			}
 			else if ( showFarming )
 			{

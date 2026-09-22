@@ -19,6 +19,14 @@
       "fallbackColor": "0.3,0.8,0.35,1",
       "isBuff": false,
       "healthPerSecond": -5
+    },
+    {
+      "id": "trapped",
+      "displayName": "Trapped",
+      "description": "Caught in a foot trap. Wait it out, or have someone open it.",
+      "icon": "ui/status/trapped.png",
+      "fallbackColor": "0.6,0.6,0.65,1",
+      "isBuff": false
     }
   ]
 }

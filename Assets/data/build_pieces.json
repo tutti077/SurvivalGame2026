@@ -347,6 +347,46 @@
       "halfHeight": 8.75,
       "halfDepth": 8.75,
       "costs": []
+    },
+    {
+      "id": "trap_small",
+      "displayName": "Foot Trap",
+      "icon": "",
+      "prefab": "prefabs/build/trap_small.prefab",
+      "fallbackColor": "0.35,0.36,0.4,1",
+      "halfWidth": 15,
+      "halfHeight": 15,
+      "halfDepth": 1.5,
+      "costs": [
+        {
+          "resourceId": "resource_scrap",
+          "amount": 4
+        },
+        {
+          "resourceId": "resource_woodBasic",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "trap_large",
+      "displayName": "Bear Trap",
+      "icon": "",
+      "prefab": "prefabs/build/trap_large.prefab",
+      "fallbackColor": "0.3,0.31,0.35,1",
+      "halfWidth": 30,
+      "halfHeight": 30,
+      "halfDepth": 2,
+      "costs": [
+        {
+          "resourceId": "resource_scrap",
+          "amount": 10
+        },
+        {
+          "resourceId": "resource_woodBasic",
+          "amount": 4
+        }
+      ]
     }
   ]
 }

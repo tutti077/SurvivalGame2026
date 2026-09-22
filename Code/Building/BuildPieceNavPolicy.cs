@@ -22,8 +22,10 @@ public static class BuildPieceNavPolicy
 		if ( string.IsNullOrWhiteSpace( pieceId ) )
 			return BuildNavCategory.Blocking;
 
+		// Traps are plates entities must be able to walk onto — never a hole in the mesh.
 		if ( BuildPieceFamily.IsStairs( pieceId )
 		     || BuildPieceFamily.IsRoof( pieceId )
+		     || pieceId.StartsWith( "trap_", StringComparison.OrdinalIgnoreCase )
 		     || pieceId.Contains( "bridge", StringComparison.OrdinalIgnoreCase )
 		     || pieceId.Contains( "gate", StringComparison.OrdinalIgnoreCase ) )
 			return BuildNavCategory.WalkablePath;

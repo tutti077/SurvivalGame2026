@@ -151,6 +151,62 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		ApplyEventFreezeLocal( frozen );
 	}
 
+	/// <summary>Host-synced: a <see cref="BearTrap"/> has this pawn — no move / jump / roll / grapple. Look and swing still work.</summary>
+	[Sync( SyncFlags.FromHost )]
+	public bool TrapLocked { get; private set; }
+
+	/// <summary>Owner-side: where the trap holds the feet (XY); Z stays the pawn's own so the controller keeps its ground.</summary>
+	Vector3 _trapAnchorWorld;
+	bool _trapAnchorActive;
+
+	/// <summary>
+	/// Host: the trap sets this on catch (with the trap centre as <paramref name="anchorWorld"/>) and
+	/// clears it on release (or death — see <see cref="PlayerVitals"/>). The owner is pulled to the
+	/// anchor and held there every frame, so a foot on the plate's corner still ends up centred.
+	/// </summary>
+	public void HostSetTrapped( bool trapped, Vector3 anchorWorld = default )
+	{
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
+			return;
+
+		if ( TrapLocked == trapped )
+			return;
+
+		TrapLocked = trapped;
+		ApplyTrapHoldLocal( trapped, anchorWorld );
+		if ( GameObject.Network is { Active: true } )
+			RpcOwnerApplyTrapHold( trapped, anchorWorld );
+	}
+
+	[Rpc.Owner]
+	void RpcOwnerApplyTrapHold( bool trapped, Vector3 anchorWorld )
+	{
+		ApplyTrapHoldLocal( trapped, anchorWorld );
+	}
+
+	void ApplyTrapHoldLocal( bool trapped, Vector3 anchorWorld )
+	{
+		ApplyEventFreezeLocal( trapped );
+		_trapAnchorActive = trapped;
+		_trapAnchorWorld = anchorWorld;
+		if ( trapped )
+			PinToTrapAnchor();
+	}
+
+	/// <summary>Owner: slide the feet onto the trap centre (XY only — never the camera, never the root yaw).</summary>
+	void PinToTrapAnchor()
+	{
+		if ( !_trapAnchorActive )
+			return;
+
+		var pos = GameObject.WorldPosition;
+		var target = new Vector3( _trapAnchorWorld.x, _trapAnchorWorld.y, pos.z );
+		if ( (pos - target).WithZ( 0f ).LengthSquared < 0.01f )
+			return;
+
+		GameObject.WorldPosition = target;
+	}
+
 	void ApplyEventFreezeLocal( bool frozen )
 	{
 		_controller ??= Components.Get<PlayerController>();
@@ -417,7 +473,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// Rope or wingsuit owns your speed up here. Walk/Run stay at 0 so held Shift cannot raise
 		// the air-control target and add swing speed — sprint is a walking thing, not a swinging one.
 		// Holding a player is not a swing: the attacker keeps full ground/air locomotion.
-		if ( WingsuitDeployed || (GrappleAttached && !IsPlayerGrappleAttach && !_controller.IsOnGround) )
+		// A trap mutes the same way: zero wish so WASD cannot creep the pawn off the plate.
+		if ( WingsuitDeployed || TrapLocked || (GrappleAttached && !IsPlayerGrappleAttach && !_controller.IsOnGround) )
 		{
 			if ( !_walkSpeedMuteActive )
 			{
@@ -547,7 +604,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( PreInputArenaSpectate() )
 			return;
 
-		if ( EventInputLocked )
+		if ( EventInputLocked || TrapLocked )
 		{
 			ClearActionIfPressed( JumpInputAction );
 			if ( !string.IsNullOrWhiteSpace( SprintInputAction ) )
@@ -557,6 +614,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			var body = _controller?.Body ?? Components.Get<Rigidbody>();
 			if ( body is not null && body.IsValid() )
 				body.Velocity = Vector3.Zero;
+			if ( TrapLocked )
+				PinToTrapAnchor();
 			return;
 		}
 

@@ -97,7 +97,38 @@ public sealed class EntityLocomotion : Component
 	public bool IsAirborne => _isFalling;
 	public bool IsSpawnSettling => false;
 
+	/// <summary>Held by a <see cref="BearTrap"/> — brains stop driving and the feet are pinned where they were caught.</summary>
+	public bool IsTrapped { get; private set; }
+
+	Vector3 _trappedAnchor;
+
 	public event Action Landed;
+
+	/// <summary>
+	/// Host: pin / free the body. The trap owns the timer; the brains read <see cref="IsTrapped"/>.
+	/// <paramref name="anchorWorld"/> is the trap centre — the feet are pulled there (XY) and held.
+	/// </summary>
+	public void HostSetTrapped( bool trapped, Vector3 anchorWorld = default )
+	{
+		if ( IsTrapped == trapped )
+			return;
+
+		IsTrapped = trapped;
+		if ( !trapped )
+			return;
+
+		var pos = GameObject.WorldPosition;
+		_trappedAnchor = new Vector3( anchorWorld.x, anchorWorld.y, pos.z );
+		GameObject.WorldPosition = _trappedAnchor;
+
+		Agent ??= Components.Get<NavMeshAgent>();
+		if ( Agent is not null && Agent.IsValid() )
+		{
+			Agent.Stop();
+			// The agent must agree on where the body is, or UpdatePosition drags it back off the plate.
+			Agent.SetAgentPosition( _trappedAnchor );
+		}
+	}
 
 	public void SetLookTarget( GameObject target )
 	{
@@ -257,6 +288,13 @@ public sealed class EntityLocomotion : Component
 			TickGroundSupport();
 			ClipMovementAgainstSolids();
 			// Ground Z is softened in OnUpdate (render rate) so elevation eases visually.
+		}
+
+		// Trapped: nothing (agent drift, shoves, the rigidbody) moves the feet off the plate.
+		if ( IsTrapped && !_isFalling )
+		{
+			var pos = GameObject.WorldPosition;
+			GameObject.WorldPosition = new Vector3( _trappedAnchor.x, _trappedAnchor.y, pos.z );
 		}
 	}
 

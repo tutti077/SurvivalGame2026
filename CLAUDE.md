@@ -175,7 +175,9 @@ Code/
                 WindDirection / WindStrength / WindGust to all shaders through Scene.RenderAttributes once per frame)
                 · GrassPatch + GrassScatterer (grass through the engine Sandbox.Clutter system — GPU instanced/culled/LOD;
                 shader Assets/shaders/grass_blade.shader, models grass_clump1–4 from Blender/scripts/create_grass_clump.py)
-                · ChopableTree, harvest yields, traps, teleport pads
+                · ChopableTree, harvest yields, teleport pads
+                · BearTrap (hammer-placed trap_small / trap_large: holds players 5 s, animals + enemies 10 s by TrapSize band;
+                  hold lives on PlayerMovement.TrapLocked / EntityLocomotion.IsTrapped) · DamageOverTimeTrap (scene hazard volume)
   World/Terrain/        Streaming, chunk mesh, biome population, world save IO
   World/TerrainPreview/ Offline world generation pipeline + settings
   UI/           PlayerScreenHud, HUDs, Menu/ sections

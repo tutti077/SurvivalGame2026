@@ -30,7 +30,8 @@
       "attackWindupSeconds": 0.35,
       "attackCooldownSeconds": 1.2,
       "attacksBeforeFlee": 1,
-      "alertSeconds": 1
+      "alertSeconds": 1,
+      "trapSize": "small"
     },
     "coyote": {
       "threatResponse": "harass",
@@ -62,7 +63,8 @@
       "attackWindupSeconds": 0.35,
       "attackCooldownSeconds": 1.2,
       "attacksBeforeFlee": 2,
-      "alertSeconds": 1
+      "alertSeconds": 1,
+      "trapSize": "small"
     },
     "whitetail": {
       "threatResponse": "flee",
@@ -81,7 +83,8 @@
       "hearRangeMeters": 30,
       "sneakHearFraction": 0.25,
       "fleeDistanceMeters": 90,
-      "calmRangeMeters": 55
+      "calmRangeMeters": 55,
+      "trapSize": "small"
     },
     "jackrabbit": {
       "threatResponse": "flee",
@@ -100,7 +103,8 @@
       "hearRangeMeters": 16,
       "sneakHearFraction": 0.25,
       "fleeDistanceMeters": 70,
-      "calmRangeMeters": 45
+      "calmRangeMeters": 45,
+      "trapSize": "small"
     },
     "snowHare": {
       "threatResponse": "flee",
@@ -149,7 +153,8 @@
       "attackCooldownSeconds": 1.4,
       "fleeHealthFraction": 0.25,
       "reengageRangeMeters": 20,
-      "alertSeconds": 0.8
+      "alertSeconds": 0.8,
+      "trapSize": "small"
     },
     "wolf": {
       "threatResponse": "predator",
@@ -179,7 +184,8 @@
       "attackCooldownSeconds": 1.1,
       "fleeHealthFraction": 0.25,
       "reengageRangeMeters": 22,
-      "alertSeconds": 0.8
+      "alertSeconds": 0.8,
+      "trapSize": "small"
     },
     "blackBear": {
       "threatResponse": "predator",
@@ -239,7 +245,8 @@
       "attackCooldownSeconds": 2.2,
       "fleeHealthFraction": 0.1,
       "reengageRangeMeters": 18,
-      "alertSeconds": 0.6
+      "alertSeconds": 0.6,
+      "trapSize": "large"
     },
     "wildBoar": {
       "threatResponse": "predator",
@@ -288,7 +295,8 @@
       "hearRangeMeters": 18,
       "sneakHearFraction": 0.25,
       "fleeDistanceMeters": 50,
-      "calmRangeMeters": 35
+      "calmRangeMeters": 35,
+      "trapSize": "none"
     },
     "raven": {
       "threatResponse": "flee",
@@ -307,7 +315,8 @@
       "hearRangeMeters": 20,
       "sneakHearFraction": 0.25,
       "fleeDistanceMeters": 50,
-      "calmRangeMeters": 35
+      "calmRangeMeters": 35,
+      "trapSize": "none"
     },
     "vulture": {
       "threatResponse": "flee",
@@ -326,7 +335,8 @@
       "hearRangeMeters": 20,
       "sneakHearFraction": 0.25,
       "fleeDistanceMeters": 55,
-      "calmRangeMeters": 40
+      "calmRangeMeters": 40,
+      "trapSize": "none"
     },
     "eagle": {
       "threatResponse": "flee",
@@ -345,7 +355,8 @@
       "hearRangeMeters": 20,
       "sneakHearFraction": 0.25,
       "fleeDistanceMeters": 70,
-      "calmRangeMeters": 50
+      "calmRangeMeters": 50,
+      "trapSize": "none"
     },
     "seagull": {
       "threatResponse": "flee",
@@ -364,7 +375,8 @@
       "hearRangeMeters": 18,
       "sneakHearFraction": 0.25,
       "fleeDistanceMeters": 45,
-      "calmRangeMeters": 30
+      "calmRangeMeters": 30,
+      "trapSize": "none"
     },
     "otter": {
       "threatResponse": "flee",
@@ -383,7 +395,8 @@
       "hearRangeMeters": 18,
       "sneakHearFraction": 0.3,
       "fleeDistanceMeters": 40,
-      "calmRangeMeters": 30
+      "calmRangeMeters": 30,
+      "trapSize": "small"
     },
     "stingray": {
       "threatResponse": "flee",
@@ -402,7 +415,8 @@
       "hearRangeMeters": 10,
       "sneakHearFraction": 0.3,
       "fleeDistanceMeters": 30,
-      "calmRangeMeters": 20
+      "calmRangeMeters": 20,
+      "trapSize": "none"
     },
     "crab": {
       "threatResponse": "flee",
@@ -421,7 +435,8 @@
       "hearRangeMeters": 6,
       "sneakHearFraction": 0.3,
       "fleeDistanceMeters": 15,
-      "calmRangeMeters": 10
+      "calmRangeMeters": 10,
+      "trapSize": "small"
     },
     "largemouth": {
       "threatResponse": "flee",
@@ -440,7 +455,8 @@
       "hearRangeMeters": 8,
       "sneakHearFraction": 0.3,
       "fleeDistanceMeters": 25,
-      "calmRangeMeters": 15
+      "calmRangeMeters": 15,
+      "trapSize": "none"
     },
     "iguana": {
       "threatResponse": "flee",
@@ -459,7 +475,8 @@
       "hearRangeMeters": 10,
       "sneakHearFraction": 0.3,
       "fleeDistanceMeters": 20,
-      "calmRangeMeters": 15
+      "calmRangeMeters": 15,
+      "trapSize": "small"
     }
   }
 }

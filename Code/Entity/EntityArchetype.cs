@@ -13,6 +13,8 @@ public static class EntityArchetype
 		public float TelegraphSeconds { get; init; }
 		public float RecoverySeconds { get; init; }
 		public float AttackHoldSeconds { get; init; }
+		/// <summary>Which foot traps hold this type (<see cref="BearTrap"/>). Boneback is the heavy one.</summary>
+		public TrapSize TrapSize { get; init; }
 	}
 
 	public static Profile Get( EnemyType type ) => type switch
@@ -24,7 +26,8 @@ public static class EntityArchetype
 			MoveSpeed = 180f,
 			TelegraphSeconds = 1.0f,
 			RecoverySeconds = 1f,
-			AttackHoldSeconds = 0.14f
+			AttackHoldSeconds = 0.14f,
+			TrapSize = TrapSize.Large
 		},
 		EnemyType.Howler => new Profile
 		{
@@ -33,7 +36,8 @@ public static class EntityArchetype
 			MoveSpeed = 260f,
 			TelegraphSeconds = 0.7f,
 			RecoverySeconds = 0.75f,
-			AttackHoldSeconds = 0.1f
+			AttackHoldSeconds = 0.1f,
+			TrapSize = TrapSize.Small
 		},
 		_ => new Profile
 		{
@@ -42,7 +46,8 @@ public static class EntityArchetype
 			MoveSpeed = 220f,
 			TelegraphSeconds = 0.85f,
 			RecoverySeconds = 1f,
-			AttackHoldSeconds = 0.12f
+			AttackHoldSeconds = 0.12f,
+			TrapSize = TrapSize.Small
 		}
 	};
 

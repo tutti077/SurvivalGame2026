@@ -98,6 +98,8 @@ public sealed class AnimalBrain : Component
 	public AnimalAiState CurrentState => _state;
 	public GameObject CurrentThreat => _threat.IsValid() ? _threat : null;
 	public AnimalThreatResponse ThreatResponse => _behavior.ThreatResponse;
+	/// <summary>Which foot traps hold this species (<c>trapSize</c> in <c>data/animal_behaviors.json</c>).</summary>
+	public TrapSize TrapSize => _behavior.TrapSize;
 
 	protected override void OnStart()
 	{
@@ -182,6 +184,13 @@ public sealed class AnimalBrain : Component
 		Agent ??= Components.Get<NavMeshAgent>();
 
 		if ( Locomotion is not null && Locomotion.IsAirborne )
+		{
+			Agent?.Stop();
+			return;
+		}
+
+		// Caught in a trap: state and timers hold where they are; the feet do not move.
+		if ( Locomotion is not null && Locomotion.IsTrapped )
 		{
 			Agent?.Stop();
 			return;

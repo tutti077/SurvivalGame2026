@@ -116,6 +116,10 @@ public static class BuildModuleDimensions
 		["chest"] = new( 1f, 0.5f, 0.5f ),
 		["augment_station"] = new( 1f, 0.6f, 0.75f ),
 		["furniture_campfire"] = new( 0.35f, 0.35f, 0.35f ),
+		// Foot traps (BearTrap): flat plates you walk onto. The solid is the thin base; the
+		// catch volume is the trigger child on the prefab.
+		["trap_small"] = new( 0.6f, 0.6f, 0.06f ),
+		["trap_large"] = new( 1.2f, 1.2f, 0.08f ),
 		// Workbench: 2 m wide, 1 m deep, 1 m tall (tool repair + workbench recipes).
 		["workbench"] = new( 2f, 1f, 1f ),
 	};

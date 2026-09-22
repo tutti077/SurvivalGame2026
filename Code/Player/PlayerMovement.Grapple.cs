@@ -1137,6 +1137,10 @@ partial class PlayerMovement
 
 	bool WasGrapplePressed()
 	{
+		// No roping out of a bear trap.
+		if ( TrapLocked )
+			return false;
+
 		if ( !string.IsNullOrWhiteSpace( GrappleAction ) && Input.Pressed( GrappleAction ) )
 			return true;
 

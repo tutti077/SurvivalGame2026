@@ -464,7 +464,8 @@ public sealed partial class EntityBrain : Component
 		if ( _state == EnemyAiState.Chasing && TryEnterAttackFromChase() )
 			return;
 
-		if ( Locomotion is not null && (Locomotion.IsAirborne || Locomotion.IsSpawnSettling) )
+		// Airborne, settling, or caught in a trap: feet stay put, but a target inside reach still gets swung at.
+		if ( Locomotion is not null && (Locomotion.IsAirborne || Locomotion.IsSpawnSettling || Locomotion.IsTrapped) )
 		{
 			Agent?.Stop();
 			if ( _target.IsValid()

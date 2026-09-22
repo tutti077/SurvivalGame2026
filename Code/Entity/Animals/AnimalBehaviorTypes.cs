@@ -124,6 +124,10 @@ public sealed class AnimalBehaviorData
 	/// <summary>Pause facing the stimulus before committing to track (harass / predator).</summary>
 	[JsonPropertyName( "alertSeconds" )]
 	public float AlertSeconds { get; set; } = 1f;
+
+	/// <summary>"none" | "small" | "large" — which foot traps hold this species (see <see cref="BearTrap"/>). Missing = small.</summary>
+	[JsonPropertyName( "trapSize" )]
+	public string TrapSize { get; set; } = "small";
 }
 
 sealed class AnimalBehaviorFile
@@ -167,6 +171,7 @@ public readonly struct AnimalBehaviorProfile
 	public float FleeHealthFraction { get; init; }
 	public float ReengageRange { get; init; }
 	public float AlertSeconds { get; init; }
+	public TrapSize TrapSize { get; init; }
 
 	public static AnimalBehaviorProfile FromData( AnimalBehaviorData data )
 	{
@@ -180,9 +185,17 @@ public readonly struct AnimalBehaviorProfile
 			_ => AnimalThreatResponse.Flee
 		};
 
+		var trapSize = data.TrapSize?.Trim().ToLowerInvariant() switch
+		{
+			"none" => TrapSize.None,
+			"large" => TrapSize.Large,
+			_ => TrapSize.Small
+		};
+
 		return new AnimalBehaviorProfile
 		{
 			ThreatResponse = response,
+			TrapSize = trapSize,
 			MaxHealth = Math.Max( 1f, data.MaxHealth ),
 			WalkSpeed = M( Math.Max( 0.2f, data.WalkSpeedMps ) ),
 			RunSpeed = M( Math.Max( 0.5f, data.RunSpeedMps ) ),

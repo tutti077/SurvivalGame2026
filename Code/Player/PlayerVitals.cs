@@ -554,6 +554,8 @@ public sealed partial class PlayerVitals : Component
 
 		_pendingDeathRespawnHost = false;
 		HostClearStatusEffects();
+		// A bear trap does not follow you to the spawn point.
+		Components.Get<PlayerMovement>()?.HostSetTrapped( false );
 
 		// Death loot: droppable resources leave the pawn here, at the death spot (equipment stays).
 		DeathLootBag.HostSpawnForDeath( GameObject );
