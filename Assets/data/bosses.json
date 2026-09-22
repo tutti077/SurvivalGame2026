@@ -1,0 +1,24 @@
+{
+  // Boss roster. One row per boss; the H key (BossSpawnButton) stamps `bossId` at its spawn point
+  // and biome / quest spawns will call the same BossSpawner. `health` is the first form's pool.
+  // hasSecondForm / secondFormHealth: when the first pool hits 0 the boss refills to the second
+  // form's health instead of dying, and its screen-top bar switches from red to secondFormBarColor.
+  // healthBarRangeMeters: a player within this distance of the boss gets the bar at the top of their
+  // screen for the rest of the fight. abandonDespawnSeconds: once no live player has been inside that
+  // range for this long the host despawns the boss and everyone gets a "despawned" banner (0 = never).
+  "bosses": [
+    {
+      "id": "scav_warlord",
+      "displayName": "Scav Warlord",
+      "prefab": "prefabs/entity/bossT1.prefab",
+      "archetype": "Scav",
+      "tier": 1,
+      "health": 300,
+      "healthBarRangeMeters": 500,
+      "abandonDespawnSeconds": 60,
+      "hasSecondForm": true,
+      "secondFormHealth": 300,
+      "secondFormBarColor": "#2ecc40"
+    }
+  ]
+}

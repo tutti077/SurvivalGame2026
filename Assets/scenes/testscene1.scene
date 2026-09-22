@@ -397,39 +397,7 @@
       },
       "__PrefabIdToInstanceId": {
         "34f86831-46d4-4318-9329-45b347826dea": "fb18a4a9-7360-4632-aad0-b0140917d5fd",
-        "06640ac9-a851-43bf-b35b-42e2be0fdca6": "7e988176-381c-4b28-b795-d818842de280",
-        "db2ec2d8-edd9-4812-b3b7-ad8ddf316d21": "cd38e861-d279-4605-99df-47c63924dcd6",
-        "e1a0945b-44d2-4cc6-a897-c7931851924d": "1b4cf466-c41f-4e3f-a1a0-18a2c70ea241",
-        "ded41f18-ffe7-4185-ab1c-9616122dc6f0": "96cb0a87-b94a-4b98-b34b-4017f9ea80a4",
-        "bce430cc-f569-4381-9ec0-f2d872648efc": "0947ad9a-edf6-4943-bf63-b3d427bce97c",
-        "563539eb-c977-45a3-92f0-e25aa1211547": "1ee801f0-056c-4dda-b169-f264805a30e1",
-        "25dd5bed-58eb-4648-bd3b-0de6ea746503": "816a668c-dbd3-4b5d-8fd1-93df9942de55",
-        "a334750f-a7f9-4e36-9c2d-563b96bda182": "d6048634-cc6b-4786-9aed-34eccb77e7e7",
-        "e7a91c42-5d8b-4f36-9a02-3c6b1d84f705": "d2581e37-6230-8c01-bd0d-653d18267032",
-        "52c95d95-b997-44f4-ba0e-3d83d5b458c7": "bc4f4bd6-d8dd-4fc5-9d7d-5f0d278fde70",
-        "4785e803-a655-4137-8dc0-d456a8086f19": "379167ef-6c81-402c-9d8b-9b69adc562ee",
-        "f4c3d2e1-b0a9-8c7d-6e5f-4a3b2c1d0e9f": "071af74b-ec61-407f-a0b8-73fbb4582d98",
-        "c8b5a3d1-3afe-4693-9f5e-57b86c57b6a2": "64c810b2-1b49-4984-9ffd-237657ff590f",
-        "d4e5f6a7-b8c9-0123-def4-567890abcdef": "98effff2-8809-4634-8c2d-ded76eecb00f",
-        "a1b2c3d4-e5f6-7890-abcd-ef1234567890": "05da9e1a-4e4f-4f76-83fc-bf4e31445c78",
-        "f1e2d3c4-b5a6-7890-fedc-ba9876543210": "188f4b24-98e9-466d-a3d8-9c23579b82f2",
-        "a9b8c7d6-e5f4-3210-abcd-ef0123456789": "b2fe8faa-64e5-4b08-9ec4-f366da4be740",
-        "b2c3d4e5-f6a7-8901-bcde-f12345678901": "23c56eb2-2631-40d5-97ea-845d0fa750b3",
-        "c1a2f3e4-d5b6-7890-cdef-123456789abc": "c6bbf6dd-1023-4b0a-8309-969b353d5cba",
-        "a9b8c7d6-e5f4-3210-9876-543210fedcba": "207a2b7e-e27f-4e82-af89-7b8659ec4f60",
-        "e7a1b2c3-4d5e-6f70-8192-a3b4c5d6e7f8": "cc048a47-8fd1-442d-b23b-7dfdfbea95f5",
-        "f8b2c3d4-e5f6-7890-abcd-ef012345678a": "309489ce-b65c-4572-8b65-52ab3bbd8edd",
-        "c2d3e4f5-a6b7-8901-cdef-123456789def": "ee5b907e-9991-4b67-8b49-5150bd7fe77c",
         "86859f44-e8df-4009-90a2-8ca9b4dc36cc": "f4c3d05f-2eda-43be-9eea-ccb1799c2b55",
-        "48bb4076-d3c6-455e-99c1-98e9ff82c2c4": "34c148af-c70d-474d-bdc9-21eef62ba70f",
-        "22adeaa4-3eff-455e-b0ad-8186e47120c5": "1cc7cf11-08d3-4569-98cf-52316ffbbb1b",
-        "f334590a-a6d7-44af-98bd-14ec93294ec7": "1cc4950f-f097-4d98-85c2-2494123e82e8",
-        "4d8ed045-4f00-411d-9d8e-42b4f855dc9b": "296eb224-d396-4cdb-879a-de5a8b87e8df",
-        "2a16b84a-ebb6-80b4-8e0b-bee479f86c01": "a0e9968f-0781-432f-96ea-34ffb61566c0",
-        "6508e920-bf49-8c75-948c-aeeef7157a7b": "a1897ba2-ab71-4574-8c1b-da0c2796b15e",
-        "889301a1-d209-8049-af16-4c5fc30470a9": "12c04bd3-e3c0-401d-8148-57311f0eaf70",
-        "034bfdf3-add2-827a-a294-72c15e831b6a": "708ddab2-18e6-477a-bb5b-8392df85ac9f",
-        "970732c0-a058-4701-8a40-c9b9df0da80b": "d4cc24b2-8f27-8669-b5d3-2f36467941cb",
         "035ab015-824c-88dd-8de4-96b873de52f6": "cb478840-355b-41e1-ac67-1d2f65764902",
         "4f27cd51-e4df-8557-a8e8-1441991fd712": "8d699cc3-9ae3-4621-95b3-1ecb86649266",
         "c0c26503-6b9d-87b2-ab26-544e173508cc": "8421ea5b-cb52-4e5b-bca4-c31af4e2b26e",
@@ -466,14 +434,46 @@
         "786f226e-690d-8b6e-83ff-4342a80cd0ee": "4cee7fd1-a96f-4a96-b9f9-da1b48deb402",
         "13b5a6bf-7962-8375-99b1-4790290e5448": "dd5a2d30-69e9-4921-bc78-d134de33dbe5",
         "18ee3cca-7999-85c9-8512-f7d092d15954": "d4386acc-12ea-483d-89dd-8ee5e7ee75c2",
-        "a7b8c9d0-e1f2-3456-7890-abcdef012345": "04eb0936-39d7-87ec-94d5-738ae9f56baf",
+        "22adeaa4-3eff-455e-b0ad-8186e47120c5": "1cc7cf11-08d3-4569-98cf-52316ffbbb1b",
+        "06640ac9-a851-43bf-b35b-42e2be0fdca6": "7e988176-381c-4b28-b795-d818842de280",
+        "db2ec2d8-edd9-4812-b3b7-ad8ddf316d21": "cd38e861-d279-4605-99df-47c63924dcd6",
+        "e1a0945b-44d2-4cc6-a897-c7931851924d": "1b4cf466-c41f-4e3f-a1a0-18a2c70ea241",
+        "ded41f18-ffe7-4185-ab1c-9616122dc6f0": "96cb0a87-b94a-4b98-b34b-4017f9ea80a4",
+        "bce430cc-f569-4381-9ec0-f2d872648efc": "0947ad9a-edf6-4943-bf63-b3d427bce97c",
+        "563539eb-c977-45a3-92f0-e25aa1211547": "1ee801f0-056c-4dda-b169-f264805a30e1",
+        "25dd5bed-58eb-4648-bd3b-0de6ea746503": "816a668c-dbd3-4b5d-8fd1-93df9942de55",
+        "970732c0-a058-4701-8a40-c9b9df0da80b": "d4cc24b2-8f27-8669-b5d3-2f36467941cb",
+        "a334750f-a7f9-4e36-9c2d-563b96bda182": "d6048634-cc6b-4786-9aed-34eccb77e7e7",
+        "52c95d95-b997-44f4-ba0e-3d83d5b458c7": "bc4f4bd6-d8dd-4fc5-9d7d-5f0d278fde70",
+        "4785e803-a655-4137-8dc0-d456a8086f19": "379167ef-6c81-402c-9d8b-9b69adc562ee",
+        "f4c3d2e1-b0a9-8c7d-6e5f-4a3b2c1d0e9f": "071af74b-ec61-407f-a0b8-73fbb4582d98",
+        "c8b5a3d1-3afe-4693-9f5e-57b86c57b6a2": "64c810b2-1b49-4984-9ffd-237657ff590f",
+        "e7a91c42-5d8b-4f36-9a02-3c6b1d84f705": "d2581e37-6230-8c01-bd0d-653d18267032",
+        "d4e5f6a7-b8c9-0123-def4-567890abcdef": "98effff2-8809-4634-8c2d-ded76eecb00f",
+        "a1b2c3d4-e5f6-7890-abcd-ef1234567890": "05da9e1a-4e4f-4f76-83fc-bf4e31445c78",
         "c4d5e6f7-a8b9-4012-9c3d-e5f60718293a": "c3e465e7-025b-870e-be46-533fe86ddb75",
-        "f00d0001-2222-4333-8444-555555555501": "3fc3c06e-f6f2-8493-8784-6dd7b8298ee2",
-        "b3f1c7e2-9a44-4d18-8c60-71e5a2d4f083": "68beb219-af4d-8849-8020-8a969ccb5c0d",
-        "3b7f2a91-6c44-4e0d-9a12-58f0cbd7e2a1": "c9fb65d7-f664-80fe-a29c-bd062722f5b3",
-        "d4e5f6a7-b8c9-4a1b-9c2d-3e4f5a6b7c8d": "3005d88a-1883-881b-b215-1da708af1299",
+        "f1e2d3c4-b5a6-7890-fedc-ba9876543210": "188f4b24-98e9-466d-a3d8-9c23579b82f2",
+        "a9b8c7d6-e5f4-3210-abcd-ef0123456789": "b2fe8faa-64e5-4b08-9ec4-f366da4be740",
+        "b2c3d4e5-f6a7-8901-bcde-f12345678901": "23c56eb2-2631-40d5-97ea-845d0fa750b3",
+        "c1a2f3e4-d5b6-7890-cdef-123456789abc": "c6bbf6dd-1023-4b0a-8309-969b353d5cba",
         "9e57a1c0-4b2d-4f8e-9a31-7c0d5e2f6b14": "f2e74d11-4371-8a94-a1fd-3a06ac9e0641",
-        "7c9e4f21-8a3b-4d56-b1e0-2f6a9c8d3e14": "df8817e4-630e-8ff2-826f-53994214f1fc"
+        "f00d0001-2222-4333-8444-555555555501": "3fc3c06e-f6f2-8493-8784-6dd7b8298ee2",
+        "a9b8c7d6-e5f4-3210-9876-543210fedcba": "207a2b7e-e27f-4e82-af89-7b8659ec4f60",
+        "d4e5f6a7-b8c9-4a1b-9c2d-3e4f5a6b7c8d": "3005d88a-1883-881b-b215-1da708af1299",
+        "e7a1b2c3-4d5e-6f70-8192-a3b4c5d6e7f8": "cc048a47-8fd1-442d-b23b-7dfdfbea95f5",
+        "f8b2c3d4-e5f6-7890-abcd-ef012345678a": "309489ce-b65c-4572-8b65-52ab3bbd8edd",
+        "c2d3e4f5-a6b7-8901-cdef-123456789def": "ee5b907e-9991-4b67-8b49-5150bd7fe77c",
+        "a7b8c9d0-e1f2-3456-7890-abcdef012345": "04eb0936-39d7-87ec-94d5-738ae9f56baf",
+        "7c9e4f21-8a3b-4d56-b1e0-2f6a9c8d3e14": "df8817e4-630e-8ff2-826f-53994214f1fc",
+        "3b7f2a91-6c44-4e0d-9a12-58f0cbd7e2a1": "c9fb65d7-f664-80fe-a29c-bd062722f5b3",
+        "48bb4076-d3c6-455e-99c1-98e9ff82c2c4": "34c148af-c70d-474d-bdc9-21eef62ba70f",
+        "b3f1c7e2-9a44-4d18-8c60-71e5a2d4f083": "68beb219-af4d-8849-8020-8a969ccb5c0d",
+        "2a16b84a-ebb6-80b4-8e0b-bee479f86c01": "a0e9968f-0781-432f-96ea-34ffb61566c0",
+        "6508e920-bf49-8c75-948c-aeeef7157a7b": "a1897ba2-ab71-4574-8c1b-da0c2796b15e",
+        "889301a1-d209-8049-af16-4c5fc30470a9": "12c04bd3-e3c0-401d-8148-57311f0eaf70",
+        "034bfdf3-add2-827a-a294-72c15e831b6a": "708ddab2-18e6-477a-bb5b-8392df85ac9f",
+        "f334590a-a6d7-44af-98bd-14ec93294ec7": "1cc4950f-f097-4d98-85c2-2494123e82e8",
+        "4d8ed045-4f00-411d-9d8e-42b4f855dc9b": "296eb224-d396-4cdb-879a-de5a8b87e8df"
       }
     },
     {
@@ -666,6 +666,62 @@
           "__version": 2,
           "Flags": 0,
           "Name": "EnemyCampSpawnPoint",
+          "Position": "0,0,0",
+          "Rotation": "0,0,0,1",
+          "Scale": "1,1,1",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [],
+          "Children": []
+        }
+      ]
+    },
+    {
+      "__guid": "b055e2c1-7d5a-4c3e-9f10-2b0551a0c001",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "BossSpawner",
+      "Position": "4450,1500,34",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Survival.BossSpawnButton",
+          "__guid": "b055e2c1-7d5a-4c3e-9f10-2b0551a0c002",
+          "__enabled": true,
+          "Flags": 0,
+          "BossId": "scav_warlord",
+          "InputAction": "SpawnBoss",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "SpawnPoint": {
+            "_type": "gameobject",
+            "go": "b055e2c1-7d5a-4c3e-9f10-2b0551a0c003"
+          }
+        }
+      ],
+      "Children": [
+        {
+          "__guid": "b055e2c1-7d5a-4c3e-9f10-2b0551a0c003",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "BossSpawnPoint",
           "Position": "0,0,0",
           "Rotation": "0,0,0,1",
           "Scale": "1,1,1",
@@ -1444,11 +1500,11 @@
       },
       "__PrefabIdToInstanceId": {
         "b1010004-1111-4111-8111-111111111104": "c8e4f012-3456-7890-abcd-ef1234567801",
-        "b1010004-1111-4111-8111-111111111141": "c8e4f012-3456-7890-abcd-ef1234567802",
+        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1eea3",
         "b1010004-1111-4111-8111-111111111142": "c8e4f012-3456-7890-abcd-ef1234567803",
         "b1010004-1111-4111-8111-111111111143": "c8e4f012-3456-7890-abcd-ef1234567804",
         "b1010004-1111-4111-8111-111111111144": "c8e4f012-3456-7890-abcd-ef1234567805",
-        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1eea3"
+        "b1010004-1111-4111-8111-111111111141": "c8e4f012-3456-7890-abcd-ef1234567802"
       }
     },
     {
@@ -1540,11 +1596,11 @@
       },
       "__PrefabIdToInstanceId": {
         "b1010004-1111-4111-8111-111111111104": "c8e4fa01-3456-7890-abcd-ef1234567801",
-        "b1010004-1111-4111-8111-111111111141": "c8e4fa01-3456-7890-abcd-ef1234567802",
+        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa01",
         "b1010004-1111-4111-8111-111111111142": "c8e4fa01-3456-7890-abcd-ef1234567803",
         "b1010004-1111-4111-8111-111111111143": "c8e4fa01-3456-7890-abcd-ef1234567804",
         "b1010004-1111-4111-8111-111111111144": "c8e4fa01-3456-7890-abcd-ef1234567805",
-        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa01"
+        "b1010004-1111-4111-8111-111111111141": "c8e4fa01-3456-7890-abcd-ef1234567802"
       }
     },
     {
@@ -1628,11 +1684,11 @@
       },
       "__PrefabIdToInstanceId": {
         "b1010004-1111-4111-8111-111111111104": "c8e4fa02-3456-7890-abcd-ef1234567801",
-        "b1010004-1111-4111-8111-111111111141": "c8e4fa02-3456-7890-abcd-ef1234567802",
+        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa02",
         "b1010004-1111-4111-8111-111111111142": "c8e4fa02-3456-7890-abcd-ef1234567803",
         "b1010004-1111-4111-8111-111111111143": "c8e4fa02-3456-7890-abcd-ef1234567804",
         "b1010004-1111-4111-8111-111111111144": "c8e4fa02-3456-7890-abcd-ef1234567805",
-        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa02"
+        "b1010004-1111-4111-8111-111111111141": "c8e4fa02-3456-7890-abcd-ef1234567802"
       }
     },
     {
@@ -1744,11 +1800,11 @@
       },
       "__PrefabIdToInstanceId": {
         "b1010004-1111-4111-8111-111111111104": "c8e4fa03-3456-7890-abcd-ef1234567801",
-        "b1010004-1111-4111-8111-111111111141": "c8e4fa03-3456-7890-abcd-ef1234567802",
+        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa03",
         "b1010004-1111-4111-8111-111111111142": "c8e4fa03-3456-7890-abcd-ef1234567803",
         "b1010004-1111-4111-8111-111111111143": "c8e4fa03-3456-7890-abcd-ef1234567804",
         "b1010004-1111-4111-8111-111111111144": "c8e4fa03-3456-7890-abcd-ef1234567805",
-        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa03"
+        "b1010004-1111-4111-8111-111111111141": "c8e4fa03-3456-7890-abcd-ef1234567802"
       }
     },
     {
@@ -1852,11 +1908,11 @@
       },
       "__PrefabIdToInstanceId": {
         "b1010004-1111-4111-8111-111111111104": "c8e4fa04-3456-7890-abcd-ef1234567801",
-        "b1010004-1111-4111-8111-111111111141": "c8e4fa04-3456-7890-abcd-ef1234567802",
+        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa04",
         "b1010004-1111-4111-8111-111111111142": "c8e4fa04-3456-7890-abcd-ef1234567803",
         "b1010004-1111-4111-8111-111111111143": "c8e4fa04-3456-7890-abcd-ef1234567804",
         "b1010004-1111-4111-8111-111111111144": "c8e4fa04-3456-7890-abcd-ef1234567805",
-        "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa04"
+        "b1010004-1111-4111-8111-111111111141": "c8e4fa04-3456-7890-abcd-ef1234567802"
       }
     },
     {
@@ -2050,8 +2106,8 @@
       },
       "__PrefabIdToInstanceId": {
         "e054d124-f2f1-4b1c-ad37-c8cefe29c6e3": "ea48ae32-e15f-445c-84ab-da472b3642a5",
-        "7663584e-5da5-4559-80ef-8948aa7bdfee": "9b4450f6-1223-4a56-94c0-89b9d0974b10",
-        "200f0897-ded9-45b9-bedd-7905c5f0b1c0": "88c4eafc-bb8b-8edf-a4ed-7645e7dfc2fd"
+        "200f0897-ded9-45b9-bedd-7905c5f0b1c0": "88c4eafc-bb8b-8edf-a4ed-7645e7dfc2fd",
+        "7663584e-5da5-4559-80ef-8948aa7bdfee": "9b4450f6-1223-4a56-94c0-89b9d0974b10"
       }
     },
     {
@@ -2144,6 +2200,9 @@
       },
       "__PrefabIdToInstanceId": {
         "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "88303074-10e5-45a0-ae1a-143628613903",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "23c62f4e-a077-41cf-a6d5-070fa6526a0a",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "39563fea-dece-44ee-8d27-5175fa6f9b60",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "c99d9b75-c4b0-4f28-b118-544cfaebf0d9",
         "6f708192-a3b4-2345-f012-456789012345": "d3331949-1c4c-414c-8a54-a80b9f3f0f45",
         "8192a3b4-c5d6-4567-1234-678901234567": "9da7d7b7-0913-476b-9f00-5705344fc8ca",
         "708192a3-b4c5-3456-0123-567890123456": "ba5bac20-ed34-47f6-bd73-e22a2e4499ba",
@@ -2154,12 +2213,9 @@
         "d6e7f809-1a2b-9012-6789-123456789012": "03637c4c-6bca-4e70-b5c6-ff38f4e1c9ae",
         "e7f8091a-2b3c-0123-789a-234567890123": "01b40498-a75f-49d6-bc02-9fe7534322fc",
         "f8091a2b-3c4d-1234-89ab-345678901234": "8219108d-b822-4d20-9dc7-8408f61071b2",
-        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "23c62f4e-a077-41cf-a6d5-070fa6526a0a",
         "3c4d5e6f-7081-9012-cdef-123456789012": "442efc46-cc2e-46a8-899c-f6c0c00a97cb",
-        "2b3c4d5e-6f70-8901-bcde-f12345678901": "39563fea-dece-44ee-8d27-5175fa6f9b60",
         "4d5e6f70-8192-0123-def0-234567890123": "d04976f9-9d7f-4033-bd15-0e0acc6ea00d",
-        "5e6f7081-92a3-1234-ef01-345678901234": "ad04b250-0b34-4253-9840-dc834d5e308c",
-        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "c99d9b75-c4b0-4f28-b118-544cfaebf0d9"
+        "5e6f7081-92a3-1234-ef01-345678901234": "ad04b250-0b34-4253-9840-dc834d5e308c"
       }
     },
     {
@@ -141168,7 +141224,6 @@
       },
       "__PrefabIdToInstanceId": {
         "c38d434a-c528-4a1d-8885-6b4f3e0cfded": "b7dc81b8-7dda-4008-987b-e3e462b174d9",
-        "c8bdf57c-bfc9-4f8a-89f2-580e0e2a1298": "50c66d49-44f1-4b10-b2c9-af14afd9904e",
         "a1f00002-0002-4002-8002-000000000001": "e30a9356-bfda-8a85-87d5-dee82d01862b",
         "a1f00002-0002-4002-8002-000000000002": "664136bf-ed50-8ede-b316-e180ea0daf8c",
         "a1f00001-0001-4001-8001-000000000001": "e7939cd2-78a0-88dd-b8bb-ca2ace808e67",
@@ -141177,6 +141232,7 @@
         "a1f00001-0001-4001-8001-000000000004": "b99a658d-986d-8faf-81a3-0d5e371840ea",
         "a1f00001-0001-4001-8001-000000000005": "7b97d968-35fc-8f76-be62-c930d6bdc327",
         "a1f00001-0001-4001-8001-000000000006": "3204d372-1476-819c-82af-84f37528942f",
+        "c8bdf57c-bfc9-4f8a-89f2-580e0e2a1298": "50c66d49-44f1-4b10-b2c9-af14afd9904e",
         "a1f00003-0003-4003-8003-000000000001": "dfd388dc-dcf9-8991-a762-546d5193f6ea"
       }
     },
@@ -141985,7 +142041,7 @@
           "__version": 2,
           "Flags": 0,
           "Name": "Object",
-          "Position": "-18.1841125,-26.666666,11.2799988",
+          "Position": "-24.3143959,-26.666666,0.131442264",
           "Rotation": "0,0,0.707106769,0.707106769",
           "Scale": "0.0333333351,3.33333325,0.200000003",
           "Tags": "",
@@ -142005,7 +142061,7 @@
               "Billboard": "None",
               "BlendMode": "Normal",
               "FogStrength": 1,
-              "HorizontalAlignment": "Center",
+              "HorizontalAlignment": "Left",
               "OnComponentDestroy": null,
               "OnComponentDisabled": null,
               "OnComponentEnabled": null,
@@ -142020,7 +142076,7 @@
               },
               "Scale": 1,
               "TextScope": {
-                "Text": "n = spawn animal\nj = return to last teleport\nk = spawn entity\ni = spawn entity camp",
+                "Text": "n = spawn animal\nj = return to last teleport\nk = spawn entity\ni = spawn entity camp\nh = spawn boss",
                 "TextColor": "1,1,1,1",
                 "FontName": "Poppins",
                 "FontSize": 32,
@@ -148196,10 +148252,7 @@
           "__guid": "960b824a-8a1a-47da-a5fc-bc93b0b7351a",
           "__enabled": true,
           "Flags": 0,
-          "SizeXMeters": 16,
-          "SizeYMeters": 16,
-          "GroundSearchMeters": 5,
-          "Seed": 1,
+          "CastShadows": false,
           "ClumpModels": [
             "models/environment/grass/grass_clump1.vmdl",
             "models/environment/grass/grass_clump2.vmdl",
@@ -148207,22 +148260,41 @@
             "models/environment/grass/grass_clump4.vmdl"
           ],
           "ClumpsPerSquareMeter": 3,
-          "ScaleMin": 0.8,
-          "ScaleMax": 1.25,
+          "GroundSearchMeters": 5,
           "MaxSlopeDegrees": 50,
-          "CastShadows": false
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "ScaleMax": 1.25,
+          "ScaleMin": 0.8,
+          "Seed": 1,
+          "SizeXMeters": 16,
+          "SizeYMeters": 16
         },
         {
-          "__type": "Sandbox.ClutterComponent",
+          "__type": "Sandbox.Clutter.ClutterComponent",
           "__guid": "5223d1dd-ed98-4704-ab76-ef1611efe482",
           "__enabled": true,
           "Flags": 0,
-          "Mode": "Volume",
-          "Seed": 1,
-          "Clutter": null,
           "Bounds": {
             "Mins": "-320,-320,-200",
             "Maxs": "320,320,200"
+          },
+          "Clutter": null,
+          "Mode": "Volume",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "Seed": 1,
+          "Storage": {
+            "$blob": "64db792e-5935-8fbc-8cfa-050cd49fa7fd",
+            "$refs": []
           }
         }
       ],
@@ -148249,17 +148321,23 @@
           "__guid": "0f2105cb-cfd1-46b0-a15c-6c37e4cd37fb",
           "__enabled": true,
           "Flags": 0,
-          "YawDegrees": 35,
+          "BaseStrength01": 0.25,
+          "GustPeriodSeconds": 7,
+          "GustStrength01": 0.8,
+          "GustVariationPeriodSeconds": 45,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "RandomHeadingOnStart": true,
           "WanderDegrees": 10,
           "WanderPeriodSeconds": 120,
-          "BaseStrength01": 0.25,
-          "GustStrength01": 0.8,
-          "GustPeriodSeconds": 7,
-          "RandomHeadingOnStart": true,
-          "GustVariationPeriodSeconds": 45,
           "WindMaterials": [
             "materials/environment/grass_blade.vmat"
-          ]
+          ],
+          "YawDegrees": 35
         }
       ],
       "Children": []

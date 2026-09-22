@@ -53,6 +53,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	Panel _staminaFill;
 
 	StatusEffectsHud _statusEffectsHud;
+	BossHealthBarHud _bossHealthBar;
 	Panel _foodSlotsRoot;
 	readonly Panel[] _foodSlotPanels = new Panel[PlayerFood.MaxFoodSlots];
 	readonly Label[] _foodSlotTimers = new Label[PlayerFood.MaxFoodSlots];
@@ -153,6 +154,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		_fishingHud?.Tick( _fishing );
 		RefreshFoodSlots();
 		_statusEffectsHud?.Tick( _menuController is { IsMenuOpen: true } );
+		if ( _vitals is not null && _vitals.GameObject.IsValid() )
+			_bossHealthBar?.Tick( _vitals.GameObject.WorldPosition );
 		if ( _inventoryInteraction?.FocusedCampfire is not null
 		     || _inventoryInteraction?.FocusedDoor is not null
 		     || _inventoryInteraction?.FocusedTrap is not null
@@ -231,6 +234,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		_hotbarHud?.Dispose();
 		_statusEffectsHud?.Dispose();
 		_statusEffectsHud = null;
+		_bossHealthBar?.Dispose();
+		_bossHealthBar = null;
 		_buildMenuHud = null;
 		_buildSnapReadout = null;
 		RestoreGrapplePromptCapture();
@@ -280,6 +285,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction?.RegisterGrid( new PlayerEquipmentPaperdollGridHost( _equipment, _inventory ) );
 
 		BuildVitals( Panel );
+		BuildBossHealthBar( Panel );
 		BuildHarvestPrompt( Panel );
 		BuildTimeTrialHud( Panel );
 		BuildPickupNotifications( Panel );
@@ -513,6 +519,13 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		var minutes = Math.Max( 1, (int)Math.Ceiling( seconds / 60.0 ) );
 		return $"{minutes}m";
+	}
+
+	/// <summary>Screen-top boss name + bar (<see cref="BossHealthBarHud"/>); hidden until a boss engages this viewer.</summary>
+	void BuildBossHealthBar( Panel root )
+	{
+		_bossHealthBar = new BossHealthBarHud();
+		_bossHealthBar.Build( root );
 	}
 
 	void BuildHarvestPrompt( Panel root )

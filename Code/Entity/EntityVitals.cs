@@ -23,7 +23,18 @@ public sealed class EntityVitals : Component
 
 	public bool IsDead => CurrentHealth <= 0.001f;
 
-	public string GetDisplayName() => $"{EnemyType} T{Math.Max( 1, Tier )}";
+	/// <summary>Name shown on health bars instead of "Type Tn" (bosses set this from bosses.json).</summary>
+	public string DisplayNameOverride { get; set; }
+
+	/// <summary>
+	/// Set by a form owner (<see cref="BossEntity"/>): a hit that would empty the pool is offered
+	/// here before it counts as a death. Return true after refilling the pool to consume the hit —
+	/// no kill credit, no <see cref="OnDied"/>. Null for every ordinary entity.
+	/// </summary>
+	public Func<Component, bool> LethalHitInterceptor { get; set; }
+
+	public string GetDisplayName() =>
+		string.IsNullOrWhiteSpace( DisplayNameOverride ) ? $"{EnemyType} T{Math.Max( 1, Tier )}" : DisplayNameOverride;
 
 	public string GetHealthLabel()
 	{
@@ -61,6 +72,14 @@ public sealed class EntityVitals : Component
 			return 0f;
 
 		CurrentHealth = Math.Max( 0f, CurrentHealth - afterArmor );
+
+		if ( IsDead && LethalHitInterceptor is { } interceptor && interceptor( attacker ) )
+		{
+			// The interceptor refilled the pool (its ResetToFull raised OnVitalsChanged) — this hit landed but nobody died.
+			OnDamaged?.Invoke( attacker );
+			return afterArmor;
+		}
+
 		OnVitalsChanged?.Invoke();
 		OnDamaged?.Invoke( attacker );
 

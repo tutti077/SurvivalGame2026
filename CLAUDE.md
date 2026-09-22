@@ -170,6 +170,9 @@ Code/
                 · seed rows live in resources.json ("seed" block); ToolHoe + PlayerFarming live in Player/
   Camps/        EnemyCampCatalog (Assets/data/enemy_camps.json — piece + entity layouts + camp-centered wander / max-travel rings, build-kit meters)
                 · EnemyCampSpawner (host stamp, sets EntityBrain camp leash, creates the EnemyCamp root) · EnemyCamp (camp root; `campRings` debug rings) · EnemyCampSpawnButton (I)
+  Boss/         BossCatalog (Assets/data/bosses.json — health, second-form flags, bar range) · BossSpawner (host stamp through
+                EntityEnemySetup) · BossEntity ([Sync] pool mirror + second-form refill via EntityVitals.LethalHitInterceptor)
+                · BossSpawnButton (H); screen-top bar is Code/UI/BossHealthBarHud.cs
   Hacks/        GameHacks — console-toggled dev flags (allCrafting), mirrored onto pawns via [Sync] for host checks
   Environment/  WindSystem (scene wind: host owns heading + base strength via [Sync], every client simulates gusts; publishes
                 WindDirection / WindStrength / WindGust to all shaders through Scene.RenderAttributes once per frame)
