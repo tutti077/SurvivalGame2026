@@ -148176,6 +148176,95 @@
       ]
     },
     {
+      "__guid": "e612352e-a224-4e85-9e2d-c44e91bfbac3",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "GrassPatch",
+      "Position": "-2500,6208,0",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Survival.GrassPatch",
+          "__guid": "960b824a-8a1a-47da-a5fc-bc93b0b7351a",
+          "__enabled": true,
+          "Flags": 0,
+          "SizeXMeters": 16,
+          "SizeYMeters": 16,
+          "GroundSearchMeters": 5,
+          "Seed": 1,
+          "ClumpModels": [
+            "models/environment/grass/grass_clump1.vmdl",
+            "models/environment/grass/grass_clump2.vmdl",
+            "models/environment/grass/grass_clump3.vmdl",
+            "models/environment/grass/grass_clump4.vmdl"
+          ],
+          "ClumpsPerSquareMeter": 3,
+          "ScaleMin": 0.8,
+          "ScaleMax": 1.25,
+          "MaxSlopeDegrees": 50,
+          "CastShadows": false
+        },
+        {
+          "__type": "Sandbox.ClutterComponent",
+          "__guid": "5223d1dd-ed98-4704-ab76-ef1611efe482",
+          "__enabled": true,
+          "Flags": 0,
+          "Mode": "Volume",
+          "Seed": 1,
+          "Clutter": null,
+          "Bounds": {
+            "Mins": "-320,-320,-200",
+            "Maxs": "320,320,200"
+          }
+        }
+      ],
+      "Children": []
+    },
+    {
+      "__guid": "ee6bce49-a0e0-4617-857e-298bea1ab0af",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "Wind",
+      "Position": "0,0,0",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Survival.WindSystem",
+          "__guid": "0f2105cb-cfd1-46b0-a15c-6c37e4cd37fb",
+          "__enabled": true,
+          "Flags": 0,
+          "YawDegrees": 35,
+          "WanderDegrees": 10,
+          "WanderPeriodSeconds": 120,
+          "BaseStrength01": 0.25,
+          "GustStrength01": 0.8,
+          "GustPeriodSeconds": 7,
+          "RandomHeadingOnStart": true,
+          "GustVariationPeriodSeconds": 45,
+          "WindMaterials": [
+            "materials/environment/grass_blade.vmat"
+          ]
+        }
+      ],
+      "Children": []
+    },
+    {
       "__guid": "e058596e-67bf-42fc-9421-ae29d90bbec3",
       "__version": 2,
       "Flags": 0,

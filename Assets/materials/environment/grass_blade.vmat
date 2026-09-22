@@ -1,0 +1,19 @@
+Layer0
+{
+	shader "shaders/grass_blade.shader"
+
+	SwayAmount "24.000"
+	GustSpeed "200.000"
+	GustLength "480.000"
+	GustSharpness "2.000"
+	FlutterAmount "0.800"
+	FlutterSpeed "4.000"
+	BendPower "2.000"
+
+	BaseColor "[0.130000 0.300000 0.070000]"
+	TipColor "[0.560000 0.740000 0.240000]"
+	ColorVariation "0.150"
+	NormalUp "0.750"
+	GrassRoughness "0.850"
+	RootDarkening "0.450"
+}

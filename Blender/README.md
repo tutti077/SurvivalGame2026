@@ -25,6 +25,7 @@ Exported meshes can be saved as `.fbx` / `.gltf` from Blender and imported into 
 | `scripts/create_low_poly_rock.py` | Procedural low-poly rock mesh (~80 triangles, flat shaded) |
 | `scripts/create_build_kit.py` | Every wood build piece in `Assets/data/build_pieces.json` — floors, walls, door, gables, roof panel + corners, straight and quarter-turn stairs, beams — each at true size around its own origin |
 | `scripts/split_build_kit.py` | Writes one single-object `.blend` and one `.fbx` per piece, each sitting on the world origin |
+| `scripts/create_grass_clump.py` | Four single-plane grass clumps (`grass_clump1..4`, 7/5/9/3 blades) — flat blade fans with wind weights in vertex colour, exported to `Assets/models/environment/grass/` for the Clutter grass system |
 
 ## Build kit
 
