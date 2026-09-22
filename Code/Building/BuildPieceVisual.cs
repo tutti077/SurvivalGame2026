@@ -4,13 +4,12 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Wires kit vmdls onto build instances at authored scale. Door also gets a static leaf child.
+/// Wires kit vmdls onto build instances at authored scale. The door leaf is not made here — it is
+/// authored on the door prefab and driven by <see cref="BuildDoor"/>.
 /// </summary>
 static class BuildPieceVisual
 {
 	public const string VisualChildName = "Visual";
-	public const string DoorLeafChildName = "DoorLeaf";
-	public const string DoorLeafModelPath = "models/building/build_wood_door_leaf.vmdl";
 
 	public static void Ensure( GameObject instance, string pieceId )
 	{
@@ -39,9 +38,6 @@ static class BuildPieceVisual
 		renderer.Model = model;
 		renderer.RenderType = ModelRenderer.ShadowRenderType.On;
 		ApplyCatalogTint( renderer, pieceId );
-
-		if ( BuildPieceFamily.IsDoor( pieceId ) )
-			EnsureStaticDoorLeaf( instance, pieceId );
 	}
 
 	public static bool TryGetModelPath( string pieceId, out string path )
@@ -66,40 +62,22 @@ static class BuildPieceVisual
 	/// <item>triangles — the gable walls and the triangle floor. A box fills in the half the
 	/// hypotenuse cuts away, so a 45° gable tucked under a roof stands proud of the slope and stops
 	/// you walking off it.</item>
+	/// <item>the door — the frame is two jambs and a header around a hole. A module box fills the
+	/// doorway in, which turns the piece back into a wall; the mesh keeps the opening. The leaf is
+	/// its own keyframed box on the hinge child (see <see cref="BuildDoor"/>).</item>
 	/// </list>
 	/// All of these vmdls declare PhysicsMeshFromRender, which is what gets used.
 	/// </summary>
 	public static bool UsesMeshCollision( string pieceId ) =>
 		BuildPieceFamily.IsRoof( pieceId )
 		|| BuildPieceFamily.IsStairs( pieceId )
+		|| BuildPieceFamily.IsDoor( pieceId )
 		|| BuildSnapLayout.GetKind( pieceId ) == BuildSnapLayoutKind.TriangleCorners;
 
 	/// <summary>Pitch is baked into the FBX — root stays yaw-only; snap math adds prefab pitch.</summary>
 	public static bool UsesBakedMeshRotation( string pieceId ) =>
 		( BuildPieceFamily.IsRoof( pieceId ) && !BuildPieceFamily.IsCorner( pieceId ) )
 		|| ( BuildPieceFamily.IsBeam( pieceId ) && pieceId.Contains( "45", StringComparison.OrdinalIgnoreCase ) );
-
-	static void EnsureStaticDoorLeaf( GameObject instance, string pieceId )
-	{
-		var leafModel = Model.Load( DoorLeafModelPath );
-		if ( leafModel is null || !leafModel.IsValid() )
-			return;
-
-		// Sit the leaf at the frame opening centre from the frame model's bounds.
-		var frameHalf = BuildPieceModelCache.GetHalfExtents( pieceId );
-		var frameCenter = BuildPieceModelCache.GetCenter( pieceId );
-		var leafHalf = leafModel.Bounds.Size * 0.5f;
-
-		var leafGo = FindOrCreateChild( instance, DoorLeafChildName );
-		leafGo.LocalPosition = frameCenter + new Vector3( 0f, 0f, -frameHalf.z + leafHalf.z );
-		leafGo.LocalRotation = Rotation.Identity;
-		leafGo.LocalScale = Vector3.One;
-
-		var renderer = leafGo.Components.Get<ModelRenderer>() ?? leafGo.Components.Create<ModelRenderer>();
-		renderer.Model = leafModel;
-		renderer.RenderType = ModelRenderer.ShadowRenderType.On;
-		ApplyCatalogTint( renderer, pieceId );
-	}
 
 	static void RemoveDevBoxRenderer( GameObject instance )
 	{

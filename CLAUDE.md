@@ -162,7 +162,8 @@ Code/
   Vitals/       VitalsAuthority (host pools), regen gates, StatusEffectCatalog (Assets/data/status_effects.json)
   Entity/       EntityBrain (+ Breach partial: entities tear down build pieces) · EntityLocomotion · EntityCombat · perception, nav
   Building/     Build piece catalog, snap layout/placement/compatibility, piece health, nav sync (+ BuildNavBakeSystem),
-                ShelterProbe (global roof-above / walled-in checks; comfort + workbench gate)
+                ShelterProbe (global roof-above / walled-in checks; comfort + workbench gate),
+                BuildDoor (swinging leaf on the door prefab: mesh-collided frame, keyframed leaf, opens away from the user)
   Inventory/    PlayerInventory · PlayerHotbar · containers · resource + equipment catalogs
   Crafting/ Food/ Quests/ Skills/ Augments/   JSON-backed catalogs (Assets/data/*.json)
   Farming/      FarmingRules (dirt tag, tile size, spacing) · TilledSoil · FarmPlant (host-timed growth stages) · FarmingAuthority (host till / sow)

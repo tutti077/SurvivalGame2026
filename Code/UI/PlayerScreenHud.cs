@@ -154,6 +154,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		RefreshFoodSlots();
 		_statusEffectsHud?.Tick( _menuController is { IsMenuOpen: true } );
 		if ( _inventoryInteraction?.FocusedCampfire is not null
+		     || _inventoryInteraction?.FocusedDoor is not null
 		     || _inventoryInteraction?.FocusedTimeTrialStand is not null
 		     || _inventoryInteraction?.FocusedArenaMenuButton is not null )
 			OnInteractionPromptChanged();
@@ -200,6 +201,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedContainerChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedAugmentStationChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedCampfireChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedDoorChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged -= OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.FocusedArenaButtonChanged -= OnInteractionPromptChanged;
@@ -564,6 +566,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedContainerChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedAugmentStationChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedDoorChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.FocusedArenaButtonChanged += OnInteractionPromptChanged;
@@ -978,6 +981,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedContainerChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedAugmentStationChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedDoorChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.FocusedArenaButtonChanged += OnInteractionPromptChanged;
@@ -1122,10 +1126,12 @@ public sealed class PlayerScreenHud : PanelComponent
 		var showArena = !arenaMenuOpen && !showOpen && !showTrial
 		                && focusedArenaButton is not null && focusedArenaButton.IsValid();
 		var showCampfire = !showOpen && !showTrial && !showArena && focusedCampfire is not null && focusedCampfire.IsValid();
+		var focusedDoor = _inventoryInteraction?.FocusedDoor;
+		var showDoor = !showOpen && !showTrial && !showArena && !showCampfire && focusedDoor is not null && focusedDoor.IsValid();
 		var farmingPrompt = _farming?.PromptText ?? string.Empty;
-		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && farmingPrompt.Length > 0;
-		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showFarming && _handHarvest?.FocusedNode is not null;
-		var show = showOpen || showTrial || showArena || showCampfire || showFarming || showHarvest;
+		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && farmingPrompt.Length > 0;
+		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showFarming && _handHarvest?.FocusedNode is not null;
+		var show = showOpen || showTrial || showArena || showCampfire || showDoor || showFarming || showHarvest;
 
 		if ( _promptKeyLabel is not null )
 			_promptKeyLabel.Text = showFarming ? (_farming?.PromptKey ?? "E") : "E";
@@ -1163,6 +1169,10 @@ public sealed class PlayerScreenHud : PanelComponent
 				var fuel = focusedCampfire.FuelUnits;
 				var max = Math.Max( 1, focusedCampfire.MaxFuelUnits );
 				_promptLabel.Text = $"Add Wood ({fuel}/{max})";
+			}
+			else if ( showDoor )
+			{
+				_promptLabel.Text = focusedDoor.IsOpen ? "Close Door" : "Open Door";
 			}
 			else if ( showFarming )
 			{

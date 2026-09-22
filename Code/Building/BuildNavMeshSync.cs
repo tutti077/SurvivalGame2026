@@ -386,6 +386,10 @@ public static class BuildNavMeshSync
 			if ( IsPawnOrEnemyHierarchy( go ) )
 				continue;
 
+			// Door leaves are keyframed on purpose (they swing) — nav already includes keyframed bodies.
+			if ( go.Tags.Has( BuildDoor.LeafTag ) )
+				continue;
+
 			var goBounds = go.GetBounds();
 			if ( goBounds.Size.LengthSquared < 1f )
 				goBounds = BBox.FromPositionAndSize( go.WorldPosition, 80f );

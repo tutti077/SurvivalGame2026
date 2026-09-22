@@ -1,0 +1,13 @@
+Next up I want to work on our boss implementation.
+
+
+When I click H I want a boss to spawn at our boss spawner location. You can throw that somewhere near the camp, just allow for enough room so that its not confusing. 
+
+When youre within a 500m Range of the boss when it spawns then I want its health bar to appear at the top of the players screen.
+
+It should show the boss's name, then underneath it the health bar. Inside the health bar I want it to show the Boss's max health and how much health it has remaining like 100/300 etc etc. the health bar should be red and the text black.
+
+I think to start our sample boss can just have 300 health but eventually itll have far far more. 
+
+Some bosses should have a 2nd form so that when you get the health to 0 it fills the health bar back up, changes the background color from red to green or purple or something. Maybe just add some json true/false flags and maybe a variable to say how much health its 2nd form should have?
+

@@ -20,6 +20,12 @@ public static class BuildModuleDimensions
 	/// <summary>Square section of every post / beam (m).</summary>
 	public const float BeamMeters = 0.2f;
 	/// <summary>
+	/// Doorway height (m) measured up from the wall bottom — mirrors <c>DOOR_OPENING_HEIGHT</c> in
+	/// <c>Blender/scripts/create_build_kit.py</c>. <see cref="BuildDoor"/> hangs the leaf so its
+	/// sill gap and head gap split whatever the leaf model leaves over.
+	/// </summary>
+	public const float DoorOpeningHeightMeters = 1.8f;
+	/// <summary>
 	/// 45° roof slope length (m): √(Module²+Module²) so one roof covers the run+rise of a module
 	/// and two roofs meet in the middle across a 2-module span. Width stays <see cref="ModuleMeters"/>.
 	/// Rounded to 2.82 this landed the pitched corner snaps at ±0.997 m instead of ±1 m, which is a
