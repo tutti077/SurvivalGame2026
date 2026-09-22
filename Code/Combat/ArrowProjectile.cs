@@ -6,7 +6,9 @@ namespace Survival;
 /// <summary>
 /// Host-simulated arrow. Clients see the networked transform; only the host applies damage.
 /// On impact the host destroys the flyer and spawns a stuck brown-cylinder pickup
-/// (<see cref="WorldDroppedResource"/>) that can be magnet / E recovered.
+/// (<see cref="WorldDroppedResource"/>) that can be magnet / E recovered. Hits on anything
+/// damageable (entity, player, tree, build piece) parent the pickup to the hit object via
+/// <see cref="StuckArrow"/>, so it rides along and drops with physics when the victim dies.
 /// </summary>
 [Title( "Arrow Projectile" )]
 public sealed class ArrowProjectile : Component
@@ -146,16 +148,42 @@ public sealed class ArrowProjectile : Component
 		// Embed ~35% of the shaft into the surface so it reads as stuck.
 		var pos = tr.HitPosition - flightDir * ( _shaftLength * 0.35f );
 		var rot = Rotation.LookAt( flightDir, Vector3.Up );
-		HostSpawnStuckPickup( scene, pos, rot, _ammoResourceId, _shaftLength );
+
+		// Damageable things move or die — ride the hit object. Static world stays scene-rooted.
+		GameObject hitObject = null;
+		DamageReceiver receiver = null;
+		var victimDead = false;
+		if ( tr.GameObject.IsValid()
+		     && CombatAuthority.TryFindDamageable( tr.GameObject, out var found )
+		     && found is DamageReceiver dmg )
+		{
+			// The killing arrow lands on something that just died — its death event already
+			// fired, so never attach; drop it loose right away instead.
+			victimDead = !CombatAuthority.IsDamageVictimAlive( dmg );
+			if ( !victimDead )
+			{
+				hitObject = tr.GameObject;
+				receiver = dmg;
+			}
+		}
+
+		var stuck = HostSpawnStuckPickup( scene, pos, rot, _ammoResourceId, _shaftLength, hitObject, receiver );
+		if ( victimDead && stuck.IsValid() )
+			ApplyLoosePhysics( stuck, _shaftLength, Math.Max( 1.5f, _shaftLength * 0.05f ) );
 	}
 
-	/// <summary>Fresh networked pickup — created before NetworkSpawn so clients get the full setup.</summary>
+	/// <summary>
+	/// Fresh networked pickup — created before NetworkSpawn so clients get the full setup.
+	/// Pass <paramref name="hitObject"/> + <paramref name="receiver"/> to embed in a living thing.
+	/// </summary>
 	public static GameObject HostSpawnStuckPickup(
 		Scene scene,
 		Vector3 position,
 		Rotation rotation,
 		string ammoResourceId,
-		float shaftLength )
+		float shaftLength,
+		GameObject hitObject,
+		DamageReceiver receiver )
 	{
 		if ( scene is null || !scene.IsValid() )
 			return null;
@@ -182,15 +210,69 @@ public sealed class ArrowProjectile : Component
 		drop.PreventMerge = true;
 		drop.SetDespawnAfterSeconds( 60f );
 
-		var sphere = go.Components.Create<SphereCollider>();
-		sphere.Static = true;
-		sphere.Radius = Math.Max( 3f, shaftLength * 0.22f );
-		sphere.Friction = 1f;
-
 		go.Tags.Add( "worlddrop" );
+
+		if ( hitObject.IsValid() && receiver is not null )
+		{
+			// No collider while riding a victim: a child collider would fold into the entity's
+			// rigidbody and clutter its traces. Pickup is registry-driven, not collider-driven.
+			var stuck = go.Components.Create<StuckArrow>();
+			stuck.HostAttach( hitObject, receiver, shaftLength, thickness );
+		}
+		else
+		{
+			var sphere = go.Components.Create<SphereCollider>();
+			sphere.Static = true;
+			sphere.Radius = Math.Max( 3f, shaftLength * 0.22f );
+			sphere.Friction = 1f;
+		}
+
 		go.Enabled = true;
 		HostNetworkSpawn.TrySpawn( go );
 		return go;
+	}
+
+	/// <summary>
+	/// Host: turn a stuck pickup into a loose one — shaft-sized dynamic box collider + rigidbody
+	/// so it tumbles to the ground. Used when the thing it was stuck in dies.
+	/// </summary>
+	public static void ApplyLoosePhysics( GameObject go, float shaftLength, float thickness )
+	{
+		if ( !go.IsValid() )
+			return;
+
+		shaftLength = Math.Max( 8f, shaftLength );
+		thickness = Math.Max( 1.5f, thickness );
+
+		foreach ( var col in go.Components.GetAll<Collider>( FindMode.EverythingInSelf ) )
+			col.Destroy();
+
+		// Box in unscaled model space — GameObject.LocalScale already stretches it to the shaft.
+		var modelSize = go.Components.Get<ModelRenderer>()?.Model?.Bounds.Size ?? new Vector3( 1f );
+		var box = go.Components.Create<BoxCollider>();
+		box.Static = false;
+		box.Scale = new Vector3(
+			Math.Max( 0.01f, modelSize.x ),
+			Math.Max( 0.01f, modelSize.y ),
+			Math.Max( 0.01f, modelSize.z ) );
+		box.Friction = 0.9f;
+		box.Elasticity = 0.05f;
+
+		var body = go.Components.Get<Rigidbody>() ?? go.Components.Create<Rigidbody>();
+		body.MotionEnabled = true;
+		body.Gravity = true;
+		body.GravityScale = 1f;
+		body.EnableImpactDamage = false;
+		body.MassOverride = 0.3f;
+		body.LinearDamping = 0.3f;
+		body.AngularDamping = 2f;
+		body.SleepThreshold = 12f;
+		body.StartAsleep = false;
+		body.ResetInertiaTensor();
+
+		// Small outward pop so it visibly comes free instead of sliding straight down.
+		body.Velocity = go.WorldRotation.Backward * 20f + Vector3.Up * 25f;
+		body.AngularVelocity = Vector3.Random * 3f;
 	}
 
 	void SampleAndDrawTrail()

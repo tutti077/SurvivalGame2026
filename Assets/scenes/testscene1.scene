@@ -472,7 +472,8 @@
         "b3f1c7e2-9a44-4d18-8c60-71e5a2d4f083": "68beb219-af4d-8849-8020-8a969ccb5c0d",
         "3b7f2a91-6c44-4e0d-9a12-58f0cbd7e2a1": "c9fb65d7-f664-80fe-a29c-bd062722f5b3",
         "d4e5f6a7-b8c9-4a1b-9c2d-3e4f5a6b7c8d": "3005d88a-1883-881b-b215-1da708af1299",
-        "9e57a1c0-4b2d-4f8e-9a31-7c0d5e2f6b14": "f2e74d11-4371-8a94-a1fd-3a06ac9e0641"
+        "9e57a1c0-4b2d-4f8e-9a31-7c0d5e2f6b14": "f2e74d11-4371-8a94-a1fd-3a06ac9e0641",
+        "7c9e4f21-8a3b-4d56-b1e0-2f6a9c8d3e14": "df8817e4-630e-8ff2-826f-53994214f1fc"
       }
     },
     {
@@ -609,6 +610,62 @@
           "__version": 2,
           "Flags": 0,
           "Name": "AnimalSpawnPoint",
+          "Position": "0,0,0",
+          "Rotation": "0,0,0,1",
+          "Scale": "1,1,1",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [],
+          "Children": []
+        }
+      ]
+    },
+    {
+      "__guid": "606950ba-6491-4e46-9adb-587d553baf56",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "EnemyCampSpawner",
+      "Position": "4450,-1290,34",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Survival.EnemyCampSpawnButton",
+          "__guid": "0f0860e2-7d5d-4552-b549-947557e369f9",
+          "__enabled": true,
+          "Flags": 0,
+          "CampId": "scav_outpost_test",
+          "InputAction": "SpawnEnemyCamp",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "SpawnPoint": {
+            "_type": "gameobject",
+            "go": "4091318a-40cd-4a1c-aa2e-81a15d869b7e"
+          }
+        }
+      ],
+      "Children": [
+        {
+          "__guid": "4091318a-40cd-4a1c-aa2e-81a15d869b7e",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "EnemyCampSpawnPoint",
           "Position": "0,0,0",
           "Rotation": "0,0,0,1",
           "Scale": "1,1,1",
@@ -778,7 +835,7 @@
               "OnTriggerExit": null,
               "RollingResistance": null,
               "Scale": "50,50,50",
-              "Static": false,
+              "Static": true,
               "Surface": null,
               "SurfaceVelocity": "0,0,0"
             }
@@ -850,7 +907,7 @@
               "OnTriggerExit": null,
               "RollingResistance": null,
               "Scale": "50,50,50",
-              "Static": false,
+              "Static": true,
               "Surface": null,
               "SurfaceVelocity": "0,0,0"
             }
@@ -924,7 +981,7 @@
           "OnTriggerExit": null,
           "RollingResistance": null,
           "Scale": "50,50,50",
-          "Static": false,
+          "Static": true,
           "Surface": null,
           "SurfaceVelocity": "0,0,0"
         },
@@ -1060,7 +1117,7 @@
           "OnTriggerExit": null,
           "RollingResistance": null,
           "Scale": "50,50,50",
-          "Static": false,
+          "Static": true,
           "Surface": null,
           "SurfaceVelocity": "0,0,0"
         },
@@ -1080,7 +1137,7 @@
           "BlockSampleSphereRadius": 2,
           "BlockShellHeightPadding": 8,
           "BowAdsCameraDistanceScale": 0.55,
-          "BowFullDrawLevelRangeMeters": 12.2,
+          "BowFullDrawLevelRangeMeters": 30,
           "BowFullDrawSeconds": 1,
           "BowLaunchSpeedMultiplier": 1,
           "BowMaxAimConePixels": 56,
@@ -1281,22 +1338,70 @@
               "__enabled": true,
               "Flags": 0,
               "Items": [
-                  { "ResourceId": "basic_hook", "Count": 1 },
-                  { "ResourceId": "basic_wingsuit", "Count": 1 },
-                  { "ResourceId": "build_hammer", "Count": 1 },
-                  { "ResourceId": "club_wood", "Count": 1 },
-                  { "ResourceId": "basic_hook", "Count": 1 },
-                  { "ResourceId": "basic_wingsuit", "Count": 1 },
-                  { "ResourceId": "build_hammer", "Count": 1 },
-                  { "ResourceId": "club_wood", "Count": 1 },
-                  { "ResourceId": "basic_hook", "Count": 1 },
-                  { "ResourceId": "basic_wingsuit", "Count": 1 },
-                  { "ResourceId": "build_hammer", "Count": 1 },
-                  { "ResourceId": "club_wood", "Count": 1 },
-                  { "ResourceId": "basic_hook", "Count": 1 },
-                  { "ResourceId": "basic_wingsuit", "Count": 1 },
-                  { "ResourceId": "build_hammer", "Count": 1 },
-                  { "ResourceId": "club_wood", "Count": 1 }
+                {
+                  "ResourceId": "basic_hook",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "basic_wingsuit",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "build_hammer",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "club_wood",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "basic_hook",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "basic_wingsuit",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "build_hammer",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "club_wood",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "basic_hook",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "basic_wingsuit",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "build_hammer",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "club_wood",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "basic_hook",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "basic_wingsuit",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "build_hammer",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "club_wood",
+                  "Count": 1
+                }
               ],
               "KitDisplayName": "Starter Kit",
               "OnComponentDestroy": null,
@@ -1373,11 +1478,26 @@
               "__enabled": true,
               "Flags": 0,
               "Items": [
-                  { "ResourceId": "tool_hoe", "Count": 1 },
-                  { "ResourceId": "seed_radish", "Count": 10 },
-                  { "ResourceId": "seed_daisy", "Count": 10 },
-                  { "ResourceId": "seed_blueberry", "Count": 10 },
-                  { "ResourceId": "seed_raspberry", "Count": 10 }
+                {
+                  "ResourceId": "tool_hoe",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "seed_radish",
+                  "Count": 10
+                },
+                {
+                  "ResourceId": "seed_daisy",
+                  "Count": 10
+                },
+                {
+                  "ResourceId": "seed_blueberry",
+                  "Count": 10
+                },
+                {
+                  "ResourceId": "seed_raspberry",
+                  "Count": 10
+                }
               ],
               "KitDisplayName": "Farming Kit",
               "OnComponentDestroy": null,
@@ -1454,9 +1574,18 @@
               "__enabled": true,
               "Flags": 0,
               "Items": [
-                  { "ResourceId": "basic_bow", "Count": 1 },
-                  { "ResourceId": "arrow_wood", "Count": 50 },
-                  { "ResourceId": "arrow_wood", "Count": 50 }
+                {
+                  "ResourceId": "basic_bow",
+                  "Count": 1
+                },
+                {
+                  "ResourceId": "arrow_wood",
+                  "Count": 50
+                },
+                {
+                  "ResourceId": "arrow_wood",
+                  "Count": 50
+                }
               ],
               "KitDisplayName": "Archery",
               "OnComponentDestroy": null,
@@ -1533,16 +1662,46 @@
               "__enabled": true,
               "Flags": 0,
               "Items": [
-                  { "ResourceId": "fish_bluegill", "Count": 5 },
-                  { "ResourceId": "fish_sunfish", "Count": 5 },
-                  { "ResourceId": "fish_perch", "Count": 5 },
-                  { "ResourceId": "fish_bass", "Count": 5 },
-                  { "ResourceId": "fish_pickerel", "Count": 5 },
-                  { "ResourceId": "fish_trout", "Count": 5 },
-                  { "ResourceId": "fish_catfish", "Count": 5 },
-                  { "ResourceId": "fish_walleye", "Count": 5 },
-                  { "ResourceId": "fish_pike", "Count": 5 },
-                  { "ResourceId": "fish_eel", "Count": 5 }
+                {
+                  "ResourceId": "fish_bluegill",
+                  "Count": 5
+                },
+                {
+                  "ResourceId": "fish_sunfish",
+                  "Count": 5
+                },
+                {
+                  "ResourceId": "fish_perch",
+                  "Count": 5
+                },
+                {
+                  "ResourceId": "fish_bass",
+                  "Count": 5
+                },
+                {
+                  "ResourceId": "fish_pickerel",
+                  "Count": 5
+                },
+                {
+                  "ResourceId": "fish_trout",
+                  "Count": 5
+                },
+                {
+                  "ResourceId": "fish_catfish",
+                  "Count": 5
+                },
+                {
+                  "ResourceId": "fish_walleye",
+                  "Count": 5
+                },
+                {
+                  "ResourceId": "fish_pike",
+                  "Count": 5
+                },
+                {
+                  "ResourceId": "fish_eel",
+                  "Count": 5
+                }
               ],
               "KitDisplayName": "Fish",
               "OnComponentDestroy": null,
@@ -1619,14 +1778,38 @@
               "__enabled": true,
               "Flags": 0,
               "Items": [
-                  { "ResourceId": "rawmeat_bird", "Count": 10 },
-                  { "ResourceId": "rawmeat_fox", "Count": 10 },
-                  { "ResourceId": "rawmeat_whitetail", "Count": 10 },
-                  { "ResourceId": "rawmeat_lynx", "Count": 10 },
-                  { "ResourceId": "food_roasted_bird", "Count": 5 },
-                  { "ResourceId": "food_roasted_fox", "Count": 5 },
-                  { "ResourceId": "food_roasted_whitetail", "Count": 5 },
-                  { "ResourceId": "food_roasted_lynx", "Count": 5 }
+                {
+                  "ResourceId": "rawmeat_bird",
+                  "Count": 10
+                },
+                {
+                  "ResourceId": "rawmeat_fox",
+                  "Count": 10
+                },
+                {
+                  "ResourceId": "rawmeat_whitetail",
+                  "Count": 10
+                },
+                {
+                  "ResourceId": "rawmeat_lynx",
+                  "Count": 10
+                },
+                {
+                  "ResourceId": "food_roasted_bird",
+                  "Count": 5
+                },
+                {
+                  "ResourceId": "food_roasted_fox",
+                  "Count": 5
+                },
+                {
+                  "ResourceId": "food_roasted_whitetail",
+                  "Count": 5
+                },
+                {
+                  "ResourceId": "food_roasted_lynx",
+                  "Count": 5
+                }
               ],
               "KitDisplayName": "Meats",
               "OnComponentDestroy": null,
@@ -1919,6 +2102,14 @@
             },
             "Property": "Position",
             "Value": "-544,-511.999939,8.79685116"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "8e1059a4-a59e-4304-b444-d636b4ff6301"
+            },
+            "Property": "Static",
+            "Value": true
           }
         ],
         "MovedObjects": []
@@ -140934,6 +141125,14 @@
             },
             "Property": "Position",
             "Value": "31.9999962,4512,1.4312699E-05"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "64b17888-f306-45ea-a6ab-c66ffeab0470"
+            },
+            "Property": "Static",
+            "Value": true
           }
         ],
         "MovedObjects": []
@@ -141046,7 +141245,7 @@
           "OnTriggerExit": null,
           "RollingResistance": null,
           "Scale": "50,50,50",
-          "Static": false,
+          "Static": true,
           "Surface": null,
           "SurfaceVelocity": "0,0,0"
         }
@@ -141821,7 +142020,7 @@
               },
               "Scale": 1,
               "TextScope": {
-                "Text": "n = spawn animal\nj = return to last teleport\nk = spawn entity\n",
+                "Text": "n = spawn animal\nj = return to last teleport\nk = spawn entity\ni = spawn entity camp",
                 "TextColor": "1,1,1,1",
                 "FontName": "Poppins",
                 "FontSize": 32,
@@ -147774,6 +147973,14 @@
             },
             "Property": "Position",
             "Value": "415.999939,2239.99951,1.46302409E-06"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "48cd543c-4eaa-43a4-b2f8-2859b02dd650"
+            },
+            "Property": "Static",
+            "Value": true
           }
         ],
         "MovedObjects": []
@@ -147801,6 +148008,14 @@
             },
             "Property": "Position",
             "Value": "-63.9999924,2175.99951,0"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "b4b76943-9f3d-411f-8c00-ffa5ddc7b8d8"
+            },
+            "Property": "Static",
+            "Value": true
           }
         ],
         "MovedObjects": []
@@ -147828,6 +148043,14 @@
             },
             "Property": "Position",
             "Value": "-543.999878,2111.99951,2.23887437E-05"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "f71abb5b-ca58-46e4-ae48-e3ac15ac74ef"
+            },
+            "Property": "Static",
+            "Value": true
           }
         ],
         "MovedObjects": []
@@ -148623,6 +148846,7 @@
   ],
   "SceneProperties": {
     "NetworkInterpolation": true,
+    "PhysicsMode": "Physics3D",
     "TimeScale": 1,
     "WantsSystemScene": true,
     "Metadata": {
@@ -148643,7 +148867,11 @@
       "ExcludedBodies": "",
       "IncludedBodies": "",
       "DeferGeneration": false,
-      "CustomBounds": false,
+      "CustomBounds": true,
+      "Bounds": {
+        "Mins": "-6000,-6000,-1000.79999",
+        "Maxs": "6000,6000,40006.8008"
+      },
       "BakedDataPath": {
         "$reference_type": "filereference",
         "path": "scenes/testscene1_scene_data/navmesh/baked.navdata"

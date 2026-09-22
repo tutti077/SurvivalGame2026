@@ -17,4 +17,6 @@ public enum EnemyAiState
 	Retreating = 5,
 	/// <summary>Player unreachable behind / on top of build pieces — walking to and hitting structure to open a way in.</summary>
 	Breaching = 6,
+	/// <summary>Pulled past the camp leash's max travel distance — target dropped, running back to within wander distance of the camp.</summary>
+	Returning = 7,
 }

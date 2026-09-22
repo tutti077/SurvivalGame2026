@@ -202,7 +202,7 @@
         "BlockSampleSphereRadius": 2,
         "BlockShellHeightPadding": 8,
         "BowAdsCameraDistanceScale": 0.55,
-        "BowFullDrawLevelRangeMeters": 18.3,
+        "BowFullDrawLevelRangeMeters": 30,
         "BowFullDrawSeconds": 1,
         "BowLaunchSpeedMultiplier": 1,
         "BowMaxAimConePixels": 56,

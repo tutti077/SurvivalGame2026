@@ -156,7 +156,7 @@ Code/
   Player/       PlayerMovement · PlayerVitals (+ Comfort / StatusEffects partials) · PlayerCombat · PlayerAnimation · PlayerAugments
                 (+ their partials), melee path/sweep/block helpers, equipment, hand harvest,
                 inventory interaction, build hammer
-  Combat/       CombatAuthority (host melee validation), ArrowProjectile
+  Combat/       CombatAuthority (host melee validation), ArrowProjectile, StuckArrow (arrow rides its victim, drops with physics on death)
   Crew/         CrewRegistry (host static registry — player data, survives scene loads) + PlayerCrew (per-pawn sync on the player prefab)
   Arena/        ArenaSession (crew-vs-crew battles, queue + matchmaking), ArenaMenuButton
   Vitals/       VitalsAuthority (host pools), regen gates, StatusEffectCatalog (Assets/data/status_effects.json)
@@ -167,6 +167,8 @@ Code/
   Crafting/ Food/ Quests/ Skills/ Augments/   JSON-backed catalogs (Assets/data/*.json)
   Farming/      FarmingRules (dirt tag, tile size, spacing) · TilledSoil · FarmPlant (host-timed growth stages) · FarmingAuthority (host till / sow)
                 · seed rows live in resources.json ("seed" block); ToolHoe + PlayerFarming live in Player/
+  Camps/        EnemyCampCatalog (Assets/data/enemy_camps.json — piece + entity layouts + camp-centered wander / max-travel rings, build-kit meters)
+                · EnemyCampSpawner (host stamp, sets EntityBrain camp leash, creates the EnemyCamp root) · EnemyCamp (camp root; `campRings` debug rings) · EnemyCampSpawnButton (I)
   Hacks/        GameHacks — console-toggled dev flags (allCrafting), mirrored onto pawns via [Sync] for host checks
   World/Terrain/        Streaming, chunk mesh, biome population, world save IO
   World/TerrainPreview/ Offline world generation pipeline + settings

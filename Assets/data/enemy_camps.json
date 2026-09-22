@@ -1,0 +1,33 @@
+{
+  // Enemy camp layouts. Offsets are camp-local meters in the build kit's space (50 u/m, same as
+  // build pieces) so entity positions line up with piece footprints: a 2 m floor is one tile.
+  // X = camp forward, Y = camp left, Z = up from the ground at the camp origin. yawDegrees is
+  // relative to the camp's facing. wanderDistanceMeters / maxTravelDistanceMeters are two rings
+  // centered on the camp origin: guards wander within the first; pulled past the second they drop
+  // their target and run back. Camp values are defaults; an entity row can override the distances.
+  "camps": [
+    {
+      "id": "scav_outpost_test",
+      "displayName": "Scav Outpost (test)",
+      "wanderDistanceMeters": 24,
+      "maxTravelDistanceMeters": 80,
+      "pieces": [
+        { "pieceId": "build_wood_floor", "x": -2, "y": -2 },
+        { "pieceId": "build_wood_floor", "x": 0, "y": -2 },
+        { "pieceId": "build_wood_floor", "x": 2, "y": -2 },
+        { "pieceId": "build_wood_floor", "x": -2, "y": 0 },
+        { "pieceId": "build_wood_floor", "x": 0, "y": 0 },
+        { "pieceId": "build_wood_floor", "x": 2, "y": 0 },
+        { "pieceId": "build_wood_floor", "x": -2, "y": 2 },
+        { "pieceId": "build_wood_floor", "x": 0, "y": 2 },
+        { "pieceId": "build_wood_floor", "x": 2, "y": 2 }
+      ],
+      "entities": [
+        { "archetype": "Scav", "tier": 1, "x": -4, "y": -4, "yawDegrees": 45 },
+        { "archetype": "Scav", "tier": 1, "x": 4, "y": -4, "yawDegrees": 135 },
+        { "archetype": "Scav", "tier": 1, "x": 4, "y": 4, "yawDegrees": -135 },
+        { "archetype": "Scav", "tier": 1, "x": -4, "y": 4, "yawDegrees": -45 }
+      ]
+    }
+  ]
+}

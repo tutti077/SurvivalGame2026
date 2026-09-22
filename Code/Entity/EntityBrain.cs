@@ -20,6 +20,11 @@ public sealed partial class EntityBrain : Component
 	[Property] public NavMeshAgent Agent { get; set; }
 
 	[Property, Group( "Home" )] public Vector3 HomePosition { get; set; }
+	/// <summary>Camp leash: distances measured from <see cref="LeashCenter"/> (the camp origin, shared by every guard). Zero = unbounded (free roam).</summary>
+	[Property, Group( "Home" ), Title( "Leash center (world, camp origin)" )] public Vector3 LeashCenter { get; set; }
+	[Property, Group( "Home" ), Title( "Wander distance from leash center (units, 0 = unbounded)" )] public float LeashWanderDistance { get; set; }
+	[Property, Group( "Home" ), Title( "Max travel distance from leash center (units, 0 = unbounded)" )] public float LeashMaxTravelDistance { get; set; }
+	public bool HasLeash => LeashWanderDistance > 0f;
 
 	[Property, Group( "Ranges" )] public float AttackRange { get; set; } = 110f;
 	[Property, Group( "Ranges" ), Title( "Find-player radius while chasing (units)" )]
@@ -56,6 +61,7 @@ public sealed partial class EntityBrain : Component
 	Vector3 _searchNoisePos;
 	Vector3 _retreatGoal;
 	Vector3 _retreatStart;
+	Vector3 _returnGoal;
 	float _alertMeter;
 	string _lastAlertFillReason = "";
 	string _lastLosDetail = "";
@@ -156,6 +162,18 @@ public sealed partial class EntityBrain : Component
 	}
 
 	public void SetHomePosition( Vector3 home ) => HomePosition = home;
+
+	/// <summary>
+	/// Leash the entity to a camp: wander legs stay within <paramref name="wanderDistance"/> of
+	/// <paramref name="center"/>; an alerted entity pulled past <paramref name="maxTravelDistance"/>
+	/// drops its target and runs back to within wander distance (so players cannot lure a camp away).
+	/// </summary>
+	public void SetLeash( Vector3 center, float wanderDistance, float maxTravelDistance )
+	{
+		LeashCenter = center;
+		LeashWanderDistance = Math.Max( 0f, wanderDistance );
+		LeashMaxTravelDistance = Math.Max( LeashWanderDistance, maxTravelDistance );
+	}
 
 	public void ApplyPerception( EntityPerceptionProfile profile )
 	{
@@ -393,6 +411,10 @@ public sealed partial class EntityBrain : Component
 		if ( attacker.Components.Get<PlayerController>() is null )
 			return;
 
+		// Leashed home: hits do not pull them back out — they re-aggro once inside the wander boundary.
+		if ( _state == EnemyAiState.Returning )
+			return;
+
 		var player = attacker.GameObject;
 		_target = player;
 		RememberLastKnown( player.WorldPosition );
@@ -452,6 +474,9 @@ public sealed partial class EntityBrain : Component
 			return;
 		}
 
+		if ( TickLeash() )
+			return;
+
 		switch ( _state )
 		{
 			case EnemyAiState.Idle:
@@ -474,6 +499,9 @@ public sealed partial class EntityBrain : Component
 				break;
 			case EnemyAiState.Breaching:
 				TickBreaching();
+				break;
+			case EnemyAiState.Returning:
+				TickReturning();
 				break;
 		}
 
@@ -814,17 +842,26 @@ public sealed partial class EntityBrain : Component
 
 	void TickManualWanderStep()
 	{
-		var pos = GameObject.WorldPosition;
-		var to = (_wanderGoal - pos).WithZ( 0f );
-		var flat = to.Length;
+		var flat = (_wanderGoal - GameObject.WorldPosition).WithZ( 0f ).Length;
 		if ( flat <= WanderReachDistance )
 		{
 			EnterState( EnemyAiState.Idle );
 			return;
 		}
 
+		ManualStepToward( _wanderGoal, Math.Max( 48f, WanderMoveSpeed ) );
+	}
+
+	/// <summary>No nav agent drive yet — walk toward a goal on the heightfield so entities are not statues.</summary>
+	void ManualStepToward( Vector3 goal, float speed )
+	{
+		var pos = GameObject.WorldPosition;
+		var to = (goal - pos).WithZ( 0f );
+		var flat = to.Length;
+		if ( flat < 1e-3f )
+			return;
+
 		var dir = to / flat;
-		var speed = Math.Max( 48f, WanderMoveSpeed );
 		var dt = Math.Max( Time.Delta, 1e-4f );
 		var next = pos + dir * (speed * dt);
 
@@ -1190,6 +1227,85 @@ public sealed partial class EntityBrain : Component
 		}
 	}
 
+	/// <summary>
+	/// Camp leash: an alerted entity pulled past the max travel distance from the leash center
+	/// drops its target and runs back. One flat distance check per frame while alerted — nothing else.
+	/// </summary>
+	bool TickLeash()
+	{
+		if ( !HasLeash || LeashMaxTravelDistance <= 0f )
+			return false;
+
+		if ( _state is not (EnemyAiState.Chasing or EnemyAiState.Attacking or EnemyAiState.Searching or EnemyAiState.Breaching) )
+			return false;
+
+		if ( FlatDistanceFromLeash() <= LeashMaxTravelDistance )
+			return false;
+
+		BeginReturnHome();
+		return true;
+	}
+
+	float FlatDistanceFromLeash() =>
+		Vector3.DistanceBetween( GameObject.WorldPosition.WithZ( 0f ), LeashCenter.WithZ( 0f ) );
+
+	void BeginReturnHome()
+	{
+		_alertMeter = 0f;
+		_alertLocked = false;
+		_hasSearchGoal = false;
+		_hasLastKnown = false;
+		_hasStimulus = false;
+		_chaseLastSeenAt = 0d;
+		_target = null;
+		ClearBreachState();
+		EnterState( EnemyAiState.Returning );
+	}
+
+	void TickReturning()
+	{
+		if ( !HasLeash )
+		{
+			EnterState( EnemyAiState.Idle );
+			return;
+		}
+
+		// Back within wander distance of the camp — resume normal life; alert can build again from here.
+		if ( FlatDistanceFromLeash() <= LeashWanderDistance * 0.85f )
+		{
+			_alertMeter = 0f;
+			EnterState( EnemyAiState.Idle );
+			return;
+		}
+
+		ApplyAgentSpeed( run: true );
+		Locomotion?.SetLookTarget( null );
+		Locomotion?.SetTravelHint( _returnGoal );
+
+		Agent ??= Components.Get<NavMeshAgent>();
+		if ( !IsNavAgentReady() )
+		{
+			ManualStepToward( _returnGoal, Math.Max( 160f, ChaseMoveSpeed ) );
+			return;
+		}
+
+		if ( !ShouldRunPathCheck() )
+			return;
+
+		var issued = TryIssueNavMove( _returnGoal, 0f );
+		// Streamed terrain often fails QueryPath even when tiles exist — still ask the agent to go.
+		if ( issued is null || !issued.Value.HasPath )
+			Agent.MoveTo( _returnGoal );
+	}
+
+	Vector3 BuildReturnGoal()
+	{
+		if ( EntityNavMeshUtility.TryProjectToNavMesh( Scene, LeashCenter, out var onNav, NavProjectTier.Full ) )
+			return onNav;
+
+		return LeashCenter.WithZ( GameObject.WorldPosition.z );
+	}
+
 	bool CanStartRetreat()
 	{
 		if ( _state == EnemyAiState.Retreating )
@@ -1322,6 +1438,19 @@ public sealed partial class EntityBrain : Component
 				Locomotion?.SetLookTarget( null );
 				Locomotion?.SetPreferAimOverVelocity( false );
 				break;
+			case EnemyAiState.Returning:
+				EntityCombat?.SetEngaged( false );
+				EntityCombat?.ResetCycle();
+				ApplyAgentSpeed( run: true );
+				_returnGoal = BuildReturnGoal();
+				Locomotion?.SetLookTarget( null );
+				Locomotion?.SetPreferAimOverVelocity( false );
+				_needsImmediatePathCheck = true;
+				TryIssueNavMove( _returnGoal, 0f );
+				Agent ??= Components.Get<NavMeshAgent>();
+				if ( IsNavAgentReady() )
+					Agent.MoveTo( _returnGoal );
+				break;
 		}
 	}
 
@@ -1352,6 +1481,8 @@ public sealed partial class EntityBrain : Component
 		var yaw = Sandbox.Game.Random.Float( -70f, 70f );
 		var dir = Rotation.FromYaw( yaw ) * facing;
 		var ideal = origin + dir * radius;
+		if ( HasLeash )
+			ideal = ClampWanderGoalToLeash( origin, ideal, radius );
 
 		// Prefer a projected nav point — do not require a precomputed path (streamed terrain often fails that gate).
 		if ( EntityNavMeshUtility.TryProjectToNavMesh( Scene, ideal, out var onNav, NavProjectTier.Full ) )
@@ -1375,6 +1506,25 @@ public sealed partial class EntityBrain : Component
 		_wanderStuckSince = 0d;
 		_needsImmediatePathCheck = true;
 		return true;
+	}
+
+	/// <summary>Keep wander legs within wander distance of the leash center; from further out, the leg heads back toward the camp.</summary>
+	Vector3 ClampWanderGoalToLeash( Vector3 origin, Vector3 ideal, float legLength )
+	{
+		var fromCenter = (origin - LeashCenter).WithZ( 0f );
+		if ( fromCenter.Length > LeashWanderDistance )
+		{
+			// Too far out (after a retreat or a lost chase): walk one leg toward the camp.
+			var back = (LeashCenter - origin).WithZ( 0f ).Normal;
+			return origin + back * Math.Min( legLength, fromCenter.Length );
+		}
+
+		var offset = (ideal - LeashCenter).WithZ( 0f );
+		var limit = LeashWanderDistance * 0.9f;
+		if ( offset.Length <= limit )
+			return ideal;
+
+		return (LeashCenter + offset.Normal * limit).WithZ( ideal.z );
 	}
 
 	Vector3 BuildRetreatGoal()

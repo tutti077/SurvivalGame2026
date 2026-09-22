@@ -26,10 +26,46 @@ public static class BuildAuthority
 		if ( !scene.IsValid() )
 			return false;
 
+		if ( !HostPlacePiece( scene, pieceId, transform, blueprint, out spawned ) )
+			return false;
+
+		if ( spawned is null || !spawned.IsValid() )
+		{
+			// Nothing was actually built — the swing is free (durability only ticks on real effect).
+			spawned = null;
+			return true;
+		}
+
+		// Build hammer durability: 1 tick per placement that actually stood.
+		ToolDurability.HostAddWearToActiveTool( placer );
+
+		if ( !blueprint )
+			placer.Components.Get<PlayerQuests>()?.HostReport( QuestEventIds.PieceBuilt, pieceId );
+
+		return true;
+	}
+
+	/// <summary>
+	/// Host: spawn a catalog piece into the world with every bit of bookkeeping a placement needs —
+	/// configure, NetworkSpawn, snap cache, nav rebake and the structural solve. No pawn, no cost,
+	/// no durability: this is the shared tail of hammer placement and world-authored structures
+	/// (enemy camps). Returns false when the piece could not be spawned at all; returns true with an
+	/// invalid <paramref name="spawned"/> when the structural solver collapsed it immediately.
+	/// </summary>
+	public static bool HostPlacePiece( Scene scene, string pieceId, Transform transform, bool blueprint, out GameObject spawned )
+	{
+		spawned = null;
+		if ( !scene.IsValid() || string.IsNullOrWhiteSpace( pieceId ) )
+			return false;
+
+		if ( !BuildPieceCatalog.TryGet( pieceId, out var data ) || string.IsNullOrWhiteSpace( data.Prefab ) )
+			return false;
+
 		spawned = BuildPrefabUtility.SpawnPiece( scene, data.Prefab, pieceId, transform );
 		if ( spawned is null || !spawned.IsValid() )
 		{
 			Log.Warning( $"[BuildAuthority] Missing prefab '{data.Prefab}' for piece '{pieceId}'." );
+			spawned = null;
 			return false;
 		}
 
@@ -47,19 +83,6 @@ public static class BuildAuthority
 		// Valheim-style: placement always succeeds, then the solver may collapse the piece
 		// (and anything that only stood because of intermediate state) immediately.
 		BuildStructuralIntegrity.HostOnPlaced( piece );
-		if ( !spawned.IsValid() )
-		{
-			// Nothing was actually built — the swing is free (durability only ticks on real effect).
-			spawned = null;
-			return true;
-		}
-
-		// Build hammer durability: 1 tick per placement that actually stood.
-		ToolDurability.HostAddWearToActiveTool( placer );
-
-		if ( !blueprint )
-			placer.Components.Get<PlayerQuests>()?.HostReport( QuestEventIds.PieceBuilt, pieceId );
-
 		return true;
 	}
 
