@@ -166,6 +166,8 @@ Code/
                 BuildBed (claimable respawn point, raid target; E claim in PlayerInventoryInteraction.Bed.cs),
                 BuildDoor (swinging leaf on the door prefab: mesh-collided frame, keyframed leaf, opens away from the user)
   Inventory/    PlayerInventory · PlayerHotbar · containers · resource + equipment catalogs
+                · armor: worn-piece aggregate on Player/PlayerEquipment.Armor.cs, formula in Vitals/ArmorMitigation.cs,
+                  weight → speed on PlayerMovement, clothing visuals on PlayerAnimation.WornClothing.cs (see AGENTS.md "Armor")
   Crafting/ Food/ Quests/ Skills/ Augments/   JSON-backed catalogs (Assets/data/*.json)
   Farming/      FarmingRules (dirt tag, tile size, spacing) · TilledSoil · FarmPlant (host-timed growth stages) · FarmingAuthority (host till / sow)
                 · seed rows live in resources.json ("seed" block); ToolHoe + PlayerFarming live in Player/
@@ -182,6 +184,7 @@ Code/
                 · GrassPatch + GrassScatterer (grass through the engine Sandbox.Clutter system — GPU instanced/culled/LOD;
                 shader Assets/shaders/grass_blade.shader, models grass_clump1–4 from Blender/scripts/create_grass_clump.py)
                 · ChopableTree, harvest yields, teleport pads
+                · SunShadowDistance (on the scene Sun: multiplies the engine's cascade shadow reach so the shadow ring is not at the player's feet)
                 · BearTrap (hammer-placed trap_small / trap_large: holds players 5 s, animals + enemies 10 s by TrapSize band;
                   hold lives on PlayerMovement.TrapLocked / EntityLocomotion.IsTrapped) · DamageOverTimeTrap (scene hazard volume)
   World/Terrain/        Streaming, chunk mesh, biome population, world save IO

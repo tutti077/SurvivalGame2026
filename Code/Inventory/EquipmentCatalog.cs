@@ -146,10 +146,37 @@ public static class EquipmentCatalog
 			case "wing":
 				slot = EquipmentSlot.Wingsuit;
 				return true;
+			case "cloak":
+			case "cape":
+				slot = EquipmentSlot.Cloak;
+				return true;
 			default:
 				return false;
 		}
 	}
+
+	/// <summary><c>armorWeight</c> JSON value → band. Unknown / empty = <see cref="ArmorWeightClass.None"/>.</summary>
+	public static ArmorWeightClass ParseArmorWeight( string value )
+	{
+		if ( string.IsNullOrWhiteSpace( value ) )
+			return ArmorWeightClass.None;
+
+		switch ( value.Trim().ToLowerInvariant() )
+		{
+			case "light":
+				return ArmorWeightClass.Light;
+			case "medium":
+				return ArmorWeightClass.Medium;
+			case "heavy":
+				return ArmorWeightClass.Heavy;
+			default:
+				return ArmorWeightClass.None;
+		}
+	}
+
+	/// <summary>Armor points this profile adds while worn (0 for weapons / tools / unarmoured items).</summary>
+	public static float GetArmor( EquipmentProfileData profile ) =>
+		profile?.StatModifiers is { } stats ? Math.Max( 0f, stats.Armor ) : 0f;
 
 	/// <summary>Weapons/tools that live on the hotbar and mirror into MainHand — not paperdoll storage.</summary>
 	public static bool IsHotbarMainHandItem( EquipmentProfileData profile ) =>

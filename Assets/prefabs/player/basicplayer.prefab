@@ -434,7 +434,6 @@
         "__guid": "4785e803-a655-4137-8dc0-d456a8086f19",
         "__enabled": true,
         "Flags": 0,
-        "ArmorFlat": 0,
         "InfiniteStaminaDebug": true,
         "LogDamageAppliedToConsole": true,
         "LogVitalsNetworking": false,

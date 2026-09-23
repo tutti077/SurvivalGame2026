@@ -39,6 +39,9 @@ public static class QuestEventIds
 	/// <summary>Match = <see cref="TerrainPreviewBiomeId"/> name. Fires once each time the pawn's biome changes.</summary>
 	public const string BiomeEntered = "biome_entered";
 
+	/// <summary>Owner-local: worn pieces of one armor set reached <see cref="PlayerEquipment.ArmorSetPieceThreshold"/> (match = set id).</summary>
+	public const string ArmorSetEquipped = "armor_set_equipped";
+
 	// ---- Reserved: referenced by quests.json but nothing emits them yet ---------------------
 
 	/// <summary>Stasis pod spawn does not exist yet.</summary>
@@ -49,7 +52,4 @@ public static class QuestEventIds
 
 	/// <summary>Beds do not exist yet.</summary>
 	public const string SleptInBed = "slept_in_bed";
-
-	/// <summary>Armor slots do not exist yet (equipment slots are mainHand / grapple / wingsuit).</summary>
-	public const string ArmorSetEquipped = "armor_set_equipped";
 }

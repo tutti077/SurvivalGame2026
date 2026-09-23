@@ -42,6 +42,18 @@ public sealed class EquipmentProfileData
 
 	public EquipmentStatModifiersData StatModifiers { get; set; } = new();
 
+	/// <summary>Weight band for worn pieces: <c>light</c> / <c>medium</c> / <c>heavy</c>. Empty = weightless (no run-speed cost).</summary>
+	[JsonPropertyName( "armorWeight" )]
+	public string ArmorWeight { get; set; } = string.Empty;
+
+	/// <summary>Set id shared by every piece of one armor set (e.g. <c>leather</c>). Empty = not part of a set.</summary>
+	[JsonPropertyName( "armorSet" )]
+	public string ArmorSet { get; set; } = string.Empty;
+
+	/// <summary>Citizen clothing resource dressed onto the pawn while this piece is worn (any paperdoll slot). Empty = no visual.</summary>
+	[JsonPropertyName( "clothing" )]
+	public string Clothing { get; set; } = string.Empty;
+
 	/// <summary>
 	/// Ammo family this weapon accepts (e.g. <c>bow</c>). Empty = not a ranged ammo weapon.
 	/// Must match ammo item <c>ammoType</c> from crafting recipes.

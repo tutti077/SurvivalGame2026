@@ -22,8 +22,10 @@ public sealed partial class PlayerVitals : Component
 	/// </summary>
 	[Property, Group( "Stamina" )] public float StaminaRegenDelayOverrideSeconds { get; set; } = -1f;
 
-	/// <summary>Subtracted from incoming damage before health (client hint; host still applies via authority).</summary>
-	[Property] public float ArmorFlat { get; set; }
+	PlayerEquipment _equipment;
+
+	/// <summary>Armor points from worn equipment (<see cref="PlayerEquipment.TotalArmor"/>). Host truth for damage; the owner mirror feeds UI.</summary>
+	public float CurrentArmor => (_equipment ??= Components.Get<PlayerEquipment>())?.TotalArmor ?? 0f;
 
 	[Property, Group( "Debug" )] public bool LogVitalsNetworking { get; set; }
 
@@ -358,14 +360,21 @@ public sealed partial class PlayerVitals : Component
 		LastStaminaDrainArmedAtRealtime = RealTime.GlobalNow;
 	}
 
-	/// <summary>Host / offline: apply damage after flat armor; networked clients should not hit this for real hits.</summary>
+	/// <summary>
+	/// Host / offline: physical damage through <see cref="ArmorMitigation"/> with the pawn's worn armor, then health.
+	/// Networked clients should not hit this for real hits. World hazards that bypass armor use
+	/// <see cref="VitalsAuthority.TryApplyDeltas"/> directly.
+	/// </summary>
 	/// <returns>Damage removed from health (after armor).</returns>
 	public float ApplyDamageAfterArmor( float incoming, Component attacker )
 	{
-		var afterArmor = Math.Max( 0f, incoming - ArmorFlat );
-
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
 			return 0f;
+
+		var armor = CurrentArmor;
+		var afterArmor = ArmorMitigation.Apply( incoming, armor );
+		if ( LogDamageAppliedToConsole && armor > 0f && incoming > 1e-4f )
+			Log.Info( $"[Armor] {GameObject.Name}: {incoming:0.#} incoming → {afterArmor:0.#} through {armor:0.#} armor" );
 
 		// Dodge roll i-frames: the whole hit is ignored while the authority's roll window holds.
 		if ( Components.Get<PlayerMovement>() is { IsDodgeRollInvulnerable: true } )

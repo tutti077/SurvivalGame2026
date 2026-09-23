@@ -65,7 +65,7 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 	/// Deliberately not a whole number of rows: the crafting height ends flush with a row, which
 	/// hid that the list continues. +15px leaves about half of the next quest peeking under the fold.
 	/// </summary>
-	const float ViewHeight = CraftingMenuSection.RecipeListMaxHeight + 15f;
+	const float ViewHeight = CraftingMenuSection.RecipeListMinHeight + 15f;
 
 	string _selectedQuestId;
 	bool _menuOpen;

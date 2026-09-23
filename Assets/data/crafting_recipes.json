@@ -124,21 +124,6 @@
                 ]
               },
               {
-                "id": "tool_hoe",
-                "displayName": "Hoe",
-                "icon": "ui/items/tool_hoe.png",
-                "unlockId": "",
-                "outputAmount": 1,
-                "maxStack": 1,
-                "ingredients": [
-                  { "resourceId": "resource_woodBasic", "amount": 1 }
-                ],
-                "stats": [
-                  { "label": "Description", "value": "Tills soil for planting" },
-                  { "label": "Type", "value": "One Handed" }
-                ]
-              },
-              {
                 "id": "axe_scrap",
                 "displayName": "Scrap Axe",
                 "icon": "ui/items/axe_scrap.png",
@@ -1378,6 +1363,102 @@
                 "stats": [
                   { "label": "Description", "value": "Hearty stew of whitetail, lynx, and mushroom" },
                   { "label": "Type", "value": "Food" }
+                ]
+              },
+/*armor*/     {
+                "id": "armor_leather_head",
+                "displayName": "Leather Cap",
+                "icon": "ui/items/armor_leather_head.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "workbench" ],
+                "ingredients": [
+                  { "resourceId": "crafted_leather", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Light leather cap — 1 armor, leather set" },
+                  { "label": "Type", "value": "Armor" }
+                ]
+              },
+              {
+                "id": "armor_leather_chest",
+                "displayName": "Leather Tunic",
+                "icon": "ui/items/armor_leather_chest.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "workbench" ],
+                "ingredients": [
+                  { "resourceId": "crafted_leather", "amount": 5 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Light leather tunic — 1 armor, leather set" },
+                  { "label": "Type", "value": "Armor" }
+                ]
+              },
+              {
+                "id": "armor_leather_arms",
+                "displayName": "Leather Sleeves",
+                "icon": "ui/items/armor_leather_arms.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "workbench" ],
+                "ingredients": [
+                  { "resourceId": "crafted_leather", "amount": 3 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Light leather sleeves — 1 armor, leather set" },
+                  { "label": "Type", "value": "Armor" }
+                ]
+              },
+              {
+                "id": "armor_leather_hands",
+                "displayName": "Leather Gloves",
+                "icon": "ui/items/armor_leather_hands.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "workbench" ],
+                "ingredients": [
+                  { "resourceId": "crafted_leather", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Light leather gloves — 1 armor, leather set" },
+                  { "label": "Type", "value": "Armor" }
+                ]
+              },
+              {
+                "id": "armor_leather_legs",
+                "displayName": "Leather Leggings",
+                "icon": "ui/items/armor_leather_legs.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "workbench" ],
+                "ingredients": [
+                  { "resourceId": "crafted_leather", "amount": 4 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Light leather leggings — 1 armor, leather set" },
+                  { "label": "Type", "value": "Armor" }
+                ]
+              },
+              {
+                "id": "armor_leather_feet",
+                "displayName": "Leather Boots",
+                "icon": "ui/items/armor_leather_feet.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "workbench" ],
+                "ingredients": [
+                  { "resourceId": "crafted_leather", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Light leather boots — 1 armor, leather set" },
+                  { "label": "Type", "value": "Armor" }
                 ]
               }
   ]

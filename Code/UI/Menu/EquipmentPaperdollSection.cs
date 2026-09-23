@@ -30,7 +30,11 @@ public sealed class EquipmentPaperdollSection : IPlayerMenuSection
 		(EquipmentSlot.Backpack, "Pack"),
 		(EquipmentSlot.Grapple, "Hook"),
 		(EquipmentSlot.Wingsuit, "Wing"),
+		(EquipmentSlot.Cloak, "Cloak"),
 	};
+
+	/// <summary>Fixed-height armor readout under the grid — text changes, the box never does.</summary>
+	const float SummaryHeight = 18f * Scale;
 
 	readonly PlayerEquipment _equipment;
 	readonly PlayerInventoryInteraction _interaction;
@@ -38,6 +42,7 @@ public sealed class EquipmentPaperdollSection : IPlayerMenuSection
 	readonly List<SlotUi> _slotUi = new();
 
 	Panel _sectionRoot;
+	Label _armorSummary;
 	bool _menuOpen;
 	bool _panelVisible;
 
@@ -109,6 +114,15 @@ public sealed class EquipmentPaperdollSection : IPlayerMenuSection
 			_slotUi.Add( CreateSlotUi( slotPanel ) );
 		}
 
+		_armorSummary = new Label { Parent = _sectionRoot, Text = string.Empty };
+		_armorSummary.Style.FontColor = new Color( 0.78f, 0.8f, 0.84f );
+		_armorSummary.Style.FontSize = Length.Pixels( LabelFontSize );
+		_armorSummary.Style.Height = Length.Pixels( SummaryHeight );
+		_armorSummary.Style.Set( "width", "100%" );
+		_armorSummary.Style.Set( "text-align", "center" );
+		_armorSummary.Style.Set( "flex-shrink", "0" );
+		_armorSummary.Style.Set( "pointer-events", "none" );
+
 		Refresh();
 		UpdateVisibility();
 	}
@@ -123,6 +137,23 @@ public sealed class EquipmentPaperdollSection : IPlayerMenuSection
 			var slot = SlotLayout[i].Slot;
 			ApplySlot( _slotUi[i], _equipment.GetSlot( slot ) );
 		}
+
+		RefreshArmorSummary();
+	}
+
+	void RefreshArmorSummary()
+	{
+		if ( _armorSummary is null )
+			return;
+
+		var movement = _equipment.Components.Get<PlayerMovement>();
+		var speed = movement?.ComputeArmorSpeedScale() ?? 1f;
+		var text = $"Armor {_equipment.TotalArmor:0.#}  ·  Speed {speed * 100f:0}%";
+		if ( _equipment.HasArmorSetBonus )
+			text += $"  ·  {_equipment.ArmorSetId} set";
+
+		if ( _armorSummary.Text != text )
+			_armorSummary.Text = text;
 	}
 
 	public void SetMenuOpen( bool isOpen )

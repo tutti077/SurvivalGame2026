@@ -123,6 +123,84 @@
       "durabilityMax": 100,
       "durabilityDrainSecondsEquipped": 5,
       "statModifiers": { "armor": 0, "damage": 1, "speed": 0 }
+    },
+    {
+      "resourceId": "armor_leather_head",
+      "displayName": "Leather Cap",
+      "slot": "head",
+      "allowedSlots": ["head"],
+      "actions": [],
+      "twoHanded": false,
+      "hotbarEquipable": false,
+      "armorWeight": "light",
+      "armorSet": "leather",
+      "clothing": "models/citizen_clothes/hat/Trapper_Hat/trapper_hat.clothing",
+      "statModifiers": { "armor": 1, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "armor_leather_chest",
+      "displayName": "Leather Tunic",
+      "slot": "chest",
+      "allowedSlots": ["chest"],
+      "actions": [],
+      "twoHanded": false,
+      "hotbarEquipable": false,
+      "armorWeight": "light",
+      "armorSet": "leather",
+      "clothing": "models/citizen_clothes/jacket/Brown_Leather_Jacket/brown_leather_jacket.clothing",
+      "statModifiers": { "armor": 1, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "armor_leather_arms",
+      "displayName": "Leather Sleeves",
+      "slot": "arms",
+      "allowedSlots": ["arms"],
+      "actions": [],
+      "twoHanded": false,
+      "hotbarEquipable": false,
+      "armorWeight": "light",
+      "armorSet": "leather",
+      "clothing": "",
+      "statModifiers": { "armor": 1, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "armor_leather_hands",
+      "displayName": "Leather Gloves",
+      "slot": "hands",
+      "allowedSlots": ["hands"],
+      "actions": [],
+      "twoHanded": false,
+      "hotbarEquipable": false,
+      "armorWeight": "light",
+      "armorSet": "leather",
+      "clothing": "models/citizen_clothes/gloves/fingerless_gloves/fingerless_gloves.clothing",
+      "statModifiers": { "armor": 1, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "armor_leather_legs",
+      "displayName": "Leather Leggings",
+      "slot": "legs",
+      "allowedSlots": ["legs"],
+      "actions": [],
+      "twoHanded": false,
+      "hotbarEquipable": false,
+      "armorWeight": "light",
+      "armorSet": "leather",
+      "clothing": "models/citizen_clothes/trousers/CargoPants/brown_cargo_pants.clothing",
+      "statModifiers": { "armor": 1, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "armor_leather_feet",
+      "displayName": "Leather Boots",
+      "slot": "feet",
+      "allowedSlots": ["feet"],
+      "actions": [],
+      "twoHanded": false,
+      "hotbarEquipable": false,
+      "armorWeight": "light",
+      "armorSet": "leather",
+      "clothing": "models/citizen_clothes/shoes/Boots/black_boots.clothing",
+      "statModifiers": { "armor": 1, "damage": 0, "speed": 0 }
     }
   ]
 }

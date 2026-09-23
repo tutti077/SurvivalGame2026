@@ -185,6 +185,23 @@ public sealed partial class PlayerInventoryInteraction
 		if ( profile.StatModifiers is { } stats && stats.Damage > 0f )
 			lines.Add( ($"Damage: {stats.Damage:0.#}", TooltipStatColor) );
 
+		var armor = EquipmentCatalog.GetArmor( profile );
+		if ( armor > 0f )
+			lines.Add( ($"Armor: {armor:0.#}", TooltipStatColor) );
+
+		var weight = EquipmentCatalog.ParseArmorWeight( profile.ArmorWeight );
+		if ( weight != ArmorWeightClass.None )
+			lines.Add( ($"Weight: {weight}", TooltipTypeColor) );
+
+		if ( !string.IsNullOrWhiteSpace( profile.ArmorSet ) )
+		{
+			var equipment = Components.Get<PlayerEquipment>();
+			var worn = equipment?.CountArmorSetPieces( profile.ArmorSet ) ?? 0;
+			var threshold = equipment?.ArmorSetPieceThreshold ?? 3;
+			var setName = char.ToUpperInvariant( profile.ArmorSet[0] ) + profile.ArmorSet.Substring( 1 );
+			lines.Add( ($"Set: {setName} — {worn} worn, set bonus at {threshold}", TooltipTypeColor) );
+		}
+
 		var combat = Components.Get<PlayerCombat>();
 		if ( EquipmentCatalog.HasAction( profile.ResourceId, EquippedItemActions.PrimaryMelee ) )
 		{

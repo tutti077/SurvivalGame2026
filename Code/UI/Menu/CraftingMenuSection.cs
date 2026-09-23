@@ -18,8 +18,15 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	public const float RowIconSize = 48f * WidthScale * RecipeListItemScale;
 	public const float DetailIconSize = 80f * WidthScale;
 	public const float MinSectionHeight = 420f * LengthScale;
-	public const float RecipeListMaxHeight = 220f * LengthScale;
-	public const float DetailAreaMaxHeight = MinSectionHeight - RecipeListMaxHeight - 80f * LayoutScale;
+	/// <summary>
+	/// The section takes this much of the viewport height (vh) so a taller window shows more recipe
+	/// rows instead of the same fixed box; <see cref="MinSectionHeight"/> is the floor on short windows.
+	/// Column padding + border must still fit under 100vh.
+	/// </summary>
+	public const float SectionViewHeightPercent = 84f;
+	/// <summary>Shortest the recipe list gets; it grows with the section on taller windows.</summary>
+	public const float RecipeListMinHeight = 220f * LengthScale;
+	public const float DetailAreaMaxHeight = MinSectionHeight - RecipeListMinHeight - 80f * LayoutScale;
 	public const float RecipeRowGap = 3f;
 	/// <summary>
 	/// Exact Style.Height for each recipe row (border-box). Scroll range uses this — keep in sync.
@@ -96,8 +103,10 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_sectionRoot.Style.Set( "align-items", "stretch" );
 		_sectionRoot.Style.Set( "gap", $"{10f * LayoutScale}px" );
 		_sectionRoot.Style.Width = Length.Percent( 100 );
+		// Viewport-relative, not a build-time pixel box: resizing the game window (windowed → full)
+		// re-lays this out and the list below grows into the extra height.
+		_sectionRoot.Style.Height = Length.ViewHeight( SectionViewHeightPercent );
 		_sectionRoot.Style.MinHeight = Length.Pixels( MinSectionHeight );
-		_sectionRoot.Style.MaxHeight = Length.Pixels( MinSectionHeight );
 		_sectionRoot.Style.Set( "overflow", "hidden" );
 		_sectionRoot.Style.Set( "flex-shrink", "0" );
 
@@ -227,9 +236,10 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_recipeListPanel = listPanel;
 		_recipeList = listPanel;
 		_recipeList.Style.Set( "width", "100%" );
-		_recipeList.Style.Height = Length.Pixels( RecipeListMaxHeight );
-		_recipeList.Style.Set( "flex-shrink", "0" );
-		_recipeList.Style.Set( "flex-grow", "0" );
+		// Takes whatever height the section has left under the fixed header / button / detail block.
+		_recipeList.Style.MinHeight = Length.Pixels( RecipeListMinHeight );
+		_recipeList.Style.Set( "flex-shrink", "1" );
+		_recipeList.Style.Set( "flex-grow", "1" );
 		_recipeList.Style.Set( "pointer-events", "auto" );
 
 		var rowParent = listPanel.Content;

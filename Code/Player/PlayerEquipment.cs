@@ -10,7 +10,7 @@ namespace Survival;
 [Title( "Player Equipment" )]
 public sealed partial class PlayerEquipment : Component
 {
-	public const int SlotCount = 11;
+	public const int SlotCount = 12;
 
 	public event Action EquipmentChanged;
 
@@ -522,6 +522,7 @@ public sealed partial class PlayerEquipment : Component
 			NetworkedMainHandResourceId = GetSlotResourceId( EquipmentSlot.MainHand ) ?? string.Empty;
 
 		RefreshActiveTool();
+		RefreshArmorState();
 	}
 
 	void RefreshActiveTool()

@@ -22,6 +22,13 @@ public sealed class CraftingRecipeListPanel : Panel
 	float _scrollY;
 	float _contentHeight;
 	int _rowCount;
+	/// <summary>
+	/// Row pitch read back from the laid-out rows (style px). The nominal
+	/// <see cref="GetRowStride"/> assumes border-box rows; the real pitch can differ by a pixel or
+	/// two, which used to drift the click math further off with every row down the list.
+	/// </summary>
+	float _measuredStride;
+	float _lastViewHeight;
 	bool _draggingThumb;
 	float _dragStartMouseY;
 	float _dragStartScrollY;
@@ -87,7 +94,13 @@ public sealed class CraftingRecipeListPanel : Panel
 	public void SetRowCount( int rowCount )
 	{
 		_rowCount = Math.Max( 0, rowCount );
-		_contentHeight = ComputeContentHeight( _rowCount );
+		_measuredStride = 0f;
+		RecomputeContentHeight();
+	}
+
+	void RecomputeContentHeight()
+	{
+		_contentHeight = ComputeContentHeight( _rowCount, EffectiveStride );
 
 		if ( _content is not null && _content.IsValid() )
 			_content.Style.Height = Length.Pixels( Math.Max( 1f, _contentHeight ) );
@@ -95,18 +108,71 @@ public sealed class CraftingRecipeListPanel : Panel
 		SetScrollY( _scrollY );
 	}
 
-	public static float ComputeContentHeight( int rowCount )
+	public static float ComputeContentHeight( int rowCount ) =>
+		ComputeContentHeight( rowCount, GetRowStride() );
+
+	static float ComputeContentHeight( int rowCount, float stride )
 	{
 		if ( rowCount <= 0 )
 			return 0f;
 
-		var rowH = CraftingMenuSection.RecipeRowHeight;
-		var gap = CraftingMenuSection.RecipeRowGap;
-		var rowsHeight = rowCount * rowH + ( rowCount - 1 ) * gap;
+		// Last row carries no bottom margin.
+		var rowsHeight = rowCount * stride - CraftingMenuSection.RecipeRowGap;
 
 		// One wheel-notch of empty space under the last recipe so a final scroll can
 		// fully reveal it (shows blank slots where there is no recipe).
-		return rowsHeight + GetNotchStep();
+		return rowsHeight + CraftingMenuSection.WheelItemsPerNotch * stride;
+	}
+
+	/// <summary>Measured row pitch when the rows have laid out, else the nominal stride.</summary>
+	float EffectiveStride => _measuredStride > 1f ? _measuredStride : GetRowStride();
+
+	float EffectiveNotchStep => CraftingMenuSection.WheelItemsPerNotch * EffectiveStride;
+
+	/// <summary>Read the real row pitch off the first rows; content height + scroll range follow it.</summary>
+	void RefreshMeasuredStride()
+	{
+		if ( _rowCount <= 0 || _content is null || !_content.IsValid() )
+			return;
+
+		var scale = ScaleToScreen > 0.001f ? ScaleToScreen : 1f;
+		var found = 0;
+		var firstTop = 0f;
+		var firstHeight = 0f;
+		var stride = 0f;
+		foreach ( var child in _content.Children )
+		{
+			if ( child is null || !child.IsValid() )
+				continue;
+
+			var rect = child.Box.Rect;
+			if ( rect.Height <= 1f )
+				return;
+
+			if ( found == 0 )
+			{
+				firstTop = rect.Top;
+				firstHeight = rect.Height;
+				found = 1;
+				continue;
+			}
+
+			stride = ( rect.Top - firstTop ) / scale;
+			found = 2;
+			break;
+		}
+
+		if ( found == 0 )
+			return;
+
+		if ( found == 1 )
+			stride = firstHeight / scale + CraftingMenuSection.RecipeRowGap;
+
+		if ( stride <= 1f || MathF.Abs( stride - _measuredStride ) < 0.05f )
+			return;
+
+		_measuredStride = stride;
+		RecomputeContentHeight();
 	}
 
 	public static float GetRowStride() =>
@@ -138,12 +204,16 @@ public sealed class CraftingRecipeListPanel : Panel
 			: MathF.Sign( delta );
 
 		// Panel docs: positive wheel = scroll down = increase scroll offset.
-		SetScrollY( _scrollY + notches * GetNotchStep() );
+		SetScrollY( _scrollY + notches * EffectiveNotchStep );
 	}
 
 	public void PollWheelWhileOpen() { }
 
-	/// <summary>Pick row by scroll math — survives soft-cursor / Box.Rect quirks.</summary>
+	/// <summary>
+	/// Pick the row under the pointer. The point must be inside the viewport (rows scrolled out of
+	/// view keep a Box.Rect, so this clip is what stops them being picked); inside it the laid-out
+	/// row rects are exact, and the measured-stride math only covers the frame before layout lands.
+	/// </summary>
 	public bool TryPickRowIndexAtScreen( Vector2 screenPos, out int rowIndex )
 	{
 		rowIndex = -1;
@@ -158,9 +228,28 @@ public sealed class CraftingRecipeListPanel : Panel
 		     || screenPos.y < view.Top || screenPos.y > view.Bottom )
 			return false;
 
+		if ( _content is not null && _content.IsValid() )
+		{
+			var i = 0;
+			foreach ( var child in _content.Children )
+			{
+				if ( child is null || !child.IsValid() )
+					continue;
+
+				var rect = child.Box.Rect;
+				if ( rect.Height > 1f && screenPos.y >= rect.Top && screenPos.y <= rect.Bottom )
+				{
+					rowIndex = i;
+					return rowIndex < _rowCount;
+				}
+
+				i++;
+			}
+		}
+
 		var scale = ScaleToScreen > 0.001f ? ScaleToScreen : 1f;
 		var localY = ( screenPos.y - view.Top ) / scale + _scrollY;
-		var stride = GetRowStride();
+		var stride = EffectiveStride;
 		if ( stride < 1f )
 			return false;
 
@@ -280,6 +369,16 @@ public sealed class CraftingRecipeListPanel : Panel
 	public override void Tick()
 	{
 		base.Tick();
+		RefreshMeasuredStride();
+
+		// Window resized: the scroll range moved with the viewport, so re-clamp and redraw the thumb.
+		var viewH = GetViewHeight();
+		if ( MathF.Abs( viewH - _lastViewHeight ) > 0.5f )
+		{
+			_lastViewHeight = viewH;
+			SetScrollY( _scrollY );
+		}
+
 		UpdateScrollbarVisual();
 	}
 
@@ -380,7 +479,19 @@ public sealed class CraftingRecipeListPanel : Panel
 
 	bool CanScroll() => GetMaxScrollY() > 1f;
 
-	float GetViewHeight() => CraftingMenuSection.RecipeListMaxHeight;
+	/// <summary>Live viewport height in style px — the list grows with the window, so never a constant.</summary>
+	float GetViewHeight()
+	{
+		if ( _viewport is not null && _viewport.IsValid() )
+		{
+			var h = _viewport.Box.Rect.Height;
+			var scale = ScaleToScreen > 0.001f ? ScaleToScreen : 1f;
+			if ( h > 1f )
+				return h / scale;
+		}
+
+		return CraftingMenuSection.RecipeListMinHeight;
+	}
 
 	float GetTrackHeightStyle() => GetViewHeight();
 

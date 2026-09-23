@@ -119,6 +119,19 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	float _designWalkSpeed = 110f;
 	float _designRunSpeed = 320f;
 
+	/// <summary>Walk + run scale with a full set of light armor worn (each piece carries 1/6 of the penalty).</summary>
+	[Property, Group( "Armor" ), Title( "Light armor speed scale (full set)" ), Range( 0.5f, 1f ), Step( 0.01f )]
+	public float LightArmorSpeedScale { get; set; } = 0.95f;
+
+	[Property, Group( "Armor" ), Title( "Medium armor speed scale (full set)" ), Range( 0.5f, 1f ), Step( 0.01f )]
+	public float MediumArmorSpeedScale { get; set; } = 0.85f;
+
+	[Property, Group( "Armor" ), Title( "Heavy armor speed scale (full set)" ), Range( 0.5f, 1f ), Step( 0.01f )]
+	public float HeavyArmorSpeedScale { get; set; } = 0.75f;
+
+	/// <summary>Current walk/run multiplier from worn armor weight (1 = unarmoured). Applied to the controller by <see cref="ApplyArmorLocomotionScale"/>.</summary>
+	public float ArmorSpeedScale { get; private set; } = 1f;
+
 	/// <summary>
 	/// Physics can redirect impact into horizontal for a few steps after <see cref="OnLanded"/> —
 	/// keep scrubbing so roof downhill jumps don't launch.
@@ -502,6 +515,39 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			return;
 
 		RestoreBlockedSprintRunSpeed();
+		ApplyArmorLocomotionScale();
+	}
+
+	/// <summary>
+	/// Worn armor weight → walk/run. Each worn piece carries one <see cref="PlayerEquipment.ArmorSlotCount"/>th of
+	/// its band's penalty, so a full light set is exactly <see cref="LightArmorSpeedScale"/> and three heavy
+	/// pieces cost half the heavy penalty. Written only in the plain-locomotion branch: the melee slow and the
+	/// grapple / wingsuit mute snapshot whatever is current, so they scale with it and restore to it.
+	/// </summary>
+	public float ComputeArmorSpeedScale()
+	{
+		if ( _equipment is null || !_equipment.IsValid() )
+			_equipment = Components.Get<PlayerEquipment>();
+
+		if ( _equipment is null )
+			return 1f;
+
+		var penalty =
+			_equipment.LightArmorPieces * (1f - LightArmorSpeedScale)
+			+ _equipment.MediumArmorPieces * (1f - MediumArmorSpeedScale)
+			+ _equipment.HeavyArmorPieces * (1f - HeavyArmorSpeedScale);
+
+		return Math.Clamp( 1f - penalty / PlayerEquipment.ArmorSlotCount, 0.1f, 1f );
+	}
+
+	void ApplyArmorLocomotionScale()
+	{
+		if ( _controller is null || !_controller.IsValid() )
+			return;
+
+		ArmorSpeedScale = ComputeArmorSpeedScale();
+		_controller.WalkSpeed = _designWalkSpeed * ArmorSpeedScale;
+		_controller.RunSpeed = _designRunSpeed * ArmorSpeedScale;
 	}
 
 	/// <summary>
