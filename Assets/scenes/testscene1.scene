@@ -73,7 +73,7 @@
           "OnComponentUpdate": null,
           "ShadowBias": 0.0005,
           "ShadowCascadeCount": 4,
-          "ShadowCascadeSplitRatio": 0.91,
+          "ShadowCascadeSplitRatio": 0.3,
           "ShadowHardness": 0,
           "Shadows": true,
           "SkyColor": "0.2532,0.32006,0.35349,1",
@@ -84,7 +84,7 @@
           "__guid": "2e39a721-2cdb-4710-b331-89587168b276",
           "__enabled": true,
           "Flags": 0,
-          "CascadeDistanceScale": 4
+          "CascadeDistanceScale": 2
         }
       ],
       "Children": []

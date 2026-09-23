@@ -13,9 +13,14 @@ namespace Survival;
 [Title( "Sun Shadow Distance" )]
 public sealed class SunShadowDistance : Component
 {
-	/// <summary>Multiplier on the engine's stock cascade reach. 1 = stock ring; 4 pushes it well past the play area.</summary>
+	/// <summary>
+	/// Multiplier on the engine's stock cascade reach (where shadows stop entirely). Bigger = shadows
+	/// further out but every cascade gets coarser. The ring <i>near</i> the player is not this — it is
+	/// the first cascade's edge, set by the light's <c>ShadowCascadeSplitRatio</c>: near 1 (logarithmic)
+	/// the first cascade is only a few metres wide; ~0.3 stretches it to tens of metres.
+	/// </summary>
 	[Property, Title( "Cascade distance scale" ), Range( 0.25f, 16f ), Step( 0.25f )]
-	public float CascadeDistanceScale { get; set; } = 4f;
+	public float CascadeDistanceScale { get; set; } = 2f;
 
 	float _appliedScale = -1f;
 	RealTimeSince _sinceApply;
