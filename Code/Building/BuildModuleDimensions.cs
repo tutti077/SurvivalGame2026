@@ -122,6 +122,8 @@ public static class BuildModuleDimensions
 		["trap_large"] = new( 1.2f, 1.2f, 0.08f ),
 		// Workbench: 2 m wide, 1 m deep, 1 m tall (tool repair + workbench recipes).
 		["workbench"] = new( 2f, 1f, 1f ),
+		// Bed: 2 m long, 1 m wide, 0.5 m tall — claimable respawn point and the base-raid target.
+		["bed"] = new( 2f, 1f, 0.5f ),
 	};
 
 	static float HalfUnitsFor( float meters ) =>

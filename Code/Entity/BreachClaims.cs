@@ -62,6 +62,29 @@ public static class BreachClaims
 		return existing >= 0 ? existing : list.Count;
 	}
 
+	/// <summary>
+	/// Is any claimed piece (one an entity is hitting right now — breach or raid) inside
+	/// <paramref name="bounds"/> grown by <paramref name="padding"/>? Per Mark: a wall coming down only
+	/// warrants a nav rebake when it is the wall someone is working on or the one next to it.
+	/// </summary>
+	public static bool AnyClaimNear( BBox bounds, float padding )
+	{
+		var mins = bounds.Mins - new Vector3( padding, padding, padding );
+		var maxs = bounds.Maxs + new Vector3( padding, padding, padding );
+		foreach ( var entry in _claims )
+		{
+			var piece = entry.Key;
+			if ( piece is null || !piece.IsValid() || !piece.GameObject.IsValid() || entry.Value.Count == 0 )
+				continue;
+
+			var p = piece.GameObject.WorldPosition;
+			if ( p.x >= mins.x && p.x <= maxs.x && p.y >= mins.y && p.y <= maxs.y && p.z >= mins.z && p.z <= maxs.z )
+				return true;
+		}
+
+		return false;
+	}
+
 	/// <summary>Drop every claim this entity holds.</summary>
 	public static void Release( EntityBrain brain )
 	{

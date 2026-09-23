@@ -14,6 +14,11 @@ public static class NavDebugCommands
 	/// <summary>`nav_trace 1|0` — every host entity logs a movement / decision snapshot twice a second (`[Trace]`).</summary>
 	public static bool TraceEnabled;
 
+	/// <summary>
+	/// `nav_trace 1|0` — the one switch for per-entity diagnostics: the 0.5 s movement trace, and the
+	/// [Breach] / [Raid] / [BuildPiece] / [Loco] / [Twitch] lines. Off by default (Mark: with twenty
+	/// raiders swinging, the console was the resource hog).
+	/// </summary>
 	[ConCmd( "nav_trace" )]
 	public static void ConCmdNavTrace( string enabled = "1" )
 	{

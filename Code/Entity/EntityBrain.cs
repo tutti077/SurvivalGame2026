@@ -10,6 +10,7 @@ namespace Survival;
 /// once alerted → always nav to the live player and attack until geometric LOS has been lost for
 /// <see cref="ChaseLosLostAbandonSeconds"/>; Retreating at low HP. Breaching (see
 /// <c>EntityBrain.Breach.cs</c>) when build pieces are what keeps the player out of reach.
+/// Raiding (see <c>EntityBrain.Raid.cs</c>) for entities spawned by a base raid.
 /// </summary>
 [Title( "Entity Brain" )]
 public sealed partial class EntityBrain : Component
@@ -108,6 +109,11 @@ public sealed partial class EntityBrain : Component
 	/// </summary>
 	public bool LastPathCrossesSolid { get; private set; }
 	public string LastNavBlockReason { get; private set; } = "init";
+	/// <summary>Diagnostics: seconds since the last MoveTo this brain issued (−1 = never).</summary>
+	public double SecondsSinceMoveIssued => _lastMoveIssuedAt > 0d ? Time.NowDouble - _lastMoveIssuedAt : -1d;
+	/// <summary>Diagnostics: seconds since this brain last entered a state (−1 = never).</summary>
+	public double SecondsSinceStateChange => _stateEnteredAt > 0d ? Time.NowDouble - _stateEnteredAt : -1d;
+	double _stateEnteredAt;
 	public Vector3 LastNavGoal { get; private set; }
 	public IReadOnlyList<Vector3> LastPathPoints => _lastPathPoints;
 
@@ -195,7 +201,7 @@ public sealed partial class EntityBrain : Component
 		_alertMeter = 0f;
 		_alertLocked = false;
 		_hasSearchGoal = false;
-		EnterState( EnemyAiState.Wander );
+		EnterState( IsRaider ? EnemyAiState.Raiding : EnemyAiState.Wander );
 	}
 
 	/// <summary>Spawn landed but nav tiles not ready — start wander once <see cref="OnNavBakeComplete"/> snaps the agent.</summary>
@@ -222,6 +228,10 @@ public sealed partial class EntityBrain : Component
 			return;
 
 		if ( Vitals is not null && Vitals.IsDead )
+			return;
+
+		// Raiders are after the beds — only a player inside the aggro range (or a hit) pulls them off.
+		if ( _state == EnemyAiState.Raiding )
 			return;
 
 		// Already hunting: noise does not fill the meter, but it DOES move the investigate / last-known goal.
@@ -335,7 +345,11 @@ public sealed partial class EntityBrain : Component
 
 	public void OnNavBakeComplete()
 	{
-		_needsImmediatePathCheck = true;
+		// Every entity gets this on the same frame; twenty raiders all re-pathing at once (each a query
+		// plus the solid sweep) was a spike right after every rebake. Spread the re-paths over the
+		// next half second — a breacher waiting on this exact rebake still rechecks at once below.
+		_needsImmediatePathCheck = false;
+		_nextPathCheckAt = Time.NowDouble + Sandbox.Game.Random.Float( 0.05f, 0.55f );
 		_validatedPathAt = -1d;
 		// Breaching: the nav now reflects the piece we (or a collapse) took out — ask at once whether
 		// the player is reachable, before committing to the next piece.
@@ -344,6 +358,13 @@ public sealed partial class EntityBrain : Component
 
 		Agent ??= Components.Get<NavMeshAgent>();
 		if ( Agent is null || !Agent.IsValid() || !Scene.IsValid() )
+			return;
+
+		// Already walking on nav: leave the body where it is. Every rebake (each wall a raid knocks
+		// down, ~1/s) used to snap EVERY entity in the scene to the nearest nav point — up to 120 u —
+		// which read as scavs jumping to a new spot every second. An agent that really lost its footing
+		// is re-placed lazily by the next path check (RunPathCheckTo: "agentReplaced").
+		if ( _agentOnNav && _aiStarted && !_awaitingNavToStartAi && IsAgentDriving() )
 			return;
 
 		if ( !EntityNavMeshUtility.EnsureAgentOnNavMesh( Scene, Agent, GameObject.WorldPosition ) )
@@ -370,8 +391,10 @@ public sealed partial class EntityBrain : Component
 
 	public void OnStructureBlockerChanged()
 	{
-		if ( _state is EnemyAiState.Chasing or EnemyAiState.Searching or EnemyAiState.Retreating or EnemyAiState.Breaching )
-			_needsImmediatePathCheck = true;
+		// Same stagger as OnNavBakeComplete — one piece change must not re-path every entity this frame.
+		if ( _state is EnemyAiState.Chasing or EnemyAiState.Searching or EnemyAiState.Retreating or EnemyAiState.Breaching
+		     or EnemyAiState.Raiding )
+			_nextPathCheckAt = Math.Min( _nextPathCheckAt, Time.NowDouble + Sandbox.Game.Random.Float( 0.05f, 0.55f ) );
 
 		// A piece fell (ours or theirs) — ask right away whether the player is reachable now.
 		if ( _state == EnemyAiState.Breaching )
@@ -409,6 +432,9 @@ public sealed partial class EntityBrain : Component
 			return;
 
 		if ( attacker.Components.Get<PlayerController>() is null )
+			return;
+
+		if ( IsRaider && RaiderIgnoresHitFrom( attacker.GameObject ) )
 			return;
 
 		// Leashed home: hits do not pull them back out — they re-aggro once inside the wander boundary.
@@ -478,6 +504,12 @@ public sealed partial class EntityBrain : Component
 		if ( TickLeash() )
 			return;
 
+		if ( TickRaidState() )
+			return;
+
+		if ( TickStragglerChase() )
+			return;
+
 		switch ( _state )
 		{
 			case EnemyAiState.Idle:
@@ -503,6 +535,9 @@ public sealed partial class EntityBrain : Component
 				break;
 			case EnemyAiState.Returning:
 				TickReturning();
+				break;
+			case EnemyAiState.Raiding:
+				TickRaiding();
 				break;
 		}
 
@@ -758,7 +793,14 @@ public sealed partial class EntityBrain : Component
 
 	/// <summary>Agent is placed on nav and allowed to drive the transform.</summary>
 	bool IsNavAgentReady() =>
-		Agent is not null && Agent.IsValid() && Agent.Enabled && _agentOnNav && Agent.UpdatePosition;
+		Agent is not null && Agent.IsValid() && Agent.Enabled && _agentOnNav && IsAgentDriving();
+
+	/// <summary>
+	/// The body is (or is about to be) following the agent: locomotion turns every UpdatePosition = true
+	/// into an attach on its next fixed update, so a freshly set flag counts too.
+	/// </summary>
+	bool IsAgentDriving() =>
+		(Agent is not null && Agent.IsValid() && Agent.UpdatePosition) || (Locomotion is { AgentDrivesBody: true });
 
 	void TickIdle()
 	{
@@ -856,6 +898,10 @@ public sealed partial class EntityBrain : Component
 	/// <summary>No nav agent drive yet — walk toward a goal on the heightfield so entities are not statues.</summary>
 	void ManualStepToward( Vector3 goal, float speed )
 	{
+		// Locomotion is carrying the body through a rebake — do not also step it.
+		if ( Locomotion is { IsCoasting: true } )
+			return;
+
 		var pos = GameObject.WorldPosition;
 		var to = (goal - pos).WithZ( 0f );
 		var flat = to.Length;
@@ -1312,6 +1358,10 @@ public sealed partial class EntityBrain : Component
 		if ( _state == EnemyAiState.Retreating )
 			return false;
 
+		// Raiders fight to the death.
+		if ( IsRaider )
+			return false;
+
 		if ( Time.NowDouble < _retreatBlockedUntil )
 			return false;
 
@@ -1337,6 +1387,7 @@ public sealed partial class EntityBrain : Component
 			BreachClaims.Release( this );
 
 		_state = next;
+		_stateEnteredAt = Time.NowDouble;
 		_needsImmediatePathCheck = true;
 		_wanderStuckSince = 0d;
 
@@ -1452,6 +1503,9 @@ public sealed partial class EntityBrain : Component
 				if ( IsNavAgentReady() )
 					Agent.MoveTo( _returnGoal );
 				break;
+			case EnemyAiState.Raiding:
+				EnterRaidingState();
+				break;
 		}
 	}
 
@@ -1479,7 +1533,9 @@ public sealed partial class EntityBrain : Component
 			facing = facing.Normal;
 
 		var radius = Math.Max( 160f, _perception.WanderDistance );
-		var yaw = Sandbox.Game.Random.Float( -70f, 70f );
+		// Raid stragglers came off the same chase facing the same way — a ±70° leg sent the whole
+		// group off together as a pack. They pick any direction.
+		var yaw = _isRaidStraggler ? Sandbox.Game.Random.Float( 0f, 360f ) : Sandbox.Game.Random.Float( -70f, 70f );
 		var dir = Rotation.FromYaw( yaw ) * facing;
 		var ideal = origin + dir * radius;
 		if ( HasLeash )
@@ -1599,6 +1655,8 @@ public sealed partial class EntityBrain : Component
 
 	/// <summary>Spacing of the re-grounded samples along a path segment when checking for solids.</summary>
 	const float PathProbeStepUnits = 96f;
+	/// <summary>How much of the route (from the start) the solid sweep covers — the rest is swept as the entity advances.</summary>
+	const float PathProbeMaxUnits = 640f;
 	/// <summary>A path with the same endpoints and length as the last validated one reuses its verdict for this long.</summary>
 	const double PathValidationReuseSeconds = 1.5;
 	Vector3 _validatedPathStart;
@@ -1621,11 +1679,15 @@ public sealed partial class EntityBrain : Component
 		if ( path.Points is null || path.Points.Count < 2 || !Scene.IsValid() )
 			return false;
 
+		// Only the near part of the route is swept: a leak far along a 3000 u path is caught when the
+		// entity gets there, and sweeping the whole thing cost ~60 traces per query per entity.
+		var sweptUnits = 0f;
 		var prev = GroundPathPoint( path.Points[0] );
-		for ( var i = 0; i < path.Points.Count - 1; i++ )
+		for ( var i = 0; i < path.Points.Count - 1 && sweptUnits < PathProbeMaxUnits; i++ )
 		{
 			var a = path.Points[i];
 			var b = path.Points[i + 1];
+			sweptUnits += (b - a).WithZ( 0f ).Length;
 			var flat = (b - a).WithZ( 0f ).Length;
 			var steps = Math.Max( 1, (int)MathF.Ceiling( flat / PathProbeStepUnits ) );
 			for ( var step = 1; step <= steps; step++ )
@@ -1966,8 +2028,19 @@ public sealed partial class EntityBrain : Component
 			startOnNavHint = origin;
 		}
 
+		// Scene-wide budget: raiders spawned in one frame keep their check timers in lock-step, so
+		// twenty path queries (each with a solid sweep) landed in the same frame about once a second —
+		// the "everyone stutters on the second". Over budget → try again next frame; the interval is
+		// jittered so the timers drift apart for good.
+		if ( !TryTakePathQuerySlot() )
+		{
+			LastNavBlockReason = "budget";
+			_nextPathCheckAt = Time.NowDouble + 0.03f;
+			return null;
+		}
+
 		_needsImmediatePathCheck = false;
-		_nextPathCheckAt = Time.NowDouble + Math.Max( 0.12f, pathInterval );
+		_nextPathCheckAt = Time.NowDouble + Math.Max( 0.12f, pathInterval ) * Sandbox.Game.Random.Float( 0.85f, 1.35f );
 
 		origin = GetNavOrigin();
 		navGoal = standOff > 1f
@@ -2012,6 +2085,11 @@ public sealed partial class EntityBrain : Component
 				LastNavBlockReason = "agentReplaced";
 		}
 
+		// An idle agent may have been re-seated by a tile rebuild while the body stayed put (locomotion
+		// only follows a walking agent): start the path from where the body actually is.
+		if ( !Agent.IsNavigating && Vector3.DistanceBetween( Agent.AgentPosition.WithZ( 0f ), GameObject.WorldPosition.WithZ( 0f ) ) > 8f )
+			Agent.SetAgentPosition( GameObject.WorldPosition );
+
 		// Retarget in place — avoid SyncAgentFromRoot every issue (yanks root sideways).
 		Agent.MoveTo( navGoal );
 		_issuedNavGoal = navGoal;
@@ -2022,6 +2100,26 @@ public sealed partial class EntityBrain : Component
 		return pathQuery;
 	}
 
+
+	/// <summary>At most this many full path checks (query + solid sweep) per frame across every entity.</summary>
+	const int MaxPathQueriesPerFrame = 4;
+	static float _pathQueryFrameTime = -1f;
+	static int _pathQueriesThisFrame;
+
+	static bool TryTakePathQuerySlot()
+	{
+		if ( Time.Now != _pathQueryFrameTime )
+		{
+			_pathQueryFrameTime = Time.Now;
+			_pathQueriesThisFrame = 0;
+		}
+
+		if ( _pathQueriesThisFrame >= MaxPathQueriesPerFrame )
+			return false;
+
+		_pathQueriesThisFrame++;
+		return true;
+	}
 
 	Vector3 GetNavOrigin() =>
 		Agent is not null && Agent.IsValid() ? Agent.AgentPosition : GameObject.WorldPosition;
@@ -2038,39 +2136,23 @@ public sealed partial class EntityBrain : Component
 		if ( EntityNavMeshUtility.TryProjectToNavMesh( Scene, origin, out onNav, NavProjectTier.Fast ) )
 			return true;
 
+		// The projection is only the path query's start hint — never a reason to move the body. The
+		// old glue (WorldPosition = projection, up to 96 u) ran on every immediate path check, and every
+		// nav rebake requests one, so each wall a raid knocked down hopped every entity sideways.
 		if ( EntityNavMeshUtility.TryProjectToNavMesh( Scene, origin, out onNav, NavProjectTier.Full ) )
 		{
-			// Only snap when projection is local — random far samples were launching entities.
-			if ( (onNav - origin).Length <= 96f )
-			{
-				if ( (onNav - origin).Length > 8f )
-					onNav = ApplyNavXyKeepTerrainZ( onNav );
+			// Only trust a local projection — random far samples were launching entities.
+			if ( (onNav - origin).Length > 96f )
+				onNav = origin;
 
-				return true;
-			}
-
-			onNav = origin;
 			return true;
 		}
 
 		if ( EntityNavMeshUtility.TryProjectToNavMesh( Scene, GameObject.WorldPosition, out onNav, NavProjectTier.Full )
 		     && (onNav - GameObject.WorldPosition).Length <= 96f )
-		{
-			onNav = ApplyNavXyKeepTerrainZ( onNav );
 			return true;
-		}
 
 		return false;
-	}
-
-	Vector3 ApplyNavXyKeepTerrainZ( Vector3 onNav )
-	{
-		// Keep current Z — locomotion soft-sticks to the heightfield. Snapping here caused ridge pops.
-		var glued = onNav.WithZ( GameObject.WorldPosition.z );
-		GameObject.WorldPosition = glued;
-		Agent ??= Components.Get<NavMeshAgent>();
-		Agent?.SetAgentPosition( glued );
-		return glued;
 	}
 
 	/// <summary>Last chase goal that was genuinely under the player's feet, for the off-nav grace.</summary>

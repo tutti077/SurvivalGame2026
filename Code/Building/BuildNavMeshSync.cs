@@ -167,7 +167,13 @@ public static class BuildNavMeshSync
 		Request
 	}
 
-	/// <summary>Default is tiles (per Mark: regenerating the whole plane for one wall is a waste); a tile bake that leaves its area empty drops the session back to Full.</summary>
+	/// <summary>
+	/// Default is Tiles: a synchronous GenerateTiles from live physics for just the tiles around the
+	/// change (~20 ms) — the engine's "small nav update". Request mode was tried while a raid rebaked
+	/// once a second (it builds across frames) but its tiles can come from the stale bake, which left
+	/// walls uncarved and scavs running against them (Mark, 2026-09-23). Rebakes are rare now (only
+	/// the wall someone is working on, the rest deferred), so the 20 ms is affordable. `nav_mode` for A/B.
+	/// </summary>
 	public static StructureRebakeMode RebakeMode = StructureRebakeMode.Tiles;
 
 	/// <summary>Pending verification of a tile rebake: the area must contain nav again once generation settles.</summary>
@@ -292,6 +298,50 @@ public static class BuildNavMeshSync
 		Log.Info( $"[BuildNav] full regenerate finished in {Time.NowDouble - _fullRegenStartedAt:0.00}s" );
 		_fullRegenStartedAt = -1d;
 		NotifyEnemiesNavUpdated( scene );
+	}
+
+	/// <summary>
+	/// Hand-built scenes: make sure nav exists within <paramref name="radius"/> of <paramref name="center"/>.
+	/// The load-time bubble (<see cref="HandBuiltNavBubbleUnits"/> around the first pawn) ends where it
+	/// ends — a base raid on a bed past its edge spawned raiders that could never get onto nav and just
+	/// stood there. Grows the bounds to include the area and generates only the missing tiles (cached
+	/// tiles are reused, nothing is unloaded). No-op when already covered and in streamed worlds, which
+	/// bake tiles per chunk. Host, rare (raid start) — never per frame.
+	/// </summary>
+	public static void EnsureNavCoversArea( Scene scene, Vector3 center, float radius )
+	{
+		if ( !scene.IsValid() || !IsNavAuthority() || IsStreamedScene( scene ) )
+			return;
+
+		var navMesh = scene.NavMesh;
+		var physics = scene.PhysicsWorld;
+		if ( navMesh is null || !navMesh.IsEnabled || physics is null )
+			return;
+
+		var current = navMesh.Bounds;
+		if ( current.Size.LengthSquared < 1f )
+			return;
+
+		var need = new BBox(
+			new Vector3( center.x - radius, center.y - radius, current.Mins.z ),
+			new Vector3( center.x + radius, center.y + radius, current.Maxs.z ) );
+		var covered = current.Mins.x <= need.Mins.x && current.Mins.y <= need.Mins.y
+		              && current.Maxs.x >= need.Maxs.x && current.Maxs.y >= need.Maxs.y;
+		if ( covered )
+			return;
+
+		navMesh.CustomBounds = true;
+		navMesh.Bounds = new BBox( Vector3.Min( current.Mins, need.Mins ), Vector3.Max( current.Maxs, need.Maxs ) );
+
+		// The tile grid is laid out from the XY bounds (see EnsureNavBoundsCover): growing them and
+		// generating only the new strips left that side without usable tiles — every raider from there
+		// stood on no nav, or on tiles that never joined the old mesh (partial paths at ~900 u). The one
+		// thing known to build a correct mesh here is the load-time full regenerate from physics, so
+		// that is what a grown bubble gets: drop everything and rebuild (~0.5 s for this bubble; the
+		// raid's first wave waits for IsGenerating to clear, so nothing spawns onto a half-built mesh).
+		Log.Info( $"[BuildNav] nav grown to cover {center} ±{radius:0}u — full regenerate, bounds now {navMesh.Bounds.Mins} → {navMesh.Bounds.Maxs}" );
+		if ( !navMesh.IsGenerating )
+			RegenerateFullFromPhysics( scene, navMesh, physics, "nav grown for a raid", unloadBounds: null );
 	}
 
 	/// <summary>
@@ -453,6 +503,8 @@ public static class BuildNavMeshSync
 		_bakeTickScene = scene;
 		_bakeTickAt = now;
 
+		TickDeferredRemovalBakes( scene );
+
 		if ( !_pendingLocalBakes.TryGetValue( scene, out var pending ) )
 			return;
 
@@ -500,6 +552,9 @@ public static class BuildNavMeshSync
 					navMesh.UnloadTiles( local );
 					navMesh.RequestTilesGeneration( local );
 					_pendingLocalBakes.Remove( scene );
+					_tileVerifyBounds = local;
+					_tileVerifyScene = scene;
+					_tileVerifyAt = Time.NowDouble + TileVerifyDelaySeconds;
 					return;
 			}
 
@@ -638,7 +693,79 @@ public static class BuildNavMeshSync
 			return;
 
 		EnsureBuildTraversalSettings( scene );
-		ScheduleLocalBake( scene, BuildPieceNavPolicy.ExpandForLocalBake( bounds ), urgent: true, structural: true );
+		var local = BuildPieceNavPolicy.ExpandForLocalBake( bounds );
+
+		// Per Mark (minimise rebakes): a removal rebakes at once only when it is a piece an entity is
+		// hitting, or one next to it — that is the hole someone is waiting to walk through. Any other
+		// removal just dirties its area; dirty areas are rebaked together later (DeferredRemovalSeconds).
+		if ( BreachClaims.AnyClaimNear( bounds, ClaimedNeighbourPadding ) )
+		{
+			ScheduleLocalBake( scene, local, urgent: true, structural: true );
+			NotifyEnemiesStructureChanged( scene );
+			return;
+		}
+
+		QueueDeferredRemovalBake( scene, local );
+	}
+
+	/// <summary>A removed piece this close (units) to a claimed piece counts as "the wall next to it" — one module plus a margin.</summary>
+	const float ClaimedNeighbourPadding = 160f;
+	/// <summary>Dirty (unclaimed) removals are rebaked together no sooner than this after the first one.</summary>
+	const double DeferredRemovalSeconds = 8d;
+	/// <summary>Then one dirty area at a time, this far apart — never a burst (the burst when the bed fell was the hitch).</summary>
+	const double DeferredRemovalSpacingSeconds = 3d;
+	static readonly Dictionary<Scene, List<BBox>> _deferredRemovals = new();
+	static readonly Dictionary<Scene, double> _deferredFlushAt = new();
+
+	static void QueueDeferredRemovalBake( Scene scene, BBox local )
+	{
+		if ( !_deferredRemovals.TryGetValue( scene, out var list ) )
+		{
+			list = new List<BBox>();
+			_deferredRemovals[scene] = list;
+			_deferredFlushAt[scene] = Time.NowDouble + DeferredRemovalSeconds;
+		}
+
+		// Merge into an overlapping dirty area so a wall of removals becomes one bake.
+		for ( var i = 0; i < list.Count; i++ )
+		{
+			if ( BoundsOverlap( list[i], local ) )
+			{
+				list[i] = UnionBounds( list[i], local );
+				return;
+			}
+		}
+
+		list.Add( local );
+	}
+
+	/// <summary>One dirty area per tick, only while no structural bake is pending and the mesh is not generating.</summary>
+	static void TickDeferredRemovalBakes( Scene scene )
+	{
+		if ( !_deferredRemovals.TryGetValue( scene, out var list ) || list.Count == 0 )
+			return;
+
+		if ( Time.NowDouble < _deferredFlushAt[scene] )
+			return;
+
+		if ( _pendingLocalBakes.TryGetValue( scene, out var pending ) && pending.Structural )
+			return;
+
+		if ( IsNavGenerating( scene ) )
+			return;
+
+		var area = list[0];
+		list.RemoveAt( 0 );
+		if ( list.Count == 0 )
+		{
+			_deferredRemovals.Remove( scene );
+			_deferredFlushAt.Remove( scene );
+		}
+		else
+			_deferredFlushAt[scene] = Time.NowDouble + DeferredRemovalSpacingSeconds;
+
+		Log.Info( $"[BuildNav] deferred removal rebake around {area.Center} ({list.Count} dirty area(s) left)" );
+		ScheduleLocalBake( scene, area, urgent: true, structural: true );
 		NotifyEnemiesStructureChanged( scene );
 	}
 

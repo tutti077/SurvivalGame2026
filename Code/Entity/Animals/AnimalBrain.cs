@@ -956,6 +956,8 @@ public sealed class AnimalBrain : Component
 			Agent.Stop();
 			Agent.UpdatePosition = false;
 		}
+
+		Locomotion?.DetachAgent();
 	}
 
 	/// <summary>Benched or never placed — periodically try to win the nav agent back.</summary>

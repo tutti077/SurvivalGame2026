@@ -68,6 +68,22 @@ public sealed class EntityLocomotion : Component
 
 	Vector3 _lastPosition;
 	Vector3 _clipFromPosition;
+
+	// ── Visual hop smoothing ──────────────────────────────────────────────────────────────
+	/// <summary>A root move this much larger than a frame of running is a hop, not a step (units). 4 u: a scav runs ~4 u a frame at 60 fps, so a 10 u shift is still caught (Mark: still "jittering" with only ≥20 u hops smoothed).</summary>
+	const float VisualHopSlackUnits = 4f;
+	/// <summary>Fastest the root legitimately moves (units/s) — run speed with margin (chase 220).</summary>
+	const float VisualHopMaxSpeed = 300f;
+	/// <summary>Hops longer than this are real teleports (spawn placement, respawn) and stay instant.</summary>
+	const float VisualHopMaxUnits = 320f;
+	/// <summary>How fast the model eases onto the root after a hop (1/s — ~0.2 s to settle).</summary>
+	const float VisualHopDecayRate = 12f;
+	Vector3 _visualOffsetWorld;
+	Vector3 _visualPrevRoot;
+	bool _hasVisualPrevRoot;
+	Vector3 _bodyBaseLocal;
+	bool _bodyBaseCaptured;
+	double _nextHopLogAt;
 	TerrainWorldManager _cachedTerrain;
 	float _smoothedGroundZ;
 	bool _hasSmoothedGroundZ;
@@ -88,6 +104,104 @@ public sealed class EntityLocomotion : Component
 	Vector3 _travelHintWorld;
 	Vector3 _lastWishDir;
 	double _lastWishAt;
+	float _lastWishSpeed;
+
+	// ── Coast through a nav rebake ────────────────────────────────────────────────────────
+	/// <summary>Longest a coast may carry the body before it simply holds (the rebake is taking too long).</summary>
+	const float CoastMaxSeconds = 1.5f;
+	/// <summary>A wish this recent counts as "was moving" when the mesh goes stale.</summary>
+	const float CoastRecentWishSeconds = 0.3f;
+	bool _coasting;
+	bool _coastResumeIssued;
+
+	// ── Body follows the agent (never the engine writing the transform) ───────────────────
+	/// <summary>
+	/// Per Mark (2026-09-23, "definitely related to the walls and the renav"): every tile rebuild
+	/// re-seats each agent on the new polygons and, with <see cref="NavMeshAgent.UpdatePosition"/>
+	/// on, the engine wrote that seat straight onto the body — 10–16 u, every scav in the area, on
+	/// the frame the tile came back. There is no incremental nav update on this engine, so instead
+	/// the engine never drives the transform: any <c>UpdatePosition = true</c> (spawn placement,
+	/// bake-complete, landing, manual-chase handoff) is taken as "attach" and turned off, and each
+	/// fixed update the body walks toward the agent at a capped speed — a normal path is followed
+	/// exactly as before, and a re-seat becomes a short slide instead of a snap.
+	/// </summary>
+	bool _agentAttached;
+	/// <summary>Headroom over the intended run speed for catching a re-seated agent (units/s).</summary>
+	const float FollowCatchUpSpeed = 120f;
+	/// <summary>
+	/// Agent this far ahead of the body (horizontal, units) = the body is held by something the mesh
+	/// does not know about (a wall nav leaks through): pull the agent back and re-path, instead of the
+	/// body running in place against the wall while the agent walks off (Mark: "running against the wall").
+	/// </summary>
+	const float FollowBlockedLagUnits = 64f;
+
+	/// <summary>The body is following its nav agent (the engine's UpdatePosition is always off).</summary>
+	public bool AgentDrivesBody => _agentAttached;
+
+	/// <summary>Brain takes the body (manual stepping, benching): stop following the agent.</summary>
+	public void DetachAgent()
+	{
+		_agentAttached = false;
+		if ( Agent is not null && Agent.IsValid() )
+			Agent.UpdatePosition = false;
+	}
+
+	/// <summary>Any external UpdatePosition = true becomes an attach; the engine flag itself stays off.</summary>
+	void SyncAgentAttachment()
+	{
+		Agent ??= Components.Get<NavMeshAgent>();
+		if ( Agent is null || !Agent.IsValid() || !Agent.UpdatePosition )
+			return;
+
+		Agent.UpdatePosition = false;
+		_agentAttached = true;
+	}
+
+	/// <summary>
+	/// Walk the body toward the agent's position (XY; Z is the ground glue's) at a capped speed —
+	/// only while the agent is actually walking a path. An idle agent (standing, mid-swing) gets
+	/// re-seated 12–18 u by every tile rebuild; following it then slid every standing scav across the
+	/// base on each rebake (Mark's log: "STALL 244→0 … locked=True" after every tile request). The
+	/// brain puts the agent back at the body before its next MoveTo instead.
+	/// </summary>
+	void FollowAgent()
+	{
+		if ( !_agentAttached || Agent is null || !Agent.IsValid() || !Agent.Enabled || !Agent.IsNavigating )
+			return;
+
+		var body = GameObject.WorldPosition;
+		var delta = (Agent.AgentPosition - body).WithZ( 0f );
+		var dist = delta.Length;
+		if ( dist < 0.01f )
+			return;
+
+		if ( dist > FollowBlockedLagUnits )
+		{
+			Agent.SetAgentPosition( body );
+			Components.Get<EntityBrain>()?.RequestImmediateRepath();
+			return;
+		}
+
+		var dt = Math.Max( Time.Delta, 1e-4f );
+		var maxStep = (Math.Max( _intendedMaxSpeed, 160f ) + FollowCatchUpSpeed) * dt;
+		var step = Math.Min( dist, maxStep );
+		GameObject.WorldPosition = body + delta * (step / dist);
+	}
+	double _coastSince;
+	Vector3 _coastVelocity;
+
+	/// <summary>
+	/// The mesh is being rebuilt and locomotion is carrying the body on its last velocity — the
+	/// brain must not step the body itself meanwhile (see <see cref="EntityBrain"/> manual stepping).
+	/// </summary>
+	public bool IsCoasting => _coasting;
+
+	/// <summary>
+	/// Coasting while the mesh is still stale: the brain has nothing to path on yet. Once the mesh is
+	/// back the brain must path again (the coast ends when the agent is walking) — blocking path
+	/// checks for the whole coast left walkers running blind for the 2.5 s cap, then stopping dead.
+	/// </summary>
+	public bool IsCoastingOnStaleNav => _coasting && Scene.IsValid() && BuildNavMeshSync.IsNavStale( Scene );
 	float _fallSpeed;
 	float _fallStartZ;
 	float _intendedMaxSpeed = 220f;
@@ -305,6 +419,20 @@ public sealed class EntityLocomotion : Component
 
 		Agent ??= Components.Get<NavMeshAgent>();
 
+		// Body movement runs at render rate (it used to sit in the fixed tick, which stepped the body
+		// at 50 Hz under a 144 Hz frame — visible judder). Follow / coast first, then the wall clip on
+		// that very step, then the feet glue: the glue resets the clip origin every frame, so a step
+		// taken here and clipped only in the next fixed tick was never seen — scavs walked clean
+		// through walls (Mark, 2026-09-23). Same trap TickManualStepToward documents.
+		if ( !_isFalling )
+		{
+			SyncAgentAttachment();
+			TickRebakeCoast();
+			if ( !_coasting )
+				FollowAgent();
+			ClipMovementAgainstSolids();
+		}
+
 		// Stick feet before measuring velocity so Z corrections don't pulse the walk anim.
 		// Runs even without a skinned body — placeholder animals still need terrain Z.
 		if ( !_isFalling )
@@ -319,14 +447,20 @@ public sealed class EntityLocomotion : Component
 		var velocity = (position - _lastPosition) / dt;
 		_lastPosition = position;
 
-		if ( !_isFalling && Agent is not null && Agent.IsValid() && Agent.IsNavigating )
+		if ( _coasting )
+			velocity = _coastVelocity;
+		else if ( !_isFalling && Agent is not null && Agent.IsValid() && Agent.IsNavigating )
 			velocity = Agent.WishVelocity.WithZ( 0f );
 		else if ( _isFalling )
 			velocity = _airVelocity + new Vector3( 0f, 0f, -_fallSpeed );
 
-		var animWish = !_isFalling && Agent is not null && Agent.IsValid()
-			? Agent.WishVelocity.WithZ( 0f )
-			: velocity.WithZ( 0f );
+		// Coasting: the agent's wish is zero (its tile is gone) — feed the anim the carried velocity, or
+		// the run cycle snaps to idle and back on every rebake.
+		var animWish = _coasting
+			? _coastVelocity
+			: !_isFalling && Agent is not null && Agent.IsValid()
+				? Agent.WishVelocity.WithZ( 0f )
+				: velocity.WithZ( 0f );
 		var facingTravel = IsFacingTravelDirection( out _ );
 		// Turn-in-place: don't feed sideways wish into the citizen anim.
 		if ( ForwardOnlyNavigation && !facingTravel )
@@ -473,6 +607,7 @@ public sealed class EntityLocomotion : Component
 			desire = wish.Normal;
 			_lastWishDir = desire;
 			_lastWishAt = Time.NowDouble;
+			_lastWishSpeed = wish.Length;
 			// If the path wish drives into a wall, face along the wall toward the look target instead.
 			if ( TrySteerAlongWall( desire, out var steered ) )
 			{
@@ -618,6 +753,79 @@ public sealed class EntityLocomotion : Component
 		}
 	}
 
+	/// <summary>
+	/// Per Mark ("all of them teleport every second on the nose", only the scavs, nothing else
+	/// stutters): a raid knocks a wall down about once a second and every rebake unloads the tiles
+	/// under the raiders — the engine agent standing on one loses its polygon, its wish drops to
+	/// zero and the body freezes for the frames until the tile is back, then re-seats. Every scav in
+	/// the base stalled in sync. While the mesh is stale a body that was moving is carried on its
+	/// last velocity with the agent detached (UpdatePosition off — otherwise the frozen agent writes
+	/// its old position back over ours), the solid clip still stops it at walls, and once the mesh is
+	/// back the agent is seated at the body and takes over when it is navigating again. A standing
+	/// body (no recent wish, mid-swing) is detached too and simply holds: the tile UNLOAD itself
+	/// re-seated a standing agent and dragged the body ~12 u (Mark's log: every hop on the exact
+	/// frame of a "tile request (unload …)", most of them locked mid-swing).
+	/// </summary>
+	void TickRebakeCoast()
+	{
+		Agent ??= Components.Get<NavMeshAgent>();
+		if ( Agent is null || !Agent.IsValid() || !Scene.IsValid() )
+			return;
+
+		var now = Time.NowDouble;
+		var stale = BuildNavMeshSync.IsNavStale( Scene );
+
+		if ( _coasting )
+		{
+			if ( !stale && !_coastResumeIssued )
+			{
+				// Mesh is back: seat the agent where the body is; the brain's (staggered) path check
+				// re-issues MoveTo from here and the agent takes over the moment it is navigating.
+				_coastResumeIssued = true;
+				Agent.SetAgentPosition( GameObject.WorldPosition );
+			}
+
+			// Back on the mesh: a walker hands over once the agent is navigating again; a holder (zero
+			// velocity — standing, swinging) hands over at once, there is no path to wait for.
+			if ( (_coastResumeIssued && (Agent.IsNavigating || _coastVelocity == Vector3.Zero)) || now - _coastSince > CoastMaxSeconds + 1d )
+			{
+				EndCoast();
+				return;
+			}
+
+			if ( now - _coastSince > CoastMaxSeconds )
+				return; // hold — the rebake is taking too long to keep walking blind
+
+			GameObject.WorldPosition += _coastVelocity * Math.Max( Time.Delta, 1e-4f );
+			return;
+		}
+
+		if ( !stale || !_agentAttached || IsTrapped )
+			return;
+
+		// Moving with a recent wish → carry it; standing / mid-swing → hold (velocity zero), but detach
+		// either way so the unload cannot drag the body.
+		var wasMoving = Components.Get<EntityCombat>() is not { IsMovementLocked: true }
+		                && now - _lastWishAt <= CoastRecentWishSeconds && _lastWishSpeed >= 8f && _lastWishDir.LengthSquared >= 0.5f;
+
+		_coasting = true;
+		_coastResumeIssued = false;
+		_coastSince = now;
+		_coastVelocity = wasMoving ? _lastWishDir * Math.Min( _lastWishSpeed, Math.Max( 8f, _intendedMaxSpeed ) ) : Vector3.Zero;
+		_agentAttached = false;
+	}
+
+	void EndCoast()
+	{
+		_coasting = false;
+		_coastResumeIssued = false;
+		if ( Agent is not null && Agent.IsValid() )
+		{
+			Agent.SetAgentPosition( GameObject.WorldPosition );
+			_agentAttached = true;
+		}
+	}
+
 	float StepGroundZ( float currentZ, float targetZ, float dt, float followRateScale )
 	{
 		var deltaZ = targetZ - currentZ;
@@ -742,6 +950,8 @@ public sealed class EntityLocomotion : Component
 			Agent.UpdatePosition = false;
 			Agent.SetAgentPosition( GameObject.WorldPosition );
 		}
+
+		_agentAttached = false;
 
 		// Scripted walk-off (drop-in): the agent is already stopped, carry comes from the brain.
 		if ( _airVelocity.Length < 8f && Time.NowDouble < _pendingAirCarryUntil )
@@ -1092,6 +1302,138 @@ public sealed class EntityLocomotion : Component
 		}
 
 		return false;
+	}
+
+	/// <summary>
+	/// Last thing before the frame renders: the engine nav agent writes the root after our OnUpdate,
+	/// so smoothing from OnUpdate let the hop render for one frame, then yanked the model back and
+	/// eased it forward — jump, back, jump (Mark: "the same, if not even more frequent").
+	/// </summary>
+	protected override void OnPreRender()
+	{
+		if ( !Active || !GameObject.IsValid() || GameObject.IsProxy )
+			return;
+
+		SmoothVisualHops();
+		DetectTwitch();
+	}
+
+	// ── Twitch detector (diagnostics) ─────────────────────────────────────────────────────
+	/// <summary>A one-frame speed collapse from above this (u/s) …</summary>
+	const float TwitchFastSpeed = 90f;
+	/// <summary>… to below this counts as a stall.</summary>
+	const float TwitchSlowSpeed = 25f;
+	/// <summary>A one-frame yaw change above this counts as a facing snap.</summary>
+	const float TwitchYawDegrees = 25f;
+	Vector3 _twitchPrevPos;
+	float _twitchPrevSpeed;
+	float _twitchPrevYaw;
+	bool _hasTwitchPrev;
+	double _nextTwitchLogAt;
+
+	/// <summary>
+	/// Per Mark ("they twitch every second on the second, even before a wall breaks"): name the
+	/// twitch. A stall (speed collapsing in one frame) or a facing snap logs once per entity per second
+	/// with everything that could have caused it — state and how long ago it changed, seconds since the
+	/// brain last issued MoveTo, the agent's status, combat lock, coast / attach — so the cause can be
+	/// read off the console instead of guessed.
+	/// </summary>
+	void DetectTwitch()
+	{
+		var pos = GameObject.WorldPosition;
+		var yaw = GameObject.WorldRotation.Angles().yaw;
+		if ( !_hasTwitchPrev )
+		{
+			_twitchPrevPos = pos;
+			_twitchPrevYaw = yaw;
+			_hasTwitchPrev = true;
+			return;
+		}
+
+		var dt = Math.Max( Time.Delta, 1e-4f );
+		var speed = (pos - _twitchPrevPos).WithZ( 0f ).Length / dt;
+		var yawDelta = MathF.Abs( Angles.NormalizeAngle( yaw - _twitchPrevYaw ) );
+		var prevSpeed = _twitchPrevSpeed;
+		var stall = prevSpeed > TwitchFastSpeed && speed < TwitchSlowSpeed;
+		var snap = yawDelta > TwitchYawDegrees;
+		_twitchPrevPos = pos;
+		_twitchPrevSpeed = speed;
+		_twitchPrevYaw = yaw;
+
+		if ( (!stall && !snap) || _isFalling || !NavDebugCommands.TraceEnabled || Time.NowDouble < _nextTwitchLogAt )
+			return;
+
+		_nextTwitchLogAt = Time.NowDouble + 1d;
+		var brain = Components.Get<EntityBrain>();
+		var combat = Components.Get<EntityCombat>();
+		var agentOk = Agent is not null && Agent.IsValid();
+		Log.Info( $"[Twitch] {GameObject.Name} {(stall ? $"STALL {prevSpeed:0}→{speed:0} u/s" : "")}{(stall && snap ? " + " : "")}{(snap ? $"YAW SNAP {yawDelta:0}°" : "")} | state={brain?.CurrentState} stateAge={brain?.SecondsSinceStateChange ?? -1:0.00}s moveIssued={brain?.SecondsSinceMoveIssued ?? -1:0.00}s ago block={brain?.LastNavBlockReason} path={brain?.LastPathStatus} navigating={(agentOk && Agent.IsNavigating)} maxSpeed={(agentOk ? Agent.MaxSpeed : 0):0} wish={(agentOk ? Agent.WishVelocity.WithZ( 0f ).Length : 0):0} locked={combat is { IsMovementLocked: true }} attached={_agentAttached} coasting={_coasting} navStale={(Scene.IsValid() && BuildNavMeshSync.IsNavStale( Scene ))}" );
+	}
+
+	/// <summary>
+	/// Per Mark ("SO choppy — they teleport around"): the root can hop when the engine nav agent
+	/// re-clamps onto a rebuilt tile (every wall a raid knocks down rebakes the tiles under the
+	/// raiders) and UpdatePosition carries the body with it. Gameplay keeps the new root position;
+	/// the model child is held where it was and eases onto the root over ~0.2 s, so a hop reads as
+	/// a quick step instead of a teleport. Hops are logged (throttled) with the nav state so the
+	/// remaining causes can be found and removed at the source. Host only — clients interpolate.
+	/// </summary>
+	void SmoothVisualHops()
+	{
+		var bodyGo = Body?.GameObject;
+		if ( bodyGo is null || !bodyGo.IsValid() || bodyGo == GameObject )
+			return;
+
+		if ( !_bodyBaseCaptured )
+		{
+			_bodyBaseLocal = bodyGo.LocalPosition;
+			_bodyBaseCaptured = true;
+		}
+
+		var dt = Math.Max( Time.Delta, 1e-4f );
+		var root = GameObject.WorldPosition;
+		if ( _hasVisualPrevRoot && !_isFalling && !IsTrapped )
+		{
+			var hop = (root - _visualPrevRoot).WithZ( 0f );
+			var length = hop.Length;
+			var frameLimit = VisualHopMaxSpeed * dt + VisualHopSlackUnits;
+			if ( length > frameLimit && length <= VisualHopMaxUnits )
+			{
+				// Keep the model where the eye last saw it; the offset decays to zero below. Measured at
+		// pre-render, after the agent has written the root, so the hop itself never reaches a frame.
+				_visualOffsetWorld -= hop;
+				if ( NavDebugCommands.TraceEnabled && Time.NowDouble >= _nextHopLogAt )
+				{
+					_nextHopLogAt = Time.NowDouble + 2d;
+					var agentOk = Agent is not null && Agent.IsValid();
+					var stale = Scene.IsValid() && BuildNavMeshSync.IsNavStale( Scene );
+					var generating = Scene.IsValid() && BuildNavMeshSync.IsNavGenerating( Scene );
+					var state = Components.Get<EntityBrain>()?.CurrentState.ToString() ?? "-";
+					var agentOff = agentOk ? Vector3.DistanceBetween( Agent.AgentPosition, root ) : -1f;
+					Log.Info( $"[Loco] {GameObject.Name} root hopped {length:0}u in one frame ({state}, attached={_agentAttached}, navigating={(agentOk && Agent.IsNavigating)}, agentOff={agentOff:0}, locked={Components.Get<EntityCombat>() is { IsMovementLocked: true }}, navStale={stale}, navGenerating={generating}) — smoothing the model" );
+				}
+			}
+		}
+
+		_visualPrevRoot = root;
+		_hasVisualPrevRoot = true;
+
+		if ( _visualOffsetWorld.LengthSquared < 0.01f )
+		{
+			if ( _visualOffsetWorld != Vector3.Zero )
+			{
+				_visualOffsetWorld = Vector3.Zero;
+				bodyGo.LocalPosition = _bodyBaseLocal;
+			}
+
+			return;
+		}
+
+		_visualOffsetWorld *= MathF.Exp( -VisualHopDecayRate * dt );
+		if ( _visualOffsetWorld.Length > VisualHopMaxUnits )
+			_visualOffsetWorld = _visualOffsetWorld.Normal * VisualHopMaxUnits;
+
+		bodyGo.LocalPosition = _bodyBaseLocal + GameObject.WorldRotation.Inverse * _visualOffsetWorld;
 	}
 
 	SkinnedModelRenderer FindBodyRenderer()

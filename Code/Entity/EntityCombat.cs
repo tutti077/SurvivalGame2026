@@ -23,7 +23,7 @@ public sealed class EntityCombat : Component
 	[Property, Group( "Telegraph" )] public float TelegraphEyeHeight { get; set; } = 64f;
 	[Property, Group( "Telegraph" )] public float TelegraphLineLength { get; set; } = 92f;
 
-	[Property, Group( "Debug" )] public bool ShowTelegraphDebug { get; set; } = true;
+	[Property, Group( "Debug" )] public bool ShowTelegraphDebug { get; set; } = false;
 
 	readonly Random _rng = new();
 	GameObject _attackTarget;
@@ -188,7 +188,9 @@ public sealed class EntityCombat : Component
 		_telegraphActive = false;
 		_hasQueuedAttack = false;
 		_rotationLocked = true;
-		_phaseEndsAt = Time.NowDouble + Math.Max( 0.05f, RecoverySeconds );
+		// ±20 % per cycle: raiders that reached the walls together swung in lock-step, and every
+		// swing's sweep traces landed in the same frames once a second (Mark: "they all stutter on the second").
+		_phaseEndsAt = Time.NowDouble + Math.Max( 0.05f, RecoverySeconds ) * Sandbox.Game.Random.Float( 0.8f, 1.2f );
 	}
 
 	void UpdateAttackRotation()
@@ -250,7 +252,7 @@ public sealed class EntityCombat : Component
 		_nextSwingDir = RollSwingDir();
 		_hasQueuedAttack = true;
 		_telegraphActive = true;
-		_phaseEndsAt = Time.NowDouble + Math.Max( 0.05f, TelegraphSeconds );
+		_phaseEndsAt = Time.NowDouble + Math.Max( 0.05f, TelegraphSeconds ) * Sandbox.Game.Random.Float( 0.8f, 1.2f );
 	}
 
 	void TryExecuteQueuedAttack()

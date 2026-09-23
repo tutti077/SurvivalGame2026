@@ -562,7 +562,7 @@ public sealed partial class PlayerVitals : Component
 
 		var hasSpawn = TryResolveSpawnTransform( out var spawnPos, out var spawnRot );
 		if ( !hasSpawn )
-			Log.Warning( $"{VitalsLogPrefix()} {GameObject.Name}: no SpawnPoint or RespawnPointOverride — respawn position unchanged." );
+			Log.Warning( $"{VitalsLogPrefix()} {GameObject.Name}: no claimed bed, SpawnPoint or RespawnPointOverride — respawn position unchanged." );
 
 		// Client-owned pawns are simulated by the owner — host proxy transforms do not stick.
 		var hostSimulatesTransform = GameObject.Network is not { Active: true } || !GameObject.IsProxy;
@@ -676,11 +676,20 @@ public sealed partial class PlayerVitals : Component
 		return null;
 	}
 
-	/// <summary>Spawn transform from scene — not from the pawn (host cannot move client-owned proxies).</summary>
+	/// <summary>
+	/// Spawn transform: the pawn's claimed <see cref="BuildBed"/> while it stands, else the scene
+	/// spawn — never the pawn itself (host cannot move client-owned proxies).
+	/// </summary>
 	bool TryResolveSpawnTransform( out Vector3 position, out Rotation rotation )
 	{
 		position = GameObject.WorldPosition;
 		rotation = GameObject.WorldRotation;
+
+		if ( BuildBed.TryFindClaimedBy( GameObject, out var bed ) )
+		{
+			bed.GetRespawnTransform( out position, out rotation );
+			return true;
+		}
 
 		var spawnGo = ResolveRespawnRoot();
 		if ( spawnGo is null || !spawnGo.IsValid() )

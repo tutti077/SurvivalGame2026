@@ -144,7 +144,8 @@ public sealed class BuildPiece : Component
 		var before = Health;
 		Health = Math.Max( 0f, Health - amount );
 		var dealt = before - Health;
-		Log.Info( $"[BuildPiece] {GameObject.Name} -{dealt:0.#} HP → {Health:0.#}/{MaxHealth:0}" );
+		if ( NavDebugCommands.TraceEnabled )
+			Log.Info( $"[BuildPiece] {GameObject.Name} -{dealt:0.#} HP → {Health:0.#}/{MaxHealth:0}" );
 
 		if ( Health <= 0.001f )
 			BuildAuthority.HostRemovePiece( this );

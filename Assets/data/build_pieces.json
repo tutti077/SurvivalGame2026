@@ -387,6 +387,23 @@
           "amount": 4
         }
       ]
+    },
+    {
+      "id": "bed",
+      "displayName": "Bed",
+      "icon": "ui/build/bed.png",
+      "prefab": "prefabs/build/bed.prefab",
+      "fallbackColor": "0.72,0.56,0.4,1",
+      "materialId": "wood",
+      "halfWidth": 50,
+      "halfHeight": 25,
+      "halfDepth": 12.5,
+      "costs": [
+        {
+          "resourceId": "resource_woodBasic",
+          "amount": 10
+        }
+      ]
     }
   ]
 }

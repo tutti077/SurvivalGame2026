@@ -116,6 +116,8 @@ public sealed partial class EntityBrain
 	{
 		if ( _state == EnemyAiState.Breaching )
 			_breachSwings++;
+
+		LandMissedBedSwing();
 	}
 
 	bool IsWithinMeleeVertical( GameObject target ) =>
@@ -128,7 +130,11 @@ public sealed partial class EntityBrain
 		_chaseProgressPosAt = Time.NowDouble;
 	}
 
-	void LogBreach( string message ) => Log.Info( $"[Breach] {GameObject.Name}: {message}" );
+	void LogBreach( string message )
+	{
+		if ( NavDebugCommands.TraceEnabled )
+			Log.Info( $"[Breach] {GameObject.Name}: {message}" );
+	}
 
 	void ClearBreachState()
 	{
@@ -189,6 +195,13 @@ public sealed partial class EntityBrain
 	/// </summary>
 	bool TickManualStepToward( Vector3 goal, float stopWithin )
 	{
+		// Locomotion is carrying the body through this rebake on its last velocity — do not also step
+		// it. Once the mesh is back, fall through so the path check below re-issues MoveTo.
+		if ( Locomotion is { IsCoastingOnStaleNav: true } )
+			return true;
+		if ( Locomotion is { IsCoasting: true } )
+			return false;
+
 		// Stale covers the debounce window too: a path through a wall placed a moment ago is not
 		// a leak to detour around — that was the "runs off somewhere, turns round, comes back".
 		if ( !Scene.IsValid() || !BuildNavMeshSync.IsNavStale( Scene ) )
@@ -208,6 +221,8 @@ public sealed partial class EntityBrain
 				Agent.Stop();
 				Agent.UpdatePosition = false;
 			}
+
+			Locomotion?.DetachAgent();
 		}
 
 		var pos = GameObject.WorldPosition;
@@ -447,7 +462,7 @@ public sealed partial class EntityBrain
 		}
 
 		var body = GameObject.WorldPosition + Vector3.Up * BodyCenterHeight;
-		if ( BuildPieceGeometry.DistanceToSurface( _breachPiece, body ) <= StructureAttackRange )
+		if ( StrikeDistance( _breachPiece, body ) <= StructureAttackRange )
 		{
 			if ( !_breachEngageLogged )
 			{
@@ -625,7 +640,7 @@ public sealed partial class EntityBrain
 		var wish = agentOk ? Agent.WishVelocity.WithZ( 0f ).Length : 0f;
 		var maxSpeed = agentOk ? Agent.MaxSpeed : 0f;
 		var navigating = agentOk && Agent.IsNavigating;
-		var updatePos = agentOk && Agent.UpdatePosition;
+		var updatePos = IsAgentDriving();
 		var dist = _target.IsValid() ? Vector3.DistanceBetween( pos, _target.WorldPosition ) : -1f;
 		var stale = Scene.IsValid() && BuildNavMeshSync.IsNavStale( Scene );
 		var generating = Scene.IsValid() && BuildNavMeshSync.IsNavGenerating( Scene );
@@ -881,6 +896,15 @@ public sealed partial class EntityBrain
 	/// <summary>Per Mark: no route and nothing to breach → walk back to where this entity started, then idle.</summary>
 	void ReturnHome( string why )
 	{
+		// Raid stragglers have no home to walk back to (their homes sit together by the old base, so
+		// they left as a pack) — they just wander from where they are.
+		if ( _isRaidStraggler )
+		{
+			LogBreach( $"{why} — wandering from here" );
+			WanderFromHere();
+			return;
+		}
+
 		LogBreach( $"{why} — returning home {HomePosition}" );
 		_alertMeter = 0f;
 		_alertLocked = false;
@@ -940,7 +964,7 @@ public sealed partial class EntityBrain
 		stand = default;
 		var origin = GetNavOrigin();
 		var body = GameObject.WorldPosition + Vector3.Up * BodyCenterHeight;
-		if ( BuildPieceGeometry.DistanceToSurface( piece, body ) <= StructureAttackRange * 0.9f )
+		if ( StrikeDistance( piece, body ) <= StructureAttackRange * 0.9f )
 		{
 			stand = origin;
 			return true;
@@ -971,7 +995,7 @@ public sealed partial class EntityBrain
 				if ( !EntityNavMeshUtility.TryProjectToNavMesh( Scene, probe, out var onNav, NavProjectTier.Fast, maxRadius: 96f ) )
 					break;
 
-				if ( BuildPieceGeometry.DistanceToSurface( piece, onNav + Vector3.Up * BodyCenterHeight ) > StructureAttackRange )
+				if ( StrikeDistance( piece, onNav + Vector3.Up * BodyCenterHeight ) > StructureAttackRange )
 					continue;
 
 				var query = EntityChaseRouting.QueryPath( Scene, origin, onNav, Agent, NavProjectTier.Fast );

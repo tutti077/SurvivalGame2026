@@ -6,7 +6,7 @@ namespace Survival;
 /// <summary>Throttled console diagnostics for entity AI state (debug only).</summary>
 public static class EntityPerceptionDebug
 {
-	public static bool Enabled { get; set; } = true;
+	public static bool Enabled { get; set; } = false;
 
 	/// <summary>Heartbeat interval when state is unchanged.</summary>
 	public static float IntervalSeconds { get; set; } = 1.5f;

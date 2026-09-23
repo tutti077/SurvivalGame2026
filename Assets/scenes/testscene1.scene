@@ -391,6 +391,22 @@
             },
             "Property": "Position",
             "Value": "0,-160,64"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d4e5f6a7-b8c9-0123-def4-567890abcdef"
+            },
+            "Property": "BedFocusScanIntervalSeconds",
+            "Value": 0.15
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d4e5f6a7-b8c9-0123-def4-567890abcdef"
+            },
+            "Property": "BedUseAction",
+            "Value": "Use"
           }
         ],
         "MovedObjects": []
@@ -736,6 +752,40 @@
           "Children": []
         }
       ]
+    },
+    {
+      "__guid": "b2143263-8f37-42a3-a0bf-05f14903a1a8",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "BaseRaid",
+      "Position": "4450,2000,34",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Survival.BaseRaidSession",
+          "__guid": "da8e8aff-1780-49df-b419-c695626a74cd",
+          "__enabled": true,
+          "Flags": 0,
+          "InputAction": "StartBaseRaid",
+          "LogRaid": false,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "RaidId": "scav_raid_test"
+        }
+      ],
+      "Children": []
     },
     {
       "__guid": "6ad70641-3c6c-4402-9c85-9a4969af4764",
@@ -2158,14 +2208,6 @@
             },
             "Property": "Position",
             "Value": "-544,-511.999939,8.79685116"
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "8e1059a4-a59e-4304-b444-d636b4ff6301"
-            },
-            "Property": "Static",
-            "Value": true
           }
         ],
         "MovedObjects": []
@@ -141181,14 +141223,6 @@
             },
             "Property": "Position",
             "Value": "31.9999962,4512,1.4312699E-05"
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "64b17888-f306-45ea-a6ab-c66ffeab0470"
-            },
-            "Property": "Static",
-            "Value": true
           }
         ],
         "MovedObjects": []
@@ -142076,7 +142110,87 @@
               },
               "Scale": 1,
               "TextScope": {
-                "Text": "n = spawn animal\nj = return to last teleport\nk = spawn entity\ni = spawn entity camp\nh = spawn boss",
+                "Text": "N = spawn animal\nJ = return to last teleport\nK = spawn entity\ni = spawn entity camp\nH = spawn boss",
+                "TextColor": "1,1,1,1",
+                "FontName": "Poppins",
+                "FontSize": 32,
+                "FontWeight": 400,
+                "FontItalic": false,
+                "FontVariantNumeric": "Normal",
+                "LineHeight": 1,
+                "LetterSpacing": 0,
+                "WordSpacing": 0,
+                "FilterMode": "Bilinear",
+                "FontSmooth": "Auto",
+                "Outline": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,0,1,1"
+                },
+                "Shadow": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,0,0,1",
+                  "Offset": "4,4"
+                },
+                "OutlineUnder": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,1,0,1"
+                },
+                "ShadowUnder": {
+                  "Enabled": false,
+                  "Size": 4,
+                  "Color": "0,0,0,1",
+                  "Offset": "4,4"
+                }
+              },
+              "VerticalAlignment": "Center"
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "68bb9697-fca6-4f1f-97ad-b53f82560724",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Object (1)",
+          "Position": "-10.1242762,-26.666666,0.131442264",
+          "Rotation": "0,0,0.707106769,0.707106769",
+          "Scale": "0.0333333351,3.33333325,0.200000003",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "Sandbox.TextRenderer",
+              "__guid": "6dda3e70-8952-4b1a-b3e2-4cfb30f4da51",
+              "__enabled": true,
+              "Flags": 0,
+              "__version": 2,
+              "Billboard": "None",
+              "BlendMode": "Normal",
+              "FogStrength": 1,
+              "HorizontalAlignment": "Left",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "RenderOptions": {
+                "GameLayer": true,
+                "OverlayLayer": false,
+                "BloomLayer": false,
+                "AfterUILayer": false
+              },
+              "Scale": 1,
+              "TextScope": {
+                "Text": "L = start base raid\n",
                 "TextColor": "1,1,1,1",
                 "FontName": "Poppins",
                 "FontSize": 32,
@@ -148029,14 +148143,6 @@
             },
             "Property": "Position",
             "Value": "415.999939,2239.99951,1.46302409E-06"
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "48cd543c-4eaa-43a4-b2f8-2859b02dd650"
-            },
-            "Property": "Static",
-            "Value": true
           }
         ],
         "MovedObjects": []
@@ -148064,14 +148170,6 @@
             },
             "Property": "Position",
             "Value": "-63.9999924,2175.99951,0"
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "b4b76943-9f3d-411f-8c00-ffa5ddc7b8d8"
-            },
-            "Property": "Static",
-            "Value": true
           }
         ],
         "MovedObjects": []
@@ -148099,14 +148197,6 @@
             },
             "Property": "Position",
             "Value": "-543.999878,2111.99951,2.23887437E-05"
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "f71abb5b-ca58-46e4-ae48-e3ac15ac74ef"
-            },
-            "Property": "Static",
-            "Value": true
           }
         ],
         "MovedObjects": []

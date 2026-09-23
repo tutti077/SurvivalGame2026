@@ -1,3 +1,4 @@
+using System;
 using Sandbox;
 
 namespace Survival;
@@ -44,6 +45,9 @@ public static class EntityEnemySetup
 
 		entityCombat.Combat = combat;
 		EntityArchetype.ApplyToCombat( entityCombat, enemyType );
+		// Entities swing at walls and pawns, never at a 12 u target: a 40 u sweep step is a third of the
+		// traces per swing with the same hits (a wall is 100 u wide, a pawn ~32 u).
+		combat.MeleeSweepSubstepLength = Math.Max( combat.MeleeSweepSubstepLength, 40f );
 
 		locomotion.Agent = agent;
 		healthBar.RefreshBinding();

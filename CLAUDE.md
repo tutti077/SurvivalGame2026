@@ -163,6 +163,7 @@ Code/
   Entity/       EntityBrain (+ Breach partial: entities tear down build pieces) · EntityLocomotion · EntityCombat · perception, nav
   Building/     Build piece catalog, snap layout/placement/compatibility, piece health, nav sync (+ BuildNavBakeSystem),
                 ShelterProbe (global roof-above / walled-in checks; comfort + workbench gate),
+                BuildBed (claimable respawn point, raid target; E claim in PlayerInventoryInteraction.Bed.cs),
                 BuildDoor (swinging leaf on the door prefab: mesh-collided frame, keyframed leaf, opens away from the user)
   Inventory/    PlayerInventory · PlayerHotbar · containers · resource + equipment catalogs
   Crafting/ Food/ Quests/ Skills/ Augments/   JSON-backed catalogs (Assets/data/*.json)
@@ -173,6 +174,8 @@ Code/
   Boss/         BossCatalog (Assets/data/bosses.json — health, second-form flags, bar range) · BossSpawner (host stamp through
                 EntityEnemySetup) · BossEntity ([Sync] pool mirror + second-form refill via EntityVitals.LethalHitInterceptor)
                 · BossSpawnButton (H); screen-top bar is Code/UI/BossHealthBarHud.cs
+  Raids/        BaseRaidCatalog (Assets/data/raids.json — counts, waves, ring + aggro meters, enemy mix) · BaseRaidSession (L: host waves,
+                win/lose, ground ring; on the BaseRaid object) · raiders run EnemyAiState.Raiding (EntityBrain.Raid.cs); banner is Code/UI/BaseRaidHud.cs
   Hacks/        GameHacks — console-toggled dev flags (allCrafting), mirrored onto pawns via [Sync] for host checks
   Environment/  WindSystem (scene wind: host owns heading + base strength via [Sync], every client simulates gusts; publishes
                 WindDirection / WindStrength / WindGust to all shaders through Scene.RenderAttributes once per frame)

@@ -1,0 +1,31 @@
+{
+  // Base raids. The L key (BaseRaidSession on the BaseRaid object) starts `raidId` on the presser's
+  // claimed bed (else the bed nearest to them); pressing L again during a raid calls it off.
+  // Every bed within baseRadiusMeters of that bed is a target — the ring drawn on the ground and
+  // the minimap. initialEnemies spawn at once (per Mark: 5 arrive together), then waveSize more every
+  // waveIntervalSeconds until totalEnemies have come (1 every 3 s = the rest trickle in), each on a
+  // random spot spawnMin..spawnMaxDistanceMeters out from the base.
+  // Raiders go for the beds; only a player within aggroRangeMeters pulls one off (hits from further
+  // out are ignored), and it goes back to the beds once that player is more than dropAggroRangeMeters
+  // away. Win = every raider dead; lose = every bed in the ring destroyed (the survivors leave).
+  // All distances are world meters.
+  // enemies: the raider mix — each spawn picks a row by weight.
+  "raids": [
+    {
+      "id": "scav_raid_test",
+      "displayName": "Scav Raid",
+      "totalEnemies": 20,
+      "initialEnemies": 5,
+      "waveSize": 1,
+      "waveIntervalSeconds": 3,
+      "baseRadiusMeters": 20,
+      "spawnMinDistanceMeters": 60,
+      "spawnMaxDistanceMeters": 80,
+      "aggroRangeMeters": 3,
+      "dropAggroRangeMeters": 3,
+      "enemies": [
+        { "archetype": "Scav", "tier": 1, "prefab": "prefabs/entity/scavT1.prefab", "health": 0, "weight": 1 }
+      ]
+    }
+  ]
+}

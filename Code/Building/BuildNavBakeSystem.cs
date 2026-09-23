@@ -16,6 +16,10 @@ public sealed class BuildNavBakeSystem : GameObjectSystem
 
 	double _liveNavAt = -1d;
 
+	/// <summary>A frame longer than this is a visible hitch — logged (throttled) so "lag every second" can be told from entity jitter.</summary>
+	const float FrameSpikeSeconds = 0.03f;
+	double _nextSpikeLogAt;
+
 	public BuildNavBakeSystem( Scene scene ) : base( scene )
 	{
 		Listen( Stage.SceneLoaded, 0, OnSceneLoaded, "BuildNavLiveOnLoad" );
@@ -28,6 +32,14 @@ public sealed class BuildNavBakeSystem : GameObjectSystem
 	{
 		if ( Scene is null || !Scene.IsValid() )
 			return;
+
+		// Per Mark ("the lag every second"): say when a frame actually stalled, with the nav state at
+		// that moment. No spike lines + choppy scavs = their motion, not the frame.
+		if ( Time.Delta > FrameSpikeSeconds && Time.NowDouble >= _nextSpikeLogAt )
+		{
+			_nextSpikeLogAt = Time.NowDouble + 1d;
+			Log.Info( $"[Perf] frame spike {Time.Delta * 1000f:0} ms (navGenerating={BuildNavMeshSync.IsNavGenerating( Scene )}, navStale={BuildNavMeshSync.IsNavStale( Scene )})" );
+		}
 
 		if ( _liveNavAt >= 0d && Time.NowDouble >= _liveNavAt )
 		{

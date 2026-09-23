@@ -169,12 +169,13 @@ static class EntityNavMeshUtility
 	}
 
 	/// <summary>
-	/// Put the agent on nav next to where it already is. Default: a tight box (±<paramref name="maxSnap"/>
-	/// u) that must be reachable without crossing a solid — the entity never moves more than a body
-	/// width, and never through a wall. The old behaviour (random sample out to 1024 u, then
-	/// WorldPosition = sample) ran on every nav rebake: the moment a wall was placed on the entity or
-	/// the wall it was hitting fell, it was yanked across the wall or 5 m away ("teleports away").
-	/// Spawn placement passes a large <paramref name="maxSnap"/> and keeps the wide search.
+	/// Tell the agent where the body already is. The body is never moved here (except spawn placement,
+	/// which passes a large <paramref name="maxSnap"/> and keeps the wide search): the engine agent
+	/// seats itself on the nearest polygon. Every earlier version moved the body to a nav point FOUND
+	/// BY RANDOM SAMPLING (<see cref="TryFindNavAtFeet"/> returns the best of a few random points in a
+	/// box, not the closest) — 15–35 u every time a path check re-seated an idle agent, a landing or a
+	/// settle ran. Per Mark: scavs "jitter around … picking a new spot on the navmesh within 1 m".
+	/// Returns false when there is no nav anywhere near the feet (the caller keeps waiting for nav).
 	/// </summary>
 	public static bool EnsureAgentOnNavMesh( Scene scene, NavMeshAgent agent, Vector3 near, float maxSnap = 48f )
 	{
@@ -191,28 +192,12 @@ static class EntityNavMeshUtility
 			return true;
 		}
 
-		// Tight first; then a body-length wider. The strict version alone failed after a landing
-		// beside a wall, and a failed snap left UpdatePosition off — the agent kept pathing while
-		// the body never moved ("wedged" every 9 s with a complete route).
-		if ( !TryFindNavAtFeet( scene, near, out var onNav, horizontal: maxSnap, vertical: 48f )
-		     && !TryFindNavAtFeet( scene, near, out onNav, horizontal: maxSnap * 2.5f, vertical: 64f ) )
+		// Any nav near the feet (tight, then a body-length wider): seat the agent at the body.
+		if ( !TryFindNavAtFeet( scene, near, out _, horizontal: maxSnap, vertical: 48f )
+		     && !TryFindNavAtFeet( scene, near, out _, horizontal: maxSnap * 2.5f, vertical: 64f ) )
 			return false;
 
-		// Same side of any wall: a thin piece can sit inside a 48 u box.
-		var from = near + Vector3.Up * 40f;
-		var to = onNav + Vector3.Up * 40f;
-		if ( Vector3.DistanceBetween( from, to ) > 4f )
-		{
-			var trace = scene.Trace.Ray( from, to )
-				.UsePhysicsWorld()
-				.IgnoreGameObjectHierarchy( agent.GameObject )
-				.Run();
-			if ( trace.Hit && trace.GameObject.IsValid() && trace.Normal.z < 0.55f )
-				return false;
-		}
-
-		agent.GameObject.WorldPosition = onNav;
-		agent.SetAgentPosition( onNav );
+		agent.SetAgentPosition( near );
 		return true;
 	}
 }

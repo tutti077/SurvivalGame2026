@@ -26,8 +26,11 @@ public sealed class BossEntity : Component
 	public static IReadOnlyList<BossEntity> Active => ActiveList;
 	static readonly List<BossEntity> ActiveList = new();
 
-	/// <summary>Raised on every machine (host RPC) with the boss's display name when the host despawns an abandoned boss.</summary>
-	public static event Action<string> Despawned;
+	/// <summary>
+	/// Raised on every machine (host RPC) with the boss's display name and what happened to it —
+	/// "killed" when its last form dies, "despawned" when the host drops an abandoned boss.
+	/// </summary>
+	public static event Action<string, string> Announced;
 
 	[Property] public EntityVitals Vitals { get; set; }
 
@@ -135,6 +138,8 @@ public sealed class BossEntity : Component
 	{
 		IsDefeated = true;
 		MirrorPool();
+		// Sent from inside the death dispatch, before the brain's deferred destroy takes the object away.
+		RpcAnnounce( DisplayName, "killed" );
 	}
 
 	/// <summary>Host: despawn once no live player has been inside the bar range for the row's abandon time.</summary>
@@ -195,10 +200,10 @@ public sealed class BossEntity : Component
 		_despawning = true;
 		Log.Info( $"[BossEntity] '{DisplayName}' abandoned for {_data.AbandonDespawnSeconds:0} s — despawning." );
 		// Announce first: the reliable broadcast lands before the destroy that follows it.
-		RpcAnnounceDespawn( DisplayName );
+		RpcAnnounce( DisplayName, "despawned" );
 		GameObject.Destroy();
 	}
 
 	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable )]
-	void RpcAnnounceDespawn( string bossName ) => Despawned?.Invoke( bossName );
+	void RpcAnnounce( string bossName, string verb ) => Announced?.Invoke( bossName, verb );
 }

@@ -9,7 +9,7 @@ namespace Survival;
 /// Screen-top boss bar: the boss's name over a bar whose black label reads "current/max".
 /// A boss is shown to this viewer once their pawn comes within the boss's health-bar range of it —
 /// at spawn or later, when they walk into range; once engaged it stays up until the boss is gone.
-/// Every viewer also gets a 3 s full-width "&lt;name&gt; spawned" banner the moment a boss appears.
+/// Every viewer also gets a 3 s full-width banner when a boss spawns, is killed, or despawns.
 /// Reads the <c>[Sync]</c> mirror on <see cref="BossEntity"/>, so host and clients see the same
 /// numbers. Second form: the fill jumps back to full and takes that form's colour from bosses.json.
 /// </summary>
@@ -116,12 +116,12 @@ public sealed class BossHealthBarHud
 		_bannerText.Style.Set( "font-weight", "bold" );
 		_bannerText.Style.Set( "text-shadow", "2px 2px 3px black" );
 
-		BossEntity.Despawned += OnBossDespawned;
+		BossEntity.Announced += OnBossAnnounced;
 	}
 
 	public void Dispose()
 	{
-		BossEntity.Despawned -= OnBossDespawned;
+		BossEntity.Announced -= OnBossAnnounced;
 		_root?.Delete();
 		_root = null;
 		_name = null;
@@ -268,8 +268,8 @@ public sealed class BossHealthBarHud
 
 	void ShowSpawnBanner( string bossName ) => ShowBanner( bossName, "spawned" );
 
-	/// <summary>Host despawned an abandoned boss — the bar drops on its own once the object is gone.</summary>
-	void OnBossDespawned( string bossName ) => ShowBanner( bossName, "despawned" );
+	/// <summary>Host says the boss was killed or despawned — the bar drops on its own once the object is gone.</summary>
+	void OnBossAnnounced( string bossName, string verb ) => ShowBanner( bossName, verb );
 
 	void ShowBanner( string bossName, string verb )
 	{

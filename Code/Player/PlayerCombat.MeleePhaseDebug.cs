@@ -10,7 +10,7 @@ public partial class PlayerCombat
 {
 	[Property, Group( "Combat — Debug" ), Title( "Log melee phase / anim transitions" ),
 	 Description( "Console on enter/exit only: Swing start, windup, attack, recover, ready + animation names." )]
-	public bool LogMeleeAttackPhaseDebug { get; set; } = true;
+	public bool LogMeleeAttackPhaseDebug { get; set; } = false;
 
 	string _meleePhaseDebugCurrent;
 	double _meleePhaseDebugEnteredAt;

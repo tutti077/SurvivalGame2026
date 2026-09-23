@@ -19,4 +19,6 @@ public enum EnemyAiState
 	Breaching = 6,
 	/// <summary>Pulled past the camp leash's max travel distance — target dropped, running back to within wander distance of the camp.</summary>
 	Returning = 7,
+	/// <summary>Base raid (<see cref="BaseRaidSession"/>): heading for the raided beds and tearing through the base to reach them.</summary>
+	Raiding = 8,
 }

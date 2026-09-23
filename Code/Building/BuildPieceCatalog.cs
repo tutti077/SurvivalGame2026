@@ -45,6 +45,10 @@ public static class BuildPieceCatalog
 
 	static float _lastFallbackRetryTime = -100f;
 
+	static float _lastJsonChangeCheckTime = -100f;
+
+	const float JsonChangeCheckSeconds = 2f;
+
 
 
 	public static IReadOnlyList<BuildPieceData> All
@@ -229,6 +233,10 @@ public static class BuildPieceCatalog
 
 				TryReloadIfFallback();
 
+			else
+
+				TryReloadIfJsonChanged();
+
 			return;
 
 		}
@@ -236,6 +244,70 @@ public static class BuildPieceCatalog
 
 
 		ReloadFromDisk();
+
+	}
+
+
+
+	/// <summary>
+
+	/// Host / offline: a <c>build_pieces.json</c> edit is picked up without restarting the editor.
+
+	/// The catalog is static and survives hotloads, so without this a new piece (the bed) never
+
+	/// reached the build menu. Hash check at most every <see cref="JsonChangeCheckSeconds"/> — never per call.
+
+	/// Joining clients use the host's JSON (<see cref="ReplaceFromJson"/>) and are left alone.
+
+	/// </summary>
+
+	static void TryReloadIfJsonChanged()
+
+	{
+
+		if ( Networking.IsActive && !Networking.IsHost )
+
+			return;
+
+
+
+		if ( RealTime.Now - _lastJsonChangeCheckTime < JsonChangeCheckSeconds )
+
+			return;
+
+
+
+		_lastJsonChangeCheckTime = RealTime.Now;
+
+		string json;
+
+		try
+
+		{
+
+			json = FileSystem.Mounted.ReadAllText( BuildPiecesFilePath );
+
+		}
+
+		catch
+
+		{
+
+			return;
+
+		}
+
+
+
+		if ( string.IsNullOrWhiteSpace( json ) || StringComparer.Ordinal.GetHashCode( json ) == _loadedJsonHash )
+
+			return;
+
+
+
+		Log.Info( "[BuildPieceCatalog] build_pieces.json changed on disk — reloading." );
+
+		ForceReload();
 
 	}
 

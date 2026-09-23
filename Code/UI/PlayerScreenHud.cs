@@ -54,6 +54,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 	StatusEffectsHud _statusEffectsHud;
 	BossHealthBarHud _bossHealthBar;
+	BaseRaidHud _baseRaidHud;
 	Panel _foodSlotsRoot;
 	readonly Panel[] _foodSlotPanels = new Panel[PlayerFood.MaxFoodSlots];
 	readonly Label[] _foodSlotTimers = new Label[PlayerFood.MaxFoodSlots];
@@ -61,6 +62,8 @@ public sealed class PlayerScreenHud : PanelComponent
 	readonly string[] _foodSlotAppliedTimers = new string[PlayerFood.MaxFoodSlots];
 
 	Panel _promptRoot;
+	Panel _promptKeyCap;
+	bool _promptKeyCapHidden;
 	Label _promptKeyLabel;
 	Label _promptLabel;
 	bool _promptWasVisible;
@@ -155,10 +158,14 @@ public sealed class PlayerScreenHud : PanelComponent
 		RefreshFoodSlots();
 		_statusEffectsHud?.Tick( _menuController is { IsMenuOpen: true } );
 		if ( _vitals is not null && _vitals.GameObject.IsValid() )
+		{
 			_bossHealthBar?.Tick( _vitals.GameObject.WorldPosition );
+			_baseRaidHud?.Tick( _vitals.GameObject );
+		}
 		if ( _inventoryInteraction?.FocusedCampfire is not null
 		     || _inventoryInteraction?.FocusedDoor is not null
 		     || _inventoryInteraction?.FocusedTrap is not null
+		     || _inventoryInteraction?.FocusedBed is not null
 		     || _inventoryInteraction?.FocusedTimeTrialStand is not null
 		     || _inventoryInteraction?.FocusedArenaMenuButton is not null )
 			OnInteractionPromptChanged();
@@ -236,6 +243,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		_statusEffectsHud = null;
 		_bossHealthBar?.Dispose();
 		_bossHealthBar = null;
+		_baseRaidHud?.Dispose();
+		_baseRaidHud = null;
 		_buildMenuHud = null;
 		_buildSnapReadout = null;
 		RestoreGrapplePromptCapture();
@@ -286,6 +295,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		BuildVitals( Panel );
 		BuildBossHealthBar( Panel );
+		BuildBaseRaidHud( Panel );
 		BuildHarvestPrompt( Panel );
 		BuildTimeTrialHud( Panel );
 		BuildPickupNotifications( Panel );
@@ -528,6 +538,13 @@ public sealed class PlayerScreenHud : PanelComponent
 		_bossHealthBar.Build( root );
 	}
 
+	/// <summary>Base raid banner + status line (<see cref="BaseRaidHud"/>); hidden until a raid starts.</summary>
+	void BuildBaseRaidHud( Panel root )
+	{
+		_baseRaidHud = new BaseRaidHud();
+		_baseRaidHud.Build( root );
+	}
+
 	void BuildHarvestPrompt( Panel root )
 	{
 		_handHarvest = FindOnAncestors<PlayerHandHarvest>();
@@ -558,6 +575,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_promptRoot.Style.Set( "display", "none" );
 
 		var keyCap = new Panel { Parent = _promptRoot };
+		_promptKeyCap = keyCap;
 		keyCap.Style.MinWidth = Length.Pixels( 28f );
 		keyCap.Style.Height = Length.Pixels( 28f );
 		keyCap.Style.Set( "align-items", "center" );
@@ -582,6 +600,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedDoorChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTrapChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedBedChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.FocusedArenaButtonChanged += OnInteractionPromptChanged;
@@ -998,6 +1017,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedDoorChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTrapChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedBedChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.FocusedArenaButtonChanged += OnInteractionPromptChanged;
@@ -1146,13 +1166,23 @@ public sealed class PlayerScreenHud : PanelComponent
 		var showDoor = !showOpen && !showTrial && !showArena && !showCampfire && focusedDoor is not null && focusedDoor.IsValid();
 		var focusedTrap = _inventoryInteraction?.FocusedTrap;
 		var showTrap = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && focusedTrap is not null && focusedTrap.IsValid();
+		var focusedBed = _inventoryInteraction?.FocusedBed;
+		var showBed = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && focusedBed is not null && focusedBed.IsValid();
 		var farmingPrompt = _farming?.PromptText ?? string.Empty;
-		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && farmingPrompt.Length > 0;
-		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showFarming && _handHarvest?.FocusedNode is not null;
-		var show = showOpen || showTrial || showArena || showCampfire || showDoor || showTrap || showFarming || showHarvest;
+		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showBed && farmingPrompt.Length > 0;
+		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showBed && !showFarming && _handHarvest?.FocusedNode is not null;
+		var show = showOpen || showTrial || showArena || showCampfire || showDoor || showTrap || showBed || showFarming || showHarvest;
 
 		if ( _promptKeyLabel is not null )
 			_promptKeyLabel.Text = showFarming ? (_farming?.PromptKey ?? "E") : "E";
+
+		// Someone else's bed only says whose it is — there is nothing to press.
+		var bedIsInfoOnly = showBed && _inventoryInteraction is { } interaction && !focusedBed.CanClaim( interaction.GameObject );
+		if ( _promptKeyCap is not null && bedIsInfoOnly != _promptKeyCapHidden )
+		{
+			_promptKeyCapHidden = bedIsInfoOnly;
+			_promptKeyCap.Style.Set( "display", bedIsInfoOnly ? "none" : "flex" );
+		}
 
 		if ( _promptLabel is not null )
 		{
@@ -1195,6 +1225,10 @@ public sealed class PlayerScreenHud : PanelComponent
 			else if ( showTrap )
 			{
 				_promptLabel.Text = focusedTrap.PromptText;
+			}
+			else if ( showBed )
+			{
+				_promptLabel.Text = focusedBed.PromptTextFor( _inventoryInteraction.GameObject );
 			}
 			else if ( showFarming )
 			{

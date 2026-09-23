@@ -7,10 +7,18 @@ namespace Survival;
 /// <summary>
 /// Shared biome-map face for HUD minimap and Map menu.
 /// Prefer a file-backed UI texture — <c>Bitmap.ToTexture</c> often fails as a Panel background.
+/// Without a <see cref="TerrainWorldManager"/> (hand-built test scenes) it is a plain local radar
+/// centered on the camera, so world markers still have somewhere to show. Markers: the viewer's
+/// cross + heading, and the red ring around a base under raid (<see cref="BaseRaidSession"/>).
 /// </summary>
 public sealed class TerrainWorldMapFace
 {
 	public const float DefaultMinimapSize = 180f;
+
+	/// <summary>Local radar (no TerrainWorld): meters across the face at the widest zoom.</summary>
+	const float LocalRadarSpanMeters = 2400f;
+	/// <summary>The raid ring never shrinks below this on screen, however far out the map is zoomed.</summary>
+	const float RaidRingMinPixels = 14f;
 
 	Panel _host;
 	Panel _zoomStage;
@@ -20,6 +28,9 @@ public sealed class TerrainWorldMapFace
 	Panel _markerCrossH;
 	Panel _markerCrossV;
 	Panel _heading;
+	Panel _raidRing;
+	float _sizePixels;
+	bool _fillParent;
 	TerrainWorldManager _manager;
 	Texture _boundTexture;
 	float _appliedZoom = -1f;
@@ -29,6 +40,8 @@ public sealed class TerrainWorldMapFace
 
 	public void Build( Panel parent, float sizePixels, bool fillParent )
 	{
+		_sizePixels = sizePixels;
+		_fillParent = fillParent;
 		_host = new Panel { Parent = parent };
 		if ( fillParent )
 		{
@@ -92,6 +105,16 @@ public sealed class TerrainWorldMapFace
 		_heading.Style.Set( "pointer-events", "none" );
 		_heading.Style.Set( "display", "none" );
 		_heading.Style.Set( "z-index", "4" );
+
+		_raidRing = new Panel { Parent = _zoomStage };
+		_raidRing.Style.Set( "position", "absolute" );
+		_raidRing.Style.Set( "border-width", "2px" );
+		_raidRing.Style.Set( "border-color", "#ff3b30" );
+		_raidRing.Style.Set( "border-radius", "50%" );
+		_raidRing.Style.BackgroundColor = new Color( 1f, 0.2f, 0.15f, 0.18f );
+		_raidRing.Style.Set( "pointer-events", "none" );
+		_raidRing.Style.Set( "display", "none" );
+		_raidRing.Style.Set( "z-index", "2" );
 
 		ApplyZoomLayout( focusUv: new Vector2( 0.5f, 0.5f ), force: true );
 	}
@@ -202,6 +225,13 @@ public sealed class TerrainWorldMapFace
 
 		if ( _placeholder is not null )
 		{
+			// No TerrainWorld at all: the face is a local radar, not a map that is still coming.
+			if ( _manager is null )
+			{
+				_placeholder.Style.Set( "display", "none" );
+				return;
+			}
+
 			_placeholder.Style.Set( "display", "flex" );
 			if ( _manager is not null && _manager.IsValid() && _manager.IsMapGenerating )
 				_placeholder.Text = $"Map {_manager.MapGenerationProgress01 * 100f:0}%";
@@ -214,7 +244,14 @@ public sealed class TerrainWorldMapFace
 
 	void UpdateMarkerAndZoom()
 	{
+		if ( _manager is null )
+		{
+			UpdateLocalRadar();
+			return;
+		}
+
 		var focusUv = new Vector2( 0.5f, 0.5f );
+		TerrainPreviewSettings streamSettings = null;
 		var hasStream = false;
 
 		if ( _manager is not null && _manager.IsValid() && _manager.HasStreamPosition )
@@ -227,6 +264,7 @@ public sealed class TerrainWorldMapFace
 					_manager.StreamYMeters,
 					settings );
 				hasStream = true;
+				streamSettings = settings;
 			}
 		}
 
@@ -235,8 +273,11 @@ public sealed class TerrainWorldMapFace
 		if ( !hasStream || _boundTexture is null )
 		{
 			SetMarkerVisible( false );
+			SetRaidRingVisible( false );
 			return;
 		}
+
+		UpdateRaidRingOnMap( streamSettings );
 
 		// Markers live on the zoom stage in full-map UV space (0–100%).
 		PlaceCenter( _markerCrossH, focusUv, -6f, -1f );
@@ -257,6 +298,99 @@ public sealed class TerrainWorldMapFace
 		}
 
 		SetMarkerVisible( true );
+	}
+
+	/// <summary>No TerrainWorld: camera-centered radar — the viewer in the middle, north up like the map.</summary>
+	void UpdateLocalRadar()
+	{
+		ApplyZoomLayout( new Vector2( 0.5f, 0.5f ), force: false );
+
+		var camera = Sandbox.Game.ActiveScene?.Camera;
+		if ( camera is null || !camera.IsValid() )
+		{
+			SetMarkerVisible( false );
+			SetRaidRingVisible( false );
+			return;
+		}
+
+		var center = new Vector2( 0.5f, 0.5f );
+		PlaceCenter( _markerCrossH, center, -6f, -1f );
+		PlaceCenter( _markerCrossV, center, -1f, -6f );
+		SetMarkerVisible( true );
+
+		var dir = TerrainBiomeMapCoordinates.WorldForwardToPreviewMapDirection( camera.WorldRotation.Forward );
+		if ( dir.LengthSquared > 1e-8f && _heading is not null )
+		{
+			dir = dir.Normal;
+			var deg = MathF.Atan2( dir.x, -dir.y ) * (180f / MathF.PI);
+			PlaceCenter( _heading, center, -1f, -16f );
+			_heading.Style.Set( "transform", $"rotate({deg:0.##}deg)" );
+			_heading.Style.Set( "display", "flex" );
+		}
+
+		var raid = ActiveRaid();
+		if ( raid is null )
+		{
+			SetRaidRingVisible( false );
+			return;
+		}
+
+		// Same mirror as the biome map: +X reads leftward, +Y downward.
+		var offsetMeters = TerrainWorldUnits.EngineToMeters( raid.RaidCenter - camera.WorldPosition );
+		var uv = new Vector2(
+			0.5f - offsetMeters.x / LocalRadarSpanMeters,
+			0.5f + offsetMeters.y / LocalRadarSpanMeters );
+		var radiusUv = TerrainWorldUnits.EngineToMeters( raid.RaidRadiusUnits ) / LocalRadarSpanMeters;
+		PlaceRaidRing( uv, radiusUv );
+	}
+
+	void UpdateRaidRingOnMap( TerrainPreviewSettings settings )
+	{
+		var raid = ActiveRaid();
+		if ( raid is null || settings is null || settings.WorldDiameterMeters <= 0f )
+		{
+			SetRaidRingVisible( false );
+			return;
+		}
+
+		var centerMeters = TerrainWorldUnits.EngineToMeters( raid.RaidCenter );
+		var uv = TerrainBiomeMapCoordinates.WorldMetersToPreviewNormalized( centerMeters.x, centerMeters.y, settings );
+		var radiusUv = TerrainWorldUnits.EngineToMeters( raid.RaidRadiusUnits ) / settings.WorldDiameterMeters;
+		PlaceRaidRing( uv, radiusUv );
+	}
+
+	static BaseRaidSession ActiveRaid() =>
+		BaseRaidSession.Instance is { } raid && raid.IsValid() && raid.IsRaidActive ? raid : null;
+
+	/// <summary>Ring centered on <paramref name="uv"/> (zoom-stage space); diameter follows the zoom, never under <see cref="RaidRingMinPixels"/>.</summary>
+	void PlaceRaidRing( Vector2 uv, float radiusUv )
+	{
+		if ( _raidRing is null || !_raidRing.IsValid() )
+			return;
+
+		var stagePixels = HostPixels() * TerrainMinimapZoom.Level;
+		var diameter = MathF.Max( RaidRingMinPixels, radiusUv * 2f * stagePixels );
+		_raidRing.Style.Width = Length.Pixels( diameter );
+		_raidRing.Style.Height = Length.Pixels( diameter );
+		PlaceCenter( _raidRing, uv, -diameter * 0.5f, -diameter * 0.5f );
+		SetRaidRingVisible( true );
+	}
+
+	/// <summary>Face width in UI pixels (the Map menu face fills its parent, so it is measured).</summary>
+	float HostPixels()
+	{
+		if ( !_fillParent || _host is null || !_host.IsValid() )
+			return _sizePixels;
+
+		var scale = MathF.Max( 0.001f, _host.ScaleToScreen );
+		var width = _host.Box.Rect.Width / scale;
+		return width > 1f ? width : _sizePixels;
+	}
+
+	void SetRaidRingVisible( bool visible )
+	{
+		if ( _raidRing is not null && _raidRing.IsValid() )
+			_raidRing.Style.Set( "display", visible ? "flex" : "none" );
 	}
 
 	void ApplyZoomLayout( Vector2 focusUv, bool force )
