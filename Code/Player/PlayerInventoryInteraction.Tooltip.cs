@@ -161,6 +161,25 @@ public sealed partial class PlayerInventoryInteraction
 		if ( !string.IsNullOrWhiteSpace( type ) )
 			AddTooltipLine( type, TooltipTypeColor, 14f );
 
+		// Augments show the same info block as the station's detail box, wherever they are hovered.
+		if ( AugmentCatalog.TryGet( id, out var augment ) )
+		{
+			AddTooltipLine( "Augment", TooltipTypeColor, 14f );
+			foreach ( var (text, kind) in AugmentInfo.BuildLines( augment ) )
+			{
+				var color = kind switch
+				{
+					AugmentInfoLineKind.Description => TooltipDescriptionColor,
+					AugmentInfoLineKind.Cost or AugmentInfoLineKind.InstallCost => TooltipDurabilityColor,
+					AugmentInfoLineKind.Slot => TooltipCrafterColor,
+					_ => TooltipStatColor,
+				};
+				AddTooltipLine( text, color, kind == AugmentInfoLineKind.Description ? 16f : 15f );
+			}
+
+			return;
+		}
+
 		var description = ResolveTooltipDescription( id, recipe );
 		if ( !string.IsNullOrWhiteSpace( description ) )
 			AddTooltipLine( description, TooltipDescriptionColor, 16f );

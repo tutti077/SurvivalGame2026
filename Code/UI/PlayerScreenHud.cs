@@ -1318,27 +1318,11 @@ public sealed class PlayerScreenHud : PanelComponent
 		_craftingSection?.Refresh();
 	}
 
-	bool OnMenuRecipeSelectAtScreen( Vector2 screenPos )
-	{
-		if ( _menuController is not null
-		     && string.Equals( _menuController.ActivePageId, MenuPageIds.AugmentStation, StringComparison.OrdinalIgnoreCase )
-		     && _augmentStationSection is not null
-		     && _augmentStationSection.TrySelectRecipeAtScreen( screenPos ) )
-			return true;
+	bool OnMenuRecipeSelectAtScreen( Vector2 screenPos ) =>
+		_craftingSection is not null && _craftingSection.TrySelectRecipeAtScreen( screenPos );
 
-		return _craftingSection is not null && _craftingSection.TrySelectRecipeAtScreen( screenPos );
-	}
-
-	bool OnMenuCraftPointerAtScreen( Vector2 screenPos, bool pressed )
-	{
-		if ( _menuController is not null
-		     && string.Equals( _menuController.ActivePageId, MenuPageIds.AugmentStation, StringComparison.OrdinalIgnoreCase )
-		     && _augmentStationSection is not null
-		     && _augmentStationSection.TryCraftPointerAtScreen( screenPos, pressed ) )
-			return true;
-
-		return _craftingSection is not null && _craftingSection.TryCraftPointerAtScreen( screenPos, pressed );
-	}
+	bool OnMenuCraftPointerAtScreen( Vector2 screenPos, bool pressed ) =>
+		_craftingSection is not null && _craftingSection.TryCraftPointerAtScreen( screenPos, pressed );
 
 	void ApplyMenuOpenState( bool isOpen )
 	{
@@ -1530,6 +1514,12 @@ public sealed class PlayerScreenHud : PanelComponent
 			return;
 		}
 
+		if ( string.Equals( _menuController.ActivePageId, MenuPageIds.AugmentStation, StringComparison.OrdinalIgnoreCase ) )
+		{
+			_augmentStationSection?.ApplyListWheel( wheel );
+			return;
+		}
+
 		if ( _craftingSection is null )
 			return;
 
@@ -1557,6 +1547,9 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		if ( string.Equals( page, MenuPageIds.Map, StringComparison.OrdinalIgnoreCase ) )
 			return _mapSection?.TrySelectAtScreen( screenPos ) ?? false;
+
+		if ( string.Equals( page, MenuPageIds.AugmentStation, StringComparison.OrdinalIgnoreCase ) )
+			return _augmentStationSection?.TryPressAtScreen( screenPos ) ?? false;
 
 		return false;
 	}

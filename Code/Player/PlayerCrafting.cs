@@ -180,6 +180,10 @@ public sealed class PlayerCrafting : Component
 		var scaledIngredients = BuildIngredients( recipe );
 		var outputTotal = recipe.TotalOutputAmount;
 
+		// A recipe with no ingredients is free by design (augment cores while the economy is built out).
+		if ( scaledIngredients.Count == 0 )
+			free = true;
+
 		if ( !free && !_inventory.HasResources( scaledIngredients ) )
 		{
 			if ( LogCrafting )

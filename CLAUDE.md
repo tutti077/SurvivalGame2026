@@ -24,7 +24,7 @@ Add properties, hooks and call paths **here**. Do not invent parallel systems.
 | Vitals | `Code/Player/PlayerVitals.cs` | Loss/gain of health, stamina, oxygen. Host bookkeeping may live on `VitalsAuthority`; per-pawn tuning stays here |
 | Combat | `Code/Player/PlayerCombat.cs` | Attacks and blocks — input, phases, weapon tuning, client vs server flow. Host validation may live on `CombatAuthority`; designer-facing combat params stay here |
 | Animation | `Code/Player/PlayerAnimation.cs` | Citizen hold poses, attack anim triggers, left-swing mirror, demo held props, **hit reaction** |
-| Augments | `Code/Player/PlayerAugments.cs` | Crafted body augments: 18 sockets + bank, station craft/install |
+| Augments | `Code/Player/PlayerAugments.cs` | Crafted body augments: 6 parts × 3 sockets + bank. Enhance (augment cores) opens sockets, placing is free/pending, Augment (gold coins) commits — costs in `Code/Augments/AugmentSlot.cs` (`AugmentBodyParts`) |
 
 Other subtrees (environment, AI, networking, building, inventory) are their own systems — this
 rule is about **this player prefab's** movement, vitals, combat and animation.

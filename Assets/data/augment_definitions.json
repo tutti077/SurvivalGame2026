@@ -1,11 +1,14 @@
 {
+  // "slots": every socket the augment may go into (see AugmentSlot enum). "tier" 1–3 multiplies the
+  // body part's base install price: hands/feet 50, arms/legs 75, head/torso 100 gold coins per tier.
   "augments": [
     {
       "id": "augment_jump_legs",
       "displayName": "Jump Legs",
       "icon": "ui/items/resource_woodBasic.png",
       "description": "Passive: every grounded jump launches at 3× normal height.",
-      "slot": "LegQuads",
+      "slots": [ "LegQuads" ],
+      "tier": 1,
       "ability": "JumpHeight",
       "jumpHeightMultiplier": 3,
       "maxStack": 1,
@@ -13,7 +16,6 @@
         { "resourceId": "resource_woodBasic", "amount": 1 }
       ],
       "stats": [
-        { "label": "Slot", "value": "Leg · Quads" },
         { "label": "Type", "value": "Passive" },
         { "label": "Jump height", "value": "3×" }
       ]
@@ -23,14 +25,14 @@
       "displayName": "Double Jump Legs",
       "icon": "ui/items/resource_woodBasic.png",
       "description": "Press Jump once more while airborne for a second hop at normal jump height. Resets on landing.",
-      "slot": "LegQuads",
+      "slots": [ "LegQuads" ],
+      "tier": 1,
       "ability": "DoubleJump",
       "maxStack": 1,
       "ingredients": [
         { "resourceId": "resource_woodBasic", "amount": 1 }
       ],
       "stats": [
-        { "label": "Slot", "value": "Leg · Quads" },
         { "label": "Type", "value": "Triggered" },
         { "label": "Air jumps", "value": "1" }
       ]

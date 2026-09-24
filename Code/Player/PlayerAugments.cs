@@ -5,14 +5,22 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Player-owned augment bank (crafted storage) + 18 installed body sockets.
-/// Crafted outputs land in the bank; drag/shift-click installs onto the matching socket.
+/// Player-owned augment state: the crafted bank, the 18 body sockets and the enhancement level of
+/// each body part.
+/// <para>
+/// <b>Enhance</b> (augment cores) opens sockets one at a time per body part. <b>Placing</b> an augment
+/// on the paper doll is free and only a plan — the socket shows as pending. <b>Augment</b> (gold coins)
+/// commits every pending socket at once; only a socket whose placed augment matches its committed id
+/// is active (grants its ability). Pulling an augment out stops its effect immediately and costs
+/// nothing. Crafting at the station spends bag materials and drops the augment into the bank.
+/// </para>
 /// </summary>
 [Title( "Player Augments" )]
 public sealed class PlayerAugments : Component
 {
 	public const int BankSlotCount = InventoryDefaults.DefaultSlotCount;
-	public const int BankColumns = InventoryDefaults.DefaultColumns;
+	/// <summary>Bank is a wide strip under the paper doll (two rows).</summary>
+	public const int BankColumns = 8;
 
 	public event Action AugmentsChanged;
 
@@ -23,15 +31,17 @@ public sealed class PlayerAugments : Component
 	[Property, Group( "Death" ), Title( "Drop augments on death" )]
 	public bool DropAugmentsOnDeath { get; set; }
 
-	InventorySlot[] _installed = new InventorySlot[AugmentSlots.Count];
-	InventorySlot[] _bank = new InventorySlot[BankSlotCount];
+	readonly InventorySlot[] _installed = new InventorySlot[AugmentSlots.Count];
+	readonly string[] _committed = new string[AugmentSlots.Count];
+	readonly InventorySlot[] _bank = new InventorySlot[BankSlotCount];
+	readonly int[] _unlocked = new int[AugmentBodyParts.Count];
 
 	PlayerInventory _inventory;
 
 	public bool HasHostAuthority =>
 		GameObject.Network is not { Active: true } || Networking.IsHost;
 
-	/// <summary>Bumps when bank or installed sockets change (UI refresh).</summary>
+	/// <summary>Bumps when bank, sockets, commits or enhancements change (UI refresh).</summary>
 	public int ContentsVersion { get; private set; }
 
 	protected override void OnStart()
@@ -52,6 +62,8 @@ public sealed class PlayerAugments : Component
 		return ConnectionIdentity.SameClient( owner, Connection.Local );
 	}
 
+	// ── Read ────────────────────────────────────────────────────────────────────────────────
+
 	public InventorySlot GetInstalled( AugmentSlot slot )
 	{
 		var i = (int)slot;
@@ -69,34 +81,107 @@ public sealed class PlayerAugments : Component
 		return _bank[index];
 	}
 
-	public bool HasAbility( AugmentAbility ability )
+	public int GetUnlockedCount( AugmentBodyPart part )
 	{
-		if ( ability == AugmentAbility.None )
+		var p = (int)part;
+		return p < 0 || p >= AugmentBodyParts.Count ? 0 : _unlocked[p];
+	}
+
+	public bool IsSlotUnlocked( AugmentSlot slot )
+	{
+		var i = (int)slot;
+		if ( i < 0 || i >= AugmentSlots.Count )
 			return false;
 
+		return AugmentSlots.IndexInPart( slot ) < GetUnlockedCount( AugmentSlots.PartOf( slot ) );
+	}
+
+	/// <summary>Placed augment matches the paid-for id → its ability is live.</summary>
+	public bool IsSlotActive( AugmentSlot slot )
+	{
+		var i = (int)slot;
+		if ( i < 0 || i >= AugmentSlots.Count )
+			return false;
+
+		var stack = _installed[i];
+		return !stack.IsEmpty && ResourceCatalog.ResourceIdsMatch( stack.ResourceId, _committed[i] );
+	}
+
+	/// <summary>Placed but not yet paid for — the Augment button is what turns it on.</summary>
+	public bool IsSlotPending( AugmentSlot slot )
+	{
+		var i = (int)slot;
+		if ( i < 0 || i >= AugmentSlots.Count )
+			return false;
+
+		return !_installed[i].IsEmpty && !IsSlotActive( slot );
+	}
+
+	public bool HasPendingInstalls()
+	{
 		for ( var i = 0; i < AugmentSlots.Count; i++ )
 		{
-			var stack = _installed[i];
-			if ( stack.IsEmpty || !AugmentCatalog.TryGet( stack.ResourceId, out var def ) )
-				continue;
-
-			if ( def.ResolvedAbility == ability )
+			if ( IsSlotPending( (AugmentSlot)i ) )
 				return true;
 		}
 
 		return false;
 	}
 
+	/// <summary>Gold the Augment button will charge right now (sum of every pending socket's install cost).</summary>
+	public int ComputePendingGoldCost()
+	{
+		var total = 0;
+		for ( var i = 0; i < AugmentSlots.Count; i++ )
+		{
+			var slot = (AugmentSlot)i;
+			if ( !IsSlotPending( slot ) )
+				continue;
+
+			if ( AugmentCatalog.TryGet( _installed[i].ResourceId, out var def ) )
+				total += def.InstallGoldCost( slot );
+		}
+
+		return total;
+	}
+
+	/// <summary>Cores the enhance button of this part costs next (0 = all three sockets open).</summary>
+	public int GetNextEnhanceCoreCost( AugmentBodyPart part ) =>
+		AugmentBodyParts.NextSlotCoreCost( part, GetUnlockedCount( part ) );
+
+	public int CountCores() => ResolveInventory()?.CountResource( AugmentCurrency.CoreResourceId ) ?? 0;
+
+	public int CountGold() => ResolveInventory()?.CountResource( AugmentCurrency.GoldResourceId ) ?? 0;
+
+	public bool CanEnhance( AugmentBodyPart part )
+	{
+		var cost = GetNextEnhanceCoreCost( part );
+		return cost > 0 && CountCores() >= cost;
+	}
+
+	public bool CanCommitAugments()
+	{
+		if ( !HasPendingInstalls() )
+			return false;
+
+		return CountGold() >= ComputePendingGoldCost();
+	}
+
+	public bool HasAbility( AugmentAbility ability ) => TryGetInstalledDefinition( ability, out _ );
+
+	/// <summary>First <b>active</b> socket granting <paramref name="ability"/>.</summary>
 	public bool TryGetInstalledDefinition( AugmentAbility ability, out AugmentDefinition definition )
 	{
 		definition = null;
+		if ( ability == AugmentAbility.None )
+			return false;
+
 		for ( var i = 0; i < AugmentSlots.Count; i++ )
 		{
-			var stack = _installed[i];
-			if ( stack.IsEmpty || !AugmentCatalog.TryGet( stack.ResourceId, out var def ) )
+			if ( !IsSlotActive( (AugmentSlot)i ) )
 				continue;
 
-			if ( def.ResolvedAbility != ability )
+			if ( !AugmentCatalog.TryGet( _installed[i].ResourceId, out var def ) || def.ResolvedAbility != ability )
 				continue;
 
 			definition = def;
@@ -114,7 +199,8 @@ public sealed class PlayerAugments : Component
 		return Math.Max( 1f, def.JumpHeightMultiplier );
 	}
 
-	/// <summary>Craft at the station: consume ingredients from bag, grant output into the augment bank.</summary>
+	// ── Craft (bag materials → bank) ────────────────────────────────────────────────────────
+
 	public bool OwnerTryCraft( string augmentId )
 	{
 		if ( !IsLocalManagingClient() || string.IsNullOrWhiteSpace( augmentId ) )
@@ -132,8 +218,8 @@ public sealed class PlayerAugments : Component
 		if ( !HasHostAuthority )
 			return false;
 
-		_inventory ??= Components.Get<PlayerInventory>();
-		if ( _inventory is null )
+		var inventory = ResolveInventory();
+		if ( inventory is null )
 			return false;
 
 		AugmentCatalog.EnsureLoaded();
@@ -143,13 +229,13 @@ public sealed class PlayerAugments : Component
 		if ( def.Ingredients is null || def.Ingredients.Count == 0 )
 			return false;
 
-		if ( !_inventory.HasResources( def.Ingredients ) )
+		if ( !inventory.HasResources( def.Ingredients ) )
 			return false;
 
 		if ( !HostCanFitBank( def.Id, 1 ) )
 			return false;
 
-		if ( !_inventory.HostTryConsumeResources( def.Ingredients ) )
+		if ( !inventory.HostTryConsumeResources( def.Ingredients ) )
 			return false;
 
 		if ( !HostTryAddToBank( def.Id, 1 ) )
@@ -161,15 +247,131 @@ public sealed class PlayerAugments : Component
 
 	public bool CanCraft( string augmentId )
 	{
-		_inventory ??= Components.Get<PlayerInventory>();
-		if ( _inventory is null || !AugmentCatalog.TryGet( augmentId, out var def ) || !def.IsUnlockedByDefault )
+		var inventory = ResolveInventory();
+		if ( inventory is null || !AugmentCatalog.TryGet( augmentId, out var def ) || !def.IsUnlockedByDefault )
 			return false;
 
 		if ( def.Ingredients is null || def.Ingredients.Count == 0 )
 			return false;
 
-		return _inventory.HasResources( def.Ingredients ) && HostCanFitBank( def.Id, 1 );
+		return inventory.HasResources( def.Ingredients ) && HostCanFitBank( def.Id, 1 );
 	}
+
+	// ── Enhance (augment cores → open a socket) ─────────────────────────────────────────────
+
+	public bool OwnerTryEnhance( AugmentBodyPart part )
+	{
+		if ( !IsLocalManagingClient() )
+			return false;
+
+		if ( HasHostAuthority )
+			return HostTryEnhance( part );
+
+		RpcHostEnhance( (int)part );
+		return true;
+	}
+
+	bool HostTryEnhance( AugmentBodyPart part )
+	{
+		if ( !HasHostAuthority )
+			return false;
+
+		var p = (int)part;
+		if ( p < 0 || p >= AugmentBodyParts.Count )
+			return false;
+
+		var cost = AugmentBodyParts.NextSlotCoreCost( part, _unlocked[p] );
+		if ( cost <= 0 )
+			return false;
+
+		var inventory = ResolveInventory();
+		if ( inventory is null )
+			return false;
+
+		var price = new List<CraftingIngredient>
+		{
+			new() { ResourceId = AugmentCurrency.CoreResourceId, Amount = cost },
+		};
+
+		if ( !inventory.HasResources( price ) || !inventory.HostTryConsumeResources( price ) )
+			return false;
+
+		_unlocked[p] = Math.Min( AugmentBodyParts.SlotsPerPart, _unlocked[p] + 1 );
+		NotifyChanged();
+		return true;
+	}
+
+	// ── Augment (gold coins → commit every pending socket) ──────────────────────────────────
+
+	public bool OwnerTryCommitAugments()
+	{
+		if ( !IsLocalManagingClient() )
+			return false;
+
+		if ( HasHostAuthority )
+			return HostTryCommitAugments();
+
+		RpcHostCommitAugments();
+		return true;
+	}
+
+	bool HostTryCommitAugments()
+	{
+		if ( !HasHostAuthority )
+			return false;
+
+		var inventory = ResolveInventory();
+		if ( inventory is null )
+			return false;
+
+		var cost = 0;
+		var anyPending = false;
+		for ( var i = 0; i < AugmentSlots.Count; i++ )
+		{
+			var slot = (AugmentSlot)i;
+			if ( !IsSlotPending( slot ) )
+				continue;
+
+			// A pending socket must hold a real augment that fits an open socket — the client only sent intent.
+			if ( !IsSlotUnlocked( slot )
+			     || !AugmentCatalog.TryGet( _installed[i].ResourceId, out var def )
+			     || !def.AllowsSlot( slot ) )
+				return false;
+
+			anyPending = true;
+			cost += def.InstallGoldCost( slot );
+		}
+
+		if ( !anyPending )
+			return false;
+
+		if ( cost > 0 )
+		{
+			var price = new List<CraftingIngredient>
+			{
+				new() { ResourceId = AugmentCurrency.GoldResourceId, Amount = cost },
+			};
+
+			if ( !inventory.HasResources( price ) || !inventory.HostTryConsumeResources( price ) )
+				return false;
+		}
+
+		var quests = Components.Get<PlayerQuests>();
+		for ( var i = 0; i < AugmentSlots.Count; i++ )
+		{
+			var stack = _installed[i];
+			var wasPending = IsSlotPending( (AugmentSlot)i );
+			_committed[i] = stack.IsEmpty ? string.Empty : ResourceCatalog.NormalizeResourceId( stack.ResourceId );
+
+			if ( wasPending )
+				quests?.HostReport( QuestEventIds.AugmentInstalled, _committed[i] );
+		}
+
+		NotifyChanged();
+		return true;
+	}
+
+	// ── Bank ────────────────────────────────────────────────────────────────────────────────
 
 	bool HostCanFitBank( string resourceId, int count )
 	{
@@ -226,76 +428,6 @@ public sealed class PlayerAugments : Component
 		}
 
 		return remaining <= 0;
-	}
-
-	public bool OwnerTryPickupInstalled( AugmentSlot slot, out InventorySlot picked )
-	{
-		picked = InventorySlot.Empty;
-		if ( !IsLocalManagingClient() )
-			return false;
-
-		var current = GetInstalled( slot );
-		if ( current.IsEmpty )
-			return false;
-
-		picked = current;
-		OwnerSetInstalled( slot, InventorySlot.Empty );
-		return true;
-	}
-
-	public bool OwnerTryPlaceIntoInstalled( AugmentSlot slot, ref InventoryCursorStack held )
-	{
-		if ( held.IsEmpty || !IsLocalManagingClient() )
-			return false;
-
-		if ( !AugmentCatalog.TryGet( held.ResourceId, out var def ) )
-			return false;
-
-		if ( !AugmentCatalog.IsSlotAllowed( def, slot ) )
-			return false;
-
-		var incoming = new InventorySlot
-		{
-			ResourceId = ResourceCatalog.NormalizeResourceId( held.ResourceId ),
-			Count = 1,
-		};
-		var previous = GetInstalled( slot );
-		OwnerSetInstalled( slot, incoming );
-
-		held.Count--;
-		if ( held.Count <= 0 )
-			held.Clear();
-
-		if ( !previous.IsEmpty )
-		{
-			if ( held.IsEmpty )
-				held.Set( previous.ResourceId, previous.Count );
-			else
-				return false;
-		}
-
-		return true;
-	}
-
-	public bool OwnerTryFinishInstalledDrag( AugmentSlot source, AugmentSlot target, ref InventoryCursorStack held )
-	{
-		if ( !IsLocalManagingClient() || source == target )
-			return false;
-
-		if ( !held.IsEmpty )
-			return OwnerTryPlaceIntoInstalled( target, ref held );
-
-		var sourceStack = GetInstalled( source );
-		if ( sourceStack.IsEmpty || !AugmentCatalog.TryGet( sourceStack.ResourceId, out var def ) )
-			return false;
-
-		if ( !AugmentCatalog.IsSlotAllowed( def, target ) )
-			return false;
-
-		var targetStack = GetInstalled( target );
-		OwnerSetInstalled( target, sourceStack );
-		OwnerSetInstalled( source, targetStack );
-		return true;
 	}
 
 	public bool OwnerTryPickupBank( int index, out InventorySlot picked )
@@ -375,15 +507,6 @@ public sealed class PlayerAugments : Component
 		return true;
 	}
 
-	public bool TryFindInstallSlot( string resourceId, out AugmentSlot slot )
-	{
-		slot = default;
-		if ( !AugmentCatalog.TryGet( resourceId, out var def ) || !def.TryGetSlot( out slot ) )
-			return false;
-
-		return GetInstalled( slot ).IsEmpty;
-	}
-
 	public bool TryFindEmptyBankSlot( out int index )
 	{
 		for ( var i = 0; i < BankSlotCount; i++ )
@@ -398,6 +521,107 @@ public sealed class PlayerAugments : Component
 		index = -1;
 		return false;
 	}
+
+	// ── Sockets (paper doll placement — free, pending until Augment) ────────────────────────
+
+	public bool OwnerTryPickupInstalled( AugmentSlot slot, out InventorySlot picked )
+	{
+		picked = InventorySlot.Empty;
+		if ( !IsLocalManagingClient() )
+			return false;
+
+		var current = GetInstalled( slot );
+		if ( current.IsEmpty )
+			return false;
+
+		picked = current;
+		OwnerSetInstalled( slot, InventorySlot.Empty );
+		return true;
+	}
+
+	public bool OwnerTryPlaceIntoInstalled( AugmentSlot slot, ref InventoryCursorStack held )
+	{
+		if ( held.IsEmpty || !IsLocalManagingClient() )
+			return false;
+
+		if ( !IsSlotUnlocked( slot ) )
+			return false;
+
+		if ( !AugmentCatalog.TryGet( held.ResourceId, out var def ) || !def.AllowsSlot( slot ) )
+			return false;
+
+		var incoming = new InventorySlot
+		{
+			ResourceId = ResourceCatalog.NormalizeResourceId( held.ResourceId ),
+			Count = 1,
+		};
+		var previous = GetInstalled( slot );
+		OwnerSetInstalled( slot, incoming );
+
+		held.Count--;
+		if ( held.Count <= 0 )
+			held.Clear();
+
+		if ( !previous.IsEmpty )
+		{
+			if ( held.IsEmpty )
+				held.Set( previous.ResourceId, previous.Count );
+			else
+				return false;
+		}
+
+		return true;
+	}
+
+	public bool OwnerTryFinishInstalledDrag( AugmentSlot source, AugmentSlot target, ref InventoryCursorStack held )
+	{
+		if ( !IsLocalManagingClient() || source == target )
+			return false;
+
+		if ( !held.IsEmpty )
+			return OwnerTryPlaceIntoInstalled( target, ref held );
+
+		var sourceStack = GetInstalled( source );
+		if ( sourceStack.IsEmpty || !AugmentCatalog.TryGet( sourceStack.ResourceId, out var def ) )
+			return false;
+
+		if ( !IsSlotUnlocked( target ) || !def.AllowsSlot( target ) )
+			return false;
+
+		var targetStack = GetInstalled( target );
+		if ( !targetStack.IsEmpty )
+		{
+			// Swap only when the displaced augment fits the source socket too.
+			if ( !AugmentCatalog.TryGet( targetStack.ResourceId, out var other ) || !other.AllowsSlot( source ) )
+				return false;
+		}
+
+		OwnerSetInstalled( target, sourceStack );
+		OwnerSetInstalled( source, targetStack );
+		return true;
+	}
+
+	/// <summary>First open, empty socket this augment fits (shift-click from the bank).</summary>
+	public bool TryFindInstallSlot( string resourceId, out AugmentSlot slot )
+	{
+		slot = default;
+		if ( !AugmentCatalog.TryGet( resourceId, out var def ) )
+			return false;
+
+		var allowed = def.AllowedSlots;
+		for ( var i = 0; i < allowed.Count; i++ )
+		{
+			if ( IsSlotUnlocked( allowed[i] ) && GetInstalled( allowed[i] ).IsEmpty )
+			{
+				slot = allowed[i];
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	// ── Death ───────────────────────────────────────────────────────────────────────────────
 
 	/// <summary>Host death path: collect installed + bank stacks when <see cref="DropAugmentsOnDeath"/>.</summary>
 	public void HostCollectDeathDrops( List<(string ResourceId, int Count)> into )
@@ -426,25 +650,28 @@ public sealed class PlayerAugments : Component
 			return;
 
 		for ( var i = 0; i < AugmentSlots.Count; i++ )
+		{
 			ApplyInstalledLocal( (AugmentSlot)i, InventorySlot.Empty );
+			_committed[i] = string.Empty;
+		}
 
 		for ( var i = 0; i < BankSlotCount; i++ )
 			ApplyBankLocal( i, InventorySlot.Empty );
 
 		NotifyChanged();
-		PushFullStateToOwner();
 	}
+
+	// ── Local apply + owner → host intent ───────────────────────────────────────────────────
+
+	PlayerInventory ResolveInventory() => _inventory ??= Components.Get<PlayerInventory>();
 
 	void OwnerSetInstalled( AugmentSlot slot, InventorySlot stack )
 	{
 		ApplyInstalledLocal( slot, stack );
 
-		if ( !string.IsNullOrWhiteSpace( stack.ResourceId ) && stack.Count > 0 )
-			Components.Get<PlayerQuests>()?.OwnerReport( QuestEventIds.AugmentInstalled, stack.ResourceId );
-
 		if ( HasHostAuthority )
 		{
-			PushFullStateToOwner();
+			NotifyChanged();
 			return;
 		}
 
@@ -460,7 +687,7 @@ public sealed class PlayerAugments : Component
 
 		if ( HasHostAuthority )
 		{
-			PushFullStateToOwner();
+			NotifyChanged();
 			return;
 		}
 
@@ -477,7 +704,8 @@ public sealed class PlayerAugments : Component
 			return;
 
 		_installed[i] = stack;
-		NotifyChanged();
+		ContentsVersion++;
+		AugmentsChanged?.Invoke();
 	}
 
 	void ApplyBankLocal( int index, InventorySlot stack )
@@ -486,13 +714,16 @@ public sealed class PlayerAugments : Component
 			return;
 
 		_bank[index] = stack;
-		NotifyChanged();
+		ContentsVersion++;
+		AugmentsChanged?.Invoke();
 	}
 
+	/// <summary>Any state change on the authority: bump the UI version and mirror to a remote owner.</summary>
 	void NotifyChanged()
 	{
 		ContentsVersion++;
 		AugmentsChanged?.Invoke();
+		PushFullStateToOwner();
 	}
 
 	void PushFullStateToOwner()
@@ -508,10 +739,12 @@ public sealed class PlayerAugments : Component
 
 		var installedIds = new string[AugmentSlots.Count];
 		var installedCounts = new int[AugmentSlots.Count];
+		var committedIds = new string[AugmentSlots.Count];
 		for ( var i = 0; i < AugmentSlots.Count; i++ )
 		{
 			installedIds[i] = _installed[i].ResourceId ?? string.Empty;
 			installedCounts[i] = _installed[i].Count;
+			committedIds[i] = _committed[i] ?? string.Empty;
 		}
 
 		var bankIds = new string[BankSlotCount];
@@ -522,31 +755,51 @@ public sealed class PlayerAugments : Component
 			bankCounts[i] = _bank[i].Count;
 		}
 
-		RpcOwnerSyncFull( installedIds, installedCounts, bankIds, bankCounts );
+		var unlocked = new int[AugmentBodyParts.Count];
+		Array.Copy( _unlocked, unlocked, AugmentBodyParts.Count );
+
+		RpcOwnerSyncFull( installedIds, installedCounts, bankIds, bankCounts, committedIds, unlocked );
+	}
+
+	bool IsCallerOwner()
+	{
+		if ( GameObject.Network is not { Active: true, Owner: { } owner } || Rpc.Caller is not { } caller )
+			return true;
+
+		return ConnectionIdentity.SameClient( caller, owner );
 	}
 
 	[Rpc.Host]
 	void RpcHostCraftAugment( string augmentId )
 	{
-		if ( !Networking.IsHost || !GameObject.IsValid() )
+		if ( !Networking.IsHost || !GameObject.IsValid() || !IsCallerOwner() )
 			return;
 
-		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
-		     && !ConnectionIdentity.SameClient( caller, owner ) )
+		HostTryCraft( augmentId );
+	}
+
+	[Rpc.Host]
+	void RpcHostEnhance( int part )
+	{
+		if ( !Networking.IsHost || !GameObject.IsValid() || !IsCallerOwner() )
 			return;
 
-		if ( HostTryCraft( augmentId ) )
-			PushFullStateToOwner();
+		HostTryEnhance( (AugmentBodyPart)part );
+	}
+
+	[Rpc.Host]
+	void RpcHostCommitAugments()
+	{
+		if ( !Networking.IsHost || !GameObject.IsValid() || !IsCallerOwner() )
+			return;
+
+		HostTryCommitAugments();
 	}
 
 	[Rpc.Host]
 	void RpcHostSetInstalled( int slotIndex, string resourceId, int count )
 	{
-		if ( !Networking.IsHost || !GameObject.IsValid() )
-			return;
-
-		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
-		     && !ConnectionIdentity.SameClient( caller, owner ) )
+		if ( !Networking.IsHost || !GameObject.IsValid() || !IsCallerOwner() )
 			return;
 
 		if ( slotIndex < 0 || slotIndex >= AugmentSlots.Count )
@@ -562,8 +815,10 @@ public sealed class PlayerAugments : Component
 
 		if ( !stack.IsEmpty )
 		{
-			if ( !AugmentCatalog.TryGet( stack.ResourceId, out var def )
-			     || !AugmentCatalog.IsSlotAllowed( def, (AugmentSlot)slotIndex ) )
+			var slot = (AugmentSlot)slotIndex;
+			if ( !IsSlotUnlocked( slot )
+			     || !AugmentCatalog.TryGet( stack.ResourceId, out var def )
+			     || !def.AllowsSlot( slot ) )
 				return;
 		}
 
@@ -574,11 +829,7 @@ public sealed class PlayerAugments : Component
 	[Rpc.Host]
 	void RpcHostSetBank( int index, string resourceId, int count )
 	{
-		if ( !Networking.IsHost || !GameObject.IsValid() )
-			return;
-
-		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
-		     && !ConnectionIdentity.SameClient( caller, owner ) )
+		if ( !Networking.IsHost || !GameObject.IsValid() || !IsCallerOwner() )
 			return;
 
 		if ( index < 0 || index >= BankSlotCount )
@@ -600,7 +851,10 @@ public sealed class PlayerAugments : Component
 	}
 
 	[Rpc.Owner]
-	void RpcOwnerSyncFull( string[] installedIds, int[] installedCounts, string[] bankIds, int[] bankCounts )
+	void RpcOwnerSyncFull(
+		string[] installedIds, int[] installedCounts,
+		string[] bankIds, int[] bankCounts,
+		string[] committedIds, int[] unlocked )
 	{
 		if ( installedIds is not null )
 		{
@@ -613,6 +867,13 @@ public sealed class PlayerAugments : Component
 					? InventorySlot.Empty
 					: new InventorySlot { ResourceId = id, Count = c };
 			}
+		}
+
+		if ( committedIds is not null )
+		{
+			var n = Math.Min( AugmentSlots.Count, committedIds.Length );
+			for ( var i = 0; i < n; i++ )
+				_committed[i] = committedIds[i] ?? string.Empty;
 		}
 
 		if ( bankIds is not null )
@@ -628,6 +889,14 @@ public sealed class PlayerAugments : Component
 			}
 		}
 
-		NotifyChanged();
+		if ( unlocked is not null )
+		{
+			var n = Math.Min( AugmentBodyParts.Count, unlocked.Length );
+			for ( var i = 0; i < n; i++ )
+				_unlocked[i] = Math.Clamp( unlocked[i], 0, AugmentBodyParts.SlotsPerPart );
+		}
+
+		ContentsVersion++;
+		AugmentsChanged?.Invoke();
 	}
 }

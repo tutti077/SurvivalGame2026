@@ -106,9 +106,6 @@ public static class AugmentCatalog
 
 	public static bool IsAugment( string resourceId ) => TryGet( resourceId, out _ );
 
-	public static bool IsSlotAllowed( AugmentDefinition definition, AugmentSlot slot ) =>
-		definition is not null && definition.TryGetSlot( out var required ) && required == slot;
-
 	public static string GetIconPath( string id ) =>
 		TryGet( id, out var def ) && !string.IsNullOrWhiteSpace( def.Icon ) ? def.Icon : null;
 
@@ -218,7 +215,8 @@ public static class AugmentCatalog
 			DisplayName = "Jump Legs",
 			Icon = "ui/items/resource_woodBasic.png",
 			Description = "Passive: every grounded jump launches at 3× normal height.",
-			Slot = "LegQuads",
+			Slots = { "LegQuads" },
+			Tier = 1,
 			Ability = "JumpHeight",
 			JumpHeightMultiplier = 3f,
 			MaxStack = 1,
@@ -230,7 +228,8 @@ public static class AugmentCatalog
 			DisplayName = "Double Jump Legs",
 			Icon = "ui/items/resource_woodBasic.png",
 			Description = "One mid-air jump at normal height; resets on landing.",
-			Slot = "LegQuads",
+			Slots = { "LegQuads" },
+			Tier = 2,
 			Ability = "DoubleJump",
 			MaxStack = 1,
 			Ingredients = { new CraftingIngredient { ResourceId = "resource_woodBasic", Amount = 1 } },

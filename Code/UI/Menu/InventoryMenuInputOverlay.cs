@@ -388,7 +388,8 @@ public sealed class InventoryMenuInputOverlay : Panel
 
 		var page = _menuController.ActivePageId;
 		var scrollablePage = string.Equals( page, MenuPageIds.Crafting, StringComparison.OrdinalIgnoreCase )
-		                     || string.Equals( page, MenuPageIds.Quests, StringComparison.OrdinalIgnoreCase );
+		                     || string.Equals( page, MenuPageIds.Quests, StringComparison.OrdinalIgnoreCase )
+		                     || string.Equals( page, MenuPageIds.AugmentStation, StringComparison.OrdinalIgnoreCase );
 		if ( !scrollablePage )
 		{
 			base.OnMouseWheel( value );

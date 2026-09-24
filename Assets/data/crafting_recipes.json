@@ -1,5 +1,20 @@
 {
   "recipes": [
+/*augments*/ {
+                "id": "resource_augmentCore",
+                "displayName": "Augment Core",
+                "icon": "ui/items/resource_augmentCore.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 20,
+                "stations": [ "inventory", "workbench" ],
+                // Free while the augment economy is built out — no ingredients = free craft.
+                "ingredients": [],
+                "stats": [
+                  { "label": "Description", "value": "Opens a body socket at the augment station" },
+                  { "label": "Type", "value": "Augment currency" }
+                ]
+              },
 /*movement*/ {
                 "id": "basic_hook",
                 "displayName": "Basic Hook",
