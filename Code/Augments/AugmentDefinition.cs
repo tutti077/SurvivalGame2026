@@ -36,6 +36,8 @@ public enum AugmentAbility
 	WarCry = 12,
 	/// <summary>Wheel toggle: cold blue world, creatures as heat signatures (<see cref="ThermalVision"/>).</summary>
 	ThermalEye = 13,
+	/// <summary>Wheel toggle (ranged weapon out): tag up to EffectScale enemies by looking, then a guaranteed volley on every tag.</summary>
+	Deadshot = 14,
 }
 
 /// <summary>How the player turns an augment on.</summary>

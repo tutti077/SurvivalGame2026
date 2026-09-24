@@ -206,7 +206,7 @@
       "id": "augment_deadshot",
       "displayName": "Deadshot",
       "icon": "ui/items/augment_placeholder.png",
-      "description": "Eye ability: tag enemies while it is on, then trigger attacks on all of them at once.",
+      "description": "With a ranged weapon out, look at enemies to tag them where you looked (one tag each, up to five). The fifth tag or a fire press lets loose a volley that lands on every tag, moving or not.",
       "school": "Ranged",
       "category": "Combat",
       "slots": [
@@ -220,11 +220,14 @@
           "amount": 1
         }
       ],
-      "implemented": false,
+      "ability": "Deadshot",
+      "implemented": true,
       "mode": "toggle",
       "cooldownSeconds": 5,
       "batterySeconds": 15,
-      "batteryRechargeSeconds": 45
+      "batteryRechargeSeconds": 45,
+      "effectScale": 5,
+      "effectRadiusMeters": 40
     },
     {
       "id": "augment_acrobatic_shot",

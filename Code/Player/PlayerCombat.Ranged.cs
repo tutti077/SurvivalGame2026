@@ -109,6 +109,10 @@ public partial class PlayerCombat
 
 		if ( Input.Pressed( PrimaryAttackAction ) && !_bowCharging )
 		{
+			// Deadshot with tags placed: the press releases the volley instead of drawing.
+			if ( Components.Get<PlayerAugments>() is { } augments && augments.TryOwnerFireDeadshot() )
+				return;
+
 			if ( !OwnerHasAmmoForEquippedBow() || IsActiveMainHandBroken() )
 				return;
 

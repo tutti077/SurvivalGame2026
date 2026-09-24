@@ -214,6 +214,7 @@ public sealed partial class PlayerAugments
 
 		ValidateBindsIfChanged();
 		TickBatteries( dt );
+		TickDeadshot();
 
 		var menuOpen = Components.Get<PlayerGameMenuController>() is { IsMenuOpen: true };
 		TickWheel( menuOpen );
@@ -366,6 +367,10 @@ public sealed partial class PlayerAugments
 			}
 
 			if ( now < state.CooldownUntil || ( def.HasBattery && state.Battery <= 0.05f ) )
+				return false;
+
+			// Equipment prerequisite (Deadshot needs a bow / rifle / pistol out).
+			if ( !CanActivateAbility( def ) )
 				return false;
 
 			state.On = true;
