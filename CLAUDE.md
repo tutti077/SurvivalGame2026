@@ -178,6 +178,11 @@ Code/
                 · BossSpawnButton (H); screen-top bar is Code/UI/BossHealthBarHud.cs
   Raids/        BaseRaidCatalog (Assets/data/raids.json — counts, waves, ring + aggro meters, enemy mix) · BaseRaidSession (L: host waves,
                 win/lose, ground ring; on the BaseRaid object) · raiders run EnemyAiState.Raiding (EntityBrain.Raid.cs); banner is Code/UI/BaseRaidHud.cs
+  Dungeon/      BoxDungeonGenerator (scene component: host picks a seed, every peer builds the same tinted dev-box dungeon locally;
+                host places dead-end chests through BuildAuthority) · DungeonLayout (pure seeded tree: 1×1…3×3-cell rect + round rooms,
+                corridor-cell runs, hub rooms with 3–6 doors, stairs + landings, dead-end pruning)
+                · DungeonGeometry (plates / multi-door walls / round rings / pillars / stair runs / stairwell holes, one child per floor)
+                · DungeonSignPanel (static ENTRANCE plate); scene Assets/scenes/BoxDungeonTest.scene; console dungeon_regen / dungeon_floors / dungeon_info
   Hacks/        GameHacks — console-toggled dev flags (allCrafting), mirrored onto pawns via [Sync] for host checks
   Map/          Player map markup: MapPinCatalog (12 pin icons, Assets/ui/map) · LocalMapMarkup (client-local pins + pen strokes in world
                 meters, write-through to 2Tgames/players/<steamid>/map/<world>.json via MapMarkupSaveStore) · MapPingFeed (MMB pings,
