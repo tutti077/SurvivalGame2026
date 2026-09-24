@@ -47,6 +47,23 @@ public sealed partial class PlayerVitals : Component
 	public double LastStaminaDrainArmedAtRealtime { get; private set; }
 	public float LastStaminaRegenDelayResolvedSeconds { get; private set; }
 
+	/// <summary>Host: stamina regen boost window (Parry Recharge augment) — rate × multiplier, delay gate bypassed.</summary>
+	public double StaminaRegenBoostUntil { get; private set; }
+	public float StaminaRegenBoostMultiplier { get; private set; } = 1f;
+
+	public void HostBeginStaminaRegenBoost( float seconds, float multiplier )
+	{
+		if ( seconds <= 0f || multiplier <= 1f )
+			return;
+
+		StaminaRegenBoostUntil = Math.Max( StaminaRegenBoostUntil, RealTime.GlobalNow + seconds );
+		StaminaRegenBoostMultiplier = Math.Max( 1f, multiplier );
+	}
+
+	/// <summary>1× outside the boost window.</summary>
+	public float StaminaRegenBoostForAuthority( double now ) =>
+		now < StaminaRegenBoostUntil ? Math.Max( 1f, StaminaRegenBoostMultiplier ) : 1f;
+
 	public float LastStaminaDrainAmount { get; private set; }
 
 	/// <summary>Raised when any displayed vital changes (for HUD).</summary>
@@ -378,6 +395,10 @@ public sealed partial class PlayerVitals : Component
 
 		// Dodge roll i-frames: the whole hit is ignored while the authority's roll window holds.
 		if ( Components.Get<PlayerMovement>() is { IsDodgeRollInvulnerable: true } )
+			return 0f;
+
+		// Armor Plating augment: a chance to shrug off the whole hit, then its cooldown.
+		if ( Components.Get<PlayerAugments>() is { } plating && plating.HostTryArmorPlatingBlock() )
 			return 0f;
 
 		var auth = VitalsAuthority.Instance;

@@ -9,7 +9,7 @@ namespace Survival;
 /// that need host validation to honour a flag mirror it onto the pawn (e.g.
 /// <see cref="PlayerCrafting.AllCraftingHack"/>) so the host reads the owner's setting.
 /// <para>
-/// Console: <c>allCrafting true</c> / <c>allCrafting false</c> — <c>hacks</c> lists every flag.
+/// Console: <c>allCrafting true</c> / <c>allCrafting false</c>, <c>freeAugments true|false</c> — <c>hacks</c> lists every flag.
 /// </para>
 /// </summary>
 public static class GameHacks
@@ -20,8 +20,43 @@ public static class GameHacks
 	/// </summary>
 	public static bool AllCrafting { get; private set; } = true;
 
+	/// <summary>
+	/// The augment station charges 0 gold coins to commit augments (cores for enhancing still apply).
+	/// Defaults on while the gold economy does not exist yet — <c>freeAugments false</c> re-enables the prices.
+	/// </summary>
+	public static bool FreeAugments { get; private set; } = true;
+
 	/// <summary>Bumps whenever any flag changes — UI that caches a hack-dependent layout rebuilds on this.</summary>
 	public static int Version { get; private set; }
+
+	public static void SetFreeAugments( bool enabled )
+	{
+		if ( FreeAugments == enabled )
+			return;
+
+		FreeAugments = enabled;
+		Version++;
+		Log.Info( $"[Hacks] freeAugments = {(enabled ? "true" : "false")}" );
+	}
+
+	/// <summary>Usage: <c>freeAugments true</c> / <c>freeAugments false</c>. No argument prints the current state.</summary>
+	[ConCmd( "freeAugments" )]
+	public static void ConCmdFreeAugments( string enabled )
+	{
+		if ( string.IsNullOrWhiteSpace( enabled ) )
+		{
+			Log.Info( $"[Hacks] freeAugments is {(FreeAugments ? "true" : "false")} (usage: freeAugments true|false)" );
+			return;
+		}
+
+		if ( !TryParseBool( enabled, out var value ) )
+		{
+			Log.Warning( $"[Hacks] freeAugments: '{enabled}' is not true/false." );
+			return;
+		}
+
+		SetFreeAugments( value );
+	}
 
 	public static void SetAllCrafting( bool enabled )
 	{
@@ -104,6 +139,7 @@ public static class GameHacks
 		var sb = new StringBuilder();
 		sb.AppendLine( "[Hacks]" );
 		sb.Append( "  allCrafting  " ).AppendLine( AllCrafting ? "true" : "false" );
+		sb.Append( "  freeAugments " ).AppendLine( FreeAugments ? "true" : "false" );
 		sb.AppendLine( "  status <id> <seconds>  apply a buff / debuff (status clear)" );
 		Log.Info( sb.ToString() );
 	}

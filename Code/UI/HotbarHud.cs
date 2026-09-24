@@ -11,10 +11,8 @@ public sealed class HotbarHud
 	public const float Scale = 1.1f;
 	public const float SlotSize = 52f * Scale;
 	public const float SlotGap = 4f * Scale;
-	public const float KeyHintFontSize = 11f * Scale;
 	public const float CountFontSize = 13f * Scale;
 
-	static readonly string[] KeyHints = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" };
 
 	readonly List<SlotUi> _slots = new();
 
@@ -65,14 +63,6 @@ public sealed class HotbarHud
 
 			interaction?.RegisterSlot( slotPanel );
 
-			var keyHint = new Label { Parent = slotPanel, Text = KeyHints[i] };
-			keyHint.Style.Set( "position", "absolute" );
-			keyHint.Style.Set( "right", "2px" );
-			keyHint.Style.Set( "top", "1px" );
-			keyHint.Style.FontColor = new Color( 0.75f, 0.78f, 0.82f, 0.9f );
-			keyHint.Style.FontSize = Length.Pixels( KeyHintFontSize );
-			keyHint.Style.Set( "text-shadow", "1px 1px 2px rgba(0,0,0,0.85)" );
-			keyHint.Style.Set( "pointer-events", "none" );
 
 			_slots.Add( CreateSlotUi( slotPanel ) );
 		}

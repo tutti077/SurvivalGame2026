@@ -171,7 +171,8 @@ public sealed partial class PlayerInventoryInteraction
 				{
 					AugmentInfoLineKind.Description => TooltipDescriptionColor,
 					AugmentInfoLineKind.Cost or AugmentInfoLineKind.InstallCost => TooltipDurabilityColor,
-					AugmentInfoLineKind.Slot => TooltipCrafterColor,
+					AugmentInfoLineKind.Slot or AugmentInfoLineKind.Activation => TooltipCrafterColor,
+					AugmentInfoLineKind.Warning => TooltipBrokenColor,
 					_ => TooltipStatColor,
 				};
 				AddTooltipLine( text, color, kind == AugmentInfoLineKind.Description ? 16f : 15f );

@@ -639,6 +639,10 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( WantsSprintStaminaSpend() )
 			return false;
 
+		// Sneaky Feet augment: sneaking is free.
+		if ( ResolveAugments()?.IsAbilityOn( AugmentAbility.SneakyFeet ) == true )
+			return false;
+
 		return HasMovementSprintIntent();
 	}
 
@@ -679,6 +683,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// roll first so Block/Crouch (+A/D) + Space is a roll, never a jump.
 		TickDodgeRollGate();
 		TickAugmentJumpGates();
+		TickAugmentSlideMotion();
 
 		// Before PlayerController.Jump: strip downhill -Z so SubtractDirection doesn't
 		// convert slope-aligned speed into a horizontal launch (roof walk-off boost).
@@ -747,8 +752,6 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( _vitals.OnControllerJumpedForStaminaFromMovement( JumpStaminaCost, ExhaustedJumpHeightFraction ) )
 			ApplyExhaustedJumpVelocityScale();
 
-		OnAugmentJumped();
-		TickPendingJumpLegsScale();
 	}
 
 	/// <summary>

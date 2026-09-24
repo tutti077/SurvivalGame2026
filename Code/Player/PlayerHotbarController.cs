@@ -10,11 +10,6 @@ namespace Survival;
 [Title( "Player Hotbar Controller" )]
 public sealed class PlayerHotbarController : Component
 {
-	static readonly string[] SlotActions =
-	{
-		"Slot1", "Slot2", "Slot3", "Slot4", "Slot5",
-		"Slot6", "Slot7", "Slot8", "Slot9", "Slot0"
-	};
 
 	PlayerVitals _vitals;
 	PlayerHotbar _hotbar;
@@ -34,7 +29,6 @@ public sealed class PlayerHotbarController : Component
 		if ( !CanControl() || _hotbar is null )
 			return;
 
-		PollSlotKeys();
 		PollMouseWheel();
 	}
 
@@ -51,17 +45,6 @@ public sealed class PlayerHotbarController : Component
 		       && _hotbar is not null && _hotbar.IsLocalManagingClient();
 	}
 
-	void PollSlotKeys()
-	{
-		for ( var i = 0; i < SlotActions.Length; i++ )
-		{
-			if ( !Input.Pressed( SlotActions[i] ) )
-				continue;
-
-			SelectSlot( i );
-			return;
-		}
-	}
 
 	void PollMouseWheel()
 	{

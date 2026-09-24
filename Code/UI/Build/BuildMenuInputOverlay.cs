@@ -110,6 +110,17 @@ public sealed class BuildMenuInputOverlay : Panel
 			return;
 
 		e.StopPropagation();
-		ResolveBuildHammer()?.SetBuildMenuOpen( false );
+		ResolveBuildHammer()?.CloseBuildMenuAndPutAway();
+	}
+
+	/// <summary>Left click beside the picker panel (on the dim layer itself) — close it and put the piece away.</summary>
+	protected override void OnClick( MousePanelEvent e )
+	{
+		base.OnClick( e );
+		if ( !_isOpen || e.Target != this )
+			return;
+
+		e.StopPropagation();
+		ResolveBuildHammer()?.CloseBuildMenuAndPutAway();
 	}
 }

@@ -43,7 +43,8 @@ public sealed class ToolBuildHammer : Component
 	[Property, Group( "Debug" ), Title( "Dump Snap Report" )]
 	public bool DumpSnapReport { get; set; }
 
-	public bool BlueprintModeEnabled { get; private set; } = true;
+	/// <summary>Off by default — the menu checkbox turns blueprints on for the session.</summary>
+	public bool BlueprintModeEnabled { get; private set; }
 	public bool IsBuildMenuOpen { get; private set; }
 	public bool IsPlacingPiece => !string.IsNullOrWhiteSpace( _selectedPieceId );
 	public bool IsRepairMode => BuildPieceCatalog.IsRepairTool( _selectedPieceId );
@@ -199,6 +200,16 @@ public sealed class ToolBuildHammer : Component
 		BuildMenuOpenChanged?.Invoke();
 	}
 
+	/// <summary>
+	/// Right-click with the menu open, or a click beside the panel: close the picker <b>and</b> put the
+	/// suggested piece away, so the hammer is idle again and the wheel goes back to swapping items.
+	/// </summary>
+	public void CloseBuildMenuAndPutAway()
+	{
+		SetBuildMenuOpen( false );
+		ClearSelectedPiece();
+	}
+
 	public void SelectPiece( string pieceId )
 	{
 		pieceId = pieceId?.Trim() ?? string.Empty;
@@ -322,7 +333,11 @@ public sealed class ToolBuildHammer : Component
 			return;
 		}
 
-		SetBuildMenuOpen( !IsBuildMenuOpen );
+		// Tap: open the picker; tap again: close it and drop the held piece.
+		if ( IsBuildMenuOpen )
+			CloseBuildMenuAndPutAway();
+		else
+			SetBuildMenuOpen( true );
 	}
 
 	void PollHammerInput()

@@ -12,12 +12,16 @@ public enum AugmentInfoLineKind
 	Stat = 3,
 	/// <summary>The gold-coin price the Augment button charges — the station renders it as its own coin row.</summary>
 	InstallCost = 4,
+	/// <summary>How it is activated (passive / key bind / F wheel, one-shot or toggle, cooldown, battery).</summary>
+	Activation = 5,
+	/// <summary>Effect not built yet.</summary>
+	Warning = 6,
 }
 
 /// <summary>
-/// The one "info about augment" block: description, which sockets it fits, tier, install cost and
-/// craft cost. The station detail box and the item hover tooltip both render exactly these lines,
-/// so the player reads the same facts wherever an augment shows up.
+/// The one "info about augment" block: description, tree, which sockets it fits, tier, how it is
+/// activated, install cost and craft cost. The station detail box and the item hover tooltip both
+/// render exactly these lines, so the player reads the same facts wherever an augment shows up.
 /// </summary>
 public static class AugmentInfo
 {
@@ -30,8 +34,16 @@ public static class AugmentInfo
 		if ( !string.IsNullOrWhiteSpace( def.Description ) )
 			lines.Add( (def.Description, AugmentInfoLineKind.Description) );
 
+		if ( !def.Implemented )
+			lines.Add( ("Effect not yet implemented — crafts and installs, does nothing yet.", AugmentInfoLineKind.Warning) );
+
+		var tree = DescribeTree( def );
+		if ( !string.IsNullOrWhiteSpace( tree ) )
+			lines.Add( (tree, AugmentInfoLineKind.Slot) );
+
 		lines.Add( ($"Fits: {DescribeSlots( def )}", AugmentInfoLineKind.Slot) );
 		lines.Add( ($"Tier {def.ResolvedTier} augment", AugmentInfoLineKind.Slot) );
+		lines.Add( (DescribeActivation( def ), AugmentInfoLineKind.Activation) );
 		lines.Add( ($"Augment cost: {DescribeInstallCost( def )}", AugmentInfoLineKind.InstallCost) );
 		lines.Add( ($"Craft cost: {DescribeCraftCost( def )}", AugmentInfoLineKind.Cost) );
 
@@ -48,6 +60,49 @@ public static class AugmentInfo
 		}
 
 		return lines;
+	}
+
+	/// <summary>"Cyber · Combat", "Movement" …</summary>
+	public static string DescribeTree( AugmentDefinition def )
+	{
+		var school = def?.School?.Trim() ?? string.Empty;
+		var category = def?.Category?.Trim() ?? string.Empty;
+		if ( string.IsNullOrWhiteSpace( school ) )
+			return category;
+		if ( string.IsNullOrWhiteSpace( category ) )
+			return school;
+		return $"{school} · {category}";
+	}
+
+	/// <summary>"Trigger — key bind 1–6 · one-shot · 10 s cooldown", "Wheel — hold F · toggle · 20 s battery", "Passive".</summary>
+	public static string DescribeActivation( AugmentDefinition def )
+	{
+		if ( def is null )
+			return string.Empty;
+
+		var sb = new StringBuilder();
+		switch ( def.ResolvedActivation )
+		{
+			case AugmentActivation.Trigger:
+				sb.Append( "Trigger — assign to a key 1–6 on the Augments page" );
+				break;
+			case AugmentActivation.Wheel:
+				sb.Append( "Wheel — hold F and pick it" );
+				break;
+			default:
+				sb.Append( "Passive" );
+				if ( def.CooldownSeconds > 0f && def.CooldownSeconds != AugmentDefinition.DefaultCooldownSeconds )
+					sb.Append( $" · once every {def.CooldownSeconds:0.#} s" );
+				return sb.ToString();
+		}
+
+		sb.Append( def.ResolvedMode == AugmentMode.Toggle ? " · toggle" : " · one-shot" );
+		if ( def.HasBattery )
+			sb.Append( $" · {def.BatterySeconds:0.#} s battery" );
+		if ( def.ResolvedCooldownSeconds > 0f )
+			sb.Append( $" · {def.ResolvedCooldownSeconds:0.#} s cooldown" );
+
+		return sb.ToString();
 	}
 
 	public static string DescribeSlots( AugmentDefinition def )

@@ -26,6 +26,12 @@ public partial class PlayerCombat
 
 		ConsumeAuthoritativeMeleeBlock( attackWasHeavy: wasHeavy, wasPerfectParry: wasParry );
 
+		// Parry Recharge augment: a perfect parry opens a short stamina regen boost window.
+		if ( wasParry && vitals is not null
+		     && Components.Get<PlayerAugments>() is { } augments
+		     && augments.TryGetActiveDefinition( AugmentAbility.ParryRecharge, out var parryDef ) )
+			vitals.HostBeginStaminaRegenBoost( parryDef.EffectSeconds, parryDef.EffectScale );
+
 		if ( !wasParry && wasHeavy )
 			ServerBeginHitReaction( RecoveryDefenderHeavyBlockSeconds );
 

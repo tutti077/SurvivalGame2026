@@ -637,23 +637,46 @@ public sealed partial class PlayerInventoryInteraction : Component
 		UpdateDragGhostPosition();
 	}
 
+	/// <summary>
+	/// Binding-only drags carry an id, not an item: hotbar slot bindings, and augment key binds
+	/// (dragged from the read-only doll sockets or the bind row on the Augments page).
+	/// </summary>
 	bool TryBeginBindingDragFromSlot( InventorySlotPanel slot )
 	{
-		if ( slot is null || slot.GridHost?.GridId != "hotbar" || _hotbar is null )
+		if ( slot is null || slot.GridHost is null )
 			return false;
 
 		var slotIndex = slot.SlotIndex;
-		var binding = _hotbar.GetBinding( slotIndex );
-		if ( string.IsNullOrWhiteSpace( binding ) )
-			return false;
+		var gridId = slot.GridHost.GridId;
 
-		var stack = slot.GridHost.GetSlot( slotIndex );
-		if ( !stack.IsEmpty )
-			return false;
+		if ( gridId == "hotbar" && _hotbar is not null )
+		{
+			var binding = _hotbar.GetBinding( slotIndex );
+			if ( string.IsNullOrWhiteSpace( binding ) )
+				return false;
 
-		_dragBindingOnly = true;
-		_held.Set( binding, 1 );
-		return true;
+			var stack = slot.GridHost.GetSlot( slotIndex );
+			if ( !stack.IsEmpty )
+				return false;
+
+			_dragBindingOnly = true;
+			_held.Set( binding, 1 );
+			return true;
+		}
+
+		if ( gridId == PlayerAugmentInstalledGridHost.ViewGridId || gridId == PlayerAugmentBindGridHost.GridIdValue )
+		{
+			var stack = slot.GridHost.GetSlot( slotIndex );
+			if ( stack.IsEmpty || !AugmentCatalog.TryGet( stack.ResourceId, out var def )
+			     || def.ResolvedActivation != AugmentActivation.Trigger )
+				return false;
+
+			_dragBindingOnly = true;
+			_held.Set( stack.ResourceId, 1 );
+			return true;
+		}
+
+		return false;
 	}
 
 	void FinishActiveDrag( InventorySlotPanel targetSlot )
@@ -846,8 +869,12 @@ public sealed partial class PlayerInventoryInteraction : Component
 	void FinishBindingDrag()
 	{
 		var bindingSlot = _dragSourceSlot;
+		var sourceHost = _dragSourceHost;
+		var heldId = _held.ResourceId;
 		// Only the live cursor position counts — not _dropHoverSlot / ResolveDropTargetSlot fallback.
-		var releasedOnHotbar = IsHotbarSlotAtScreenPosition( GetDropProbeScreenPosition() );
+		var pointer = GetDropProbeScreenPosition();
+		var releasedOnHotbar = IsHotbarSlotAtScreenPosition( pointer );
+		var target = FindSlotAtScreenPosition( pointer );
 
 		_leftDragActive = false;
 		_dragBindingOnly = false;
@@ -857,8 +884,31 @@ public sealed partial class PlayerInventoryInteraction : Component
 		_held.Clear();
 		HideDragGhost();
 
-		if ( !releasedOnHotbar && bindingSlot >= 0 && _hotbar is not null )
-			_hotbar.OwnerClearBinding( bindingSlot );
+		if ( sourceHost?.GridId == "hotbar" )
+		{
+			if ( !releasedOnHotbar && bindingSlot >= 0 && _hotbar is not null )
+				_hotbar.OwnerClearBinding( bindingSlot );
+			return;
+		}
+
+		// Augment key binds: drop on a bind slot assigns; dragging a bind anywhere else clears it.
+		var augments = Components.Get<PlayerAugments>();
+		if ( augments is null || string.IsNullOrWhiteSpace( heldId ) )
+			return;
+
+		var fromBindRow = sourceHost?.GridId == PlayerAugmentBindGridHost.GridIdValue;
+		if ( target?.GridHost?.GridId == PlayerAugmentBindGridHost.GridIdValue )
+		{
+			if ( fromBindRow && target.SlotIndex == bindingSlot )
+				return;
+
+			if ( augments.OwnerTrySetBind( target.SlotIndex, heldId ) && fromBindRow )
+				augments.OwnerClearBind( bindingSlot );
+			return;
+		}
+
+		if ( fromBindRow )
+			augments.OwnerClearBind( bindingSlot );
 	}
 
 	bool IsHotbarSlotAtScreenPosition( Vector2 screenPosition ) =>

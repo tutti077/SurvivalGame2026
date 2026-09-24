@@ -211,14 +211,15 @@ public static class AugmentCatalog
 	{
 		new()
 		{
-			Id = "augment_jump_legs",
-			DisplayName = "Jump Legs",
-			Icon = "ui/items/resource_woodBasic.png",
-			Description = "Passive: every grounded jump launches at 3× normal height.",
+			Id = "augment_spring_legs",
+			DisplayName = "Spring Legs",
+			Icon = "ui/items/augment_placeholder.png",
+			Description = "Spring-loaded legs: trigger while grounded to launch far higher than a normal jump.",
 			Slots = { "LegQuads" },
 			Tier = 1,
-			Ability = "JumpHeight",
-			JumpHeightMultiplier = 3f,
+			Ability = "SpringLegs",
+			Activation = "trigger",
+			EffectScale = 2.5f,
 			MaxStack = 1,
 			Ingredients = { new CraftingIngredient { ResourceId = "resource_woodBasic", Amount = 1 } },
 		},
@@ -226,7 +227,7 @@ public static class AugmentCatalog
 		{
 			Id = "augment_double_jump_legs",
 			DisplayName = "Double Jump Legs",
-			Icon = "ui/items/resource_woodBasic.png",
+			Icon = "ui/items/augment_placeholder.png",
 			Description = "One mid-air jump at normal height; resets on landing.",
 			Slots = { "LegQuads" },
 			Tier = 2,

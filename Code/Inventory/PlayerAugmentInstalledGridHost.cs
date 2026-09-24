@@ -8,6 +8,8 @@ namespace Survival;
 /// </summary>
 public sealed class PlayerAugmentInstalledGridHost : IInventoryGridHost
 {
+	public const string ViewGridId = "augment_installed_view";
+
 	public string GridId { get; }
 	public PlayerInventory Inventory { get; }
 	public PlayerHotbar Hotbar => null;
@@ -20,7 +22,7 @@ public sealed class PlayerAugmentInstalledGridHost : IInventoryGridHost
 		_augments = augments;
 		_readOnly = readOnly;
 		Inventory = inventory;
-		GridId = readOnly ? "augment_installed_view" : "augment_installed";
+		GridId = readOnly ? ViewGridId : "augment_installed";
 	}
 
 	public int SlotCount => AugmentSlots.Count;

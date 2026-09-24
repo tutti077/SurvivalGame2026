@@ -41,9 +41,15 @@ public sealed class AugmentPaperdollView
 	readonly PlayerInventoryInteraction _interaction;
 	readonly bool _interactive;
 
+	/// <summary>Degrees of body spin per pixel of horizontal drag.</summary>
+	const float DragDegreesPerPixel = 0.5f;
+
 	readonly SocketUi[] _socketUi = new SocketUi[AugmentSlots.Count];
 	readonly PartUi[] _partUi = new PartUi[AugmentBodyParts.Count];
 	AugmentPlayerPreviewPanel _preview;
+	Panel _previewFrame;
+	bool _previewDragging;
+	float _previewDragLastX;
 
 	/// <param name="interactive">True at the station (Enhance buttons shown); false on the Augments page (view only).</param>
 	public AugmentPaperdollView( PlayerAugments augments, IInventoryGridHost gridHost, PlayerInventoryInteraction interaction, bool interactive )
@@ -61,6 +67,8 @@ public sealed class AugmentPaperdollView
 		body.Style.Set( "flex-direction", "row" );
 		body.Style.Set( "width", "100%" );
 		body.Style.Set( "flex-grow", "1" );
+		body.Style.Set( "flex-shrink", "1" );
+		body.Style.Set( "min-height", "0" );
 		body.Style.Set( "gap", "12px" );
 		body.Style.Set( "align-items", "stretch" );
 
@@ -73,6 +81,7 @@ public sealed class AugmentPaperdollView
 			BuildPart( left, LeftParts[i] );
 
 		var previewFrame = new Panel { Parent = body };
+		_previewFrame = previewFrame;
 		previewFrame.Style.Set( "flex-direction", "column" );
 		previewFrame.Style.Width = Length.Pixels( PreviewWidth );
 		previewFrame.Style.Set( "flex-shrink", "0" );
@@ -100,14 +109,14 @@ public sealed class AugmentPaperdollView
 	{
 		var block = new Panel { Parent = parent };
 		block.Style.Set( "flex-direction", "column" );
-		block.Style.Set( "gap", "6px" );
+		block.Style.Set( "gap", "4px" );
 		block.Style.Set( "flex-shrink", "0" );
 
 		var header = new Panel { Parent = block };
 		header.Style.Set( "flex-direction", "row" );
 		header.Style.Set( "align-items", "center" );
 		header.Style.Set( "gap", "8px" );
-		header.Style.Height = Length.Pixels( 30f );
+		header.Style.Height = Length.Pixels( 26f );
 
 		var name = new Label { Parent = header, Text = AugmentBodyParts.Label( part ) };
 		name.Style.FontColor = TitleColor;
@@ -196,6 +205,32 @@ public sealed class AugmentPaperdollView
 		label.Style.Set( "pointer-events", "none" );
 
 		_socketUi[(int)slot] = new SocketUi( slotPanel, ui, lockOverlay );
+	}
+
+	/// <summary>
+	/// Every frame while the page is open: soft-cursor position + Attack1 held. A press that starts on
+	/// the preview frame becomes a drag that spins the body; releasing ends it.
+	/// </summary>
+	public void TickPointerDrag( Vector2 screenPos, bool held )
+	{
+		if ( !held )
+		{
+			_previewDragging = false;
+			return;
+		}
+
+		if ( _previewDragging )
+		{
+			_preview?.RotateBy( (screenPos.x - _previewDragLastX) * DragDegreesPerPixel );
+			_previewDragLastX = screenPos.x;
+			return;
+		}
+
+		if ( _previewFrame is null || !_previewFrame.IsValid() || !_previewFrame.IsInside( screenPos ) )
+			return;
+
+		_previewDragging = true;
+		_previewDragLastX = screenPos.x;
 	}
 
 	/// <summary>Soft-cursor press on an Enhance button (interactive doll only).</summary>

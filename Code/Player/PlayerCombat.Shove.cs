@@ -35,23 +35,38 @@ public partial class PlayerCombat
 		if ( string.IsNullOrWhiteSpace( ShoveAction ) || !Input.Pressed( ShoveAction ) )
 			return;
 
-		if ( !IsLocalPlayerGroundedForShove() )
+		// With wheel augments installed, F belongs to the augment wheel (PlayerAugments.Triggers):
+		// hold = wheel, plain tap release = this shove.
+		if ( Components.Get<PlayerAugments>() is { HasWheelAugments: true } )
 			return;
+
+		OwnerTryShove();
+	}
+
+	/// <summary>Owner: fire the shove now if the grounded / chain / stamina gates allow it.</summary>
+	public bool OwnerTryShove()
+	{
+		if ( !IsLocalCombatDriver() )
+			return false;
+
+		if ( !IsLocalPlayerGroundedForShove() )
+			return false;
 
 		// Same gate as sword: recovery / hit reaction / in-flight melee / swing window.
 		if ( IsMeleeAttackChainBusy() )
-			return;
+			return false;
 
 		var cost = Math.Max( 0f, ShoveStaminaCost );
 		if ( cost > 1e-4f )
 		{
 			var vitals = Components.Get<PlayerVitals>();
 			if ( vitals is null || !vitals.CanAffordStamina( cost ) )
-				return;
+				return false;
 		}
 
 		BeginShoveFacingLock();
 		OwnerRequestShove();
+		return true;
 	}
 
 	bool IsLocalPlayerGroundedForShove()

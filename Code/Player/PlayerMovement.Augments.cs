@@ -3,13 +3,22 @@ using Sandbox;
 
 namespace Survival;
 
-/// <summary>Augment-driven jump abilities (Jump Legs, Double Jump).</summary>
+/// <summary>
+/// Augment-driven movement: Double Jump (passive, Jump key in the air), Spring Legs (trigger),
+/// Recovery Slide (trigger) and the Grapple Drive winch scale. All read live state from
+/// <see cref="PlayerAugments.IsAbilityOn"/>; triggers arrive through the Try* entry points.
+/// </summary>
 public sealed partial class PlayerMovement
 {
 	bool _doubleJumpUsed;
 	bool _wasGroundedForDoubleJump = true;
-	bool _pendingJumpLegsScale;
 	PlayerAugments _augments;
+
+	Vector3 _slideDir;
+	float _slideSpeed;
+	float _slideRefundStamina;
+	double _slideUntil;
+	bool _slideActive;
 
 	PlayerAugments ResolveAugments() =>
 		_augments ??= Components.Get<PlayerAugments>();
@@ -31,7 +40,8 @@ public sealed partial class PlayerMovement
 		if ( _controller is null )
 			return;
 
-		TickDoubleJumpFlightState( augments );
+		var hasDoubleJump = augments.IsAbilityOn( AugmentAbility.DoubleJump );
+		TickDoubleJumpFlightState( hasDoubleJump );
 
 		var jumpPressed = !string.IsNullOrWhiteSpace( JumpInputAction ) && Input.Pressed( JumpInputAction );
 		if ( !jumpPressed )
@@ -45,9 +55,7 @@ public sealed partial class PlayerMovement
 			return;
 
 		// Air hop: any time while airborne until used once this flight (jump-launch or walk-off).
-		if ( !_controller.IsOnGround
-		     && augments.HasAbility( AugmentAbility.DoubleJump )
-		     && !_doubleJumpUsed )
+		if ( !_controller.IsOnGround && hasDoubleJump && !_doubleJumpUsed )
 		{
 			if ( TryPerformDoubleJump() )
 			{
@@ -58,14 +66,14 @@ public sealed partial class PlayerMovement
 	}
 
 	/// <summary>Grounded → recharge. Airborne (from jump or cliff) → keep charge until the air hop is spent.</summary>
-	void TickDoubleJumpFlightState( PlayerAugments augments )
+	void TickDoubleJumpFlightState( bool hasDoubleJump )
 	{
 		var grounded = _controller.IsOnGround;
 		if ( grounded )
 		{
 			_doubleJumpUsed = false;
 		}
-		else if ( _wasGroundedForDoubleJump && augments.HasAbility( AugmentAbility.DoubleJump ) )
+		else if ( _wasGroundedForDoubleJump && hasDoubleJump )
 		{
 			// Just left the ground — grant the air hop for this flight.
 			_doubleJumpUsed = false;
@@ -91,45 +99,104 @@ public sealed partial class PlayerMovement
 		return true;
 	}
 
-	void OnAugmentJumped()
-	{
-		var augments = ResolveAugments();
-		if ( augments is null || !augments.HasAbility( AugmentAbility.JumpHeight ) )
-			return;
-
-		_pendingJumpLegsScale = true;
-	}
-
-	void TickPendingJumpLegsScale()
-	{
-		if ( !_pendingJumpLegsScale )
-			return;
-
-		_pendingJumpLegsScale = false;
-		var mult = ResolveAugments()?.GetJumpHeightMultiplier() ?? 1f;
-		if ( mult <= 1.001f )
-			return;
-
-		ApplyJumpHeightMultiplier( mult );
-	}
-
-	void ApplyJumpHeightMultiplier( float multiplier )
-	{
-		var body = Components.Get<Rigidbody>();
-		if ( body is null || !body.IsValid() )
-			return;
-
-		var up = Vector3.Up;
-		var upwardSpeed = Vector3.Dot( body.Velocity, up );
-		if ( upwardSpeed <= 1e-4f )
-			return;
-
-		var boosted = upwardSpeed * multiplier;
-		body.Velocity += up * (boosted - upwardSpeed);
-	}
-
 	void OnAugmentLanded()
 	{
 		_doubleJumpUsed = false;
+	}
+
+	/// <summary>Spring Legs trigger: grounded launch at <paramref name="multiplier"/> × the controller jump speed. False when not grounded / locked.</summary>
+	public bool TryAugmentSpringJump( float multiplier )
+	{
+		if ( !IsLocalMovementDriver() )
+			return false;
+
+		_controller ??= Components.Get<PlayerController>();
+		if ( _controller is null || !_controller.IsValid() || !_controller.IsOnGround )
+			return false;
+
+		if ( IsHitReactionActive() || TrapLocked || GrappleAttached || WingsuitDeployed || EventInputLocked )
+			return false;
+
+		var jumpSpeed = Math.Max( 1f, _controller.JumpSpeed ) * Math.Max( 1f, multiplier );
+		_controller.Jump( Vector3.Up * jumpSpeed );
+		return true;
+	}
+
+	/// <summary>
+	/// Recovery Slide trigger: while sprinting on the ground, hold the current heading at sprint speed
+	/// for <see cref="AugmentDefinition.EffectSeconds"/>, then refund <see cref="AugmentDefinition.EffectScale"/> stamina.
+	/// </summary>
+	public bool TryAugmentRecoverySlide( AugmentDefinition def )
+	{
+		if ( def is null || !IsLocalMovementDriver() || _slideActive )
+			return false;
+
+		_controller ??= Components.Get<PlayerController>();
+		if ( _controller is null || !_controller.IsValid() || !_controller.IsOnGround )
+			return false;
+
+		if ( IsHitReactionActive() || TrapLocked || GrappleAttached || WingsuitDeployed || EventInputLocked )
+			return false;
+
+		if ( !WantsSprintStaminaSpend() )
+			return false;
+
+		var body = _controller.Body ?? Components.Get<Rigidbody>();
+		if ( body is null || !body.IsValid() )
+			return false;
+
+		var flat = body.Velocity.WithZ( 0f );
+		if ( flat.LengthSquared < 1e-3f )
+			flat = GameObject.WorldRotation.Forward.WithZ( 0f );
+		if ( flat.LengthSquared < 1e-6f )
+			return false;
+
+		_slideDir = flat.Normal;
+		_slideSpeed = Math.Max( flat.Length, 60f );
+		_slideUntil = Time.NowDouble + Math.Max( 0.1f, def.EffectSeconds );
+		_slideRefundStamina = Math.Max( 0f, def.EffectScale );
+		_slideActive = true;
+		TickAugmentSlideMotion();
+		return true;
+	}
+
+	/// <summary>Every PreInput frame: re-assert the slide velocity (controller friction would decay it), then pay out the refund.</summary>
+	void TickAugmentSlideMotion()
+	{
+		if ( !_slideActive )
+			return;
+
+		_controller ??= Components.Get<PlayerController>();
+		var body = _controller?.Body ?? Components.Get<Rigidbody>();
+		if ( body is null || !body.IsValid() || _controller is null )
+		{
+			_slideActive = false;
+			return;
+		}
+
+		if ( Time.NowDouble >= _slideUntil || !_controller.IsOnGround || TrapLocked || IsHitReactionActive() )
+		{
+			_slideActive = false;
+			if ( _slideRefundStamina > 0f )
+				_vitals?.RequestVitalsDelta( 0f, _slideRefundStamina );
+			return;
+		}
+
+		body.Velocity = new Vector3( _slideDir.x * _slideSpeed, _slideDir.y * _slideSpeed, body.Velocity.z );
+	}
+
+	/// <summary>Grapple Drive: sprint held while the rope winches in = EffectScale × winch rate.</summary>
+	float GrappleDriveWinchScale()
+	{
+		var augments = ResolveAugments();
+		if ( augments is null || !augments.IsAbilityOn( AugmentAbility.GrappleDrive ) )
+			return 1f;
+
+		if ( string.IsNullOrWhiteSpace( SprintInputAction ) || !Input.Down( SprintInputAction ) )
+			return 1f;
+
+		return augments.TryGetActiveDefinition( AugmentAbility.GrappleDrive, out var def )
+			? Math.Max( 1f, def.EffectScale )
+			: 1f;
 	}
 }

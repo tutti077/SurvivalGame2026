@@ -343,6 +343,22 @@ public sealed partial class EntityBrain : Component
 			EnterState( EnemyAiState.Chasing, _target );
 	}
 
+	/// <summary>Host: War Cry — this player becomes the target now, unless the entity is already fighting.</summary>
+	public void HostProvoke( GameObject player )
+	{
+		if ( !player.IsValid() || !IsValidPlayerTarget( player ) )
+			return;
+
+		RememberStimulus( player.WorldPosition, player );
+		_target = player;
+		RememberLastKnown( player.WorldPosition );
+
+		if ( _state is EnemyAiState.Chasing or EnemyAiState.Attacking or EnemyAiState.Breaching )
+			return;
+
+		EnterState( EnemyAiState.Chasing, _target );
+	}
+
 	public void OnNavBakeComplete()
 	{
 		// Every entity gets this on the same frame; twenty raiders all re-pathing at once (each a query

@@ -13,7 +13,11 @@ public sealed class AugmentPlayerPreviewPanel : ScenePanel
 {
 	const string HumanModelPath = "models/citizen_human/citizen_human_male.vmdl";
 
+	const float DefaultYaw = -12f;
+
 	SkinnedModelRenderer _body;
+	GameObject _bodyObject;
+	float _yaw = DefaultYaw;
 	string _appliedClothingKey;
 	bool _built;
 
@@ -45,10 +49,11 @@ public sealed class AugmentPlayerPreviewPanel : ScenePanel
 			var cameraObject = new GameObject( true, "Camera" );
 			var camera = cameraObject.AddComponent<CameraComponent>();
 			camera.BackgroundColor = Color.Transparent;
-			camera.FieldOfView = 34;
+			// Portrait frame: a narrow field and a close camera fill the box with the body.
+			camera.FieldOfView = 26;
 			camera.ZNear = 1;
 			camera.ZFar = 512;
-			cameraObject.WorldPosition = new Vector3( 150, 0, 40 );
+			cameraObject.WorldPosition = new Vector3( 105, 0, 37 );
 			cameraObject.WorldRotation = Rotation.FromYaw( 180 );
 
 			var sunObject = new GameObject( true, "Sun" );
@@ -58,13 +63,25 @@ public sealed class AugmentPlayerPreviewPanel : ScenePanel
 			sun.SkyColor = new Color( 0.35f, 0.38f, 0.45f );
 
 			var bodyObject = new GameObject( true, "Body" );
-			bodyObject.WorldRotation = Rotation.FromYaw( -12 );
+			bodyObject.WorldRotation = Rotation.FromYaw( _yaw );
+			_bodyObject = bodyObject;
 			_body = bodyObject.AddComponent<SkinnedModelRenderer>();
 			_body.Model = Model.Load( HumanModelPath );
 		}
 
 		if ( !string.IsNullOrWhiteSpace( _appliedClothingKey ) )
 			Dress( _appliedClothingKey );
+	}
+
+	/// <summary>Spin the body about its feet (click-drag on the frame). Degrees, positive = clockwise from above.</summary>
+	public void RotateBy( float degrees )
+	{
+		if ( MathF.Abs( degrees ) < 1e-4f )
+			return;
+
+		_yaw = (_yaw + degrees) % 360f;
+		if ( _bodyObject is not null && _bodyObject.IsValid() )
+			_bodyObject.WorldRotation = Rotation.FromYaw( _yaw );
 	}
 
 	/// <summary>Mirror the pawn's worn outfit (<see cref="PlayerEquipment.NetworkedWornClothing"/> key). Re-dresses only on change.</summary>

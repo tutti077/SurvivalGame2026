@@ -32,6 +32,8 @@ public sealed class PlayerScreenHud : PanelComponent
 	PlayerHotbar _hotbar;
 	PlayerInventoryInteraction _inventoryInteraction;
 	HotbarHud _hotbarHud;
+	AugmentBindsHud _augmentBindsHud;
+	AugmentWheelHud _augmentWheelHud;
 	TerrainMinimapHud _minimapHud;
 	PlayerCrafting _crafting;
 	InventoryMenuInputOverlay _menuInputOverlay;
@@ -155,6 +157,8 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_pickupNotifications?.Tick();
 		_minimapHud?.Tick();
+		_augmentBindsHud?.Tick();
+		_augmentWheelHud?.Tick();
 		_buildMenuHud?.Tick();
 		_wireCableMenuHud?.Tick();
 		_buildSnapReadout?.Tick();
@@ -247,6 +251,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		}
 
 		_hotbarHud?.Dispose();
+		_augmentBindsHud?.Dispose();
+		_augmentWheelHud?.Dispose();
 		_statusEffectsHud?.Dispose();
 		_statusEffectsHud = null;
 		_bossHealthBar?.Dispose();
@@ -892,6 +898,11 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_hotbarHud = new HotbarHud();
 		_hotbarHud.Build( root, _hotbar, _inventoryInteraction );
+
+		_augmentBindsHud = new AugmentBindsHud();
+		_augmentBindsHud.Build( root, _augments );
+		_augmentWheelHud = new AugmentWheelHud();
+		_augmentWheelHud.Build( root, _augments );
 	}
 
 	void BuildBuildMenu( Panel root )
@@ -1467,6 +1478,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _menuController is null || !_menuController.IsMenuOpen )
 		{
 			_hotbarHud.SetVisible( true );
+			_augmentBindsHud?.SetVisible( true );
 			return;
 		}
 
@@ -1476,6 +1488,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		                        || (panels & MenuPanelFlags.AugmentStation) != 0
 		                        || (panels & MenuPanelFlags.Augments) != 0;
 		_hotbarHud.SetVisible( !hideForFullscreen );
+		_augmentBindsHud?.SetVisible( !hideForFullscreen );
 	}
 
 	void UpdateMinimapVisibility()
@@ -1510,6 +1523,11 @@ public sealed class PlayerScreenHud : PanelComponent
 		     && string.Equals( _menuController.ActivePageId, MenuPageIds.Quests, StringComparison.OrdinalIgnoreCase )
 		     && _questsSection is not null )
 			return _questsSection.TryHandleScrollbarPointer( screenPos, pressed );
+
+		if ( _menuController is not null
+		     && string.Equals( _menuController.ActivePageId, MenuPageIds.AugmentStation, StringComparison.OrdinalIgnoreCase )
+		     && _augmentStationSection is not null )
+			return _augmentStationSection.TryHandleScrollbarPointer( screenPos, pressed );
 
 		return _craftingSection is not null && _craftingSection.TryHandleScrollbarPointer( screenPos, pressed );
 	}
@@ -1599,7 +1617,16 @@ public sealed class PlayerScreenHud : PanelComponent
 	void OnMenuPageDrag( Vector2 screenPos, bool held )
 	{
 		if ( IsMapPageActive )
+		{
 			_mapSection?.TickPointerDrag( screenPos, held );
+			return;
+		}
+
+		var page = _menuController?.ActivePageId;
+		if ( string.Equals( page, MenuPageIds.AugmentStation, StringComparison.OrdinalIgnoreCase ) )
+			_augmentStationSection?.TickPointerDrag( screenPos, held );
+		else if ( string.Equals( page, MenuPageIds.Augments, StringComparison.OrdinalIgnoreCase ) )
+			_augmentsSection?.TickPointerDrag( screenPos, held );
 	}
 
 	void RefreshVitals()

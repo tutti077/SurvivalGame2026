@@ -23,8 +23,10 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 	const float RowGap = 4f;
 	const float GroupHeaderHeight = 30f;
 	const float InfoBoxHeight = 250f;
-	const float ButtonHeight = 42f;
+	const float ButtonHeight = 36f;
 	const float WheelPixelsPerNotch = RowHeight * 2f + RowGap * 2f;
+	const float ScrollBarWidth = 18f;
+	const float MinThumbHeight = 28f;
 
 	public string SectionId => "augment_station";
 
@@ -61,6 +63,13 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 	Label _detailCostLabel;
 	Panel _listViewport;
 	Panel _listContent;
+	Panel _scrollTrack;
+	Panel _scrollThumb;
+	bool _draggingThumb;
+	float _dragStartMouseY;
+	float _dragStartScrollY;
+	float _lastThumbTop = -1f;
+	float _lastThumbHeight = -1f;
 	Panel _augmentButton;
 	Label _augmentLabel;
 	Label _augmentCostLabel;
@@ -180,6 +189,8 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		listFrame.Style.Set( "flex-direction", "column" );
 		listFrame.Style.Set( "width", "100%" );
 		listFrame.Style.Set( "flex-grow", "1" );
+		listFrame.Style.Set( "flex-shrink", "1" );
+		listFrame.Style.Set( "min-height", "0" );
 		listFrame.Style.Set( "overflow", "hidden" );
 		listFrame.Style.Set( "position", "relative" );
 		listFrame.Style.BackgroundColor = BoxBg;
@@ -191,11 +202,32 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		_listContent = new Panel { Parent = listFrame };
 		_listContent.Style.Set( "position", "absolute" );
 		_listContent.Style.Set( "left", "0" );
-		_listContent.Style.Set( "right", "0" );
+		_listContent.Style.Set( "right", $"{ScrollBarWidth + 2f}px" );
 		_listContent.Style.Set( "top", "0" );
 		_listContent.Style.Set( "flex-direction", "column" );
 		_listContent.Style.Set( "gap", $"{RowGap}px" );
 		_listContent.Style.Set( "padding", "6px" );
+
+		// Scrollbar: soft-cursor rect hit-tests (TryHandleScrollbarPointer), thumb follows the wheel too.
+		_scrollTrack = new Panel { Parent = listFrame };
+		_scrollTrack.Style.Set( "position", "absolute" );
+		_scrollTrack.Style.Set( "top", "0" );
+		_scrollTrack.Style.Set( "bottom", "0" );
+		_scrollTrack.Style.Set( "right", "0" );
+		_scrollTrack.Style.Width = Length.Pixels( ScrollBarWidth );
+		_scrollTrack.Style.BackgroundColor = new Color( 0.08f, 0.09f, 0.11f, 0.95f );
+		_scrollTrack.Style.Set( "border-radius", "4px" );
+		_scrollTrack.Style.Set( "pointer-events", "none" );
+
+		_scrollThumb = new Panel { Parent = _scrollTrack };
+		_scrollThumb.Style.Set( "position", "absolute" );
+		_scrollThumb.Style.Set( "left", "2px" );
+		_scrollThumb.Style.Set( "right", "2px" );
+		_scrollThumb.Style.Set( "top", "0px" );
+		_scrollThumb.Style.Height = Length.Pixels( MinThumbHeight );
+		_scrollThumb.Style.BackgroundColor = new Color( 0.55f, 0.60f, 0.68f, 0.95f );
+		_scrollThumb.Style.Set( "border-radius", "3px" );
+		_scrollThumb.Style.Set( "pointer-events", "none" );
 
 		PopulateRows();
 	}
@@ -336,9 +368,10 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 			var line = new Label { Parent = _detailLines, Text = text };
 			line.Style.FontColor = kind switch
 			{
-				AugmentInfoLineKind.Slot => SlotLineColor,
+				AugmentInfoLineKind.Slot or AugmentInfoLineKind.Activation => SlotLineColor,
 				AugmentInfoLineKind.Cost => CostColor,
 				AugmentInfoLineKind.Stat => LabelColor,
+				AugmentInfoLineKind.Warning => new Color( 0.95f, 0.45f, 0.4f ),
 				_ => MutedColor,
 			};
 			line.Style.FontSize = Length.Pixels( kind == AugmentInfoLineKind.Description ? BodyFont - 2f : BodyFont - 3f );
@@ -355,7 +388,8 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		if ( !_menuOpen || !_panelVisible || MathF.Abs( wheel.y ) < 1e-4f )
 			return;
 
-		_scrollY -= wheel.y * WheelPixelsPerNotch;
+		// Panel convention: positive wheel = scroll down = larger offset (same as the crafting list).
+		_scrollY += wheel.y * WheelPixelsPerNotch;
 		ApplyScroll();
 	}
 
@@ -364,11 +398,127 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		if ( _listContent is null || !_listContent.IsValid() || _listViewport is null )
 			return;
 
-		var scale = MathF.Max( 0.001f, _listViewport.ScaleToScreen );
-		var viewHeight = _listViewport.Box.Rect.Height / scale;
-		var maxScroll = MathF.Max( 0f, _contentHeight - viewHeight );
-		_scrollY = Math.Clamp( _scrollY, 0f, maxScroll );
+		_scrollY = Math.Clamp( _scrollY, 0f, MaxScrollY );
 		_listContent.Style.Top = Length.Pixels( -_scrollY );
+		UpdateScrollbarVisual();
+	}
+
+	float ViewHeight
+	{
+		get
+		{
+			if ( _listViewport is null || !_listViewport.IsValid() )
+				return 0f;
+
+			var scale = MathF.Max( 0.001f, _listViewport.ScaleToScreen );
+			return _listViewport.Box.Rect.Height / scale;
+		}
+	}
+
+	/// <summary>Laid-out content height (padding included) once the panel has a box; the nominal row sum before that.</summary>
+	float ContentHeight
+	{
+		get
+		{
+			if ( _listContent is null || !_listContent.IsValid() )
+				return _contentHeight;
+
+			var scale = MathF.Max( 0.001f, _listContent.ScaleToScreen );
+			var measured = _listContent.Box.Rect.Height / scale;
+			return measured > 1f ? measured : _contentHeight;
+		}
+	}
+
+	float MaxScrollY => MathF.Max( 0f, ContentHeight - ViewHeight );
+
+	// ── Scrollbar (soft-cursor: track / thumb are hit-tested by rect, not by panel events) ──
+
+	/// <summary>Overlay Attack1 routed here while the station is open: press to jump / drag the thumb, release to end.</summary>
+	public bool TryHandleScrollbarPointer( Vector2 screenPos, bool pressed )
+	{
+		if ( !pressed )
+		{
+			if ( !_draggingThumb )
+				return false;
+
+			_draggingThumb = false;
+			return true;
+		}
+
+		if ( _draggingThumb )
+		{
+			UpdateDragFromScreenY( screenPos.y );
+			return true;
+		}
+
+		if ( !_menuOpen || !_panelVisible || MaxScrollY <= 1f || !IsInside( _scrollTrack, screenPos ) )
+			return false;
+
+		if ( !IsInside( _scrollThumb, screenPos ) )
+			JumpToTrackAtScreenY( screenPos.y );
+
+		_draggingThumb = true;
+		_dragStartMouseY = screenPos.y;
+		_dragStartScrollY = _scrollY;
+		return true;
+	}
+
+	float ThumbHeight
+	{
+		get
+		{
+			var view = ViewHeight;
+			var content = ContentHeight;
+			if ( view <= 1f || content <= view )
+				return view;
+
+			return MathF.Max( MinThumbHeight, view * (view / content) );
+		}
+	}
+
+	void UpdateDragFromScreenY( float screenY )
+	{
+		var scale = _listViewport is not null && _listViewport.IsValid() ? MathF.Max( 0.001f, _listViewport.ScaleToScreen ) : 1f;
+		var travel = MathF.Max( 1f, ViewHeight - ThumbHeight );
+		var deltaStyle = (screenY - _dragStartMouseY) / scale;
+		_scrollY = _dragStartScrollY + deltaStyle / travel * MaxScrollY;
+		ApplyScroll();
+	}
+
+	void JumpToTrackAtScreenY( float screenY )
+	{
+		if ( _scrollTrack is null || !_scrollTrack.IsValid() )
+			return;
+
+		var scale = MathF.Max( 0.001f, _scrollTrack.ScaleToScreen );
+		var rect = _scrollTrack.Box.Rect;
+		var localY = (screenY - rect.Top) / scale - ThumbHeight * 0.5f;
+		var travel = MathF.Max( 1f, ViewHeight - ThumbHeight );
+		_scrollY = Math.Clamp( localY / travel, 0f, 1f ) * MaxScrollY;
+		ApplyScroll();
+	}
+
+	/// <summary>Cheap per-frame sync while the page is open — heights are only known after layout.</summary>
+	void UpdateScrollbarVisual()
+	{
+		if ( _scrollTrack is null || !_scrollTrack.IsValid() || _scrollThumb is null || !_scrollThumb.IsValid() )
+			return;
+
+		var maxY = MaxScrollY;
+		var canScroll = maxY > 1f;
+		var thumbH = ThumbHeight;
+		var travel = MathF.Max( 0f, ViewHeight - thumbH );
+		var t = canScroll ? Math.Clamp( _scrollY / maxY, 0f, 1f ) : 0f;
+		var thumbTop = t * travel;
+
+		if ( MathF.Abs( thumbTop - _lastThumbTop ) < 0.25f && MathF.Abs( thumbH - _lastThumbHeight ) < 0.25f )
+			return;
+
+		_lastThumbTop = thumbTop;
+		_lastThumbHeight = thumbH;
+		_scrollTrack.Style.Set( "opacity", canScroll ? "1" : "0.35" );
+		_scrollThumb.Style.Height = Length.Pixels( thumbH );
+		_scrollThumb.Style.Set( "top", $"{thumbTop:0.##}px" );
 	}
 
 	// ── Centre: paper doll + bank ───────────────────────────────────────────────────────────
@@ -399,12 +549,7 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 
 		_augmentCostIcon = AugmentPaperdollView.MakeCostIcon( commitRow, "ui/items/currency_goldCoins.png" );
 
-		// Bank strip.
-		var bankTitle = new Label { Parent = col, Text = "Augment Bank" };
-		bankTitle.Style.FontColor = TitleColor;
-		bankTitle.Style.FontSize = Length.Pixels( BodyFont );
-		bankTitle.Style.Set( "flex-shrink", "0" );
-
+		// Bank strip (title dropped — the doll needs the vertical room on small screens).
 		var bankGrid = new Panel { Parent = col };
 		bankGrid.Style.Set( "flex-direction", "row" );
 		bankGrid.Style.Set( "flex-wrap", "wrap" );
@@ -474,6 +619,10 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		if ( _doll.TryPressEnhanceAtScreen( screenPos ) )
 			return true;
 
+		// The scrollbar is the overlay's next handler — leave its presses alone.
+		if ( IsInside( _scrollTrack, screenPos ) )
+			return false;
+
 		// Rows scrolled out of the list frame are clipped — never clickable.
 		if ( IsInside( _listViewport, screenPos ) )
 		{
@@ -490,6 +639,15 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		}
 
 		return false;
+	}
+
+	/// <summary>Overlay page drag (pointer + Attack1 held): click-drag on the preview spins the body.</summary>
+	public void TickPointerDrag( Vector2 screenPos, bool held )
+	{
+		if ( !_menuOpen || !_panelVisible )
+			return;
+
+		_doll.TickPointerDrag( screenPos, held );
 	}
 
 	static bool IsInside( Panel panel, Vector2 screenPos ) =>
@@ -556,6 +714,8 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		// Bag changes arrive through the HUD's InventoryChanged refresh; this catches socket / bank / enhance edits.
 		if ( (_augments?.ContentsVersion ?? -1) != _lastAugmentVersion )
 			Refresh();
+
+		UpdateScrollbarVisual();
 	}
 
 	public void OnMenuGlobalMouseUp() { }
@@ -576,6 +736,8 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		col.Style.Set( "flex-direction", "column" );
 		col.Style.Set( "width", width );
 		col.Style.Set( "height", "100%" );
+		// Padding inside the 100% box — otherwise the column runs 20 px past the page and clips its bottom.
+		col.Style.Set( "box-sizing", "border-box" );
 		col.Style.Set( "gap", "8px" );
 		col.Style.Set( "overflow", "hidden" );
 		col.Style.Set( "padding", "10px" );

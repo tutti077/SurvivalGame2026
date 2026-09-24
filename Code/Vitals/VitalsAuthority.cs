@@ -116,11 +116,15 @@ public sealed class VitalsAuthority : Component
 				var blockStaminaRegen = vitals.GameObject.Components.Get<PlayerMovement>() is { } moveBlock
 				                        && moveBlock.ShouldBlockStaminaRegenForAuthority();
 
-				if ( !blockStaminaRegen
-				     && _staminaRegenGate.MayRegenAfterDelay( id, now, staminaDelaySeconds, armFullDelayIfMissing: true, out var rampOriginUtc ) )
+				var rampOriginUtc = 0.0;
+				var mayRegen = !blockStaminaRegen
+				               && _staminaRegenGate.MayRegenAfterDelay( id, now, staminaDelaySeconds, armFullDelayIfMissing: true, out rampOriginUtc );
+				// Parry Recharge augment window: full-ramp rate × multiplier, and the post-drain delay does not apply.
+				var regenBoost = vitals.StaminaRegenBoostForAuthority( now );
+				if ( mayRegen || ( !blockStaminaRegen && regenBoost > 1f ) )
 				{
-					var rampT = (float)Math.Clamp( ( now - rampOriginUtc ) / rampSeconds, 0.0, 1.0 );
-					var stRegenPerSec = minRate + ( maxRate - minRate ) * rampT;
+					var rampT = mayRegen ? (float)Math.Clamp( ( now - rampOriginUtc ) / rampSeconds, 0.0, 1.0 ) : 1f;
+					var stRegenPerSec = ( minRate + ( maxRate - minRate ) * rampT ) * regenBoost;
 					var addSt = MathF.Min( stRegenPerSec * dt, r.StaminaMax - r.Stamina );
 					if ( addSt > 1e-5f )
 					{

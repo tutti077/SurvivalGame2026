@@ -377,6 +377,10 @@ partial class PlayerMovement
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
 			return;
 
+		// Death Grip augment: shrug off one hit per cooldown and keep the rope.
+		if ( ResolveAugments()?.HostTryConsumePassiveCooldown( AugmentAbility.DeathGrip ) == true )
+			return;
+
 		ServerDetach( "damage" );
 	}
 
@@ -1170,7 +1174,8 @@ partial class PlayerMovement
 			return;
 
 		var deltaMeters = 0f;
-		var rate = Math.Max( 0.1f, RetractMetersPerSecond );
+		// Grapple Drive augment: sprint held = faster winch.
+		var rate = Math.Max( 0.1f, RetractMetersPerSecond ) * GrappleDriveWinchScale();
 		if ( IsRetractingRope )
 			deltaMeters -= rate * dt;
 

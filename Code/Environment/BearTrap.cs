@@ -286,6 +286,10 @@ public sealed class BearTrap : Component
 		var hold = isPlayer ? PlayerHoldSeconds : EntityHoldSeconds;
 		hold = Math.Max( 0.1f, hold );
 
+		// Heat Breaker augment: red-hot calves halve the hold.
+		if ( isPlayer && root.Components.Get<PlayerAugments>() is { } augments && augments.IsAbilityOn( AugmentAbility.HeatBreaker ) )
+			hold *= 0.5f;
+
 		_victimRoot = root;
 		_victimPlayer = null;
 		_victimVitals = null;

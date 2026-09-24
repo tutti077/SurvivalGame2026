@@ -16,7 +16,7 @@ namespace Survival;
 /// </para>
 /// </summary>
 [Title( "Player Augments" )]
-public sealed class PlayerAugments : Component
+public sealed partial class PlayerAugments : Component
 {
 	public const int BankSlotCount = InventoryDefaults.DefaultSlotCount;
 	/// <summary>Bank is a wide strip under the paper doll (two rows).</summary>
@@ -30,6 +30,22 @@ public sealed class PlayerAugments : Component
 	/// </summary>
 	[Property, Group( "Death" ), Title( "Drop augments on death" )]
 	public bool DropAugmentsOnDeath { get; set; }
+
+	/// <summary>
+	/// Owner's <see cref="GameHacks.FreeAugments"/> mirrored onto the pawn so the host honours it:
+	/// the Augment button charges 0 gold while set.
+	/// </summary>
+	[Sync] public bool FreeAugmentsHack { get; private set; }
+
+	/// <summary>Owner mirrors the console flag onto the synced pawn state (cheap compare, writes only on change).</summary>
+	void PushHackFlags()
+	{
+		if ( GameObject.Network is { Active: true } net && !net.IsOwner )
+			return;
+
+		if ( FreeAugmentsHack != GameHacks.FreeAugments )
+			FreeAugmentsHack = GameHacks.FreeAugments;
+	}
 
 	readonly InventorySlot[] _installed = new InventorySlot[AugmentSlots.Count];
 	readonly string[] _committed = new string[AugmentSlots.Count];
@@ -128,9 +144,12 @@ public sealed class PlayerAugments : Component
 		return false;
 	}
 
-	/// <summary>Gold the Augment button will charge right now (sum of every pending socket's install cost).</summary>
+	/// <summary>Gold the Augment button will charge right now (sum of every pending socket's install cost; 0 under the freeAugments hack).</summary>
 	public int ComputePendingGoldCost()
 	{
+		if ( FreeAugmentsHack )
+			return 0;
+
 		var total = 0;
 		for ( var i = 0; i < AugmentSlots.Count; i++ )
 		{
@@ -167,10 +186,23 @@ public sealed class PlayerAugments : Component
 		return CountGold() >= ComputePendingGoldCost();
 	}
 
-	public bool HasAbility( AugmentAbility ability ) => TryGetInstalledDefinition( ability, out _ );
+	/// <summary>True when <paramref name="augmentId"/> sits in an <b>active</b> (paid-for) socket.</summary>
+	public bool IsInstalledActive( string augmentId )
+	{
+		if ( string.IsNullOrWhiteSpace( augmentId ) )
+			return false;
 
-	/// <summary>First <b>active</b> socket granting <paramref name="ability"/>.</summary>
-	public bool TryGetInstalledDefinition( AugmentAbility ability, out AugmentDefinition definition )
+		for ( var i = 0; i < AugmentSlots.Count; i++ )
+		{
+			if ( IsSlotActive( (AugmentSlot)i ) && ResourceCatalog.ResourceIdsMatch( _installed[i].ResourceId, augmentId ) )
+				return true;
+		}
+
+		return false;
+	}
+
+	/// <summary>First <b>active</b> socket whose augment grants <paramref name="ability"/> (toggle state ignored — see <see cref="IsAbilityOn"/>).</summary>
+	public bool TryGetActiveDefinition( AugmentAbility ability, out AugmentDefinition definition )
 	{
 		definition = null;
 		if ( ability == AugmentAbility.None )
@@ -189,14 +221,6 @@ public sealed class PlayerAugments : Component
 		}
 
 		return false;
-	}
-
-	public float GetJumpHeightMultiplier()
-	{
-		if ( !TryGetInstalledDefinition( AugmentAbility.JumpHeight, out var def ) )
-			return 1f;
-
-		return Math.Max( 1f, def.JumpHeightMultiplier );
 	}
 
 	// ── Craft (bag materials → bank) ────────────────────────────────────────────────────────
@@ -344,6 +368,10 @@ public sealed class PlayerAugments : Component
 
 		if ( !anyPending )
 			return false;
+
+		// freeAugments hack: the owner's flag rides on the pawn, so the host waives the gold too.
+		if ( FreeAugmentsHack )
+			cost = 0;
 
 		if ( cost > 0 )
 		{
