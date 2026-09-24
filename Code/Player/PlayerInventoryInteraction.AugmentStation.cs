@@ -125,6 +125,9 @@ public sealed partial class PlayerInventoryInteraction
 
 		OpenAugmentStation = null;
 		AugmentStationChanged?.Invoke();
+
+		// Leaving the bench: anything placed but not paid for goes back to storage.
+		Components.Get<PlayerAugments>()?.OwnerRevertPendingSockets();
 	}
 
 	bool IsAugmentStationWithinKeepOpenRange()

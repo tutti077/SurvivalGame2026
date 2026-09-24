@@ -34,6 +34,8 @@ public enum AugmentAbility
 	SonicBurst = 11,
 	/// <summary>Trigger: every enemy within EffectRadiusMeters targets you.</summary>
 	WarCry = 12,
+	/// <summary>Wheel toggle: cold blue world, creatures as heat signatures (<see cref="ThermalVision"/>).</summary>
+	ThermalEye = 13,
 }
 
 /// <summary>How the player turns an augment on.</summary>

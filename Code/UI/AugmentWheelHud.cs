@@ -9,7 +9,7 @@ namespace Survival;
 /// The C radial: installed wheel augments laid out on a ring around screen centre while
 /// <see cref="PlayerAugments.IsWheelOpen"/>. Segment 0 sits at the top, the rest clockwise — the same
 /// convention the pawn uses to turn mouse travel into a pick. The highlighted entry shows its name
-/// in the middle; a toggle that is on carries a green edge.
+/// in the middle; a toggle that is on carries a yellow ring.
 /// </summary>
 public sealed class AugmentWheelHud
 {
@@ -21,9 +21,17 @@ public sealed class AugmentWheelHud
 
 	static readonly Color EntryBg = new( 0.07f, 0.08f, 0.10f, 0.9f );
 	static readonly Color EntryBgSelected = new( 0.2f, 0.3f, 0.45f, 0.96f );
+	// Fill behind the icon: yellow = battery left while on (drains from the top), red = recharge cooldown left.
+	static readonly Color FillOn = new( 0.98f, 0.88f, 0.50f, 0.92f );
+	static readonly Color FillPartial = new( 0.98f, 0.88f, 0.50f, 0.45f );
+	static readonly Color FillCooldown = new( 0.85f, 0.18f, 0.12f, 0.92f );
+	static readonly Color EntryBgEmpty = new( 0.05f, 0.06f, 0.08f, 0.55f );
+	static readonly Color EntryBgSelectedEmpty = new( 0.12f, 0.16f, 0.24f, 0.7f );
+	const string BorderEmpty = "#262b35";
 	const string BorderIdle = "#3a4150";
 	const string BorderSelected = "#8fbaff";
-	const string BorderOn = "#5ec46a";
+	/// <summary>Yellow ring: this toggle is currently on. Blue stays the "about to pick" highlight.</summary>
+	const string BorderOn = "#e0b84a";
 
 	readonly List<EntryUi> _entries = new();
 
@@ -91,14 +99,25 @@ public sealed class AugmentWheelHud
 		{
 			var ui = _entries[i];
 			var isSelected = i == selected;
-			_augments.TryGetTriggerState( ui.Id, out _, out _, out var on, out _ );
+			if ( string.IsNullOrWhiteSpace( ui.Id ) )
+			{
+				// Empty segment: hovering it just means "pick nothing".
+				ui.Root.Style.BackgroundColor = isSelected ? EntryBgSelectedEmpty : EntryBgEmpty;
+				ui.Root.Style.Set( "border-color", isSelected ? BorderSelected : BorderEmpty );
+				ui.Root.Style.Set( "border-width", "2px" );
+				continue;
+			}
+
+			_augments.TryGetTriggerState( ui.Id, out var cooldownLeft, out var cooldownTotal, out var on, out var battery01 );
 			ui.Root.Style.BackgroundColor = isSelected ? EntryBgSelected : EntryBg;
+			ApplyFill( ui.Fill, cooldownLeft, cooldownTotal, on, battery01 );
 			ui.Root.Style.Set( "border-color", on ? BorderOn : isSelected ? BorderSelected : BorderIdle );
+			ui.Root.Style.Set( "border-width", on ? "4px" : "2px" );
 		}
 
 		_center.Text = selected >= 0 && selected < entries.Count
 			? entries[selected].DisplayName
-			: entries.Count > 0 ? "Move to pick · release C" : "";
+			: selected >= 0 ? "Empty · release C for nothing" : "Move to pick · release C";
 	}
 
 	void RebuildIfChanged( IReadOnlyList<AugmentDefinition> entries )
@@ -112,7 +131,8 @@ public sealed class AugmentWheelHud
 			_entries[i].Root?.Delete();
 		_entries.Clear();
 
-		var count = entries.Count;
+		// Always six segments so an installed augment never fills the whole ring.
+		var count = PlayerAugments.WheelSlotCount;
 		var centre = RingRadius + EntrySize;
 		for ( var i = 0; i < count; i++ )
 		{
@@ -137,22 +157,79 @@ public sealed class AugmentWheelHud
 			entry.Style.Set( "border-radius", "10px" );
 			entry.Style.Set( "pointer-events", "none" );
 
+			// Fill sits under the icon and name; height is the fraction left, so it drains from the top down.
+			var fill = new Panel { Parent = entry };
+			fill.Style.Set( "position", "absolute" );
+			fill.Style.Set( "left", "0" );
+			fill.Style.Set( "right", "0" );
+			fill.Style.Set( "bottom", "0" );
+			fill.Style.Set( "height", "0%" );
+			fill.Style.Set( "border-radius", "8px" );
+			fill.Style.Set( "pointer-events", "none" );
+
 			var icon = new Panel { Parent = entry };
+			icon.Style.Set( "z-index", "1" );
 			icon.Style.Width = Length.Pixels( IconSize );
 			icon.Style.Height = Length.Pixels( IconSize );
 			icon.Style.Set( "background-size", "contain" );
 			icon.Style.Set( "background-repeat", "no-repeat" );
 			icon.Style.Set( "background-position", "center" );
-			MenuUiTextures.ApplyBackground( icon, entries[i].Icon );
+			var def = i < entries.Count ? entries[i] : null;
+			if ( def is not null )
+				MenuUiTextures.ApplyBackground( icon, def.Icon );
+			else
+				icon.Style.Set( "display", "none" );
 
-			var name = new Label { Parent = entry, Text = entries[i].DisplayName };
+			var name = new Label { Parent = entry, Text = def?.DisplayName ?? "empty" };
+			name.Style.Set( "z-index", "1" );
+			name.Style.Set( "text-shadow", "1px 1px 2px rgba(0,0,0,0.9)" );
 			name.Style.FontColor = Color.White;
 			name.Style.FontSize = Length.Pixels( NameFont );
 			name.Style.Set( "text-align", "center" );
 			name.Style.Set( "white-space", "normal" );
 
-			_entries.Add( new EntryUi( entry, entries[i].Id ) );
+			if ( def is null )
+				name.Style.FontColor = new Color( 0.45f, 0.48f, 0.55f );
+
+			_entries.Add( new EntryUi( entry, fill, def?.Id ) );
 		}
+	}
+
+	/// <summary>
+	/// Recharging → red, the cooldown fraction left. On → yellow, the battery fraction left (a full
+	/// box at activation, a thin strip along the bottom when nearly empty). Off with a partly
+	/// recharged battery → dim yellow. Idle and full → no fill (the plain look).
+	/// </summary>
+	static void ApplyFill( Panel fill, float cooldownLeft, float cooldownTotal, bool on, float battery01 )
+	{
+		if ( fill is null || !fill.IsValid() )
+			return;
+
+		float fraction;
+		Color color;
+		if ( cooldownLeft > 0.01f && cooldownTotal > 0.01f )
+		{
+			fraction = Math.Clamp( cooldownLeft / cooldownTotal, 0f, 1f );
+			color = FillCooldown;
+		}
+		else if ( on )
+		{
+			fraction = Math.Clamp( battery01, 0f, 1f );
+			color = FillOn;
+		}
+		else if ( battery01 < 0.995f )
+		{
+			fraction = Math.Clamp( battery01, 0f, 1f );
+			color = FillPartial;
+		}
+		else
+		{
+			fraction = 0f;
+			color = Color.Transparent;
+		}
+
+		fill.Style.BackgroundColor = color;
+		fill.Style.Set( "height", $"{MathF.Max( fraction * 100f, fraction > 0f ? 3f : 0f ):0.#}%" );
 	}
 
 	public void Dispose()
@@ -164,10 +241,12 @@ public sealed class AugmentWheelHud
 	readonly struct EntryUi
 	{
 		public Panel Root { get; }
+		public Panel Fill { get; }
 		public string Id { get; }
-		public EntryUi( Panel root, string id )
+		public EntryUi( Panel root, Panel fill, string id )
 		{
 			Root = root;
+			Fill = fill;
 			Id = id;
 		}
 	}

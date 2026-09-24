@@ -54,7 +54,7 @@
       "id": "augment_thermal_eye",
       "displayName": "Thermal Eye",
       "icon": "ui/items/augment_placeholder.png",
-      "description": "Thermal sights: warm bodies glow through the dark.",
+      "description": "Thermal sights: the world drops to cold blues while players, enemies and animals glow as heat signatures — hot head and torso, cooler limbs.",
       "school": "",
       "category": "Combat",
       "slots": [
@@ -68,7 +68,8 @@
           "amount": 1
         }
       ],
-      "implemented": false,
+      "ability": "ThermalEye",
+      "implemented": true,
       "mode": "toggle",
       "cooldownSeconds": 5,
       "batterySeconds": 30,

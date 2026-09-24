@@ -90,6 +90,9 @@ public sealed partial class PlayerAugments
 		return true;
 	}
 
+	/// <summary>The wheel always shows this many segments; installed wheel augments fill them in socket order.</summary>
+	public const int WheelSlotCount = 6;
+
 	public bool HasWheelAugments => WheelEntries.Count > 0;
 
 	/// <summary>Installed + paid wheel augments, in socket order.</summary>
@@ -202,6 +205,9 @@ public sealed partial class PlayerAugments
 
 		PushHackFlags();
 
+		// Thermal Eye (wheel toggle) or the thermalView hack — client-local rendering for this pawn's viewer.
+		ThermalVision.Tick( Scene, IsAbilityOn( AugmentAbility.ThermalEye ) || GameHacks.ThermalView );
+
 		var now = Time.NowDouble;
 		var dt = _lastTriggerTickAt > 0 ? (float)Math.Clamp( now - _lastTriggerTickAt, 0.0, 0.25 ) : 0f;
 		_lastTriggerTickAt = now;
@@ -260,7 +266,7 @@ public sealed partial class PlayerAugments
 	{
 		if ( !IsWheelOpen )
 		{
-			if ( menuOpen || !HasWheelAugments || !Input.Pressed( WheelAction ) )
+			if ( menuOpen || !Input.Pressed( WheelAction ) )
 				return;
 
 			OpenWheel();
@@ -268,7 +274,8 @@ public sealed partial class PlayerAugments
 		}
 
 		_wheelVector += ReadWheelDelta();
-		WheelSelectedIndex = ResolveWheelIndex( _wheelVector, WheelEntries.Count );
+		// Six segments whatever is installed — an empty segment (or the centre) is a deliberate "nothing".
+		WheelSelectedIndex = ResolveWheelIndex( _wheelVector, WheelSlotCount );
 
 		if ( menuOpen )
 		{

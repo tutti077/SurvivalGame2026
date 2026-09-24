@@ -405,6 +405,84 @@ public sealed partial class PlayerAugments : Component
 		return true;
 	}
 
+	// ── Station close: nothing stays on the doll unless it was paid for ────────────────────
+
+	/// <summary>
+	/// Owner: the station closed. Every pending socket empties back to the bank, then the bag, then
+	/// the ground; stale committed ids on empty sockets are cleared. Paid-for sockets are untouched.
+	/// </summary>
+	public void OwnerRevertPendingSockets()
+	{
+		if ( !IsLocalManagingClient() )
+			return;
+
+		if ( HasHostAuthority )
+			HostRevertPendingSockets();
+		else
+			RpcHostRevertPending();
+	}
+
+	void HostRevertPendingSockets()
+	{
+		if ( !HasHostAuthority )
+			return;
+
+		var inventory = ResolveInventory();
+		var changed = false;
+		for ( var i = 0; i < AugmentSlots.Count; i++ )
+		{
+			var slot = (AugmentSlot)i;
+			var stack = _installed[i];
+			if ( stack.IsEmpty )
+			{
+				if ( !string.IsNullOrWhiteSpace( _committed[i] ) )
+				{
+					_committed[i] = string.Empty;
+					changed = true;
+				}
+
+				continue;
+			}
+
+			if ( IsSlotActive( slot ) )
+				continue;
+
+			_installed[i] = InventorySlot.Empty;
+			_committed[i] = string.Empty;
+			changed = true;
+			HostStoreOrDrop( stack, inventory );
+		}
+
+		if ( changed )
+			NotifyChanged();
+	}
+
+	/// <summary>Bank if it fits, else the bag, else dropped at the player's feet — never lost.</summary>
+	void HostStoreOrDrop( in InventorySlot stack, PlayerInventory inventory )
+	{
+		var id = ResourceCatalog.NormalizeResourceId( stack.ResourceId );
+		var count = Math.Max( 1, stack.Count );
+
+		if ( HostCanFitBank( id, count ) && HostTryAddToBank( id, count ) )
+			return;
+
+		if ( inventory is not null && inventory.HostCanFitResource( id, count ) && inventory.HostTryAddResource( id, count ) )
+			return;
+
+		var held = new InventoryCursorStack();
+		held.Set( id, count );
+		HeldStackWorldDrop.TryDropAtPlayer( GameObject, ref held );
+	}
+
+	[Rpc.Host]
+	void RpcHostRevertPending()
+	{
+		if ( !Networking.IsHost || !GameObject.IsValid() || !IsCallerOwner() )
+			return;
+
+		HostRevertPendingSockets();
+	}
+
 	// ── Bank ────────────────────────────────────────────────────────────────────────────────
 
 	bool HostCanFitBank( string resourceId, int count )

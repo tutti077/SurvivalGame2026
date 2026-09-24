@@ -26,8 +26,35 @@ public static class GameHacks
 	/// </summary>
 	public static bool FreeAugments { get; private set; } = true;
 
+	/// <summary>Forces the Thermal Eye view on for the local player without the augment (<c>thermalView true|false</c>). Off by default.</summary>
+	public static bool ThermalView { get; private set; }
+
 	/// <summary>Bumps whenever any flag changes — UI that caches a hack-dependent layout rebuilds on this.</summary>
 	public static int Version { get; private set; }
+
+	/// <summary>Usage: <c>thermalView true</c> / <c>thermalView false</c>.</summary>
+	[ConCmd( "thermalView" )]
+	public static void ConCmdThermalView( string enabled )
+	{
+		if ( string.IsNullOrWhiteSpace( enabled ) )
+		{
+			Log.Info( $"[Hacks] thermalView is {(ThermalView ? "true" : "false")} (usage: thermalView true|false)" );
+			return;
+		}
+
+		if ( !TryParseBool( enabled, out var value ) )
+		{
+			Log.Warning( $"[Hacks] thermalView: '{enabled}' is not true/false." );
+			return;
+		}
+
+		if ( value == ThermalView )
+			return;
+
+		ThermalView = value;
+		Version++;
+		Log.Info( $"[Hacks] thermalView = {(value ? "true" : "false")}" );
+	}
 
 	public static void SetFreeAugments( bool enabled )
 	{
@@ -140,6 +167,7 @@ public static class GameHacks
 		sb.AppendLine( "[Hacks]" );
 		sb.Append( "  allCrafting  " ).AppendLine( AllCrafting ? "true" : "false" );
 		sb.Append( "  freeAugments " ).AppendLine( FreeAugments ? "true" : "false" );
+		sb.Append( "  thermalView  " ).AppendLine( ThermalView ? "true" : "false" );
 		sb.AppendLine( "  status <id> <seconds>  apply a buff / debuff (status clear)" );
 		Log.Info( sb.ToString() );
 	}

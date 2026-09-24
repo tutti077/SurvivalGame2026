@@ -6,7 +6,7 @@ namespace Survival;
 
 /// <summary>
 /// Six small slots above the hotbar: the augments bound to keys 1–6, with a cooldown sweep,
-/// a battery bar for toggles and a green edge while a toggle is on. Read-only feedback — the
+/// a battery bar for toggles and a yellow edge while a toggle is on. Read-only feedback — the
 /// assignment lives on the Augments menu page.
 /// </summary>
 public sealed class AugmentBindsHud
@@ -19,7 +19,7 @@ public sealed class AugmentBindsHud
 	static readonly Color CooldownShade = new( 0f, 0f, 0f, 0.7f );
 	static readonly Color BatteryColor = new( 0.4f, 0.75f, 1f, 0.95f );
 	const string BorderIdle = "#2a3140";
-	const string BorderOn = "#5ec46a";
+	const string BorderOn = "#e0b84a";
 
 	readonly SlotUi[] _slots = new SlotUi[PlayerAugments.BindCount];
 
