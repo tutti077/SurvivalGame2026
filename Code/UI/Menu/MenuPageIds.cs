@@ -10,4 +10,5 @@ public static class MenuPageIds
 	public const string Map = "map";
 	public const string Settings = "settings";
 	public const string AugmentStation = "augment_station";
+	public const string Augments = "augments";
 }

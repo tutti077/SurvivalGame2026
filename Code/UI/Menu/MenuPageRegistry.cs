@@ -9,6 +9,8 @@ public static class MenuPageRegistry
 	{
 		new( MenuPageIds.Inventory, "Inventory", "ui/menu/InventoryTab.png", MenuPanelFlags.Inventory ),
 		new( MenuPageIds.Crafting, "Crafting", "ui/menu/CraftingTab.png", MenuPanelFlags.Inventory | MenuPanelFlags.Crafting ),
+		// Read-only paper doll of installed augments — tab icon is the augment core.
+		new( MenuPageIds.Augments, "Augments", "ui/items/resource_augmentCore.png", MenuPanelFlags.Augments, allowsHotkey: false ),
 		new( MenuPageIds.Skills, "Skills", "ui/menu/SkillsTab.png", MenuPanelFlags.Skills, allowsHotkey: false ),
 		new( MenuPageIds.Quests, "Quests", "ui/menu/QuestsTab.png", MenuPanelFlags.Inventory | MenuPanelFlags.Quests, allowsHotkey: false ),
 		new( MenuPageIds.Map, "Map", "ui/menu/MapTab.png", MenuPanelFlags.Map ),

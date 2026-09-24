@@ -88,6 +88,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	Panel _menuMapRoot;
 	Panel _vitalsHost;
 	Panel _menuAugmentRoot;
+	Panel _menuAugmentsPageRoot;
 	Panel _leftMenuColumn;
 	Panel _rightMenuColumn;
 	readonly List<IPlayerMenuSection> _sections = new();
@@ -99,6 +100,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	EquipmentPaperdollSection _equipmentSection;
 	ContainerMenuSection _containerSection;
 	AugmentStationMenuSection _augmentStationSection;
+	AugmentsMenuSection _augmentsSection;
 	PlayerAugments _augments;
 	PickupNotificationHud _pickupNotifications;
 	GrappleControlPromptPanel _grappleControlPrompt;
@@ -975,6 +977,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_menuMapRoot = CreateMapCenterAnchor( _menuRoot );
 		_menuAugmentRoot = CreateMapCenterAnchor( _menuRoot );
+		_menuAugmentsPageRoot = CreateMapCenterAnchor( _menuRoot );
 		_menuSkillsCenterRoot = CreateSkillsCenterAnchor( _menuRoot );
 		_menuSkillsDetailRoot = CreateSkillsDetailAnchor( _menuRoot );
 		_menuLeftRoot = CreateMenuSideAnchor( _menuRoot, alignLeft: true );
@@ -1018,6 +1021,10 @@ public sealed class PlayerScreenHud : PanelComponent
 		_augmentStationSection = new AugmentStationMenuSection( _augments, _inventory, _inventoryInteraction );
 		_sections.Add( _augmentStationSection );
 		_augmentStationSection.Build( _menuAugmentRoot );
+
+		_augmentsSection = new AugmentsMenuSection( _augments, _inventory, _inventoryInteraction );
+		_sections.Add( _augmentsSection );
+		_augmentsSection.Build( _menuAugmentsPageRoot );
 
 		_questsSection = new QuestMenuSection();
 		_sections.Add( _questsSection );
@@ -1284,7 +1291,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		for ( var i = 0; i < _sections.Count; i++ )
 		{
 			var id = _sections[i].SectionId;
-			if ( id is "inventory" or "crafting" or "equipment" or "augment_station" )
+			if ( id is "inventory" or "crafting" or "equipment" or "augment_station" or "augments" )
 				_sections[i].Refresh();
 		}
 	}
@@ -1364,6 +1371,8 @@ public sealed class PlayerScreenHud : PanelComponent
 				_menuMapRoot.Style.Set( "display", "none" );
 			if ( _menuAugmentRoot is not null )
 				_menuAugmentRoot.Style.Set( "display", "none" );
+			if ( _menuAugmentsPageRoot is not null )
+				_menuAugmentsPageRoot.Style.Set( "display", "none" );
 		}
 	}
 
@@ -1376,7 +1385,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		var showMap = (panels & MenuPanelFlags.Map) != 0;
 		var showSettings = (panels & MenuPanelFlags.Settings) != 0;
 		var showAugmentStation = (panels & MenuPanelFlags.AugmentStation) != 0;
-		var showFullscreen = showMap || showSettings || showAugmentStation;
+		var showAugmentsPage = (panels & MenuPanelFlags.Augments) != 0;
+		var showFullscreen = showMap || showSettings || showAugmentStation || showAugmentsPage;
 		var showSkills = !showFullscreen && (panels & MenuPanelFlags.Skills) != 0;
 		var showQuests = !showFullscreen && !showSkills && (panels & MenuPanelFlags.Quests) != 0;
 		var showCrafting = !showFullscreen && !showSkills && !showQuests && (panels & MenuPanelFlags.Crafting) != 0;
@@ -1391,6 +1401,9 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		if ( _menuAugmentRoot is not null )
 			_menuAugmentRoot.Style.Set( "display", showAugmentStation ? "flex" : "none" );
+
+		if ( _menuAugmentsPageRoot is not null )
+			_menuAugmentsPageRoot.Style.Set( "display", showAugmentsPage ? "flex" : "none" );
 
 		if ( _menuSkillsCenterRoot is not null )
 			_menuSkillsCenterRoot.Style.Set( "display", showSkills ? "flex" : "none" );
@@ -1412,6 +1425,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_mapSection?.SetPanelVisible( showMap );
 		_settingsSection?.SetPanelVisible( showSettings );
 		_augmentStationSection?.SetPanelVisible( showAugmentStation );
+		_augmentsSection?.SetPanelVisible( showAugmentsPage );
 
 		for ( var i = 0; i < _sections.Count; i++ )
 		{
@@ -1440,7 +1454,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		var panels = _menuController.VisiblePanels;
 		var hideForFullscreen = (panels & MenuPanelFlags.Map) != 0
 		                        || (panels & MenuPanelFlags.Settings) != 0
-		                        || (panels & MenuPanelFlags.AugmentStation) != 0;
+		                        || (panels & MenuPanelFlags.AugmentStation) != 0
+		                        || (panels & MenuPanelFlags.Augments) != 0;
 		_vitalsHost.Style.Set( "display", hideForFullscreen ? "none" : "flex" );
 	}
 
@@ -1458,7 +1473,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		var panels = _menuController.VisiblePanels;
 		var hideForFullscreen = (panels & MenuPanelFlags.Map) != 0
 		                        || (panels & MenuPanelFlags.Settings) != 0
-		                        || (panels & MenuPanelFlags.AugmentStation) != 0;
+		                        || (panels & MenuPanelFlags.AugmentStation) != 0
+		                        || (panels & MenuPanelFlags.Augments) != 0;
 		_hotbarHud.SetVisible( !hideForFullscreen );
 	}
 
@@ -1476,7 +1492,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		var panels = _menuController.VisiblePanels;
 		var hideForFullscreen = (panels & MenuPanelFlags.Map) != 0
 		                        || (panels & MenuPanelFlags.Settings) != 0
-		                        || (panels & MenuPanelFlags.AugmentStation) != 0;
+		                        || (panels & MenuPanelFlags.AugmentStation) != 0
+		                        || (panels & MenuPanelFlags.Augments) != 0;
 		_minimapHud.SetVisible( !hideForFullscreen );
 	}
 

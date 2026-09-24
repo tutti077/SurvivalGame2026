@@ -34,4 +34,6 @@ public enum MenuPanelFlags
 	Quests = 16,
 	Settings = 32,
 	AugmentStation = 64,
+	/// <summary>Augments tab: read-only paper doll of the installed augments.</summary>
+	Augments = 128,
 }

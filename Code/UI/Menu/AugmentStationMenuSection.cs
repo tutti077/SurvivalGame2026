@@ -7,48 +7,38 @@ namespace Survival;
 
 /// <summary>
 /// Full-screen augment station. Left: crafting (info box, Craft, list grouped by socket).
-/// Centre: the paper doll — six body parts in two columns around a standing player preview, each
-/// with an Enhance button (augment cores) and three sockets; the Augment button (gold coins) under
-/// the preview commits pending sockets; the augment bank strip along the bottom. Right: the bag.
-/// Every button is a soft-cursor screen-rect hit-test routed through <see cref="TryPressAtScreen"/>.
+/// Centre: the interactive paper doll (<see cref="AugmentPaperdollView"/> — Enhance buttons, sockets,
+/// player preview), the Augment button (gold coins) that commits pending sockets, and the augment
+/// bank strip. Right: the bag. Every button is a soft-cursor screen-rect hit-test routed through
+/// <see cref="TryPressAtScreen"/>.
 /// </summary>
 public sealed class AugmentStationMenuSection : IPlayerMenuSection
 {
-	public const float SlotSize = 56f;
-	public const float SlotGap = 4f;
+	public const float SlotSize = AugmentPaperdollView.SlotSize;
+	public const float SlotGap = AugmentPaperdollView.SlotGap;
 	const float HeaderFont = 20f;
-	const float BodyFont = 17f;
-	const float SmallFont = 13f;
+	const float BodyFont = AugmentPaperdollView.BodyFont;
+	const float SmallFont = AugmentPaperdollView.SmallFont;
 	const float RowHeight = 44f;
 	const float RowGap = 4f;
 	const float GroupHeaderHeight = 30f;
 	const float InfoBoxHeight = 250f;
 	const float ButtonHeight = 42f;
-	const float CostIconSize = 20f;
 	const float WheelPixelsPerNotch = RowHeight * 2f + RowGap * 2f;
 
 	public string SectionId => "augment_station";
 
 	static readonly Color PanelBg = new( 0.07f, 0.08f, 0.10f, 0.92f );
-	static readonly Color BoxBg = new( 0.10f, 0.11f, 0.13f, 0.95f );
-	static readonly Color TitleColor = Color.White;
-	static readonly Color MutedColor = new( 0.72f, 0.74f, 0.78f );
-	static readonly Color LabelColor = new( 0.78f, 0.8f, 0.84f );
-	static readonly Color CostColor = new( 0.93f, 0.8f, 0.4f );
+	static readonly Color BoxBg = AugmentPaperdollView.BoxBg;
+	static readonly Color TitleColor = AugmentPaperdollView.TitleColor;
+	static readonly Color MutedColor = AugmentPaperdollView.MutedColor;
+	static readonly Color LabelColor = AugmentPaperdollView.LabelColor;
+	static readonly Color CostColor = AugmentPaperdollView.CostColor;
 	static readonly Color SlotLineColor = new( 0.62f, 0.75f, 0.95f );
 	static readonly Color ButtonOn = new( 0.22f, 0.45f, 0.28f, 0.95f );
-	static readonly Color ButtonOff = new( 0.2f, 0.21f, 0.24f, 0.95f );
-	static readonly Color EnhanceOn = new( 0.25f, 0.4f, 0.6f, 0.95f );
-	static readonly Color EnhanceDone = new( 0.16f, 0.18f, 0.22f, 0.95f );
-	const string BorderIdle = "#474d57";
-	const string BorderLocked = "#2a2d33";
-	const string BorderPending = "#e0b84a";
-	const string BorderActive = "#5ec46a";
+	static readonly Color ButtonOff = AugmentPaperdollView.ButtonOff;
+	const string BorderIdle = AugmentPaperdollView.BorderIdle;
 	const string BorderSelected = "#6aa0ff";
-
-	// Sketch order: left column Head / Arms / Legs, right column Torso / Hands / Feet.
-	static readonly AugmentBodyPart[] LeftParts = { AugmentBodyPart.Head, AugmentBodyPart.Arms, AugmentBodyPart.Legs };
-	static readonly AugmentBodyPart[] RightParts = { AugmentBodyPart.Torso, AugmentBodyPart.Hands, AugmentBodyPart.Feet };
 
 	readonly PlayerAugments _augments;
 	readonly PlayerInventory _inventory;
@@ -56,11 +46,10 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 	readonly PlayerAugmentInstalledGridHost _installedHost;
 	readonly PlayerAugmentBankGridHost _bankHost;
 	readonly PlayerInventoryGridHost _bagHost;
+	readonly AugmentPaperdollView _doll;
 
-	readonly SocketUi[] _socketUi = new SocketUi[AugmentSlots.Count];
-	readonly PartUi[] _partUi = new PartUi[AugmentBodyParts.Count];
-	readonly List<SlotUi> _bankUi = new();
-	readonly List<SlotUi> _bagUi = new();
+	readonly List<AugmentPaperdollView.SlotUi> _bankUi = new();
+	readonly List<AugmentPaperdollView.SlotUi> _bagUi = new();
 	readonly List<RowUi> _rows = new();
 
 	Panel _sectionRoot;
@@ -76,7 +65,6 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 	Label _augmentLabel;
 	Label _augmentCostLabel;
 	Panel _augmentCostIcon;
-	AugmentPlayerPreviewPanel _preview;
 
 	string _selectedId;
 	bool _menuOpen;
@@ -95,12 +83,13 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		_inventory = inventory;
 		_interaction = interaction;
 		_installedHost = augments is not null && inventory is not null
-			? new PlayerAugmentInstalledGridHost( augments, inventory )
+			? new PlayerAugmentInstalledGridHost( augments, inventory, readOnly: false )
 			: null;
 		_bankHost = augments is not null && inventory is not null
 			? new PlayerAugmentBankGridHost( augments, inventory )
 			: null;
 		_bagHost = inventory is not null ? new PlayerInventoryGridHost( "player", inventory ) : null;
+		_doll = new AugmentPaperdollView( augments, _installedHost, interaction, interactive: true );
 
 		if ( _installedHost is not null )
 			_interaction?.RegisterGrid( _installedHost );
@@ -182,7 +171,7 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		_detailCostLabel.Style.Set( "margin-left", "auto" );
 		_detailCostLabel.Style.Set( "pointer-events", "none" );
 
-		MakeCostIcon( _detailCostRow, "ui/items/currency_goldCoins.png" );
+		AugmentPaperdollView.MakeCostIcon( _detailCostRow, "ui/items/currency_goldCoins.png" );
 
 		_craftButton = MakeButton( col, "Craft", out _craftLabel );
 		_craftButton.Style.Set( "width", "100%" );
@@ -391,43 +380,7 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 
 		AddTitle( col, "Augment Station" );
 
-		var body = new Panel { Parent = col };
-		body.Style.Set( "flex-direction", "row" );
-		body.Style.Set( "width", "100%" );
-		body.Style.Set( "flex-grow", "1" );
-		body.Style.Set( "gap", "12px" );
-		body.Style.Set( "align-items", "stretch" );
-
-		var left = new Panel { Parent = body };
-		left.Style.Set( "flex-direction", "column" );
-		left.Style.Set( "justify-content", "space-between" );
-		left.Style.Set( "flex-grow", "1" );
-		left.Style.Set( "align-items", "flex-end" );
-		for ( var i = 0; i < LeftParts.Length; i++ )
-			BuildPart( left, LeftParts[i] );
-
-		var previewFrame = new Panel { Parent = body };
-		previewFrame.Style.Set( "flex-direction", "column" );
-		previewFrame.Style.Width = Length.Pixels( 300f );
-		previewFrame.Style.Set( "flex-shrink", "0" );
-		previewFrame.Style.BackgroundColor = BoxBg;
-		previewFrame.Style.Set( "border-radius", "4px" );
-		previewFrame.Style.Set( "border-width", "1px" );
-		previewFrame.Style.Set( "border-color", BorderIdle );
-		previewFrame.Style.Set( "overflow", "hidden" );
-		previewFrame.Style.Set( "pointer-events", "none" );
-
-		_preview = new AugmentPlayerPreviewPanel { Parent = previewFrame };
-		_preview.Style.Set( "width", "100%" );
-		_preview.Style.Set( "height", "100%" );
-
-		var right = new Panel { Parent = body };
-		right.Style.Set( "flex-direction", "column" );
-		right.Style.Set( "justify-content", "space-between" );
-		right.Style.Set( "flex-grow", "1" );
-		right.Style.Set( "align-items", "flex-start" );
-		for ( var i = 0; i < RightParts.Length; i++ )
-			BuildPart( right, RightParts[i] );
+		_doll.Build( col );
 
 		// Augment (commit) button + its gold cost readout.
 		var commitRow = new Panel { Parent = col };
@@ -444,7 +397,7 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		_augmentCostLabel.Style.FontSize = Length.Pixels( BodyFont );
 		_augmentCostLabel.Style.Set( "pointer-events", "none" );
 
-		_augmentCostIcon = MakeCostIcon( commitRow, "ui/items/currency_goldCoins.png" );
+		_augmentCostIcon = AugmentPaperdollView.MakeCostIcon( commitRow, "ui/items/currency_goldCoins.png" );
 
 		// Bank strip.
 		var bankTitle = new Label { Parent = col, Text = "Augment Bank" };
@@ -464,97 +417,10 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		for ( var i = 0; i < PlayerAugments.BankSlotCount; i++ )
 		{
 			var slotPanel = new InventorySlotPanel( i, _bankHost, _interaction ) { Parent = bankGrid };
-			StyleSlot( slotPanel );
+			AugmentPaperdollView.StyleSlot( slotPanel );
 			_interaction?.RegisterSlot( slotPanel );
-			_bankUi.Add( CreateSlotUi( slotPanel ) );
+			_bankUi.Add( AugmentPaperdollView.CreateSlotUi( slotPanel ) );
 		}
-	}
-
-	void BuildPart( Panel parent, AugmentBodyPart part )
-	{
-		var block = new Panel { Parent = parent };
-		block.Style.Set( "flex-direction", "column" );
-		block.Style.Set( "gap", "6px" );
-		block.Style.Set( "flex-shrink", "0" );
-
-		var header = new Panel { Parent = block };
-		header.Style.Set( "flex-direction", "row" );
-		header.Style.Set( "align-items", "center" );
-		header.Style.Set( "gap", "8px" );
-		header.Style.Height = Length.Pixels( 30f );
-
-		var name = new Label { Parent = header, Text = AugmentBodyParts.Label( part ) };
-		name.Style.FontColor = TitleColor;
-		name.Style.FontSize = Length.Pixels( BodyFont );
-		name.Style.Width = Length.Pixels( 60f );
-		name.Style.Set( "pointer-events", "none" );
-
-		var enhance = new Panel { Parent = header };
-		enhance.Style.Width = Length.Pixels( 96f );
-		enhance.Style.Height = Length.Pixels( 28f );
-		enhance.Style.BackgroundColor = EnhanceOn;
-		enhance.Style.Set( "border-radius", "4px" );
-		enhance.Style.Set( "justify-content", "center" );
-		enhance.Style.Set( "align-items", "center" );
-		enhance.Style.Set( "pointer-events", "all" );
-
-		var enhanceLabel = new Label { Parent = enhance, Text = "Enhance" };
-		enhanceLabel.Style.FontColor = Color.White;
-		enhanceLabel.Style.FontSize = Length.Pixels( SmallFont + 1f );
-		enhanceLabel.Style.Set( "pointer-events", "none" );
-
-		var cost = new Label { Parent = header, Text = "" };
-		cost.Style.FontColor = CostColor;
-		cost.Style.FontSize = Length.Pixels( BodyFont );
-		cost.Style.Set( "pointer-events", "none" );
-
-		var coreIcon = MakeCostIcon( header, $"ui/items/{AugmentCurrency.CoreResourceId}.png" );
-
-		var socketsRow = new Panel { Parent = block };
-		socketsRow.Style.Set( "flex-direction", "row" );
-		socketsRow.Style.Set( "gap", $"{SlotGap}px" );
-
-		var slots = AugmentBodyParts.SlotsOf( part );
-		for ( var i = 0; i < slots.Length; i++ )
-			BuildSocket( socketsRow, slots[i] );
-
-		_partUi[(int)part] = new PartUi( enhance, enhanceLabel, cost, coreIcon );
-	}
-
-	void BuildSocket( Panel row, AugmentSlot slot )
-	{
-		var host = new Panel { Parent = row };
-		host.Style.Set( "flex-direction", "column" );
-		host.Style.Set( "align-items", "center" );
-		host.Style.Set( "gap", "2px" );
-		host.Style.Width = Length.Pixels( SlotSize + 8f );
-
-		var slotPanel = new InventorySlotPanel( (int)slot, _installedHost, _interaction ) { Parent = host };
-		StyleSlot( slotPanel );
-		_interaction?.RegisterSlot( slotPanel );
-		var ui = CreateSlotUi( slotPanel );
-
-		var lockOverlay = new Panel { Parent = slotPanel };
-		lockOverlay.Style.Set( "position", "absolute" );
-		lockOverlay.Style.Set( "left", "0" );
-		lockOverlay.Style.Set( "top", "0" );
-		lockOverlay.Style.Set( "right", "0" );
-		lockOverlay.Style.Set( "bottom", "0" );
-		lockOverlay.Style.BackgroundColor = new Color( 0f, 0f, 0f, 0.62f );
-		lockOverlay.Style.Set( "justify-content", "center" );
-		lockOverlay.Style.Set( "align-items", "center" );
-		lockOverlay.Style.Set( "pointer-events", "none" );
-		var lockText = new Label { Parent = lockOverlay, Text = "locked" };
-		lockText.Style.FontColor = new Color( 0.55f, 0.57f, 0.62f );
-		lockText.Style.FontSize = Length.Pixels( 11f );
-		lockText.Style.Set( "pointer-events", "none" );
-
-		var label = new Label { Parent = host, Text = AugmentSlots.VariationLabel( slot ) };
-		label.Style.FontColor = LabelColor;
-		label.Style.FontSize = Length.Pixels( SmallFont - 1f );
-		label.Style.Set( "pointer-events", "none" );
-
-		_socketUi[(int)slot] = new SocketUi( slotPanel, ui, lockOverlay );
 	}
 
 	// ── Right: bag ──────────────────────────────────────────────────────────────────────────
@@ -578,9 +444,9 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		for ( var i = 0; i < slotCount; i++ )
 		{
 			var slotPanel = new InventorySlotPanel( i, _bagHost, _interaction ) { Parent = grid };
-			StyleSlot( slotPanel );
+			AugmentPaperdollView.StyleSlot( slotPanel );
 			_interaction?.RegisterSlot( slotPanel );
-			_bagUi.Add( CreateSlotUi( slotPanel ) );
+			_bagUi.Add( AugmentPaperdollView.CreateSlotUi( slotPanel ) );
 		}
 	}
 
@@ -605,14 +471,8 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 			return true;
 		}
 
-		for ( var p = 0; p < _partUi.Length; p++ )
-		{
-			if ( !IsInside( _partUi[p]?.EnhanceButton, screenPos ) )
-				continue;
-
-			_augments.OwnerTryEnhance( (AugmentBodyPart)p );
+		if ( _doll.TryPressEnhanceAtScreen( screenPos ) )
 			return true;
-		}
 
 		// Rows scrolled out of the list frame are clipped — never clickable.
 		if ( IsInside( _listViewport, screenPos ) )
@@ -644,64 +504,12 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		else
 			RefreshDetail();
 
-		RefreshSockets();
-		RefreshParts();
+		_doll.Refresh();
 		RefreshCommitButton();
 		RefreshSlotList( _bankUi, i => _augments?.GetBankSlot( i ) ?? InventorySlot.Empty );
 		RefreshSlotList( _bagUi, i => _inventory?.GetSlot( i ) ?? InventorySlot.Empty );
-		RefreshPreviewOutfit();
 
 		_lastAugmentVersion = _augments?.ContentsVersion ?? -1;
-	}
-
-	void RefreshSockets()
-	{
-		for ( var i = 0; i < _socketUi.Length; i++ )
-		{
-			var ui = _socketUi[i];
-			if ( ui is null )
-				continue;
-
-			var slot = (AugmentSlot)i;
-			var stack = _augments?.GetInstalled( slot ) ?? InventorySlot.Empty;
-			ResourceCatalog.ApplyStackVisual( ui.Slot.IconPanel, ui.Slot.CountLabel, stack );
-
-			var unlocked = _augments?.IsSlotUnlocked( slot ) ?? false;
-			ui.LockOverlay.Style.Set( "display", unlocked ? "none" : "flex" );
-
-			var border = !unlocked ? BorderLocked
-				: _augments.IsSlotActive( slot ) ? BorderActive
-				: _augments.IsSlotPending( slot ) ? BorderPending
-				: BorderIdle;
-			ui.Root.Style.Set( "border-color", border );
-		}
-	}
-
-	void RefreshParts()
-	{
-		for ( var p = 0; p < _partUi.Length; p++ )
-		{
-			var ui = _partUi[p];
-			if ( ui is null )
-				continue;
-
-			var part = (AugmentBodyPart)p;
-			var cost = _augments?.GetNextEnhanceCoreCost( part ) ?? 0;
-			if ( cost <= 0 )
-			{
-				ui.CostLabel.Text = "full";
-				ui.CoreIcon.Style.Set( "display", "none" );
-				ui.EnhanceButton.Style.BackgroundColor = EnhanceDone;
-				ui.EnhanceLabel.Style.FontColor = MutedColor;
-				continue;
-			}
-
-			ui.CostLabel.Text = cost.ToString();
-			ui.CoreIcon.Style.Set( "display", "flex" );
-			var can = _augments?.CanEnhance( part ) ?? false;
-			ui.EnhanceButton.Style.BackgroundColor = can ? EnhanceOn : ButtonOff;
-			ui.EnhanceLabel.Style.FontColor = can ? Color.White : MutedColor;
-		}
 	}
 
 	void RefreshCommitButton()
@@ -716,16 +524,7 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		SetButtonState( _augmentButton, _augmentLabel, _augments.CanCommitAugments(), ButtonOn );
 	}
 
-	void RefreshPreviewOutfit()
-	{
-		if ( _preview is null || _augments is null )
-			return;
-
-		var equipment = _augments.Components.Get<PlayerEquipment>();
-		_preview.SetClothing( equipment?.NetworkedWornClothing ?? string.Empty );
-	}
-
-	static void RefreshSlotList( List<SlotUi> list, Func<int, InventorySlot> getter )
+	static void RefreshSlotList( List<AugmentPaperdollView.SlotUi> list, Func<int, InventorySlot> getter )
 	{
 		for ( var i = 0; i < list.Count; i++ )
 			ResourceCatalog.ApplyStackVisual( list[i].IconPanel, list[i].CountLabel, getter( i ) );
@@ -822,98 +621,6 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		button.Style.BackgroundColor = enabled ? onColor : ButtonOff;
 		if ( label is not null )
 			label.Style.FontColor = enabled ? Color.White : MutedColor;
-	}
-
-	static Panel MakeCostIcon( Panel parent, string iconPath )
-	{
-		var icon = new Panel { Parent = parent };
-		icon.Style.Width = Length.Pixels( CostIconSize );
-		icon.Style.Height = Length.Pixels( CostIconSize );
-		icon.Style.Set( "flex-shrink", "0" );
-		icon.Style.Set( "pointer-events", "none" );
-		icon.Style.Set( "background-size", "contain" );
-		icon.Style.Set( "background-repeat", "no-repeat" );
-		icon.Style.Set( "background-position", "center" );
-		MenuUiTextures.ApplyBackground( icon, iconPath );
-		return icon;
-	}
-
-	static void StyleSlot( Panel slotPanel )
-	{
-		slotPanel.Style.Width = Length.Pixels( SlotSize );
-		slotPanel.Style.Height = Length.Pixels( SlotSize );
-		slotPanel.Style.Set( "flex-shrink", "0" );
-		slotPanel.Style.Set( "position", "relative" );
-		slotPanel.Style.Set( "box-sizing", "border-box" );
-		slotPanel.Style.BackgroundColor = new Color( 0.1f, 0.11f, 0.13f, 0.95f );
-		slotPanel.Style.Set( "border-width", "2px" );
-		slotPanel.Style.Set( "border-color", BorderIdle );
-		slotPanel.Style.Set( "border-radius", "4px" );
-		slotPanel.Style.Set( "overflow", "hidden" );
-		slotPanel.Style.Set( "pointer-events", "auto" );
-	}
-
-	static SlotUi CreateSlotUi( InventorySlotPanel slotPanel )
-	{
-		var icon = new Panel { Parent = slotPanel };
-		icon.Style.Set( "position", "absolute" );
-		icon.Style.Set( "left", "4px" );
-		icon.Style.Set( "right", "4px" );
-		icon.Style.Set( "top", "4px" );
-		icon.Style.Set( "bottom", "4px" );
-		icon.Style.Set( "pointer-events", "none" );
-		icon.Style.Set( "background-size", "contain" );
-		icon.Style.Set( "background-repeat", "no-repeat" );
-		icon.Style.Set( "background-position", "center" );
-
-		var count = new Label { Parent = slotPanel, Text = "" };
-		count.Style.Set( "position", "absolute" );
-		count.Style.Set( "right", "3px" );
-		count.Style.Set( "bottom", "1px" );
-		count.Style.FontColor = Color.White;
-		count.Style.FontSize = Length.Pixels( 12f );
-		count.Style.Set( "pointer-events", "none" );
-
-		return new SlotUi( icon, count );
-	}
-
-	readonly struct SlotUi
-	{
-		public Panel IconPanel { get; }
-		public Label CountLabel { get; }
-		public SlotUi( Panel icon, Label count )
-		{
-			IconPanel = icon;
-			CountLabel = count;
-		}
-	}
-
-	sealed class SocketUi
-	{
-		public Panel Root { get; }
-		public SlotUi Slot { get; }
-		public Panel LockOverlay { get; }
-		public SocketUi( Panel root, SlotUi slot, Panel lockOverlay )
-		{
-			Root = root;
-			Slot = slot;
-			LockOverlay = lockOverlay;
-		}
-	}
-
-	sealed class PartUi
-	{
-		public Panel EnhanceButton { get; }
-		public Label EnhanceLabel { get; }
-		public Label CostLabel { get; }
-		public Panel CoreIcon { get; }
-		public PartUi( Panel enhanceButton, Label enhanceLabel, Label costLabel, Panel coreIcon )
-		{
-			EnhanceButton = enhanceButton;
-			EnhanceLabel = enhanceLabel;
-			CostLabel = costLabel;
-			CoreIcon = coreIcon;
-		}
 	}
 
 	readonly struct RowUi

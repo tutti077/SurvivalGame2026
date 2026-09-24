@@ -2,19 +2,25 @@ using System;
 
 namespace Survival;
 
-/// <summary>Grid host for the 18 installed augment sockets.</summary>
+/// <summary>
+/// Grid host for the 18 body sockets. The station uses it interactive; the Augments menu page uses a
+/// <b>read-only</b> instance so its sockets hover for tooltips but never pick up, drop or swap.
+/// </summary>
 public sealed class PlayerAugmentInstalledGridHost : IInventoryGridHost
 {
-	public string GridId => "augment_installed";
+	public string GridId { get; }
 	public PlayerInventory Inventory { get; }
 	public PlayerHotbar Hotbar => null;
 
 	readonly PlayerAugments _augments;
+	readonly bool _readOnly;
 
-	public PlayerAugmentInstalledGridHost( PlayerAugments augments, PlayerInventory inventory )
+	public PlayerAugmentInstalledGridHost( PlayerAugments augments, PlayerInventory inventory, bool readOnly )
 	{
 		_augments = augments;
+		_readOnly = readOnly;
 		Inventory = inventory;
+		GridId = readOnly ? "augment_installed_view" : "augment_installed";
 	}
 
 	public int SlotCount => AugmentSlots.Count;
@@ -30,7 +36,7 @@ public sealed class PlayerAugmentInstalledGridHost : IInventoryGridHost
 	public bool OwnerTryPickupAll( int slotIndex, out InventorySlot picked )
 	{
 		picked = InventorySlot.Empty;
-		if ( _augments is null || slotIndex < 0 || slotIndex >= SlotCount )
+		if ( _readOnly || _augments is null || slotIndex < 0 || slotIndex >= SlotCount )
 			return false;
 
 		return _augments.OwnerTryPickupInstalled( (AugmentSlot)slotIndex, out picked );
@@ -38,7 +44,7 @@ public sealed class PlayerAugmentInstalledGridHost : IInventoryGridHost
 
 	public bool OwnerTryFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
 	{
-		if ( _augments is null )
+		if ( _readOnly || _augments is null )
 			return false;
 
 		return _augments.OwnerTryFinishInstalledDrag(
@@ -49,7 +55,7 @@ public sealed class PlayerAugmentInstalledGridHost : IInventoryGridHost
 
 	public bool OwnerTryPlaceHeld( int slotIndex, ref InventoryCursorStack held )
 	{
-		if ( _augments is null || slotIndex < 0 || slotIndex >= SlotCount )
+		if ( _readOnly || _augments is null || slotIndex < 0 || slotIndex >= SlotCount )
 			return false;
 
 		return _augments.OwnerTryPlaceIntoInstalled( (AugmentSlot)slotIndex, ref held );
@@ -63,7 +69,7 @@ public sealed class PlayerAugmentInstalledGridHost : IInventoryGridHost
 	public bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held, out int placedCount )
 	{
 		placedCount = 0;
-		if ( _augments is null || held.IsEmpty )
+		if ( _readOnly || _augments is null || held.IsEmpty )
 			return false;
 
 		var copy = held;
@@ -83,7 +89,7 @@ public sealed class PlayerAugmentInstalledGridHost : IInventoryGridHost
 	public bool TryFindQuickMoveTarget( in InventorySlot stack, int fromSlotIndex, out int targetSlotIndex )
 	{
 		targetSlotIndex = -1;
-		if ( _augments is null || stack.IsEmpty )
+		if ( _readOnly || _augments is null || stack.IsEmpty )
 			return false;
 
 		if ( !_augments.TryFindInstallSlot( stack.ResourceId, out var slot ) )
