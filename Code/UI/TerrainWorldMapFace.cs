@@ -57,6 +57,8 @@ public sealed class TerrainWorldMapFace
 	Texture _boundTexture;
 	float _appliedZoom = -1f;
 	float _appliedStagePixels = -1f;
+	/// <summary>Drag offset from the player-centred view, in map UV; clamped to the map in <see cref="ApplyZoomLayout"/>.</summary>
+	Vector2 _panUv;
 	Vector2 _lastFocusUv = new( -1f, -1f );
 	Vector2 _radarOriginMeters;
 	bool _radarMode;
@@ -338,7 +340,7 @@ public sealed class TerrainWorldMapFace
 		else
 			_settings ??= _manager.BuildGenerationSettings();
 
-		ApplyZoomLayout( focusUv, force: false );
+		ApplyZoomLayout( focusUv + _panUv, force: false );
 		PlaceWorldLayer();
 
 		if ( !hasStream || _boundTexture is null )
@@ -375,7 +377,7 @@ public sealed class TerrainWorldMapFace
 	void UpdateLocalRadar()
 	{
 		_radarMode = true;
-		ApplyZoomLayout( new Vector2( 0.5f, 0.5f ), force: false );
+		ApplyZoomLayout( new Vector2( 0.5f, 0.5f ) + _panUv, force: false );
 
 		var camera = Sandbox.Game.ActiveScene?.Camera;
 		if ( camera is null || !camera.IsValid() )
@@ -514,6 +516,13 @@ public sealed class TerrainWorldMapFace
 		var leftUv = Math.Clamp( focusUv.x - viewW * 0.5f, 0f, 1f - viewW );
 		var topUv = Math.Clamp( focusUv.y - viewH * 0.5f, 0f, 1f - viewH );
 
+		// Keep the pan honest: whatever the clamp threw away is not banked, so dragging back from
+		// the map edge responds immediately instead of first unwinding invisible overshoot.
+		var shownCenter = new Vector2( leftUv + viewW * 0.5f, topUv + viewH * 0.5f );
+		var lostToClamp = focusUv - shownCenter;
+		if ( lostToClamp.LengthSquared > 1e-10f )
+			_panUv -= lostToClamp;
+
 		_zoomStage.Style.Width = Length.Pixels( stage );
 		_zoomStage.Style.Height = Length.Pixels( stage );
 		_zoomStage.Style.Left = Length.Pixels( -leftUv * stage );
@@ -607,6 +616,23 @@ public sealed class TerrainWorldMapFace
 		_worldLayer.Style.Left = Length.Percent( _radarOriginMeters.x / span * 100f );
 		_worldLayer.Style.Top = Length.Percent( -_radarOriginMeters.y / span * 100f );
 	}
+
+	/// <summary>Drag the view by a pointer delta in screen pixels (the map follows the cursor).</summary>
+	public void PanByScreenPixels( Vector2 deltaScreenPixels )
+	{
+		if ( _zoomStage is null || !_zoomStage.IsValid() )
+			return;
+
+		var stagePixels = _zoomStage.Box.Rect.Width;
+		if ( stagePixels < 1f )
+			return;
+
+		_panUv -= deltaScreenPixels / stagePixels;
+		_panUv = new Vector2( Math.Clamp( _panUv.x, -1f, 1f ), Math.Clamp( _panUv.y, -1f, 1f ) );
+	}
+
+	/// <summary>Back to the player-centred view (menu closed).</summary>
+	public void ResetPan() => _panUv = Vector2.Zero;
 
 	/// <summary>True when <paramref name="screenPos"/> is over the visible map window.</summary>
 	public bool ContainsScreen( Vector2 screenPos ) =>
@@ -995,7 +1021,7 @@ public sealed class TerrainWorldMapFace
 		if ( _pingPanels.Count == 0 )
 			return;
 
-		var now = Time.NowDouble;
+		var now = MapPingFeed.Now;
 		foreach ( var (ring, startedAt) in _pingPanels )
 		{
 			if ( ring is null || !ring.IsValid() )

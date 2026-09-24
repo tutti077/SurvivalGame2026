@@ -1,12 +1,18 @@
+using System;
 using System.Collections.Generic;
 using Sandbox;
 
 namespace Survival;
 
-/// <summary>Short-lived map pings this machine should draw (own pings + crew mates', see the <see cref="PlayerCrew"/> MapPing partial).</summary>
+/// <summary>
+/// Short-lived map pings this machine should draw (own pings + crew mates', see the
+/// <see cref="PlayerCrew"/> MapPing partial). Never saved: pings are pure session state, timed on
+/// the wall clock (game time restarts at zero on every play session, which used to leave stale
+/// pings "alive" for minutes) and tied to the scene they were made in.
+/// </summary>
 public static class MapPingFeed
 {
-	public const float LifetimeSeconds = 15f;
+	public const float LifetimeSeconds = 10f;
 
 	public sealed class Ping
 	{
@@ -14,7 +20,11 @@ public static class MapPingFeed
 		public string SenderName = "";
 		public double ExpiresAt;
 		public double StartedAt;
+		public Guid SceneId;
 	}
+
+	/// <summary>Wall-clock seconds; immune to the game clock resetting between play sessions.</summary>
+	public static double Now => System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
 
 	static readonly List<Ping> Active = new();
 
@@ -32,12 +42,14 @@ public static class MapPingFeed
 
 	public static void Add( Vector2 worldMeters, string senderName )
 	{
+		var now = Now;
 		Active.Add( new Ping
 		{
 			WorldMeters = worldMeters,
 			SenderName = senderName ?? "",
-			StartedAt = Time.NowDouble,
-			ExpiresAt = Time.NowDouble + LifetimeSeconds,
+			StartedAt = now,
+			ExpiresAt = now + LifetimeSeconds,
+			SceneId = Sandbox.Game.ActiveScene?.Id ?? Guid.Empty,
 		} );
 		Version++;
 
@@ -69,10 +81,12 @@ public static class MapPingFeed
 
 	static void Prune()
 	{
-		var now = Time.NowDouble;
+		var now = Now;
+		var sceneId = Sandbox.Game.ActiveScene?.Id ?? Guid.Empty;
 		for ( var i = Active.Count - 1; i >= 0; i-- )
 		{
-			if ( Active[i].ExpiresAt > now )
+			var ping = Active[i];
+			if ( ping.ExpiresAt > now && ping.SceneId == sceneId )
 				continue;
 
 			Active.RemoveAt( i );

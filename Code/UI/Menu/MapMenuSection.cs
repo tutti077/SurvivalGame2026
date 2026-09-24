@@ -59,6 +59,13 @@ public sealed class MapMenuSection : IPlayerMenuSection
 	double _lastMapClickAt = -10;
 	Vector2 _lastMapClickPos;
 
+	/// <summary>Pointer must travel this far before a press becomes a pan (keeps clicks and double-clicks clean).</summary>
+	const float PanStartPixels = 4f;
+
+	bool _panArmed;
+	bool _panning;
+	Vector2 _panPressPos;
+	Vector2 _panLastPos;
 	bool _dragging;
 	MapMarkupTool _dragTool;
 	MapStrokeData _activeStroke;
@@ -266,7 +273,8 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		AddControlLine( controls, "RMB: Remove Pin" );
 		AddControlLine( controls, "MMB: Ping Crew" );
 		AddControlLine( controls, "Wheel: Zoom" );
-		AddControlLine( controls, "Pen / Eraser: hold LMB" );
+		AddControlLine( controls, "LMB drag: Pan map" );
+		AddControlLine( controls, "Pen / Eraser: hold RMB" );
 
 		// Coop sharing: my location to the crew, and which crew mates' pins land on my map.
 		var sharingHeader = AddSectionHeader( column, "Sharing" );
@@ -503,6 +511,8 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		{
 			CommitNaming();
 			EndDrag();
+			EndPan();
+			_face.ResetPan();
 		}
 
 		_menuOpen = isOpen;
@@ -515,6 +525,8 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		{
 			CommitNaming();
 			EndDrag();
+			EndPan();
+			_face.ResetPan();
 		}
 
 		_panelVisible = visible;
@@ -574,7 +586,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 			return false;
 
 		if ( LocalMapMarkup.Tool != MapMarkupTool.Pin )
-			return true; // pen / eraser presses are handled by the drag tick
+			return true; // pen / eraser: LMB only pans (drag tick); strokes are RMB
 
 		var pin = _face.FindPinAtScreen( screenPos );
 		if ( pin is not null )
@@ -630,6 +642,10 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		if ( _naming )
 			CommitNaming();
 
+		// Pen / eraser draw with the right button (the left one drags the map); removal is pin-tool only.
+		if ( LocalMapMarkup.Tool != MapMarkupTool.Pin )
+			return true;
+
 		var pin = _face.FindPinAtScreen( screenPos );
 		if ( pin is not null )
 			LocalMapMarkup.RemovePin( pin.Id );
@@ -651,13 +667,16 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		return true;
 	}
 
-	/// <summary>Every frame while the menu is open: pen / eraser drags follow the held Attack1.</summary>
+	/// <summary>Every frame while the menu is open: Attack1 drags the map, Attack2 drives pen / eraser strokes.</summary>
 	public void TickPointerDrag( Vector2 screenPos, bool held )
 	{
 		if ( !_menuOpen || !_panelVisible )
 			return;
 
-		if ( !held )
+		TickPan( screenPos, held );
+
+		var drawHeld = Input.Down( "Attack2" );
+		if ( !drawHeld )
 		{
 			if ( _dragging )
 				EndDrag();
@@ -688,6 +707,51 @@ public sealed class MapMenuSection : IPlayerMenuSection
 			LocalMapMarkup.AppendStrokePoint( _activeStroke, point, LocalMapMarkup.StrokePointSpacingPixels / pixelsPerMeter );
 		else if ( LocalMapMarkup.Erase( point, LocalMapMarkup.EraserRadiusPixels / pixelsPerMeter ) )
 			_eraseChanged = true;
+	}
+
+	/// <summary>
+	/// Left click-and-drag pans the map with every tool (a press on a pin is a click, not a pan).
+	/// A press only becomes a pan after <see cref="PanStartPixels"/> of travel, so single and
+	/// double clicks are unaffected.
+	/// </summary>
+	void TickPan( Vector2 screenPos, bool primaryHeld )
+	{
+		if ( _panArmed )
+		{
+			if ( !primaryHeld )
+			{
+				EndPan();
+				return;
+			}
+
+			if ( !_panning && (screenPos - _panPressPos).Length >= PanStartPixels )
+				_panning = true;
+
+			if ( _panning )
+			{
+				_face.PanByScreenPixels( screenPos - _panLastPos );
+				_panLastPos = screenPos;
+			}
+
+			return;
+		}
+
+		if ( _naming || _dragging || !primaryHeld )
+			return;
+
+		if ( !_face.ContainsScreen( screenPos ) || _face.FindPinAtScreen( screenPos ) is not null )
+			return;
+
+		_panArmed = true;
+		_panning = false;
+		_panPressPos = screenPos;
+		_panLastPos = screenPos;
+	}
+
+	void EndPan()
+	{
+		_panArmed = false;
+		_panning = false;
 	}
 
 	void EndDrag()

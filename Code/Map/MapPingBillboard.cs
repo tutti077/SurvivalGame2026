@@ -46,9 +46,9 @@ public sealed class MapPingBillboardPanel : PanelComponent
 		EnsureBuilt();
 
 		if ( _diesAt <= 0 )
-			_diesAt = Time.NowDouble + MapPingFeed.LifetimeSeconds;
+			_diesAt = MapPingFeed.Now + MapPingFeed.LifetimeSeconds;
 
-		if ( Time.NowDouble >= _diesAt && GameObject.IsValid() )
+		if ( MapPingFeed.Now >= _diesAt && GameObject.IsValid() )
 		{
 			GameObject.Destroy();
 			return;
