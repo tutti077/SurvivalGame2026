@@ -87,6 +87,23 @@
                   { "label": "Type", "value": "Farming Tool" }
                 ]
               },
+              {
+                "id": "tool_wireStripper",
+                "displayName": "Wire Stripper",
+                "icon": "ui/items/tool_wireStripper.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "inventory", "workbench" ],
+                "ingredients": [
+                  { "resourceId": "resource_scrap", "amount": 4 },
+                  { "resourceId": "resource_woodBasic", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Links circuit-enabled objects with red, blue or green wire" },
+                  { "label": "Type", "value": "Circuit Tool" }
+                ]
+              },
 
               {
                 "id": "light_torch",

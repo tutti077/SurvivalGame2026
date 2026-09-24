@@ -32,6 +32,7 @@ public static class ResourceCatalog
 			["arrow_wood"] = "ui/items/arrow_wood.png",
 			["fishing_rod"] = "ui/items/tool_fishingRod.png",
 			["tool_hoe"] = "ui/items/tool_hoe.png",
+			["tool_wireStripper"] = "ui/items/tool_wireStripper.png",
 		};
 
 	/// <summary>Maps old/sample resource ids to current catalog ids.</summary>

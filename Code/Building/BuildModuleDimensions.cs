@@ -124,6 +124,9 @@ public static class BuildModuleDimensions
 		["workbench"] = new( 2f, 1f, 1f ),
 		// Bed: 2 m long, 1 m wide, 0.5 m tall — claimable respawn point and the base-raid target.
 		["bed"] = new( 2f, 1f, 0.5f ),
+		// Circuit pieces: a 0.3 m bulb cube and a 0.2 x 0.2 x 0.3 m lever box. Gates will be 0.15 m cubes.
+		["circuit_light"] = new( 0.3f, 0.3f, 0.3f ),
+		["circuit_lever"] = new( 0.2f, 0.2f, 0.3f ),
 	};
 
 	static float HalfUnitsFor( float meters ) =>

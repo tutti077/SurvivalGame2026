@@ -570,6 +570,8 @@ public sealed partial class PlayerEquipment : Component
 				hammer.BindPawn( GameObject );
 			else if ( bindable is ToolHoe hoe )
 				hoe.BindPawn( GameObject );
+			else if ( bindable is ToolWireStripper stripper )
+				stripper.BindPawn( GameObject );
 		}
 	}
 

@@ -26,6 +26,8 @@ public static class BuildPieceNavPolicy
 		if ( BuildPieceFamily.IsStairs( pieceId )
 		     || BuildPieceFamily.IsRoof( pieceId )
 		     || pieceId.StartsWith( "trap_", StringComparison.OrdinalIgnoreCase )
+		     // Circuit pieces (bulbs, levers, gates) are hand-sized - never a hole in the mesh.
+		     || pieceId.StartsWith( "circuit_", StringComparison.OrdinalIgnoreCase )
 		     || pieceId.Contains( "bridge", StringComparison.OrdinalIgnoreCase )
 		     || pieceId.Contains( "gate", StringComparison.OrdinalIgnoreCase ) )
 			return BuildNavCategory.WalkablePath;

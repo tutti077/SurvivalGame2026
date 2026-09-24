@@ -3,6 +3,38 @@ using System.Text.Json.Serialization;
 
 namespace Survival;
 
+/// <summary>Where a held light sits on the pawn.</summary>
+public enum HeldLightAnchor : byte
+{
+	/// <summary>Vertical stick in the right hand, light at the top (torch).</summary>
+	TorchTip = 0,
+	/// <summary>Hanging below the relaxed right hand at hip height (lantern).</summary>
+	LanternHang = 1,
+}
+
+/// <summary>The <c>heldLight</c> block of an equipment profile.</summary>
+public sealed class HeldLightData
+{
+	/// <summary><c>torchTip</c> or <c>lanternHang</c>.</summary>
+	[JsonPropertyName( "anchor" )]
+	public string Anchor { get; set; } = "torchTip";
+
+	/// <summary>Point light reach in meters (converted once at the read site).</summary>
+	[JsonPropertyName( "radiusMeters" )]
+	public float RadiusMeters { get; set; } = 6f;
+
+	/// <summary>Light colour as <c>r,g,b[,a]</c> in 0-1.</summary>
+	[JsonPropertyName( "color" )]
+	public string Color { get; set; } = "1,0.75,0.4,1";
+
+	public HeldLightAnchor ResolveAnchor() =>
+		string.Equals( Anchor?.Trim(), "lanternHang", System.StringComparison.OrdinalIgnoreCase )
+			? HeldLightAnchor.LanternHang
+			: HeldLightAnchor.TorchTip;
+
+	public Color ResolveColor() => BuildPieceCatalog.ParseFallbackColor( Color );
+}
+
 public sealed class EquipmentStatModifiersData
 {
 	public float Armor { get; set; }
@@ -62,6 +94,10 @@ public sealed class EquipmentProfileData
 	public string AmmoType { get; set; } = string.Empty;
 
 	public string ToolPrefab { get; set; } = string.Empty;
+
+	/// <summary>Light source carried in the main hand (torch / lantern). Null = no held light. Read by <c>PlayerAnimation.HeldLight.cs</c>.</summary>
+	[JsonPropertyName( "heldLight" )]
+	public HeldLightData HeldLight { get; set; }
 
 	public string HandDisplayPrefab { get; set; } = string.Empty;
 

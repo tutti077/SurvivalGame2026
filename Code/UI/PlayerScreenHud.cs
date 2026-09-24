@@ -37,6 +37,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	InventoryMenuInputOverlay _menuInputOverlay;
 	MenuPageNavigator _pageNavigator;
 	BuildMenuHud _buildMenuHud;
+	WireCableMenuHud _wireCableMenuHud;
 	BuildSnapReadoutHud _buildSnapReadout;
 	BuildSupportReadoutHud _buildSupportReadout;
 	PlayerFishing _fishing;
@@ -152,6 +153,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_pickupNotifications?.Tick();
 		_minimapHud?.Tick();
 		_buildMenuHud?.Tick();
+		_wireCableMenuHud?.Tick();
 		_buildSnapReadout?.Tick();
 		_buildSupportReadout?.Tick();
 		_fishingHud?.Tick( _fishing );
@@ -165,6 +167,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _inventoryInteraction?.FocusedCampfire is not null
 		     || _inventoryInteraction?.FocusedDoor is not null
 		     || _inventoryInteraction?.FocusedTrap is not null
+	     || _inventoryInteraction?.FocusedLever is not null
 		     || _inventoryInteraction?.FocusedBed is not null
 		     || _inventoryInteraction?.FocusedTimeTrialStand is not null
 		     || _inventoryInteraction?.FocusedArenaMenuButton is not null )
@@ -213,6 +216,8 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedAugmentStationChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedCampfireChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedDoorChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedTrapChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedLeverChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged -= OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.FocusedArenaButtonChanged -= OnInteractionPromptChanged;
@@ -246,6 +251,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_baseRaidHud?.Dispose();
 		_baseRaidHud = null;
 		_buildMenuHud = null;
+		_wireCableMenuHud = null;
 		_buildSnapReadout = null;
 		RestoreGrapplePromptCapture();
 		if ( _menuController is not null )
@@ -600,6 +606,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedDoorChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTrapChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedLeverChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedBedChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
@@ -895,6 +902,9 @@ public sealed class PlayerScreenHud : PanelComponent
 		_buildMenuHud = new BuildMenuHud( _equipment );
 		_buildMenuHud.Build( root );
 
+		_wireCableMenuHud = new WireCableMenuHud( _equipment );
+		_wireCableMenuHud.Build( root );
+
 		_buildSnapReadout = new BuildSnapReadoutHud( _equipment );
 		_buildSnapReadout.Build( root );
 
@@ -1017,6 +1027,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedDoorChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTrapChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedLeverChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedBedChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
@@ -1166,12 +1177,14 @@ public sealed class PlayerScreenHud : PanelComponent
 		var showDoor = !showOpen && !showTrial && !showArena && !showCampfire && focusedDoor is not null && focusedDoor.IsValid();
 		var focusedTrap = _inventoryInteraction?.FocusedTrap;
 		var showTrap = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && focusedTrap is not null && focusedTrap.IsValid();
+		var focusedLever = _inventoryInteraction?.FocusedLever;
+		var showLever = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && focusedLever is not null && focusedLever.IsValid();
 		var focusedBed = _inventoryInteraction?.FocusedBed;
-		var showBed = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && focusedBed is not null && focusedBed.IsValid();
+		var showBed = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && focusedBed is not null && focusedBed.IsValid();
 		var farmingPrompt = _farming?.PromptText ?? string.Empty;
-		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showBed && farmingPrompt.Length > 0;
-		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showBed && !showFarming && _handHarvest?.FocusedNode is not null;
-		var show = showOpen || showTrial || showArena || showCampfire || showDoor || showTrap || showBed || showFarming || showHarvest;
+		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && !showBed && farmingPrompt.Length > 0;
+		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && !showBed && !showFarming && _handHarvest?.FocusedNode is not null;
+		var show = showOpen || showTrial || showArena || showCampfire || showDoor || showTrap || showLever || showBed || showFarming || showHarvest;
 
 		if ( _promptKeyLabel is not null )
 			_promptKeyLabel.Text = showFarming ? (_farming?.PromptKey ?? "E") : "E";
@@ -1225,6 +1238,10 @@ public sealed class PlayerScreenHud : PanelComponent
 			else if ( showTrap )
 			{
 				_promptLabel.Text = focusedTrap.PromptText;
+			}
+			else if ( showLever )
+			{
+				_promptLabel.Text = focusedLever.PromptText;
 			}
 			else if ( showBed )
 			{

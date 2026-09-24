@@ -16,6 +16,8 @@ public sealed partial class PlayerAnimation : Component
 		None = 0,
 		/// <summary>Citizen <c>holdtype=melee_weapons</c> (2H idle + attack graph).</summary>
 		MeleeTwoHand = 1,
+		/// <summary>Citizen <c>holdtype=HoldItem</c>, right hand (torch). See <c>PlayerAnimation.HeldLight.cs</c>.</summary>
+		HoldItemRight = 2,
 	}
 
 	static readonly string[] DemoStickRightBoneCandidates =
@@ -315,12 +317,14 @@ public sealed partial class PlayerAnimation : Component
 		// Facing before the stick transform so the held prop follows the rotated body this frame.
 		TickCombatFacingPresentation( advance: false );
 		TickMeleeDemoStickTransform();
+		TickHeldLightProp();
 	}
 
 	protected override void OnDestroy()
 	{
 		RestoreLateralSwingPlaybackRate();
 		DestroyMeleeDemoStick();
+		DestroyHeldLightProp();
 		ClearStuckNegativeBodyScale();
 		base.OnDestroy();
 	}
@@ -435,6 +439,18 @@ public sealed partial class PlayerAnimation : Component
 	HoldPose ResolveDesiredHoldPose()
 	{
 		_equippedItem ??= Components.Get<PlayerEquippedItem>();
+
+		// A torch is held upright in one hand until it is actually swung; then the melee pose owns the body.
+		var heldLight = ResolveHeldLightProfile();
+		if ( heldLight is not null && heldLight.ResolveAnchor() == HeldLightAnchor.TorchTip
+		     && !HasActiveMeleeSwingPresentation && !_windupHoldFrozen )
+			return HoldPose.HoldItemRight;
+
+		// A lantern hangs from the relaxed hand: no hold type, the prop alone shows it.
+		if ( heldLight is not null && heldLight.ResolveAnchor() == HeldLightAnchor.LanternHang
+		     && !HasActiveMeleeSwingPresentation && !_windupHoldFrozen )
+			return HoldPose.None;
+
 		if ( _equippedItem is not null && _equippedItem.IsValid()
 		     && _equippedItem.HasAction( EquippedItemActions.PrimaryMelee )
 		     && PlayMeleeSwingAnimation )
@@ -496,7 +512,16 @@ public sealed partial class PlayerAnimation : Component
 			return;
 		}
 
-		if ( _appliedHoldPose == HoldPose.MeleeTwoHand || pose == HoldPose.None )
+		if ( pose == HoldPose.HoldItemRight )
+		{
+			if ( _appliedHoldPose == HoldPose.MeleeTwoHand )
+				ClearMeleeTwoHandHold();
+			ApplyHoldItemRightHold();
+			_appliedHoldPose = HoldPose.HoldItemRight;
+			return;
+		}
+
+		if ( _appliedHoldPose != HoldPose.None || pose == HoldPose.None )
 			ClearMeleeTwoHandHold();
 
 		_appliedHoldPose = HoldPose.None;

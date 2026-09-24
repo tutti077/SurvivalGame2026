@@ -17,6 +17,8 @@ public static class CraftingRecipeCatalog
 	static string _sourceJson = string.Empty;
 	static int _contentVersion;
 	static float _lastFallbackRetryTime = -100f;
+	static float _lastJsonChangeCheckTime = -100f;
+	const float JsonChangeCheckSeconds = 2f;
 
 	public static IReadOnlyList<CraftingRecipe> All
 	{
@@ -175,10 +177,45 @@ public static class CraftingRecipeCatalog
 			// Joining clients often hit FileExists too early — retry while stuck on sword-only fallback.
 			if ( _isFallbackOnly )
 				TryReloadIfFallback();
+			else
+				TryReloadIfJsonChanged();
 			return;
 		}
 
 		ReloadFromDisk();
+	}
+
+	/// <summary>
+	/// The catalog is static and survives hotloads, so without this a recipe added to the JSON
+	/// (the wire stripper) never reached the crafting menu until a full restart. Same throttled
+	/// hash check as <see cref="BuildPieceCatalog"/> — at most every <see cref="JsonChangeCheckSeconds"/>,
+	/// never per call. Joining clients use the host's JSON (<see cref="ReplaceFromJson"/>) and are left alone.
+	/// </summary>
+	static void TryReloadIfJsonChanged()
+	{
+		if ( Networking.IsActive && !Networking.IsHost )
+			return;
+
+		if ( RealTime.Now - _lastJsonChangeCheckTime < JsonChangeCheckSeconds )
+			return;
+
+		_lastJsonChangeCheckTime = RealTime.Now;
+
+		string json;
+		try
+		{
+			json = FileSystem.Mounted.ReadAllText( RecipeFilePath );
+		}
+		catch
+		{
+			return;
+		}
+
+		if ( string.IsNullOrWhiteSpace( json ) || StringComparer.Ordinal.GetHashCode( json ) == _loadedJsonHash )
+			return;
+
+		Log.Info( "[CraftingRecipeCatalog] crafting_recipes.json changed on disk — reloading." );
+		ForceReload();
 	}
 
 	static void TryReloadIfFallback()

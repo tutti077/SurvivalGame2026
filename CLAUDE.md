@@ -179,6 +179,9 @@ Code/
   Raids/        BaseRaidCatalog (Assets/data/raids.json — counts, waves, ring + aggro meters, enemy mix) · BaseRaidSession (L: host waves,
                 win/lose, ground ring; on the BaseRaid object) · raiders run EnemyAiState.Raiding (EntityBrain.Raid.cs); banner is Code/UI/BaseRaidHud.cs
   Hacks/        GameHacks — console-toggled dev flags (allCrafting), mirrored onto pawns via [Sync] for host checks
+  Circuits/     CircuitNode (sphere + [Sync] powered/output/wires on every circuit-enabled prefab) · CircuitRegistry (host OR-solve, event-driven)
+                · CircuitLever / CircuitLight devices · CircuitWireOverlay (stripper spheres + wire lines); tool is Player/ToolWireStripper.cs,
+                cable menu Code/UI/Circuits/, pieces need "circuitEnabled": true in build_pieces.json (see AGENTS.md "Circuits")
   Environment/  WindSystem (scene wind: host owns heading + base strength via [Sync], every client simulates gusts; publishes
                 WindDirection / WindStrength / WindGust to all shaders through Scene.RenderAttributes once per frame)
                 · GrassPatch + GrassScatterer (grass through the engine Sandbox.Clutter system — GPU instanced/culled/LOD;

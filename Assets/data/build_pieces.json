@@ -404,6 +404,44 @@
           "amount": 10
         }
       ]
+    },
+    {
+      "id": "circuit_light",
+      "displayName": "Light Bulb",
+      "icon": "",
+      "prefab": "prefabs/build/circuit_light.prefab",
+      "fallbackColor": "0.55,0.75,1,1",
+      "circuitEnabled": true,
+      "halfWidth": 7.5,
+      "halfHeight": 7.5,
+      "halfDepth": 7.5,
+      "costs": [
+        {
+          "resourceId": "resource_scrap",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "circuit_lever",
+      "displayName": "Lever",
+      "icon": "",
+      "prefab": "prefabs/build/circuit_lever.prefab",
+      "fallbackColor": "0.98,0.85,0.15,1",
+      "circuitEnabled": true,
+      "halfWidth": 5,
+      "halfHeight": 5,
+      "halfDepth": 7.5,
+      "costs": [
+        {
+          "resourceId": "resource_scrap",
+          "amount": 2
+        },
+        {
+          "resourceId": "resource_woodBasic",
+          "amount": 1
+        }
+      ]
     }
   ]
 }

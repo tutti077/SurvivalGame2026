@@ -20,6 +20,8 @@ public sealed class BuildPieceData
 	/// <summary>Structural material id (see <see cref="BuildMaterialData"/>). Empty = exempt from structural integrity (furniture, stations).</summary>
 	public string MaterialId { get; set; } = string.Empty;
 	public bool AllowTerrainPlacement { get; set; } = true;
+	/// <summary>May join a wire circuit (<c>"circuitEnabled": true</c>). The prefab must also carry a <see cref="CircuitNode"/> + its device.</summary>
+	public bool CircuitEnabled { get; set; }
 	public BuildSnapRole AnchorSnapRole { get; set; } = BuildSnapRole.CornerNorthEast;
 	public float HalfWidth { get; set; } = 30f;
 	public float HalfHeight { get; set; } = 4f;

@@ -18,4 +18,6 @@ public enum EquippedItemActions
 	Fish = 1 << 6,
 	/// <summary>Hoe: till dirt into farm soil (<see cref="ToolHoe"/>). No melee or ranged paths.</summary>
 	Till = 1 << 7,
+	/// <summary>Wire stripper: link circuit-enabled objects (<see cref="ToolWireStripper"/>). No melee or ranged paths.</summary>
+	Wire = 1 << 8,
 }
