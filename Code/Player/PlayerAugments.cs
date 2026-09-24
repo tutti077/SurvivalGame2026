@@ -250,16 +250,19 @@ public sealed partial class PlayerAugments : Component
 		if ( !AugmentCatalog.TryGet( augmentId, out var def ) || !def.IsUnlockedByDefault )
 			return false;
 
-		if ( def.Ingredients is null || def.Ingredients.Count == 0 )
+		// allCrafting hack (owner's flag mirrored onto the pawn): materials are waived, same as bench recipes.
+		var free = Components.Get<PlayerCrafting>() is { AllCraftingHack: true };
+		var hasCost = def.Ingredients is { Count: > 0 };
+		if ( !free && !hasCost )
 			return false;
 
-		if ( !inventory.HasResources( def.Ingredients ) )
+		if ( !free && !inventory.HasResources( def.Ingredients ) )
 			return false;
 
 		if ( !HostCanFitBank( def.Id, 1 ) )
 			return false;
 
-		if ( !inventory.HostTryConsumeResources( def.Ingredients ) )
+		if ( !free && !inventory.HostTryConsumeResources( def.Ingredients ) )
 			return false;
 
 		if ( !HostTryAddToBank( def.Id, 1 ) )
@@ -275,10 +278,13 @@ public sealed partial class PlayerAugments : Component
 		if ( inventory is null || !AugmentCatalog.TryGet( augmentId, out var def ) || !def.IsUnlockedByDefault )
 			return false;
 
-		if ( def.Ingredients is null || def.Ingredients.Count == 0 )
+		if ( !HostCanFitBank( def.Id, 1 ) )
 			return false;
 
-		return inventory.HasResources( def.Ingredients ) && HostCanFitBank( def.Id, 1 );
+		if ( GameHacks.AllCrafting )
+			return true;
+
+		return def.Ingredients is { Count: > 0 } && inventory.HasResources( def.Ingredients );
 	}
 
 	// ── Enhance (augment cores → open a socket) ─────────────────────────────────────────────

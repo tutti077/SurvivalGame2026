@@ -35,11 +35,6 @@ public partial class PlayerCombat
 		if ( string.IsNullOrWhiteSpace( ShoveAction ) || !Input.Pressed( ShoveAction ) )
 			return;
 
-		// With wheel augments installed, F belongs to the augment wheel (PlayerAugments.Triggers):
-		// hold = wheel, plain tap release = this shove.
-		if ( Components.Get<PlayerAugments>() is { HasWheelAugments: true } )
-			return;
-
 		OwnerTryShove();
 	}
 

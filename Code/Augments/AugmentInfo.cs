@@ -42,7 +42,6 @@ public static class AugmentInfo
 			lines.Add( (tree, AugmentInfoLineKind.Slot) );
 
 		lines.Add( ($"Fits: {DescribeSlots( def )}", AugmentInfoLineKind.Slot) );
-		lines.Add( ($"Tier {def.ResolvedTier} augment", AugmentInfoLineKind.Slot) );
 		lines.Add( (DescribeActivation( def ), AugmentInfoLineKind.Activation) );
 		lines.Add( ($"Augment cost: {DescribeInstallCost( def )}", AugmentInfoLineKind.InstallCost) );
 		lines.Add( ($"Craft cost: {DescribeCraftCost( def )}", AugmentInfoLineKind.Cost) );
@@ -74,7 +73,7 @@ public static class AugmentInfo
 		return $"{school} · {category}";
 	}
 
-	/// <summary>"Trigger — key bind 1–6 · one-shot · 10 s cooldown", "Wheel — hold F · toggle · 20 s battery", "Passive".</summary>
+	/// <summary>"Trigger — key bind 1–6 · one-shot · 10 s cooldown", "Wheel — hold C · toggle · 20 s battery", "Passive".</summary>
 	public static string DescribeActivation( AugmentDefinition def )
 	{
 		if ( def is null )
@@ -87,7 +86,7 @@ public static class AugmentInfo
 				sb.Append( "Trigger — assign to a key 1–6 on the Augments page" );
 				break;
 			case AugmentActivation.Wheel:
-				sb.Append( "Wheel — hold F and pick it" );
+				sb.Append( "Wheel — hold C and pick it" );
 				break;
 			default:
 				sb.Append( "Passive" );
@@ -122,28 +121,26 @@ public static class AugmentInfo
 		return sb.ToString();
 	}
 
-	/// <summary>"150 gold" — or one figure per body part when the augment fits parts with different rates.</summary>
+	/// <summary>"150 gold" — or one figure per socket when the augment fits several (the price belongs to the socket).</summary>
 	public static string DescribeInstallCost( AugmentDefinition def )
 	{
+		// freeAugments hack: the Augment button charges nothing, so say so everywhere the price shows.
+		if ( GameHacks.FreeAugments )
+			return "free (freeAugments hack)";
+
 		var allowed = def?.AllowedSlots;
 		if ( allowed is null || allowed.Count == 0 )
 			return "—";
 
-		var seenParts = new List<AugmentBodyPart>();
 		var sb = new StringBuilder();
 		for ( var i = 0; i < allowed.Count; i++ )
 		{
-			var part = AugmentSlots.PartOf( allowed[i] );
-			if ( seenParts.Contains( part ) )
-				continue;
-
-			seenParts.Add( part );
 			if ( sb.Length > 0 )
 				sb.Append( " · " );
 
-			var cost = def.InstallGoldCost( allowed[i] );
-			sb.Append( seenParts.Count > 1 || allowed.Count > 1
-				? $"{AugmentBodyParts.Label( part )} {cost} gold"
+			var cost = AugmentBodyParts.InstallGoldCost( allowed[i] );
+			sb.Append( allowed.Count > 1
+				? $"{AugmentSlots.Label( allowed[i] )} {cost} gold"
 				: $"{cost} gold" );
 		}
 
@@ -152,6 +149,9 @@ public static class AugmentInfo
 
 	public static string DescribeCraftCost( AugmentDefinition def )
 	{
+		if ( GameHacks.AllCrafting )
+			return "free (allCrafting hack)";
+
 		if ( def?.Ingredients is null || def.Ingredients.Count == 0 )
 			return "free";
 

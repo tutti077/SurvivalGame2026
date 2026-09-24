@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Sandbox;
 using Sandbox.UI;
 
@@ -48,8 +49,31 @@ public sealed class AugmentPaperdollView
 	readonly PartUi[] _partUi = new PartUi[AugmentBodyParts.Count];
 	AugmentPlayerPreviewPanel _preview;
 	Panel _previewFrame;
+	Panel _body;
 	bool _previewDragging;
+	bool _pointerWasHeld;
 	float _previewDragLastX;
+
+	// ── Fit-to-space scaling ────────────────────────────────────────────────────────────────
+	// The doll is authored at 1× (56 px sockets, 300 px preview). Every menu tick it measures the
+	// row it lives in and scales every sized element so the parts and the preview fill that row
+	// with little slack — fullscreen gets a big doll, a small window keeps the 1× layout.
+	const float NominalBlockHeight = 26f + 4f + 56f + 2f + 16f;
+	const float NominalBlockGap = 12f;
+	const float NominalRowWidth = 2f * 226f + 300f + 24f;
+	const float MaxScale = 2.6f;
+
+	readonly List<(Panel Panel, float Width, float Height)> _scaledBoxes = new();
+	readonly List<(Label Label, float Font)> _scaledLabels = new();
+	readonly List<Panel> _scaledBlocks = new();
+	float _appliedScale = 1f;
+
+	/// <summary>Nominal (1×) height of the doll row: three blocks and two gaps.</summary>
+	public const float NominalHeight = 3f * NominalBlockHeight + 2f * NominalBlockGap;
+
+	/// <summary>Fired with the new scale whenever the fit changes — the owning page scales its own extras (bank, binds, buttons) to match.</summary>
+	public event Action<float> ScaleApplied;
+	public float AppliedScale => _appliedScale;
 
 	/// <param name="interactive">True at the station (Enhance buttons shown); false on the Augments page (view only).</param>
 	public AugmentPaperdollView( PlayerAugments augments, IInventoryGridHost gridHost, PlayerInventoryInteraction interaction, bool interactive )
@@ -64,6 +88,7 @@ public sealed class AugmentPaperdollView
 	public void Build( Panel parent )
 	{
 		var body = new Panel { Parent = parent };
+		_body = body;
 		body.Style.Set( "flex-direction", "row" );
 		body.Style.Set( "width", "100%" );
 		body.Style.Set( "flex-grow", "1" );
@@ -85,6 +110,7 @@ public sealed class AugmentPaperdollView
 		previewFrame.Style.Set( "flex-direction", "column" );
 		previewFrame.Style.Width = Length.Pixels( PreviewWidth );
 		previewFrame.Style.Set( "flex-shrink", "0" );
+		_scaledBoxes.Add( (previewFrame, PreviewWidth, 0f) );
 		previewFrame.Style.BackgroundColor = BoxBg;
 		previewFrame.Style.Set( "border-radius", "4px" );
 		previewFrame.Style.Set( "border-width", "1px" );
@@ -111,18 +137,22 @@ public sealed class AugmentPaperdollView
 		block.Style.Set( "flex-direction", "column" );
 		block.Style.Set( "gap", "4px" );
 		block.Style.Set( "flex-shrink", "0" );
+		_scaledBlocks.Add( block );
 
 		var header = new Panel { Parent = block };
 		header.Style.Set( "flex-direction", "row" );
 		header.Style.Set( "align-items", "center" );
 		header.Style.Set( "gap", "8px" );
 		header.Style.Height = Length.Pixels( 26f );
+		_scaledBoxes.Add( (header, 0f, 26f) );
 
 		var name = new Label { Parent = header, Text = AugmentBodyParts.Label( part ) };
 		name.Style.FontColor = TitleColor;
 		name.Style.FontSize = Length.Pixels( BodyFont );
 		name.Style.Width = Length.Pixels( 60f );
 		name.Style.Set( "pointer-events", "none" );
+		_scaledLabels.Add( (name, BodyFont) );
+		_scaledBoxes.Add( (name, 60f, 0f) );
 
 		Panel enhance = null;
 		Label enhanceLabel = null;
@@ -133,6 +163,7 @@ public sealed class AugmentPaperdollView
 			enhance = new Panel { Parent = header };
 			enhance.Style.Width = Length.Pixels( 96f );
 			enhance.Style.Height = Length.Pixels( 28f );
+			_scaledBoxes.Add( (enhance, 96f, 28f) );
 			enhance.Style.BackgroundColor = EnhanceOn;
 			enhance.Style.Set( "border-radius", "4px" );
 			enhance.Style.Set( "justify-content", "center" );
@@ -143,13 +174,16 @@ public sealed class AugmentPaperdollView
 			enhanceLabel.Style.FontColor = Color.White;
 			enhanceLabel.Style.FontSize = Length.Pixels( SmallFont + 1f );
 			enhanceLabel.Style.Set( "pointer-events", "none" );
+			_scaledLabels.Add( (enhanceLabel, SmallFont + 1f) );
 
 			cost = new Label { Parent = header, Text = "" };
 			cost.Style.FontColor = CostColor;
 			cost.Style.FontSize = Length.Pixels( BodyFont );
 			cost.Style.Set( "pointer-events", "none" );
+			_scaledLabels.Add( (cost, BodyFont) );
 
 			coreIcon = MakeCostIcon( header, $"ui/items/{AugmentCurrency.CoreResourceId}.png" );
+			_scaledBoxes.Add( (coreIcon, CostIconSize, CostIconSize) );
 		}
 		else
 		{
@@ -158,6 +192,7 @@ public sealed class AugmentPaperdollView
 			cost.Style.FontColor = MutedColor;
 			cost.Style.FontSize = Length.Pixels( SmallFont );
 			cost.Style.Set( "pointer-events", "none" );
+			_scaledLabels.Add( (cost, SmallFont) );
 		}
 
 		var socketsRow = new Panel { Parent = block };
@@ -178,10 +213,12 @@ public sealed class AugmentPaperdollView
 		host.Style.Set( "align-items", "center" );
 		host.Style.Set( "gap", "2px" );
 		host.Style.Width = Length.Pixels( SlotSize + 8f );
+		_scaledBoxes.Add( (host, SlotSize + 8f, 0f) );
 
 		var slotPanel = new InventorySlotPanel( (int)slot, _gridHost, _interaction ) { Parent = host };
 		StyleSlot( slotPanel );
 		_interaction?.RegisterSlot( slotPanel );
+		_scaledBoxes.Add( (slotPanel, SlotSize, SlotSize) );
 		var ui = CreateSlotUi( slotPanel );
 
 		var lockOverlay = new Panel { Parent = slotPanel };
@@ -198,13 +235,80 @@ public sealed class AugmentPaperdollView
 		lockText.Style.FontColor = new Color( 0.55f, 0.57f, 0.62f );
 		lockText.Style.FontSize = Length.Pixels( 11f );
 		lockText.Style.Set( "pointer-events", "none" );
+		_scaledLabels.Add( (lockText, 11f) );
 
 		var label = new Label { Parent = host, Text = AugmentSlots.VariationLabel( slot ) };
 		label.Style.FontColor = LabelColor;
 		label.Style.FontSize = Length.Pixels( SmallFont - 1f );
 		label.Style.Set( "pointer-events", "none" );
+		_scaledLabels.Add( (label, SmallFont - 1f) );
 
 		_socketUi[(int)slot] = new SocketUi( slotPanel, ui, lockOverlay );
+	}
+
+	/// <summary>
+	/// Every menu tick: measure the page column and scale the doll (and, through
+	/// <see cref="ScaleApplied"/>, the page's extras) so the whole stack fills it. The column is
+	/// measured rather than the doll row so extras that grow with the scale cannot feed back into
+	/// the fit. Cheap — one rect read and an early-out unless the fit moved a few percent.
+	/// </summary>
+	/// <param name="column">The page column the doll sits in.</param>
+	/// <param name="extraScalableNominal">1× height of everything else in the column that scales with the doll.</param>
+	/// <param name="fixedHeight">Height of everything that does not scale (titles, gaps, padding).</param>
+	public void TickLayout( Panel column, float extraScalableNominal, float fixedHeight )
+	{
+		if ( column is null || !column.IsValid() )
+			return;
+
+		var scale = column.ScaleToScreen;
+		if ( scale < 0.001f )
+			return;
+
+		var rect = column.Box.Rect;
+		var height = rect.Height / scale - fixedHeight;
+		var width = rect.Width / scale - 20f;
+		if ( height < 10f || width < 10f )
+			return;
+
+		var byHeight = height / (NominalHeight + MathF.Max( 0f, extraScalableNominal ));
+		var byWidth = width / NominalRowWidth;
+		var fit = Math.Clamp( MathF.Min( byHeight, byWidth ), 1f, MaxScale );
+		if ( MathF.Abs( fit - _appliedScale ) < 0.03f )
+			return;
+
+		ApplyScale( fit );
+		ScaleApplied?.Invoke( fit );
+	}
+
+	void ApplyScale( float s )
+	{
+		_appliedScale = s;
+
+		for ( var i = 0; i < _scaledBoxes.Count; i++ )
+		{
+			var (panel, w, h) = _scaledBoxes[i];
+			if ( panel is null || !panel.IsValid() )
+				continue;
+
+			if ( w > 0f )
+				panel.Style.Width = Length.Pixels( w * s );
+			if ( h > 0f )
+				panel.Style.Height = Length.Pixels( h * s );
+		}
+
+		for ( var i = 0; i < _scaledLabels.Count; i++ )
+		{
+			var (label, font) = _scaledLabels[i];
+			if ( label is not null && label.IsValid() )
+				label.Style.FontSize = Length.Pixels( font * s );
+		}
+
+		for ( var i = 0; i < _scaledBlocks.Count; i++ )
+		{
+			var block = _scaledBlocks[i];
+			if ( block is not null && block.IsValid() )
+				block.Style.Set( "gap", $"{4f * s:0.#}px" );
+		}
 	}
 
 	/// <summary>
@@ -213,6 +317,9 @@ public sealed class AugmentPaperdollView
 	/// </summary>
 	public void TickPointerDrag( Vector2 screenPos, bool held )
 	{
+		var pressedThisFrame = held && !_pointerWasHeld;
+		_pointerWasHeld = held;
+
 		if ( !held )
 		{
 			_previewDragging = false;
@@ -225,6 +332,11 @@ public sealed class AugmentPaperdollView
 			_previewDragLastX = screenPos.x;
 			return;
 		}
+
+		// Only a press that lands on the box starts a spin — a button held elsewhere and dragged
+		// across the preview (an item drag, a scrollbar drag) never grabs the character.
+		if ( !pressedThisFrame )
+			return;
 
 		if ( _previewFrame is null || !_previewFrame.IsValid() || !_previewFrame.IsInside( screenPos ) )
 			return;

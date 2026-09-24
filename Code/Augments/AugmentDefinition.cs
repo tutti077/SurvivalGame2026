@@ -64,7 +64,6 @@ public sealed class AugmentDefinitionFile
 
 public sealed class AugmentDefinition
 {
-	public const int MaxTier = 3;
 	public const float DefaultCooldownSeconds = 10f;
 
 	/// <summary>Canonical item id (bank / bag / installed slot ResourceId).</summary>
@@ -88,10 +87,6 @@ public sealed class AugmentDefinition
 	/// </summary>
 	[JsonPropertyName( "slots" )]
 	public List<string> Slots { get; set; } = new();
-
-	/// <summary>Augment tier 1..3 — multiplies the body part's base install cost (×1 / ×2 / ×3).</summary>
-	[JsonPropertyName( "tier" )]
-	public int Tier { get; set; } = 1;
 
 	[JsonPropertyName( "ability" )]
 	public string Ability { get; set; } = string.Empty;
@@ -145,7 +140,6 @@ public sealed class AugmentDefinition
 	public string UnlockId { get; set; } = string.Empty;
 
 	public int ResolvedMaxStack => MaxStack > 0 ? MaxStack : 1;
-	public int ResolvedTier => Math.Clamp( Tier, 1, MaxTier );
 	public bool IsUnlockedByDefault => string.IsNullOrWhiteSpace( UnlockId );
 	public float ResolvedCooldownSeconds => Math.Max( 0f, CooldownSeconds );
 	public bool HasBattery => BatterySeconds > 0f;
@@ -213,9 +207,8 @@ public sealed class AugmentDefinition
 		return allowed.Count > 0;
 	}
 
-	/// <summary>Gold coins the augment step charges to put this augment into <paramref name="slot"/>.</summary>
-	public int InstallGoldCost( AugmentSlot slot ) =>
-		AugmentBodyParts.InstallGoldCost( AugmentSlots.PartOf( slot ), ResolvedTier );
+	/// <summary>Gold coins the augment step charges to put this augment into <paramref name="slot"/> (price belongs to the socket).</summary>
+	public int InstallGoldCost( AugmentSlot slot ) => AugmentBodyParts.InstallGoldCost( slot );
 
 	public AugmentAbility ResolvedAbility
 	{

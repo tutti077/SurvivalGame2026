@@ -5,7 +5,9 @@ namespace Survival;
 /// <summary>Grid host for the player augment bank (crafted storage).</summary>
 public sealed class PlayerAugmentBankGridHost : IInventoryGridHost
 {
-	public string GridId => "augment_bank";
+	public const string GridIdValue = "augment_bank";
+
+	public string GridId => GridIdValue;
 	public PlayerInventory Inventory { get; }
 	public PlayerHotbar Hotbar => null;
 

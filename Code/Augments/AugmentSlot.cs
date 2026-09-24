@@ -133,7 +133,7 @@ public static class AugmentBodyParts
 		_ => 1,
 	};
 
-	/// <summary>Gold coins to install a tier-1 augment into this part (×2 for tier 2, ×3 for tier 3 augments).</summary>
+	/// <summary>Gold coins to install into this part's first socket; the second costs ×2 and the third ×3.</summary>
 	public static int BaseInstallGoldCost( AugmentBodyPart part ) => part switch
 	{
 		AugmentBodyPart.Head or AugmentBodyPart.Torso => 100,
@@ -141,8 +141,9 @@ public static class AugmentBodyParts
 		_ => 50,
 	};
 
-	public static int InstallGoldCost( AugmentBodyPart part, int augmentTier ) =>
-		BaseInstallGoldCost( part ) * Math.Clamp( augmentTier, 1, AugmentDefinition.MaxTier );
+	/// <summary>Install price of a socket: part base × its position in the part (eye 1×, jaw 2×, cranium 3×).</summary>
+	public static int InstallGoldCost( AugmentSlot slot ) =>
+		BaseInstallGoldCost( AugmentSlots.PartOf( slot ) ) * (AugmentSlots.IndexInPart( slot ) + 1);
 
 	public static string Label( AugmentBodyPart part ) => part switch
 	{

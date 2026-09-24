@@ -20,7 +20,8 @@ public sealed partial class PlayerAugments
 	/// <summary>Number row 1–6 — the hotbar no longer listens to these.</summary>
 	static readonly string[] BindActions = { "Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6" };
 
-	public const string WheelAction = "Shove";
+	/// <summary>Hold to open the radial (C). Its own action — F stays the shove.</summary>
+	public const string WheelAction = "AugmentWheel";
 	const float WheelDeadZonePixels = 36f;
 
 	/// <summary>Owner: an activatable augment fired or switched on (HUD / feedback).</summary>
@@ -253,7 +254,7 @@ public sealed partial class PlayerAugments
 		}
 	}
 
-	// ── Wheel (hold F, release to pick; plain tap = shove) ──────────────────────────────────
+	// ── Wheel (hold C, release to pick) ─────────────────────────────────────────────────────
 
 	void TickWheel( bool menuOpen )
 	{
@@ -308,13 +309,7 @@ public sealed partial class PlayerAugments
 
 		var entries = WheelEntries;
 		if ( picked >= 0 && picked < entries.Count )
-		{
 			OwnerTryActivate( entries[picked].Id );
-			return;
-		}
-
-		// Tap with no pick: F still shoves.
-		Components.Get<PlayerCombat>()?.OwnerTryShove();
 	}
 
 	static Vector2 ReadWheelDelta()

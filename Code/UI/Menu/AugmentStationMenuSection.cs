@@ -53,6 +53,18 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 	readonly List<AugmentPaperdollView.SlotUi> _bankUi = new();
 	readonly List<AugmentPaperdollView.SlotUi> _bagUi = new();
 	readonly List<RowUi> _rows = new();
+	readonly List<Panel> _bankSlotPanels = new();
+	readonly List<Panel> _bankRows = new();
+
+	// Column fit: what sits under the doll at 1× (scales with it) and what never scales.
+	const float BankRowCount = 2f;
+	const float BankTitleFont = BodyFont;
+	const float CommitButtonWidth = 220f;
+	const float ExtraScalableNominal = ButtonHeight + BankTitleFont + 6f + BankRowCount * SlotSize + (BankRowCount - 1f) * SlotGap;
+	const float FixedColumnHeight = HeaderFont + 8f + 5f * 8f + 20f;
+
+	Panel _stationColumn;
+	Label _bankTitle;
 
 	Panel _sectionRoot;
 	Panel _craftButton;
@@ -318,13 +330,6 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		name.Style.FontSize = Length.Pixels( BodyFont );
 		name.Style.Set( "pointer-events", "none" );
 
-		var tier = new Label { Parent = row, Text = $"T{def.ResolvedTier}" };
-		tier.Style.FontColor = MutedColor;
-		tier.Style.FontSize = Length.Pixels( SmallFont );
-		tier.Style.Set( "margin-left", "auto" );
-		tier.Style.PaddingRight = Length.Pixels( 8f );
-		tier.Style.Set( "pointer-events", "none" );
-
 		_rows.Add( new RowUi( row, def.Id ) );
 		_contentHeight += RowHeight + RowGap;
 	}
@@ -357,7 +362,7 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		}
 
 		_detailName.Text = def.DisplayName;
-		_detailCostLabel.Text = AugmentInfo.DescribeInstallCost( def ).Replace( " gold", "" );
+		_detailCostLabel.Text = GameHacks.FreeAugments ? "free" : AugmentInfo.DescribeInstallCost( def ).Replace( " gold", "" );
 		_detailCostRow.Style.Set( "display", "flex" );
 		foreach ( var (text, kind) in AugmentInfo.BuildLines( def ) )
 		{
@@ -527,10 +532,12 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 	{
 		var col = MakeColumn( parent, "52%" );
 		col.Style.Set( "align-items", "center" );
+		_stationColumn = col;
 
 		AddTitle( col, "Augment Station" );
 
 		_doll.Build( col );
+		_doll.ScaleApplied += ApplyExtraScale;
 
 		// Augment (commit) button + its gold cost readout.
 		var commitRow = new Panel { Parent = col };
@@ -549,22 +556,74 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 
 		_augmentCostIcon = AugmentPaperdollView.MakeCostIcon( commitRow, "ui/items/currency_goldCoins.png" );
 
-		// Bank strip (title dropped — the doll needs the vertical room on small screens).
+		// Bank: fixed 2 × 8 rows (no wrap — a wrapped grid left a stray pair eating the column), scaled with the doll.
+		_bankTitle = new Label { Parent = col, Text = "Augment Bank" };
+		_bankTitle.Style.FontColor = TitleColor;
+		_bankTitle.Style.FontSize = Length.Pixels( BankTitleFont );
+		_bankTitle.Style.Set( "flex-shrink", "0" );
+		_bankTitle.Style.Set( "pointer-events", "none" );
+
 		var bankGrid = new Panel { Parent = col };
-		bankGrid.Style.Set( "flex-direction", "row" );
-		bankGrid.Style.Set( "flex-wrap", "wrap" );
+		bankGrid.Style.Set( "flex-direction", "column" );
 		bankGrid.Style.Set( "gap", $"{SlotGap}px" );
-		bankGrid.Style.Set( "justify-content", "center" );
+		bankGrid.Style.Set( "align-items", "center" );
 		bankGrid.Style.Set( "flex-shrink", "0" );
-		bankGrid.Style.Width = Length.Pixels( SlotSize * PlayerAugments.BankColumns + SlotGap * (PlayerAugments.BankColumns - 1) );
 
 		_bankUi.Clear();
+		_bankSlotPanels.Clear();
+		_bankRows.Clear();
+		Panel row = null;
 		for ( var i = 0; i < PlayerAugments.BankSlotCount; i++ )
 		{
-			var slotPanel = new InventorySlotPanel( i, _bankHost, _interaction ) { Parent = bankGrid };
+			if ( i % PlayerAugments.BankColumns == 0 )
+			{
+				row = new Panel { Parent = bankGrid };
+				row.Style.Set( "flex-direction", "row" );
+				row.Style.Set( "gap", $"{SlotGap}px" );
+				row.Style.Set( "flex-shrink", "0" );
+				_bankRows.Add( row );
+			}
+
+			var slotPanel = new InventorySlotPanel( i, _bankHost, _interaction ) { Parent = row };
 			AugmentPaperdollView.StyleSlot( slotPanel );
 			_interaction?.RegisterSlot( slotPanel );
+			_bankSlotPanels.Add( slotPanel );
 			_bankUi.Add( AugmentPaperdollView.CreateSlotUi( slotPanel ) );
+		}
+	}
+
+	/// <summary>Doll fit changed: the Augment button, bank title and bank slots follow the same scale.</summary>
+	void ApplyExtraScale( float s )
+	{
+		if ( _augmentButton is not null && _augmentButton.IsValid() )
+		{
+			_augmentButton.Style.Width = Length.Pixels( CommitButtonWidth * s );
+			_augmentButton.Style.Height = Length.Pixels( ButtonHeight * s );
+		}
+
+		if ( _augmentLabel is not null && _augmentLabel.IsValid() )
+			_augmentLabel.Style.FontSize = Length.Pixels( BodyFont * s );
+
+		if ( _augmentCostLabel is not null && _augmentCostLabel.IsValid() )
+			_augmentCostLabel.Style.FontSize = Length.Pixels( BodyFont * s );
+
+		if ( _bankTitle is not null && _bankTitle.IsValid() )
+			_bankTitle.Style.FontSize = Length.Pixels( BankTitleFont * s );
+
+		for ( var i = 0; i < _bankSlotPanels.Count; i++ )
+		{
+			var slot = _bankSlotPanels[i];
+			if ( slot is null || !slot.IsValid() )
+				continue;
+
+			slot.Style.Width = Length.Pixels( SlotSize * s );
+			slot.Style.Height = Length.Pixels( SlotSize * s );
+		}
+
+		for ( var i = 0; i < _bankRows.Count; i++ )
+		{
+			if ( _bankRows[i] is { } bankRow && bankRow.IsValid() )
+				bankRow.Style.Set( "gap", $"{SlotGap * s:0.#}px" );
 		}
 	}
 
@@ -715,6 +774,7 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		if ( (_augments?.ContentsVersion ?? -1) != _lastAugmentVersion )
 			Refresh();
 
+		_doll.TickLayout( _stationColumn, ExtraScalableNominal, FixedColumnHeight );
 		UpdateScrollbarVisual();
 	}
 

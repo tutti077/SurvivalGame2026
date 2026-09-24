@@ -25,6 +25,15 @@ public sealed class AugmentsMenuSection : IPlayerMenuSection
 	readonly PlayerAugmentBindGridHost _bindHost;
 	readonly AugmentPaperdollView _doll;
 	readonly List<AugmentPaperdollView.SlotUi> _bindUi = new();
+	readonly List<Panel> _bindSlotPanels = new();
+	readonly List<Label> _bindKeyLabels = new();
+	Panel _bindRow;
+
+	// Column fit: bind title + slots + key labels + hint scale with the doll; page title, gaps and padding do not.
+	const float ExtraScalableNominal = (AugmentPaperdollView.SmallFont + 1f) + AugmentPaperdollView.SlotSize + 2f + AugmentPaperdollView.SmallFont + (AugmentPaperdollView.SmallFont + 1f);
+	const float FixedColumnHeight = HeaderFont + 8f + 4f * 8f + 20f;
+	Label _bindTitle;
+	Label _hint;
 
 	Panel _sectionRoot;
 	bool _menuOpen;
@@ -71,23 +80,26 @@ public sealed class AugmentsMenuSection : IPlayerMenuSection
 		AddTitle( "Augments" );
 
 		_doll.Build( _sectionRoot );
+		_doll.ScaleApplied += ApplyExtraScale;
 
 		// Key binds 1–6.
-		var bindTitle = new Label { Parent = _sectionRoot, Text = "Key binds — drag a trigger augment from the doll onto a key" };
-		bindTitle.Style.FontColor = AugmentPaperdollView.LabelColor;
-		bindTitle.Style.FontSize = Length.Pixels( AugmentPaperdollView.SmallFont + 1f );
-		bindTitle.Style.Set( "flex-shrink", "0" );
-		bindTitle.Style.Set( "pointer-events", "none" );
+		_bindTitle = new Label { Parent = _sectionRoot, Text = "Key binds — drag a trigger augment from the doll onto a key" };
+		_bindTitle.Style.FontColor = AugmentPaperdollView.LabelColor;
+		_bindTitle.Style.FontSize = Length.Pixels( AugmentPaperdollView.SmallFont + 1f );
+		_bindTitle.Style.Set( "flex-shrink", "0" );
+		_bindTitle.Style.Set( "pointer-events", "none" );
 
-		var bindRow = new Panel { Parent = _sectionRoot };
-		bindRow.Style.Set( "flex-direction", "row" );
-		bindRow.Style.Set( "gap", $"{AugmentPaperdollView.SlotGap * 2f}px" );
-		bindRow.Style.Set( "flex-shrink", "0" );
+		_bindRow = new Panel { Parent = _sectionRoot };
+		_bindRow.Style.Set( "flex-direction", "row" );
+		_bindRow.Style.Set( "gap", $"{AugmentPaperdollView.SlotGap * 2f}px" );
+		_bindRow.Style.Set( "flex-shrink", "0" );
 
 		_bindUi.Clear();
+		_bindSlotPanels.Clear();
+		_bindKeyLabels.Clear();
 		for ( var i = 0; i < PlayerAugments.BindCount; i++ )
 		{
-			var host = new Panel { Parent = bindRow };
+			var host = new Panel { Parent = _bindRow };
 			host.Style.Set( "flex-direction", "column" );
 			host.Style.Set( "align-items", "center" );
 			host.Style.Set( "gap", "2px" );
@@ -95,19 +107,21 @@ public sealed class AugmentsMenuSection : IPlayerMenuSection
 			var slotPanel = new InventorySlotPanel( i, _bindHost, _interaction ) { Parent = host };
 			AugmentPaperdollView.StyleSlot( slotPanel );
 			_interaction?.RegisterSlot( slotPanel );
+			_bindSlotPanels.Add( slotPanel );
 			_bindUi.Add( AugmentPaperdollView.CreateSlotUi( slotPanel ) );
 
 			var key = new Label { Parent = host, Text = (i + 1).ToString() };
 			key.Style.FontColor = AugmentPaperdollView.LabelColor;
 			key.Style.FontSize = Length.Pixels( AugmentPaperdollView.SmallFont );
 			key.Style.Set( "pointer-events", "none" );
+			_bindKeyLabels.Add( key );
 		}
 
-		var hint = new Label { Parent = _sectionRoot, Text = "Wheel augments are picked by holding F. Visit an augment station to enhance, install or remove augments." };
-		hint.Style.FontColor = AugmentPaperdollView.MutedColor;
-		hint.Style.FontSize = Length.Pixels( AugmentPaperdollView.SmallFont + 1f );
-		hint.Style.Set( "flex-shrink", "0" );
-		hint.Style.Set( "pointer-events", "none" );
+		_hint = new Label { Parent = _sectionRoot, Text = "Wheel augments are picked by holding C. Visit an augment station to enhance, install or remove augments." };
+		_hint.Style.FontColor = AugmentPaperdollView.MutedColor;
+		_hint.Style.FontSize = Length.Pixels( AugmentPaperdollView.SmallFont + 1f );
+		_hint.Style.Set( "flex-shrink", "0" );
+		_hint.Style.Set( "pointer-events", "none" );
 
 		Refresh();
 		UpdateVisibility();
@@ -122,6 +136,33 @@ public sealed class AugmentsMenuSection : IPlayerMenuSection
 		title.Style.Set( "text-align", "center" );
 		title.Style.Set( "flex-shrink", "0" );
 		title.Style.Set( "pointer-events", "none" );
+	}
+
+	/// <summary>Doll fit changed: the bind row, its labels and the hint follow the same scale.</summary>
+	void ApplyExtraScale( float s )
+	{
+		if ( _bindTitle is not null && _bindTitle.IsValid() )
+			_bindTitle.Style.FontSize = Length.Pixels( (AugmentPaperdollView.SmallFont + 1f) * s );
+		if ( _hint is not null && _hint.IsValid() )
+			_hint.Style.FontSize = Length.Pixels( (AugmentPaperdollView.SmallFont + 1f) * s );
+		if ( _bindRow is not null && _bindRow.IsValid() )
+			_bindRow.Style.Set( "gap", $"{AugmentPaperdollView.SlotGap * 2f * s:0.#}px" );
+
+		for ( var i = 0; i < _bindSlotPanels.Count; i++ )
+		{
+			var slot = _bindSlotPanels[i];
+			if ( slot is null || !slot.IsValid() )
+				continue;
+
+			slot.Style.Width = Length.Pixels( AugmentPaperdollView.SlotSize * s );
+			slot.Style.Height = Length.Pixels( AugmentPaperdollView.SlotSize * s );
+		}
+
+		for ( var i = 0; i < _bindKeyLabels.Count; i++ )
+		{
+			if ( _bindKeyLabels[i] is { } key && key.IsValid() )
+				key.Style.FontSize = Length.Pixels( AugmentPaperdollView.SmallFont * s );
+		}
 	}
 
 	public void Refresh()
@@ -162,6 +203,8 @@ public sealed class AugmentsMenuSection : IPlayerMenuSection
 
 		if ( (_augments?.ContentsVersion ?? -1) != _lastAugmentVersion )
 			Refresh();
+
+		_doll.TickLayout( _sectionRoot, ExtraScalableNominal, FixedColumnHeight );
 	}
 
 	/// <summary>Overlay page drag (pointer + Attack1 held): click-drag on the preview spins the body.</summary>

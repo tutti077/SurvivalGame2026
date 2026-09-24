@@ -6,7 +6,7 @@ using Sandbox.UI;
 namespace Survival;
 
 /// <summary>
-/// The F radial: installed wheel augments laid out on a ring around screen centre while
+/// The C radial: installed wheel augments laid out on a ring around screen centre while
 /// <see cref="PlayerAugments.IsWheelOpen"/>. Segment 0 sits at the top, the rest clockwise — the same
 /// convention the pawn uses to turn mouse travel into a pick. The highlighted entry shows its name
 /// in the middle; a toggle that is on carries a green edge.
@@ -98,7 +98,7 @@ public sealed class AugmentWheelHud
 
 		_center.Text = selected >= 0 && selected < entries.Count
 			? entries[selected].DisplayName
-			: entries.Count > 0 ? "Move to pick · release F" : "";
+			: entries.Count > 0 ? "Move to pick · release C" : "";
 	}
 
 	void RebuildIfChanged( IReadOnlyList<AugmentDefinition> entries )

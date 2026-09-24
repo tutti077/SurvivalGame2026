@@ -556,6 +556,11 @@ public sealed partial class PlayerInventoryInteraction : Component
 			if ( IsClosedContainerSlot( slot ) )
 				continue;
 
+			// Slots on a page that is not showing keep their last laid-out rect — the Augments page's
+			// bind row sat exactly over the station's bank and swallowed every drop into it.
+			if ( !slot.IsVisible )
+				continue;
+
 			if ( SlotContainsScreenPoint( slot, screenPosition ) )
 				return slot;
 		}
@@ -1109,6 +1114,10 @@ public sealed partial class PlayerInventoryInteraction : Component
 		if ( source.IsEmpty )
 			return;
 
+		// Augments have one home each — never shuffle them around the bank.
+		if ( AugmentCatalog.IsAugment( source.ResourceId ) && TryQuickMoveAugment( fromHost, fromIndex ) )
+			return;
+
 		// Open container takes priority: bag/hotbar → container, container → bag.
 		if ( _containerGrid is { IsActive: true } )
 		{
@@ -1144,6 +1153,39 @@ public sealed partial class PlayerInventoryInteraction : Component
 		// Paperdoll / container → bag
 		if ( fromHost.GridId is not "player" )
 			TryQuickMoveToPlayerBag( fromHost, fromIndex );
+	}
+
+	/// <summary>
+	/// Shift-click on an augment at the station: bank / bag → the first open, empty socket it fits;
+	/// socket → bank; bag → bank when no socket is open. Handled (true) even when nothing moved, so the
+	/// generic storage loop cannot bounce it around the bank.
+	/// </summary>
+	bool TryQuickMoveAugment( IInventoryGridHost fromHost, int fromIndex )
+	{
+		IInventoryGridHost installed = null;
+		IInventoryGridHost bank = null;
+		for ( var i = 0; i < _grids.Count; i++ )
+		{
+			var grid = _grids[i];
+			if ( grid?.GridId == PlayerAugmentInstalledGridHost.InteractiveGridId )
+				installed = grid;
+			else if ( grid?.GridId == PlayerAugmentBankGridHost.GridIdValue )
+				bank = grid;
+		}
+
+		if ( installed is null || bank is null )
+			return false;
+
+		if ( fromHost.GridId == PlayerAugmentInstalledGridHost.InteractiveGridId )
+			return TryCrossGridQuickMove( fromHost, fromIndex, bank );
+
+		if ( TryCrossGridQuickMove( fromHost, fromIndex, installed ) )
+			return true;
+
+		if ( fromHost.GridId != PlayerAugmentBankGridHost.GridIdValue )
+			return TryCrossGridQuickMove( fromHost, fromIndex, bank );
+
+		return true;
 	}
 
 	bool TryQuickMoveToPlayerBag( IInventoryGridHost fromHost, int fromIndex )
@@ -1295,6 +1337,11 @@ public sealed partial class PlayerInventoryInteraction : Component
 				continue;
 
 			if ( IsClosedContainerSlot( slot ) )
+				continue;
+
+			// Slots on a page that is not showing keep their last laid-out rect — the Augments page's
+			// bind row sat exactly over the station's bank and swallowed every drop into it.
+			if ( !slot.IsVisible )
 				continue;
 
 			if ( SlotContainsScreenPoint( slot, screenPosition ) )

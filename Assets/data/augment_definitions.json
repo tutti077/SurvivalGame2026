@@ -1,8 +1,8 @@
 {
   // Generated from Mark's augment table (2026-09-24). Fields:
-  //   slots: every socket the augment may go into (AugmentSlot names). tier 1-3 multiplies the body
-  //   part's base install price (hands/feet 50, arms/legs 75, head/torso 100 gold per tier):
-  //   N/A tree = 1, Melee/Ranged = 2, Cyber = 3.
+  //   slots: every socket the augment may go into (AugmentSlot names). The install price belongs to
+  //   the socket: part base (hands/feet 50, arms/legs 75, head/torso 100 gold) x the socket's position
+  //   in its part (eye 1x, jaw 2x, cranium 3x).
   //   activation: passive | trigger (keys 1-6, assigned on the Augments page) | wheel (hold F).
   //   mode: oneshot | toggle. cooldownSeconds / batterySeconds / batteryRechargeSeconds tune the
   //   activation; effectSeconds / effectScale / effectRadiusMeters / effectChance feed the ability.
@@ -20,7 +20,6 @@
       "slots": [
         "FeetHeel"
       ],
-      "tier": 1,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -41,7 +40,6 @@
       "slots": [
         "FeetToes"
       ],
-      "tier": 1,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -62,7 +60,6 @@
       "slots": [
         "HeadEye"
       ],
-      "tier": 1,
       "activation": "wheel",
       "maxStack": 1,
       "ingredients": [
@@ -87,7 +84,6 @@
       "slots": [
         "FeetAnkle"
       ],
-      "tier": 1,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -109,7 +105,6 @@
       "slots": [
         "LegQuads"
       ],
-      "tier": 1,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -134,7 +129,6 @@
       "slots": [
         "HeadCranium"
       ],
-      "tier": 2,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -155,7 +149,6 @@
       "slots": [
         "HeadJaw"
       ],
-      "tier": 2,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -178,7 +171,6 @@
       "slots": [
         "TorsoChest"
       ],
-      "tier": 1,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -199,7 +191,6 @@
       "slots": [
         "ArmForearms"
       ],
-      "tier": 2,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -220,7 +211,6 @@
       "slots": [
         "HeadEye"
       ],
-      "tier": 2,
       "activation": "wheel",
       "maxStack": 1,
       "ingredients": [
@@ -245,7 +235,6 @@
       "slots": [
         "LegCalves"
       ],
-      "tier": 2,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -268,7 +257,6 @@
       "slots": [
         "HandFront"
       ],
-      "tier": 1,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -291,7 +279,6 @@
       "slots": [
         "LegQuads"
       ],
-      "tier": 1,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -313,7 +300,6 @@
       "slots": [
         "LegCalves"
       ],
-      "tier": 1,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -339,7 +325,6 @@
       "slots": [
         "HeadEye"
       ],
-      "tier": 3,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -363,7 +348,6 @@
       "slots": [
         "HandFingers"
       ],
-      "tier": 3,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -386,7 +370,6 @@
       "slots": [
         "TorsoChest"
       ],
-      "tier": 3,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -409,7 +392,6 @@
       "slots": [
         "HeadEye"
       ],
-      "tier": 3,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -432,7 +414,6 @@
       "slots": [
         "ArmShoulders"
       ],
-      "tier": 2,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -455,7 +436,6 @@
       "slots": [
         "ArmElbow"
       ],
-      "tier": 2,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -478,7 +458,6 @@
       "slots": [
         "HeadCranium"
       ],
-      "tier": 3,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -501,7 +480,6 @@
       "slots": [
         "TorsoBack"
       ],
-      "tier": 3,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -526,7 +504,6 @@
       "slots": [
         "TorsoAbs"
       ],
-      "tier": 2,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -549,7 +526,6 @@
       "slots": [
         "ArmForearms"
       ],
-      "tier": 2,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -572,7 +548,6 @@
       "slots": [
         "TorsoBack"
       ],
-      "tier": 3,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -595,7 +570,6 @@
       "slots": [
         "ArmForearms"
       ],
-      "tier": 2,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -616,7 +590,6 @@
       "slots": [
         "LegKneecaps"
       ],
-      "tier": 3,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -639,7 +612,6 @@
       "slots": [
         "TorsoChest"
       ],
-      "tier": 2,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -663,7 +635,6 @@
       "slots": [
         "HeadJaw"
       ],
-      "tier": 2,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -689,7 +660,6 @@
       "slots": [
         "HeadJaw"
       ],
-      "tier": 2,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -714,7 +684,6 @@
       "slots": [
         "ArmForearms"
       ],
-      "tier": 2,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -738,7 +707,6 @@
       "slots": [
         "HandBack"
       ],
-      "tier": 2,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -761,7 +729,6 @@
       "slots": [
         "ArmForearms"
       ],
-      "tier": 2,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -785,7 +752,6 @@
       "slots": [
         "HandFingers"
       ],
-      "tier": 1,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -806,7 +772,6 @@
       "slots": [
         "HandFront"
       ],
-      "tier": 2,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -829,7 +794,6 @@
       "slots": [
         "HandFront"
       ],
-      "tier": 1,
       "activation": "wheel",
       "maxStack": 1,
       "ingredients": [
@@ -854,7 +818,6 @@
       "slots": [
         "LegKneecaps"
       ],
-      "tier": 2,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -875,7 +838,6 @@
       "slots": [
         "FeetAnkle"
       ],
-      "tier": 1,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -898,7 +860,6 @@
       "slots": [
         "FeetToes"
       ],
-      "tier": 2,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -919,7 +880,6 @@
       "slots": [
         "ArmShoulders"
       ],
-      "tier": 2,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -942,7 +902,6 @@
       "slots": [
         "HandFingers"
       ],
-      "tier": 1,
       "activation": "trigger",
       "maxStack": 1,
       "ingredients": [
@@ -965,7 +924,6 @@
       "slots": [
         "ArmShoulders"
       ],
-      "tier": 1,
       "activation": "wheel",
       "maxStack": 1,
       "ingredients": [
@@ -988,7 +946,6 @@
       "slots": [
         "HandFingers"
       ],
-      "tier": 1,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -1011,7 +968,6 @@
       "slots": [
         "HandFingers"
       ],
-      "tier": 1,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
@@ -1032,7 +988,6 @@
       "slots": [
         "LegCalves"
       ],
-      "tier": 1,
       "activation": "passive",
       "maxStack": 1,
       "ingredients": [
