@@ -38,6 +38,8 @@ public enum AugmentAbility
 	ThermalEye = 13,
 	/// <summary>Wheel toggle (ranged weapon out): tag up to EffectScale enemies by looking, then a guaranteed volley on every tag.</summary>
 	Deadshot = 14,
+	/// <summary>Trigger one-shot: two eye beams to the crosshair for EffectSeconds, EffectScale damage every 0.2 s.</summary>
+	LaserEyes = 15,
 }
 
 /// <summary>How the player turns an augment on.</summary>

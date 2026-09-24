@@ -197,8 +197,13 @@ public sealed partial class PlayerAugments
 	{
 		base.OnUpdate();
 
+		// Every peer draws the synced beams; the host alone deals their damage.
+		DrawLaserEyes();
 		if ( HasHostAuthority )
+		{
 			TickHostPins();
+			TickLaserEyesHost();
+		}
 
 		if ( !IsLocalManagingClient() )
 			return;
@@ -215,6 +220,7 @@ public sealed partial class PlayerAugments
 		ValidateBindsIfChanged();
 		TickBatteries( dt );
 		TickDeadshot();
+		TickLaserEyesOwner();
 
 		var menuOpen = Components.Get<PlayerGameMenuController>() is { IsMenuOpen: true };
 		TickWheel( menuOpen );
@@ -422,6 +428,8 @@ public sealed partial class PlayerAugments
 				return movement is not null && movement.TryAugmentSpringJump( def.EffectScale );
 			case AugmentAbility.RecoverySlide:
 				return movement is not null && movement.TryAugmentRecoverySlide( def );
+			case AugmentAbility.LaserEyes:
+				return StartLaserEyes( def );
 			default:
 				return true;
 		}

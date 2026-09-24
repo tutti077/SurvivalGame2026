@@ -323,7 +323,7 @@
       "id": "augment_lazer_eyes",
       "displayName": "Lazer Eyes",
       "icon": "ui/items/augment_placeholder.png",
-      "description": "3 s of damage ticks where you are looking; damage scales with distance to the enemy.",
+      "description": "Two red beams from your eyes to the crosshair for 3 s, ticking a little damage every 0.2 s on whatever they touch.",
       "school": "Cyber",
       "category": "Combat",
       "slots": [
@@ -337,10 +337,13 @@
           "amount": 1
         }
       ],
-      "implemented": false,
+      "ability": "LaserEyes",
+      "implemented": true,
       "mode": "oneshot",
       "cooldownSeconds": 10,
-      "effectSeconds": 3
+      "effectSeconds": 3,
+      "effectScale": 2,
+      "effectRadiusMeters": 30
     },
     {
       "id": "augment_gravity_well",
