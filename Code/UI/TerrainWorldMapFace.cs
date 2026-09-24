@@ -45,6 +45,7 @@ public sealed class TerrainWorldMapFace
 	Panel _heading;
 	Panel _raidRing;
 	Panel _worldLayer;
+	Panel _dungeonLayer;
 	Panel _strokeLayer;
 	Panel _pinLayer;
 	Panel _pingLayer;
@@ -75,6 +76,13 @@ public sealed class TerrainWorldMapFace
 	readonly Dictionary<Guid, Panel> _crewMarkers = new();
 	readonly List<Guid> _staleCrewKeys = new();
 	int _builtRemotePinKey;
+	/// <summary>Dungeon layer rebuild key: generator map identity, discovery version and the viewer's floor.</summary>
+	long _builtDungeonKey = long.MinValue;
+	float _builtDungeonStagePixels = -1f;
+	float _builtDungeonSpanMeters = -1f;
+	bool _builtDungeonRadarMode;
+	const float DungeonWallMinPixels = 1.5f;
+	const float DungeonBadgePixels = 22f;
 
 	public Panel Host => _host;
 
@@ -137,6 +145,7 @@ public sealed class TerrainWorldMapFace
 		_worldLayer.Style.Set( "pointer-events", "none" );
 		_worldLayer.Style.Set( "z-index", "2" );
 
+		_dungeonLayer = CreateLayer( _worldLayer, 0 );
 		_strokeLayer = CreateLayer( _worldLayer, 1 );
 		_pinLayer = CreateLayer( _worldLayer, 3 );
 		_pingLayer = CreateLayer( _worldLayer, 4 );
@@ -738,6 +747,7 @@ public sealed class TerrainWorldMapFace
 			_builtPingVersion = -1;
 		}
 
+		UpdateDungeon( stagePixels, span );
 		UpdateCrewMarkers();
 
 		// Reading Pings prunes expired ones (and bumps the version), so compare afterwards.
@@ -808,6 +818,146 @@ public sealed class TerrainWorldMapFace
 		seg.Style.BackgroundColor = color;
 		seg.Style.Set( "pointer-events", "none" );
 		_strokePanels.Add( seg );
+	}
+
+	// ------------------------------------------------------------------
+	// Dungeon reveal: the floor the viewer is on, only the rooms / halls they have found
+	// ------------------------------------------------------------------
+
+	void UpdateDungeon( float stagePixels, float spanMeters )
+	{
+		if ( _dungeonLayer is null || !_dungeonLayer.IsValid() )
+			return;
+
+		var gen = BoxDungeonGenerator.Active;
+		var map = gen is { IsValid: true } ? gen.Map : null;
+		var explored = map is null ? null : gen.Exploration;
+		var key = map is null
+			? 0L
+			: unchecked( ((long)map.GetHashCode() << 32) ^ ((long)explored.Version << 8) ^ (uint)explored.CurrentFloor );
+
+		var geometryChanged = MathF.Abs( stagePixels - _builtDungeonStagePixels ) > 0.5f
+		                      || MathF.Abs( spanMeters - _builtDungeonSpanMeters ) > 0.01f
+		                      || _builtDungeonRadarMode != _radarMode;
+		if ( key == _builtDungeonKey && !geometryChanged )
+			return;
+
+		_builtDungeonKey = key;
+		_builtDungeonStagePixels = stagePixels;
+		_builtDungeonSpanMeters = spanMeters;
+		_builtDungeonRadarMode = _radarMode;
+		RebuildDungeon( map, explored, stagePixels, spanMeters );
+	}
+
+	void RebuildDungeon( DungeonMapModel map, DungeonExploration explored, float stagePixels, float spanMeters )
+	{
+		_dungeonLayer.DeleteChildren( true );
+		if ( map is null || explored is null || spanMeters <= 0f )
+			return;
+
+		var ppm = stagePixels / spanMeters;
+		var floor = explored.CurrentFloor;
+		var wallPx = MathF.Max( DungeonWallMinPixels, map.WallMeters * ppm );
+		var background = new Color( 0.06f, 0.08f, 0.10f );
+
+		// Halls first so room walls and door tabs draw over their end caps.
+		foreach ( var hall in map.Halls )
+		{
+			if ( hall.Floor != floor || !explored.IsHallVisited( hall.Index ) )
+				continue;
+
+			AddDungeonRect( hall.MinMeters, hall.MaxMeters, ppm, hall.Color.WithAlpha( 0.5f ), hall.Color.WithAlpha( 0.9f ), wallPx, round: false, expandMeters: map.WallMeters );
+		}
+
+		foreach ( var room in map.Rooms )
+		{
+			if ( room.Floor != floor || !explored.IsRoomVisited( room.Index ) )
+				continue;
+
+			var color = room.Treasure ? new Color( 1f, 0.8f, 0.25f ) : room.Color;
+			var fillAlpha = room.Corridor ? 0.5f : 0.35f;
+			var half = new Vector2( room.HalfXMeters, room.HalfYMeters );
+			AddDungeonRect( room.CenterMeters - half, room.CenterMeters + half, ppm, color.WithAlpha( fillAlpha ), color.WithAlpha( 0.95f ), wallPx, room.Round, expandMeters: map.WallMeters );
+
+			// Doorways: an opaque floor-coloured tab across the wall band reads as a gap in the wall.
+			var tab = Color.Lerp( background, color, fillAlpha );
+			foreach ( var door in room.Doors )
+			{
+				var halfTab = door.AlongX
+					? new Vector2( map.HallWidthMeters * 0.5f, map.WallMeters )
+					: new Vector2( map.WallMeters, map.HallWidthMeters * 0.5f );
+				AddDungeonRect( door.CenterMeters - halfTab, door.CenterMeters + halfTab, ppm, tab, tab, 0f, round: false, expandMeters: 0f );
+			}
+
+			if ( room.StairUp || room.Landing )
+			{
+				AddDungeonRect( room.StairMinMeters, room.StairMaxMeters, ppm, new Color( 0.95f, 0.95f, 0.98f, 0.9f ), new Color( 0.1f, 0.1f, 0.12f, 0.9f ), 1f, round: false, expandMeters: 0f );
+				var center = (room.StairMinMeters + room.StairMaxMeters) * 0.5f;
+				if ( room.StairUp )
+					AddDungeonBadge( center, "UP", new Color( 0.3f, 0.85f, 1f ) );
+				else
+					AddDungeonBadge( center, "DOWN", new Color( 1f, 0.6f, 0.25f ) );
+			}
+
+			if ( room.Entrance )
+				AddDungeonBadge( map.EntranceDoorMeters, "IN", new Color( 0.3f, 0.95f, 0.4f ) );
+		}
+	}
+
+	/// <summary>World-anchored rectangle (interior in meters, grown by <paramref name="expandMeters"/> for the wall band drawn as its border).</summary>
+	Panel AddDungeonRect( Vector2 minMeters, Vector2 maxMeters, float ppm, Color fill, Color border, float borderPx, bool round, float expandMeters )
+	{
+		var min = minMeters - new Vector2( expandMeters, expandMeters );
+		var max = maxMeters + new Vector2( expandMeters, expandMeters );
+		var a = WorldToLayerUv( min );
+		var b = WorldToLayerUv( max );
+
+		var panel = new Panel { Parent = _dungeonLayer };
+		panel.Style.Set( "position", "absolute" );
+		panel.Style.Left = Length.Percent( MathF.Min( a.x, b.x ) * 100f );
+		panel.Style.Top = Length.Percent( MathF.Min( a.y, b.y ) * 100f );
+		panel.Style.Width = Length.Pixels( MathF.Max( 1f, (max.x - min.x) * ppm ) );
+		panel.Style.Height = Length.Pixels( MathF.Max( 1f, (max.y - min.y) * ppm ) );
+		panel.Style.BackgroundColor = fill;
+		if ( borderPx > 0f )
+		{
+			panel.Style.BorderWidth = Length.Pixels( borderPx );
+			panel.Style.BorderColor = border;
+		}
+		if ( round )
+			panel.Style.Set( "border-radius", "50%" );
+		panel.Style.Set( "pointer-events", "none" );
+		return panel;
+	}
+
+	/// <summary>Constant screen-size tag (UP / DOWN / IN) centred on a world point.</summary>
+	void AddDungeonBadge( Vector2 meters, string text, Color color )
+	{
+		var uv = WorldToLayerUv( meters );
+		var width = 12f + 7f * text.Length;
+
+		var root = new Panel { Parent = _dungeonLayer };
+		root.Style.Set( "position", "absolute" );
+		root.Style.Left = Length.Percent( uv.x * 100f );
+		root.Style.Top = Length.Percent( uv.y * 100f );
+		root.Style.Width = Length.Pixels( width );
+		root.Style.Height = Length.Pixels( DungeonBadgePixels );
+		root.Style.Set( "margin-left", $"{-width * 0.5f:0.##}px" );
+		root.Style.Set( "margin-top", $"{-DungeonBadgePixels * 0.5f:0.##}px" );
+		root.Style.Set( "border-radius", "6px" );
+		root.Style.BorderWidth = Length.Pixels( 2f );
+		root.Style.BorderColor = color;
+		root.Style.BackgroundColor = new Color( 0.05f, 0.05f, 0.07f, 0.92f );
+		root.Style.Set( "align-items", "center" );
+		root.Style.Set( "justify-content", "center" );
+		root.Style.Set( "pointer-events", "none" );
+
+		var label = new Label { Parent = root, Text = text };
+		label.Style.FontColor = color;
+		label.Style.FontSize = Length.Pixels( 11f );
+		label.Style.Set( "font-weight", "bold" );
+		label.Style.Set( "white-space", "nowrap" );
+		label.Style.Set( "pointer-events", "none" );
 	}
 
 	/// <summary>Changes when a crew mate's shared pins, or which mates are shown, change.</summary>

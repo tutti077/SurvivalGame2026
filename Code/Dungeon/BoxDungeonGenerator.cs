@@ -6,7 +6,7 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Procedural box dungeon (BoxDungeonTest scene). The host picks a seed (or uses <see cref="Seed"/>), every peer
+/// Procedural box dungeon (dungeonBoxTest scene). The host picks a seed (or uses <see cref="Seed"/>), every peer
 /// builds the identical tinted-box geometry from it locally, and the host alone places the dead-end chests
 /// through the normal build path so they network like any placed chest. The object's transform is the entrance:
 /// the entrance room's centre sits on it and the doorway faces the object's -X.
@@ -106,6 +106,23 @@ public sealed class BoxDungeonGenerator : Component
 
 	public DungeonLayout Layout { get; private set; }
 	public DungeonGeometryResult Geometry { get; private set; }
+	/// <summary>Rooms / halls / doors / stairs in world meters for the map page; rebuilt with the geometry.</summary>
+	public DungeonMapModel Map { get; private set; }
+	/// <summary>What the local player has found so far (client-local; the map draws only this).</summary>
+	public DungeonExploration Exploration { get; } = new();
+
+	/// <summary>The generator in the active scene, for the map face and console commands.</summary>
+	public static BoxDungeonGenerator Active { get; private set; }
+
+	/// <summary>Real rooms (corridor cells excluded), for the map page's "rooms found" readout.</summary>
+	public int RoomCount { get; private set; }
+
+	/// <summary>Real rooms the local player has stood in (corridor cells excluded).</summary>
+	public int VisitedRoomCount =>
+		Layout is null ? 0 : Layout.Rooms.Count( r => !r.Has( DungeonRoomFlags.Corridor ) && Exploration.IsRoomVisited( r.Index ) );
+
+	/// <summary>How often the viewer's position is sampled for room discovery.</summary>
+	const float TrackIntervalSeconds = 0.25f;
 
 	/// <summary>World-space point just outside the entrance doorway.</summary>
 	public Vector3 EntranceSpawnPosition
@@ -135,6 +152,7 @@ public sealed class BoxDungeonGenerator : Component
 	readonly List<GameObject> _chests = new();
 	int _builtSeed;
 	int _appliedVisibleFloors = int.MinValue;
+	float _nextTrackAt;
 
 	bool IsAuthority => !Networking.IsActive || Networking.IsHost;
 
@@ -148,6 +166,19 @@ public sealed class BoxDungeonGenerator : Component
 		Rebuild();
 	}
 
+	protected override void OnEnabled()
+	{
+		base.OnEnabled();
+		Active = this;
+	}
+
+	protected override void OnDisabled()
+	{
+		base.OnDisabled();
+		if ( Active == this )
+			Active = null;
+	}
+
 	protected override void OnUpdate()
 	{
 		base.OnUpdate();
@@ -157,6 +188,46 @@ public sealed class BoxDungeonGenerator : Component
 
 		if ( _appliedVisibleFloors != VisibleFloorsMax )
 			ApplyFloorVisibility();
+
+		TrackExploration();
+	}
+
+	/// <summary>Every quarter second: which floor / room / hall the local viewer is in, for the map reveal.</summary>
+	void TrackExploration()
+	{
+		if ( Layout is null || Map is null || Time.Now < _nextTrackAt )
+			return;
+
+		_nextTrackAt = Time.Now + TrackIntervalSeconds;
+
+		var viewer = ResolveLocalViewerPosition();
+		if ( viewer is null )
+			return;
+
+		var world = viewer.Value;
+		var local = WorldTransform.PointToLocal( world );
+		var meters = new Vector2( TerrainWorldUnits.EngineToMeters( world.x ), TerrainWorldUnits.EngineToMeters( world.y ) );
+		Exploration.Track( Layout, Map, local, meters );
+	}
+
+	/// <summary>The local input-owned pawn's feet; the scene camera when no pawn exists (fly cam in the test scene).</summary>
+	Vector3? ResolveLocalViewerPosition()
+	{
+		if ( !Scene.IsValid() )
+			return null;
+
+		foreach ( var vitals in Scene.GetAllComponents<PlayerVitals>() )
+		{
+			if ( vitals is null || !vitals.IsValid() || !vitals.IsLocalInputOwnedPawn() )
+				continue;
+			return vitals.WorldPosition;
+		}
+
+		var camera = Scene.Camera;
+		if ( camera is null || !camera.IsValid() )
+			return null;
+
+		return camera.WorldPosition;
 	}
 
 	protected override void OnDestroy()
@@ -219,6 +290,9 @@ public sealed class BoxDungeonGenerator : Component
 		_geometryRoot.LocalScale = Vector3.One;
 
 		Geometry = DungeonGeometry.Build( _geometryRoot, Layout, p );
+		Map = DungeonMapModel.Build( Layout, p, WorldTransform );
+		RoomCount = Layout.Rooms.Count( r => !r.Has( DungeonRoomFlags.Corridor ) );
+		Exploration.Reset( Layout );
 		_appliedVisibleFloors = int.MinValue;
 
 		SpawnSign();
@@ -253,6 +327,8 @@ public sealed class BoxDungeonGenerator : Component
 
 		Layout = null;
 		Geometry = null;
+		Map = null;
+		RoomCount = 0;
 		_builtSeed = 0;
 	}
 

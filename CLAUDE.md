@@ -182,7 +182,15 @@ Code/
                 host places dead-end chests through BuildAuthority) · DungeonLayout (pure seeded tree: 1×1…3×3-cell rect + round rooms,
                 corridor-cell runs, hub rooms with 3–6 doors, stairs + landings, dead-end pruning)
                 · DungeonGeometry (plates / multi-door walls / round rings / pillars / stair runs / stairwell holes, one child per floor)
-                · DungeonSignPanel (static ENTRANCE plate); scene Assets/scenes/BoxDungeonTest.scene; console dungeon_regen / dungeon_floors / dungeon_info
+                · DungeonMapModel (rooms / halls / doors / stairs in world meters) + DungeonExploration (client-local visited rooms + current floor)
+                  → TerrainWorldMapFace draws only the current floor's discovered rooms (UP / DOWN / IN badges); readout line in MapMenuSection
+                · DungeonSignPanel (static ENTRANCE plate); scene Assets/scenes/dungeonBoxTest.scene; console dungeon_regen / dungeon_floors / dungeon_info
+                · CaveDungeonGenerator (caveVertTest scene: a 3 km-deep CHAIN of drops, steep chutes, chimneys and caverns swept as one
+                  wandering tube — no central axis, mainly one path, flat ground only at rare landings / one junction / the chamber — CaveLayout (+ .Trunk, .Passages, .Route partials) is the pure seeded layout: archetype
+                  trunk plan, swept tubes with parallel-transported frames, mouths cut into the trunk, dead-end rooms and loops off the
+                  junctions and drops, ledge route with descend / climb steppers; CaveGeometry (+ .Dressing) builds one runtime rock model with
+                  mesh collision (no grapple tag) — tubes, holes zipped to branches, platform collar, pond bowls — plus dev-box ledges tagged
+                  "grapple", oases, waterfall, host-placed chests; verified by a standalone .NET harness; console cave_regen / cave_info / cave_tp
   Hacks/        GameHacks — console-toggled dev flags (allCrafting), mirrored onto pawns via [Sync] for host checks
   Map/          Player map markup: MapPinCatalog (12 pin icons, Assets/ui/map) · LocalMapMarkup (client-local pins + pen strokes in world
                 meters, write-through to 2Tgames/players/<steamid>/map/<world>.json via MapMarkupSaveStore) · MapPingFeed (MMB pings,

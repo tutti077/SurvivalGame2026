@@ -148,21 +148,21 @@ public static class DungeonGeometry
 	// ---- frames ----------------------------------------------------------------------------------
 
 	/// <summary>Outward unit vector for a side.</summary>
-	static Vector2 Normal( DungeonSide side )
+	public static Vector2 Normal( DungeonSide side )
 	{
 		var s = DungeonLayout.Step[(int)side];
 		return new Vector2( s.dx, s.dy );
 	}
 
 	/// <summary>Tangent along the wall of a side (rotated clockwise from the normal); axis-aligned like the normal.</summary>
-	static Vector2 Tangent( DungeonSide side )
+	public static Vector2 Tangent( DungeonSide side )
 	{
 		var n = Normal( side );
 		return new Vector2( n.y, -n.x );
 	}
 
 	/// <summary>Axis-aligned XY rect from a wall frame: <c>u</c> along the tangent, <c>v</c> along the outward normal.</summary>
-	static (Vector2 min, Vector2 max) FrameRect( Vector2 center, DungeonSide side, float u0, float u1, float v0, float v1 )
+	public static (Vector2 min, Vector2 max) FrameRect( Vector2 center, DungeonSide side, float u0, float u1, float v0, float v1 )
 	{
 		var n = Normal( side );
 		var t = Tangent( side );
@@ -225,7 +225,7 @@ public static class DungeonGeometry
 		var plateMax = xy + new Vector2( hx + wt, hy + wt );
 		if ( room.Has( DungeonRoomFlags.Landing ) )
 		{
-			var (holeMin, holeMax) = StairRect( ctx, room, center, hx );
+			var (holeMin, holeMax) = StairFootprint( room, xy, hx, p );
 			foreach ( var (min, max) in SubtractRect( plateMin, plateMax, holeMin, holeMax ) )
 				AddRect( ctx, floorRoot, $"plate_{room.Index}", min, max, zf - p.PlateThickness, zf, floorColor );
 		}
@@ -510,12 +510,11 @@ public static class DungeonGeometry
 		}
 	}
 
-	/// <summary>Footprint of the stair run (StairUp room) / the stairwell hole (Landing): hugging <c>StairSide</c>, running along its tangent from one corner.</summary>
-	static (Vector2 min, Vector2 max) StairRect( BuildContext ctx, DungeonRoom room, Vector3 center, float h )
+	/// <summary>Footprint of the stair run (StairUp room) / the stairwell hole (Landing): hugging <c>StairSide</c>, running along its tangent from one corner. Local units.</summary>
+	public static (Vector2 min, Vector2 max) StairFootprint( DungeonRoom room, Vector2 centerXy, float half, DungeonGeometryParams p )
 	{
-		var p = ctx.P;
 		var runLength = p.StepCount * p.StepRun;
-		return FrameRect( new Vector2( center.x, center.y ), room.StairSide, -h, -h + runLength, h - p.HallWidth, h );
+		return FrameRect( centerXy, room.StairSide, -half, -half + runLength, half - p.HallWidth, half );
 	}
 
 	static void BuildStairs( BuildContext ctx, GameObject parent, DungeonRoom room, Vector3 center, float h, Color color )
@@ -544,21 +543,26 @@ public static class DungeonGeometry
 	/// </summary>
 	static float FaceDistance( BuildContext ctx, DungeonRoom room, DungeonSide side, Vector2 cellCenter )
 	{
-		var p = ctx.P;
 		var center = ctx.RoomCenter( room );
-		var xy = new Vector2( center.x, center.y );
+		return FaceDistance( room, side, cellCenter - new Vector2( center.x, center.y ), ctx.HalfX( room ), ctx.HalfY( room ), ctx.P );
+	}
+
+	/// <summary>Pure form (shared with <see cref="DungeonMapModel"/>): <paramref name="cellOffset"/> is the door cell's centre relative to the room centre, extents in units.</summary>
+	public static float FaceDistance( DungeonRoom room, DungeonSide side, Vector2 cellOffset, float halfX, float halfY, DungeonGeometryParams p )
+	{
 		var n = Normal( side );
 		var t = Tangent( side );
-		var along = Dot( cellCenter - xy, n );
+		var along = Dot( cellOffset, n );
 
 		if ( room.Shape == DungeonRoomShape.Round )
 		{
-			var r = ctx.HalfX( room ) + p.WallThickness;
-			var u = MathF.Abs( Dot( cellCenter - xy, t ) ) + p.HallWidth * 0.5f + p.WallThickness;
+			var r = halfX + p.WallThickness;
+			var u = MathF.Abs( Dot( cellOffset, t ) ) + p.HallWidth * 0.5f + p.WallThickness;
 			return MathF.Sqrt( MathF.Max( 0f, r * r - u * u ) ) - along;
 		}
 
-		return HalfAlongNormal( ctx, room, side ) + p.WallThickness - along;
+		var hn = side is DungeonSide.North or DungeonSide.South ? halfY : halfX;
+		return hn + p.WallThickness - along;
 	}
 
 	static void BuildHall( BuildContext ctx, DungeonHall hall )

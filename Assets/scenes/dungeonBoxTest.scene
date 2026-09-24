@@ -24,7 +24,7 @@
           "Flags": 0,
           "Author": "SurvivalGame2026",
           "Changes": null,
-          "Description": "Procedural box dungeon test \u2014 BoxDungeonGenerator (tinted dev boxes, cycling colours, no roof), ENTRANCE sign at the object's -X, fly cam; L spawns the playable pawn at the camera.",
+          "Description": "Procedural box dungeon test — BoxDungeonGenerator (tinted dev boxes, cycling colours, no roof), ENTRANCE sign at the object's -X, fly cam; L spawns the playable pawn at the camera.",
           "Group": "Dungeon",
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
@@ -33,7 +33,7 @@
           "OnComponentStart": null,
           "OnComponentUpdate": null,
           "SceneTags": "dungeon,test",
-          "Title": "BoxDungeonTest",
+          "Title": "dungeonBoxTest",
           "Version": "1"
         }
       ],
@@ -45,9 +45,9 @@
       "Flags": 0,
       "Name": "Sun",
       "Position": "0,0,0",
-      "Rotation": "-0.13885,0.440377,0.266729,0.845957",
+      "Rotation": "-0.138850003,0.440376997,0.266728997,0.845956981",
       "Scale": "1,1,1",
-      "Tags": "light_directional",
+      "Tags": "light_directional,light",
       "Enabled": true,
       "NetworkMode": 2,
       "NetworkFlags": 0,
@@ -123,7 +123,7 @@
             "AfterUILayer": false
           },
           "RenderType": "On",
-          "Tint": "0.30,0.33,0.30,1"
+          "Tint": "0.3,0.33,0.3,1"
         },
         {
           "__type": "Sandbox.BoxCollider",
@@ -241,58 +241,58 @@
           "__guid": "083872ca-92c6-45a2-86d5-f3a2e6bdd856",
           "__enabled": true,
           "Flags": 0,
-          "Seed": 1,
-          "Width": 10,
-          "Depth": 10,
-          "Floors": 3,
-          "RoomsPerFloor": 12,
-          "StairsPerFloor": 2,
-          "WindingBias": 0.6,
+          "BigRoomChance": 0.4,
           "ChestDeadEndFraction": 0.5,
-          "PitchMeters": 16,
-          "MediumRoomMeters": 9,
-          "LargeRoomMeters": 12,
-          "HallWidthMeters": 2.5,
-          "FloorHeightMeters": 4,
-          "WallThicknessMeters": 0.4,
-          "PlateThicknessMeters": 0.4,
-          "DoorHeightMeters": 2.8,
-          "StepRiseMeters": 0.4,
-          "StepRunMeters": 0.7,
-          "PillarMeters": 1,
           "ColorByDepth": true,
-          "SignScale": 1.5,
-          "VisibleFloorsMax": -1,
+          "CorridorChance": 0.5,
+          "Depth": 10,
+          "DoorHeightMeters": 2.8,
+          "FloorHeightMeters": 4,
+          "Floors": 3,
+          "HallWidthMeters": 2.5,
+          "LargeRoomMeters": 12,
+          "MaxCorridorRun": 3,
+          "MediumRoomMeters": 9,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
           "OnComponentFixedUpdate": null,
           "OnComponentStart": null,
           "OnComponentUpdate": null,
-          "CorridorChance": 0.5,
-          "MaxCorridorRun": 3,
-          "BigRoomChance": 0.4,
-          "RoundRoomChance": 0.2
+          "PillarMeters": 1,
+          "PitchMeters": 16,
+          "PlateThicknessMeters": 0.4,
+          "RoomsPerFloor": 12,
+          "RoundRoomChance": 0.2,
+          "Seed": 0,
+          "SignScale": 1.5,
+          "StairsPerFloor": 2,
+          "StepRiseMeters": 0.4,
+          "StepRunMeters": 0.7,
+          "VisibleFloorsMax": -1,
+          "WallThicknessMeters": 0.4,
+          "Width": 10,
+          "WindingBias": 0.6
         },
         {
           "__type": "Survival.TerrainTestPlayerSpawn",
           "__guid": "1517772f-44c2-4cd8-9bd9-3e50c3992e25",
           "__enabled": true,
           "Flags": 0,
-          "ViewCamera": null,
-          "PlayerPrefabPath": "prefabs/player/basicplayer.prefab",
           "DisableFallDamage": true,
           "EquipGrappleOnPlayable": true,
-          "GrappleResourceId": "basic_hook",
           "EquipWingsuitOnPlayable": false,
-          "WingsuitResourceId": "basic_wingsuit",
+          "GrappleResourceId": "basic_hook",
           "InfiniteStaminaOnPlayable": true,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
           "OnComponentFixedUpdate": null,
           "OnComponentStart": null,
-          "OnComponentUpdate": null
+          "OnComponentUpdate": null,
+          "PlayerPrefabPath": "prefabs/player/basicplayer.prefab",
+          "ViewCamera": null,
+          "WingsuitResourceId": "basic_wingsuit"
         }
       ],
       "Children": []
@@ -300,11 +300,12 @@
   ],
   "SceneProperties": {
     "NetworkInterpolation": true,
+    "PhysicsMode": "Physics3D",
     "TimeScale": 1,
     "WantsSystemScene": true,
     "Metadata": {
-      "Title": "BoxDungeonTest",
-      "Description": "Procedural box dungeon test \u2014 BoxDungeonGenerator (tinted dev boxes, cycling colours, no roof), ENTRANCE sign at the object's -X, fly cam; L spawns the playable pawn at the camera.",
+      "Title": "dungeonBoxTest",
+      "Description": "Procedural box dungeon test — BoxDungeonGenerator (tinted dev boxes, cycling colours, no roof), ENTRANCE sign at the object's -X, fly cam; L spawns the playable pawn at the camera.",
       "Group": "Dungeon",
       "Version": "1",
       "Author": "SurvivalGame2026",
@@ -322,9 +323,19 @@
       "ExcludedBodies": "",
       "IncludedBodies": "",
       "DeferGeneration": false,
-      "CustomBounds": false
+      "CustomBounds": true,
+      "Bounds": {
+        "Mins": "-6000,-6000,-2002.80005",
+        "Maxs": "6000,6000,-1.20000005"
+      }
     },
     "GameObjectSystems": {
+      "Sandbox.Clutter.ClutterGridSystem": {
+        "Storage": {
+          "$blob": "64db792e-5935-8fbc-8cfa-050cd49fa7fd",
+          "$refs": []
+        }
+      },
       "Sandbox.SelectionSetsSystem": {
         "Data": {
           "SelectionSets": []
@@ -333,8 +344,8 @@
     }
   },
   "ResourceVersion": 3,
-  "Title": "BoxDungeonTest",
-  "Description": "Procedural box dungeon test \u2014 BoxDungeonGenerator (tinted dev boxes, cycling colours, no roof), ENTRANCE sign at the object's -X, fly cam; L spawns the playable pawn at the camera.",
+  "Title": "dungeonBoxTest",
+  "Description": "Procedural box dungeon test — BoxDungeonGenerator (tinted dev boxes, cycling colours, no roof), ENTRANCE sign at the object's -X, fly cam; L spawns the playable pawn at the camera.",
   "__references": [],
   "__version": 3
 }

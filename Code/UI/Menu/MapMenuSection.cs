@@ -32,6 +32,9 @@ public sealed class MapMenuSection : IPlayerMenuSection
 	const int WheelZoomStepsPerNotch = 3;
 
 	readonly TerrainWorldMapFace _face = new();
+	/// <summary>One fixed line under Controls: dungeon floor + rooms found (never reflows the column).</summary>
+	Label _dungeonLine;
+	long _dungeonLineKey = long.MinValue;
 	readonly CrewMapPanel _crewPanel;
 	readonly PlayerInventoryInteraction _interaction;
 	readonly List<(Panel Panel, Action Action)> _toolTargets = new();
@@ -276,6 +279,14 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		AddControlLine( controls, "LMB drag: Pan map" );
 		AddControlLine( controls, "Pen / Eraser: hold RMB" );
 
+		// Dungeon readout: which floor layer the map is showing and how much of the dungeon has been found.
+		_dungeonLine = new Label { Parent = controls, Text = "Dungeon: —" };
+		_dungeonLine.Style.FontColor = new Color( 0.95f, 0.85f, 0.45f );
+		_dungeonLine.Style.FontSize = Length.Pixels( BodyFontSize );
+		_dungeonLine.Style.MarginTop = Length.Pixels( 10f );
+		_dungeonLine.Style.Set( "white-space", "nowrap" );
+		_dungeonLine.Style.Set( "pointer-events", "none" );
+
 		// Coop sharing: my location to the crew, and which crew mates' pins land on my map.
 		var sharingHeader = AddSectionHeader( column, "Sharing" );
 		sharingHeader.Style.MarginTop = Length.Pixels( 18f );
@@ -505,6 +516,31 @@ public sealed class MapMenuSection : IPlayerMenuSection
 
 	public void Refresh() { }
 
+	/// <summary>"Dungeon: floor 2/3 · rooms 5/38" — text only changes when discovery or the floor changes.</summary>
+	void RefreshDungeonLine()
+	{
+		if ( _dungeonLine is null || !_dungeonLine.IsValid() )
+			return;
+
+		var gen = BoxDungeonGenerator.Active;
+		if ( gen is null || !gen.IsValid() || gen.Map is null )
+		{
+			if ( _dungeonLineKey != long.MinValue )
+			{
+				_dungeonLineKey = long.MinValue;
+				_dungeonLine.Text = "Dungeon: —";
+			}
+			return;
+		}
+
+		var key = unchecked( ((long)gen.GetHashCode() << 32) ^ ((long)gen.Exploration.Version << 8) ^ (uint)gen.Exploration.CurrentFloor );
+		if ( key == _dungeonLineKey )
+			return;
+
+		_dungeonLineKey = key;
+		_dungeonLine.Text = $"Dungeon: floor {gen.Exploration.CurrentFloor + 1}/{gen.Map.Floors} · rooms {gen.VisitedRoomCount}/{gen.RoomCount}";
+	}
+
 	public void SetMenuOpen( bool isOpen )
 	{
 		if ( !isOpen )
@@ -541,6 +577,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		_face.Tick();
 		_crewPanel.Tick();
 		RefreshCrewPinRows( force: false );
+		RefreshDungeonLine();
 		RefreshToolHighlights();
 
 		// Enter commits the name even if the entry's own submit event never fires.
