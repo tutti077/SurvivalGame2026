@@ -393,7 +393,7 @@
       "id": "augment_medusa_eye",
       "displayName": "Medusa Eye",
       "icon": "ui/items/augment_placeholder.png",
-      "description": "Freezes robot and augmented enemies you stare at for 5 s straight.",
+      "description": "Hold a robot or ascended enemy in the centre of your view for 5 s and it freezes in place for 5 s. Once a minute.",
       "school": "Cyber",
       "category": "Combat",
       "slots": [
@@ -407,9 +407,12 @@
           "amount": 1
         }
       ],
-      "implemented": false,
+      "ability": "MedusaEye",
+      "implemented": true,
       "cooldownSeconds": 60,
-      "effectSeconds": 5
+      "effectSeconds": 5,
+      "effectScale": 5,
+      "effectRadiusMeters": 25
     },
     {
       "id": "augment_ram_skull",

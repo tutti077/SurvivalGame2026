@@ -11,6 +11,11 @@ public sealed class EntityVitals : Component
 
 	[Property] public int Tier { get; set; } = 1;
 
+	/// <summary>Feral / Robot / Ascended — set from the archetype at spawn.</summary>
+	[Property] public EntityKind Kind { get; set; } = EntityKind.Feral;
+
+	public bool IsMachineOrAscended => Kind is EntityKind.Robot or EntityKind.Ascended;
+
 	[Property] public float MaxHealth { get; set; } = 80f;
 
 	[Property] public float ArmorFlat { get; set; }

@@ -477,8 +477,69 @@ public sealed partial class EntityBrain : Component
 		EnterState( EnemyAiState.Chasing, player );
 	}
 
+	// ── Stun (Medusa Eye, Sonic Burst): the brain stops entirely — no state ticks, no swings ──
+
+	double _stunnedUntil;
+	bool _petrifyTintApplied;
+	readonly Dictionary<ModelRenderer, Color> _petrifyOriginalTints = new();
+
+	/// <summary>Host clock: true while a stun holds. Feet are pinned separately by the caller (<see cref="EntityLocomotion.HostSetTrapped"/>).</summary>
+	public bool IsStunned => Time.NowDouble < _stunnedUntil;
+
+	/// <summary>Mirrored to every peer for the grey "petrified" tint.</summary>
+	[Sync] public bool IsPetrified { get; private set; }
+
+	/// <summary>Host: freeze the AI for <paramref name="seconds"/> — cancels any attack in flight, drops engagement, stops the agent.</summary>
+	public void HostStun( float seconds )
+	{
+		if ( !CanRunHostLogic() || seconds <= 0f )
+			return;
+
+		_stunnedUntil = Math.Max( _stunnedUntil, Time.NowDouble + seconds );
+		IsPetrified = true;
+
+		EntityCombat ??= Components.Get<EntityCombat>();
+		EntityCombat?.ResetCycle();
+		EntityCombat?.SetEngaged( false );
+		Agent ??= Components.Get<NavMeshAgent>();
+		Agent?.Stop();
+	}
+
+	/// <summary>Every peer: swap the model tint while petrified, restore the authored tint after.</summary>
+	void TickPetrifyVisual()
+	{
+		if ( IsPetrified == _petrifyTintApplied )
+			return;
+
+		_petrifyTintApplied = IsPetrified;
+		if ( IsPetrified )
+		{
+			_petrifyOriginalTints.Clear();
+			foreach ( var renderer in GameObject.Components.GetAll<ModelRenderer>( FindMode.EverythingInSelfAndDescendants ) )
+			{
+				if ( renderer is null || !renderer.IsValid() )
+					continue;
+
+				_petrifyOriginalTints[renderer] = renderer.Tint;
+				renderer.Tint = new Color( 0.5f, 0.55f, 0.65f );
+			}
+
+			return;
+		}
+
+		foreach ( var (renderer, tint) in _petrifyOriginalTints )
+		{
+			if ( renderer is not null && renderer.IsValid() )
+				renderer.Tint = tint;
+		}
+
+		_petrifyOriginalTints.Clear();
+	}
+
 	protected override void OnUpdate()
 	{
+		TickPetrifyVisual();
+
 		if ( !CanRunHostLogic() )
 			return;
 
@@ -492,6 +553,16 @@ public sealed partial class EntityBrain : Component
 			return;
 
 		TickNavSettle();
+
+		// Stunned: stand there. Nothing below runs — no alert fill, no chase, no attack tick.
+		if ( IsStunned )
+		{
+			Agent?.Stop();
+			return;
+		}
+
+		if ( IsPetrified )
+			IsPetrified = false;
 
 		if ( _state is EnemyAiState.Idle or EnemyAiState.Wander or EnemyAiState.Searching
 		     or EnemyAiState.Chasing or EnemyAiState.Retreating or EnemyAiState.Breaching )

@@ -33,35 +33,46 @@ public sealed class EnemySpawnButton : Component
 
 	void SpawnEnemy()
 	{
-		var scene = Scene;
-		if ( !scene.IsValid() )
-			return;
-
-		BuildNavMeshSync.EnsureBuildTraversalSettings( scene );
-
 		var spawnPos = SpawnPoint is { IsValid: true }
 			? SpawnPoint.WorldPosition
 			: GameObject.WorldPosition;
+		var spawnRot = SpawnPoint is { IsValid: true } ? SpawnPoint.WorldRotation : GameObject.WorldRotation;
 
-		var instance = BuildPrefabUtility.GetTemplate( PrefabPath )?.Clone();
+		HostSpawn( Scene, PrefabPath, EnemyType, Tier, spawnPos, spawnRot, SpawnHealth );
+	}
+
+	/// <summary>Host: stamp one enemy of <paramref name="enemyType"/> from <paramref name="prefabPath"/> at a spot. Console spawners use this too.</summary>
+	public static GameObject HostSpawn( Scene scene, string prefabPath, EnemyType enemyType, int tier, Vector3 position, Rotation rotation, float healthOverride = 0f )
+	{
+		if ( scene is null || !scene.IsValid() )
+			return null;
+
+		if ( Networking.IsActive && !Networking.IsHost )
+			return null;
+
+		BuildNavMeshSync.EnsureBuildTraversalSettings( scene );
+
+		var instance = BuildPrefabUtility.GetTemplate( prefabPath )?.Clone();
 		if ( instance is null || !instance.IsValid() )
 		{
-			Log.Warning( $"[EnemySpawnButton] Failed to clone prefab '{PrefabPath}'." );
-			return;
+			Log.Warning( $"[EnemySpawnButton] Failed to clone prefab '{prefabPath}'." );
+			return null;
 		}
 
 		instance.Parent = scene;
-		instance.WorldPosition = spawnPos;
-		if ( SpawnPoint is { IsValid: true } )
-			instance.WorldRotation = SpawnPoint.WorldRotation;
+		instance.WorldPosition = position;
+		instance.WorldRotation = rotation;
 
-		EntityEnemySetup.Configure( instance, EnemyType, Tier, SpawnHealth );
+		EntityEnemySetup.Configure( instance, enemyType, tier, healthOverride );
 
-		// Clone alone is host-local — remotes never see the scav without NetworkSpawn.
+		// Clone alone is host-local — remotes never see the enemy without NetworkSpawn.
 		if ( Networking.IsActive && !HostNetworkSpawn.TrySpawn( instance ) )
 		{
-			Log.Warning( $"[EnemySpawnButton] NetworkSpawn failed for '{PrefabPath}' — destroying local clone." );
+			Log.Warning( $"[EnemySpawnButton] NetworkSpawn failed for '{prefabPath}' — destroying local clone." );
 			instance.Destroy();
+			return null;
 		}
+
+		return instance;
 	}
 }

@@ -221,6 +221,7 @@ public sealed partial class PlayerAugments
 		TickBatteries( dt );
 		TickDeadshot();
 		TickLaserEyesOwner();
+		TickMedusaEye();
 
 		var menuOpen = Components.Get<PlayerGameMenuController>() is { IsMenuOpen: true };
 		TickWheel( menuOpen );
@@ -475,6 +476,7 @@ public sealed partial class PlayerAugments
 
 					locomotion.HostSetTrapped( true, locomotion.GameObject.WorldPosition );
 					_hostPins.Add( (locomotion, now + Math.Max( 0.5f, def.EffectSeconds )) );
+					locomotion.Components.Get<EntityBrain>()?.HostStun( Math.Max( 0.5f, def.EffectSeconds ) );
 				}
 				break;
 

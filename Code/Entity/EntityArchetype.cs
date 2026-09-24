@@ -2,11 +2,20 @@ using System;
 
 namespace Survival;
 
+/// <summary>What an entity is made of — some augments (Medusa Eye, Hackd) only bite on machines and the ascended.</summary>
+public enum EntityKind
+{
+	Feral = 0,
+	Robot = 1,
+	Ascended = 2,
+}
+
 /// <summary>Default stats per <see cref="EnemyType"/> (tier scales health modestly).</summary>
 public static class EntityArchetype
 {
 	public readonly struct Profile
 	{
+		public EntityKind Kind { get; init; }
 		public float MaxHealth { get; init; }
 		public float ArmorFlat { get; init; }
 		public float MoveSpeed { get; init; }
@@ -28,6 +37,18 @@ public static class EntityArchetype
 			RecoverySeconds = 1f,
 			AttackHoldSeconds = 0.14f,
 			TrapSize = TrapSize.Large
+		},
+		// Patrol bot: the scav's numbers with a robot's insides.
+		EnemyType.PatrolBot => new Profile
+		{
+			Kind = EntityKind.Robot,
+			MaxHealth = 80f,
+			ArmorFlat = 0f,
+			MoveSpeed = 220f,
+			TelegraphSeconds = 0.85f,
+			RecoverySeconds = 1f,
+			AttackHoldSeconds = 0.12f,
+			TrapSize = TrapSize.Small
 		},
 		EnemyType.Howler => new Profile
 		{
@@ -59,6 +80,7 @@ public static class EntityArchetype
 		var profile = Get( type );
 		var tierScale = 1f + Math.Max( 0, tier - 1 ) * 0.18f;
 		vitals.EnemyType = type;
+		vitals.Kind = profile.Kind;
 		vitals.Tier = Math.Max( 1, tier );
 		vitals.MaxHealth = profile.MaxHealth * tierScale;
 		vitals.ArmorFlat = profile.ArmorFlat;

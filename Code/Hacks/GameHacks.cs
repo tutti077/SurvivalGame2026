@@ -144,6 +144,37 @@ public static class GameHacks
 		vitals.OwnerRequestDebugStatusEffect( effectId.Trim(), seconds );
 	}
 
+	/// <summary>
+	/// Usage: <c>spawnPatrolBot</c> — host drops a patrol bot (scav stats, robot kind) 3 m in front of
+	/// your pawn. For Medusa Eye / Hackd testing.
+	/// </summary>
+	[ConCmd( "spawnPatrolBot" )]
+	public static void ConCmdSpawnPatrolBot()
+	{
+		if ( Networking.IsActive && !Networking.IsHost )
+		{
+			Log.Warning( "[Hacks] spawnPatrolBot: host only." );
+			return;
+		}
+
+		var vitals = FindLocalPawnVitals();
+		if ( vitals is null )
+		{
+			Log.Warning( "[Hacks] spawnPatrolBot: no local player pawn." );
+			return;
+		}
+
+		var pawn = vitals.GameObject;
+		var forward = pawn.WorldRotation.Forward.WithZ( 0f );
+		if ( forward.LengthSquared < 1e-6f )
+			forward = Vector3.Forward;
+
+		var position = pawn.WorldPosition + forward.Normal * TerrainWorldUnits.MetersToEngine( 3f );
+		var facing = Rotation.LookAt( -forward.Normal, Vector3.Up );
+		var bot = EnemySpawnButton.HostSpawn( pawn.Scene, "prefabs/entity/scavT1.prefab", EnemyType.PatrolBot, 1, position, facing );
+		Log.Info( bot is not null ? "[Hacks] spawned a patrol bot." : "[Hacks] spawnPatrolBot failed." );
+	}
+
 	static PlayerVitals FindLocalPawnVitals()
 	{
 		var scene = Sandbox.Game.ActiveScene;
@@ -169,6 +200,7 @@ public static class GameHacks
 		sb.Append( "  freeAugments " ).AppendLine( FreeAugments ? "true" : "false" );
 		sb.Append( "  thermalView  " ).AppendLine( ThermalView ? "true" : "false" );
 		sb.AppendLine( "  status <id> <seconds>  apply a buff / debuff (status clear)" );
+		sb.AppendLine( "  spawnPatrolBot  host: drop a robot patrol unit in front of you" );
 		Log.Info( sb.ToString() );
 	}
 

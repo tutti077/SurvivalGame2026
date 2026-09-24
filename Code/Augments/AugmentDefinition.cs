@@ -40,6 +40,8 @@ public enum AugmentAbility
 	Deadshot = 14,
 	/// <summary>Trigger one-shot: two eye beams to the crosshair for EffectSeconds, EffectScale damage every 0.2 s.</summary>
 	LaserEyes = 15,
+	/// <summary>Passive: stare at a robot / ascended entity for EffectSeconds to pin it for EffectScale seconds, once per cooldown.</summary>
+	MedusaEye = 16,
 }
 
 /// <summary>How the player turns an augment on.</summary>
