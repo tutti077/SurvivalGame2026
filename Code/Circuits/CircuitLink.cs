@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Survival;
 
-/// <summary>One outgoing wire: this node → <see cref="TargetId"/>, drawn in <see cref="Cable"/>.</summary>
+/// <summary>One wire between this node and <see cref="TargetId"/> (two-way), drawn in <see cref="Cable"/>.</summary>
 public readonly struct CircuitLink
 {
 	public readonly Guid TargetId;

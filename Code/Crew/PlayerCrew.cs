@@ -12,7 +12,7 @@ namespace Survival;
 /// travels with the player, not with any feature object or scene.
 /// </summary>
 [Title( "Player Crew" )]
-public sealed class PlayerCrew : Component
+public sealed partial class PlayerCrew : Component
 {
 	/// <summary><c>crewId|name|leaderId|memberId:memberName|...</c>, empty while solo.</summary>
 	[Sync( SyncFlags.FromHost )] public string MyCrewBlob { get; private set; } = string.Empty;
@@ -42,6 +42,8 @@ public sealed class PlayerCrew : Component
 	protected override void OnUpdate()
 	{
 		base.OnUpdate();
+		TickOwnerMapShare();
+
 		if ( !HasHostAuthority || Time.NowDouble < _nextHostPushAt )
 			return;
 

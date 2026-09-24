@@ -64,7 +64,13 @@ public sealed class PlayerCrosshair : Component
 		if ( !ShowCrosshair || !IsLocalDriver() )
 			return;
 
+		_menu ??= Components.Get<PlayerGameMenuController>( FindMode.EverythingInSelfAndAncestors );
 		if ( _menu is not null && _menu.IsMenuOpen )
+			return;
+
+		// The menu overlay drives a software cursor whenever it is open — belt and braces so the
+		// aim ring can never show through the map page.
+		if ( InventoryScreenPointer.SoftCursorActive )
 			return;
 
 		// Cursor-owning modals: only the mouse cursor should show, not the aim ring.

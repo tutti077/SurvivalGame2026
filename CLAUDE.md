@@ -179,6 +179,9 @@ Code/
   Raids/        BaseRaidCatalog (Assets/data/raids.json — counts, waves, ring + aggro meters, enemy mix) · BaseRaidSession (L: host waves,
                 win/lose, ground ring; on the BaseRaid object) · raiders run EnemyAiState.Raiding (EntityBrain.Raid.cs); banner is Code/UI/BaseRaidHud.cs
   Hacks/        GameHacks — console-toggled dev flags (allCrafting), mirrored onto pawns via [Sync] for host checks
+  Map/          Player map markup: MapPinCatalog (12 pin icons, Assets/ui/map) · LocalMapMarkup (client-local pins + pen strokes in world
+                meters, write-through to 2Tgames/players/<steamid>/map/<world>.json via MapMarkupSaveStore) · MapPingFeed (MMB pings,
+                crew-scoped RPC on Crew/PlayerCrew.MapPing.cs); drawn by UI/TerrainWorldMapFace, driven by UI/Menu/MapMenuSection (see AGENTS.md "Map")
   Circuits/     CircuitNode (sphere + [Sync] powered/output/wires on every circuit-enabled prefab) · CircuitRegistry (host OR-solve, event-driven)
                 · CircuitLever / CircuitLight devices · CircuitWireOverlay (stripper spheres + wire lines); tool is Player/ToolWireStripper.cs,
                 cable menu Code/UI/Circuits/, pieces need "circuitEnabled": true in build_pieces.json (see AGENTS.md "Circuits")

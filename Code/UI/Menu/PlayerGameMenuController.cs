@@ -65,6 +65,29 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 	Vector2 _preInputMouseWheel;
 
 	/// <summary>
+	/// Asked first when Escape is pressed with the menu open; returning true swallows the press
+	/// (a page text entry closing itself) instead of closing the menu.
+	/// </summary>
+	public Func<bool> EscapeConsumer { get; set; }
+
+	/// <summary>True while a page text entry (pin naming) has the keyboard — page hotkeys stand down.</summary>
+	public Func<bool> TextCaptureProbe { get; set; }
+
+	public bool IsTextCaptureActive => IsMenuOpen && TextCaptureProbe?.Invoke() == true;
+
+	/// <summary>Escape with the menu open: let the page consume it first, otherwise close.</summary>
+	public void RequestCloseFromEscape()
+	{
+		if ( !IsMenuOpen )
+			return;
+
+		if ( EscapeConsumer?.Invoke() == true )
+			return;
+
+		SetMenuOpen( false );
+	}
+
+	/// <summary>
 	/// Apply wheel for the open menu. Reads PreInput capture, live <see cref="Input.MouseWheel"/>,
 	/// and optional MouseWheelUp/Down action bindings (nothing should WantsMouseInput while menu is open).
 	/// </summary>
@@ -197,9 +220,13 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 		if ( IsMenuOpen && Input.EscapePressed )
 		{
 			Input.EscapePressed = false;
-			SetMenuOpen( false );
+			RequestCloseFromEscape();
 			return;
 		}
+
+		// Typing a pin name: letters must not flip pages or close the menu.
+		if ( IsTextCaptureActive )
+			return;
 
 		if ( IsEnginePauseBlockingGameplay() )
 			return;

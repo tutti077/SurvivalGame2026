@@ -5,8 +5,8 @@ namespace Survival;
 
 /// <summary>
 /// Hammer-placed lever (<c>circuit_lever</c> in <c>data/build_pieces.json</c>). Look + E flips it;
-/// the host owns <see cref="IsOn"/> (<c>[Sync]</c>) and its <see cref="CircuitNode"/> pushes that
-/// state down every wire leaving it. A source: its wired input is ignored.
+/// the host owns <see cref="IsOn"/> (<c>[Sync]</c>); while it is on, every circuit its
+/// <see cref="CircuitNode"/> is wired into is live. A source: its wired input is ignored.
 /// </summary>
 [Title( "Circuit Lever" )]
 public sealed class CircuitLever : Component, ICircuitDevice

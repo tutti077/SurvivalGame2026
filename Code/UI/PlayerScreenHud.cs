@@ -86,6 +86,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	Panel _menuSkillsCenterRoot;
 	Panel _menuSkillsDetailRoot;
 	Panel _menuMapRoot;
+	Panel _vitalsHost;
 	Panel _menuAugmentRoot;
 	Panel _leftMenuColumn;
 	Panel _rightMenuColumn;
@@ -335,6 +336,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	void BuildVitals( Panel root )
 	{
 		var vitalsHost = new Panel { Parent = root };
+		_vitalsHost = vitalsHost;
 		vitalsHost.Style.Set( "position", "absolute" );
 		vitalsHost.Style.Set( "left", "16px" );
 		vitalsHost.Style.Set( "bottom", "16px" );
@@ -1006,6 +1008,11 @@ public sealed class PlayerScreenHud : PanelComponent
 		_menuInputOverlay.BindCraftingCraftPointer( OnMenuCraftPointerAtScreen );
 		_menuInputOverlay.BindTabSelect( _pageNavigator.TrySelectTabAtScreen );
 		_menuInputOverlay.BindPageContentSelect( TryMenuPageContentAtScreen );
+		_menuInputOverlay.BindPageSecondarySelect( TryMenuPageSecondaryAtScreen );
+		_menuInputOverlay.BindPageMiddleSelect( TryMenuPageMiddleAtScreen );
+		_menuInputOverlay.BindPageDrag( OnMenuPageDrag );
+		_menuController.EscapeConsumer = () => _mapSection?.TryConsumeEscape() ?? false;
+		_menuController.TextCaptureProbe = () => _mapSection?.IsCapturingText ?? false;
 		_menuController.MenuMouseWheelSink = OnMenuMouseWheel;
 
 		_augmentStationSection = new AugmentStationMenuSection( _augments, _inventory, _inventoryInteraction );
@@ -1352,6 +1359,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		UpdateHotbarVisibility();
 		UpdateMinimapVisibility();
+		UpdateVitalsVisibility();
 
 		if ( isOpen )
 		{
@@ -1430,6 +1438,26 @@ public sealed class PlayerScreenHud : PanelComponent
 		_pageNavigator?.RefreshHighlight();
 		UpdateHotbarVisibility();
 		UpdateMinimapVisibility();
+		UpdateVitalsVisibility();
+	}
+
+	/// <summary>Health / stamina / buffs sit above the menu columns (buff tooltip), but never over a fullscreen page like the map.</summary>
+	void UpdateVitalsVisibility()
+	{
+		if ( _vitalsHost is null || !_vitalsHost.IsValid() )
+			return;
+
+		if ( _menuController is null || !_menuController.IsMenuOpen )
+		{
+			_vitalsHost.Style.Set( "display", "flex" );
+			return;
+		}
+
+		var panels = _menuController.VisiblePanels;
+		var hideForFullscreen = (panels & MenuPanelFlags.Map) != 0
+		                        || (panels & MenuPanelFlags.Settings) != 0
+		                        || (panels & MenuPanelFlags.AugmentStation) != 0;
+		_vitalsHost.Style.Set( "display", hideForFullscreen ? "none" : "flex" );
 	}
 
 	void UpdateHotbarVisibility()
@@ -1537,6 +1565,31 @@ public sealed class PlayerScreenHud : PanelComponent
 	{
 		for ( var i = 0; i < _sections.Count; i++ )
 			_sections[i].OnMenuGlobalMouseUp();
+	}
+
+	bool IsMapPageActive =>
+		_menuController is not null
+		&& string.Equals( _menuController.ActivePageId, MenuPageIds.Map, StringComparison.OrdinalIgnoreCase );
+
+	/// <summary>Soft-cursor Attack2 on page content — only the map page uses it (remove pin).</summary>
+	bool TryMenuPageSecondaryAtScreen( Vector2 screenPos ) =>
+		IsMapPageActive && (_mapSection?.TrySecondaryAtScreen( screenPos ) ?? false);
+
+	/// <summary>Soft-cursor middle mouse on page content — map ping to the crew.</summary>
+	bool TryMenuPageMiddleAtScreen( Vector2 screenPos )
+	{
+		if ( !IsMapPageActive )
+			return false;
+
+		var crew = FindOnAncestors<PlayerCrew>();
+		return _mapSection?.TryMiddleAtScreen( screenPos, crew ) ?? false;
+	}
+
+	/// <summary>Held Attack1 each frame — map pen / eraser drags.</summary>
+	void OnMenuPageDrag( Vector2 screenPos, bool held )
+	{
+		if ( IsMapPageActive )
+			_mapSection?.TickPointerDrag( screenPos, held );
 	}
 
 	void RefreshVitals()

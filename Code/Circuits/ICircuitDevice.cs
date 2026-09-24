@@ -8,9 +8,9 @@ namespace Survival;
 public interface ICircuitDevice
 {
 	/// <summary>
-	/// Output for the node's outgoing wires given its wired input. Sources (lever, sensor) ignore
-	/// <paramref name="powered"/> and return their own state; sinks pass it through so a chain of
-	/// lights lights up from one lever.
+	/// The node's own state given whether its circuit is live. Sources (lever, sensor) ignore
+	/// <paramref name="powered"/> and return their own state — the registry asks them with
+	/// <c>false</c> to find out whether they make the circuit live; sinks return the input.
 	/// </summary>
 	bool ComputeOutput( bool powered );
 }

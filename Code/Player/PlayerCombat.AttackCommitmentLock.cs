@@ -53,6 +53,12 @@ public partial class PlayerCombat : Component, PlayerController.IEvents
 		if ( menu is not null && menu.IsMenuOpen )
 			return false;
 
+		// Tools that use Attack1 for their own job (wire stripper drag, hammer, hoe) never swing:
+		// same gate as the owner swing tick, so holding the button keeps run + jump.
+		var equipped = Components.Get<PlayerEquippedItem>();
+		if ( equipped is not null && !equipped.HasAction( EquippedItemActions.PrimaryMelee ) )
+			return false;
+
 		if ( ServerHasActiveMeleeAttackAction || _primary.Down )
 			return true;
 

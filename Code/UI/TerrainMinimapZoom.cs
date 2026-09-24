@@ -9,14 +9,17 @@ public static class TerrainMinimapZoom
 	/// <summary>Full world in view.</summary>
 	public const float Min = 1f;
 
-	/// <summary>Closest view — past this the stamp is too tight for usable navigation.</summary>
-	public const float Max = 12f;
+	/// <summary>Closest view — about 100 m across a 4 km world in the Map page window.</summary>
+	public const float Max = 40f;
 
 	/// <summary>Each +/- multiplies / divides scale by this (constant 10% feel).</summary>
 	public const float ScaleStep = 1.10f;
 
-	/// <summary>Spawn fully zoomed in on the stream position.</summary>
-	public static float Level { get; private set; } = Max;
+	/// <summary>Where the HUD minimap starts: the old closest view (~330 m across); the Map page can wheel in further.</summary>
+	public const float Default = 12f;
+
+	/// <summary>Spawn zoomed in on the stream position.</summary>
+	public static float Level { get; private set; } = Default;
 
 	public static bool TryZoomIn()
 	{

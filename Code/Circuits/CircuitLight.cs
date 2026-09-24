@@ -4,8 +4,8 @@ namespace Survival;
 
 /// <summary>
 /// Hammer-placed electric light (<c>circuit_light</c> in <c>data/build_pieces.json</c>). Lit while
-/// its <see cref="CircuitNode"/> is powered: the bulb mesh tints and a point light comes on. Passes
-/// its input through, so lights wired in a row all follow one lever.
+/// its <see cref="CircuitNode"/> is powered: the bulb mesh tints and a point light comes on. Lights
+/// wired in a row are one circuit, so they all follow every lever on it.
 /// </summary>
 [Title( "Circuit Light" )]
 public sealed class CircuitLight : Component, ICircuitDevice

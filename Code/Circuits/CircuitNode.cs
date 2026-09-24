@@ -9,7 +9,8 @@ namespace Survival;
 /// <see cref="ICircuitDevice"/>). Holds the wire stripper's sphere, the host-solved wired input
 /// (<see cref="Powered"/>), what the node pushes down its own wires (<see cref="Output"/>) and the
 /// outgoing wires themselves — all <c>[Sync]</c>, so every machine draws the same graph and every
-/// device reads the same state. Wires are directional: they live on the node they leave.
+/// device reads the same state. A wire is stored on one of its two ends but carries power both
+/// ways — the registry treats the graph as undirected.
 /// The catalog flag <see cref="BuildPieceData.CircuitEnabled"/> must also be on for the piece.
 /// </summary>
 [Title( "Circuit Node" )]
@@ -28,13 +29,13 @@ public sealed class CircuitNode : Component
 	[Property, Group( "Circuit" ), Title( "Sphere offset (units)" )]
 	public Vector3 SphereLocalOffset { get; set; }
 
-	/// <summary>Host → everyone: at least one live wire into this node carries a signal.</summary>
+	/// <summary>Host → everyone: the circuit this node is wired into is live (any lever on it is on).</summary>
 	[Sync] public bool Powered { get; private set; }
 
-	/// <summary>Host → everyone: the signal this node sends down its outgoing wires.</summary>
+	/// <summary>Host → everyone: what this node contributes / shows (lever: thrown; sink: mirrors Powered).</summary>
 	[Sync] public bool Output { get; private set; }
 
-	/// <summary>Host → everyone: outgoing wires (<see cref="CircuitLink.Encode"/>).</summary>
+	/// <summary>Host → everyone: wires stored on this end (<see cref="CircuitLink.Encode"/>); each is two-way.</summary>
 	[Sync] public string LinksEncoded { get; private set; } = string.Empty;
 
 	readonly List<CircuitLink> _links = new();
@@ -57,7 +58,7 @@ public sealed class CircuitNode : Component
 	public bool IsCircuitEnabled =>
 		BuildPieceCatalog.TryGet( PieceId, out var data ) && data.CircuitEnabled;
 
-	/// <summary>Pushes its own state (lever, sensor, generator) rather than passing a wired input along.</summary>
+	/// <summary>Can make a circuit live on its own (lever, sensor, generator) rather than only following it.</summary>
 	public bool IsSourceKind => Kind is CircuitNodeKind.Switch or CircuitNodeKind.Sensor or CircuitNodeKind.Power;
 
 	public ICircuitDevice Device => _device ??= FindDevice();
@@ -78,7 +79,7 @@ public sealed class CircuitNode : Component
 
 	public float SphereRadiusUnits => SphereDiameterMeters * BuildColliderSnap.PrefabColliderSize.x * 0.5f;
 
-	/// <summary>Outgoing wires, decoded once per synced change.</summary>
+	/// <summary>Wires stored on this node, decoded once per synced change.</summary>
 	public IReadOnlyList<CircuitLink> Links
 	{
 		get

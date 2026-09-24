@@ -23,6 +23,9 @@ public sealed class InventoryMenuInputOverlay : Panel
 	Func<Vector2, bool, bool> _craftingCraftPointer;
 	Func<Vector2, bool> _tabSelect;
 	Func<Vector2, bool> _pageContentSelect;
+	Func<Vector2, bool> _pageSecondarySelect;
+	Func<Vector2, bool> _pageMiddleSelect;
+	Action<Vector2, bool> _pageDrag;
 	Action _menuGlobalMouseUp;
 	bool _isOpen;
 
@@ -45,6 +48,15 @@ public sealed class InventoryMenuInputOverlay : Panel
 	public void BindTabSelect( Func<Vector2, bool> handler ) => _tabSelect = handler;
 
 	public void BindPageContentSelect( Func<Vector2, bool> handler ) => _pageContentSelect = handler;
+
+	/// <summary>Soft-cursor Attack2 on page content (map: remove pin) — runs before the inventory right-click path.</summary>
+	public void BindPageSecondarySelect( Func<Vector2, bool> handler ) => _pageSecondarySelect = handler;
+
+	/// <summary>Soft-cursor middle mouse on page content (map: ping).</summary>
+	public void BindPageMiddleSelect( Func<Vector2, bool> handler ) => _pageMiddleSelect = handler;
+
+	/// <summary>Every frame while open: pointer position + whether Attack1 is held (map pen / eraser drags).</summary>
+	public void BindPageDrag( Action<Vector2, bool> handler ) => _pageDrag = handler;
 
 	public void BindMenuGlobalMouseUp( Action handler ) => _menuGlobalMouseUp = handler;
 
@@ -84,7 +96,20 @@ public sealed class InventoryMenuInputOverlay : Panel
 		TickSoftCursor();
 		PollAttack1MenuPointer();
 		PollAttack2MenuPointer();
-		PollEquipAmmoOnUse();
+		PollMiddleMenuPointer();
+		_pageDrag?.Invoke( _softCursorPos, Input.Down( "Attack1" ) );
+
+		// A text entry on the page (pin naming) owns the keyboard — no E-to-equip while typing.
+		if ( _menuController is not { IsTextCaptureActive: true } )
+			PollEquipAmmoOnUse();
+	}
+
+	void PollMiddleMenuPointer()
+	{
+		if ( !Input.Pressed( "mouse3" ) )
+			return;
+
+		_pageMiddleSelect?.Invoke( _softCursorPos );
 	}
 
 	/// <summary>Inventory soft-cursor + E (HandHarvest): mark hovered ammo stack as preferred.</summary>
@@ -291,6 +316,9 @@ public sealed class InventoryMenuInputOverlay : Panel
 			return;
 
 		var pos = _softCursorPos;
+		if ( _pageSecondarySelect is not null && _pageSecondarySelect.Invoke( pos ) )
+			return;
+
 		if ( _inventoryInteraction is null )
 			return;
 
@@ -377,7 +405,7 @@ public sealed class InventoryMenuInputOverlay : Panel
 
 		// Consume Escape so closing inventory does not also open the engine pause menu.
 		Input.EscapePressed = false;
-		_menuController?.SetMenuOpen( false );
+		_menuController?.RequestCloseFromEscape();
 	}
 
 	public override void OnButtonEvent( ButtonEvent e )
@@ -390,7 +418,7 @@ public sealed class InventoryMenuInputOverlay : Panel
 		if ( e.Button == "escape" )
 		{
 			Input.EscapePressed = false;
-			_menuController?.SetMenuOpen( false );
+			_menuController?.RequestCloseFromEscape();
 		}
 	}
 }
