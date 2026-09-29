@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import create_elm_tree as elm   # guarded main(): importing builds nothing
 import elm_felling as fell
 
-VERSION = 9
+VERSION = 12
 TAG = f"_v{VERSION}"
 BARK = f"elm_sapling_bark{TAG}"
 LEAVES = f"elm_sapling_leaves{TAG}"
@@ -49,6 +49,13 @@ CARD_LEN = 0.55
 STICK_R = 0.02       # every branch and the trunk above its base: one thickness (before height scaling)
 BASE_R = 0.032       # slightly thicker at the very bottom of the trunk
 HP, WOOD = 12, (2, 4)
+# LOD chain, same format as create_elm_tree.TREE_LODS: (switch_threshold, wood tris, cards kept, card scale)
+SAPLING_LODS = [
+	(0.0, None, 1.0, 1.0),
+	(100.0, 500, 1.0, 1.0),    # Mark's LOD distances: 100 / 200 m (a third level would be 300)
+	(200.0, 150, 0.6, 1.2),    # gentle step: keep 60 % of the cards (nested), grow them a little
+]
+SAPLING_PHYSICS_LOD = 1
 UP = Vector((0, 0, 1))
 
 # name, seed, total height incl. leaves (m), base radius (m), side shoots, lean
@@ -390,16 +397,22 @@ def main():
 		print(f"SAPLING {name}: height {max(zs):.2f} m, stem {dia * 100:.1f} cm across at 10 cm, "
 			  f"wood islands {elm.island_count(wood.data)}, wood tris {sum(len(p.vertices) - 2 for p in wood.data.polygons)}, "
 			  f"cards {cards} ({cards * 4} tris), clusters {len(tips)}")
+		lod_objs = elm.build_lods(name, wood, leaves, SAPLING_LODS)
+		merged = elm.merge_lod_meshes(name, wood, leaves, lod_objs)
+		phys = wood if SAPLING_PHYSICS_LOD == 0 else lod_objs[(SAPLING_PHYSICS_LOD - 1) * 2]
 		for o in bpy.data.objects:
 			o.select_set(False)
-		wood.select_set(True)
-		leaves.select_set(True)
-		bpy.context.view_layer.objects.active = wood
+		for o in merged + [phys]:
+			o.select_set(True)
+		bpy.context.view_layer.objects.active = merged[0]
 		bpy.ops.export_scene.fbx(filepath=os.path.join(MODEL_DIR, name + ".fbx"), use_selection=True,
 								 global_scale=1.0, apply_unit_scale=True, object_types={'MESH'},
 								 mesh_smooth_type='OFF', path_mode='STRIP', embed_textures=False)
 		with open(os.path.join(MODEL_DIR, name + ".vmdl"), "w", newline="\n") as f:
-			f.write(elm.vmdl_text(name).replace("elm_bark", BARK).replace("elm_leaves", LEAVES))
+			f.write(elm.vmdl_text(name, SAPLING_LODS, SAPLING_PHYSICS_LOD).replace("elm_bark", BARK).replace("elm_leaves", LEAVES))
+		for o in lod_objs + merged:
+			o.hide_render = True
+			o.hide_set(True)
 		fell.write_prefab(os.path.join(PREFAB_DIR, name + ".prefab"), name, f"{ASSET_DIR}/{name}.vmdl",
 						  {"MaxHealth": HP, "CurrentHealth": HP, "WoodDropMin": WOOD[0], "WoodDropMax": WOOD[1]},
 						  False, elm.PREFAB_TEMPLATE)

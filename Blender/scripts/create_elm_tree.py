@@ -47,7 +47,7 @@ OLD_DIRS = [os.path.join(ROOT, "Assets", "models", "environment"),
 			os.path.join(ROOT, "Assets", "materials", "environment")]
 # Every regenerated set gets a new version number in all model + material names, and older
 # versions' files are deleted, so s&box never serves a stale compiled model or texture.
-VERSION = 31
+VERSION = 34
 BARK = f"elm_bark_v{VERSION}"
 GRAIN = f"elm_endgrain_v{VERSION}"
 LOG = f"environment_elm_log_v{VERSION}"
@@ -1170,7 +1170,116 @@ VMAT_LEAVES = """Layer0
 """
 
 
-def vmdl_text(name):
+# ---------------------------------------------------------------------------- LOD chain
+
+# s&box LODGroupList: (switch_threshold, wood tris, fraction of leaf cards kept, kept-card scale).
+# switch_threshold is ModelDoc's LOD switch distance (bigger = farther; compiled as SwitchDistance). The
+# citizen uses 5 / 20 / 40 / 70 for a 1.8 m body, so a 25 m tree needs far bigger numbers — 4 / 10 / 24
+# put every tree on LOD3 almost at once. Calibrate in ModelDoc with "Set LOD threshold from current
+# camera position" and copy the numbers back here.
+# Mark's LOD distances for generated models: 100 / 200 / 300 m.
+# Gentle steps so the swap does not pop: each level drops ~30-50 % of the remaining cards (never half
+# the crown at once), and kept cards grow only ~kept^-0.35 (partial area compensation) so the pixel
+# leaves do not visibly jump in size. Cards are nested (LOD3 subset of LOD2 subset of LOD1): a card
+# that survives a swap never moves.
+TREE_LODS = [
+	(0.0, None, 1.0, 1.0),
+	(100.0, 6000, 0.7, 1.13),
+	(200.0, 1500, 0.4, 1.38),
+	(300.0, 400, 0.2, 1.76),
+]
+# Collision uses this LOD's wood: a full-res 24k-tri physics mesh per tree is slow to build and query.
+TREE_PHYSICS_LOD = 2
+
+
+def lod_name(name, part, level):
+	return f"{name}_{part}" if level == 0 else f"{name}_{part}_lod{level}"
+
+
+def merged_lod_name(name, level):
+	return f"{name}_lod{level}"
+
+
+def merge_lod_meshes(name, wood, leaves, lod_objs):
+	"""One export object per LOD level: copies of that level's wood + leaves joined into
+	<name>_lod<N> (two material slots, custom leaf normals kept by the join). The separate wood / leaves
+	objects stay in the .blend (stumps, previews) and the physics LOD's wood is exported alongside
+	for the vmdl's PhysicsMeshFile. Returns [merged lod0, lod1, ...]."""
+	pairs = [(wood, leaves)] + [(lod_objs[i], lod_objs[i + 1]) for i in range(0, len(lod_objs), 2)]
+	merged = []
+	for level, (w, l) in enumerate(pairs):
+		parts = []
+		for src in (w, l):
+			c = src.copy()
+			c.data = src.data.copy()
+			bpy.context.scene.collection.objects.link(c)
+			parts.append(c)
+		with bpy.context.temp_override(active_object=parts[0], object=parts[0],
+									   selected_objects=parts, selected_editable_objects=parts):
+			bpy.ops.object.join()
+		m = parts[0]
+		m.name = m.data.name = merged_lod_name(name, level)
+		merged.append(m)
+	return merged
+
+
+def build_lods(name, wood, leaves, lods):
+	"""Extra LOD objects (level 1+) as copies of the finished wood / leaves: wood decimated to the
+	level's triangle budget (UVs carried by the decimate), leaves thinned (cards are 6 verts / 2 quads,
+	generated clump by clump) with each kept card scaled about its own centre. Each card gets a fixed
+	golden-ratio rank, and a level keeps the cards ranked below its fraction: the kept sets are NESTED
+	(nothing reappears or moves at a swap) and evenly spread through every clump.
+	Custom (cluster) normals are copied from the source card."""
+	made = []
+	src = leaves.data
+	cards = len(src.polygons) // 2
+	uv_src = src.uv_layers[0].data
+	corner_n = [tuple(c.vector) for c in src.corner_normals]
+	for level, (_, wood_tris, keep, scale) in enumerate(lods):
+		if level == 0:
+			continue
+		w = wood.copy()
+		w.data = wood.data.copy()
+		w.name = w.data.name = lod_name(name, "wood", level)
+		bpy.context.scene.collection.objects.link(w)
+		tris = sum(len(p.vertices) - 2 for p in w.data.polygons)
+		if wood_tris and tris > wood_tris:
+			bake(w, ('DECIMATE', {"ratio": wood_tris / tris}))
+			w.data.shade_smooth()
+
+		verts, faces, uvs, normals = [], [], [], []
+		for c in range(cards):
+			if (c * 0.6180339887) % 1.0 >= keep:
+				continue
+			polys = (src.polygons[c * 2], src.polygons[c * 2 + 1])
+			ids = sorted({vi for p in polys for vi in p.vertices})
+			centre = sum((src.vertices[i].co for i in ids), Vector()) / len(ids)
+			remap = {}
+			for i in ids:
+				remap[i] = len(verts)
+				verts.append(centre + (src.vertices[i].co - centre) * scale)
+			for p in polys:
+				faces.append(tuple(remap[vi] for vi in p.vertices))
+				uvs.append([tuple(uv_src[li].uv) for li in p.loop_indices])
+				normals += [corner_n[li] for li in p.loop_indices]
+		me = bpy.data.meshes.new(lod_name(name, "leaves", level))
+		me.from_pydata(verts, [], faces)
+		uvl = me.uv_layers.new(name="UVMap")
+		for poly, quv in zip(me.polygons, uvs):
+			for li, u in zip(poly.loop_indices, quv):
+				uvl.data[li].uv = u
+		me.normals_split_custom_set(normals)
+		for mat in src.materials:
+			me.materials.append(mat)
+		lv = bpy.data.objects.new(me.name, me)
+		bpy.context.scene.collection.objects.link(lv)
+		made += [w, lv]
+		print(f"  LOD{level} {name}: wood tris {sum(len(p.vertices) - 2 for p in w.data.polygons)}, "
+			  f"cards {len(faces) // 2} of {cards}")
+	return made
+
+
+def vmdl_text(name, lods=((0.0, None, 1.0, 1.0),), physics_lod=0):
 	def render_node(obj):
 		return f"""					{{
 						_class = "RenderMeshFile"
@@ -1190,6 +1299,28 @@ def vmdl_text(name):
 						}}
 					}},
 """
+	physics_mesh = lod_name(name, "wood", physics_lod)
+	# One render mesh per level (wood + leaves merged, see merge_lod_meshes): the engine picks a LOD per
+	# render mesh from that mesh's own bounds, so separate trunk / crown meshes switched at different distances.
+	render_nodes = "".join(render_node(merged_lod_name(name, i)) for i in range(len(lods)))
+	lod_groups = ""
+	if len(lods) > 1:
+		groups = "".join(f"""
+					{{
+						_class = "LODGroup"
+						switch_threshold = {lods[i][0]:.1f}
+						meshes =
+						[
+							"{merged_lod_name(name, i)}",
+						]
+					}},""" for i in range(len(lods)))
+		lod_groups = f"""
+			{{
+				_class = "LODGroupList"
+				children =
+				[{groups}
+				]
+			}},"""
 	return f"""<!-- kv3 encoding:text:version{{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d}} format:modeldoc30:version{{8c2d7a91-9c42-4bf0-883a-5a3b1762d4f1}} -->
 {{
 	rootNode =
@@ -1242,7 +1373,7 @@ def vmdl_text(name):
 						import_filter =
 						{{
 							exclude_by_default = true
-							exception_list = [ "{name}_wood" ]
+							exception_list = [ "{physics_mesh}" ]
 						}}
 					}},
 				]
@@ -1251,8 +1382,8 @@ def vmdl_text(name):
 				_class = "RenderMeshList"
 				children =
 				[
-{render_node(name + "_wood")}{render_node(name + "_leaves")}				]
-			}},
+{render_nodes}				]
+			}},{lod_groups}
 		]
 		model_archetype = ""
 		primary_associated_entity = ""
@@ -1425,7 +1556,7 @@ def remove_old_versions():
 	old = [f for f in set(old) if "sapling" not in os.path.basename(f)
 		   and (tag not in os.path.basename(f) or os.path.dirname(f) != MODEL_DIR)]
 	old += [f for f in glob.glob(os.path.join(os.path.dirname(BLEND_OUT), "environment_elm*.blend*"))
-			if tag not in os.path.basename(f)]
+			if tag not in os.path.basename(f) and "sapling" not in os.path.basename(f)]
 	old += [f for f in glob.glob(os.path.join(PREVIEW_DIR, "*.png")) if tag not in os.path.basename(f)]
 	old += [f for f in glob.glob(os.path.join(PREFAB_DIR, "environment_elm*"))
 			if tag not in os.path.basename(f) and "sapling" not in os.path.basename(f)]
@@ -1523,16 +1654,22 @@ def main():
 		print(f"TREE {name} clusters {nfl}, outline lump {lump:.2f} % dip {dip:.2f} %, nodes {len(nodes)} (seed {seed}, biggest bald patch {holes} cells): height {max(zs):.1f} m, crown {max(xs) - min(xs):.1f} x {max(ys) - min(ys):.1f} m, "
 			  f"trunk {dbh:.2f} m across at 1.3 m, wood islands {island_count(wood.data)}, bad bark UV faces {uv_stretch_report(wood.data):.1f} %, wood tris {wtris}, cards {cards} ({cards * 4} tris)")
 
+		lod_objs = build_lods(name, wood, leaves, TREE_LODS)
+		merged = merge_lod_meshes(name, wood, leaves, lod_objs)
+		phys = wood if TREE_PHYSICS_LOD == 0 else lod_objs[(TREE_PHYSICS_LOD - 1) * 2]
 		for o in bpy.data.objects:
 			o.select_set(False)
-		wood.select_set(True)
-		leaves.select_set(True)
-		bpy.context.view_layer.objects.active = wood
+		for o in merged + [phys]:
+			o.select_set(True)
+		bpy.context.view_layer.objects.active = merged[0]
 		bpy.ops.export_scene.fbx(filepath=os.path.join(MODEL_DIR, name + ".fbx"), use_selection=True,
 								 global_scale=1.0, apply_unit_scale=True, object_types={'MESH'},
 								 mesh_smooth_type='OFF', path_mode='STRIP', embed_textures=False)
 		with open(os.path.join(MODEL_DIR, name + ".vmdl"), "w", newline="\n") as f:
-			f.write(vmdl_text(name).replace("elm_bark", BARK).replace("elm_leaves", LEAVES))
+			f.write(vmdl_text(name, TREE_LODS, TREE_PHYSICS_LOD).replace("elm_bark", BARK).replace("elm_leaves", LEAVES))
+		for o in lod_objs + merged:
+			o.hide_render = True
+			o.hide_set(True)
 
 		# stump: this tree's own base cut at STUMP_H, and the tree prefab that fells into it
 		sname = name.replace(f"_v{VERSION}", f"_stump_v{VERSION}")

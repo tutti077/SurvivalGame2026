@@ -21,7 +21,11 @@ public sealed class TerrainWorldManager : Component
 		public TerrainChunkCoord Coord;
 		public int VerticesPerSide;
 		public bool HasVegetation;
+		public bool HasSmallVegetation;
 		public bool HasEntityPopulation;
+		/// <summary>Large-tree positions (world meters) — sapling trunk clearance on promotion.</summary>
+		public readonly List<Vector2> Trunks = new();
+		public readonly List<ModelCollider> VegetationColliders = new();
 	}
 
 	[Property, Group( "World" )] public string WorldName { get; set; } = "TestWorld";
@@ -93,14 +97,53 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Scatter Trees" )]
 	public bool VegetationScatterEnabled { get; set; } = true;
 
-	[Property, Group( "Vegetation" ), Title( "Clover — Tree Prefab A" )]
-	public string VegetationPrefabA { get; set; } = "prefabs/environment/temp_tree_3.prefab";
+	[Property, Group( "Vegetation" ), Title( "Clover — Tree Prefabs" ), Description( "Large trees; each spawn picks one of these at random." )]
+	public List<string> VegetationCloverTreePrefabs { get; set; } =
+	[
+		"prefabs/environment/tests/environment_elm1_v34.prefab",
+		"prefabs/environment/tests/environment_elm2_v34.prefab",
+		"prefabs/environment/tests/environment_elm3_v34.prefab",
+		"prefabs/environment/tests/environment_elm4_v34.prefab",
+		"prefabs/environment/tests/environment_elm5_v34.prefab",
+		"prefabs/environment/tests/environment_elm6_v34.prefab",
+	];
 
-	[Property, Group( "Vegetation" ), Title( "Clover — Tree Prefab B" )]
-	public string VegetationPrefabB { get; set; } = "prefabs/environment/propertree.prefab";
+	[Property, Group( "Vegetation" ), Title( "Clover — Sapling Prefabs" ), Description( "Small trees, Clover Hills only; each spawn picks one of these at random. Empty = no saplings." )]
+	public List<string> VegetationCloverSaplingPrefabs { get; set; } =
+	[
+		"prefabs/environment/tests/environment_elmsapling1_v12.prefab",
+		"prefabs/environment/tests/environment_elmsapling2_v12.prefab",
+		"prefabs/environment/tests/environment_elmsapling3_v12.prefab",
+		"prefabs/environment/tests/environment_elmsapling4_v12.prefab",
+		"prefabs/environment/tests/environment_elmsapling5_v12.prefab",
+	];
 
-	[Property, Group( "Vegetation" ), Title( "Clover — Prefab A Weight (0–1)" ), Range( 0f, 1f ), Step( 0.05f )]
-	public float VegetationPrefabAWeight01 { get; set; } = 0.55f;
+	[Property, Group( "Vegetation" ), Title( "Clover — Sapling Cell Spacing (m)" ), Range( 2f, 32f ), Step( 1f ), Description( "Grid for the sapling layer (separate from the large-tree grid). Lower = more candidates." )]
+	public float VegetationCloverSaplingSpacingMeters { get; set; } = 8f;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Sapling Chance (0–1)" ), Range( 0f, 1f ), Step( 0.05f ), Description( "Per-cell chance at a forest edge (the best spot)." )]
+	public float VegetationCloverSaplingChance01 { get; set; } = 0.5f;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Sapling Forest Edge Bias (0–1)" ), Range( 0f, 1f ), Step( 0.05f ), Description( "0 = saplings spread evenly over Clover Hills. 1 = only along forest edges, none deep in groves or mid-clearing." )]
+	public float VegetationCloverSaplingEdgeBias01 { get; set; } = 0.7f;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Sapling Trunk Clearance (m)" ), Range( 0f, 8f ), Step( 0.25f ), Description( "No sapling closer than this to a large tree trunk." )]
+	public float VegetationCloverSaplingClearanceMeters { get; set; } = 2.5f;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Max Saplings Per Chunk" ), Range( 1, 256 ), Step( 1 )]
+	public int VegetationCloverSaplingMaxPerChunk { get; set; } = 64;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Sapling Scale Min (multiplier)" ), Range( 0.3f, 2f ), Step( 0.05f )]
+	public float VegetationCloverSaplingScaleMin { get; set; } = 0.8f;
+
+	[Property, Group( "Vegetation" ), Title( "Clover — Sapling Scale Max (multiplier)" ), Range( 0.3f, 2f ), Step( 0.05f )]
+	public float VegetationCloverSaplingScaleMax { get; set; } = 1.2f;
+
+	[Property, Group( "Vegetation" ), Title( "Slope Tilt Influence (0–1)" ), Range( 0f, 1f ), Step( 0.05f ), Description( "How much trees lean with the ground slope. 0 = always straight up, 1 = perpendicular to the ground (still capped by Max Slope Tilt)." )]
+	public float VegetationSlopeTiltInfluence01 { get; set; } = 0.5f;
+
+	[Property, Group( "Vegetation" ), Title( "Max Slope Tilt (deg)" ), Range( 0f, 45f ), Step( 1f ), Description( "Trees never lean further than this from vertical, however steep the slope." )]
+	public float VegetationSlopeTiltMaxDegrees { get; set; } = 15f;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Rock Prefab" )]
 	public string VegetationCloverRockPrefab { get; set; } = "prefabs/environment/rock.prefab";
@@ -144,7 +187,7 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Clover — Stick Cluster Radius (m)" ), Range( 0.25f, 4f ), Step( 0.25f )]
 	public float VegetationCloverStickClusterRadiusMeters { get; set; } = 1.5f;
 
-	[Property, Group( "Vegetation" ), Title( "Clover — Stick Near Large Tree" ), Description( "Extra sticks beside Prefab A (large) Clover trees. Prefab C / 3rd tree type not wired yet." )]
+	[Property, Group( "Vegetation" ), Title( "Clover — Stick Near Large Tree" ), Description( "Extra sticks beside large Clover trees (not saplings)." )]
 	public bool VegetationCloverStickNearLargeTreeEnabled { get; set; } = true;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Stick Near Large Tree Chance (0–1)" ), Range( 0f, 1f ), Step( 0.01f ), Description( "Chance per large tree to place one stick in open ground beside the trunk." )]
@@ -161,9 +204,6 @@ public sealed class TerrainWorldManager : Component
 
 	[Property, Group( "Vegetation" ), Title( "Redwood — Tree Prefab B" )]
 	public string VegetationRedwoodPrefabB { get; set; } = "prefabs/environment/temp_tree_4.prefab";
-
-	[Property, Group( "Vegetation" ), Title( "Redwood — Prefab A Weight (0–1)" ), Range( 0f, 1f ), Step( 0.05f ), Description( "Chance to pick Prefab A (temp_tree_2) vs B (temp_tree_4)." )]
-	public float VegetationRedwoodPrefabAWeight01 { get; set; } = 0.5f;
 
 	[Property, Group( "Vegetation" ), Title( "Redwood — Density (0–1)" ), Range( 0.05f, 1f ), Step( 0.05f ), Description( "Fraction of shared forest density for Redwood only. Redwood ignores hard forest patches, so low values still cover the whole biome sparsely." )]
 	public float VegetationRedwoodDensity01 { get; set; } = 0.1f;
@@ -183,7 +223,7 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Max Trees Per Chunk" ), Range( 4, 128 ), Step( 1 )]
 	public int VegetationMaxTreesPerChunk { get; set; } = 96;
 
-	[Property, Group( "Vegetation" ), Title( "Scale Min (multiplier)" ), Range( 0.5f, 1.5f ), Step( 0.05f ), Description( "Multiplies each prefab's authored scale (temp_tree_3=1, ProperTree=0.25)." )]
+	[Property, Group( "Vegetation" ), Title( "Scale Min (multiplier)" ), Range( 0.5f, 1.5f ), Step( 0.05f ), Description( "Multiplies each large tree prefab's authored scale." )]
 	public float VegetationScaleMin { get; set; } = 0.9f;
 
 	[Property, Group( "Vegetation" ), Title( "Scale Max (multiplier)" ), Range( 0.5f, 2f ), Step( 0.05f )]
@@ -1257,10 +1297,9 @@ public sealed class TerrainWorldManager : Component
 			}
 
 			if ( wantVegetation && !entry.HasVegetation )
-			{
-				ScatterVegetationOnChunk( entry.GameObject, entry.Coord, settings, desiredVerts );
-				entry.HasVegetation = true;
-			}
+				ScatterVegetationOnChunk( entry, settings, desiredVerts );
+			else if ( entry.HasVegetation && !entry.HasSmallVegetation && entry.VerticesPerSide >= ChunkVerticesPerSide )
+				ScatterSmallVegetationOnChunk( entry, settings );
 
 			if ( ShouldScatterEntityPopulation( desiredVerts, distance, chunkSize ) && !entry.HasEntityPopulation )
 			{
@@ -1297,6 +1336,8 @@ public sealed class TerrainWorldManager : Component
 
 		var wasEnabled = entry.Collider.Enabled;
 		entry.Collider.Enabled = true;
+		if ( !wasEnabled )
+			SetVegetationCollidersEnabled( entry, true );
 		if ( wasEnabled || !entry.GameObject.IsValid() )
 			return;
 
@@ -1339,7 +1380,10 @@ public sealed class TerrainWorldManager : Component
 		{
 			entry.Collider.Model = built.Model;
 			entry.Collider.Static = true;
-			entry.Collider.Enabled = ShouldKeepChunkColliderEnabled( entry, distance, ChunkSizeMeters );
+			var enabled = ShouldKeepChunkColliderEnabled( entry, distance, ChunkSizeMeters );
+			if ( entry.Collider.Enabled != enabled )
+				SetVegetationCollidersEnabled( entry, enabled );
+			entry.Collider.Enabled = enabled;
 		}
 
 		entry.VerticesPerSide = verticesPerSide;
@@ -1365,6 +1409,8 @@ public sealed class TerrainWorldManager : Component
 			var wantEnabled = ShouldKeepChunkColliderEnabled( entry, distance, chunkSize );
 			var wasEnabled = entry.Collider.Enabled;
 			entry.Collider.Enabled = wantEnabled;
+			if ( wasEnabled != wantEnabled )
+				SetVegetationCollidersEnabled( entry, wantEnabled );
 
 			// Terrain collision just came online — bake nav, then spawn scavs (after terrain).
 			if ( !wasEnabled && wantEnabled && entry.GameObject.IsValid() )
@@ -1462,22 +1508,17 @@ public sealed class TerrainWorldManager : Component
 		collider.Static = true;
 		collider.Enabled = IsChunkInCollisionRange( distance, chunkSize );
 
-		var hasVegetation = false;
-		if ( ShouldScatterVegetation( verticesPerSide ) )
-		{
-			ScatterVegetationOnChunk( go, coord, settings, verticesPerSide );
-			hasVegetation = true;
-		}
-
-		_loaded[coord] = new LoadedChunk
+		var entry = new LoadedChunk
 		{
 			GameObject = go,
 			Collider = collider,
 			Coord = coord,
 			VerticesPerSide = verticesPerSide,
-			HasVegetation = hasVegetation,
-			HasEntityPopulation = false,
 		};
+		_loaded[coord] = entry;
+
+		if ( ShouldScatterVegetation( verticesPerSide ) )
+			ScatterVegetationOnChunk( entry, settings, verticesPerSide );
 
 		// Nav + scavs only when collision is live — far render chunks must not schedule Recast.
 		if ( collider.Enabled )
@@ -1504,100 +1545,163 @@ public sealed class TerrainWorldManager : Component
 			settings.WorldSeed );
 	}
 
-	void ScatterVegetationOnChunk(
-		GameObject chunkRoot,
-		TerrainChunkCoord coord,
-		TerrainPreviewSettings settings,
-		int verticesPerSide )
+	/// <summary>
+	/// Large trees + props (once per chunk), plus saplings when the chunk is full detail; far chunks get
+	/// their saplings on promotion (<see cref="ScatterSmallVegetationOnChunk"/>).
+	/// </summary>
+	void ScatterVegetationOnChunk( LoadedChunk entry, TerrainPreviewSettings settings, int verticesPerSide )
 	{
+		var options = BuildVegetationOptions();
 		TerrainVegetationScatter.PopulateChunk(
-			chunkRoot,
-			coord,
+			entry.GameObject,
+			entry.Coord,
 			settings,
 			_backend,
 			ChunkSizeMeters,
 			verticesPerSide,
 			ChunkVerticesPerSide,
-			new TerrainVegetationScatter.Options
-			{
-				Enabled = true,
-				Profiles =
-				[
-					new TerrainVegetationScatter.BiomeScatterProfile
-					{
-						BiomeId = TerrainPreviewBiomeId.CloverHills,
-						PrefabA = VegetationPrefabA,
-						PrefabB = VegetationPrefabB,
-						PrefabAWeight01 = VegetationPrefabAWeight01,
-						NoiseSeedSalt = 0,
-						InstancePrefix = "veg_clover",
-						Density01 = 1f,
-					},
-					new TerrainVegetationScatter.BiomeScatterProfile
-					{
-						BiomeId = TerrainPreviewBiomeId.RedwoodForest,
-						PrefabA = VegetationRedwoodPrefab,
-						PrefabB = VegetationRedwoodPrefabB,
-						PrefabAWeight01 = VegetationRedwoodPrefabAWeight01,
-						NoiseSeedSalt = 5000,
-						InstancePrefix = "veg_redwood",
-						Density01 = VegetationRedwoodDensity01,
-						IgnoreForestPatches = true,
-					},
-				],
-				PatchWavelengthMeters = VegetationPatchWavelengthMeters,
-				PatchThreshold01 = VegetationPatchThreshold01,
-				CellSpacingMeters = VegetationCellSpacingMeters,
-				SpawnChanceInPatch01 = VegetationSpawnChance01,
-				YawJitterDegrees = 360f,
-				ScaleMin = VegetationScaleMin,
-				ScaleMax = VegetationScaleMax,
-				MaxTreesPerChunk = VegetationMaxTreesPerChunk,
-				SkipFarLodChunks = VegetationSkipFarLodChunks,
-				NearLargeTreeSticksEnabled = VegetationCloverSticksEnabled && VegetationCloverStickNearLargeTreeEnabled,
-				NearLargeTreeStickPrefab = VegetationCloverStickPrefab,
-				NearLargeTreeStickChance01 = VegetationCloverStickNearLargeTreeChance01,
-				NearLargeTreeStickMinRadiusMeters = VegetationCloverStickNearLargeTreeMinRadiusMeters,
-				NearLargeTreeStickMaxRadiusMeters = VegetationCloverStickNearLargeTreeMaxRadiusMeters,
-				PropClusters =
-				[
-					new TerrainVegetationScatter.PropClusterOptions
-					{
-						Enabled = VegetationCloverRocksEnabled,
-						BiomeId = TerrainPreviewBiomeId.CloverHills,
-						Prefab = VegetationCloverRockPrefab,
-						InstancePrefix = "veg_rock",
-						KindLabel = "rock",
-						NoiseSeedSalt = 7000,
-						ClusterSpacingMeters = VegetationCloverRockSpacingMeters,
-						ClusterChance01 = VegetationCloverRockChance01,
-						ClusterSizeMin = VegetationCloverRockClusterMin,
-						ClusterSizeMax = VegetationCloverRockClusterMax,
-						ClusterRadiusMeters = VegetationCloverRockClusterRadiusMeters,
-						ScaleMin = 0.85f,
-						ScaleMax = 1.2f,
-						MaxPerChunk = 48,
-					},
-					new TerrainVegetationScatter.PropClusterOptions
-					{
-						Enabled = VegetationCloverSticksEnabled,
-						BiomeId = TerrainPreviewBiomeId.CloverHills,
-						Prefab = VegetationCloverStickPrefab,
-						InstancePrefix = "veg_stick",
-						KindLabel = "stick",
-						NoiseSeedSalt = 9100,
-						ClusterSpacingMeters = VegetationCloverStickSpacingMeters,
-						ClusterChance01 = VegetationCloverStickChance01,
-						ClusterSizeMin = VegetationCloverStickClusterMin,
-						ClusterSizeMax = VegetationCloverStickClusterMax,
-						ClusterRadiusMeters = VegetationCloverStickClusterRadiusMeters,
-						ScaleMin = 0.85f,
-						ScaleMax = 1.15f,
-						MaxPerChunk = 24,
-					},
-				],
-			} );
+			options,
+			entry.Trunks );
+		entry.HasVegetation = true;
+
+		if ( verticesPerSide >= ChunkVerticesPerSide )
+		{
+			TerrainVegetationScatter.PopulateSmallTrees( entry.GameObject, entry.Coord, settings, _backend, ChunkSizeMeters, options, entry.Trunks );
+			entry.HasSmallVegetation = true;
+		}
+
+		CollectVegetationColliders( entry );
 	}
+
+	void ScatterSmallVegetationOnChunk( LoadedChunk entry, TerrainPreviewSettings settings )
+	{
+		TerrainVegetationScatter.PopulateSmallTrees(
+			entry.GameObject,
+			entry.Coord,
+			settings,
+			_backend,
+			ChunkSizeMeters,
+			BuildVegetationOptions(),
+			entry.Trunks );
+		entry.HasSmallVegetation = true;
+		CollectVegetationColliders( entry );
+	}
+
+	/// <summary>
+	/// Tree / prop colliders follow the chunk's terrain collider: thousands of static tree meshes on
+	/// render-only far chunks cost physics for nothing. Collected once per scatter, toggled only when
+	/// the chunk collider flips (<see cref="UpdateChunkColliders"/>).
+	/// </summary>
+	void CollectVegetationColliders( LoadedChunk entry )
+	{
+		entry.VegetationColliders.Clear();
+		if ( entry.GameObject is null || !entry.GameObject.IsValid() )
+			return;
+
+		foreach ( var col in entry.GameObject.Components.GetAll<ModelCollider>( FindMode.EverythingInDescendants ) )
+		{
+			if ( col is not null && col.IsValid() && col != entry.Collider )
+				entry.VegetationColliders.Add( col );
+		}
+
+		SetVegetationCollidersEnabled( entry, entry.Collider is not null && entry.Collider.IsValid() && entry.Collider.Enabled );
+	}
+
+	static void SetVegetationCollidersEnabled( LoadedChunk entry, bool enabled )
+	{
+		foreach ( var col in entry.VegetationColliders )
+		{
+			if ( col is not null && col.IsValid() )
+				col.Enabled = enabled;
+		}
+	}
+
+	TerrainVegetationScatter.Options BuildVegetationOptions() =>
+		new()
+		{
+			Enabled = true,
+			Profiles =
+			[
+				new TerrainVegetationScatter.BiomeScatterProfile
+				{
+					BiomeId = TerrainPreviewBiomeId.CloverHills,
+					Prefabs = VegetationCloverTreePrefabs?.ToArray(),
+					NoiseSeedSalt = 0,
+					InstancePrefix = "veg_clover",
+					Density01 = 1f,
+					SmallPrefabs = VegetationCloverSaplingPrefabs?.ToArray(),
+					SmallCellSpacingMeters = VegetationCloverSaplingSpacingMeters,
+					SmallChance01 = VegetationCloverSaplingChance01,
+					SmallEdgeBias01 = VegetationCloverSaplingEdgeBias01,
+					SmallTrunkClearanceMeters = VegetationCloverSaplingClearanceMeters,
+					SmallScaleMin = VegetationCloverSaplingScaleMin,
+					SmallScaleMax = VegetationCloverSaplingScaleMax,
+					SmallMaxPerChunk = VegetationCloverSaplingMaxPerChunk,
+				},
+				new TerrainVegetationScatter.BiomeScatterProfile
+				{
+					BiomeId = TerrainPreviewBiomeId.RedwoodForest,
+					Prefabs = [VegetationRedwoodPrefab, VegetationRedwoodPrefabB],
+					NoiseSeedSalt = 5000,
+					InstancePrefix = "veg_redwood",
+					Density01 = VegetationRedwoodDensity01,
+					IgnoreForestPatches = true,
+				},
+			],
+			PatchWavelengthMeters = VegetationPatchWavelengthMeters,
+			PatchThreshold01 = VegetationPatchThreshold01,
+			CellSpacingMeters = VegetationCellSpacingMeters,
+			SpawnChanceInPatch01 = VegetationSpawnChance01,
+			YawJitterDegrees = 360f,
+			SlopeTiltInfluence01 = VegetationSlopeTiltInfluence01,
+			SlopeTiltMaxDegrees = VegetationSlopeTiltMaxDegrees,
+			ScaleMin = VegetationScaleMin,
+			ScaleMax = VegetationScaleMax,
+			MaxTreesPerChunk = VegetationMaxTreesPerChunk,
+			SkipFarLodChunks = VegetationSkipFarLodChunks,
+			NearLargeTreeSticksEnabled = VegetationCloverSticksEnabled && VegetationCloverStickNearLargeTreeEnabled,
+			NearLargeTreeStickPrefab = VegetationCloverStickPrefab,
+			NearLargeTreeStickChance01 = VegetationCloverStickNearLargeTreeChance01,
+			NearLargeTreeStickMinRadiusMeters = VegetationCloverStickNearLargeTreeMinRadiusMeters,
+			NearLargeTreeStickMaxRadiusMeters = VegetationCloverStickNearLargeTreeMaxRadiusMeters,
+			PropClusters =
+			[
+				new TerrainVegetationScatter.PropClusterOptions
+				{
+					Enabled = VegetationCloverRocksEnabled,
+					BiomeId = TerrainPreviewBiomeId.CloverHills,
+					Prefab = VegetationCloverRockPrefab,
+					InstancePrefix = "veg_rock",
+					KindLabel = "rock",
+					NoiseSeedSalt = 7000,
+					ClusterSpacingMeters = VegetationCloverRockSpacingMeters,
+					ClusterChance01 = VegetationCloverRockChance01,
+					ClusterSizeMin = VegetationCloverRockClusterMin,
+					ClusterSizeMax = VegetationCloverRockClusterMax,
+					ClusterRadiusMeters = VegetationCloverRockClusterRadiusMeters,
+					ScaleMin = 0.85f,
+					ScaleMax = 1.2f,
+					MaxPerChunk = 48,
+				},
+				new TerrainVegetationScatter.PropClusterOptions
+				{
+					Enabled = VegetationCloverSticksEnabled,
+					BiomeId = TerrainPreviewBiomeId.CloverHills,
+					Prefab = VegetationCloverStickPrefab,
+					InstancePrefix = "veg_stick",
+					KindLabel = "stick",
+					NoiseSeedSalt = 9100,
+					ClusterSpacingMeters = VegetationCloverStickSpacingMeters,
+					ClusterChance01 = VegetationCloverStickChance01,
+					ClusterSizeMin = VegetationCloverStickClusterMin,
+					ClusterSizeMax = VegetationCloverStickClusterMax,
+					ClusterRadiusMeters = VegetationCloverStickClusterRadiusMeters,
+					ScaleMin = 0.85f,
+					ScaleMax = 1.15f,
+					MaxPerChunk = 24,
+				},
+			],
+		};
 
 	bool ShouldScatterVegetation( int verticesPerSide )
 	{

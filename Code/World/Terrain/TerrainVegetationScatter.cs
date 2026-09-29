@@ -4,8 +4,10 @@ namespace Survival;
 
 /// <summary>
 /// Deterministic per-chunk vegetation scatter per land biome.
-/// Trees: forest/clearing patches + clump noise. Clover props: sparse random clusters (rocks, sticks)
-/// plus optional sticks beside large Clover trees (Prefab A).
+/// Trees: forest/clearing patches + clump noise, one prefab picked at random from the biome's list.
+/// Small trees (saplings): optional second layer on its own grid, biased toward forest edges and kept
+/// clear of the large trunks; full-detail chunks only (<see cref="PopulateSmallTrees"/>). Trees lean with the ground slope (partial influence, capped).
+/// Clover props: sparse random clusters (rocks, sticks) plus optional sticks beside large Clover trees.
 /// Runs once on chunk load (not per frame).
 /// </summary>
 public static class TerrainVegetationScatter
@@ -13,9 +15,8 @@ public static class TerrainVegetationScatter
 	public readonly struct BiomeScatterProfile
 	{
 		public TerrainPreviewBiomeId BiomeId { get; init; }
-		public string PrefabA { get; init; }
-		public string PrefabB { get; init; }
-		public float PrefabAWeight01 { get; init; }
+		/// <summary>Large-tree prefabs; each tree picks one uniformly at random.</summary>
+		public string[] Prefabs { get; init; }
 		/// <summary>Offsets patch/clump noise per biome (same pattern, different phase).</summary>
 		public int NoiseSeedSalt { get; init; }
 		public string InstancePrefix { get; init; }
@@ -23,6 +24,17 @@ public static class TerrainVegetationScatter
 		public float Density01 { get; init; }
 		/// <summary>When true, patch noise only varies density instead of creating hard no-tree clearings.</summary>
 		public bool IgnoreForestPatches { get; init; }
+		/// <summary>Small-tree (sapling) prefabs; empty = no small-tree layer in this biome.</summary>
+		public string[] SmallPrefabs { get; init; }
+		public float SmallCellSpacingMeters { get; init; }
+		public float SmallChance01 { get; init; }
+		/// <summary>0 = saplings anywhere in the biome; 1 = only along forest edges (patch-noise threshold).</summary>
+		public float SmallEdgeBias01 { get; init; }
+		/// <summary>No sapling closer than this to a large trunk spawned in the same chunk.</summary>
+		public float SmallTrunkClearanceMeters { get; init; }
+		public float SmallScaleMin { get; init; }
+		public float SmallScaleMax { get; init; }
+		public int SmallMaxPerChunk { get; init; }
 	}
 
 	public readonly struct PropClusterOptions
@@ -57,9 +69,13 @@ public static class TerrainVegetationScatter
 		public int MaxTreesPerChunk { get; init; }
 		public bool SkipFarLodChunks { get; init; }
 		public PropClusterOptions[] PropClusters { get; init; }
+		/// <summary>Fraction of the ground slope a tree leans with (0 = always upright, 1 = perpendicular to the ground).</summary>
+		public float SlopeTiltInfluence01 { get; init; }
+		/// <summary>Hard cap on the lean, degrees from vertical.</summary>
+		public float SlopeTiltMaxDegrees { get; init; }
 		/// <summary>
-		/// Clover Hills only: after each large tree (Prefab A), roll this chance to drop one stick
-		/// in open ground beside the trunk. Prefab C (3rd tree type) is not wired yet.
+		/// Clover Hills only: after each large tree, roll this chance to drop one stick
+		/// in open ground beside the trunk.
 		/// </summary>
 		public bool NearLargeTreeSticksEnabled { get; init; }
 		public string NearLargeTreeStickPrefab { get; init; }
@@ -71,16 +87,17 @@ public static class TerrainVegetationScatter
 	sealed class ResolvedProfile
 	{
 		public TerrainPreviewBiomeId BiomeId;
-		public string PathA;
-		public string PathB;
-		public bool HasA;
-		public bool HasB;
-		public float AWeight;
+		public string[] Paths;
+		public string[] SmallPaths;
 		public int NoiseSalt;
 		public string InstancePrefix;
 		public float Density01;
 		public bool IgnoreForestPatches;
+		public BiomeScatterProfile Source;
 	}
+
+	/// <summary>Finite-difference step for the slope normal under a tree.</summary>
+	const float SlopeProbeMeters = 2f;
 
 	static bool _loggedFirstTree;
 	static bool _loggedFirstRock;
@@ -94,7 +111,8 @@ public static class TerrainVegetationScatter
 		float chunkSizeMeters,
 		int verticesPerSide,
 		int fullDetailVertices,
-		Options options )
+		Options options,
+		List<Vector2> trunks )
 	{
 		if ( !options.Enabled || chunkRoot is null || !chunkRoot.IsValid() )
 			return;
@@ -120,7 +138,8 @@ public static class TerrainVegetationScatter
 				chunkMinY,
 				seed,
 				profiles,
-				options );
+				options,
+				trunks ?? [] );
 
 		if ( options.PropClusters is null )
 			return;
@@ -168,7 +187,8 @@ public static class TerrainVegetationScatter
 		float chunkMinY,
 		int seed,
 		List<ResolvedProfile> profiles,
-		Options options )
+		Options options,
+		List<Vector2> trunks )
 	{
 		// Same cell grid at every LOD — density does not change when a chunk refines.
 		var cell = Math.Clamp( options.CellSpacingMeters, 4f, chunkSize * 0.5f );
@@ -236,11 +256,10 @@ public static class TerrainVegetationScatter
 				if ( !denseCore && densify > localChance )
 					continue;
 
-				var preferA = TerrainPreviewNoise.Hash01( noiseSeed + 930, coord.X * 256 + ix, coord.Y * 256 + iy ) < profile.AWeight;
-				var path = preferA
-					? (profile.HasA ? profile.PathA : profile.PathB)
-					: (profile.HasB ? profile.PathB : profile.PathA);
-				var variant = preferA && profile.HasA ? "a" : "b";
+				var pick = PickIndex( profile.Paths.Length, TerrainPreviewNoise.Hash01( noiseSeed + 930, coord.X * 256 + ix, coord.Y * 256 + iy ) );
+				var path = profile.Paths[pick];
+				var variant = pick.ToString();
+				var tilt = SlopeTilt( settings, backend, wx, wy, sample.HeightMeters, options );
 
 				if ( !TrySpawnInstance(
 					    chunkRoot,
@@ -260,15 +279,15 @@ public static class TerrainVegetationScatter
 					    yawJitter,
 					    scaleMin,
 					    scaleMax,
+					    tilt,
 					    ref _loggedFirstTree,
 					    "tree" ) )
 					continue;
 
 				spawned++;
+				trunks.Add( new Vector2( wx, wy ) );
 
-				// Clover Prefab A = large tree for now (Prefab C / 3rd type later).
 				if ( profile.BiomeId == TerrainPreviewBiomeId.CloverHills
-				     && string.Equals( variant, "a", StringComparison.Ordinal )
 				     && options.NearLargeTreeSticksEnabled )
 				{
 					TrySpawnStickNearLargeTree(
@@ -287,6 +306,183 @@ public static class TerrainVegetationScatter
 				}
 			}
 		}
+	}
+
+	/// <summary>
+	/// Small-tree (sapling) layer for one chunk. Only runs on full-detail chunks — a 2 m sapling is
+	/// sub-pixel on far chunks — so the manager calls it again when a far chunk is promoted.
+	/// <paramref name="trunks"/> = large-tree positions from <see cref="PopulateChunk"/> (clearance).
+	/// </summary>
+	public static void PopulateSmallTrees(
+		GameObject chunkRoot,
+		TerrainChunkCoord coord,
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		float chunkSizeMeters,
+		Options options,
+		List<Vector2> trunks )
+	{
+		if ( !options.Enabled || chunkRoot is null || !chunkRoot.IsValid() )
+			return;
+
+		var chunkSize = Math.Max( 32f, chunkSizeMeters );
+		var worldRadius = settings.TotalWorldRadiusMeters;
+		var chunkMinX = -worldRadius + (coord.X * chunkSize);
+		var chunkMinY = -worldRadius + (coord.Y * chunkSize);
+		foreach ( var profile in ResolveProfiles( options.Profiles ) )
+		{
+			if ( profile.SmallPaths.Length > 0 )
+				ScatterSmallTrees( chunkRoot, coord, settings, backend, chunkSize, chunkMinX, chunkMinY, settings.WorldSeed, profile, trunks ?? [], options );
+		}
+	}
+
+	/// <summary>
+	/// Small-tree layer: its own jittered grid, same forest-patch noise as the large trees. Chance peaks
+	/// at the forest edge (patch value near the threshold) and falls off into deep canopy and open
+	/// clearings by <see cref="BiomeScatterProfile.SmallEdgeBias01"/>. Skips cells too close to a trunk
+	/// already placed in this chunk (one list scan per candidate, chunk load only).
+	/// </summary>
+	static void ScatterSmallTrees(
+		GameObject chunkRoot,
+		TerrainChunkCoord coord,
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		float chunkSize,
+		float chunkMinX,
+		float chunkMinY,
+		int seed,
+		ResolvedProfile profile,
+		List<Vector2> trunks,
+		Options options )
+	{
+		var src = profile.Source;
+		var cell = Math.Clamp( src.SmallCellSpacingMeters, 2f, chunkSize * 0.5f );
+		var chance = Math.Clamp( src.SmallChance01, 0f, 1f );
+		if ( chance <= 1e-6f )
+			return;
+
+		var edgeBias = Math.Clamp( src.SmallEdgeBias01, 0f, 1f );
+		var clearance = Math.Max( 0f, src.SmallTrunkClearanceMeters );
+		var clearanceSq = clearance * clearance;
+		var maxSmall = Math.Clamp( src.SmallMaxPerChunk, 1, 256 );
+		var scaleMin = Math.Clamp( src.SmallScaleMin, 0.05f, 4f );
+		var scaleMax = Math.Max( scaleMin, Math.Clamp( src.SmallScaleMax, 0.05f, 4f ) );
+		var patchWave = Math.Max( 32f, options.PatchWavelengthMeters );
+		var patchThreshold = Math.Clamp( options.PatchThreshold01, 0.05f, 0.95f );
+		// Patch-noise distance from the threshold that still counts as "edge".
+		const float edgeBand = 0.15f;
+
+		var noiseSeed = seed + profile.NoiseSalt;
+		var cells = Math.Max( 1, (int)MathF.Floor( chunkSize / cell ) );
+		var prefix = profile.InstancePrefix + "_small";
+		var spawned = 0;
+
+		for ( var iy = 0; iy < cells && spawned < maxSmall; iy++ )
+		{
+			for ( var ix = 0; ix < cells && spawned < maxSmall; ix++ )
+			{
+				var jitterX = (TerrainPreviewNoise.Hash01( noiseSeed + 1901, coord.X * 64 + ix, coord.Y * 64 + iy ) - 0.5f) * cell * 0.8f;
+				var jitterY = (TerrainPreviewNoise.Hash01( noiseSeed + 1902, coord.X * 64 + ix, coord.Y * 64 + iy ) - 0.5f) * cell * 0.8f;
+				var wx = chunkMinX + ((ix + 0.5f) * cell) + jitterX;
+				var wy = chunkMinY + ((iy + 0.5f) * cell) + jitterY;
+
+				if ( !IsInsideLandDisk( settings, wx, wy ) )
+					continue;
+
+				// Cheap rolls before the terrain sample.
+				var patch = TerrainPreviewNoise.Fbm( noiseSeed + 910, wx / patchWave, wy / patchWave, 4, 2.05f, 0.5f );
+				var edge = 1f - Math.Clamp( MathF.Abs( patch - patchThreshold ) / edgeBand, 0f, 1f );
+				var localChance = chance * ((1f - edgeBias) + (edgeBias * edge));
+				if ( TerrainPreviewNoise.Hash01( noiseSeed + 1920, coord.X * 128 + ix, coord.Y * 128 + iy ) > localChance )
+					continue;
+
+				if ( clearanceSq > 0f && NearAnyTrunk( trunks, wx, wy, clearanceSq ) )
+					continue;
+
+				var sample = backend.Sample( settings, wx, wy );
+				if ( !sample.IsInsideWorld || !sample.IsOnLand || sample.OceanHeight01 > 0.5f )
+					continue;
+
+				var biome = TerrainPreviewBiomeResolver.ResolveLandOverlay( settings, sample, wx, wy );
+				if ( biome.BiomeId != profile.BiomeId )
+					continue;
+
+				var pick = PickIndex( profile.SmallPaths.Length, TerrainPreviewNoise.Hash01( noiseSeed + 1930, coord.X * 256 + ix, coord.Y * 256 + iy ) );
+				var tilt = SlopeTilt( settings, backend, wx, wy, sample.HeightMeters, options );
+
+				if ( !TrySpawnInstance(
+					    chunkRoot,
+					    profile.SmallPaths[pick],
+					    prefix,
+					    pick.ToString(),
+					    chunkMinX,
+					    chunkMinY,
+					    wx,
+					    wy,
+					    sample.HeightMeters,
+					    noiseSeed + 1000,
+					    coord,
+					    ix,
+					    iy,
+					    0,
+					    360f,
+					    scaleMin,
+					    scaleMax,
+					    tilt,
+					    ref _loggedFirstTree,
+					    "sapling" ) )
+					continue;
+
+				spawned++;
+			}
+		}
+	}
+
+	static bool NearAnyTrunk( List<Vector2> trunks, float wx, float wy, float radiusSq )
+	{
+		for ( var i = 0; i < trunks.Count; i++ )
+		{
+			var dx = trunks[i].x - wx;
+			var dy = trunks[i].y - wy;
+			if ( (dx * dx) + (dy * dy) < radiusSq )
+				return true;
+		}
+
+		return false;
+	}
+
+	static int PickIndex( int count, float hash01 )
+		=> Math.Clamp( (int)(hash01 * count), 0, count - 1 );
+
+	/// <summary>
+	/// Tilted "up" for a tree at (wx, wy): the ground normal from two forward-difference samples,
+	/// leaned toward by <see cref="Options.SlopeTiltInfluence01"/> of the slope angle, capped at
+	/// <see cref="Options.SlopeTiltMaxDegrees"/>. Returns <see cref="Vector3.Up"/> when disabled or flat.
+	/// </summary>
+	static Vector3 SlopeTilt(
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		float wx,
+		float wy,
+		float heightMeters,
+		Options options )
+	{
+		var influence = Math.Clamp( options.SlopeTiltInfluence01, 0f, 1f );
+		var maxDeg = Math.Clamp( options.SlopeTiltMaxDegrees, 0f, 45f );
+		if ( influence <= 1e-4f || maxDeg <= 1e-3f )
+			return Vector3.Up;
+
+		var hx = backend.Sample( settings, wx + SlopeProbeMeters, wy ).HeightMeters;
+		var hy = backend.Sample( settings, wx, wy + SlopeProbeMeters ).HeightMeters;
+		var downhill = new Vector3( -(hx - heightMeters) / SlopeProbeMeters, -(hy - heightMeters) / SlopeProbeMeters, 0f );
+		var gradient = downhill.Length;
+		if ( gradient < 1e-4f )
+			return Vector3.Up;
+
+		var slopeDeg = MathF.Atan( gradient ) * (180f / MathF.PI);
+		var tiltRad = Math.Min( slopeDeg * influence, maxDeg ) * (MathF.PI / 180f);
+		// Leaning toward the ground normal = leaning downhill.
+		return (Vector3.Up * MathF.Cos( tiltRad )) + (downhill / gradient * MathF.Sin( tiltRad ));
 	}
 
 	/// <summary>
@@ -356,6 +552,7 @@ public static class TerrainVegetationScatter
 			360f,
 			0.85f,
 			1.15f,
+			Vector3.Up,
 			ref _loggedFirstStick,
 			"stick" );
 	}
@@ -462,6 +659,7 @@ public static class TerrainVegetationScatter
 						    360f,
 						    scaleMin,
 						    scaleMax,
+						    Vector3.Up,
 						    ref loggedFirst,
 						    kind ) )
 						continue;
@@ -480,24 +678,18 @@ public static class TerrainVegetationScatter
 
 		foreach ( var profile in profiles )
 		{
-			var pathA = NormalizePrefabPath( profile.PrefabA );
-			var pathB = NormalizePrefabPath( profile.PrefabB );
-			var hasA = PrefabPathResolves( pathA );
-			var hasB = PrefabPathResolves( pathB );
-			if ( !hasA && !hasB )
+			var paths = ResolvePaths( profile.Prefabs, profile.BiomeId, "tree" );
+			if ( paths.Length == 0 )
 			{
-				Log.Warning( $"[Vegetation] No prefabs for biome {profile.BiomeId} (A='{pathA}', B='{pathB}')." );
+				Log.Warning( $"[Vegetation] No tree prefabs resolve for biome {profile.BiomeId}." );
 				continue;
 			}
 
 			resolved.Add( new ResolvedProfile
 			{
 				BiomeId = profile.BiomeId,
-				PathA = pathA,
-				PathB = pathB,
-				HasA = hasA,
-				HasB = hasB,
-				AWeight = Math.Clamp( profile.PrefabAWeight01, 0f, 1f ),
+				Paths = paths,
+				SmallPaths = ResolvePaths( profile.SmallPrefabs, profile.BiomeId, "small tree" ),
 				NoiseSalt = profile.NoiseSeedSalt,
 				InstancePrefix = string.IsNullOrWhiteSpace( profile.InstancePrefix )
 					? "veg_tree"
@@ -505,10 +697,29 @@ public static class TerrainVegetationScatter
 				// Default 1 when unset (struct default 0 would otherwise clamp to the floor).
 				Density01 = profile.Density01 > 0f ? profile.Density01 : 1f,
 				IgnoreForestPatches = profile.IgnoreForestPatches,
+				Source = profile,
 			} );
 		}
 
 		return resolved;
+	}
+
+	static string[] ResolvePaths( string[] prefabs, TerrainPreviewBiomeId biomeId, string kind )
+	{
+		if ( prefabs is null || prefabs.Length == 0 )
+			return [];
+
+		var paths = new List<string>( prefabs.Length );
+		foreach ( var raw in prefabs )
+		{
+			var path = NormalizePrefabPath( raw );
+			if ( PrefabPathResolves( path ) )
+				paths.Add( path );
+			else if ( !string.IsNullOrEmpty( path ) )
+				Log.Warning( $"[Vegetation] {biomeId} {kind} prefab missing ('{path}')." );
+		}
+
+		return paths.ToArray();
 	}
 
 	static ResolvedProfile FindProfile( List<ResolvedProfile> profiles, TerrainPreviewBiomeId biomeId )
@@ -540,6 +751,7 @@ public static class TerrainVegetationScatter
 		float yawJitter,
 		float scaleMin,
 		float scaleMax,
+		Vector3 up,
 		ref bool loggedFirst,
 		string kindLabel )
 	{
@@ -564,7 +776,18 @@ public static class TerrainVegetationScatter
 			seed + 940 + memberIndex,
 			coord.X * 512 + ix,
 			coord.Y * 512 + iy ) * yawJitter;
-		instance.LocalRotation = Rotation.FromYaw( yaw );
+		var yawRotation = Rotation.FromYaw( yaw );
+		if ( up.z > 0.9999f )
+		{
+			instance.LocalRotation = yawRotation;
+		}
+		else
+		{
+			// Keep the random heading, stand the model on the tilted up axis.
+			var forward = yawRotation.Forward;
+			forward = (forward - (up * Vector3.Dot( forward, up ))).Normal;
+			instance.LocalRotation = Rotation.LookAt( forward, up );
+		}
 
 		var authored = instance.LocalScale;
 		if ( authored.x < 0.001f || authored.y < 0.001f || authored.z < 0.001f )

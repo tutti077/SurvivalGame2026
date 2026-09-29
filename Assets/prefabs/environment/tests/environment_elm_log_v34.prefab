@@ -1,0 +1,92 @@
+{
+  "RootObject": {
+    "__guid": "7e31359d-be41-49a6-8849-33b232cc7a2f",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "environment_elm_log_v34",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "",
+    "Enabled": true,
+    "NetworkMode": 1,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 0,
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "07efe1e1-d866-44ac-a48e-32e028608740",
+        "__enabled": true,
+        "Model": "models/environment/tests/environment_elm_log_v34.vmdl",
+        "RenderType": "On",
+        "Tint": "1,1,1,1",
+        "BodyGroups": 18446744073709551615
+      },
+      {
+        "__type": "Sandbox.ModelCollider",
+        "__guid": "fca70e14-6946-481e-9173-c1f7f1eeca1a",
+        "__enabled": true,
+        "Model": "models/environment/tests/environment_elm_log_v34.vmdl",
+        "IsTrigger": false,
+        "Static": false
+      },
+      {
+        "__type": "Sandbox.Rigidbody",
+        "__guid": "13b67c89-6263-477c-9d34-5695f5d42e5a",
+        "__enabled": true,
+        "Gravity": true
+      },
+      {
+        "__type": "Survival.DamageReceiver",
+        "__guid": "3f3b1918-776d-4be5-bacd-7677c2212ff8",
+        "__enabled": true,
+        "DamageMultiplier": 1
+      },
+      {
+        "__type": "Survival.ChopableTree",
+        "__guid": "0a5c1e50-4210-4538-8d95-ef19e9ddacdb",
+        "__enabled": true,
+        "RequireAxe": true,
+        "WoodResourceId": "resource_woodBasic",
+        "LogChop": false,
+        "MaxHealth": 16,
+        "CurrentHealth": 16,
+        "WoodDropMin": 0,
+        "WoodDropMax": 0,
+        "SplitPiecePrefab": "prefabs/environment/tests/environment_elm_loghalf_v34.prefab",
+        "SplitPieceOffsetMeters": 2.0
+      }
+    ],
+    "Children": [],
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}
