@@ -81,8 +81,9 @@ public sealed class WorldScatterIdentity : Component
 		return tree is not null && tree.IsValid();
 	}
 
-	/// <summary>Host→peers: hide/break the local deterministic copy matching this key.</summary>
-	public static void HostBroadcastBroken( string stableKey )
+	/// <summary>Host→peers: move the local deterministic tree matching this key to <paramref name="stage"/>
+	/// (<see cref="ChopableTree.StageStump"/> or <see cref="ChopableTree.StageGone"/>).</summary>
+	public static void HostBroadcastBroken( string stableKey, int stage )
 	{
 		if ( string.IsNullOrWhiteSpace( stableKey ) || !Networking.IsHost )
 			return;
@@ -90,11 +91,11 @@ public sealed class WorldScatterIdentity : Component
 		var auth = CombatAuthority.Instance;
 		if ( auth is null || !auth.IsValid() )
 		{
-			ApplyBrokenLocal( stableKey );
+			ApplyBrokenLocal( stableKey, stage );
 			return;
 		}
 
-		auth.HostBroadcastScatterBroken( stableKey );
+		auth.HostBroadcastScatterBroken( stableKey, stage );
 	}
 
 	public static void HostBroadcastHarvestDepleted( string stableKey )
@@ -112,12 +113,12 @@ public sealed class WorldScatterIdentity : Component
 		auth.HostBroadcastScatterHarvestDepleted( stableKey );
 	}
 
-	internal static void ApplyBrokenLocal( string stableKey )
+	internal static void ApplyBrokenLocal( string stableKey, int stage )
 	{
 		if ( !TryFindChopableTree( stableKey, out var tree ) )
 			return;
 
-		tree.ApplyRemoteBrokenPresentation();
+		tree.ApplyStagePresentation( stage );
 	}
 
 	internal static void ApplyHarvestDepletedLocal( string stableKey )

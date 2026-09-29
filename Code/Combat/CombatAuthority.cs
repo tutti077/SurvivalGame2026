@@ -93,18 +93,18 @@ public sealed class CombatAuthority : Component
 	/// <summary>
 	/// Host→all peers: hide a deterministic world-scatter tree that was chopped on the host.
 	/// </summary>
-	public void HostBroadcastScatterBroken( string stableKey )
+	public void HostBroadcastScatterBroken( string stableKey, int stage )
 	{
 		if ( !Networking.IsHost || string.IsNullOrWhiteSpace( stableKey ) )
 			return;
 
-		RpcBroadcastScatterBroken( stableKey );
+		RpcBroadcastScatterBroken( stableKey, stage );
 	}
 
 	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable )]
-	void RpcBroadcastScatterBroken( string stableKey )
+	void RpcBroadcastScatterBroken( string stableKey, int stage )
 	{
-		WorldScatterIdentity.ApplyBrokenLocal( stableKey );
+		WorldScatterIdentity.ApplyBrokenLocal( stableKey, stage );
 	}
 
 	public void HostBroadcastScatterHarvestDepleted( string stableKey )

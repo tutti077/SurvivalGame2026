@@ -1,0 +1,104 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:modeldoc30:version{8c2d7a91-9c42-4bf0-883a-5a3b1762d4f1} -->
+{
+	rootNode =
+	{
+		_class = "RootNode"
+		children =
+		[
+			{
+				_class = "MaterialGroupList"
+				children =
+				[
+					{
+						_class = "DefaultMaterialGroup"
+						remaps =
+						[
+							{
+								from = "elm_bark_v31.vmat"
+								to = "models/environment/tests/elm_bark_v31.vmat"
+							},
+							{
+								from = "elm_leaves_v31.vmat"
+								to = "models/environment/tests/elm_leaves_v31.vmat"
+							},
+						]
+						use_global_default = false
+						global_default_material = "models/environment/tests/elm_bark_v31.vmat"
+					},
+				]
+			},
+			{
+				_class = "PhysicsShapeList"
+				children =
+				[
+					{
+						_class = "PhysicsMeshFile"
+						name = "environment_elm6_v31_wood_physics"
+						parent_bone = ""
+						surface_prop = "wood"
+						collision_tags = "solid"
+						recenter_on_parent_bone = false
+						offset_origin = [ 0.0, 0.0, 0.0 ]
+						offset_angles = [ 0.0, 0.0, 0.0 ]
+						align_origin_x_type = "None"
+						align_origin_y_type = "None"
+						align_origin_z_type = "None"
+						filename = "models/environment/tests/environment_elm6_v31.fbx"
+						import_scale = 0.4
+						maxMeshVertices = 0
+						qemError = 0.0
+						import_filter =
+						{
+							exclude_by_default = true
+							exception_list = [ "environment_elm6_v31_wood" ]
+						}
+					},
+				]
+			},
+			{
+				_class = "RenderMeshList"
+				children =
+				[
+					{
+						_class = "RenderMeshFile"
+						name = "environment_elm6_v31_wood"
+						filename = "models/environment/tests/environment_elm6_v31.fbx"
+						import_translation = [ 0.0, 0.0, 0.0 ]
+						import_rotation = [ 0.0, 0.0, 0.0 ]
+						import_scale = 0.4
+						align_origin_x_type = "None"
+						align_origin_y_type = "None"
+						align_origin_z_type = "None"
+						parent_bone = ""
+						import_filter =
+						{
+							exclude_by_default = true
+							exception_list = [ "environment_elm6_v31_wood" ]
+						}
+					},
+					{
+						_class = "RenderMeshFile"
+						name = "environment_elm6_v31_leaves"
+						filename = "models/environment/tests/environment_elm6_v31.fbx"
+						import_translation = [ 0.0, 0.0, 0.0 ]
+						import_rotation = [ 0.0, 0.0, 0.0 ]
+						import_scale = 0.4
+						align_origin_x_type = "None"
+						align_origin_y_type = "None"
+						align_origin_z_type = "None"
+						parent_bone = ""
+						import_filter =
+						{
+							exclude_by_default = true
+							exception_list = [ "environment_elm6_v31_leaves" ]
+						}
+					},
+				]
+			},
+		]
+		model_archetype = ""
+		primary_associated_entity = ""
+		anim_graph_name = ""
+		base_model_name = ""
+	}
+}

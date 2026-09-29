@@ -125,9 +125,9 @@ If you cannot say what cheat or boundary failure a check stops, it does not belo
 
 ### Patch bump
 
-Any edit under `Code/` (including Razor/SCSS in `Code/UI/`) or to `Code/survivalgamebasics.csproj`
-bumps the semver **patch** of `GameBuildLabel.Display` **once per turn**, at the end. No bump for
-chat-only replies with zero file edits.
+Every user prompt bumps the semver **patch** of `GameBuildLabel.Display` **once**, at the end of
+the reply — code, asset / Blender work and chat-only answers alike (Mark, 2026-09-28: the label
+counts prompts; asset iterations are iterations too).
 
 > Note: `bump-patch-on-code-edit.mdc` also says to mirror the string into a `<Version>` element in
 > `Code/survivalgamebasics.csproj`. **That element does not exist** — either add it or drop that
@@ -202,7 +202,8 @@ Code/
                 WindDirection / WindStrength / WindGust to all shaders through Scene.RenderAttributes once per frame)
                 · GrassPatch + GrassScatterer (grass through the engine Sandbox.Clutter system — GPU instanced/culled/LOD;
                 shader Assets/shaders/grass_blade.shader, models grass_clump1–4 from Blender/scripts/create_grass_clump.py)
-                · ChopableTree, harvest yields, teleport pads
+                · ChopableTree (optional felling: tree → its stump + one universal pointy log that tips over → log splits
+                  into two halves → halves / stump drop wood; stages broadcast via WorldScatterIdentity), harvest yields, teleport pads
                 · SunShadowDistance (on the scene Sun: multiplies the engine's cascade shadow reach so the shadow ring is not at the player's feet)
                 · BearTrap (hammer-placed trap_small / trap_large: holds players 5 s, animals + enemies 10 s by TrapSize band;
                   hold lives on PlayerMovement.TrapLocked / EntityLocomotion.IsTrapped) · DamageOverTimeTrap (scene hazard volume)
