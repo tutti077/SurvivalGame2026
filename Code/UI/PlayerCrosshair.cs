@@ -1,5 +1,7 @@
 using System;
+using System.Globalization;
 using Sandbox;
+using Sandbox.UI;
 
 namespace Survival;
 
@@ -14,6 +16,14 @@ namespace Survival;
 ///   inner — small yellow lock ring when a grapple attach target is valid right now; slides
 ///           with aim assist to the actual attach point (also mid-grapple for re-targeting)
 /// Hidden while any game menu is open.
+/// <para>
+/// The rings are UI panels (a bordered circle each) under the pawn's <see cref="PlayerScreenHud"/>
+/// root, restyled only when their state changes. They used to be 40-segment
+/// <c>HudPainter.DrawLine</c> polylines rebuilt every frame — 80 line draws for the idle ring alone,
+/// measured at 2.5 ms a frame (Mark's <c>perf_components</c> table, 2026-09-29): a third of the
+/// whole frame at 120 fps. Only the attack triangle still uses overlay lines, and only while a melee
+/// weapon is out, with a fan small enough to cover 8 px.
+/// </para>
 /// </summary>
 [Title( "Player Crosshair" )]
 public sealed class PlayerCrosshair : Component
@@ -44,6 +54,13 @@ public sealed class PlayerCrosshair : Component
 	PlayerEquipment _equipment;
 	PlayerGameMenuController _menu;
 	PlayerInventoryInteraction _interaction;
+	PlayerScreenHud _hud;
+
+	Panel _host;
+	RingUi _base;
+	RingUi _bow;
+	RingUi _lock;
+	bool? _hostShown;
 
 	protected override void OnStart()
 	{
@@ -55,38 +72,32 @@ public sealed class PlayerCrosshair : Component
 		_equipment = Components.Get<PlayerEquipment>( FindMode.EverythingInSelf );
 		_menu = Components.Get<PlayerGameMenuController>( FindMode.EverythingInSelf );
 		_interaction = Components.Get<PlayerInventoryInteraction>( FindMode.EverythingInSelf );
+		_hud = Components.Get<PlayerScreenHud>( FindMode.EverythingInSelf );
+	}
+
+	protected override void OnDisabled()
+	{
+		base.OnDisabled();
+		DestroyPanels();
+	}
+
+	protected override void OnDestroy()
+	{
+		DestroyPanels();
+		base.OnDestroy();
 	}
 
 	protected override void OnPreRender()
 	{
 		base.OnPreRender();
 
-		if ( !ShowCrosshair || !IsLocalDriver() )
+		if ( !EnsurePanels() )
 			return;
 
-		_menu ??= Components.Get<PlayerGameMenuController>( FindMode.EverythingInSelfAndAncestors );
-		if ( _menu is not null && _menu.IsMenuOpen )
+		var show = ShouldShow();
+		SetHostShown( show );
+		if ( !show )
 			return;
-
-		// The menu overlay drives a software cursor whenever it is open — belt and braces so the
-		// aim ring can never show through the map page.
-		if ( InventoryScreenPointer.SoftCursorActive )
-			return;
-
-		// Cursor-owning modals: only the mouse cursor should show, not the aim ring.
-		if ( _interaction is { IsTimeTrialMenuOpen: true } or { IsArenaMenuOpen: true } )
-			return;
-
-		// Grapple control-scheme prompt (per-machine first-use choice).
-		if ( GrappleControlSchemeStore.NeedsChoice && _movement?.HasGrappleEquipped() == true )
-			return;
-
-		var cam = BuildViewCamera.Resolve( GameObject );
-		if ( !cam.IsValid() )
-			return;
-
-		var rect = cam.ScreenRect;
-		var center = new Vector2( rect.Left + rect.Width * 0.5f, rect.Top + rect.Height * 0.5f );
 
 		var grappleMode = _movement?.IsAimHudActive == true;
 		var weaponOut = _equipment?.MainHandHasAction( EquippedItemActions.PrimaryMelee ) == true;
@@ -96,26 +107,61 @@ public sealed class PlayerCrosshair : Component
 		float baseOuterEdge;
 		if ( grappleMode )
 		{
-			DrawBorderedRing( cam, center, GrappleRingRadius, GrappleRingWidth, CrosshairWhite );
+			_base.Apply( true, GrappleRingRadius, GrappleRingWidth, CrosshairWhite, null );
 			baseOuterEdge = GrappleRingRadius + GrappleRingWidth * 0.5f;
 		}
 		else
 		{
-			DrawBorderedRing( cam, center, BaseRadius, BaseLineWidth, CrosshairWhite );
+			_base.Apply( true, BaseRadius, BaseLineWidth, CrosshairWhite, null );
 			baseOuterEdge = BaseRadius + BaseLineWidth * 0.5f;
 		}
 
 		if ( bowDrawing )
-		{
-			var drawRadius = Math.Max( BaseRadius, _combat.GetBowDrawRingRadiusPixels() );
-			DrawBorderedRing( cam, center, drawRadius, BaseLineWidth, BowDrawRing );
-		}
-
-		if ( weaponOut && _combat is not null )
-			DrawArrow( cam, center, _combat.GetTeardropScreenDirection(), baseOuterEdge );
+			_bow.Apply( true, Math.Max( BaseRadius, _combat.GetBowDrawRingRadiusPixels() ), BaseLineWidth, BowDrawRing, null );
+		else
+			_bow.Apply( false, 0f, 0f, default, null );
 
 		if ( grappleMode && _movement.HasValidAimTarget )
-			DrawInnerLockRing( cam, center );
+			ApplyInnerLockRing();
+		else
+			_lock.Apply( false, 0f, 0f, default, null );
+
+		// The attack teardrop is a filled triangle — still overlay lines, only while a melee weapon is out.
+		if ( weaponOut && _combat is not null )
+		{
+			var cam = BuildViewCamera.Resolve( GameObject );
+			if ( cam.IsValid() )
+			{
+				var rect = cam.ScreenRect;
+				var center = new Vector2( rect.Left + rect.Width * 0.5f, rect.Top + rect.Height * 0.5f );
+				DrawArrow( cam, center, _combat.GetTeardropScreenDirection(), baseOuterEdge );
+			}
+		}
+	}
+
+	bool ShouldShow()
+	{
+		if ( !ShowCrosshair || !IsLocalDriver() )
+			return false;
+
+		_menu ??= Components.Get<PlayerGameMenuController>( FindMode.EverythingInSelfAndAncestors );
+		if ( _menu is not null && _menu.IsMenuOpen )
+			return false;
+
+		// The menu overlay drives a software cursor whenever it is open — belt and braces so the
+		// aim ring can never show through the map page.
+		if ( InventoryScreenPointer.SoftCursorActive )
+			return false;
+
+		// Cursor-owning modals: only the mouse cursor should show, not the aim ring.
+		if ( _interaction is { IsTimeTrialMenuOpen: true } or { IsArenaMenuOpen: true } )
+			return false;
+
+		// Grapple control-scheme prompt (per-machine first-use choice).
+		if ( GrappleControlSchemeStore.NeedsChoice && _movement?.HasGrappleEquipped() == true )
+			return false;
+
+		return true;
 	}
 
 	/// <summary>Same driver rule as PlayerMovement: owner client, or host for host/ownerless pawns.</summary>
@@ -130,38 +176,167 @@ public sealed class PlayerCrosshair : Component
 		return net.Owner is null ? Networking.IsHost : net.IsOwner;
 	}
 
-	void DrawInnerLockRing( CameraComponent cam, Vector2 center )
+	// ── Panels ───────────────────────────────────────────────────────────────────────────────
+
+	/// <summary>Host panel under the HUD root; rebuilt if the HUD root was recreated (hotload / rebuild).</summary>
+	bool EnsurePanels()
 	{
-		var lockPos = center;
+		_hud ??= Components.Get<PlayerScreenHud>( FindMode.EverythingInSelf );
+		var root = _hud?.Panel;
+		if ( root is null || !root.IsValid() )
+			return false;
+
+		if ( _host is not null && _host.IsValid() && _host.Parent == root )
+			return true;
+
+		DestroyPanels();
+
+		_host = new Panel { Parent = root };
+		_host.Style.Set( "position", "absolute" );
+		_host.Style.Set( "left", "0" );
+		_host.Style.Set( "top", "0" );
+		_host.Style.Set( "right", "0" );
+		_host.Style.Set( "bottom", "0" );
+		_host.Style.Set( "pointer-events", "none" );
+		_hostShown = null;
+
+		// Draw order = creation order: base, bow ring, lock ring on top.
+		_base = new RingUi( _host );
+		_bow = new RingUi( _host );
+		_lock = new RingUi( _host );
+		return true;
+	}
+
+	void DestroyPanels()
+	{
+		if ( _host is not null && _host.IsValid() )
+			_host.Delete();
+		_host = null;
+		_base = null;
+		_bow = null;
+		_lock = null;
+		_hostShown = null;
+	}
+
+	void SetHostShown( bool shown )
+	{
+		if ( _hostShown == shown )
+			return;
+
+		_hostShown = shown;
+		_host.Style.Set( "display", shown ? "flex" : "none" );
+	}
+
+	void ApplyInnerLockRing()
+	{
+		Vector2? offset = null;
 		if ( _movement.TryGetAimLockScreenPoint( out var assistPoint ) )
-			lockPos = assistPoint;
-
-		if ( (lockPos - center).Length <= InnerCenterSnapPixels )
-			lockPos = center;
-
-		DrawBorderedRing( cam, lockPos, InnerRingRadius, InnerRingWidth, GrappleYellow );
-	}
-
-	/// <summary>Black underlay stroke first, colored stroke on top — border on both edges.</summary>
-	static void DrawBorderedRing( CameraComponent cam, Vector2 center, float radius, float lineWidth, Color color )
-	{
-		DrawRing( cam, center, radius, lineWidth + BorderWidth * 2f, BorderBlack );
-		DrawRing( cam, center, radius, lineWidth, color );
-	}
-
-	static void DrawRing( CameraComponent cam, Vector2 center, float radius, float lineWidth, Color color )
-	{
-		const int segments = 40;
-		var hud = cam.Overlay;
-		var prev = center + new Vector2( radius, 0f );
-		for ( var i = 1; i <= segments; i++ )
 		{
-			var a = i * ( MathF.PI * 2f / segments );
-			var next = center + new Vector2( MathF.Cos( a ), MathF.Sin( a ) ) * radius;
-			hud.DrawLine( prev, next, lineWidth, color );
-			prev = next;
+			var cam = BuildViewCamera.Resolve( GameObject );
+			if ( cam.IsValid() )
+			{
+				var rect = cam.ScreenRect;
+				var center = new Vector2( rect.Left + rect.Width * 0.5f, rect.Top + rect.Height * 0.5f );
+				var delta = assistPoint - center;
+				if ( delta.Length > InnerCenterSnapPixels )
+				{
+					// Screen pixels → panel units.
+					var scale = MathF.Max( 0.001f, _host.ScaleToScreen );
+					offset = delta / scale;
+				}
+			}
 		}
+
+		_lock.Apply( true, InnerRingRadius, InnerRingWidth, GrappleYellow, offset );
 	}
+
+	/// <summary>
+	/// One bordered ring: a black circle-border panel with a coloured one on top, both centred on
+	/// the screen (or offset from it). Styles are written only when a rounded value changes.
+	/// </summary>
+	sealed class RingUi
+	{
+		readonly Panel _black;
+		readonly Panel _color;
+		bool? _visible;
+		float _radius = -1f;
+		float _lineWidth = -1f;
+		Color _tint;
+		Vector2 _offset = new( float.NaN, float.NaN );
+
+		public RingUi( Panel parent )
+		{
+			_black = MakeCircle( parent );
+			_color = MakeCircle( parent );
+		}
+
+		static Panel MakeCircle( Panel parent )
+		{
+			var p = new Panel { Parent = parent };
+			p.Style.Set( "position", "absolute" );
+			p.Style.Set( "left", "50%" );
+			p.Style.Set( "top", "50%" );
+			p.Style.Set( "transform", "translate(-50%, -50%)" );
+			p.Style.Set( "box-sizing", "border-box" );
+			p.Style.Set( "background-color", "transparent" );
+			p.Style.Set( "pointer-events", "none" );
+			p.Style.Set( "display", "none" );
+			return p;
+		}
+
+		public void Apply( bool visible, float radius, float lineWidth, Color tint, Vector2? offset )
+		{
+			if ( _visible != visible )
+			{
+				_visible = visible;
+				_black.Style.Set( "display", visible ? "flex" : "none" );
+				_color.Style.Set( "display", visible ? "flex" : "none" );
+			}
+
+			if ( !visible )
+				return;
+
+			radius = MathF.Round( radius * 4f ) * 0.25f;
+			if ( MathF.Abs( radius - _radius ) > 1e-3f || MathF.Abs( lineWidth - _lineWidth ) > 1e-3f || tint != _tint )
+			{
+				_radius = radius;
+				_lineWidth = lineWidth;
+				_tint = tint;
+				Shape( _black, radius, lineWidth + BorderWidth * 2f, BorderBlack );
+				Shape( _color, radius, lineWidth, tint );
+			}
+
+			// Offset from screen centre (lock ring sliding to the aim-assist point): a margin on top of
+			// the 50% anchor, rounded to half a panel pixel so a steady aim writes nothing.
+			var off = offset ?? Vector2.Zero;
+			off = new Vector2( MathF.Round( off.x * 2f ) * 0.5f, MathF.Round( off.y * 2f ) * 0.5f );
+			if ( off != _offset )
+			{
+				_offset = off;
+				_black.Style.Set( "margin-left", Px( off.x ) );
+				_black.Style.Set( "margin-top", Px( off.y ) );
+				_color.Style.Set( "margin-left", Px( off.x ) );
+				_color.Style.Set( "margin-top", Px( off.y ) );
+			}
+		}
+
+		static void Shape( Panel p, float radius, float lineWidth, Color color )
+		{
+			var size = 2f * (radius + lineWidth * 0.5f);
+			p.Style.Width = Length.Pixels( size );
+			p.Style.Height = Length.Pixels( size );
+			p.Style.Set( "border-width", Px( lineWidth ) );
+			p.Style.Set( "border-radius", Px( size ) );
+			p.Style.Set( "border-color", Rgba( color ) );
+		}
+
+		static string Px( float v ) => v.ToString( "0.##", CultureInfo.InvariantCulture ) + "px";
+
+		static string Rgba( Color c ) =>
+			$"rgba({(int)MathF.Round( c.r * 255f )},{(int)MathF.Round( c.g * 255f )},{(int)MathF.Round( c.b * 255f )},{c.a.ToString( "0.###", CultureInfo.InvariantCulture )})";
+	}
+
+	// ── Attack teardrop (overlay lines, melee weapon out only) ───────────────────────────────
 
 	/// <summary>Filled directional triangle off the base rim (attack teardrop), black-bordered.</summary>
 	static void DrawArrow( CameraComponent cam, Vector2 center, Vector2 dir, float rimRadius )
@@ -184,7 +359,8 @@ public sealed class PlayerCrosshair : Component
 		var pLeft = rim + perp * halfWidth;
 		var pRight = rim - perp * halfWidth;
 
-		const int fanSegments = 48;
+		// 2 px lines across an 8 px base: 8 steps overlap fully; 48 was 6× the draws for the same pixels.
+		const int fanSegments = 8;
 		const float fanLineWidth = 2f;
 		var hud = cam.Overlay;
 		for ( var i = 0; i <= fanSegments; i++ )
