@@ -721,6 +721,7 @@
         "BiteDelaySeconds": 3,
         "CastAction": "Attack1",
         "CastLevelRangeMeters": 12,
+        "CastMaxDistanceMeters": 15,
         "CatchRequiredSeconds": 10,
         "LineBreakDistanceMeters": 30,
         "OnComponentDestroy": null,

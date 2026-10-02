@@ -11,7 +11,8 @@
 //
 // Notes for anyone editing: F_RENDER_BACKFACES is defined by the engine for every shader (do not
 // redeclare it), and the cutout is a plain clip() under its own combo rather than S_ALPHA_TEST,
-// whose shading-model path expects the complex shader's material inputs.
+// whose shading-model path expects the complex shader's material inputs. Parameter names carry a
+// Pixel prefix: a plain 'Roughness' collided with the engine's struct of that name.
 //
 HEADER
 {
@@ -75,17 +76,17 @@ PS
 	// The whole point of this shader: nearest texel, no blending between texels.
 	SamplerState g_sPointSampler < Filter( POINT ); AddressU( WRAP ); AddressV( WRAP ); >;
 
-	float Roughness < Default( 0.9 ); Range( 0.0, 1.0 ); UiGroup( "Material,10/30" ); >;
-	float AlphaTestReference < Default( 0.5 ); Range( 0.0, 1.0 ); UiGroup( "Material,10/40" ); >;
+	float PixelRoughness < Default( 0.9 ); Range( 0.0, 1.0 ); UiGroup( "Material,10/30" ); >;
+	float PixelAlphaCutoff < Default( 0.5 ); Range( 0.0, 1.0 ); UiGroup( "Material,10/40" ); >;
 	// Leaf cards: blend the card normal toward world up so a crown shades as a soft mass, not flickering planes.
-	float NormalUp < Default( 0.0 ); Range( 0.0, 1.0 ); UiGroup( "Material,10/50" ); >;
+	float PixelNormalUp < Default( 0.0 ); Range( 0.0, 1.0 ); UiGroup( "Material,10/50" ); >;
 
 	float4 MainPs( PixelInput i ) : SV_Target0
 	{
 		float4 tex = g_tColor.Sample( g_sPointSampler, i.vTextureCoords.xy );
 
 		#if ( S_PIXEL_CUTOUT )
-			clip( tex.a - AlphaTestReference );
+			clip( tex.a - PixelAlphaCutoff );
 		#endif
 
 		Material m = Material::Init( i );
@@ -97,11 +98,11 @@ PS
 		float3 vToCamera = g_vCameraPositionWs - vPositionWs;
 		if ( dot( vNormal, vToCamera ) < 0.0 )
 			vNormal = -vNormal;
-		m.Normal = normalize( lerp( vNormal, float3( 0.0, 0.0, 1.0 ), NormalUp ) );
+		m.Normal = normalize( lerp( vNormal, float3( 0.0, 0.0, 1.0 ), PixelNormalUp ) );
 
 		m.Albedo = tex.rgb;
 		m.Metalness = 0.0;
-		m.Roughness = Roughness;
+		m.Roughness = PixelRoughness;
 		m.AmbientOcclusion = 1.0;
 		m.Opacity = 1.0;
 

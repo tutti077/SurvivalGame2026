@@ -8,6 +8,9 @@ namespace Survival;
 /// → Stardew-style tension minigame. The owner simulates the bobber locally and syncs its position,
 /// so every machine renders the line and bobber; only the final catch grant goes through the host,
 /// which rolls the species from the <c>"fish": true</c> rows in <c>data/resources.json</c>.
+/// The bobber flies one continuous arc: launch speed is solved from the aim pitch so a level cast
+/// lands at the level range and a high lob never lands past the max distance. Only a water landing
+/// keeps the cast alive — a dry landing or a fall with no contact despawns the bobber.
 /// Bait/ammo comes later.
 /// </summary>
 [Title( "Player Fishing" )]
@@ -16,10 +19,16 @@ public sealed class PlayerFishing : Component
 	const string BobberModelPath = "models/dev/sphere.vmdl";
 	const float MaxFlightSeconds = 6f;
 
+	/// <summary>Vertical component added to the (normalised) aim before re-normalising — ~19° of lob on a level aim.</summary>
+	const float CastUpBias = 0.35f;
+
 	[Property, Group( "Input" )] public string CastAction { get; set; } = "Attack1";
 
-	[Property, Group( "Fishing — Cast" ), Title( "Cast level range (m)" ), Description( "Horizontal distance of a level cast from hand height. Designer meters → pawn units via BodyHeight/1.8." ), Range( 3f, 30f ), Step( 0.5f )]
+	[Property, Group( "Fishing — Cast" ), Title( "Cast level range (m)" ), Description( "Horizontal distance a level-aimed cast lands at on flat ground. Aiming up carries further, down shorter. Designer meters → pawn units via BodyHeight/1.8." ), Range( 3f, 30f ), Step( 0.5f )]
 	public float CastLevelRangeMeters { get; set; } = 12f;
+
+	[Property, Group( "Fishing — Cast" ), Title( "Cast max distance (m)" ), Description( "Farthest a cast lands on flat ground however high you aim. Aiming up lobs higher and lands further, up to this; the arc is never cut short." ), Range( 5f, 40f ), Step( 0.5f )]
+	public float CastMaxDistanceMeters { get; set; } = 15f;
 
 	[Property, Group( "Fishing — Cast" ), Title( "Reel-in max distance (m)" ), Description( "Walking further than this from the bobber snaps the line and cancels the cast." ), Range( 10f, 80f ), Step( 1f )]
 	public float LineBreakDistanceMeters { get; set; } = 30f;
@@ -174,7 +183,10 @@ public sealed class PlayerFishing : Component
 				break;
 
 			case FishingState.BobberFlying:
-				if ( !menuOpen && Input.Pressed( CastAction ) )
+				// Simulated per frame, not per fixed tick: the bobber is a visual-only object placed by
+				// hand, so fixed-rate stepping showed as judder on the fast drop.
+				TickBobberFlight( Math.Clamp( Time.Delta, 0f, 0.1f ) );
+				if ( _state == FishingState.BobberFlying && !menuOpen && Input.Pressed( CastAction ) )
 					CancelFishing();
 				break;
 
@@ -226,19 +238,6 @@ public sealed class PlayerFishing : Component
 		_remoteBobber = null;
 	}
 
-	protected override void OnFixedUpdate()
-	{
-		base.OnFixedUpdate();
-
-		if ( _state != FishingState.BobberFlying )
-			return;
-
-		if ( _vitals is null || !_vitals.IsLocalInputOwnedPawn() )
-			return;
-
-		TickBobberFlight( Math.Max( 0f, Time.Delta ) );
-	}
-
 	// ── Cast / flight ────────────────────────────────────────────────────────
 
 	void StartCast()
@@ -248,10 +247,10 @@ public sealed class PlayerFishing : Component
 			direction = WorldRotation.Forward;
 
 		// Up-bias for a readable lob arc; speed solved for the level-range target below.
-		direction = ( direction.Normal + Vector3.Up * 0.35f ).Normal;
+		direction = ( direction.Normal + Vector3.Up * CastUpBias ).Normal;
 
 		var origin = ResolveRodTipPosition();
-		var speed = ComputeCastSpeed();
+		var speed = ComputeCastSpeed( direction );
 
 		_bobber = CreateBobber( origin );
 		_bobberVelocity = direction * speed;
@@ -306,9 +305,8 @@ public sealed class PlayerFishing : Component
 
 		if ( solid.Hit )
 		{
-			// Dry-land landing: the bobber just sits there — click to reel in and recast.
-			_bobber.WorldPosition = solid.HitPosition;
-			_bobberVelocity = Vector3.Zero;
+			// Dry landing — no water contact, so the bobber despawns and the rod is free to recast.
+			CancelFishing();
 			return;
 		}
 
@@ -693,11 +691,17 @@ public sealed class PlayerFishing : Component
 		       + forward.Normal * ( bodyHeight * 0.35f );
 	}
 
-	float ComputeCastSpeed()
+	/// <summary>
+	/// Launch speed for this aim. Aimed level (or down) the speed is fixed, solved so the base lob
+	/// lands at <see cref="CastLevelRangeMeters"/>. Aimed higher, the natural range of that fixed speed
+	/// grows with the pitch; once it would pass <see cref="CastMaxDistanceMeters"/> the speed is pulled
+	/// back so the arc still lands exactly there — a higher lob, never a cut-off flight.
+	/// </summary>
+	float ComputeCastSpeed( Vector3 direction )
 	{
-		var bodyHeight = ResolveBodyHeight();
-		var range = Math.Max( 1f, CastLevelRangeMeters ) * PawnUnitsPerMeter();
-		var handHeight = bodyHeight * 0.55f;
+		var unitsPerMeter = PawnUnitsPerMeter();
+		var levelRange = Math.Max( 1f, CastLevelRangeMeters ) * unitsPerMeter;
+		var maxRange = Math.Max( levelRange, CastMaxDistanceMeters * unitsPerMeter );
 
 		var scene = Scene.IsValid() ? Scene : Sandbox.Game.ActiveScene;
 		var gravity = scene?.PhysicsWorld?.Gravity ?? new Vector3( 0f, 0f, -800f );
@@ -705,9 +709,19 @@ public sealed class PlayerFishing : Component
 		if ( g < 1f )
 			g = 800f;
 
-		// Level shot solve (same shape as the bow): R = v * sqrt(2h/g).
-		var fallTime = MathF.Sqrt( 2f * Math.Max( 8f, handHeight ) / g );
-		return Math.Max( 60f, range / Math.Max( 0.05f, fallTime ) );
+		// Flat-ground range of a lob back to launch height: R = v² sin(2θ) / g.
+		var baseTheta = MathF.Atan( CastUpBias );
+		var baseSin2 = Math.Max( 0.05f, MathF.Sin( 2f * baseTheta ) );
+		var levelSpeed = MathF.Sqrt( levelRange * g / baseSin2 );
+
+		var pitch = MathF.Asin( Math.Clamp( direction.z, -1f, 1f ) );
+		if ( pitch <= baseTheta + 1e-3f )
+			return Math.Max( 60f, levelSpeed );
+
+		var sin2 = Math.Max( 0.05f, MathF.Sin( 2f * pitch ) );
+		var naturalRange = levelSpeed * levelSpeed * sin2 / g;
+		var range = Math.Min( naturalRange, maxRange );
+		return Math.Max( 60f, MathF.Sqrt( range * g / sin2 ) );
 	}
 
 	float ResolveBodyHeight()

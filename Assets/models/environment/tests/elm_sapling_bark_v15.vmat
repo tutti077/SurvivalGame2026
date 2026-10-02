@@ -2,6 +2,6 @@ Layer0
 {
 	shader "shaders/pixel_lit.shader"
 
-	Roughness "0.900"
+	PixelRoughness "0.900"
 	TextureColor "models/environment/tests/elm_sapling_bark_v15.png"
 }

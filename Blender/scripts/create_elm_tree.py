@@ -1393,7 +1393,7 @@ VMAT_BARK = """Layer0
 {
 	shader "shaders/pixel_lit.shader"
 
-	Roughness "0.900"
+	PixelRoughness "0.900"
 	TextureColor "models/environment/tests/elm_bark.png"
 }
 """
@@ -1404,9 +1404,9 @@ VMAT_LEAVES = """Layer0
 	F_ALPHA_TEST 1
 	F_RENDER_BACKFACES 1
 
-	Roughness "0.900"
-	AlphaTestReference "0.500"
-	NormalUp "0.000"
+	PixelRoughness "0.900"
+	PixelAlphaCutoff "0.500"
+	PixelNormalUp "0.000"
 	TextureColor "models/environment/tests/elm_leaves.png"
 	TextureTranslucency "models/environment/tests/elm_leaves_mask.png"
 }
