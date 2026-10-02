@@ -34,7 +34,7 @@ engine, with before/after renders.
 - `Blender/scripts/` — generator / split / render scripts (`create_*.py`, `split_*.py`, `render_*.py`).
 - The prefab or JSON line that points at the model (`heldModel` in `equipment_profiles.json`, a
   prefab's `Visual` child, `build_pieces.json` model path) — only to swap the reference.
-- `Assets/scenes/lightTestScene.scene` as the viewing stage.
+- `Assets/scenes/lightingTest.scene` as the viewing stage.
 
 ## Out of scope
 
@@ -53,7 +53,7 @@ engine, with before/after renders.
   near-black. Materials use `shaders/pixel_lit.shader` (point sampler) — see
   `Blender/scripts/import_artist_pack.py` for the vmat it writes.
 - **Artist packs** (Rumple's Tripo `.blend`): go through `import_artist_pack.py`; do not re-bake.
-- **Engine verification** through the sbox MCP: `switch_scene` / `open_scene` lightTestScene,
+- **Engine verification** through the sbox MCP: `switch_scene` / `open_scene` lightingTest,
   `spawn_model`, `set_editor_camera`, `editor_camera_screenshot`. Screenshots in one `call_tools`
   batch share a frame — take them in a later call. A scene edited on disk needs `close_scene`
   then `open_scene`.
@@ -78,7 +78,7 @@ real-world variant, name it, and continue.
 
 1. **Restate** the brief (asset, subject, objectives, what is kept). Locate the asset: model,
    materials, vmdl, blend source, every prefab / JSON that references it (`grep` the path).
-2. **Capture "before"**: render the current asset in lightTestScene from two angles (front ¾ and
+2. **Capture "before"**: render the current asset in lightingTest from two angles (front ¾ and
    top for trees / rocks, side profile for weapons) at player eye height.
 3. **References**: gather and note them as above.
 4. **Plan** one paragraph per objective: what geometry / texture change achieves it and which
@@ -87,7 +87,7 @@ real-world variant, name it, and continue.
    scratchpad. Self-review against the **Quality bar** below; write the pass/fail per item.
 6. **Export**: FBX + authored `.vmdl` beside it (the engine does not create one), `.png` + `.vmat`
    on `pixel_lit.shader`. Same import scale as the category (0.4 weapons / environment, 0.5 building).
-7. **Verify in engine**: spawn in lightTestScene, screenshot the same two angles as step 2. If the
+7. **Verify in engine**: spawn in lightingTest, screenshot the same two angles as step 2. If the
    asset has chop / smash pieces, spawn those too and check they assemble at one origin.
 8. **Loop** steps 5–7 until every objective passes and no checklist item regresses, or the
    iteration budget is spent. Keep each iteration's renders (`<asset>_v<N>_<angle>.png`).

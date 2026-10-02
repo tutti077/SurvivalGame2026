@@ -240,9 +240,12 @@ Code/
                 · SunShadowDistance (on the scene Sun: multiplies the engine's cascade shadow reach so the shadow ring is not at the player's feet)
                 · BearTrap (hammer-placed trap_small / trap_large: holds players 5 s, animals + enemies 10 s by TrapSize band;
                   hold lives on PlayerMovement.TrapLocked / EntityLocomotion.IsTrapped) · DamageOverTimeTrap (scene hazard volume)
-  Rendering/    PixelDitherPostProcess (camera post-process: pixelate + palette quantize + ordered dither, shaders/pixel_dither.shader —
-                reserved for future cyber techniques, not the base look). Lighting playground Assets/scenes/lightTestScene.scene =
-                100 m uniformly scaled dev box (non-uniform scale breaks vertex normals) + clovertree1_chop + fly cam
+  (lighting)    No screen-space pixelation. The look is asset-side (Valheim recipe, Mark 2026-10-02): low-res textures + point filtering +
+                faceted normals baked in the mesh (create_elm_tree.py shade_flat; PixelFlatShading on pixel_lit.shader for meshes that
+                are not), optional point-sampled TextureNormal / TextureRoughness + PixelTexCoordScale on pixel_lit.shader (elm bark
+                v76: colour, normal and roughness all from one height field), then the engine's normal sun/shadows, SSAO, fog, bloom,
+                tonemap. Playground: Assets/scenes/lightingTest.scene (100 m uniformly scaled dev box — non-uniform scale breaks
+                vertex normals — clovertree/whole + fly cam + standard post stack on the camera)
   World/Terrain/        Streaming, chunk mesh, biome population, world save IO
   World/TerrainPreview/ Offline world generation pipeline + settings
   UI/           PlayerScreenHud, HUDs, Menu/ sections
