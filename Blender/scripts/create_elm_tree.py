@@ -22,20 +22,15 @@ Structure of each model (one .fbx, two objects):
                    fuses them into one surface (real crotches, nothing intersecting), then it is
                    decimated, smooth shaded, and bark UVs run along each limb. Leader ends are ~40 cm
                    across (stylised, never stick-thin).
-    <name>_lichen  LOD0 only: two to four lichen colonies as a decal shell - per colony a small grid ray-cast
-                   onto the wood and lifted 2 cm off the bark, the colony cutout texture mapped 0..1 on it,
-                   on the TOPS of thick limbs and the trunk's shaded (+y) side (Mark, 2026-10-02: lichen in
-                   select spots, never all over the bark). Not in the stump / log.
     <name>_leaves  bushy branch cards (Valheim-style, ~60 per tree): each card is two quads hinged on a
                    centre crease, 3/4 as wide as long, base on a thick limb, running out to where the
-                   fine limbs it replaces reached (7-11 m). The 128x128 texture is Mark's reference
+                   fine limbs it replaces reached (7-11 m). The 256x256 texture is Mark's reference
                    card: a short brown stem forking into three, then leaf-sleeved arms with irregular
                    gaps between them (~45 % opaque). The crown lets sky through between the branches
                    on purpose (sky_through prints the % per tree). No collision on leaves (vmdl physics = wood only).
 
-Textures (true 256x256 bark, 64x64 end grain, 128x128 leaf card; shaders/pixel_lit.shader point-samples them):
+Textures (true 256x256 bark, 64x64 end grain, 256x256 leaf card; shaders/pixel_lit.shader point-samples them):
     Assets/models/environment/tests/elm_bark_v<N>.png        grey-brown ridged bark (7-tone ramp), 1.25 cm per texel (Mark's D3 pick, 2026-10-02)
-    Assets/models/environment/tests/elm_lichen_v<N>.png      2x2 atlas of four scraggly 64x64 lichen colonies on a transparent card (+ _mask cutout), build_lichen places them
     Assets/models/environment/tests/elm_leaves_v<N>.png      bushy branch: brown stem, leaf-sleeved arms of small flat-toned leaves, no baked light
     Assets/models/environment/tests/elm_leaves_v<N>_mask.png cutout mask (pixel_lit TextureTranslucency)
 """
@@ -55,7 +50,7 @@ OLD_DIRS = [os.path.join(ROOT, "Assets", "models", "environment"),
 			os.path.join(ROOT, "Assets", "materials", "environment")]
 # Every regenerated set gets a new version number in all model + material names, and older
 # versions' files are deleted, so s&box never serves a stale compiled model or texture.
-VERSION = 60
+VERSION = 72
 BARK = f"elm_bark_v{VERSION}"
 GRAIN = f"elm_endgrain_v{VERSION}"
 LOG = f"environment_elm_log_v{VERSION}"
@@ -64,25 +59,24 @@ ASSET_DIR = "models/environment/tests"
 PREFAB_DIR = os.path.join(ROOT, "Assets", "prefabs", "environment", "tests")
 PREFAB_REL = "prefabs/environment/tests"
 LEAVES = f"elm_leaves_v{VERSION}"
-LICHEN_NAME = f"elm_lichen_v{VERSION}"
 BLEND_OUT = os.path.join(ROOT, "Blender", "blenderprojects", f"environment_elm_v{VERSION}.blend")
 PREVIEW_DIR = os.path.join(ROOT, "Blender", "blenderprojects", "elm_preview")
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 
 TEX = 64
-# v57: textures are written at their TRUE size (64 x 64 bark / end grain, 128 x 128 leaf card) and
+# v57: textures are written at their TRUE size (64 x 64 end grain, 256 x 256 bark and leaf card) and
 # the materials use shaders/pixel_lit.shader, which samples with POINT filtering. Before that the
 # engine's complex.shader blurred a real 64 px file, so designs were saved as 512 px blocks.
 PIXEL_BLOCK = 1
 # Bark is a 256 x 256 design on the same 3.2 m tile (Mark, 2026-10-02: picked "D3" from 256 px options):
 # 4x the texels of the old 64 px bark, ridges 44 per tile (~7 cm, real elm plate width) instead of 11.
-# End grain stays at TEX. Lichen is NOT in the tile any more (v58): see build_lichen.
+# End grain stays at TEX.
 BARK_TEX = 256
-# Leaf cards: a 128 x 128 design on a card 3/4 as wide as it is long, so texels are ~6 x 4.7 cm in
+# Leaf cards: a 256 x 256 design on a card 3/4 as wide as it is long, so texels are ~3 x 2.3 cm in
 # the world - close to the bark's - and the small leaves are ~5 texels (~30 cm) instead of one
 # blob. Both sides MUST be powers of two: a 96 x 128 design never compiled and every card drew the
 # engine's red error material.
-LEAF_TEX_W, LEAF_TEX_H = 128, 128
+LEAF_TEX_W, LEAF_TEX_H = 256, 256   # v68: 256 so a 45 cm elm leaf has ~13 texels for a real silhouette
 CARD_ASPECT = 0.75       # card width / length; the design is drawn in card space so its angles are true
 LEAF_BLOCK = 1
 BARK_TILE = 3.2         # m of bark per 256 px tile = 1.25 cm per texel on every limb
@@ -200,69 +194,122 @@ def tile_noise(x, y, rng, terms, fmax):
 
 
 # Chosen by Mark from rendered options (2026-09-27): bark "D1" and leaves "B2".
-BARK_RAMP = [(44, 38, 33), (62, 55, 48), (82, 74, 65), (102, 94, 83), (122, 114, 102), (142, 135, 122), (166, 160, 148)]
-# Lichen (Mark's reference photo, 2026-10-02): chalky grey-green foliose colonies. v60 (Mark: "creepy ... less
-# cartoony, more realistic"): low-saturation ramp, no dark outline (a faint paler margin instead), tone from a
-# coherent lobe pattern rather than per-texel speckle, and lichen texels as fine as the bark's.
-# v58 (Mark: "far too much lichen and the patches are too large ... select locations, top of tree limbs"):
-# the bark tile carries NO lichen; build_lichen puts a handful of small colonies where they grow.
-LICHEN = [(122, 130, 114), (146, 156, 138), (168, 178, 160), (188, 196, 180)]
-LICHEN_RIM = "light"       # "light": one-texel paler margin, "dark": outline, "none"
-LICHEN_LOBE = 1.0          # amplitude of the coherent lobe pattern in the tone (0 = flat)
-LICHEN_JITTER = 0.06       # share of texels nudged one tone (0.25 was the v59 speckle)
-# v59 (Mark: "too tiny ... tiny scraggly things, not perfect ovals ... 3/4 per tree at most, some bigger than
-# others"): a 2 x 2 atlas of four different scraggly colonies, 2-4 placed per tree at 0.45-1.2 m.
-LICHEN_TEX = 256           # atlas, px: four LICHEN_CELL cards, each one colony in the middle, cutout around it
-LICHEN_CELL = 128          # a colony fills ~half the cell: 0.4-1 m over ~64 texels = 0.6-1.5 cm texels, like the bark
-LICHEN_PATCHES = (2, 4)    # colonies per tree
-LICHEN_SIZE = (0.8, 2.0)   # card length along the limb, m; the colony fills about half of it (~0.4-1 m)
-LICHEN_TRUNK_SHARE = 0.3   # share of colonies on the trunk / steep leaders' shaded +y side; rest on limb tops
-LICHEN_MIN_R = 0.2         # m; only limbs at least this thick carry a colony
-LICHEN_LIFT = 0.02         # m the shell sits above the bark
-LICHEN_CELL_M = 0.06       # m per shell quad: the grid follows the wobbly wood, so bigger colonies get more quads
+# v65 (Mark, 2026-10-02, art routine): American elm bark - grey-brown with brown in it, low contrast.
+# 0 unused, 1 crack, 2 shaded plate edge, 3-4 plate body, 5 lit plate edge, 6 unused. Also the leaf-card stems.
+BARK_RAMP = [(52, 44, 38), (72, 62, 54), (94, 82, 72), (116, 102, 90), (138, 124, 110), (158, 144, 128), (176, 162, 146)]
+BARK_LINES = 36            # crack lines per family per 3.2 m tile (spacing ~9 cm)
+BARK_LEAN_K = 6            # lean: a line drifts K spacings across the tile height -> ~8 deg off vertical
+BARK_DRIFT = 1.2           # per-line lateral drift range across the tile height, in spacings (ridges converge / diverge)
+BARK_TIES = 60             # short cross-cracks per tile, each running crack to crack
+BARK_CRACK_W = ((0.0, 0.3), (0.5, 1.0), (1.3, 2.2))   # crack half-width ranges, texels: hairline (65 %), medium (27 %), major (8 %)
+BARK_LIP = 1               # width of the lit / shaded plate edges beside a crack, texels
+BARK_RELIEF = 1.0          # strength of those edges in ramp steps
+BARK_GROUND_VAR = 0.6      # slow tonal variation of the plate body
+BARK_GRAIN = 0.3           # fine vertical grain on the plate body
+BARK_BREAK = 0.35          # share of every crack's length left undrawn (gaps), so no line runs top to bottom
+BARK_JOG = 2.0             # sideways step a crack takes between gaps, texels
+BARK_MAX_SKEW = 1.8        # a wrapped face whose texels are stretched more than this one way gets a flat projection
 STEM_RGB = BARK_RAMP[2]   # the card's stem in the bark's own grey-brown, so it blends into the limb it leaves (Mark, v48)
 # Leaf bases use tones 3 / 4 / 4 / 5 (midrib +1, veins -1). Tone 4 is Mark's base green #448c37
 # (v38: the old lime ramp read almost pastel); the ramp keeps that hue, darker below and lighter above.
-LEAF_RAMP = [(22, 48, 20), (32, 68, 28), (44, 92, 36), (56, 116, 46), (68, 140, 55), (92, 162, 70), (128, 186, 96)]
+# v69 (Mark picked sample 10 of ten, 2026-10-02: "indiscernible leaves is ideal"): true-scale elm leaves
+# (12-18 cm, 3-5 texels) in two passes - a darker back layer, then a lighter front layer - so clumps read as
+# fine foliage mass with depth, no outlines, no lit / shaded halves. Deep, realistic elm green.
+LEAF_RAMP = [(26, 44, 24), (36, 62, 32), (48, 82, 42), (62, 102, 52), (80, 122, 64), (100, 142, 80), (126, 162, 100)]
+LEAF_LEN = (0.014, 0.02)   # leaf length in card units (~12-18 cm on a 9 m card)
+LEAF_BACK = (60000, 1.4, (1, 2, 2))    # back layer: sleeve density, spread (x half-width), tones
+LEAF_FRONT = (45000, 0.9, (3, 4, 4, 5))  # front layer: tighter to the arm, lighter
 
 
 def make_bark_texture():
-	"""Grey-brown elm bark, 7-tone ramp, BARK_TEX square. Interlacing ridge strips between
-	meandering furrows; each strip shaded as a rounded ridge lit from the left, with fibre streaks,
-	short cracks with a lit lip, and furrows kept two tones up (never near-black). Tiles seamlessly.
-	No lichen in the tile (v58) - build_lichen places colonies on the model instead."""
-	rng = np.random.default_rng(11)
-	N = 44
-	yy = (np.arange(BARK_TEX) + 0.5) / BARK_TEX
-	lines = np.zeros((N, BARK_TEX))
-	for k in range(N):
-		off = np.zeros(BARK_TEX)
-		for m in (1, 2, 3):
-			off += rng.uniform(0.4, 1.0) / m * np.sin(2 * math.pi * (m * yy + rng.random()))
-		lines[k] = (k + 0.5) * BARK_TEX / N + off * BARK_TEX / N * 0.55
-	px = np.arange(BARK_TEX) + 0.5
-	sd = px[None, None, :] - lines[:, :, None]
-	sd -= np.round(sd / BARK_TEX) * BARK_TEX
-	left_d = np.where(sd > 0, sd, np.inf).min(0)       # distance to the furrow on the left
-	right_d = np.where(sd < 0, -sd, np.inf).min(0)     # ... and on the right
-	left_k = np.where(sd > 0, sd, np.inf).argmin(0)
-	s = left_d / (left_d + right_d)                    # 0 at the left furrow .. 1 at the right
-	dist = np.minimum(left_d, right_d)
-	yi = np.arange(BARK_TEX)[:, None].repeat(BARK_TEX, 1)
-	xi = np.arange(BARK_TEX)[None, :].repeat(BARK_TEX, 0)
-	shade = 0.78 - 0.55 * s ** 1.3 + 0.12 * np.sin(math.pi * s)          # rounded ridge
-	shade += (rng.random((N, BARK_TEX // 16)) - 0.5)[left_k, yi // 16] * 0.16   # plates differ a little
-	fib = rng.random((BARK_TEX // 3 + 1, BARK_TEX)) < 0.22                          # fibre streaks
-	shade = np.where(fib[yi // 3, xi] & (dist > 1.2), shade - 0.12, shade)
-	crack_rows = rng.random((N, BARK_TEX // 8)) < 0.12                         # short cracks + lit lip
-	crack = crack_rows[left_k, yi // 8] & ((yi % 8) == 3) & (dist > 1.0)
-	lip = crack_rows[left_k, yi // 8] & ((yi % 8) == 2) & (dist > 1.0)
-	shade = np.where(crack, 0.3, np.where(lip, shade + 0.12, shade))
-	shade += rng.uniform(-0.03, 0.03, shade.shape)
-	idx = np.clip(np.round(np.clip(shade, 0, 1) * 6), 0, 6).astype(int)
-	idx = np.where(dist < 0.6, 2, np.where(dist < 1.3, np.minimum(idx, 3), idx))   # furrows
-	rgb = np.array(BARK_RAMP, float)[idx]
+	"""American elm bark after Mark's sketch + photo (2026-10-02, v65, art routine): the CRACKS are a
+	connected net and the flat grey-brown plates between them are the ridges. Two families of full-height
+	lines (BARK_LINES each, one leaning right and one left by atan(BARK_LEAN_K * spacing / tile)) start at
+	evenly spaced x so each line's foot lands on another's head at the tile edge (seamless), wobble with a
+	y-periodic sine and cross into stretched diamonds; per-line drift (BARK_DRIFT) varies the spacing.
+	BARK_TIES short cross-cracks run from one crack to the next and stop there (no free ends). Each crack
+	is one step above the darkest tone, its left plate edge one step lighter and its right edge one step
+	darker (BARK_LIP / BARK_RELIEF), on a mid ground with slow variation. 7-step ramp, 3-4 tones in use."""
+	n, k, drift, tie_n, crack_w = BARK_LINES, BARK_LEAN_K, BARK_DRIFT, BARK_TIES, BARK_CRACK_W
+	lip, relief, ground_var, grain, ramp, seed = BARK_LIP, BARK_RELIEF, BARK_GROUND_VAR, BARK_GRAIN, BARK_RAMP, 11
+	rng = random.Random(seed)
+	crack = np.zeros((BARK_TEX, BARK_TEX), bool)
+	spacing = BARK_TEX / n
+	# Line i leaves the tile top where line (i + k) starts, so the lines of one family form gcd(n, k)
+	# chains that wrap the tile. Every line gets its own lateral drift (so ridges converge and diverge)
+	# and its own width and wobble; the drifts of each chain are centred to sum to zero and the start
+	# of each line is propagated from its predecessor, so every crack is continuous across the edge.
+	g = math.gcd(n, k)
+	L = n // g
+	for sign in (1, -1):
+		for c in range(g):
+			drifts = [rng.uniform(-drift, drift) * spacing for _ in range(L)]
+			mean = sum(drifts) / L
+			drifts = [d - mean for d in drifts]
+			x0 = c * spacing + rng.uniform(-0.3, 0.3) * spacing
+			for j in range(L):
+				# width: mostly hairlines, some medium, a few wide major cracks (Mark: "not all the lines
+				# should be the same thickness"), and each crack pinches / widens along its length
+				u = rng.random()
+				w = rng.uniform(*crack_w[0]) if u < 0.65 else rng.uniform(*crack_w[1]) if u < 0.92 else rng.uniform(*crack_w[2])
+				wm = rng.choice((1, 2)); wph = rng.uniform(0, 6.28)
+				amp = rng.uniform(0.3, 1.4) * spacing * 0.35
+				m = rng.choice((1, 2, 3))
+				# breaks + jogs: a crack is drawn only where a y-periodic break function is high, and it
+				# steps sideways by up to BARK_JOG texels between breaks, so no line runs the tile unbroken
+				bf1, bf2, bf3 = rng.choice((3, 4, 5, 6)), rng.choice((7, 9, 11)), rng.choice((2, 3))
+				bp1, bp2, bp3 = rng.uniform(0, 6.28), rng.uniform(0, 6.28), rng.uniform(0, 6.28)
+				for yy in range(BARK_TEX * 2):
+					y = yy / 2.0
+					brk = (math.sin(2 * math.pi * bf1 * y / BARK_TEX + bp1) + 0.6 * math.sin(2 * math.pi * bf2 * y / BARK_TEX + bp2)) / 1.6
+					if brk < -1 + 2 * BARK_BREAK:
+						continue
+					jog = round(BARK_JOG * math.sin(2 * math.pi * bf3 * y / BARK_TEX + bp3))
+					x = x0 + (sign * k * spacing + drifts[j]) * y / BARK_TEX + amp * math.sin(2 * math.pi * m * y / BARK_TEX) + jog
+					wy = w * (0.55 + 0.45 * math.sin(2 * math.pi * wm * y / BARK_TEX + wph))
+					xi = int(round(x))
+					for wx in range(-3, 4):
+						if (wx + 0.5 if wx >= 0 else wx - 0.5) * (1 if wx >= 0 else -1) <= wy + 0.5 and abs(wx) <= wy + 0.5:
+							crack[int(y) % BARK_TEX, (xi + wx) % BARK_TEX] = True
+				x0 = x0 + sign * k * spacing + drifts[j]      # next line in the chain starts where this one left
+	# ties: from a random point, walk left and right (slightly tilted) until a crack is hit
+	for _ in range(tie_n):
+		x0, y0 = rng.uniform(0, BARK_TEX), rng.uniform(0, BARK_TEX)
+		tilt = rng.uniform(-0.45, 0.45)
+		ends = []
+		for d in (1, -1):
+			for step in range(1, int(spacing * 2.2)):
+				px, py = int(x0 + d * step) % BARK_TEX, int(y0 + d * step * tilt) % BARK_TEX
+				if crack[py, px]:
+					ends.append(step); break
+			else:
+				ends.append(None)
+		if None in ends:
+			continue
+		wide_tie = rng.random() < 0.3
+		for d, step_max in zip((1, -1), ends):
+			for step in range(step_max):
+				yy_, xx_ = int(y0 + d * step * tilt) % BARK_TEX, int(x0 + d * step) % BARK_TEX
+				crack[yy_, xx_] = True
+				if wide_tie:
+					crack[(yy_ + 1) % BARK_TEX, xx_] = True
+	wide = crack & np.roll(crack, 1, 1) & np.roll(crack, -1, 1) & np.roll(crack, 2, 1) & np.roll(crack, -2, 1)   # 5+ texels wide
+	left1 = np.roll(crack, -lip, 1) & ~crack
+	left2 = np.roll(wide, -2 * lip, 1) & ~crack & ~left1
+	right1 = np.roll(crack, lip, 1) & ~crack
+	right2 = np.roll(wide, 2 * lip, 1) & ~crack & ~right1
+	r2 = random.Random(seed + 1)
+	x, y = np.meshgrid((np.arange(BARK_TEX) + 0.5) / BARK_TEX, (np.arange(BARK_TEX) + 0.5) / BARK_TEX)
+	tone = 3.6 + ground_var * 0.9 * tile_noise(x * 2, y, r2, 8, 3) + grain * 0.7 * tile_noise(x * 4, y, r2, 10, 24)
+	tone = np.where(left1, tone + 1.0 * relief, tone)
+	tone = np.where(left2, tone + 0.4 * relief, tone)
+	tone = np.where(right1, tone - 1.0 * relief, tone)
+	tone = np.where(right2, tone - 0.4 * relief, tone)
+	tone = np.where(crack, np.minimum(tone - 1.8, 1.4), tone)
+	idx = np.clip(np.round(tone), 0, 6).astype(int)
+	rgb = np.array(ramp, float)[idx]
 	return np.dstack([rgb, np.full((BARK_TEX, BARK_TEX), 255)]).astype(np.uint8)
+
 
 
 def connected_to(mask, seed):
@@ -280,74 +327,14 @@ def connected_to(mask, seed):
 		keep = grown
 
 
-def lichen_colony(rng, r2, T):
-	"""One scraggly foliose colony in a T x T cell (bool body, bool flecks, float field): two to four
-	overlapping lobes at odd angles, torn hard by low- and mid-frequency noise, then the rim knocked
-	about so the outline has arms, bays and ragged edges instead of an oval. Only what connects to a
-	lobe core survives; a few loose flecks sit just outside the body."""
-	x, y = np.meshgrid((np.arange(T) + 0.5) / T, (np.arange(T) + 0.5) / T)
-	field = np.full((T, T), -9.0)
-	for _ in range(int(rng.integers(2, 5))):
-		cx, cy = 0.5 + rng.uniform(-0.15, 0.15), 0.5 + rng.uniform(-0.12, 0.12)
-		rx, ry = rng.uniform(0.14, 0.32), rng.uniform(0.10, 0.24)
-		ang = rng.uniform(0, math.pi)
-		dx, dy = x - cx, y - cy
-		u = (dx * math.cos(ang) + dy * math.sin(ang)) / rx
-		v = (-dx * math.sin(ang) + dy * math.cos(ang)) / ry
-		field = np.maximum(field, 1.0 - (u * u + v * v))
-	tear = tile_noise(x, y, r2, 10, 4) * 0.55 + tile_noise(x, y, r2, 12, 9) * 0.3 + tile_noise(x, y, r2, 12, 20) * 0.15
-	field = field + 1.0 * tear
-	field -= 4.0 * np.clip(np.maximum(np.abs(x - 0.5), np.abs(y - 0.5)) - 0.40, 0, 1)   # fade out at the cell border
-	cores = field > 0.7
-	body = connected_to(field > 0.15, cores)
-	for _ in range(2):                                   # rough up the rim
-		inner = body & np.roll(body, 1, 0) & np.roll(body, -1, 0) & np.roll(body, 1, 1) & np.roll(body, -1, 1)
-		body &= ~((body & ~inner) & (rng.random((T, T)) < 0.35))
-	body = connected_to(body, cores)
-	fine = tile_noise(x, y, r2, 12, 28)
-	fleck = (fine > 0.72) & (field > -0.5) & ~body & (rng.random((T, T)) < 0.5)
-	return body, fleck, field
-
-
-def make_lichen_texture():
-	"""2 x 2 atlas (LICHEN_TEX) of four different scraggly colonies (lichen_colony, one per LICHEN_CELL
-	cell): one-texel dark rim, pale granular centre with per-texel jitter, loose flecks. Alpha is the
-	cutout; the colour under transparent texels is the mid tone so point sampling never bleeds."""
-	T = LICHEN_CELL
-	n = LICHEN_TEX // T
-	rgb = np.full((LICHEN_TEX, LICHEN_TEX, 3), LICHEN[1], float)
-	alpha = np.zeros((LICHEN_TEX, LICHEN_TEX), int)
-	for cell in range(n * n):
-		rng = np.random.default_rng(50 + cell)
-		r2 = random.Random(50 + cell)
-		body, fleck, field = lichen_colony(rng, r2, T)
-		lich = body | fleck
-		x, y = np.meshgrid((np.arange(T) + 0.5) / T, (np.arange(T) + 0.5) / T)
-		lobes = tile_noise(x, y, r2, 12, 16)                        # coherent 2-4 texel lobe structure
-		t = np.clip(field / 1.3, 0, 1)
-		lt = np.round(1.2 + 1.2 * t + LICHEN_LOBE * 0.9 * lobes).astype(int)
-		lt += (rng.random((T, T)) < LICHEN_JITTER) * rng.choice([-1, 1], (T, T))
-		inner = body & np.roll(body, 1, 0) & np.roll(body, -1, 0) & np.roll(body, 1, 1) & np.roll(body, -1, 1)
-		if LICHEN_RIM == "dark":
-			lt = np.where(body & ~inner, np.minimum(lt, 1), lt)
-		elif LICHEN_RIM == "light":
-			lt = np.where(body & ~inner, np.maximum(lt, 2), lt)     # paler lobe margins
-		lt = np.where(fleck, 2, lt)
-		lt = np.clip(lt, 0, 3)
-		oy, ox = (cell // n) * T, (cell % n) * T
-		sub = rgb[oy:oy + T, ox:ox + T]
-		sub[lich] = np.array(LICHEN, float)[lt[lich]]
-		alpha[oy:oy + T, ox:ox + T] = np.where(lich, 255, 0)
-		print(f"lichen colony {cell}: {body.sum()} body texels, {fleck.sum()} flecks, {lich.mean() * 100:.0f} % of the cell")
-	return np.dstack([rgb, alpha]).astype(np.uint8)
-
-
 def make_leaf_texture():
 	"""Bushy branch card (v46, Mark's reference): a short brown stem forking into three, then a leafy
 	main axis up the middle with side arms leaving alternately (long and flat low down, shorter and
 	steeper near the top), each arm with sub-arms forking forward. Every arm is a SLEEVE of small
 	leaves - nothing is drawn as a line - so the branch structure reads only through the irregular
-	gaps between the leafy arms (~45 % opaque). No baked lighting: flat per-leaf tones plus a midrib.
+	gaps between the leafy arms (~45 % opaque). No baked lighting: flat per-leaf tones.
+	v69: true-scale tiny leaves in a dark back pass and a light front pass (LEAF_BACK / LEAF_FRONT), so
+	the foliage reads as an indiscernible mass with depth rather than countable leaves.
 	Everything not connected to the stem is erased (no leaf floats free). Drawn in card space
 	(x = (u - 0.5) * CARD_ASPECT, y = v) so the angles are true on the card."""
 	rng = random.Random(9)
@@ -370,19 +357,25 @@ def make_leaf_texture():
 		line(stem, (0.0, 0.11), f, 0.003)
 
 	leaves = []
+	segs = []
+
 	def sleeve(a, b, half_w, density):
-		"""Leaves along a branch segment: the branch is a sleeve of leaves, never a drawn line."""
-		(ax, ay), (bx, by) = a, b
-		L = math.hypot(bx - ax, by - ay)
-		nx, ny = -(by - ay) / (L + 1e-9), (bx - ax) / (L + 1e-9)
-		for _ in range(int(L * half_w * density)):
-			t = rng.random()
-			off = rng.gauss(0, 0.5) * half_w
-			if abs(off) > half_w * 1.3:
-				continue
-			x, y = ax + (bx - ax) * t + nx * off, ay + (by - ay) * t + ny * off
-			ang = math.atan2(ny, nx) * (1 if off > 0 else -1) + rng.uniform(-1.2, 1.2)
-			leaves.append((x, y, ang, rng.uniform(0.035, 0.05)))
+		"""Leaves along a branch segment: the branch is a sleeve of leaves, never a drawn line.
+		Records the segment; the two passes below scatter leaves along every segment."""
+		segs.append((a, b, half_w))
+
+	def scatter(density, spread, tones):
+		for (ax, ay), (bx, by), half_w in segs:
+			L = math.hypot(bx - ax, by - ay)
+			nx, ny = -(by - ay) / (L + 1e-9), (bx - ax) / (L + 1e-9)
+			for _ in range(int(L * half_w * density)):
+				t = rng.random()
+				off = rng.gauss(0, 0.5) * half_w
+				if abs(off) > half_w * spread:
+					continue
+				x, y = ax + (bx - ax) * t + nx * off, ay + (by - ay) * t + ny * off
+				ang = math.atan2(ny, nx) * (1 if off > 0 else -1) + rng.uniform(-1.2, 1.2)
+				leaves.append((x, y, ang, rng.uniform(*LEAF_LEN), rng.choice(tones)))
 
 	def arm(p, ang, length, level):
 		"""One leafy arm: a sleeved segment that ends in a tuft, with sub-arms forking forward."""
@@ -419,17 +412,16 @@ def make_leaf_texture():
 	# the two lowest forks each throw one low arm out sideways too (the fan is widest low down)
 	arm(forks[0], math.radians(-75), 0.2, 1)
 	arm(forks[2], math.radians(74), 0.2, 1)
-	rng.shuffle(leaves)
-	for lx, ly, ang, length in leaves:
+	scatter(*LEAF_BACK)        # dark back layer first, then the lighter front layer paints over it
+	scatter(*LEAF_FRONT)
+	for lx, ly, ang, length, base in leaves:
 		d = np.array([math.cos(ang), math.sin(ang)])
 		rx_, ry_ = px - lx, pv - ly
 		a = (rx_ * d[0] + ry_ * d[1]) / length
-		b = (-rx_ * d[1] + ry_ * d[0]) / (length * 0.25)
+		b = (-rx_ * d[1] + ry_ * d[0]) / (length * 0.4)
 		prof = np.clip(a, 0, 1) ** 0.5 * np.clip(1 - a, 0, 1) ** 0.7 / (0.4 ** 0.5 * 0.6 ** 0.7)
 		inside = (a > 0) & (a < 1) & (np.abs(b) < prof)
-		base = rng.choice((2, 3, 3, 4, 4, 4, 5, 5))
-		leaf = np.where((np.abs(b) < 0.22) & (a > 0.15) & (a < 0.85), base + 1, np.full((H, W), base))
-		tone[inside] = np.clip(leaf, 0, 6)[inside]
+		tone[inside] = base
 	tone[(pv > 0.97) | (np.abs(px) > CARD_ASPECT * 0.5 - 0.02)] = -1
 	alpha = connected_to((tone >= 0) | stem, stem)
 	tone[~alpha] = -1
@@ -1024,19 +1016,22 @@ def build_wood(name, nodes, rng, P):
 
 
 def bark_uvs(me, nodes, P):
-	"""Cylindrical bark UVs, u around a limb and v along its cumulative length, at a fixed
-	5 cm per texel. Every FACE takes one limb segment (the one nearest its centre) and maps all of
-	its corners against that segment's axis, so a face never mixes two limbs: where limbs fork or
-	roots leave the trunk the bark just changes direction at a clean seam instead of smearing one
-	face across two different parts of the texture. Along one limb the frames are parallel-
-	transported and v uses the unclamped axis position, so neighbouring faces still line up.
-	Faces that point along their limb (fork saddles) get a flat projection at the same texel
-	size instead, since no wrap-around mapping can cover them without stretching.
-	The BASE (flare + roots, v54) is one world-aligned box projection at the same texel size:
-	side faces take (horizontal, height), top / underside faces take (x, y). Wrapping the flare
-	around the trunk and the roots around their own axes made neighbouring faces pick different
-	segments, and the foot broke into herringbone patches (Mark). Each limb gets its own random
-	offset + mirror of the pattern so forks never show repeated bark."""
+	"""Cylindrical bark UVs, u around a limb and v along its cumulative length, at a fixed texel
+	size. Every VERTEX is mapped against the limb segment nearest to it (v66, Mark: "open each limb
+	longways instead of slicing it horizontally"): v is the unclamped axis position, u the angle
+	around the axis measured from a frame BLENDED between the segment's two end-node frames, so
+	along one limb u and v are continuous from base to tip and the only seam is the lengthwise one
+	where the wrap meets itself. A face takes the limb most of its corners belong to and re-maps
+	the odd corner against that limb's nearest segment, so forks and root junctions show one clean
+	seam instead of smeared faces; the old per-face segment choice put a ring at every node.
+	The ROOTS (v54) are one world-aligned box projection at the same texel size: side faces take
+	(horizontal, height), top / underside faces take (x, y), since wrapping each root around its
+	own axis made neighbouring faces pick different segments and the foot broke into herringbone
+	patches (Mark). The flare used to share that box projection, which drew a ring where the box
+	met the trunk's wrap-around mapping ~2 m up (Mark, v63: "the texture is splitting halfway up");
+	now every flare face wraps around the TRUNK segment like the trunk above it, so the bark runs
+	unbroken from the ground to the first fork. Each limb gets its own random offset + mirror of
+	the pattern so forks never show repeated bark."""
 	N = len(nodes)
 	# Which child continues its parent's bark: a trunk section (depth 0) always does - a leader can
 	# be thicker than the short trunk piece above a fork, and giving the trunk a new offset there
@@ -1060,6 +1055,9 @@ def bark_uvs(me, nodes, P):
 			# a branch starts at the height where it joins its parent (leaders start a little below
 			# the fork): measure its first step by height so its bark lines up with the parent's
 			vcoord[i] = vcoord[p] + seg.z / BARK_TILE
+		# Angle frame for u: parallel-transported node to node (rotation-minimising), seeded from world +x
+		# at the base. The mapping below blends the two end-node frames along every segment, so the frame
+		# is continuous along a limb and the bark never rotates at a node.
 		rr = ref[p] - d * ref[p].dot(d)
 		if rr.length < 1e-4:
 			rr = d.orthogonal()
@@ -1104,39 +1102,87 @@ def bark_uvs(me, nodes, P):
 	for i in range(1, N):
 		is_root[i] = (nodes[i].parent == 0 and i != 1) or is_root[nodes[i].parent]
 	root_seg = np.array([is_root[b] for _, b in segs])
-	base_zone = (C[:, 2] < P["flare_h"] + 0.3) & ((np.hypot(C[:, 0], C[:, 1]) < P["trunk_r"] * 1.9) | root_seg[fseg])
+	near_foot = (C[:, 2] < P["flare_h"] + 0.3) & ((np.hypot(C[:, 0], C[:, 1]) < P["trunk_r"] * 1.9) | root_seg[fseg])
+	base_zone = near_foot & root_seg[fseg]               # roots: box projection
+	flare_zone = near_foot & ~root_seg[fseg]             # flare: wrap around the trunk segment
+	trunk_si = next(k for k, (_, b) in enumerate(segs) if b == 1)
 	z0 = nodes[0].pos.z          # the trunk's v starts here, so the box mapping's height lines up with it
 
 	D = AB / np.sqrt(L2)[:, None]
-	R0 = np.array([ref[b] for _, b in segs])
-	S0 = np.cross(D, R0)
 	VA = np.array([vcoord[a] for a, _ in segs])
 	VB = np.array([vcoord[b] for _, b in segs])
+	REFA = np.array([ref[a] for a, _ in segs])
+	REFB = np.array([ref[b] for _, b in segs])
+	LIMB = np.array([b for _, b in segs])          # the node whose ou / ov / flip apply
 	co = np.array([v.co for v in me.vertices])
+	# nearest segment per VERTEX (chunked)
+	vseg = np.zeros(len(co), int)
+	for c0 in range(0, len(co), 256):
+		AP = co[c0:c0 + 256, None, :] - A[None]
+		t = np.clip((AP * AB[None]).sum(2) / L2[None], 0, 1)
+		d = np.sqrt(((AP - t[..., None] * AB[None]) ** 2).sum(2))
+		vseg[c0:c0 + 256] = d.argmin(1)
+	# which limb a segment belongs to: the node that was given its own ou / ov / flip above. Walk up
+	# while a node inherited its parent's offsets (continuing chain, or a leader off the trunk).
+	def inherits(i):
+		p_ = nodes[i].parent
+		if p_ is None or p_ <= 0:
+			return False
+		return first_child.get(p_) == i or (nodes[p_].depth == 0 and nodes[i].depth == 1)
+	limb_of = {}
+	for si, (a_, b_) in enumerate(segs):
+		n_ = b_
+		while inherits(n_):
+			n_ = nodes[n_].parent
+		limb_of[si] = n_
+	seg_of_limb = {}
+	for si in range(len(segs)):
+		seg_of_limb.setdefault(limb_of[si], []).append(si)
+	# one box frame per limb for the fallback faces: e1 along the limb, e2 horizontal across it, e3 = e1 x e2
+	limb_frame = {}
+	for limb, sis in seg_of_limb.items():
+		d_ = sum((AB[si] for si in sis), np.zeros(3))
+		d_ = d_ / (np.linalg.norm(d_) + 1e-9)
+		e2 = np.cross(np.array([0.0, 0.0, 1.0]), d_)
+		if np.linalg.norm(e2) < 1e-3:
+			e2 = np.array([1.0, 0.0, 0.0])
+		e2 = e2 / np.linalg.norm(e2)
+		limb_frame[limb] = (d_, e2, np.cross(d_, e2))
+
+	def map_vertex(pw, si):
+		"""(u, v, period) of world point pw against segment si, frame blended along the segment."""
+		Pp = pw - A[si]
+		tu = Pp @ AB[si] / L2[si]                      # unclamped: v continues past the segment ends
+		tc = min(max(tu, 0.0), 1.0)
+		rad = Pp - tu * AB[si]
+		Ra = REFA[si] - D[si] * (REFA[si] @ D[si])
+		Rb = REFB[si] - D[si] * (REFB[si] @ D[si])
+		R = (1 - tc) * Ra + tc * Rb
+		if np.linalg.norm(R) < 1e-6:
+			R = Rb
+		R = R / np.linalg.norm(R)
+		S = np.cross(D[si], R)
+		ang = math.atan2(rad @ S, rad @ R)
+		period = 2 * math.pi * max(np.linalg.norm(rad), 0.02) / BARK_TILE
+		return ang / (2 * math.pi) * period, VA[si] + (VB[si] - VA[si]) * tu, period
+
+	def nearest_in_limb(pw, limb):
+		best, bsi = 1e9, None
+		for si in seg_of_limb[limb]:
+			Pp = pw - A[si]
+			t = min(max(Pp @ AB[si] / L2[si], 0.0), 1.0)
+			d = np.linalg.norm(Pp - t * AB[si])
+			if d < best:
+				best, bsi = d, si
+		return bsi
+
 	uv = me.uv_layers.new(name="UVMap")
-	def stretch_ok(u, v, area, lo=1 / 3, hi=3):
-		au = sum((u[k] - u[0]) * (v[k + 1] - v[0]) - (u[k + 1] - u[0]) * (v[k] - v[0])
-				 for k in range(1, len(u) - 1)) / 2
-		return lo < abs(au) * BARK_TILE * BARK_TILE / max(area, 1e-9) < hi
-
 	for poly in me.polygons:
-		si = fseg[poly.index]
 		vis = [me.loops[li].vertex_index for li in poly.loop_indices]
-		n = np.array(poly.normal)
-		along = n @ D[si]
-
-		def flat():
-			# project flat onto the face at the same 5 cm texels, bark streaks along the limb
-			t1 = D[si] - n * along
-			t1 = t1 / np.linalg.norm(t1) if np.linalg.norm(t1) > 1e-4 else np.array(Vector(n).orthogonal())
-			t2 = np.cross(n, t1)
-			b_ = segs[si][1]
-			for li, pw in zip(poly.loop_indices, co[vis]):
-				uv.data[li].uv = (pw @ t2 / BARK_TILE + ou[b_], pw @ t1 / BARK_TILE + ov[b_])
-
 		if base_zone[poly.index]:
-			# Box projection from the face's dominant axis: side faces keep the bark streaks vertical
-			# (v = height, continuous with the trunk's v above), tops and undersides of roots take (x, y).
+			# roots: box projection from the face's dominant axis (v54): side faces keep the bark streaks
+			# vertical (v = height, continuous with the trunk's v above), tops and undersides take (x, y).
+			n = np.array(poly.normal)
 			ax = int(np.argmax(np.abs(n)))
 			for li, pw in zip(poly.loop_indices, co[vis]):
 				if ax == 2:
@@ -1145,137 +1191,54 @@ def bark_uvs(me, nodes, P):
 					side = pw[1] if ax == 0 else pw[0]
 					uv.data[li].uv = (side / BARK_TILE + ou[1], (pw[2] - z0) / BARK_TILE + ov[1])
 			continue
-		if abs(along) > 0.6:
-			flat()   # saddle faces facing along the limb: wrap-around can only smear them
-			continue
-		Pp = co[vis] - A[si]
-		t = Pp @ AB[si] / L2[si]                      # unclamped: continuous past segment ends
-		rad = Pp - np.outer(t, AB[si])
-		ang = np.arctan2(rad @ S0[si], rad @ R0[si])
-		period = 2 * np.pi * np.maximum(np.linalg.norm(rad, axis=1), 0.02) / BARK_TILE
-		u = ang / (2 * np.pi) * period
-		v = VA[si] + (VB[si] - VA[si]) * t
+		# the limb most corners belong to; the trunk segment for flare faces
+		limbs = [limb_of[trunk_si] if flare_zone[poly.index] else limb_of[vseg[vi]] for vi in vis]
+		limb = max(set(limbs), key=limbs.count)
+		b_ = limb
+		us, vs, periods = [], [], []
+		for vi, pw in zip(vis, co[vis]):
+			si = vseg[vi] if (limb_of[vseg[vi]] == limb and not flare_zone[poly.index]) else nearest_in_limb(pw, limb)
+			u_, v_, per = map_vertex(pw, si)
+			us.append(u_); vs.append(v_); periods.append(per)
 		# keep the face on one side of the angle wrap
-		for k in range(1, len(u)):
-			if u[k] - u[0] > period[k] / 2:
-				u[k] -= period[k]
-			elif u[0] - u[k] > period[k] / 2:
-				u[k] += period[k]
-		# safety net: if the wrap-around mapping still puts this face > 3x off the texel size,
-		# use the flat projection instead (a seam is better than a smear)
-		if not stretch_ok(u, v, poly.area):
-			flat()
+		for k_ in range(1, len(us)):
+			if us[k_] - us[0] > periods[k_] / 2:
+				us[k_] -= periods[k_]
+			elif us[0] - us[k_] > periods[k_] / 2:
+				us[k_] += periods[k_]
+		# faces the wrap cannot cover without smearing get a flat projection onto their own plane instead:
+		# a seam beats a smear (v67). Two tests: UV area > 3x off the texel size (fork saddles facing along
+		# the limb), and texels more than BARK_MAX_SKEW times longer one way than the other (v70: the lobed
+		# flare bulges faster than r * dtheta, which stretched texels sideways at the flare top).
+		au = sum((us[k_] - us[0]) * (vs[k_ + 1] - vs[0]) - (us[k_ + 1] - us[0]) * (vs[k_] - vs[0])
+				 for k_ in range(1, len(us) - 1)) / 2
+		ratio = abs(au) * BARK_TILE * BARK_TILE / max(poly.area, 1e-9)
+		skew = 1.0
+		if len(us) >= 3:
+			n_ = np.array(poly.normal)
+			t1_ = co[vis[1]] - co[vis[0]]
+			t1_ = t1_ - n_ * (n_ @ t1_)
+			if np.linalg.norm(t1_) > 1e-6:
+				t1_ = t1_ / np.linalg.norm(t1_)
+				t2_ = np.cross(n_, t1_)
+				c3_ = co[vis].mean(0)
+				Auv = np.array([[u_ - np.mean(us), v_ - np.mean(vs)] for u_, v_ in zip(us, vs)])
+				B3 = np.array([[(pw - c3_) @ t1_, (pw - c3_) @ t2_] for pw in co[vis]])
+				J_, *_ = np.linalg.lstsq(Auv, B3, rcond=None)
+				sv_ = np.linalg.svd(J_, compute_uv=False)
+				skew = sv_[0] / max(sv_[1], 1e-9)
+		if not (1 / 3 < ratio < 3) or skew > BARK_MAX_SKEW:
+			# limb-aligned box projection (v72): every rescued face of a limb projects onto the same two
+			# planes (across-limb axis chosen by the face normal, v along the limb), so neighbouring rescued
+			# faces line up with each other; per-face planes (v67-v71) made a patchwork at the flare top.
+			n = np.array(poly.normal)
+			e1, e2, e3 = limb_frame[limb]
+			across = e3 if abs(n @ e2) > abs(n @ e3) else e2
+			for li, pw in zip(poly.loop_indices, co[vis]):
+				uv.data[li].uv = (pw @ across / BARK_TILE + ou[b_], pw @ e1 / BARK_TILE + ov[b_])
 			continue
-		b_ = segs[si][1]
-		for li, uu, vv in zip(poly.loop_indices, u, v):
+		for li, uu, vv in zip(poly.loop_indices, us, vs):
 			uv.data[li].uv = (flip[b_] * uu + ou[b_], vv + ov[b_])
-
-
-def build_lichen(name, wood, nodes, rng, P, mat):
-	"""Lichen colonies as a decal shell over the finished wood. LICHEN_PATCHES spots: most on the TOP of
-	a thick, not-too-steep limb (where rain and light reach), the rest on the shaded +y side of the trunk
-	or a steep leader. Each spot is a small grid (LICHEN_GRID quads, ~5 cm cells) laid out in limb
-	coordinates - along the limb x angle around it - and every grid vertex is ray-cast onto the real
-	wood surface, then lifted LICHEN_LIFT along the hit normal: the decimated wood has faces as big as
-	a colony and wobbles ~5 cm off the ideal tube, so copying its faces or an ideal cylinder both fail.
-	The grid maps 0..1 onto one of the atlas's four colony cells (random cell and mirror per spot), so
-	no colony ever wraps or repeats and neighbours differ. Returns the shell object, or None when nothing could be placed."""
-	from mathutils.bvhtree import BVHTree
-	me = wood.data
-	bvh = BVHTree.FromPolygons([v.co for v in me.vertices], [tuple(p_.vertices) for p_ in me.polygons])
-	up = Vector((0, 0, 1))
-	segs = []
-	for i in range(1, len(nodes)):
-		p = nodes[i].parent
-		if p <= 0 or min(nodes[i].r, nodes[p].r) < LICHEN_MIN_R or nodes[p].pos.z < 1.8:
-			continue
-		d = nodes[i].pos - nodes[p].pos
-		if d.length < 0.3:
-			continue
-		segs.append((p, i, d.normalized(), d.length))
-	limbs = [sg for sg in segs if abs(sg[2].z) < 0.75]
-	steep = [sg for sg in segs if abs(sg[2].z) >= 0.75]
-	if not limbs and not steep:
-		return None
-
-	def pick(pool):
-		w = [nodes[b].r * ln for _, b, _, ln in pool]
-		return rng.choices(pool, w)[0]
-
-	bm = bmesh.new()
-	uvl = bm.loops.layers.uv.new("UVMap")
-	n_patch = rng.randint(*LICHEN_PATCHES)
-	placed = 0
-	used = set()
-	for _ in range(n_patch * 3):          # a few retries: a spot can miss the wood (fork hollows)
-		if placed >= n_patch:
-			break
-		on_trunk = bool(steep) and (not limbs or rng.random() < LICHEN_TRUNK_SHARE)
-		a, b, d, ln = pick(steep if on_trunk else limbs)
-		if (a, b) in used and rng.random() < 0.7:
-			continue
-		t = rng.uniform(0.25, 0.75)
-		r = nodes[a].r * (1 - t) + nodes[b].r * t
-		side = Vector((0, 1, 0)) if on_trunk else up
-		e3 = side - d * side.dot(d)
-		if e3.length < 1e-3:
-			continue
-		e3.normalize()
-		e2 = e3.cross(d).normalized()
-		size = rng.uniform(*LICHEN_SIZE)
-		L, W = size / 2, size * rng.uniform(0.4, 0.8) / 2
-		W = min(W, r * 1.2)                        # never wrap more than ~70 deg each side
-		phi_max = W / r
-		axis0 = nodes[a].pos + d * (ln * t)
-		flip, flip_v = rng.choice((1.0, -1.0)), rng.choice((1.0, -1.0))
-		n_cells = LICHEN_TEX // LICHEN_CELL
-		cell = rng.randrange(n_cells * n_cells)
-		ou, ov = (cell % n_cells) / n_cells, (cell // n_cells) / n_cells
-		NU = max(8, min(24, round(2 * L / LICHEN_CELL_M)))
-		NV = max(6, min(16, round(2 * W / LICHEN_CELL_M)))
-		grid = []
-		missed = 0
-		for i in range(NU + 1):
-			row = []
-			sv = (i / NU - 0.5) * 2 * L
-			for j in range(NV + 1):
-				phi = (j / NV - 0.5) * 2 * phi_max
-				out_dir = e3 * math.cos(phi) + e2 * math.sin(phi)
-				origin = axis0 + d * sv + out_dir * (r + 0.6)
-				hit = bvh.ray_cast(origin, -out_dir, r + 0.6)
-				if hit[0] is None:
-					missed += 1
-					pos, nrm = axis0 + d * sv + out_dir * r, out_dir
-				else:
-					pos, nrm = hit[0], hit[1]
-					if nrm.dot(out_dir) < 0:
-						nrm = -nrm
-				row.append((pos + nrm * LICHEN_LIFT,
-							(ou + (0.5 + flip * sv / (2 * L)) / n_cells, ov + (0.5 + flip_v * (r * phi) / (2 * W)) / n_cells)))
-			grid.append(row)
-		if missed > (NU + 1) * (NV + 1) // 3:
-			continue
-		verts = [[bm.verts.new(pos) for pos, _ in row] for row in grid]
-		for i in range(NU):
-			for j in range(NV):
-				f = bm.faces.new((verts[i][j], verts[i + 1][j], verts[i + 1][j + 1], verts[i][j + 1]))
-				f.smooth = True
-				for loop, (ii, jj) in zip(f.loops, ((i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1))):
-					loop[uvl].uv = grid[ii][jj][1]
-		used.add((a, b))
-		placed += 1
-	if placed == 0:
-		bm.free()
-		return None
-	bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-	out = bpy.data.meshes.new(name)
-	bm.to_mesh(out)
-	bm.free()
-	out.materials.append(mat)
-	obj = bpy.data.objects.new(name, out)
-	bpy.context.scene.collection.objects.link(obj)
-	print(f"  lichen {name}: {placed} colonies, {len(out.polygons)} shell faces")
-	return obj
 
 
 def uv_stretch_report(me):
@@ -1604,20 +1567,6 @@ VMAT_LEAVES = """Layer0
 """
 
 
-VMAT_LICHEN = """Layer0
-{
-	shader "shaders/pixel_lit.shader"
-	F_ALPHA_TEST 1
-
-	PixelRoughness "0.900"
-	PixelAlphaCutoff "0.500"
-	PixelNormalUp "0.000"
-	TextureColor "models/environment/tests/elm_lichen.png"
-	TextureTranslucency "models/environment/tests/elm_lichen_mask.png"
-}
-"""
-
-
 # ---------------------------------------------------------------------------- LOD chain
 
 # s&box LODGroupList: (switch_threshold, wood tris, fraction of leaf cards kept, kept-card scale).
@@ -1639,8 +1588,11 @@ TREE_LODS = [
 	(200.0, 800, 0.4, 1.38),
 	(300.0, 300, 0.2, 1.76),
 ]
-# Collision uses this LOD's wood: a full-res 24k-tri physics mesh per tree is slow to build and query.
-TREE_PHYSICS_LOD = 2
+# Collision uses this LOD's wood. The wood is 4k tris now (it was 24k when LOD2 was chosen), so the render
+# mesh itself is cheap enough: the collider then sits exactly on the bark (Mark, v71: the LOD2 collider sat up to
+# 5 cm inside the rendered surface).
+TREE_PHYSICS_LOD = 0
+
 
 
 def lod_name(name, part, level):
@@ -1651,12 +1603,12 @@ def merged_lod_name(name, level):
 	return f"{name}_lod{level}"
 
 
-def merge_lod_meshes(name, wood, leaves, lod_objs, lichen=None):
-	"""One export object per LOD level: copies of that level's wood + leaves (+ the lichen shell on
-	LOD0 only) joined into <name>_lod<N> (one material slot each, custom leaf normals kept by the join).
-	The separate wood / leaves / lichen objects stay in the .blend (stumps, previews) and the physics
+def merge_lod_meshes(name, wood, leaves, lod_objs):
+	"""One export object per LOD level: copies of that level's wood + leaves joined into <name>_lod<N>
+	(one material slot each, custom leaf normals kept by the join).
+	The separate wood / leaves objects stay in the .blend (stumps, previews) and the physics
 	LOD's wood is exported alongside for the vmdl's PhysicsMeshFile. Returns [merged lod0, lod1, ...]."""
-	groups = [(wood, leaves) + ((lichen,) if lichen else ())]
+	groups = [(wood, leaves)]
 	groups += [(lod_objs[i], lod_objs[i + 1]) for i in range(0, len(lod_objs), 2)]
 	merged = []
 	for level, group in enumerate(groups):
@@ -1675,9 +1627,10 @@ def merge_lod_meshes(name, wood, leaves, lod_objs, lichen=None):
 	return merged
 
 
-def build_lods(name, wood, leaves, lods):
+def build_lods(name, wood, leaves, lods, uv_fn=None):
 	"""Extra LOD objects (level 1+) as copies of the finished wood / leaves: wood decimated to the
-	level's triangle budget (UVs carried by the decimate), leaves thinned (cards are 6 verts / 2 quads,
+	level's triangle budget (then unwrapped again through uv_fn - UVs carried by the decimate were
+	interpolated across collapsed edges and smeared, v70), leaves thinned (cards are 6 verts / 2 quads,
 	generated clump by clump) with each kept card scaled about its own centre. Each card gets a fixed
 	golden-ratio rank, and a level keeps the cards ranked below its fraction: the kept sets are NESTED
 	(nothing reappears or moves at a swap) and evenly spread through every clump.
@@ -1698,6 +1651,9 @@ def build_lods(name, wood, leaves, lods):
 		if wood_tris and tris > wood_tris:
 			bake(w, ('DECIMATE', {"ratio": wood_tris / tris}))
 			w.data.shade_smooth()
+			if uv_fn:
+				w.data.uv_layers.remove(w.data.uv_layers[0])
+				uv_fn(w.data)
 
 		verts, faces, uvs, normals = [], [], [], []
 		for c in range(cards):
@@ -1731,7 +1687,7 @@ def build_lods(name, wood, leaves, lods):
 	return made
 
 
-def vmdl_text(name, lods=((0.0, None, 1.0, 1.0),), physics_lod=0, lichen=False):
+def vmdl_text(name, lods=((0.0, None, 1.0, 1.0),), physics_lod=0):
 	def render_node(obj):
 		return f"""					{{
 						_class = "RenderMeshFile"
@@ -1755,11 +1711,6 @@ def vmdl_text(name, lods=((0.0, None, 1.0, 1.0),), physics_lod=0, lichen=False):
 	# One render mesh per level (wood + leaves merged, see merge_lod_meshes): the engine picks a LOD per
 	# render mesh from that mesh's own bounds, so separate trunk / crown meshes switched at different distances.
 	render_nodes = "".join(render_node(merged_lod_name(name, i)) for i in range(len(lods)))
-	lichen_remap = """
-							{
-								from = "elm_lichen.vmat"
-								to = "models/environment/tests/elm_lichen.vmat"
-							},""" if lichen else ""
 	lod_groups = ""
 	if len(lods) > 1:
 		groups = "".join(f"""
@@ -1800,7 +1751,7 @@ def vmdl_text(name, lods=((0.0, None, 1.0, 1.0),), physics_lod=0, lichen=False):
 							{{
 								from = "elm_leaves.vmat"
 								to = "models/environment/tests/elm_leaves.vmat"
-							}},{lichen_remap}
+							}}
 						]
 						use_global_default = false
 						global_default_material = "models/environment/tests/elm_bark.vmat"
@@ -2049,15 +2000,6 @@ def main():
 		f.write(VMAT_LEAVES.replace("elm_leaves", LEAVES))
 	bark = blender_material(BARK, bark_png, False)
 	leaves_mat = blender_material(LEAVES, leaf_png, True)
-	lichen_png = os.path.join(MAT_DIR, LICHEN_NAME + ".png")
-	lichen_rgba = make_lichen_texture()
-	write_png(lichen_png, lichen_rgba)
-	lmask = np.repeat(lichen_rgba[..., 3:4], 4, axis=2)
-	lmask[..., 3] = 255
-	write_png(os.path.join(MAT_DIR, LICHEN_NAME + "_mask.png"), lmask)
-	with open(os.path.join(MAT_DIR, LICHEN_NAME + ".vmat"), "w", newline="\n") as f:
-		f.write(VMAT_LICHEN.replace("elm_lichen", LICHEN_NAME))
-	lichen_mat = blender_material(LICHEN_NAME, lichen_png, True)
 	grain_png = os.path.join(MAT_DIR, GRAIN + ".png")
 	write_png(grain_png, fell.make_endgrain_texture(TEX))
 	with open(os.path.join(MAT_DIR, GRAIN + ".vmat"), "w", newline="\n") as f:
@@ -2117,9 +2059,8 @@ def main():
 		bark_uvs(wood.data, nodes, P)
 		wood.data.materials.append(bark)
 		leaves.data.materials.append(leaves_mat)
-		lichen = build_lichen(name + "_lichen", wood, nodes, rng, P, lichen_mat)
 		sky = sky_through(leaves, P)
-		made[name] = tuple(o for o in (wood, leaves, lichen) if o)
+		made[name] = (wood, leaves)
 		zs = [v.co.z for v in leaves.data.vertices] + [v.co.z for v in wood.data.vertices]
 		xs = [v.co.x for v in leaves.data.vertices]
 		ys = [v.co.y for v in leaves.data.vertices]
@@ -2130,8 +2071,8 @@ def main():
 		print(f"TREE {name} clusters {nfl}, outline lump {lump:.2f} % dip {dip:.2f} %, wood nodes {len(nodes)} (seed {seed}, biggest bald patch {holes} cells, sky through crown {sky:.1f} %): height {max(zs):.1f} m, crown {max(xs) - min(xs):.1f} x {max(ys) - min(ys):.1f} m, "
 			  f"trunk {dbh:.2f} m across at 1.3 m, wood islands {island_count(wood.data)}, bad bark UV faces {uv_stretch_report(wood.data):.1f} %, wood tris {wtris}, cards {cards} ({cards * 4} tris)")
 
-		lod_objs = build_lods(name, wood, leaves, TREE_LODS)
-		merged = merge_lod_meshes(name, wood, leaves, lod_objs, lichen)
+		lod_objs = build_lods(name, wood, leaves, TREE_LODS, lambda me: bark_uvs(me, nodes, P))
+		merged = merge_lod_meshes(name, wood, leaves, lod_objs)
 		phys = wood if TREE_PHYSICS_LOD == 0 else lod_objs[(TREE_PHYSICS_LOD - 1) * 2]
 		for o in bpy.data.objects:
 			o.select_set(False)
@@ -2142,8 +2083,8 @@ def main():
 								 global_scale=1.0, apply_unit_scale=True, object_types={'MESH'},
 								 mesh_smooth_type='OFF', path_mode='STRIP', embed_textures=False)
 		with open(os.path.join(MODEL_DIR, name + ".vmdl"), "w", newline="\n") as f:
-			f.write(vmdl_text(name, TREE_LODS, TREE_PHYSICS_LOD, lichen is not None)
-					.replace("elm_bark", BARK).replace("elm_leaves", LEAVES).replace("elm_lichen", LICHEN_NAME))
+			f.write(vmdl_text(name, TREE_LODS, TREE_PHYSICS_LOD)
+					.replace("elm_bark", BARK).replace("elm_leaves", LEAVES))
 		for o in lod_objs + merged:
 			o.hide_render = True
 			o.hide_set(True)

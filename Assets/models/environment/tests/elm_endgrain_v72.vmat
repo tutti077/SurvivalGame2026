@@ -1,0 +1,7 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.900"
+	TextureColor "models/environment/tests/elm_endgrain_v72.png"
+}

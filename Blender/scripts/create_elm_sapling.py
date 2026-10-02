@@ -443,7 +443,7 @@ def main():
 		print(f"SAPLING {name}: height {max(zs):.2f} m, stem {dia * 100:.1f} cm across at 10 cm, "
 			  f"wood islands {elm.island_count(wood.data)}, wood tris {sum(len(p.vertices) - 2 for p in wood.data.polygons)}, "
 			  f"cards {cards} ({cards * 4} tris), clusters {len(tips)}")
-		lod_objs = elm.build_lods(name, wood, leaves, SAPLING_LODS)
+		lod_objs = elm.build_lods(name, wood, leaves, SAPLING_LODS, lambda me: bark_uvs(me, nodes))
 		merged = elm.merge_lod_meshes(name, wood, leaves, lod_objs)
 		phys = wood if SAPLING_PHYSICS_LOD == 0 else lod_objs[(SAPLING_PHYSICS_LOD - 1) * 2]
 		for o in bpy.data.objects:
