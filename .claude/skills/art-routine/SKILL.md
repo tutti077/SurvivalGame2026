@@ -123,5 +123,6 @@ Every item is pass/fail in the report.
 - Files changed / added / deleted.
 - Before/after renders sent as files.
 - **Out of scope, noticed**.
+- **VERIFY rows added** (`VERIFY.md` IDs for everything only Mark can judge at the PC).
 - Standard footer: build label (patch bumped) + **What's needed from you** (prefab edits to review,
   an in-game look at the asset, decisions on anything that was inferred).

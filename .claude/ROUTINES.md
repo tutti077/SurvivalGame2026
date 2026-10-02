@@ -26,7 +26,9 @@ the plain-language form trigger, so keep the trigger phrase in it.
 5. **Leave the editor the way you found it**: stop play mode, close scene tabs you opened, never
    `save_scene` on a tab that had the user's unsaved changes, remove temporary logging.
 6. **Never commit or push** inside a routine. Leave the working tree for Mark to review.
-7. **Finish with the standard footer**: `Build label — vX.Y.Z (Assistant)` (patch bumped once in
+7. **Log what a human must still check** in `VERIFY.md` (one row per unverifiable thing, see
+   CLAUDE.md *Human verification log*) and list the new IDs in the report.
+8. **Finish with the standard footer**: `Build label — vX.Y.Z (Assistant)` (patch bumped once in
    `Code/GameBuildLabel.cs`) and a **What's needed from you** section.
 
 ## Adding a routine

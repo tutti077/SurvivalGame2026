@@ -123,6 +123,22 @@ RPC sends intent; the host re-validates once.
 
 If you cannot say what cheat or boundary failure a check stops, it does not belong in a hot path.
 
+### Human verification log
+
+Anything changed without a player-eye check in the engine (look, feel, collision, timing — whatever
+only a human at the PC can judge) gets a row in **`VERIFY.md`** at the repo root: ID, date, build,
+area, what to check, how to reproduce in under a minute, status. One row per thing. Only Mark closes
+rows (`OK` / `BAD <note>`); Claude never deletes or closes them. Every reply's **What's needed from
+you** lists the IDs it added (`VERIFY V-012`). A `BAD` row is the brief for the fix; the fix adds a
+new row that references the old ID.
+
+### Cool ideas list
+
+When Mark says "remember this idea for later" (or similar), append it to **`IDEAS.md`** at the repo
+root in his own words: sequential `I-NNN`, date, the idea, one optional context line. Record, don't
+design: no plan, estimate or counter-proposal. Only Mark reorders, merges or removes ideas; when one
+is picked up he moves it to *Picked up*. Mention the new ID in **What's needed from you** (`IDEAS I-003`).
+
 ### Patch bump
 
 Every user prompt bumps the semver **patch** of `GameBuildLabel.Display` **once**, at the end of
