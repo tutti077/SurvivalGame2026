@@ -149,6 +149,19 @@ Targets: `lakePatchCount` ≤ 24 · `medianLakeDiameterMeters` ≥ 600 · `lakeA
 
 ---
 
+### Routines (hand-off jobs)
+
+Named, well-defined jobs Mark can start and walk away from. They live in `.claude/skills/*/SKILL.md`
+and are indexed, with the shared contract and a template for new ones, in `.claude/ROUTINES.md`.
+Invoke by slash command or by saying the phrase:
+
+- **art routine** (`/art-routine`) — redesign one model / texture / material against stated
+  objectives, from real-life source material; 256×256 textures; verified in lightTestScene.
+- **code qc routine** (`/code-qc-routine`) — audit a code scope for bloat and per-frame hazards;
+  safe fixes applied, the rest proposed.
+- **bug test routine** (`/bug-test-routine`) — reproduce a defect in the live editor through the
+  sbox MCP, instrument, fix, pass three consecutive runs. Full scene / play-mode access granted.
+
 ## Layout
 
 ```
@@ -227,6 +240,10 @@ Assets/prefabs/ player/basicplayer · entity/scavT1 · build/* · environment/*
 
 - Data lives in `Assets/data/*.json` and is loaded by `*Catalog.EnsureLoaded()`. Adding content is
   usually a JSON edit, not a code edit.
+- Artist models (Rumple's Tripo `.blend` packs) go through `Blender/scripts/import_artist_pack.py`
+  — one command writes fbx + vmdl + baked png + vmat in the right frame for `weapons` / `building` /
+  `environment`; see AGENTS.md "Artist model import" for the rules (origin at the butt for weapons,
+  bbox-centred + `SizesMeters` row for build pieces, Blender X lands on engine Y).
 - Host authority: `CombatAuthority` (melee), `VitalsAuthority` (pools), `BuildAuthority` (placement).
   Clients send intent; the host validates and broadcasts.
 - Melee damage never comes from weapon colliders — only from the phased server attack on
