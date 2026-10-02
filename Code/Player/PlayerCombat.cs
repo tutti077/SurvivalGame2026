@@ -547,6 +547,9 @@ public partial class PlayerCombat : Component
 		if ( !IsLocalCombatDriver() )
 			return;
 
+		// Dev: console `swing` holds the attack action for a few frames (GameHacks) — same path as a real press.
+		GameHacks.ApplySimulatedInput( PrimaryAttackAction );
+
 		var menuController = Components.Get<PlayerGameMenuController>();
 		if ( menuController is not null && menuController.IsMenuOpen )
 		{

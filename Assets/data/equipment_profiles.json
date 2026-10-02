@@ -9,6 +9,7 @@
       "weaponClass": "oneHanded",
       "twoHanded": false,
       "hotbarEquipable": true,
+      "heldModel": "models/weapons/sword_reforged.vmdl",
       "durabilityMax": 100,
       "statModifiers": { "armor": 0, "damage": 8, "speed": 0 }
     },
@@ -60,6 +61,7 @@
       "hotbarEquipable": true,
       "harvestToolType": "Axe",
       "harvestToolTier": 0,
+      "heldModel": "models/weapons/axe_reforged.vmdl",
       "durabilityMax": 100,
       "statModifiers": { "armor": 0, "damage": 4, "speed": 0 }
     },

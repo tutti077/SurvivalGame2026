@@ -1,0 +1,7 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.441"
+	TextureColor "materials/weapons/sword_reforged.png"
+}

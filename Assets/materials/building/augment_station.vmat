@@ -1,0 +1,7 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "1.000"
+	TextureColor "materials/building/augment_station.png"
+}

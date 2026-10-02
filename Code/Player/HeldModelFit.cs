@@ -47,6 +47,18 @@ public readonly struct HeldModelFit
 		if ( third <= 1e-3f )
 			return BoundsOnly( bounds, h, e, t );
 
+		// Import convention (Blender/scripts/import_artist_pack.py, weapons): the model origin sits
+		// at the butt of the handle. When the origin is at one end of the long axis that end is the
+		// butt and no guessing is needed - the cross-section rule below would hold a sword by the
+		// blade, because its cross-guard makes the hilt the wider end. Models centred on their
+		// bounds (the dev box, the earlier axe export) fall through to the heuristic.
+		var originTolerance = (hMax - hMin) * 0.1f;
+		bool? headIsHighByOrigin = null;
+		if ( MathF.Abs( hMin ) <= originTolerance )
+			headIsHighByOrigin = true;
+		else if ( MathF.Abs( hMax ) <= originTolerance )
+			headIsHighByOrigin = false;
+
 		// Cross-section extent of each end third along the "edge" axis — the head is the wider end.
 		float lowMinE = float.MaxValue, lowMaxE = float.MinValue, lowMinT = float.MaxValue, lowMaxT = float.MinValue;
 		float highMinE = float.MaxValue, highMaxE = float.MinValue, highMinT = float.MaxValue, highMaxT = float.MinValue;
@@ -71,7 +83,7 @@ public readonly struct HeldModelFit
 		if ( lowMinE == float.MaxValue || highMinE == float.MaxValue )
 			return BoundsOnly( bounds, h, e, t );
 
-		var headIsHigh = (highMaxE - highMinE) >= (lowMaxE - lowMinE);
+		var headIsHigh = headIsHighByOrigin ?? ((highMaxE - highMinE) >= (lowMaxE - lowMinE));
 
 		// Handle centre line = middle of the butt third's cross-section.
 		var handleE = headIsHigh ? (lowMinE + lowMaxE) * 0.5f : (highMinE + highMaxE) * 0.5f;
