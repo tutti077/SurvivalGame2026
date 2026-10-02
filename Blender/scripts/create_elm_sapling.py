@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import create_elm_tree as elm   # guarded main(): importing builds nothing
 import elm_felling as fell
 
-VERSION = 12
+VERSION = 14
 TAG = f"_v{VERSION}"
 BARK = f"elm_sapling_bark{TAG}"
 LEAVES = f"elm_sapling_leaves{TAG}"
@@ -69,6 +69,52 @@ VARIANTS = [
 
 SAPLING_BARK = [(96, 96, 92), (118, 118, 112), (134, 134, 127), (148, 147, 140), (160, 159, 151)]
 DASH = [(36, 34, 32), (58, 55, 51)]
+
+
+def make_leaf_texture():
+	"""Sapling leaf card (the big elms' v39 design, kept here since v40 moved them to a spray of small
+	leaves): a twig up the middle (the card's fold line), alternate elm leaves on both sides. On a
+	0.55 m card the seven leaves are ~10 cm, real sapling scale. No baked lighting (the game lights
+	the cards): each leaf is one flat tone with a little per-leaf variation, a paler midrib and faint
+	darker lateral veins; small serration teeth."""
+	rng = random.Random(9)
+	TEX = elm.TEX
+	px, py = np.meshgrid((np.arange(TEX) + 0.5) / TEX, 1.0 - (np.arange(TEX) + 0.5) / TEX)
+	tone = np.full((TEX, TEX), -1)
+	leaves = []
+	count = 3
+	for i in range(count):
+		for side in (-1, 1):
+			t = i / (count - 1)
+			ay = 0.03 + t * 0.52 + (0.10 if side > 0 else 0.0)
+			ang = math.pi / 2 - side * math.radians(55 - 20 * t + rng.uniform(-5, 5))
+			length = 0.60 - 0.12 * t + rng.uniform(-0.03, 0.03)
+			leaves.append((ay, 0.5 + 0.012 * side, ang, length))
+	leaves.sort()
+	leaves.append((0.62, 0.5, math.pi / 2 + rng.uniform(-0.1, 0.1), 0.37))   # terminal leaf
+	for ay, ax, ang, length in leaves:
+		width = length * 0.54
+		d = np.array([math.cos(ang), math.sin(ang)])
+		p = np.array([-d[1], d[0]])
+		rx, ry = px - ax, py - ay
+		a = (rx * d[0] + ry * d[1]) / length
+		b = (rx * p[0] + ry * p[1]) / (width * 0.5)
+		a_side = np.where(b > 0, (a - 0.07) / 0.93, a)                    # elm: lopsided base
+		prof = np.clip(a_side, 0, 1) ** 0.55 * np.clip(1 - a, 0, 1) ** 0.85 / (0.39 ** 0.55 * 0.61 ** 0.85)
+		prof = prof * (1 - 0.07 * (np.sin(a * 38) > 0.3))
+		inside = (a > 0) & (a < 1) & (np.abs(b) < prof)
+		base = rng.choice((3, 4, 4, 5))
+		leaf = np.where(np.abs(b) < 0.1, base + 1, np.full((TEX, TEX), base))
+		vein = (np.mod(a * 6.5 - np.abs(b) * 1.3, 1.0) < 0.14) & (np.abs(b) > 0.2) & (np.abs(b) < prof - 0.15)
+		leaf = np.where(vein, base - 1, leaf)
+		tone[inside] = np.clip(leaf, 0, 6)[inside]
+	stem = (np.abs(px - 0.5) < 0.016) & (py < 0.80)
+	ramp = np.array(elm.LEAF_RAMP, float)
+	rgb = ramp[np.clip(tone, 0, 6)]
+	rgb[stem] = (84, 70, 44)
+	alpha = (tone >= 0) | stem
+	rgb[~alpha] = ramp[3]              # bleed colour under the cutout, never black
+	return np.dstack([rgb, np.where(alpha, 255, 0)]).astype(np.uint8)
 
 
 def make_sapling_bark():
@@ -363,7 +409,7 @@ def main():
 	bark_png = os.path.join(MODEL_DIR, BARK + ".png")
 	leaf_png = os.path.join(MODEL_DIR, LEAVES + ".png")
 	elm.write_png(bark_png, make_sapling_bark())
-	leaf = elm.make_leaf_texture()
+	leaf = make_leaf_texture()
 	elm.write_png(leaf_png, leaf)
 	mask = np.repeat(leaf[..., 3:4], 4, axis=2)
 	mask[..., 3] = 255
@@ -415,7 +461,7 @@ def main():
 			o.hide_set(True)
 		fell.write_prefab(os.path.join(PREFAB_DIR, name + ".prefab"), name, f"{ASSET_DIR}/{name}.vmdl",
 						  {"MaxHealth": HP, "CurrentHealth": HP, "WoodDropMin": WOOD[0], "WoodDropMax": WOOD[1]},
-						  False, elm.PREFAB_TEMPLATE)
+						  False)
 	for i, (w, l) in enumerate(made.values()):
 		w.location.x = l.location.x = (i - 2) * 2.5
 	bpy.ops.wm.save_as_mainfile(filepath=BLEND_OUT)

@@ -108,12 +108,56 @@ public static class BuildNavMeshSync
 		if ( navMesh is null || !navMesh.IsEnabled )
 			return;
 
+		// An agent that still cannot get onto nav after a bake around it would ask again every settle /
+		// recovery tick (0.45–1.5 s) forever — a full rebake (plus a scene-wide collider pass) about once
+		// a second while the player stands still (Mark's terrainTest: steady "[BuildNav] rebake" lines and
+		// a once-a-second hitch). Nothing changed there, so the same bake would give the same result.
+		if ( WasRecentlyBaked( worldPos ) )
+			return;
+
 		var pad = Math.Max( 128f, padding );
 		var bounds = new BBox(
 			worldPos - new Vector3( pad, pad, pad ),
 			worldPos + new Vector3( pad, pad, pad ) );
 
 		ScheduleLocalBake( scene, bounds );
+
+		// Remember the REQUEST box too, not only what finally bakes. Requests are coalesced into one
+		// pending box and then clamped to MaxLocalBakeHalfExtent around the union's centre, so several
+		// off-nav entities spread over a chunk each fell outside the box that actually baked, were never
+		// counted as covered, and asked again every tick — a steady 0.85 s bake loop on terrainTest even
+		// with the bake-side memory above (Mark's log, 2026-09-29).
+		RememberRecentBake( bounds );
+	}
+
+	/// <summary>How long an executed local bake counts as fresh for <see cref="EnsureNavAroundPoint"/> requests inside it.</summary>
+	const double RecentBakeSeconds = 30.0;
+	const int RecentBakeMax = 64;
+	static readonly List<(BBox Bounds, double At)> _recentBakes = new();
+
+	static void RememberRecentBake( BBox bounds )
+	{
+		var now = Time.NowDouble;
+		_recentBakes.RemoveAll( b => now - b.At > RecentBakeSeconds );
+		if ( _recentBakes.Count >= RecentBakeMax )
+			_recentBakes.RemoveAt( 0 );
+		_recentBakes.Add( (bounds, now) );
+	}
+
+	static bool WasRecentlyBaked( Vector3 point )
+	{
+		var now = Time.NowDouble;
+		for ( var i = 0; i < _recentBakes.Count; i++ )
+		{
+			var (b, at) = _recentBakes[i];
+			if ( now - at <= RecentBakeSeconds
+			     && point.x >= b.Mins.x && point.x <= b.Maxs.x
+			     && point.y >= b.Mins.y && point.y <= b.Maxs.y
+			     && point.z >= b.Mins.z && point.z <= b.Maxs.z )
+				return true;
+		}
+
+		return false;
 	}
 
 	/// <summary>
@@ -565,6 +609,7 @@ public static class BuildNavMeshSync
 
 		_pendingLocalBakes.Remove( scene );
 		var bounds = ClampBakeBounds( pending.Bounds );
+		RememberRecentBake( bounds );
 		MarkSolidCollidersStaticInBounds( scene, bounds );
 		EnsureNavBoundsCover( navMesh, bounds );
 

@@ -1,10 +1,9 @@
 """Export a single-mesh .blend with a packed base-colour texture (Tripo-style downloads) into the game.
 
 Run:  blender -b <file.blend> --python Blender/scripts/export_packed_blend.py -- <model_name> <material_name>
-  e.g. ... redwoodbasepacked.blend ...        -- environment_redwoodBase redwood_base
-       ... crystalformationpacked.blend ...   -- environment_crystalFormation crystal_formation
+  e.g. ... crystalformationpacked.blend ...   -- environment_crystalFormation crystal_formation
 Writes Assets/models/environment/<model_name>.fbx and Assets/materials/environment/<material_name>.png.
-The .vmdl / .vmat are hand-written next to them (see environment_redwoodBase.vmdl).
+The .vmdl / .vmat are hand-written next to them (see environment_crystalFormation.vmdl).
 """
 import bpy, os, sys
 

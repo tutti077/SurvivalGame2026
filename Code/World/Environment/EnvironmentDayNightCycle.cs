@@ -402,7 +402,7 @@ public sealed class EnvironmentDayNightCycle : Component
 		{
 			light.WorldRotation = Rotation.LookAt( -dir, Vector3.Up );
 			light.FogStrength = 0f;
-			light.Shadows = true;
+			light.Shadows = !TerrainPerfBench.SunShadowsOff;
 			light.Enabled = true;
 
 			if ( isSun )

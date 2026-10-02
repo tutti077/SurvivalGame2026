@@ -35,6 +35,9 @@ public sealed class PlayerScreenHud : PanelComponent
 	AugmentBindsHud _augmentBindsHud;
 	AugmentWheelHud _augmentWheelHud;
 	TerrainMinimapHud _minimapHud;
+	/// <summary>Refresh period for passive HUD readouts (minimap, cooldowns, food, status, boss / raid bars).</summary>
+	const float PassiveHudTickSeconds = 0.1f;
+	RealTimeSince _sincePassiveHudTick;
 	PlayerCrafting _crafting;
 	InventoryMenuInputOverlay _menuInputOverlay;
 	MenuPageNavigator _pageNavigator;
@@ -156,20 +159,29 @@ public sealed class PlayerScreenHud : PanelComponent
 		}
 
 		_pickupNotifications?.Tick();
-		_minimapHud?.Tick();
-		_augmentBindsHud?.Tick();
 		_augmentWheelHud?.Tick();
 		_buildMenuHud?.Tick();
 		_wireCableMenuHud?.Tick();
 		_buildSnapReadout?.Tick();
 		_buildSupportReadout?.Tick();
 		_fishingHud?.Tick( _fishing );
-		RefreshFoodSlots();
-		_statusEffectsHud?.Tick( _menuController is { IsMenuOpen: true } );
-		if ( _vitals is not null && _vitals.GameObject.IsValid() )
+		_minimapHud?.TickInput();
+
+		// Passive readouts (Mark: HUD was the biggest player-mode cost; "static unless the player does
+		// something"): refreshed at PassiveHudTickSeconds instead of every frame. Anything the player
+		// drives directly (menus, wheel, build / fishing readouts, prompts) stays per frame above.
+		if ( _sincePassiveHudTick >= PassiveHudTickSeconds )
 		{
-			_bossHealthBar?.Tick( _vitals.GameObject.WorldPosition );
-			_baseRaidHud?.Tick( _vitals.GameObject );
+			_sincePassiveHudTick = 0f;
+			_minimapHud?.TickVisuals();
+			_augmentBindsHud?.Tick();
+			RefreshFoodSlots();
+			_statusEffectsHud?.Tick( _menuController is { IsMenuOpen: true } );
+			if ( _vitals is not null && _vitals.GameObject.IsValid() )
+			{
+				_bossHealthBar?.Tick( _vitals.GameObject.WorldPosition );
+				_baseRaidHud?.Tick( _vitals.GameObject );
+			}
 		}
 		if ( _inventoryInteraction?.FocusedCampfire is not null
 		     || _inventoryInteraction?.FocusedDoor is not null

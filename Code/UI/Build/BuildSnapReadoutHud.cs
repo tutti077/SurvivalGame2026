@@ -46,6 +46,8 @@ public sealed class BuildSnapReadoutHud
 		_hint.Style.Set( "text-shadow", "0px 1px 3px rgba(0,0,0,0.9)" );
 	}
 
+	bool? _shown;
+
 	public void Tick()
 	{
 		if ( _root is null )
@@ -53,7 +55,12 @@ public sealed class BuildSnapReadoutHud
 
 		var hammer = _equipment?.GetActiveTool<ToolBuildHammer>();
 		var show = hammer is not null && hammer.IsPreviewingPlacePiece;
-		_root.Style.Set( "display", show ? "flex" : "none" );
+		if ( _shown != show )
+		{
+			_shown = show;
+			_root.Style.Set( "display", show ? "flex" : "none" );
+		}
+
 		if ( !show )
 			return;
 

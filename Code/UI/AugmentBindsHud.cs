@@ -26,6 +26,7 @@ public sealed class AugmentBindsHud
 	Panel _host;
 	PlayerAugments _augments;
 	bool _visible = true;
+	bool? _hostShown;
 
 	public void Build( Panel root, PlayerAugments augments )
 	{
@@ -111,7 +112,12 @@ public sealed class AugmentBindsHud
 		for ( var i = 0; i < PlayerAugments.BindCount && !anyBound; i++ )
 			anyBound = !string.IsNullOrWhiteSpace( _augments?.GetBind( i ) );
 
-		_host.Style.Set( "display", _visible && anyBound ? "flex" : "none" );
+		var shown = _visible && anyBound;
+		if ( _hostShown == shown )
+			return;
+
+		_hostShown = shown;
+		_host.Style.Set( "display", shown ? "flex" : "none" );
 	}
 
 	public void Tick()
@@ -130,9 +136,7 @@ public sealed class AugmentBindsHud
 			if ( string.IsNullOrWhiteSpace( id ) )
 			{
 				ui.SetIcon( null );
-				ui.Cooldown.Style.Set( "height", "0%" );
-				ui.Battery.Style.Set( "width", "0%" );
-				ui.Root.Style.Set( "border-color", BorderIdle );
+				ui.Apply( 0, 0, BorderIdle );
 				continue;
 			}
 
@@ -140,9 +144,8 @@ public sealed class AugmentBindsHud
 
 			_augments.TryGetTriggerState( id, out var remaining, out var total, out var on, out var battery01 );
 			var fill = total > 0.01f ? Math.Clamp( remaining / total, 0f, 1f ) : 0f;
-			ui.Cooldown.Style.Set( "height", $"{fill * 100f:0}%" );
-			ui.Battery.Style.Set( "width", AugmentCatalog.TryGet( id, out var def ) && def.HasBattery ? $"{battery01 * 100f:0}%" : "0%" );
-			ui.Root.Style.Set( "border-color", on ? BorderOn : BorderIdle );
+			var batteryPct = AugmentCatalog.TryGet( id, out var def ) && def.HasBattery ? (int)MathF.Round( battery01 * 100f ) : 0;
+			ui.Apply( (int)MathF.Round( fill * 100f ), batteryPct, on ? BorderOn : BorderIdle );
 		}
 	}
 
@@ -159,6 +162,32 @@ public sealed class AugmentBindsHud
 		public Panel Cooldown { get; }
 		public Panel Battery { get; }
 		string _iconPath;
+		// Last applied values: styles are only touched when the rounded percent / colour changes
+		// (Style.Set every frame dirtied the HUD's styles and layout each frame).
+		int _cooldownPct = -1;
+		int _batteryPct = -1;
+		string _border;
+
+		public void Apply( int cooldownPct, int batteryPct, string border )
+		{
+			if ( cooldownPct != _cooldownPct )
+			{
+				_cooldownPct = cooldownPct;
+				Cooldown.Style.Set( "height", $"{cooldownPct}%" );
+			}
+
+			if ( batteryPct != _batteryPct )
+			{
+				_batteryPct = batteryPct;
+				Battery.Style.Set( "width", $"{batteryPct}%" );
+			}
+
+			if ( !string.Equals( border, _border, StringComparison.Ordinal ) )
+			{
+				_border = border;
+				Root.Style.Set( "border-color", border );
+			}
+		}
 
 		public SlotUi( Panel root, Panel icon, Panel cooldown, Panel battery )
 		{

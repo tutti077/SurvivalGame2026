@@ -28,8 +28,14 @@ public sealed class InventoryPlayerDropZonePanel : Panel
 		Style.Set( "display", displayed ? "flex" : "none" );
 	}
 
+	bool? _highlighted;
+
 	public void SetHighlighted( bool highlighted )
 	{
+		if ( _highlighted == highlighted )
+			return;
+
+		_highlighted = highlighted;
 		Style.Set( "border-color", highlighted ? "#c9a227" : "#5a4a32" );
 		Style.Set( "background-color", highlighted ? "rgba(42,32,18,0.92)" : "rgba(24,20,14,0.88)" );
 	}

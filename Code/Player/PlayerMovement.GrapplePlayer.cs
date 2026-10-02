@@ -18,7 +18,7 @@ partial class PlayerMovement
 	/// <summary>Host-synced player anchor when <see cref="GrappleAttached"/> targets a pawn; empty = static world point.</summary>
 	[Sync( SyncFlags.FromHost )] public Guid GrappleAttachPlayerId { get; private set; }
 
-	/// <summary>Attach point in the target pawn's local space — follows body motion.</summary>
+	/// <summary>Attach point in the target's local space (hooked pawn or towed body) — follows its motion.</summary>
 	[Sync( SyncFlags.FromHost )] public Vector3 GrappleAttachLocalOffset { get; private set; }
 
 	/// <summary>Host-synced sandbox time after which this pawn may grapple again after being hooked.</summary>
@@ -43,6 +43,11 @@ partial class PlayerMovement
 	{
 		if ( !GrappleAttached )
 			return GrappleAttachWorldPoint;
+
+		if ( GrappleAttachTowId != Guid.Empty )
+			return TryResolveGrappleTowTarget( GrappleAttachTowId, out var towed )
+				? ResolveTowRopeEnd( towed )
+				: GrappleAttachWorldPoint;
 
 		if ( GrappleAttachPlayerId == Guid.Empty )
 			return GrappleAttachWorldPoint;

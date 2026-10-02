@@ -1,0 +1,84 @@
+{
+  "RootObject": {
+    "__guid": "c5841960-ddf5-44c3-83b1-cd14c24abb05",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "environment_elmsapling3_v14",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "grapple",
+    "Enabled": true,
+    "NetworkMode": 0,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 0,
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": [],
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "b5b0bcaa-ae80-4340-b3a8-7cd7554f8fa4",
+        "__enabled": true,
+        "Model": "models/environment/tests/environment_elmsapling3_v14.vmdl",
+        "RenderType": "On",
+        "Tint": "1,1,1,1",
+        "BodyGroups": 18446744073709551615
+      },
+      {
+        "__type": "Sandbox.ModelCollider",
+        "__guid": "ff00a805-aacb-4d54-b780-ce17fa42ebab",
+        "__enabled": true,
+        "Model": "models/environment/tests/environment_elmsapling3_v14.vmdl",
+        "IsTrigger": false,
+        "Static": true
+      },
+      {
+        "__type": "Survival.DamageReceiver",
+        "__guid": "f728cba6-424e-4f28-9917-580c16196d0e",
+        "__enabled": true,
+        "DamageMultiplier": 1
+      },
+      {
+        "__type": "Survival.ChopableTree",
+        "__guid": "f163bfcf-de39-4190-84e5-a2567909e198",
+        "__enabled": true,
+        "RequireAxe": true,
+        "WoodResourceId": "resource_woodBasic",
+        "LogChop": false,
+        "MaxHealth": 12,
+        "CurrentHealth": 12,
+        "WoodDropMin": 2,
+        "WoodDropMax": 4
+      }
+    ],
+    "Children": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

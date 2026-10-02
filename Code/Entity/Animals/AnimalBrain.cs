@@ -61,6 +61,10 @@ public sealed class AnimalBrain : Component
 	double _nextRepathAt;
 	double _agentIdleSince;
 	double _navRetryAt;
+	/// <summary>Consecutive recovery attempts that found no nav; drives the retry back-off.</summary>
+	int _navRetryFailures;
+	/// <summary>Bake requests stop after this many failed attempts (see EntityBrain.NavSettleBakeRequestLimit).</summary>
+	const int NavRetryBakeRequestLimit = 3;
 
 	const float ReachDistance = 96f;
 	/// <summary>Minimum real walk for a wander leg — shorter projected goals count as "no usable nav here".</summary>
@@ -966,16 +970,26 @@ public sealed class AnimalBrain : Component
 		if ( _agentOnNav || Time.NowDouble < _navRetryAt )
 			return;
 
-		_navRetryAt = Time.NowDouble + 1.5d;
-
 		Agent ??= Components.Get<NavMeshAgent>();
 		if ( Agent is null || !Agent.IsValid() || !Scene.IsValid() )
+		{
+			_navRetryAt = Time.NowDouble + 1.5d;
 			return;
+		}
 
-		BuildNavMeshSync.EnsureNavAroundPoint( Scene, GameObject.WorldPosition );
+		if ( _navRetryFailures < NavRetryBakeRequestLimit )
+			BuildNavMeshSync.EnsureNavAroundPoint( Scene, GameObject.WorldPosition );
 		if ( !EntityNavMeshUtility.EnsureAgentOnNavMesh( Scene, Agent, GameObject.WorldPosition ) )
+		{
+			// Same back-off as EntityBrain.TickNavSettle: 1.5 s doubling to 10 s, so an animal that
+			// cannot reach nav does not request a bake every 1.5 s forever.
+			_navRetryFailures++;
+			_navRetryAt = Time.NowDouble + Math.Min( 10d, 1.5d * Math.Pow( 2d, _navRetryFailures ) );
 			return;
+		}
 
+		_navRetryFailures = 0;
+		_navRetryAt = Time.NowDouble + 1.5d;
 		_agentOnNav = true;
 		Agent.UpdatePosition = true;
 		_nextRepathAt = 0d;

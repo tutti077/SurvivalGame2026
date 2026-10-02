@@ -267,8 +267,7 @@ public sealed class TerrainWorldMapFace
 		{
 			if ( _boundTexture == map )
 			{
-				if ( _placeholder is not null )
-					_placeholder.Style.Set( "display", "none" );
+				SetStyleIfChanged( _placeholder, "display", "none" );
 				return;
 			}
 
@@ -371,12 +370,20 @@ public sealed class TerrainWorldMapFace
 			dir = dir.Normal;
 			var deg = MathF.Atan2( dir.x, -dir.y ) * (180f / MathF.PI);
 			PlaceCenter( _heading, focusUv, -1f, -16f );
-			_heading.Style.Set( "transform", $"rotate({deg:0.##}deg)" );
-			_heading.Style.Set( "display", "flex" );
+			// Whole-degree steps: the arrow is a few pixels, and the string + restyle then only
+			// happen when the heading actually turns.
+			var roundedDeg = (int)MathF.Round( deg );
+			if ( roundedDeg != _headingDeg )
+			{
+				_headingDeg = roundedDeg;
+				_heading.Style.Set( "transform", $"rotate({roundedDeg}deg)" );
+			}
+
+			SetStyleIfChanged( _heading, "display", "flex" );
 		}
 		else if ( _heading is not null )
 		{
-			_heading.Style.Set( "display", "none" );
+			SetStyleIfChanged( _heading, "display", "none" );
 		}
 
 		SetMarkerVisible( true );
@@ -411,8 +418,14 @@ public sealed class TerrainWorldMapFace
 			dir = dir.Normal;
 			var deg = MathF.Atan2( dir.x, -dir.y ) * (180f / MathF.PI);
 			PlaceCenter( _heading, center, -1f, -16f );
-			_heading.Style.Set( "transform", $"rotate({deg:0.##}deg)" );
-			_heading.Style.Set( "display", "flex" );
+			var roundedDeg = (int)MathF.Round( deg );
+			if ( roundedDeg != _headingDeg )
+			{
+				_headingDeg = roundedDeg;
+				_heading.Style.Set( "transform", $"rotate({roundedDeg}deg)" );
+			}
+
+			SetStyleIfChanged( _heading, "display", "flex" );
 		}
 
 		var raid = ActiveRaid();
@@ -538,26 +551,49 @@ public sealed class TerrainWorldMapFace
 		_zoomStage.Style.Top = Length.Pixels( -topUv * stage );
 	}
 
-	static void PlaceCenter( Panel panel, Vector2 uv01, float offsetXPx, float offsetYPx )
+	void PlaceCenter( Panel panel, Vector2 uv01, float offsetXPx, float offsetYPx )
 	{
 		if ( panel is null || !panel.IsValid() )
 			return;
 
+		// Unchanged placement (standing still) skips the restyle and the two px strings.
+		var placement = new Vector4( uv01.x, uv01.y, offsetXPx, offsetYPx );
+		if ( _placed.TryGetValue( panel, out var last ) && last == placement )
+			return;
+
+		_placed[panel] = placement;
 		panel.Style.Left = Length.Percent( uv01.x * 100f );
 		panel.Style.Top = Length.Percent( uv01.y * 100f );
 		panel.Style.Set( "margin-left", $"{offsetXPx:0.##}px" );
 		panel.Style.Set( "margin-top", $"{offsetYPx:0.##}px" );
 	}
 
+	// Per-frame style writes go through these caches: Style.Set re-parses and dirties the panel's
+	// styles even when the value is the same, which cost HUD layout time every frame in player mode.
+	readonly Dictionary<(Panel, string), string> _styleCache = new();
+	readonly Dictionary<Panel, Vector4> _placed = new();
+	int _headingDeg = int.MinValue;
+
+	void SetStyleIfChanged( Panel panel, string property, string value )
+	{
+		if ( panel is null || !panel.IsValid() )
+			return;
+
+		var key = (panel, property);
+		if ( _styleCache.TryGetValue( key, out var last ) && string.Equals( last, value, StringComparison.Ordinal ) )
+			return;
+
+		_styleCache[key] = value;
+		panel.Style.Set( property, value );
+	}
+
 	void SetMarkerVisible( bool visible )
 	{
 		var display = visible ? "flex" : "none";
-		if ( _markerCrossH is not null )
-			_markerCrossH.Style.Set( "display", display );
-		if ( _markerCrossV is not null )
-			_markerCrossV.Style.Set( "display", display );
-		if ( !visible && _heading is not null )
-			_heading.Style.Set( "display", "none" );
+		SetStyleIfChanged( _markerCrossH, "display", display );
+		SetStyleIfChanged( _markerCrossV, "display", display );
+		if ( !visible )
+			SetStyleIfChanged( _heading, "display", "none" );
 	}
 
 	// ------------------------------------------------------------------
@@ -1112,7 +1148,11 @@ public sealed class TerrainWorldMapFace
 		for ( var i = 0; i < _staleCrewKeys.Count; i++ )
 		{
 			if ( _crewMarkers.TryGetValue( _staleCrewKeys[i], out var dot ) )
+			{
+				if ( dot is not null )
+					_placed.Remove( dot );
 				dot?.Delete( true );
+			}
 			_crewMarkers.Remove( _staleCrewKeys[i] );
 		}
 	}

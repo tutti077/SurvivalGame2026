@@ -51,14 +51,19 @@ public sealed class ChopableTree : Component
 	[Property, Group( "Felling" ), Title( "Stump Wood Max" ), Range( 0, 50 )]
 	public int StumpWoodMax { get; set; } = 4;
 
+	/// <summary>Speed given to the log's top as it is felled; gravity does the rest. Low = a heavy log that hangs a moment before it goes (Mark: 1.5 tipped like it was weightless).</summary>
 	[Property, Group( "Felling" ), Title( "Tip Speed (m/s)" ), Range( 0f, 5f )]
-	public float FellTipSpeedMeters { get; set; } = 1.5f;
+	public float FellTipSpeedMeters { get; set; } = 0.3f;
 
 	[Property, Group( "Split" ), Title( "Split Piece Prefab" )]
 	public string SplitPiecePrefab { get; set; }
 
 	[Property, Group( "Split" ), Title( "Split Piece Offset (m)" ), Range( 0f, 10f )]
 	public float SplitPieceOffsetMeters { get; set; } = 2f;
+
+	/// <summary>Where the split happens, measured from this object's origin along its up axis: a log whose origin is its bottom point splits at half its length, so the pieces land exactly where the log lay (Mark: the halves used to teleport 2 m).</summary>
+	[Property, Group( "Split" ), Title( "Split Centre (m from origin)" ), Range( 0f, 20f )]
+	public float SplitCenterOffsetMeters { get; set; }
 
 	[Property, Group( "Debug" )]
 	public bool LogChop { get; set; }
@@ -165,6 +170,7 @@ public sealed class ChopableTree : Component
 		_broken = true;
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
 		var offset = TerrainWorldUnits.MetersToEngine( SplitPieceOffsetMeters );
+		var centre = WorldPosition + WorldRotation.Up * TerrainWorldUnits.MetersToEngine( SplitCenterOffsetMeters );
 		var body = Components.Get<Rigidbody>();
 		foreach ( var side in new[] { -1f, 1f } )
 		{
@@ -177,7 +183,7 @@ public sealed class ChopableTree : Component
 
 			piece.NetworkMode = NetworkMode.Object;
 			piece.Parent = scene;
-			piece.WorldPosition = WorldPosition + WorldRotation.Up * offset * side;
+			piece.WorldPosition = centre + WorldRotation.Up * offset * side;
 			piece.WorldRotation = WorldRotation;
 			piece.Enabled = true;
 			HostNetworkSpawn.TrySpawn( piece );

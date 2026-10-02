@@ -25,7 +25,7 @@ public sealed partial class PlayerMovement
 
 	/// <summary>Write a CSV row per physics step while the rope is attached. Debug only.</summary>
 	[Property, Group( "Grapple Swing" ), Title( "Log Swing To File" )]
-	public bool GrappleSwingLogEnabled { get; set; } = true;
+	public bool GrappleSwingLogEnabled { get; set; } = false;
 
 	StringBuilder _grappleLogBuffer;
 	int _grappleLogRows;

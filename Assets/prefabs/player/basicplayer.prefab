@@ -136,8 +136,8 @@
         "OnComponentStart": null,
         "OnComponentUpdate": null,
         "Priority": 0,
-        "StepDownHeight": 18,
-        "StepUpHeight": 18
+        "StepDownHeight": 26,
+        "StepUpHeight": 26
       },
       {
         "__type": "Sandbox.Movement.MoveModeSwim",
@@ -354,7 +354,7 @@
         "ExhaustedStaminaEpsilon": 0.25,
         "GrappleAction": "Grapple",
         "GrappleAirGravityScale": 1.24,
-        "GrappleSwingLogEnabled": true,
+        "GrappleSwingLogEnabled": false,
         "GrappleVictimCooldownSeconds": 3,
         "HardMaxLengthMeters": 60,
         "JumpInputAction": "jump",

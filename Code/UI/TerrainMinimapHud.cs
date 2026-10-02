@@ -92,10 +92,25 @@ public sealed class TerrainMinimapHud
 		return button;
 	}
 
+	// Last applied state; Style.Set every frame dirtied the panel styles (UI re-layout) for nothing.
+	bool? _zoomOutStyled;
+	bool? _zoomInStyled;
+
 	void RefreshButtonStyles()
 	{
-		StyleZoomButton( _zoomOutButton, canPress: TerrainMinimapZoom.Level > TerrainMinimapZoom.Min + 0.001f );
-		StyleZoomButton( _zoomInButton, canPress: TerrainMinimapZoom.Level < TerrainMinimapZoom.Max - 0.001f );
+		var canOut = TerrainMinimapZoom.Level > TerrainMinimapZoom.Min + 0.001f;
+		var canIn = TerrainMinimapZoom.Level < TerrainMinimapZoom.Max - 0.001f;
+		if ( _zoomOutStyled != canOut )
+		{
+			StyleZoomButton( _zoomOutButton, canOut );
+			_zoomOutStyled = canOut;
+		}
+
+		if ( _zoomInStyled != canIn )
+		{
+			StyleZoomButton( _zoomInButton, canIn );
+			_zoomInStyled = canIn;
+		}
 	}
 
 	static void StyleZoomButton( TerrainMinimapZoomButton button, bool canPress )
@@ -116,6 +131,28 @@ public sealed class TerrainMinimapHud
 
 		// No keyboard Input.Pressed for ad-hoc names — those are not registered actions and spam the console.
 		PollPointerZoom();
+		_face.Tick();
+		RefreshButtonStyles();
+	}
+
+	/// <summary>
+	/// Per-frame part only: the +/- click edge. For hosts that refresh the map itself at a lower rate
+	/// (<see cref="PlayerScreenHud"/> passive tick) so a short click between refreshes is not lost.
+	/// </summary>
+	public void TickInput()
+	{
+		if ( !_built )
+			return;
+
+		PollPointerZoom();
+	}
+
+	/// <summary>Map redraw + button styles without input polling (pair with <see cref="TickInput"/>).</summary>
+	public void TickVisuals()
+	{
+		if ( !_built )
+			return;
+
 		_face.Tick();
 		RefreshButtonStyles();
 	}

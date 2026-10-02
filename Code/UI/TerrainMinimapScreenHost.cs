@@ -31,6 +31,19 @@ public sealed class TerrainMinimapScreenHost : Component
 		if ( _screen is null || !_screen.IsValid() )
 			_screen = Components.Create<TerrainMinimapScreen>();
 
+		if ( _screen is not null && _screen.IsValid() && !_screen.Enabled )
+			_screen.Enabled = true;
+
 		return _screen is not null && _screen.IsValid();
+	}
+
+	/// <summary>
+	/// Hide this camera minimap while a local pawn HUD owns its own (L spawn). Before this it kept
+	/// building and ticking underneath the pawn's minimap: two minimaps every frame in player mode.
+	/// </summary>
+	public void Suspend()
+	{
+		if ( _screen is not null && _screen.IsValid() && _screen.Enabled )
+			_screen.Enabled = false;
 	}
 }

@@ -86,6 +86,9 @@ public sealed partial class EntityBrain : Component
 	bool _awaitingNavToStartAi;
 	bool _agentOnNav;
 	double _nextNavSettleAt;
+	/// <summary>Consecutive nav-settle attempts that found no nav; drives the settle back-off.</summary>
+	int _navSettleFailures;
+	const int NavSettleBakeRequestLimit = 3;
 	/// <summary>Last time geometric LOS on the chase target was true (starts when chase begins).</summary>
 	double _chaseLastSeenAt;
 	EnemyAiState _loggedState = (EnemyAiState)(-1);
@@ -361,6 +364,9 @@ public sealed partial class EntityBrain : Component
 
 	public void OnNavBakeComplete()
 	{
+		// A bake just landed: drop the settle back-off so an off-nav entity retries this frame.
+		_navSettleFailures = 0;
+		_nextNavSettleAt = 0d;
 		// Every entity gets this on the same frame; twenty raiders all re-pathing at once (each a query
 		// plus the solid sweep) was a spike right after every rebake. Spread the re-paths over the
 		// next half second — a breacher waiting on this exact rebake still rechecks at once below.
@@ -863,13 +869,26 @@ public sealed partial class EntityBrain : Component
 		if ( Time.NowDouble < _nextNavSettleAt )
 			return;
 
-		_nextNavSettleAt = Time.NowDouble + 0.45;
-
 		var pos = GameObject.WorldPosition;
-		BuildNavMeshSync.EnsureNavAroundPoint( Scene, pos );
+		// Ask for a bake only for the first few attempts: after that the area has been baked and there
+		// is simply no nav here (outside the nav bounds, or unwalkable). Keep trying to seat the agent
+		// at the backed-off rate, but stop costing everyone a rebake.
+		if ( _navSettleFailures < NavSettleBakeRequestLimit )
+			BuildNavMeshSync.EnsureNavAroundPoint( Scene, pos );
 		if ( !EntityNavMeshUtility.EnsureAgentOnNavMesh( Scene, Agent, pos ) )
+		{
+			// Still no nav under the feet after asking for a bake: back off (0.45 s doubling to 10 s)
+			// instead of asking every 0.45 s forever. One off-nav scav kept terrainTest in a bake loop —
+			// a synchronous GenerateTiles plus a scene-wide collider pass about once a second (Mark's
+			// log: steady "[BuildNav] rebake tiles" lines, 30–40 ms spikes, avg frame stepping
+			// 7.7 → 11.1 ms). OnNavBakeComplete resets the back-off so a real bake is tried at once.
+			_navSettleFailures++;
+			_nextNavSettleAt = Time.NowDouble + Math.Min( 10d, 0.45d * Math.Pow( 2d, _navSettleFailures ) );
 			return;
+		}
 
+		_navSettleFailures = 0;
+		_nextNavSettleAt = Time.NowDouble + 0.45;
 		_agentOnNav = true;
 		Agent.UpdatePosition = true;
 		if ( _awaitingNavToStartAi || !_aiStarted )

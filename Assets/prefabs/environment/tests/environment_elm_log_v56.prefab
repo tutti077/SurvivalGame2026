@@ -1,0 +1,104 @@
+{
+  "RootObject": {
+    "__guid": "51b354ff-01bd-49fc-a4fe-7334179af62d",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "environment_elm_log_v56",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "tow",
+    "Enabled": true,
+    "NetworkMode": 1,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 0,
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": [],
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "604914c1-803b-4a25-a311-ee77954fd885",
+        "__enabled": true,
+        "Model": "models/environment/tests/environment_elm_log_v56.vmdl",
+        "RenderType": "On",
+        "Tint": "1,1,1,1",
+        "BodyGroups": 18446744073709551615
+      },
+      {
+        "__type": "Sandbox.ModelCollider",
+        "__guid": "db05e511-b507-4610-ab1d-a7d3b6fad6a4",
+        "__enabled": true,
+        "Model": "models/environment/tests/environment_elm_log_v56.vmdl",
+        "IsTrigger": false,
+        "Static": false,
+        "Friction": 0.9,
+        "Elasticity": 0.35
+      },
+      {
+        "__type": "Survival.TowableProp",
+        "__guid": "23d18028-5870-4b4e-8356-b14aa63ae869",
+        "__enabled": true,
+        "IdleHorizontalDamping": 15,
+        "IdleSpinDamping": 8,
+        "RestingVerticalSpeed": 20
+      },
+      {
+        "__type": "Sandbox.Rigidbody",
+        "__guid": "29feea13-92ea-4937-b5f2-eeb04ebbf50e",
+        "__enabled": true,
+        "Gravity": true,
+        "MassOverride": 3000.0
+      },
+      {
+        "__type": "Survival.DamageReceiver",
+        "__guid": "358a2978-c008-4ec7-bf4f-e8be0d8968f8",
+        "__enabled": true,
+        "DamageMultiplier": 1
+      },
+      {
+        "__type": "Survival.ChopableTree",
+        "__guid": "6d7bd250-38b5-4579-8514-bb57086898ea",
+        "__enabled": true,
+        "RequireAxe": true,
+        "WoodResourceId": "resource_woodBasic",
+        "LogChop": false,
+        "MaxHealth": 16,
+        "CurrentHealth": 16,
+        "WoodDropMin": 0,
+        "WoodDropMax": 0,
+        "SplitPiecePrefab": "prefabs/environment/tests/environment_elm_loghalf_v56.prefab",
+        "SplitPieceOffsetMeters": 2.5,
+        "SplitCenterOffsetMeters": 5.0
+      }
+    ],
+    "Children": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

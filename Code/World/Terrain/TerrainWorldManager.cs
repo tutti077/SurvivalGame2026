@@ -26,6 +26,8 @@ public sealed class TerrainWorldManager : Component
 		/// <summary>Large-tree positions (world meters) — sapling trunk clearance on promotion.</summary>
 		public readonly List<Vector2> Trunks = new();
 		public readonly List<ModelCollider> VegetationColliders = new();
+		/// <summary>Scatter renderers that cast shadows only while the chunk is near (saplings never do).</summary>
+		public readonly List<ModelRenderer> VegetationShadowRenderers = new();
 	}
 
 	[Property, Group( "World" )] public string WorldName { get; set; } = "TestWorld";
@@ -100,22 +102,22 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Clover — Tree Prefabs" ), Description( "Large trees; each spawn picks one of these at random." )]
 	public List<string> VegetationCloverTreePrefabs { get; set; } =
 	[
-		"prefabs/environment/tests/environment_elm1_v34.prefab",
-		"prefabs/environment/tests/environment_elm2_v34.prefab",
-		"prefabs/environment/tests/environment_elm3_v34.prefab",
-		"prefabs/environment/tests/environment_elm4_v34.prefab",
-		"prefabs/environment/tests/environment_elm5_v34.prefab",
-		"prefabs/environment/tests/environment_elm6_v34.prefab",
+		"prefabs/environment/tests/environment_elm1_v56.prefab",
+		"prefabs/environment/tests/environment_elm2_v56.prefab",
+		"prefabs/environment/tests/environment_elm3_v56.prefab",
+		"prefabs/environment/tests/environment_elm4_v56.prefab",
+		"prefabs/environment/tests/environment_elm5_v56.prefab",
+		"prefabs/environment/tests/environment_elm6_v56.prefab",
 	];
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Sapling Prefabs" ), Description( "Small trees, Clover Hills only; each spawn picks one of these at random. Empty = no saplings." )]
 	public List<string> VegetationCloverSaplingPrefabs { get; set; } =
 	[
-		"prefabs/environment/tests/environment_elmsapling1_v12.prefab",
-		"prefabs/environment/tests/environment_elmsapling2_v12.prefab",
-		"prefabs/environment/tests/environment_elmsapling3_v12.prefab",
-		"prefabs/environment/tests/environment_elmsapling4_v12.prefab",
-		"prefabs/environment/tests/environment_elmsapling5_v12.prefab",
+		"prefabs/environment/tests/environment_elmsapling1_v14.prefab",
+		"prefabs/environment/tests/environment_elmsapling2_v14.prefab",
+		"prefabs/environment/tests/environment_elmsapling3_v14.prefab",
+		"prefabs/environment/tests/environment_elmsapling4_v14.prefab",
+		"prefabs/environment/tests/environment_elmsapling5_v14.prefab",
 	];
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Sapling Cell Spacing (m)" ), Range( 2f, 32f ), Step( 1f ), Description( "Grid for the sapling layer (separate from the large-tree grid). Lower = more candidates." )]
@@ -200,10 +202,10 @@ public sealed class TerrainWorldManager : Component
 	public float VegetationCloverStickNearLargeTreeMaxRadiusMeters { get; set; } = 6f;
 
 	[Property, Group( "Vegetation" ), Title( "Redwood — Tree Prefab A" )]
-	public string VegetationRedwoodPrefab { get; set; } = "prefabs/environment/temp_tree_2.prefab";
+	public string VegetationRedwoodPrefab { get; set; } = "prefabs/environment/tests/environment_elm3_v56.prefab";
 
 	[Property, Group( "Vegetation" ), Title( "Redwood — Tree Prefab B" )]
-	public string VegetationRedwoodPrefabB { get; set; } = "prefabs/environment/temp_tree_4.prefab";
+	public string VegetationRedwoodPrefabB { get; set; } = "prefabs/environment/tests/environment_elm6_v56.prefab";
 
 	[Property, Group( "Vegetation" ), Title( "Redwood — Density (0–1)" ), Range( 0.05f, 1f ), Step( 0.05f ), Description( "Fraction of shared forest density for Redwood only. Redwood ignores hard forest patches, so low values still cover the whole biome sparsely." )]
 	public float VegetationRedwoodDensity01 { get; set; } = 0.1f;
@@ -283,6 +285,7 @@ public sealed class TerrainWorldManager : Component
 	GameObject _minimapCameraObject;
 	bool _minimapHostResolved;
 	bool _hasLocalPlayerMinimapHost;
+	RealTimeSince _sinceMinimapHostScan;
 	int _hudBiomeMapSeed = int.MinValue;
 	TerrainPreviewSettings _loadSettings;
 	Vector3 _loadStreamPos;
@@ -621,6 +624,83 @@ public sealed class TerrainWorldManager : Component
 		_generationSettingsSource = SettingsSource;
 		_generationSettingsOverrideScalars = OverrideWorldScalarsFromComponent;
 		return _generationSettings;
+	}
+
+	bool _vegetationHidden;
+
+	/// <summary>
+	/// Cumulative streaming counters for <c>perf_watch</c> (chunk loads / unloads / LOD remeshes /
+	/// near-state flips, which toggle scatter colliders + shadows). Plain increments, no per-frame cost.
+	/// </summary>
+	public struct StreamStats
+	{
+		public int Loads;
+		public int Unloads;
+		public int Remeshes;
+		public int NearFlips;
+	}
+
+	public StreamStats Stats;
+
+	/// <summary>
+	/// Perf A/B switch (<c>perf_trees 0|1</c>): hides every scatter instance (trees, saplings, rocks,
+	/// sticks) on loaded chunks and stops new chunks scattering; showing them again re-enables the
+	/// hidden ones and lets unscattered chunks catch up through the normal refresh. Runtime only.
+	/// </summary>
+	public bool VegetationHidden
+	{
+		get => _vegetationHidden;
+		set
+		{
+			if ( _vegetationHidden == value )
+				return;
+
+			_vegetationHidden = value;
+			foreach ( var entry in _loaded.Values )
+			{
+				if ( entry.GameObject is null || !entry.GameObject.IsValid() )
+					continue;
+
+				foreach ( var child in entry.GameObject.Children )
+				{
+					if ( child.Name.StartsWith( "veg_", StringComparison.Ordinal ) )
+						child.Enabled = !value;
+				}
+			}
+		}
+	}
+
+	/// <summary>Chunks still waiting in the stream build queue (0 = streaming has caught up).</summary>
+	public int PendingStreamChunkCount => _streamLoadQueue.Count;
+
+	/// <summary>
+	/// Scatter counts over every loaded chunk, by instance-name prefix (see
+	/// <see cref="TerrainVegetationScatter"/>): large trees, saplings, rocks / sticks. Debug / benchmark
+	/// only — walks the chunk children, so call it once per report, not per frame.
+	/// </summary>
+	public (int Chunks, int FullDetailChunks, int Trees, int Saplings, int Props) CountScatter()
+	{
+		int full = 0, trees = 0, saplings = 0, props = 0;
+		foreach ( var entry in _loaded.Values )
+		{
+			if ( entry.VerticesPerSide >= ChunkVerticesPerSide )
+				full++;
+			if ( entry.GameObject is null || !entry.GameObject.IsValid() )
+				continue;
+
+			foreach ( var child in entry.GameObject.Children )
+			{
+				var name = child.Name;
+				if ( name.StartsWith( "veg_clover_small", StringComparison.Ordinal ) )
+					saplings++;
+				else if ( name.StartsWith( "veg_clover", StringComparison.Ordinal ) || name.StartsWith( "veg_redwood", StringComparison.Ordinal ) )
+					trees++;
+				else if ( name.StartsWith( "veg_", StringComparison.Ordinal ) )
+					props++;
+			}
+		}
+
+		return (_loaded.Count, full, trees, saplings, props);
 	}
 
 	/// <summary>Ground elevation at world meters — same sampler as chunk meshes.</summary>
@@ -1298,7 +1378,7 @@ public sealed class TerrainWorldManager : Component
 
 			if ( wantVegetation && !entry.HasVegetation )
 				ScatterVegetationOnChunk( entry, settings, desiredVerts );
-			else if ( entry.HasVegetation && !entry.HasSmallVegetation && entry.VerticesPerSide >= ChunkVerticesPerSide )
+			else if ( !_vegetationHidden && entry.HasVegetation && !entry.HasSmallVegetation && entry.VerticesPerSide >= ChunkVerticesPerSide )
 				ScatterSmallVegetationOnChunk( entry, settings );
 
 			if ( ShouldScatterEntityPopulation( desiredVerts, distance, chunkSize ) && !entry.HasEntityPopulation )
@@ -1337,7 +1417,7 @@ public sealed class TerrainWorldManager : Component
 		var wasEnabled = entry.Collider.Enabled;
 		entry.Collider.Enabled = true;
 		if ( !wasEnabled )
-			SetVegetationCollidersEnabled( entry, true );
+			SetVegetationNear( entry, true );
 		if ( wasEnabled || !entry.GameObject.IsValid() )
 			return;
 
@@ -1354,6 +1434,7 @@ public sealed class TerrainWorldManager : Component
 		int verticesPerSide,
 		float distance )
 	{
+		Stats.Remeshes++;
 		var smoothPasses = verticesPerSide < ChunkVerticesPerSide ? 0 : ChunkHeightSmoothPasses;
 		var built = TerrainMeshBuilder.BuildChunk(
 			settings,
@@ -1382,7 +1463,7 @@ public sealed class TerrainWorldManager : Component
 			entry.Collider.Static = true;
 			var enabled = ShouldKeepChunkColliderEnabled( entry, distance, ChunkSizeMeters );
 			if ( entry.Collider.Enabled != enabled )
-				SetVegetationCollidersEnabled( entry, enabled );
+				SetVegetationNear( entry, enabled );
 			entry.Collider.Enabled = enabled;
 		}
 
@@ -1410,7 +1491,7 @@ public sealed class TerrainWorldManager : Component
 			var wasEnabled = entry.Collider.Enabled;
 			entry.Collider.Enabled = wantEnabled;
 			if ( wasEnabled != wantEnabled )
-				SetVegetationCollidersEnabled( entry, wantEnabled );
+				SetVegetationNear( entry, wantEnabled );
 
 			// Terrain collision just came online — bake nav, then spawn scavs (after terrain).
 			if ( !wasEnabled && wantEnabled && entry.GameObject.IsValid() )
@@ -1464,6 +1545,7 @@ public sealed class TerrainWorldManager : Component
 		bool visible,
 		bool useStreamLod )
 	{
+		Stats.Loads++;
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
 		var worldRadius = settings.TotalWorldRadiusMeters;
 		var distance = ChunkDistanceMeters( coord, streamPos, worldRadius, chunkSize );
@@ -1588,31 +1670,59 @@ public sealed class TerrainWorldManager : Component
 	}
 
 	/// <summary>
-	/// Tree / prop colliders follow the chunk's terrain collider: thousands of static tree meshes on
-	/// render-only far chunks cost physics for nothing. Collected once per scatter, toggled only when
-	/// the chunk collider flips (<see cref="UpdateChunkColliders"/>).
+	/// Near-only scatter cost follows the chunk's terrain collider (collision range, ~200 m): tree / prop
+	/// colliders, and tree / prop shadows. Thousands of static tree meshes on render-only far chunks cost
+	/// physics for nothing, and every shadow caster is drawn again into each sun cascade. Saplings never
+	/// cast shadows (too small to read, and the most numerous scatter). Collected once per scatter,
+	/// toggled only when the chunk collider flips (<see cref="UpdateChunkColliders"/>).
 	/// </summary>
 	void CollectVegetationColliders( LoadedChunk entry )
 	{
 		entry.VegetationColliders.Clear();
+		entry.VegetationShadowRenderers.Clear();
 		if ( entry.GameObject is null || !entry.GameObject.IsValid() )
 			return;
 
-		foreach ( var col in entry.GameObject.Components.GetAll<ModelCollider>( FindMode.EverythingInDescendants ) )
+		foreach ( var child in entry.GameObject.Children )
 		{
-			if ( col is not null && col.IsValid() && col != entry.Collider )
-				entry.VegetationColliders.Add( col );
+			if ( !child.Name.StartsWith( "veg_", StringComparison.Ordinal ) )
+				continue;
+
+			var sapling = child.Name.StartsWith( "veg_clover_small", StringComparison.Ordinal );
+			foreach ( var col in child.Components.GetAll<ModelCollider>( FindMode.EverythingInSelfAndDescendants ) )
+			{
+				if ( col is not null && col.IsValid() )
+					entry.VegetationColliders.Add( col );
+			}
+
+			foreach ( var renderer in child.Components.GetAll<ModelRenderer>( FindMode.EverythingInSelfAndDescendants ) )
+			{
+				if ( renderer is null || !renderer.IsValid() )
+					continue;
+				if ( sapling )
+					renderer.RenderType = ModelRenderer.ShadowRenderType.Off;
+				else
+					entry.VegetationShadowRenderers.Add( renderer );
+			}
 		}
 
-		SetVegetationCollidersEnabled( entry, entry.Collider is not null && entry.Collider.IsValid() && entry.Collider.Enabled );
+		SetVegetationNear( entry, entry.Collider is not null && entry.Collider.IsValid() && entry.Collider.Enabled );
 	}
 
-	static void SetVegetationCollidersEnabled( LoadedChunk entry, bool enabled )
+	void SetVegetationNear( LoadedChunk entry, bool near )
 	{
+		Stats.NearFlips++;
 		foreach ( var col in entry.VegetationColliders )
 		{
 			if ( col is not null && col.IsValid() )
-				col.Enabled = enabled;
+				col.Enabled = near;
+		}
+
+		var shadows = near ? ModelRenderer.ShadowRenderType.On : ModelRenderer.ShadowRenderType.Off;
+		foreach ( var renderer in entry.VegetationShadowRenderers )
+		{
+			if ( renderer is not null && renderer.IsValid() )
+				renderer.RenderType = shadows;
 		}
 	}
 
@@ -1707,7 +1817,7 @@ public sealed class TerrainWorldManager : Component
 	{
 		// World-seeded vegetation is deterministic per-peer (same WorldSeed → same trees).
 		// Player-placed flora (future farming) will NetworkSpawn separately.
-		if ( !VegetationScatterEnabled )
+		if ( !VegetationScatterEnabled || _vegetationHidden )
 			return false;
 
 		if ( VegetationSkipFarLodChunks && verticesPerSide < ChunkVerticesPerSide )
@@ -1761,6 +1871,7 @@ public sealed class TerrainWorldManager : Component
 
 	void UnloadChunk( TerrainChunkCoord coord )
 	{
+		Stats.Unloads++;
 		if ( !_loaded.TryGetValue( coord, out var entry ) )
 			return;
 
@@ -1958,9 +2069,13 @@ public sealed class TerrainWorldManager : Component
 
 	bool EnsureMinimapScreen()
 	{
-		// Player HUD owns the minimap when a local pawn ScreenPanel is present.
+		// Player HUD owns the minimap when a local pawn ScreenPanel is present: park the camera one.
 		if ( HasLocalPlayerMinimapHostCached() )
+		{
+			if ( _minimapScreen is not null && _minimapScreen.IsValid() )
+				_minimapScreen.Suspend();
 			return true;
+		}
 
 		var scene = GameObject.Scene;
 		if ( !scene.IsValid() )
@@ -1988,10 +2103,13 @@ public sealed class TerrainWorldManager : Component
 
 	bool HasLocalPlayerMinimapHostCached()
 	{
-		if ( _minimapHostResolved )
+		// A "no" is re-checked once a second: the L-spawn invalidation can run before the new pawn is
+		// input-owned, and a cached "no" kept the camera minimap ticking under the pawn's forever.
+		if ( _minimapHostResolved && (_hasLocalPlayerMinimapHost || _sinceMinimapHostScan < 1f) )
 			return _hasLocalPlayerMinimapHost;
 
 		_minimapHostResolved = true;
+		_sinceMinimapHostScan = 0f;
 		_hasLocalPlayerMinimapHost = ScanLocalPlayerMinimapHost();
 		return _hasLocalPlayerMinimapHost;
 	}

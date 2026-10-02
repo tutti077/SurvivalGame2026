@@ -487,7 +487,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// the air-control target and add swing speed — sprint is a walking thing, not a swinging one.
 		// Holding a player is not a swing: the attacker keeps full ground/air locomotion.
 		// A trap mutes the same way: zero wish so WASD cannot creep the pawn off the plate.
-		if ( WingsuitDeployed || TrapLocked || (GrappleAttached && !IsPlayerGrappleAttach && !_controller.IsOnGround) )
+		if ( WingsuitDeployed || TrapLocked || (GrappleAttached && !IsMovingTargetAttach && !_controller.IsOnGround) )
 		{
 			if ( !_walkSpeedMuteActive )
 			{
@@ -546,8 +546,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			return;
 
 		ArmorSpeedScale = ComputeArmorSpeedScale();
-		_controller.WalkSpeed = _designWalkSpeed * ArmorSpeedScale;
-		_controller.RunSpeed = _designRunSpeed * ArmorSpeedScale;
+		var tow = ComputeTowSpeedScale();   // dragging a log on a taut rope slows the holder
+		_controller.WalkSpeed = _designWalkSpeed * ArmorSpeedScale * tow;
+		_controller.RunSpeed = _designRunSpeed * ArmorSpeedScale * tow;
 	}
 
 	/// <summary>
@@ -700,7 +701,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		// Jump while grappled: no mid-air hop off the rope (both schemes).
 		// Holding a player: normal jumping stays, and there is no ledge to mantle onto.
-		if ( GrappleAttached && !IsPlayerGrappleAttach )
+		if ( GrappleAttached && !IsMovingTargetAttach )
 		{
 			if ( _controller is null )
 				_controller = Components.Get<PlayerController>();
@@ -829,6 +830,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		OnAugmentLanded();
 	}
 
+	/// <summary>Perf bisect only (<c>perf_fov</c>): forces the pawn camera FOV after the engine sets it. 0 = off.</summary>
+	public static float PerfFovOverride;
+
 	/// <summary>
 	/// After the built-in third-person camera (and its wall-trace ease), hard-place at our stepped zoom
 	/// so zoom-out snaps the same way zoom-in does.
@@ -839,6 +843,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			return;
 
 		camera.ZFar = Math.Max( 100f, CameraFarClipMeters );
+		if ( PerfFovOverride > 0f )
+			camera.FieldOfView = Math.Clamp( PerfFovOverride, 20f, 140f );
 
 		_controller ??= Components.Get<PlayerController>();
 		if ( _controller is null || !_controller.IsValid() )
@@ -1251,6 +1257,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// would starve the player-hook validity checks (target lost / downed / out of range).
 		TickGrapplePlayerTargetValidity();
 		TickGrappledByValidity();
+		TickGrappleTowValidity();
+		TickGrappleTowPull( Time.Delta );   // host drives the towed log, whoever holds the rope
 
 		if ( !IsLocalMovementDriver() )
 			return;
@@ -1332,7 +1340,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 	void ApplyGrappleOverLengthCatchup()
 	{
-		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f || IsPlayerGrappleAttach )
+		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f || IsMovingTargetAttach )
 			return;
 
 		var attach = ResolveGrappleAttachWorldPoint();
@@ -1353,7 +1361,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// Ledge mantle broke the rope this instant — never fight the pull while the detach lands.
 		// Player attach: the VICTIM is reeled (PlayerMovement.GrapplePlayer.cs); the attacker is
 		// never constrained, so a hooked player can't drag the rope holder around.
-		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f || IsGrappleLedgePulling || IsPlayerGrappleAttach )
+		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f || IsGrappleLedgePulling || IsMovingTargetAttach )
 		{
 			_grapplePrevRopeLength = 0f;
 			_grappleRopeTaut = false;
@@ -1695,8 +1703,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		_grappleSteerX = 0f;
 		_grappleSteerY = 0f;
 
-		// Player attach never swings — WASD stays with MoveModeWalk.
-		if ( !GrappleAttached || IsPlayerGrappleAttach )
+		// Player / tow attach never swings — WASD stays with MoveModeWalk.
+		if ( !GrappleAttached || IsMovingTargetAttach )
 			return;
 
 		_controller ??= Components.Get<PlayerController>();
@@ -1810,8 +1818,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 	void TryKillGrappleOnCollision( Collision collision )
 	{
-		// Player attach: walking into things while dragging someone must not break the rope.
-		if ( !GrappleAttached || IsPlayerGrappleAttach || !IsLocalMovementDriver() )
+		// Player / tow attach: walking into things while dragging something must not break the rope.
+		if ( !GrappleAttached || IsMovingTargetAttach || !IsLocalMovementDriver() )
 			return;
 
 		var other = collision.Other.GameObject;

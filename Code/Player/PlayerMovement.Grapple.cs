@@ -316,6 +316,7 @@ partial class PlayerMovement
 		TickGrappleReleaseWeight();
 		TickGrappleControllerOverride();
 		TickGrappledByPlayerPull();
+		TickGrappleTowHoldback();
 
 		// Mantle broke the rope this instant — no winch / stamina while the host detach lands.
 		if ( !GrappleAttached || IsGrappleLedgePulling )
@@ -864,6 +865,9 @@ partial class PlayerMovement
 		return true;
 	}
 
+	/// <summary>Scratch for <see cref="TryClosestPointOnObjectToRay"/> (reused, never held across calls).</summary>
+	readonly List<Collider> _grappleClosestColliders = new();
+
 	bool TryClosestPointOnObjectToRay(
 		GameObject root,
 		Vector3 rayOrigin,
@@ -880,7 +884,12 @@ partial class PlayerMovement
 		var maxRange = GetMaxRangeEngine();
 		var pawnPos = GameObject.WorldPosition;
 
-		var colliders = root.Components.GetAll<Collider>( FindMode.EverythingInSelfAndDescendants );
+		// Collect once: the lazy GetAll re-walked the object's hierarchy (and allocated an iterator) on
+		// every one of the 29 probe steps, every frame the aim assist runs.
+		_grappleClosestColliders.Clear();
+		foreach ( var c in root.Components.GetAll<Collider>( FindMode.EverythingInSelfAndDescendants ) )
+			_grappleClosestColliders.Add( c );
+		var colliders = _grappleClosestColliders;
 		var bestPerp = float.MaxValue;
 		var found = false;
 
@@ -967,11 +976,12 @@ partial class PlayerMovement
 	/// Host check: client snap must be in range on a tagged surface, or on the exact player the
 	/// client aimed at. Avoids host-camera aim (scene.Camera is the host view for remote pawns).
 	/// </summary>
-	bool TryValidateAttachPoint( Vector3 clientHitPoint, Guid intendedPlayerId, out Vector3 validatedPoint, out float length, out Guid playerTargetId )
+	bool TryValidateAttachPoint( Vector3 clientHitPoint, Guid intendedPlayerId, out Vector3 validatedPoint, out float length, out Guid playerTargetId, out Guid towTargetId )
 	{
 		validatedPoint = default;
 		length = 0f;
 		playerTargetId = Guid.Empty;
+		towTargetId = Guid.Empty;
 
 		if ( !IsWithinGrappleRange( clientHitPoint ) )
 			return false;
@@ -992,6 +1002,9 @@ partial class PlayerMovement
 
 		if ( TryFindTaggedRootNearPoint( clientHitPoint, surfaceSlack, out var nearRoot ) )
 		{
+			if ( ObjectHasTowTag( nearRoot ) )
+				towTargetId = nearRoot.Id;
+
 			if ( TryConfirmPointOnGrappleObject( nearRoot, clientHitPoint ) )
 			{
 				validatedPoint = clientHitPoint;
@@ -1017,6 +1030,8 @@ partial class PlayerMovement
 			var hitPlayer = hostObject.IsValid() && hostObject.Components.Get<PlayerMovement>() is not null;
 			if ( !hitPlayer && Vector3.DistanceBetween( hostPoint, clientHitPoint ) <= surfaceSlack && IsWithinGrappleRange( hostPoint ) )
 			{
+				var hostRoot = ResolveGrappleRoot( hostObject );
+				towTargetId = ObjectHasTowTag( hostRoot ) ? hostRoot.Id : Guid.Empty;
 				validatedPoint = hostPoint;
 				length = hostLen;
 				return true;
@@ -1300,7 +1315,7 @@ partial class PlayerMovement
 	{
 		_controller ??= Components.Get<PlayerController>();
 		// Player attach is not a swing — the attacker keeps normal air friction and damping.
-		var airborne = GrappleAttached && !IsPlayerGrappleAttach
+		var airborne = GrappleAttached && !IsMovingTargetAttach
 		               && _controller is not null && _controller.IsValid() && !_controller.IsOnGround;
 		ApplyGrappleControllerOverride( airborne );
 	}
@@ -1493,7 +1508,7 @@ partial class PlayerMovement
 				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host mirrored client grapple '{clientGrappleResourceId}'." );
 		}
 
-		if ( !TryValidateAttachPoint( clientHitPoint, intendedPlayerId, out var validatedPoint, out var length, out var playerTargetId ) )
+		if ( !TryValidateAttachPoint( clientHitPoint, intendedPlayerId, out var validatedPoint, out var length, out var playerTargetId, out var towTargetId ) )
 		{
 			if ( LogGrapple )
 				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host rejected attach." );
@@ -1511,6 +1526,7 @@ partial class PlayerMovement
 		GrappleAttachWorldPoint = validatedPoint;
 		GrappleRopeLengthEngine = length;
 		ClearGrapplePlayerAttachState();
+		ClearGrappleTowAttachState();
 		Components.Get<PlayerQuests>()?.HostReport( QuestEventIds.GrappleAttached );
 
 		if ( playerTargetId != Guid.Empty && TryResolveGrapplePlayerTarget( playerTargetId, out var target ) )
@@ -1519,10 +1535,19 @@ partial class PlayerMovement
 			GrappleAttachLocalOffset = target.WorldTransform.PointToLocal( validatedPoint );
 			target.Components.Get<PlayerMovement>()?.HostNotifyGrappledByPlayer( GameObject.Id );
 		}
+		else if ( towTargetId != Guid.Empty && TryResolveGrappleTowTarget( towTargetId, out var towed ) )
+		{
+			// Tow: the anchor rides the log; a short rope so the holder walks right by it.
+			GrappleAttachTowId = towTargetId;
+			GrappleAttachLocalOffset = towed.WorldTransform.PointToLocal( validatedPoint );
+			// rope length is measured to the choker point on the log's axis, not the hooked surface;
+			// the rope stays as long as the shot was - no cap, so attaching never moves the holder
+			GrappleRopeLengthEngine = Math.Min( Vector3.DistanceBetween( GameObject.WorldPosition, ResolveTowAnchor( towed ).anchor ), GetHardMaxLengthEngine() );
+		}
 
 		if ( LogGrapple )
 		{
-			var kind = playerTargetId != Guid.Empty ? "player" : "surface";
+			var kind = playerTargetId != Guid.Empty ? "player" : towTargetId != Guid.Empty ? "tow" : "surface";
 			Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: attached ({kind}) len={TerrainWorldUnits.EngineToMeters( length ):0.##}m" );
 		}
 	}
@@ -1568,6 +1593,7 @@ partial class PlayerMovement
 		GrappleAttachWorldPoint = default;
 		GrappleRopeLengthEngine = 0f;
 		ClearGrapplePlayerAttachState();
+		ClearGrappleTowAttachState();
 		_airborneStaminaDebt = 0f;
 		_grappleReleaseAir = true;
 
@@ -1578,6 +1604,11 @@ partial class PlayerMovement
 	void ServerAdjustLength( float deltaEngine )
 	{
 		if ( !GrappleAttached || MathF.Abs( deltaEngine ) < 1e-5f )
+			return;
+
+		// Tow rope: E reels the holder in and the rope follows them (TickGrappleTowPull); a length
+		// that ran ahead of a blocked holder was paid out as one jump-teleport (Mark).
+		if ( IsTowGrappleAttach )
 			return;
 
 		if ( !HasGrappleEquipped() )
@@ -1624,8 +1655,8 @@ partial class PlayerMovement
 		if ( !go.IsValid() )
 			return false;
 
-		// Prefab Tags only (e.g. "grapple" on temp_tree_2 / temp_tree_3).
-		return go.Tags.Has( GrappleSurfaceTag );
+		// Prefab Tags only (e.g. "grapple" on the tree prefabs, "tow" on the felled log + halves).
+		return go.Tags.Has( GrappleSurfaceTag ) || go.Tags.Has( GrappleTowTag );
 	}
 
 	/// <summary>

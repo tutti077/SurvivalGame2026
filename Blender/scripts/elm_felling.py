@@ -7,8 +7,10 @@ Chop flow in game (Code/Environment/ChopableTree.cs):
     log half --chop--> wood drops;  stump --chop--> a little wood, then gone
 
 Everything is in true meters (fbx exported 1:1, vmdl import_scale 0.4 = 40 u/m):
-    log       8 m long, 1.2 m across, the bottom 1.2 m is a cone; origin at the cone point
-    log half  4 m long, 1.2 m across, flat end-grain at both ends; origin at its centre
+    log       10 m long, 1.2 m across, the bottom 0.5 m is a cone of end grain (the cut); origin at the cone point
+    log half  5 m long, 1.2 m across, flat end-grain at both ends; origin at its centre
+    Both carry a Rigidbody with LOG_MASS / HALF_MASS and the "tow" tag: the grapple hooks them and
+    the holder drags them by walking (PlayerMovement.GrappleTow.cs).
     stump     each tree's own wood mesh cut flat at STUMP_H, end-grain cap; origin at the base
 """
 import json
@@ -21,15 +23,17 @@ import bmesh
 import bpy
 import numpy as np
 
-LOG_LEN = 8.0
+LOG_LEN = 10.0
 LOG_R = 0.6
-LOG_POINT = 1.2
+LOG_POINT = 0.5      # m of cone at the bottom; 1.2 read as a pencil (Mark, v55)
 HALF_LEN = LOG_LEN / 2
 STUMP_H = 1.0
 SIDES = 14
 
 # Chop tuning (a stone axe hits for 4): tree 10 hits, log 4, each half 3, stump 3.
 TREE_HP, LOG_HP, HALF_HP, STUMP_HP = 40, 16, 12, 12
+LOG_FRICTION, LOG_ELASTICITY = 0.9, 0.35
+LOG_MASS, HALF_MASS = 3000.0, 1500.0  # kg; the tow scales by mass so this only sets how hard a body shove moves it (Mark: pushing was easier than towing)
 HALF_WOOD = (8, 10)
 STUMP_WOOD = (3, 4)
 
@@ -38,7 +42,8 @@ ENDGRAIN_RAMP = [(88, 62, 40), (118, 86, 56), (146, 110, 72), (170, 132, 88), (1
 
 def make_endgrain_texture(tex):
 	"""Cut face of a log: warm growth rings (7-tone ramp, one ring per ~3 px) wobbling around a
-	slightly off-centre pith, a dark pith dot, one radial check crack and a grey-brown bark rim."""
+	slightly off-centre pith, a dark pith dot and a grey-brown bark rim (the radial check crack
+	was removed - Mark: "remove this line")."""
 	rng = np.random.default_rng(21)
 	c = (np.arange(tex) + 0.5) / tex * 2 - 1
 	x, y = np.meshgrid(c, c)
@@ -49,8 +54,6 @@ def make_endgrain_texture(tex):
 	ring = np.mod((r + wob) * 10.5, 1.0)
 	idx = np.where(ring < 0.3, 2, 4) + np.round(1.2 * (1 - r)).astype(int)      # late wood darker
 	idx = idx + (rng.random((tex, tex)) < 0.06)                                 # a few flecks
-	crack = (np.abs(np.mod(th - 0.9 + np.pi, 2 * np.pi) - np.pi) < 0.05 / np.maximum(r, 0.05)) & (r > 0.12) & (r < 0.78)
-	idx = np.where(crack, 0, idx)
 	idx = np.where(r < 0.07, 1, idx)
 	idx = np.clip(idx, 0, 6)
 	rgb = np.array(ENDGRAIN_RAMP, float)[idx]
@@ -103,6 +106,14 @@ def build_log(name, length, radius, point, bark_tile, bark_mat, grain_mat, seed)
 			f.material_index = 0
 			for loop, uv in zip(f.loops, uvs):
 				loop[uvl].uv = uv
+			if point > 0 and z1 <= point + 1e-6:
+				# the cut cone is end grain, like the stump top (Mark): map it radially from the
+				# point so the rings run around the cone instead of bark running up it
+				f.material_index = 1
+				f.smooth = False
+				for loop in f.loops:
+					q = loop.vert.co
+					loop[uvl].uv = (0.5 + q.x / (2 * radius) * 0.96, 0.5 + q.y / (2 * radius) * 0.96)
 
 	def cap(ring, up):
 		pts = [v.co.copy() for v in ring[:SIDES]]
@@ -267,15 +278,33 @@ def _g():
 	return str(uuid.uuid4())
 
 
-def write_prefab(path, name, model, chop, dynamic, template_path):
-	"""Prefab from the project's existing tree prefab (same root / __properties layout): model
-	renderer + collider, DamageReceiver, ChopableTree(chop), and a Rigidbody when dynamic."""
-	with open(template_path, encoding="utf-8") as f:
-		d = json.load(f)
-	root = d["RootObject"]
+# The s&box prefab envelope (ResourceVersion 2): root object fields + the scene-style __properties
+# block the editor writes. Was copied from a hand-made tree prefab; inlined when those were deleted.
+PREFAB_ROOT = {
+	"__guid": "", "__version": 2, "Flags": 0, "Name": "", "Position": "0,0,0", "Rotation": "0,0,0,1",
+	"Scale": "1,1,1", "Tags": "", "Enabled": True, "NetworkMode": 0, "NetworkFlags": 0,
+	"NetworkOrphaned": 0, "NetworkTransmit": True, "OwnerTransfer": 0,
+	"__properties": {
+		"NetworkInterpolation": True, "TimeScale": 1, "WantsSystemScene": True, "Metadata": {},
+		"NavMesh": {"Enabled": False, "IncludeStaticBodies": True, "IncludeKeyframedBodies": True,
+					"EditorAutoUpdate": False, "AgentHeight": 64, "AgentRadius": 16, "AgentStepSize": 18,
+					"AgentMaxSlope": 40, "ExcludedBodies": "", "IncludedBodies": "", "DeferGeneration": False,
+					"CustomBounds": False}},
+	"__variables": [],
+}
+PREFAB_FILE = {"RootObject": None, "ResourceVersion": 2, "ShowInMenu": False, "MenuPath": None,
+			   "MenuIcon": None, "DontBreakAsTemplate": False, "__references": [], "__version": 2}
+
+
+def write_prefab(path, name, model, chop, dynamic, mass=0.0):
+	"""Prefab: model renderer + collider, DamageReceiver, ChopableTree(chop), and a Rigidbody (mass kg)
+	+ TowableProp + the "tow" tag when dynamic."""
+	d = json.loads(json.dumps(PREFAB_FILE))
+	root = json.loads(json.dumps(PREFAB_ROOT))
+	d["RootObject"] = root
 	root["__guid"] = _g()
 	root["Name"] = name
-	root["Tags"] = "" if dynamic else "grapple"
+	root["Tags"] = "tow" if dynamic else "grapple"
 	root["NetworkMode"] = 1 if dynamic else 0
 	comps = [
 		{"__type": "Sandbox.ModelRenderer", "__guid": _g(), "__enabled": True, "Model": model,
@@ -284,7 +313,15 @@ def write_prefab(path, name, model, chop, dynamic, template_path):
 		 "IsTrigger": False, "Static": not dynamic},
 	]
 	if dynamic:
-		comps.append({"__type": "Sandbox.Rigidbody", "__guid": _g(), "__enabled": True, "Gravity": True})
+		comps[1]["Friction"] = LOG_FRICTION
+		comps[1]["Elasticity"] = LOG_ELASTICITY   # a felled log bounces a little as it lands (Mark)
+		comps.append({"__type": "Survival.TowableProp", "__guid": _g(), "__enabled": True,
+					  "IdleHorizontalDamping": 15, "IdleSpinDamping": 8, "RestingVerticalSpeed": 20})
+	if dynamic:
+		body = {"__type": "Sandbox.Rigidbody", "__guid": _g(), "__enabled": True, "Gravity": True}
+		if mass > 0:
+			body["MassOverride"] = mass
+		comps.append(body)
 	comps.append({"__type": "Survival.DamageReceiver", "__guid": _g(), "__enabled": True, "DamageMultiplier": 1})
 	c = {"__type": "Survival.ChopableTree", "__guid": _g(), "__enabled": True, "RequireAxe": True,
 		 "WoodResourceId": "resource_woodBasic", "LogChop": False}

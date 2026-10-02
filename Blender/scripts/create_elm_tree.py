@@ -16,19 +16,22 @@ so the world lands on the terrain's 40 u/m — same pipeline as create_grass_clu
     on limb ends. Textures are 64 px designs saved 8x nearest-upscaled so the pixels stay hard in-engine.
 
 Structure of each model (one .fbx, two objects):
-    <name>_wood    ONE continuous closed mesh: trunk -> leaders -> space-colonised limbs. Each
+    <name>_wood    ONE continuous closed mesh: trunk -> leaders, and nothing forking off a leader in
+                   wood (every space-colonised limb becomes branch cards, see split_limbs). Each
                    skeleton segment is a tapered tube with a ball at every joint; a voxel remesh
                    fuses them into one surface (real crotches, nothing intersecting), then it is
-                   decimated, smooth shaded, and bark UVs run along each limb. Limb tips are 20 cm
+                   decimated, smooth shaded, and bark UVs run along each limb. Leader ends are ~40 cm
                    across (stylised, never stick-thin).
-    <name>_leaves  folded leaf cards in clumps on the limb ends: each card is two quads hinged on a
-                   centre crease, the 64x64 texture holds a twig with alternate (two-ranked) elm
-                   leaves, one rank per half of the fold. Cards are 1.8 m (stylised ~30 cm
-                   leaves, ~3 cm per texel) so the crown blocks the sky. No collision on leaves (vmdl physics = wood only).
+    <name>_leaves  bushy branch cards (Valheim-style, ~60 per tree): each card is two quads hinged on a
+                   centre crease, 3/4 as wide as long, base on a thick limb, running out to where the
+                   fine limbs it replaces reached (7-11 m). The 128x128 texture is Mark's reference
+                   card: a short brown stem forking into three, then leaf-sleeved arms with irregular
+                   gaps between them (~45 % opaque). The crown lets sky through between the branches
+                   on purpose (sky_through prints the % per tree). No collision on leaves (vmdl physics = wood only).
 
-Textures (64x64 designs, saved as 512x512 nearest-neighbour blocks so pixels stay hard):
+Textures (64x64 bark / 128x128 leaf designs, saved as 8x / 4x nearest-neighbour blocks so pixels stay hard):
     Assets/models/environment/tests/elm_bark_v<N>.png        grey-brown ridged bark + lichen (7-tone ramp), 5 cm per texel
-    Assets/models/environment/tests/elm_leaves_v<N>.png      big flat-toned lime leaves, midrib + faint veins, no baked light
+    Assets/models/environment/tests/elm_leaves_v<N>.png      bushy branch: brown stem, leaf-sleeved arms of small flat-toned leaves, no baked light
     Assets/models/environment/tests/elm_leaves_v<N>_mask.png cutout mask (complex.shader TextureTranslucency)
 """
 import bpy, bmesh, math, os, random, struct, sys, zlib
@@ -47,7 +50,7 @@ OLD_DIRS = [os.path.join(ROOT, "Assets", "models", "environment"),
 			os.path.join(ROOT, "Assets", "materials", "environment")]
 # Every regenerated set gets a new version number in all model + material names, and older
 # versions' files are deleted, so s&box never serves a stale compiled model or texture.
-VERSION = 34
+VERSION = 56
 BARK = f"elm_bark_v{VERSION}"
 GRAIN = f"elm_endgrain_v{VERSION}"
 LOG = f"environment_elm_log_v{VERSION}"
@@ -55,7 +58,6 @@ HALF = f"environment_elm_loghalf_v{VERSION}"
 ASSET_DIR = "models/environment/tests"
 PREFAB_DIR = os.path.join(ROOT, "Assets", "prefabs", "environment", "tests")
 PREFAB_REL = "prefabs/environment/tests"
-PREFAB_TEMPLATE = os.path.join(ROOT, "Assets", "prefabs", "environment", "temp_tree_2.prefab")
 LEAVES = f"elm_leaves_v{VERSION}"
 BLEND_OUT = os.path.join(ROOT, "Blender", "blenderprojects", f"environment_elm_v{VERSION}.blend")
 PREVIEW_DIR = os.path.join(ROOT, "Blender", "blenderprojects", "elm_preview")
@@ -66,6 +68,13 @@ TEX = 64
 # design is written nearest-neighbour upscaled: each design pixel becomes a PIXEL_BLOCK square
 # block, and bilinear only softens a 1/8-texel seam between blocks -> hard, visible pixels.
 PIXEL_BLOCK = 8
+# Leaf cards: a 128 x 128 design at 4x blocks (512 x 512 file) on a card 3/4 as wide as it is long,
+# so texels are ~6 x 4.7 cm in the world - close to the bark's - and the small leaves are ~5 texels
+# (~30 cm) instead of one blob. Both sides MUST be powers of two: the v46 96 x 128 design (384 px
+# wide) never compiled and every card drew the engine's red error material.
+LEAF_TEX_W, LEAF_TEX_H = 128, 128
+CARD_ASPECT = 0.75       # card width / length; the design is drawn in card space so its angles are true
+LEAF_BLOCK = PIXEL_BLOCK // 2
 BARK_TILE = 3.2         # m of bark per 64 px tile = 5 cm per texel on every limb (chunky pixels)
 UP = Vector((0, 0, 1))
 
@@ -78,13 +87,15 @@ def elm(s, E=2.6, split=4.5):
 	6-8 heavy leaders, each as thick as a young tree, that climb in a vase and arch over."""
 	R = 10.5 * s   # the clusters add ~20 % on top of this envelope
 	return dict(
-		base_r=1.05 * s, trunk_r=0.80 * s, top_r=0.86 * s, split_h=split * s,   # swells into the fork
+		base_r=0.80 * s, trunk_r=0.80 * s, top_r=0.86 * s, split_h=split * s,   # swells into the fork
 		flare_h=2.6 * s, flare=0.8,
 		lead_tilt=(26, 46), central_tilt=(5, 14), lead_len=7.0 * s, lead_segs=6,
 		zc=15.5 * s, R=R, H=6.5 * s, E=E,
 		floret=(0.28, 0.42),                  # cluster radius range, fraction of R
 		attractors=int(15 * R * R), step=0.7, influence=0.42 * R, kill=1.5,
-		droop=0.28, cards=int(45 * R * R), wood_tris=24000,
+		# wood_tris (all variants): 4000 since v39 — Mark could not tell 24k from 8k; 4k was the last
+		# budget before twig tips collapse into spikes (2k), compared side by side.
+		droop=0.28, wood_tris=4000,
 	)
 
 
@@ -96,7 +107,7 @@ def central(s, limbs_from=4.8):
 	R = 10.0 * s
 	return dict(
 		form="central",
-		base_r=1.10 * s, trunk_r=0.80 * s, top_r=0.34 * s, split_h=limbs_from * s,
+		base_r=0.80 * s, trunk_r=0.80 * s, top_r=0.34 * s, split_h=limbs_from * s,
 		trunk_h=18.0 * s,                     # where the central trunk ends inside the crown
 		flare_h=3.0 * s, flare=1.0,           # spreading root buttresses, as in the concept
 		limb_tilt=(45, 22),                   # deg off vertical: lowest limb .. highest limb
@@ -104,7 +115,7 @@ def central(s, limbs_from=4.8):
 		zc=14.0 * s, R=R, H=9.0 * s, E=2.2,
 		floret=(0.28, 0.40),
 		attractors=int(15 * R * R), step=0.7, influence=0.42 * R, kill=1.5,
-		droop=0.10, cards=int(45 * R * R), wood_tris=26000,
+		droop=0.10, wood_tris=4000,
 	)
 
 
@@ -125,13 +136,13 @@ def tiered(tiers, trunk_h, top_cr, trunk_r=0.8):
 	R = reach
 	return dict(
 		form="central", tiers=tiers, top_cr=top_cr,
-		base_r=trunk_r * 1.35, trunk_r=trunk_r, top_r=trunk_r * 0.42,
+		base_r=trunk_r, trunk_r=trunk_r, top_r=trunk_r * 0.42,
 		split_h=min(T["h"] for T in tiers) * 0.8, trunk_h=trunk_h,
 		flare_h=3.0, flare=1.0, lead_segs=6,
 		zc=(zlo + zhi) / 2, R=R, H=(zhi - zlo) / 2, E=2.6,
 		floret=(0.28, 0.40),
 		attractors=int(5 * area), step=0.7, influence=max(4.0, 0.4 * R), kill=1.5,
-		droop=0.12, cards=int(13 * area), wood_tris=24000,
+		droop=0.12, wood_tris=4000,
 	)
 
 
@@ -181,7 +192,10 @@ def tile_noise(x, y, rng, terms, fmax):
 # Chosen by Mark from rendered options (2026-09-27): bark "D1" and leaves "B2".
 BARK_RAMP = [(44, 38, 33), (62, 55, 48), (82, 74, 65), (102, 94, 83), (122, 114, 102), (142, 135, 122), (166, 160, 148)]
 LICHEN = [(104, 116, 84), (132, 144, 106), (160, 170, 132)]
-LEAF_RAMP = [(40, 66, 28), (62, 94, 32), (90, 124, 36), (122, 152, 44), (156, 180, 58), (190, 204, 84), (222, 226, 130)]
+STEM_RGB = BARK_RAMP[2]   # the card's stem in the bark's own grey-brown, so it blends into the limb it leaves (Mark, v48)
+# Leaf bases use tones 3 / 4 / 4 / 5 (midrib +1, veins -1). Tone 4 is Mark's base green #448c37
+# (v38: the old lime ramp read almost pastel); the ramp keeps that hue, darker below and lighter above.
+LEAF_RAMP = [(22, 48, 20), (32, 68, 28), (44, 92, 36), (56, 116, 46), (68, 140, 55), (92, 162, 70), (128, 186, 96)]
 
 
 def make_bark_texture():
@@ -229,46 +243,117 @@ def make_bark_texture():
 	return np.dstack([rgb, np.full((TEX, TEX), 255)]).astype(np.uint8)
 
 
+def connected_to(mask, seed):
+	"""The 4-connected part of `mask` reachable from any True cell of `seed` (both (h, w) bool)."""
+	keep = mask & seed
+	while True:
+		grown = keep.copy()
+		grown[1:] |= keep[:-1]
+		grown[:-1] |= keep[1:]
+		grown[:, 1:] |= keep[:, :-1]
+		grown[:, :-1] |= keep[:, 1:]
+		grown &= mask
+		if (grown == keep).all():
+			return keep
+		keep = grown
+
+
 def make_leaf_texture():
-	"""Twig up the middle (the card's fold line), alternate elm leaves on both sides, sunlit-lime
-	ramp. No baked lighting (the game lights the cards): each leaf is one flat tone with a little
-	per-leaf variation, a paler midrib and faint darker lateral veins; small serration teeth."""
+	"""Bushy branch card (v46, Mark's reference): a short brown stem forking into three, then a leafy
+	main axis up the middle with side arms leaving alternately (long and flat low down, shorter and
+	steeper near the top), each arm with sub-arms forking forward. Every arm is a SLEEVE of small
+	leaves - nothing is drawn as a line - so the branch structure reads only through the irregular
+	gaps between the leafy arms (~45 % opaque). No baked lighting: flat per-leaf tones plus a midrib.
+	Everything not connected to the stem is erased (no leaf floats free). Drawn in card space
+	(x = (u - 0.5) * CARD_ASPECT, y = v) so the angles are true on the card."""
 	rng = random.Random(9)
-	px, py = np.meshgrid((np.arange(TEX) + 0.5) / TEX, 1.0 - (np.arange(TEX) + 0.5) / TEX)
-	tone = np.full((TEX, TEX), -1)
+	W, H = LEAF_TEX_W, LEAF_TEX_H
+	pu, pv = np.meshgrid((np.arange(W) + 0.5) / W, 1.0 - (np.arange(H) + 0.5) / H)
+	px = (pu - 0.5) * CARD_ASPECT
+	tone = np.full((H, W), -1)
+	stem = np.zeros((H, W), bool)
+
+	def line(mask, a, b, w):
+		(ax, ay), (bx, by) = a, b
+		dx, dy = bx - ax, by - ay
+		t = np.clip(((px - ax) * dx + (pv - ay) * dy) / (dx * dx + dy * dy + 1e-9), 0, 1)
+		mask[np.hypot(px - (ax + t * dx), pv - (ay + t * dy)) < w] = True
+
+	# short brown stem forking into three, like the reference: ~20 % of the card
+	line(stem, (0.0, 0.02), (0.0, 0.12), 0.0035)   # v53 (Mark): thin, ~one texel
+	forks = [(-0.04, 0.21), (0.005, 0.23), (0.045, 0.2)]
+	for f in forks:
+		line(stem, (0.0, 0.11), f, 0.003)
+
 	leaves = []
-	count = 3
-	for i in range(count):
-		for side in (-1, 1):
-			t = i / (count - 1)
-			ay = 0.03 + t * 0.52 + (0.10 if side > 0 else 0.0)
-			ang = math.pi / 2 - side * math.radians(55 - 20 * t + rng.uniform(-5, 5))
-			length = 0.60 - 0.12 * t + rng.uniform(-0.03, 0.03)
-			leaves.append((ay, 0.5 + 0.012 * side, ang, length))
-	leaves.sort()
-	leaves.append((0.62, 0.5, math.pi / 2 + rng.uniform(-0.1, 0.1), 0.37))   # terminal leaf
-	for ay, ax, ang, length in leaves:
-		width = length * 0.54
+	def sleeve(a, b, half_w, density):
+		"""Leaves along a branch segment: the branch is a sleeve of leaves, never a drawn line."""
+		(ax, ay), (bx, by) = a, b
+		L = math.hypot(bx - ax, by - ay)
+		nx, ny = -(by - ay) / (L + 1e-9), (bx - ax) / (L + 1e-9)
+		for _ in range(int(L * half_w * density)):
+			t = rng.random()
+			off = rng.gauss(0, 0.5) * half_w
+			if abs(off) > half_w * 1.3:
+				continue
+			x, y = ax + (bx - ax) * t + nx * off, ay + (by - ay) * t + ny * off
+			ang = math.atan2(ny, nx) * (1 if off > 0 else -1) + rng.uniform(-1.2, 1.2)
+			leaves.append((x, y, ang, rng.uniform(0.035, 0.05)))
+
+	def arm(p, ang, length, level):
+		"""One leafy arm: a sleeved segment that ends in a tuft, with sub-arms forking forward."""
+		for _ in range(6):                        # stay inside the card
+			e = (p[0] + math.sin(ang) * length, p[1] + math.cos(ang) * length)
+			if abs(e[0]) < 0.30 and e[1] < 0.9:
+				break
+			length *= 0.75
+		if length < 0.04:
+			return
+		sleeve(p, e, 0.025 - 0.003 * level, 30000)
+		sleeve(e, (e[0] + math.sin(ang) * 0.025, e[1] + math.cos(ang) * 0.025), 0.042, 30000)
+		if level >= 2:
+			return
+		for t, da in ((0.55, -1), (1.0, 1))[:2 - level]:
+			q = (p[0] + (e[0] - p[0]) * t, p[1] + (e[1] - p[1]) * t)
+			arm(q, ang + da * math.radians(rng.uniform(30, 45)), length * rng.uniform(0.45, 0.6), level + 1)
+
+	# main leafy axis up the middle, from the fork to the top
+	axis = [(0.0, 0.22)]
+	while axis[-1][1] < 0.9:
+		x, y = axis[-1]
+		axis.append((x + rng.uniform(-0.03, 0.03), y + 0.13))
+	for p, q in zip(axis, axis[1:]):
+		sleeve(p, q, 0.029, 30000)
+	sleeve(axis[-1], (axis[-1][0], axis[-1][1] + 0.03), 0.044, 30000)
+	# side arms leave the axis alternately, long and flat low down, shorter and steeper higher up
+	side = -1
+	for i, (x, y) in enumerate(axis[:-1]):
+		t = i / max(1, len(axis) - 2)
+		ang = side * math.radians(70 - 30 * t + rng.uniform(-8, 8))
+		arm((x, y + rng.uniform(0.0, 0.06)), ang, (0.30 - 0.14 * t) * rng.uniform(0.85, 1.15), 0)
+		side = -side
+	# the two lowest forks each throw one low arm out sideways too (the fan is widest low down)
+	arm(forks[0], math.radians(-75), 0.2, 1)
+	arm(forks[2], math.radians(74), 0.2, 1)
+	rng.shuffle(leaves)
+	for lx, ly, ang, length in leaves:
 		d = np.array([math.cos(ang), math.sin(ang)])
-		p = np.array([-d[1], d[0]])
-		rx, ry = px - ax, py - ay
-		a = (rx * d[0] + ry * d[1]) / length
-		b = (rx * p[0] + ry * p[1]) / (width * 0.5)
-		a_side = np.where(b > 0, (a - 0.07) / 0.93, a)                    # elm: lopsided base
-		prof = np.clip(a_side, 0, 1) ** 0.55 * np.clip(1 - a, 0, 1) ** 0.85 / (0.39 ** 0.55 * 0.61 ** 0.85)
-		prof = prof * (1 - 0.07 * (np.sin(a * 38) > 0.3))
+		rx_, ry_ = px - lx, pv - ly
+		a = (rx_ * d[0] + ry_ * d[1]) / length
+		b = (-rx_ * d[1] + ry_ * d[0]) / (length * 0.25)
+		prof = np.clip(a, 0, 1) ** 0.5 * np.clip(1 - a, 0, 1) ** 0.7 / (0.4 ** 0.5 * 0.6 ** 0.7)
 		inside = (a > 0) & (a < 1) & (np.abs(b) < prof)
-		base = rng.choice((3, 4, 4, 5))
-		leaf = np.where(np.abs(b) < 0.1, base + 1, np.full((TEX, TEX), base))
-		vein = (np.mod(a * 6.5 - np.abs(b) * 1.3, 1.0) < 0.14) & (np.abs(b) > 0.2) & (np.abs(b) < prof - 0.15)
-		leaf = np.where(vein, base - 1, leaf)
+		base = rng.choice((2, 3, 3, 4, 4, 4, 5, 5))
+		leaf = np.where((np.abs(b) < 0.22) & (a > 0.15) & (a < 0.85), base + 1, np.full((H, W), base))
 		tone[inside] = np.clip(leaf, 0, 6)[inside]
-	stem = (np.abs(px - 0.5) < 0.016) & (py < 0.80)
+	tone[(pv > 0.97) | (np.abs(px) > CARD_ASPECT * 0.5 - 0.02)] = -1
+	alpha = connected_to((tone >= 0) | stem, stem)
+	tone[~alpha] = -1
 	ramp = np.array(LEAF_RAMP, float)
 	rgb = ramp[np.clip(tone, 0, 6)]
-	rgb[stem] = (84, 70, 44)
-	alpha = (tone >= 0) | stem
+	rgb[stem & (tone < 0)] = STEM_RGB
 	rgb[~alpha] = ramp[3]              # bleed colour under the cutout, never black
+	print(f"leaf texture: {len(leaves)} leaves, {alpha.mean() * 100:.0f} % opaque")
 	return np.dstack([rgb, np.where(alpha, 255, 0)]).astype(np.uint8)
 
 
@@ -415,6 +500,131 @@ def add_roots(nodes, base, P, rr):
 			z = 0.35 * settle + r * 0.5 + wave + dive
 			nodes.append(Node(Vector((pos.x, pos.y, z)), r, prev, 0))
 			prev = len(nodes) - 1
+
+
+TIPS_PER_CARD = 2.3      # one branch card per ~2.3 fine-limb tips it replaces: ~60 cards per tree (Mark)
+CARDS_MAX_PER_ROOT = 8   # cap per fine-limb subtree
+TIP_FAN, TIP_BURY = 4, 3.8   # cards per leader end, and how far (m) their bases sit back along the limb
+CARDS_PER_TREE = 100     # every tree gets exactly this many cards (Mark, v51: "100 so it's a little more filled in")
+CARDS_PER_FLORET_M = 0.85 # v50: every crown cluster gets at least (radius / this) cards, filled from the nearest wood
+CARD_BASE_MIN = 0.7      # a card's base must sit above zc - CARD_BASE_MIN * H: no cards halfway down the leaders (Mark)
+
+
+def split_limbs(nodes, P, florets, rng):
+	"""v44 (Mark, from Valheim): the wood is the trunk and a few thick limbs; everything finer is
+	drawn by the leaf cards, which read as branches themselves. v51 (Mark: "no additional hard limbs
+	that split off" a limb): the wood is ONLY the trunk and the leaders - nothing forks off a leader
+	in wood; every space-colonised limb is cut. Each cut-off subtree (rooted where it left a leader) is replaced by
+	branch cards fanning from that point to its farthest-apart tips, one per ~TIPS_PER_CARD tips,
+	so the cards reach exactly where the space-colonised limbs did and the crown keeps its shape.
+	Returns (wood nodes, compacted and re-linked; cards as (base, direction, length))."""
+	n = len(nodes)
+	keep = [nd.depth == 0 or (nd.depth == 1 and nd.r > 0) for nd in nodes]
+	# v51: a leader whose tip stops below the crown used to be carried up by its sub-limbs; with no
+	# wood forking off leaders it would stand as a bare stub, so the whole leader is dropped.
+	z_min = P["zc"] - CARD_BASE_MIN * P["H"]
+	lead_kid = [False] * n
+	for i, nd in enumerate(nodes):
+		if nd.depth == 1 and nd.parent >= 0 and nodes[nd.parent].depth == 1:
+			lead_kid[nd.parent] = True
+	for i, nd in enumerate(nodes):
+		if nd.depth == 1 and keep[i] and not lead_kid[i] and nd.pos.z < z_min:
+			j = i
+			while j >= 0 and nodes[j].depth == 1:
+				keep[j] = False
+				j = nodes[j].parent
+	kids = {}
+	for i, nd in enumerate(nodes):
+		if nd.parent >= 0:
+			kids.setdefault(nd.parent, []).append(i)
+	branches = []
+	for i, nd in enumerate(nodes):
+		if keep[i] or nd.parent < 0 or not keep[nd.parent]:
+			continue
+		# subtree of i: collect its tips
+		tips, stack = [], [i]
+		while stack:
+			j = stack.pop()
+			ks = kids.get(j, [])
+			if ks:
+				stack.extend(ks)
+			else:
+				tips.append(nodes[j].pos)
+		root = nodes[nd.parent].pos
+		want = max(1, min(CARDS_MAX_PER_ROOT, round(len(tips) / TIPS_PER_CARD)))
+		chosen = [max(tips, key=lambda t: (t - root).length)]
+		while len(chosen) < want and len(chosen) < len(tips):
+			chosen.append(max(tips, key=lambda t: min((t - c).length for c in chosen)))
+		for t in chosen:
+			v = t - root
+			if v.length < 1e-3:
+				continue
+			branches.append((root, v.normalized(), v.length))
+		# v49 (Mark: "not enough up top"): fine limbs in the upper crown are short, so every subtree
+		# rooted above the crown centre also throws one card straight up-and-out
+		if root.z > P["zc"]:
+			up_out = (outward(root) * 0.9 + UP * 0.6).normalized()
+			branches.append((root, up_out, max(4.0, 0.6 * max((t - root).length for t in tips))))
+	# v50 (Mark): no cards halfway down the tree - fine limbs that sprouted low on a leader put
+	# their cards near the fork. A card's base has to be up in the crown.
+	branches = [b for b in branches if b[0].z > z_min]
+	# v52 (Mark): bury every leader END in leaves - TIP_FAN cards per wood tip, bases set back inside
+	# the wood, fanned about the limb direction, so the end of the limb cannot be seen.
+	has_kid = [False] * n
+	for i, nd in enumerate(nodes):
+		if keep[i] and nd.parent >= 0:
+			has_kid[nd.parent] = True
+	for i, nd in enumerate(nodes):
+		if keep[i] and nd.depth >= 1 and not has_kid[i] and nd.pos.z > z_min:
+			d = (nd.pos - nodes[nd.parent].pos).normalized() if nd.parent >= 0 else UP
+			for k in range(TIP_FAN):
+				yaw = math.radians(rng.uniform(-35, 35))
+				dk = (d * math.cos(yaw) + d.cross(UP).normalized() * math.sin(yaw) + UP * rng.uniform(-0.25, 0.2)).normalized()
+				branches.append((nd.pos - d * TIP_BURY, dk, 6.5))
+	if len(branches) > CARDS_PER_TREE:
+		# keep a spatially EVEN subset (farthest-point over card tips), not the longest: dropping the
+		# short ones stripped whole limb ends bare (elm5, v50)
+		tips_of = [b[0] + b[1] * b[2] for b in branches]
+		chosen = [max(range(len(branches)), key=lambda i: branches[i][2])]
+		dist = [(tips_of[i] - tips_of[chosen[0]]).length for i in range(len(branches))]
+		while len(chosen) < CARDS_PER_TREE:
+			j = max(range(len(branches)), key=lambda i: dist[i])
+			chosen.append(j)
+			dist = [min(dist[i], (tips_of[i] - tips_of[j]).length) for i in range(len(branches))]
+		branches = [branches[i] for i in chosen]
+	# v50 (Mark): cards only left the wood where a fine limb did, so whole flanks of the crown were
+	# bald higher up. Every cluster (floret) now gets at least its share of cards: any short cluster
+	# is filled from the wood nodes inside or beside it, each card aimed at a random point in the
+	# cluster's upper half.
+	wood = [nd.pos for i, nd in enumerate(nodes) if keep[i] and nd.depth >= 1 and nd.pos.z > z_min]
+
+	def fill(fl):
+		c, rh, rv = fl
+		near = [w for w in wood if floret_value(w, fl) < 2.5] or [min(wood, key=lambda w: (w - c).length)]
+		w = rng.choice(near)
+		aim = c + Vector((rng.uniform(-0.8, 0.8) * rh, rng.uniform(-0.8, 0.8) * rh, rng.uniform(-0.35, 0.7) * rv))
+		v = aim - w
+		if v.length < 1.0:
+			v = (outward(w) + UP).normalized() * rh
+		branches.append((w, v.normalized(), v.length + 0.5 * rh))
+
+	if wood:
+		for fl in florets:
+			have = sum(1 for b in branches if floret_value(b[0] + b[1] * b[2] * 0.7, fl) < 1.0)
+			for _ in range(max(3, int(fl[1] / CARDS_PER_FLORET_M)) - have):
+				fill(fl)
+		# then top the tree up to CARDS_PER_TREE, clusters weighted by their volume
+		weights = [rh * rh * rv for _, rh, rv in florets]
+		while len(branches) < CARDS_PER_TREE:
+			fill(rng.choices(florets, weights)[0])
+	remap, out = {}, []
+	for i, nd in enumerate(nodes):
+		if not keep[i]:
+			continue
+		remap[i] = len(out)
+		nd.parent = remap[nd.parent] if nd.parent >= 0 else -1
+		out.append(nd)
+	return out, branches
 
 
 def build_skeleton(rng, P, leader_count):
@@ -576,6 +786,18 @@ def build_skeleton(rng, P, leader_count):
 			feeds[nodes[i].parent] = True
 	child_sum = [0.0] * len(nodes)
 	has_child = [False] * len(nodes)
+	# Caps (Mark, v37: elm3 had one leader as thick as the trunk ending in a blunt stub). A leader that
+	# claims a big share of the crown collects a huge pipe sum; nothing held it to its authored size.
+	# Leaders now stay within LEADER_CAP of their authored taper, and a limb is never thicker than
+	# LIMB_CAP of the leader it grows from (ancestor radii are known: parents precede children).
+	LEADER_CAP, LIMB_CAP = 1.25, 0.85
+	authored = [n.r for n in nodes]
+	lead_r = [0.0] * len(nodes)
+	for i, n in enumerate(nodes):
+		if n.depth == 1:
+			lead_r[i] = authored[i]
+		elif n.depth == 2 and i > 0:
+			lead_r[i] = lead_r[n.parent] if lead_r[n.parent] > 0 else authored[n.parent]
 	for i in range(len(nodes) - 1, 0, -1):
 		n = nodes[i]
 		if n.depth == 0:
@@ -586,7 +808,11 @@ def build_skeleton(rng, P, leader_count):
 		r_pipe = TIP_R if not has_child[i] else child_sum[i] ** (1 / PIPE)
 		# leaders keep their authored heavy taper; the thicker pipe model below them means the
 		# limbs they hand off to are close in size, so there is no pinch at the leader end
-		n.r = max(n.r, r_pipe) if n.depth == 1 else r_pipe
+		if n.depth == 1:
+			n.r = min(max(n.r, r_pipe), authored[i] * LEADER_CAP)
+		else:
+			n.r = min(r_pipe, lead_r[i] * LIMB_CAP) if lead_r[i] > 0 else r_pipe
+			n.r = max(n.r, TIP_R)
 		child_sum[n.parent] += n.r ** PIPE
 		has_child[n.parent] = True
 	return nodes, florets
@@ -596,6 +822,7 @@ def build_skeleton(rng, P, leader_count):
 
 WOOD_VOXEL = 0.03      # m; thinnest meshed limb is 10 cm across so this keeps every end closed
 WOOD_MIN_R = 0.05      # m; thinner twig steps are not meshed (hidden in their leaf clump)
+WOOD_FLOOR = -0.15     # m; the wood is squashed flat here - v53 (Mark): the flared trunk continued 0.9 m underground and read as a ball wherever the terrain sat below the origin
 
 
 def bake(obj, *mods):
@@ -622,10 +849,10 @@ def build_wood(name, nodes, rng, P):
 	for i, n in enumerate(nodes):
 		if n.r < WOOD_MIN_R:
 			continue  # the last twig steps live inside the leaf clumps; no wood for them
+		if n.parent < 0:
+			continue  # v43: no ball at the base node - it bulged out of the ground as a ball around the trunk foot
 		ball = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=n.r)
 		bmesh.ops.translate(bm, verts=ball["verts"], vec=n.pos)
-		if n.parent < 0:
-			continue
 		p = nodes[n.parent]
 		d = (n.pos - p.pos).normalized()
 		a1 = d.orthogonal().normalized()
@@ -680,7 +907,7 @@ def build_wood(name, nodes, rng, P):
 		co = v.co
 		wob = noise.noise_vector(co * 0.35 + seed) * 0.05
 		if co.z < P["flare_h"]:
-			fade = (1 - max(co.z, -0.4) / P["flare_h"]) ** 2.8
+			fade = (1 - max(co.z, 0.0) / P["flare_h"]) ** 2.8   # no extra push below ground
 			theta = math.atan2(co.y, co.x)
 			radial = Vector((co.x, co.y, 0))
 			rlen = radial.length
@@ -692,6 +919,8 @@ def build_wood(name, nodes, rng, P):
 			if rlen > 1e-6:
 				co += radial / rlen * (P["trunk_r"] * P["flare"] * fade * lobe * near)
 		v.co = co + wob
+		if v.co.z < WOOD_FLOOR:
+			v.co.z = WOOD_FLOOR
 
 	# Round off the fork zone: where the trunk hands over to its leaders the fused tubes can leave a
 	# pinched crease that reads as a gap in the trunk. Extra Laplacian smoothing on that band only.
@@ -717,10 +946,13 @@ def bark_uvs(me, nodes, P):
 	roots leave the trunk the bark just changes direction at a clean seam instead of smearing one
 	face across two different parts of the texture. Along one limb the frames are parallel-
 	transported and v uses the unclamped axis position, so neighbouring faces still line up.
-	Faces that point along their limb (fork saddles, the flare) get a flat projection at the
-	same texel size instead, since no wrap-around mapping can cover them without stretching.
-	The whole trunk flare maps off the trunk axis as one surface. Each limb / root gets its own
-	random offset + mirror of the pattern so forks never show repeated bark."""
+	Faces that point along their limb (fork saddles) get a flat projection at the same texel
+	size instead, since no wrap-around mapping can cover them without stretching.
+	The BASE (flare + roots, v54) is one world-aligned box projection at the same texel size:
+	side faces take (horizontal, height), top / underside faces take (x, y). Wrapping the flare
+	around the trunk and the roots around their own axes made neighbouring faces pick different
+	segments, and the foot broke into herringbone patches (Mark). Each limb gets its own random
+	offset + mirror of the pattern so forks never show repeated bark."""
 	N = len(nodes)
 	# Which child continues its parent's bark: a trunk section (depth 0) always does - a leader can
 	# be thicker than the short trunk piece above a fork, and giving the trunk a new offset there
@@ -782,23 +1014,14 @@ def bark_uvs(me, nodes, P):
 		t = np.clip((AP * AB[None]).sum(2) / L2[None], 0, 1)
 		d = np.sqrt(((AP - t[..., None] * AB[None]) ** 2).sum(2))
 		fseg[c0:c0 + 256] = d.argmin(1)
-	# The flare around the trunk base maps as ONE surface off the trunk's first segment (node 0 ->
-	# node 1): otherwise faces there flip between trunk, root and flat mappings and the base turns
-	# into a patchwork of short seams. Roots take their own mapping once clear of the flare.
-	# Flare faces map off the TRUNK's own segments (nearest one along the trunk chain), not one
-	# straight line from the ground: the trunk wanders a little, and a single straight axis drifted
-	# off it by the top of the flare, drawing a ring across the trunk where the mappings met.
-	trunk_segs = np.array([k for k, (a, b) in enumerate(segs)
-						   if nodes[b].depth == 0 and b != 0 and math.hypot(nodes[b].pos.x, nodes[b].pos.y) < P["trunk_r"]
-						   and nodes[b].pos.z > 0.0])
-	flare_zone = (np.hypot(C[:, 0], C[:, 1]) < P["trunk_r"] * 1.9) & (C[:, 2] < P["flare_h"] + 0.3)
-	own_seg = fseg.copy()          # nearest segment, used if the flare mapping squashes a face
-	if len(trunk_segs):
-		Cz = C[flare_zone]
-		AP = Cz[:, None, :] - A[trunk_segs][None]
-		t = np.clip((AP * AB[trunk_segs][None]).sum(2) / L2[trunk_segs][None], 0, 1)
-		near = ((AP - t[..., None] * AB[trunk_segs][None]) ** 2).sum(2).argmin(1)
-		fseg[flare_zone] = trunk_segs[near]
+	# The base zone: every face on the flare or on a root (a root is a depth-0 chain hanging off
+	# node 0 that is not the trunk). Mapped below as one box projection.
+	is_root = [False] * N
+	for i in range(1, N):
+		is_root[i] = (nodes[i].parent == 0 and i != 1) or is_root[nodes[i].parent]
+	root_seg = np.array([is_root[b] for _, b in segs])
+	base_zone = (C[:, 2] < P["flare_h"] + 0.3) & ((np.hypot(C[:, 0], C[:, 1]) < P["trunk_r"] * 1.9) | root_seg[fseg])
+	z0 = nodes[0].pos.z          # the trunk's v starts here, so the box mapping's height lines up with it
 
 	D = AB / np.sqrt(L2)[:, None]
 	R0 = np.array([ref[b] for _, b in segs])
@@ -827,35 +1050,17 @@ def bark_uvs(me, nodes, P):
 			for li, pw in zip(poly.loop_indices, co[vis]):
 				uv.data[li].uv = (pw @ t2 / BARK_TILE + ou[b_], pw @ t1 / BARK_TILE + ov[b_])
 
-		if flare_zone[poly.index]:
-			# Flare: wrap around the trunk axis, and measure "along the bark" down the flare's
-			# slope (height minus how far the surface has swelled out), so the trunk's streaks run
-			# straight down and spill out over the flare instead of breaking into patches.
-			# Same axis frame as the trunk segment above it; the swell correction fades to zero at
-			# the zone's top edge, so where the flare meets the trunk both mappings are identical
-			# (no ring / seam around the trunk).
-			Pp = co[vis] - A[si]
-			t = Pp @ AB[si] / L2[si]
-			rad = Pp - np.outer(t, AB[si])
-			rl = np.maximum(np.linalg.norm(rad, axis=1), 0.02)
-			th = np.arctan2(rad @ S0[si], rad @ R0[si])
-			period = 2 * np.pi * rl / BARK_TILE
-			u = th / (2 * np.pi) * period
-			ztop = P["flare_h"] + 0.3
-			fade = np.clip((ztop - co[vis][:, 2]) / (0.5 * ztop), 0, 1)
-			v = VA[si] + (VB[si] - VA[si]) * t - fade * np.maximum(0.0, rl - P["trunk_r"]) / BARK_TILE
-			for k in range(1, len(u)):
-				if u[k] - u[0] > period[k] / 2:
-					u[k] -= period[k]
-				elif u[0] - u[k] > period[k] / 2:
-					u[k] += period[k]
-			if stretch_ok(u, v, poly.area):
-				for li, uu, vv in zip(poly.loop_indices, u, v):
-					uv.data[li].uv = (uu, vv)
-				continue
-			# a root's side wall leaving the flare: map it off its own root instead
-			si = own_seg[poly.index]
-			along = n @ D[si]
+		if base_zone[poly.index]:
+			# Box projection from the face's dominant axis: side faces keep the bark streaks vertical
+			# (v = height, continuous with the trunk's v above), tops and undersides of roots take (x, y).
+			ax = int(np.argmax(np.abs(n)))
+			for li, pw in zip(poly.loop_indices, co[vis]):
+				if ax == 2:
+					uv.data[li].uv = (pw[0] / BARK_TILE + ou[1], pw[1] / BARK_TILE + ov[1])
+				else:
+					side = pw[1] if ax == 0 else pw[0]
+					uv.data[li].uv = (side / BARK_TILE + ou[1], (pw[2] - z0) / BARK_TILE + ov[1])
+			continue
 		if abs(along) > 0.6:
 			flat()   # saddle faces facing along the limb: wrap-around can only smear them
 			continue
@@ -925,15 +1130,22 @@ def island_count(me):
 
 # ---------------------------------------------------------------------------- leaf cards
 
-CARD_LEN = 1.8    # m; stylised big leaves (~30 cm) at ~3 cm per texel, dense enough to block the sky
+# Performance (Mark): alpha-tested double-sided cards are the most expensive pixels in the scene (no
+# early-z, several stacked layers per pixel), so the count is kept low and the cards big.
+# v44 (Mark, Valheim screenshots): "they make a few limbs, 3-5, and then the cards themselves appear
+# as if they're limbs". Each card is a branch: its base ON the wood where a fine limb left it, running
+# roughly out to where that limb's tips were but tilted off the limb axis at random (CARD_SCATTER),
+# face turned up-and-out of its cluster and rolled freely about its own length (CARD_ROLL).
+CARD_LEN = (7.0, 11.0)   # m; clamp on the replaced limb's reach (plus the tuft beyond the last tip)
+CARD_EXTRA = 1.5         # m added past the farthest tip so the card's end tuft covers it
+CARD_ROLL = 80           # deg, random either way about the branch
+CARD_SCATTER = 0.5       # random tilt off the limb axis (unit-vector weight); v47's cards all lay along their limbs and left V-shaped sky gaps between the limbs (Mark)
 
 
-def build_leaves(name, nodes, florets, rng, P):
-	"""Leaf clumps on the thin ends of the limbs: every card sits within ~0.9 m of a twig node
-	(radius < 16 cm), so each one belongs to a clump that hangs off a real limb. Cards stay inside
-	their floret (slightly inflated) so each cluster keeps a crisp rounded edge, and they are
-	shaded as part of that floret (normals out from its centre): lit tops, darker undersides."""
-	anchors = [n.pos for n in nodes if n.depth >= 1 and 0 < n.r < 0.16]
+def build_leaves(name, branches, florets, rng, P):
+	"""Branch cards: one folded card per (base, direction, reach) from split_limbs, base on the wood,
+	fold along the branch, face turned up-and-out of its cluster with a random roll. Cards are
+	shaded as part of their floret (normals out from its centre): lit tops, darker undersides."""
 
 	def home(p):
 		vals = [floret_value(p, f) for f in florets]
@@ -945,7 +1157,7 @@ def build_leaves(name, nodes, florets, rng, P):
 
 	def card(base, t, n, length):
 		side = t.cross(n).normalized()
-		w = length * 0.5
+		w = length * CARD_ASPECT * 0.5
 		tip = base + t * length
 		lo = side * (-math.cos(fold) * w) + n * (math.sin(fold) * w)
 		ro = side * (math.cos(fold) * w) + n * (math.sin(fold) * w)
@@ -958,25 +1170,25 @@ def build_leaves(name, nodes, florets, rng, P):
 		uvs.append(((0.5, 0), (1, 0), (1, 1), (0.5, 1)))
 
 	picked, card_home = [], []
-	per = P["cards"] / max(1, len(anchors))
-	for a in anchors:
-		for _ in range(int(per) + (1 if rng.random() < per - int(per) else 0)):
-			for _try in range(4):
-				base = a + rand_unit(rng) * rng.uniform(0.0, 0.9)
-				k, v = home(base)
-				if v < 1.15:
-					break
-			else:
-				continue
-			o = (base - florets[k][0]).normalized()
-			t = (o * 0.6 + UP * 0.25 + rand_unit(rng) * 0.8).normalized()
-			n = o + rand_unit(rng) * 0.7 + UP * 0.3
-			n = n - t * n.dot(t)
-			if n.length < 1e-3:
-				n = t.orthogonal()
-			card(base - t * CARD_LEN * 0.3, t, n.normalized(), rng.uniform(CARD_LEN * 0.88, CARD_LEN * 1.12))
-			picked.append(tuple(base))
-			card_home.append(k)
+	for base, d0, reach in branches:
+		length = min(CARD_LEN[1], max(CARD_LEN[0], reach + CARD_EXTRA))
+		# scatter the card off the limb axis so neighbouring fans cross instead of lining up. v52 (Mark,
+		# elm1: "all standing directly upward"): no upward bias any more - outer cards may droop a
+		# little, but never hang (v49: cards hung below the crown)
+		d = (d0 + rand_unit(rng) * CARD_SCATTER + UP * rng.uniform(-0.1, 0.25)).normalized()
+		if d.z < -0.2:
+			d = Vector((d.x, d.y, -0.2)).normalized()
+		mid = base + d * length * 0.5
+		k, _ = home(mid)
+		o = (mid - florets[k][0]).normalized()
+		n0 = o + UP * 0.6
+		n0 = n0 - d * n0.dot(d)
+		n0 = n0.normalized() if n0.length > 1e-3 else d.orthogonal().normalized()
+		roll = math.radians(rng.uniform(-CARD_ROLL, CARD_ROLL))
+		n = (n0 * math.cos(roll) + d.cross(n0) * math.sin(roll)).normalized()
+		card(base, d, n, length)
+		picked += [tuple(mid), tuple(base + d * length)]
+		card_home.append(k)
 
 	me = bpy.data.meshes.new(name)
 	me.from_pydata(verts, [], faces)
@@ -1111,6 +1323,46 @@ def crown_bald_spot(pts, P):
 	return worst
 
 
+def sky_through(leaves, P):
+	"""% of the crown footprint (a disc of 0.85 R, seen straight down, orthographic, transparent film)
+	that shows sky through the leaf cards. Mark's "see the sky from beneath" check, printed per tree
+	so a density change can be compared against the previous version's numbers."""
+	scene = bpy.context.scene
+	for eng in ("BLENDER_EEVEE", "BLENDER_EEVEE_NEXT"):
+		try:
+			scene.render.engine = eng
+			break
+		except TypeError:
+			pass
+	res = 400
+	scene.render.resolution_x = scene.render.resolution_y = res
+	scene.render.film_transparent = True
+	cam = bpy.data.objects.new("sky_cam", bpy.data.cameras.new("sky_cam"))
+	scene.collection.objects.link(cam)
+	scene.camera = cam
+	cam.data.type = 'ORTHO'
+	cam.data.ortho_scale = 2 * P["R"]
+	cam.location, cam.rotation_euler = (0, 0, P["zc"] + P["H"] + 20), (0, 0, 0)
+	path = os.path.join(PREVIEW_DIR, "_probe_sky.png")
+	os.makedirs(PREVIEW_DIR, exist_ok=True)
+	hidden = [(o, o.hide_render) for o in bpy.data.objects if o.type == 'MESH' and o is not leaves]
+	for o, _ in hidden:
+		o.hide_render = True
+	scene.render.filepath = path
+	bpy.ops.render.render(write_still=True)
+	for o, h in hidden:
+		o.hide_render = h
+	img = bpy.data.images.load(path)
+	a = np.array(img.pixels[:]).reshape(res, res, 4)[:, :, 3] > 0.5
+	bpy.data.images.remove(img)
+	yy, xx = np.mgrid[0:res, 0:res]
+	disc = np.hypot(xx - res / 2 + 0.5, yy - res / 2 + 0.5) < 0.85 * res / 2
+	bpy.data.objects.remove(cam, do_unlink=True)
+	scene.render.film_transparent = False
+	os.remove(path)
+	return 100.0 * (~a & disc).sum() / disc.sum()
+
+
 # ---------------------------------------------------------------------------- materials
 
 def blender_material(name, png, alpha_clip):
@@ -1177,16 +1429,19 @@ VMAT_LEAVES = """Layer0
 # citizen uses 5 / 20 / 40 / 70 for a 1.8 m body, so a 25 m tree needs far bigger numbers — 4 / 10 / 24
 # put every tree on LOD3 almost at once. Calibrate in ModelDoc with "Set LOD threshold from current
 # camera position" and copy the numbers back here.
-# Mark's LOD distances for generated models: 100 / 200 / 300 m.
+# Mark's LOD distances for generated models: 100 / 200 / 300 m. The first column is METERS; the vmdl
+# switch_threshold is not: thresholds of 100 / 200 / 300 switched in game at ~25 / 50 / 100 m, so the
+# engine value is ~4 per meter. vmdl_text multiplies by LOD_THRESHOLD_PER_METER.
+LOD_THRESHOLD_PER_METER = 4.0
 # Gentle steps so the swap does not pop: each level drops ~30-50 % of the remaining cards (never half
 # the crown at once), and kept cards grow only ~kept^-0.35 (partial area compensation) so the pixel
 # leaves do not visibly jump in size. Cards are nested (LOD3 subset of LOD2 subset of LOD1): a card
 # that survives a swap never moves.
 TREE_LODS = [
 	(0.0, None, 1.0, 1.0),
-	(100.0, 6000, 0.7, 1.13),
-	(200.0, 1500, 0.4, 1.38),
-	(300.0, 400, 0.2, 1.76),
+	(100.0, 2000, 0.7, 1.13),
+	(200.0, 800, 0.4, 1.38),
+	(300.0, 300, 0.2, 1.76),
 ]
 # Collision uses this LOD's wood: a full-res 24k-tri physics mesh per tree is slow to build and query.
 TREE_PHYSICS_LOD = 2
@@ -1308,7 +1563,7 @@ def vmdl_text(name, lods=((0.0, None, 1.0, 1.0),), physics_lod=0):
 		groups = "".join(f"""
 					{{
 						_class = "LODGroup"
-						switch_threshold = {lods[i][0]:.1f}
+						switch_threshold = {lods[i][0] * LOD_THRESHOLD_PER_METER:.1f}
 						meshes =
 						[
 							"{merged_lod_name(name, i)}",
@@ -1560,9 +1815,14 @@ def remove_old_versions():
 	old += [f for f in glob.glob(os.path.join(PREVIEW_DIR, "*.png")) if tag not in os.path.basename(f)]
 	old += [f for f in glob.glob(os.path.join(PREFAB_DIR, "environment_elm*"))
 			if tag not in os.path.basename(f) and "sapling" not in os.path.basename(f)]
+	locked = []
 	for f in old:
-		os.remove(f)
-	print(f"removed {len(old)} files from older elm versions")
+		try:
+			os.remove(f)
+		except PermissionError:
+			locked.append(f)      # the s&box editor holds compiled files open; they go next run
+	print(f"removed {len(old) - len(locked)} files from older elm versions"
+		  + (f"; LOCKED (editor open), delete later: {[os.path.basename(f) for f in locked]}" if locked else ""))
 
 
 def main():
@@ -1576,11 +1836,11 @@ def main():
 	leaf_png = os.path.join(MAT_DIR, LEAVES + ".png")
 	write_png(bark_png, make_bark_texture())
 	leaf_rgba = make_leaf_texture()
-	write_png(leaf_png, leaf_rgba)
+	write_png(leaf_png, leaf_rgba, LEAF_BLOCK)
 	# complex.shader's alpha test reads TextureTranslucency, not the colour PNG's alpha
 	mask = np.repeat(leaf_rgba[..., 3:4], 4, axis=2)
 	mask[..., 3] = 255
-	write_png(os.path.join(MAT_DIR, LEAVES + "_mask.png"), mask)
+	write_png(os.path.join(MAT_DIR, LEAVES + "_mask.png"), mask, LEAF_BLOCK)
 	with open(os.path.join(MAT_DIR, BARK + ".vmat"), "w", newline="\n") as f:
 		f.write(VMAT_BARK.replace("elm_bark", BARK))
 	with open(os.path.join(MAT_DIR, LEAVES + ".vmat"), "w", newline="\n") as f:
@@ -1614,11 +1874,12 @@ def main():
 	export([half], HALF, fell.single_vmdl(HALF, ASSET_DIR, [BARK, GRAIN], "hull"))
 	fell.write_prefab(os.path.join(PREFAB_DIR, HALF + ".prefab"), HALF, f"{ASSET_DIR}/{HALF}.vmdl",
 					  {"MaxHealth": fell.HALF_HP, "CurrentHealth": fell.HALF_HP,
-					   "WoodDropMin": fell.HALF_WOOD[0], "WoodDropMax": fell.HALF_WOOD[1]}, True, PREFAB_TEMPLATE)
+					   "WoodDropMin": fell.HALF_WOOD[0], "WoodDropMax": fell.HALF_WOOD[1]}, True, fell.HALF_MASS)
 	fell.write_prefab(os.path.join(PREFAB_DIR, LOG + ".prefab"), LOG, f"{ASSET_DIR}/{LOG}.vmdl",
 					  {"MaxHealth": fell.LOG_HP, "CurrentHealth": fell.LOG_HP, "WoodDropMin": 0, "WoodDropMax": 0,
 					   "SplitPiecePrefab": f"{PREFAB_REL}/{HALF}.prefab",
-					   "SplitPieceOffsetMeters": fell.HALF_LEN / 2}, True, PREFAB_TEMPLATE)
+					   "SplitPieceOffsetMeters": fell.HALF_LEN / 2,
+					   "SplitCenterOffsetMeters": fell.LOG_LEN / 2}, True, fell.LOG_MASS)
 	pieces = [log, half]
 
 	made = {}
@@ -1629,7 +1890,8 @@ def main():
 		for seed in range(seed0, seed0 + 8):
 			rng = random.Random(seed)
 			nodes, florets = build_skeleton(rng, P, leaders)
-			leaves, cards, pts = build_leaves(name + "_probe", nodes, florets, rng, P)
+			_, branches = split_limbs(nodes, P, florets, rng)
+			leaves, cards, pts = build_leaves(name + "_probe", branches, florets, rng, P)
 			lump, dip = outline_score(leaves)
 			bald = crown_bald_spot(pts, P)
 			scores.append((bald, abs(lump - LUMP_TARGET) + abs(dip - DIP_TARGET), seed, lump, dip, len(florets)))
@@ -1638,20 +1900,22 @@ def main():
 		print(f"  {name}: (bald, outline error, seed, lump %, dip %, clusters) {[tuple(round(v, 2) for v in s_) for s_ in scores]}")
 		rng = random.Random(seed)
 		nodes, florets = build_skeleton(rng, P, leaders)
-		leaves, cards, pts = build_leaves(name + "_leaves", nodes, florets, rng, P)
+		nodes, branches = split_limbs(nodes, P, florets, rng)
+		leaves, cards, pts = build_leaves(name + "_leaves", branches, florets, rng, P)
 		wood = build_wood(name + "_wood", nodes, rng, P)
 		bark_uvs(wood.data, nodes, P)
 		wood.data.materials.append(bark)
 		leaves.data.materials.append(leaves_mat)
+		sky = sky_through(leaves, P)
 		made[name] = (wood, leaves)
 		zs = [v.co.z for v in leaves.data.vertices] + [v.co.z for v in wood.data.vertices]
 		xs = [v.co.x for v in leaves.data.vertices]
 		ys = [v.co.y for v in leaves.data.vertices]
 		wtris = sum(len(p.vertices) - 2 for p in wood.data.polygons)
 		# trunk across at breast height (1.3 m), measured on the finished mesh
-		ring = [v.co for v in wood.data.vertices if 1.2 < v.co.z < 1.4]
+		ring = [v.co for v in wood.data.vertices if 0.9 < v.co.z < 1.7] or [Vector()]   # decimated wood can have no ring at 1.3 m exactly
 		dbh = (max(c.x for c in ring) - min(c.x for c in ring) + max(c.y for c in ring) - min(c.y for c in ring)) / 2
-		print(f"TREE {name} clusters {nfl}, outline lump {lump:.2f} % dip {dip:.2f} %, nodes {len(nodes)} (seed {seed}, biggest bald patch {holes} cells): height {max(zs):.1f} m, crown {max(xs) - min(xs):.1f} x {max(ys) - min(ys):.1f} m, "
+		print(f"TREE {name} clusters {nfl}, outline lump {lump:.2f} % dip {dip:.2f} %, wood nodes {len(nodes)} (seed {seed}, biggest bald patch {holes} cells, sky through crown {sky:.1f} %): height {max(zs):.1f} m, crown {max(xs) - min(xs):.1f} x {max(ys) - min(ys):.1f} m, "
 			  f"trunk {dbh:.2f} m across at 1.3 m, wood islands {island_count(wood.data)}, bad bark UV faces {uv_stretch_report(wood.data):.1f} %, wood tris {wtris}, cards {cards} ({cards * 4} tris)")
 
 		lod_objs = build_lods(name, wood, leaves, TREE_LODS)
@@ -1680,7 +1944,7 @@ def main():
 						   "StumpModel": f"{ASSET_DIR}/{sname}.vmdl", "StumpTopMeters": fell.STUMP_H,
 						   "FelledLogPrefab": f"{PREFAB_REL}/{LOG}.prefab", "StumpHealth": fell.STUMP_HP,
 						   "StumpWoodMin": fell.STUMP_WOOD[0], "StumpWoodMax": fell.STUMP_WOOD[1],
-						   "WoodDropMin": 0, "WoodDropMax": 0}, False, PREFAB_TEMPLATE)
+						   "WoodDropMin": 0, "WoodDropMax": 0}, False)
 		pieces.append(stump)
 
 	for o in pieces:
