@@ -16,6 +16,33 @@
     "OwnerTransfer": 1,
     "Components": [
       {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "a2010004-2222-4222-8222-222222222241",
+        "__enabled": true,
+        "Flags": 0,
+        "BodyGroups": 18446744073709551615,
+        "CreateAttachments": false,
+        "LodOverride": null,
+        "MaterialGroup": null,
+        "MaterialOverride": "materials/build/augment_station_blue.vmat",
+        "Materials": null,
+        "Model": "models/dev/box.vmdl",
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "RenderOptions": {
+          "GameLayer": true,
+          "OverlayLayer": false,
+          "BloomLayer": false,
+          "AfterUILayer": false
+        },
+        "RenderType": "On",
+        "Tint": "1,1,1,1"
+      },
+      {
         "__type": "Sandbox.BoxCollider",
         "__guid": "a2010004-2222-4222-8222-222222222242",
         "__enabled": true,
@@ -36,7 +63,7 @@
         "OnTriggerEnter": null,
         "OnTriggerExit": null,
         "RollingResistance": null,
-        "Scale": "28.5,50,39",
+        "Scale": "50,30,37.5",
         "Static": true,
         "Surface": null,
         "SurfaceVelocity": "0,0,0"
@@ -69,54 +96,7 @@
         "OnComponentUpdate": null
       }
     ],
-    "Children": [
-      {
-        "__guid": "a2010004-2222-4222-8222-222222222251",
-        "__version": 2,
-        "Flags": 0,
-        "Name": "Visual",
-        "Position": "0,0,0",
-        "Rotation": "0,0,0,1",
-        "Scale": "1,1,1",
-        "Tags": "",
-        "Enabled": true,
-        "NetworkMode": 1,
-        "NetworkFlags": 0,
-        "NetworkOrphaned": 0,
-        "NetworkTransmit": true,
-        "OwnerTransfer": 1,
-        "Components": [
-          {
-            "__type": "Sandbox.ModelRenderer",
-            "__guid": "a2010004-2222-4222-8222-222222222241",
-            "__enabled": true,
-            "Flags": 0,
-            "BodyGroups": 18446744073709551615,
-            "CreateAttachments": false,
-            "LodOverride": null,
-            "MaterialGroup": null,
-            "MaterialOverride": null,
-            "Materials": null,
-            "Model": "models/building/augment_station.vmdl",
-            "OnComponentDestroy": null,
-            "OnComponentDisabled": null,
-            "OnComponentEnabled": null,
-            "OnComponentFixedUpdate": null,
-            "OnComponentStart": null,
-            "OnComponentUpdate": null,
-            "RenderOptions": {
-              "GameLayer": true,
-              "OverlayLayer": false,
-              "BloomLayer": false,
-              "AfterUILayer": false
-            },
-            "RenderType": "On",
-            "Tint": "1,1,1,1"
-          }
-        ],
-        "Children": []
-      }
-    ],
+    "Children": [],
     "__properties": {
       "NetworkInterpolation": true,
       "TimeScale": 1,

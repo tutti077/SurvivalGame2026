@@ -311,10 +311,10 @@
       "displayName": "Augment Station",
       "icon": "",
       "prefab": "prefabs/build/augment_station.prefab",
-      "fallbackColor": "1,1,1,1",
+      "fallbackColor": "0.28,0.48,0.62,1",
       "halfWidth": 25,
-      "halfHeight": 14.25,
-      "halfDepth": 19.5,
+      "halfHeight": 15,
+      "halfDepth": 18.75,
       "costs": [
         {
           "resourceId": "resource_woodBasic",
