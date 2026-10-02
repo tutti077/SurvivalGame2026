@@ -1,0 +1,12 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+	F_ALPHA_TEST 1
+	F_RENDER_BACKFACES 1
+
+	Roughness "0.900"
+	AlphaTestReference "0.500"
+	NormalUp "0.000"
+	TextureColor "models/environment/tests/elm_leaves_v57.png"
+	TextureTranslucency "models/environment/tests/elm_leaves_v57_mask.png"
+}

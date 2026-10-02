@@ -29,10 +29,10 @@ Structure of each model (one .fbx, two objects):
                    gaps between them (~45 % opaque). The crown lets sky through between the branches
                    on purpose (sky_through prints the % per tree). No collision on leaves (vmdl physics = wood only).
 
-Textures (64x64 bark / 128x128 leaf designs, saved as 8x / 4x nearest-neighbour blocks so pixels stay hard):
+Textures (true 64x64 bark + end grain, 128x128 leaf card; shaders/pixel_lit.shader point-samples them):
     Assets/models/environment/tests/elm_bark_v<N>.png        grey-brown ridged bark + lichen (7-tone ramp), 5 cm per texel
     Assets/models/environment/tests/elm_leaves_v<N>.png      bushy branch: brown stem, leaf-sleeved arms of small flat-toned leaves, no baked light
-    Assets/models/environment/tests/elm_leaves_v<N>_mask.png cutout mask (complex.shader TextureTranslucency)
+    Assets/models/environment/tests/elm_leaves_v<N>_mask.png cutout mask (pixel_lit TextureTranslucency)
 """
 import bpy, bmesh, math, os, random, struct, sys, zlib
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -50,7 +50,7 @@ OLD_DIRS = [os.path.join(ROOT, "Assets", "models", "environment"),
 			os.path.join(ROOT, "Assets", "materials", "environment")]
 # Every regenerated set gets a new version number in all model + material names, and older
 # versions' files are deleted, so s&box never serves a stale compiled model or texture.
-VERSION = 56
+VERSION = 57
 BARK = f"elm_bark_v{VERSION}"
 GRAIN = f"elm_endgrain_v{VERSION}"
 LOG = f"environment_elm_log_v{VERSION}"
@@ -64,17 +64,17 @@ PREVIEW_DIR = os.path.join(ROOT, "Blender", "blenderprojects", "elm_preview")
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 
 TEX = 64
-# The engine's complex.shader samples bilinearly no matter what the vmat asks for, so the 64 px
-# design is written nearest-neighbour upscaled: each design pixel becomes a PIXEL_BLOCK square
-# block, and bilinear only softens a 1/8-texel seam between blocks -> hard, visible pixels.
-PIXEL_BLOCK = 8
-# Leaf cards: a 128 x 128 design at 4x blocks (512 x 512 file) on a card 3/4 as wide as it is long,
-# so texels are ~6 x 4.7 cm in the world - close to the bark's - and the small leaves are ~5 texels
-# (~30 cm) instead of one blob. Both sides MUST be powers of two: the v46 96 x 128 design (384 px
-# wide) never compiled and every card drew the engine's red error material.
+# v57: textures are written at their TRUE size (64 x 64 bark / end grain, 128 x 128 leaf card) and
+# the materials use shaders/pixel_lit.shader, which samples with POINT filtering. Before that the
+# engine's complex.shader blurred a real 64 px file, so designs were saved as 512 px blocks.
+PIXEL_BLOCK = 1
+# Leaf cards: a 128 x 128 design on a card 3/4 as wide as it is long, so texels are ~6 x 4.7 cm in
+# the world - close to the bark's - and the small leaves are ~5 texels (~30 cm) instead of one
+# blob. Both sides MUST be powers of two: a 96 x 128 design never compiled and every card drew the
+# engine's red error material.
 LEAF_TEX_W, LEAF_TEX_H = 128, 128
 CARD_ASPECT = 0.75       # card width / length; the design is drawn in card space so its angles are true
-LEAF_BLOCK = PIXEL_BLOCK // 2
+LEAF_BLOCK = 1
 BARK_TILE = 3.2         # m of bark per 64 px tile = 5 cm per texel on every limb (chunky pixels)
 UP = Vector((0, 0, 1))
 
@@ -1391,33 +1391,24 @@ def blender_material(name, png, alpha_clip):
 
 VMAT_BARK = """Layer0
 {
-	shader "shaders/complex.shader"
+	shader "shaders/pixel_lit.shader"
 
-	g_flMetalness "0.000"
-	g_vColorTint "[1.000000 1.000000 1.000000 0.000000]"
-
+	Roughness "0.900"
 	TextureColor "models/environment/tests/elm_bark.png"
-	TextureNormal "materials/default/default_normal.tga"
-	TextureRoughness "materials/default/default_rough.tga"
-	TextureAmbientOcclusion "materials/default/default_ao.tga"
 }
 """
 
 VMAT_LEAVES = """Layer0
 {
-	shader "shaders/complex.shader"
+	shader "shaders/pixel_lit.shader"
 	F_ALPHA_TEST 1
 	F_RENDER_BACKFACES 1
 
-	g_flMetalness "0.000"
-	g_flAlphaTestReference "0.500"
-	g_vColorTint "[1.000000 1.000000 1.000000 0.000000]"
-
+	Roughness "0.900"
+	AlphaTestReference "0.500"
+	NormalUp "0.000"
 	TextureColor "models/environment/tests/elm_leaves.png"
 	TextureTranslucency "models/environment/tests/elm_leaves_mask.png"
-	TextureNormal "materials/default/default_normal.tga"
-	TextureRoughness "materials/default/default_rough.tga"
-	TextureAmbientOcclusion "materials/default/default_ao.tga"
 }
 """
 

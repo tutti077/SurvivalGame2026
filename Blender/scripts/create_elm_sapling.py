@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import create_elm_tree as elm   # guarded main(): importing builds nothing
 import elm_felling as fell
 
-VERSION = 14
+VERSION = 15
 TAG = f"_v{VERSION}"
 BARK = f"elm_sapling_bark{TAG}"
 LEAVES = f"elm_sapling_leaves{TAG}"
