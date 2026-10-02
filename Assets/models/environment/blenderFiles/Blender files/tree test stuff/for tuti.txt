@@ -1,0 +1,1 @@
+When this goes into the real game, replace its existing Code\Environment\CloverTreeChop.cs with the one in 2chunks\code. The models go in Assets\models\environment\clovertree\, the bark in Assets\materials\environment\clovertree\, and clovertree_chop.prefab is the tree you drop into the scene.
