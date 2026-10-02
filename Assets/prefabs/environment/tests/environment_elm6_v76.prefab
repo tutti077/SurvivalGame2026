@@ -1,0 +1,90 @@
+{
+  "RootObject": {
+    "__guid": "6ddbf327-c392-4571-b76f-ce71fd2afba9",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "environment_elm6_v76",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "grapple",
+    "Enabled": true,
+    "NetworkMode": 0,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 0,
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": [],
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "67941b69-bb6a-4595-8173-35fcb3da1c11",
+        "__enabled": true,
+        "Model": "models/environment/tests/environment_elm6_v76.vmdl",
+        "RenderType": "On",
+        "Tint": "1,1,1,1",
+        "BodyGroups": 18446744073709551615
+      },
+      {
+        "__type": "Sandbox.ModelCollider",
+        "__guid": "73135b6d-fe04-4715-921d-dc3ebe8d41a8",
+        "__enabled": true,
+        "Model": "models/environment/tests/environment_elm6_v76.vmdl",
+        "IsTrigger": false,
+        "Static": true
+      },
+      {
+        "__type": "Survival.DamageReceiver",
+        "__guid": "7d61c8ce-d391-41a6-aca7-a021ef3a7167",
+        "__enabled": true,
+        "DamageMultiplier": 1
+      },
+      {
+        "__type": "Survival.ChopableTree",
+        "__guid": "9e5f54a5-be79-4e8e-9e59-8935925a6119",
+        "__enabled": true,
+        "RequireAxe": true,
+        "WoodResourceId": "resource_woodBasic",
+        "LogChop": false,
+        "MaxHealth": 40,
+        "CurrentHealth": 40,
+        "StumpModel": "models/environment/tests/environment_elm6_stump_v76.vmdl",
+        "StumpTopMeters": 1.0,
+        "FelledLogPrefab": "prefabs/environment/tests/environment_elm_log_v76.prefab",
+        "StumpHealth": 12,
+        "StumpWoodMin": 3,
+        "StumpWoodMax": 4,
+        "WoodDropMin": 0,
+        "WoodDropMax": 0
+      }
+    ],
+    "Children": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

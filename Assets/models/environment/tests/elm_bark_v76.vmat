@@ -1,0 +1,10 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "1.000"
+	PixelNormalStrength "1.000"
+	TextureColor "models/environment/tests/elm_bark_v76.png"
+	TextureNormal "models/environment/tests/elm_bark_v76_normal.png"
+	TextureRoughness "models/environment/tests/elm_bark_v76_rough.png"
+}

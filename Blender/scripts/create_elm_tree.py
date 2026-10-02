@@ -50,7 +50,7 @@ OLD_DIRS = [os.path.join(ROOT, "Assets", "models", "environment"),
 			os.path.join(ROOT, "Assets", "materials", "environment")]
 # Every regenerated set gets a new version number in all model + material names, and older
 # versions' files are deleted, so s&box never serves a stale compiled model or texture.
-VERSION = 72
+VERSION = 76
 BARK = f"elm_bark_v{VERSION}"
 GRAIN = f"elm_endgrain_v{VERSION}"
 LOG = f"environment_elm_log_v{VERSION}"
@@ -72,6 +72,14 @@ PIXEL_BLOCK = 1
 # 4x the texels of the old 64 px bark, ridges 44 per tile (~7 cm, real elm plate width) instead of 11.
 # End grain stays at TEX.
 BARK_TEX = 256
+# v76 bark relief (Mark, 2026-10-02 "make it gorgeous"): the crack net is carved into a CONTINUOUS height field
+# (rolling ridges + grooves with sloped walls), and colour, normal map and roughness all come from that one field.
+BARK_GROOVE_W = 3          # groove wall width beside a crack, texels (~4 cm each side)
+BARK_GROOVE_DEPTH = 0.55   # groove depth, fraction of the height range (major cracks go deeper)
+BARK_RIDGE_AMP = 0.22      # rolling ridge undulation across the plates (slow, tile-periodic)
+BARK_NORMAL_STRENGTH = 4.0 # slope multiplier for the normal map
+BARK_ROUGH = (0.60, 0.95)  # roughness at plate tops .. crack bottoms (plate tops take a soft sun glint)
+BARK_WARM = 0.04           # lit plate tops drift this much warmer, crack bottoms this much cooler (subtle)
 # Leaf cards: a 256 x 256 design on a card 3/4 as wide as it is long, so texels are ~3 x 2.3 cm in
 # the world - close to the bark's - and the small leaves are ~5 texels (~30 cm) instead of one
 # blob. Both sides MUST be powers of two: a 96 x 128 design never compiled and every card drew the
@@ -300,15 +308,55 @@ def make_bark_texture():
 	right2 = np.roll(wide, 2 * lip, 1) & ~crack & ~right1
 	r2 = random.Random(seed + 1)
 	x, y = np.meshgrid((np.arange(BARK_TEX) + 0.5) / BARK_TEX, (np.arange(BARK_TEX) + 0.5) / BARK_TEX)
-	tone = 3.6 + ground_var * 0.9 * tile_noise(x * 2, y, r2, 8, 3) + grain * 0.7 * tile_noise(x * 4, y, r2, 10, 24)
-	tone = np.where(left1, tone + 1.0 * relief, tone)
-	tone = np.where(left2, tone + 0.4 * relief, tone)
-	tone = np.where(right1, tone - 1.0 * relief, tone)
-	tone = np.where(right2, tone - 0.4 * relief, tone)
-	tone = np.where(crack, np.minimum(tone - 1.8, 1.4), tone)
-	idx = np.clip(np.round(tone), 0, 6).astype(int)
+
+	# --- v76 height field (0 = crack bottom .. 1 = highest plate crest), tile-periodic everywhere.
+	# Plates: slow rolling ridges plus a little vertical grain, so no plate is a dead-flat sheet.
+	h = 0.72 + BARK_RIDGE_AMP * tile_noise(x * 2, y, r2, 8, 3) + 0.05 * tile_noise(x * 4, y, r2, 10, 24)
+	# Grooves: distance to the nearest crack texel (8-neighbour dilation, wrapping), walls BARK_GROOVE_W wide.
+	dist = np.full((BARK_TEX, BARK_TEX), BARK_GROOVE_W + 1, float)
+	reach = crack.copy()
+	dist[crack] = 0
+	for d in range(1, BARK_GROOVE_W + 1):
+		grown = reach.copy()
+		for dy_ in (-1, 0, 1):
+			for dx_ in (-1, 0, 1):
+				grown |= np.roll(np.roll(reach, dy_, 0), dx_, 1)
+		dist[grown & ~reach] = d
+		reach = grown
+	wall = np.clip(1.0 - dist / (BARK_GROOVE_W + 1), 0.0, 1.0) ** 1.6
+	h -= BARK_GROOVE_DEPTH * wall
+	h -= 0.15 * np.clip(1.0 - dist / 2.0, 0.0, 1.0) * (wide | np.roll(wide, 1, 1) | np.roll(wide, -1, 1))
+	h = (h - h.min()) / (h.max() - h.min() + 1e-6)
+
+	# Colour: the ramp indexed by height (tones 1..6 - dark crack bottoms, light plate crests), with a
+	# subtle warm drift on the crests and cool drift in the grooves. No hue tricks beyond that (Mark).
+	idx = np.clip(np.round(1.0 + h * 5.0), 0, 6).astype(int)
 	rgb = np.array(ramp, float)[idx]
+	warm = (h - 0.5) * 2.0 * BARK_WARM
+	rgb = rgb * np.dstack([1.0 + warm, np.ones_like(warm), 1.0 - warm])
+	rgb = np.clip(np.round(rgb), 0, 255)
+	colour = np.dstack([rgb, np.full((BARK_TEX, BARK_TEX), 255)]).astype(np.uint8)
+	return colour, h
+
+
+def make_bark_normal(h, strength=BARK_NORMAL_STRENGTH):
+	"""Tangent-space normal map from the bark height field. Point-sampled like the colour, so every texel on
+	a flat facet tilts its own way and catches the sun differently - the per-pixel light inside one face that
+	flat shading alone cannot give. Green-up convention; strength scales the slope."""
+	dx = (np.roll(h, -1, 1) - np.roll(h, 1, 1)) * 0.5      # +x = +u (right)
+	dy = (np.roll(h, 1, 0) - np.roll(h, -1, 0)) * 0.5      # row 0 is the top of the image: +v = up
+	# Sign checked in engine (v75): with -dx/-dy the cracks lit as raised veins; +dx/+dy makes them recessed.
+	n = np.dstack([dx * strength, dy * strength, np.ones_like(h)])
+	n /= np.linalg.norm(n, axis=2, keepdims=True)
+	rgb = np.clip(np.round((n * 0.5 + 0.5) * 255), 0, 255)
 	return np.dstack([rgb, np.full((BARK_TEX, BARK_TEX), 255)]).astype(np.uint8)
+
+
+def make_bark_roughness(h):
+	"""Roughness from the same height field: plate crests smooth enough for a soft sun glint, crack bottoms matte."""
+	r = BARK_ROUGH[1] + (BARK_ROUGH[0] - BARK_ROUGH[1]) * h
+	g = np.clip(np.round(r * 255), 0, 255)
+	return np.dstack([g, g, g, np.full((BARK_TEX, BARK_TEX), 255)]).astype(np.uint8)
 
 
 
@@ -1011,7 +1059,10 @@ def build_wood(name, nodes, rng, P):
 
 	tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
 	bake(obj, ('DECIMATE', {"ratio": min(1.0, P["wood_tris"] / tris)}))
-	obj.data.shade_smooth()
+	# v73: wood is shade-flat (faceted, Valheim-style) — every triangle takes its own light. The FBX
+	# export keeps per-face normals (mesh_smooth_type OFF), so the engine lights it faceted with no
+	# shader help (PixelFlatShading stays 0 in the generated vmats).
+	obj.data.shade_flat()
 	return obj
 
 
@@ -1552,6 +1603,19 @@ VMAT_BARK = """Layer0
 }
 """
 
+# Bark: colour + the crack-net normal map (end grain keeps VMAT_BARK, flat normal).
+VMAT_BARK_NORMAL = """Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "1.000"
+	PixelNormalStrength "1.000"
+	TextureColor "models/environment/tests/elm_bark.png"
+	TextureNormal "models/environment/tests/elm_bark_normal.png"
+	TextureRoughness "models/environment/tests/elm_bark_rough.png"
+}
+"""
+
 VMAT_LEAVES = """Layer0
 {
 	shader "shaders/pixel_lit.shader"
@@ -1650,7 +1714,7 @@ def build_lods(name, wood, leaves, lods, uv_fn=None):
 		tris = sum(len(p.vertices) - 2 for p in w.data.polygons)
 		if wood_tris and tris > wood_tris:
 			bake(w, ('DECIMATE', {"ratio": wood_tris / tris}))
-			w.data.shade_smooth()
+			w.data.shade_flat()
 			if uv_fn:
 				w.data.uv_layers.remove(w.data.uv_layers[0])
 				uv_fn(w.data)
@@ -1987,7 +2051,10 @@ def main():
 	remove_old_versions()
 	bark_png = os.path.join(MAT_DIR, BARK + ".png")
 	leaf_png = os.path.join(MAT_DIR, LEAVES + ".png")
-	write_png(bark_png, make_bark_texture())
+	bark_rgba, bark_h = make_bark_texture()
+	write_png(bark_png, bark_rgba)
+	write_png(os.path.join(MAT_DIR, BARK + "_normal.png"), make_bark_normal(bark_h))
+	write_png(os.path.join(MAT_DIR, BARK + "_rough.png"), make_bark_roughness(bark_h))
 	leaf_rgba = make_leaf_texture()
 	write_png(leaf_png, leaf_rgba, LEAF_BLOCK)
 	# complex.shader's alpha test reads TextureTranslucency, not the colour PNG's alpha
@@ -1995,7 +2062,7 @@ def main():
 	mask[..., 3] = 255
 	write_png(os.path.join(MAT_DIR, LEAVES + "_mask.png"), mask, LEAF_BLOCK)
 	with open(os.path.join(MAT_DIR, BARK + ".vmat"), "w", newline="\n") as f:
-		f.write(VMAT_BARK.replace("elm_bark", BARK))
+		f.write(VMAT_BARK_NORMAL.replace("elm_bark", BARK))
 	with open(os.path.join(MAT_DIR, LEAVES + ".vmat"), "w", newline="\n") as f:
 		f.write(VMAT_LEAVES.replace("elm_leaves", LEAVES))
 	bark = blender_material(BARK, bark_png, False)
