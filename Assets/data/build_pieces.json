@@ -279,10 +279,10 @@
       "displayName": "Chest",
       "icon": "",
       "prefab": "prefabs/build/chest.prefab",
-      "fallbackColor": "1,1,1,1",
-      "halfWidth": 20.75,
-      "halfHeight": 17.75,
-      "halfDepth": 23.25,
+      "fallbackColor": "0.45,0.32,0.18,1",
+      "halfWidth": 25,
+      "halfHeight": 12.5,
+      "halfDepth": 12.5,
       "costs": [
         {
           "resourceId": "resource_woodBasic",

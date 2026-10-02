@@ -114,8 +114,9 @@ public static class BuildModuleDimensions
 		// Furniture / stations (unchanged by the wood rename). Sizes are the authored model bounds
 		// printed by Blender/scripts/import_artist_pack.py (building category: bbox centred on
 		// the origin, width X / depth Y / height Z), so the box collider and ground-sit match the mesh.
-		// Chest: Rumple's open-lid chest (box1pack.blend), 0.83 m wide, 0.71 m deep, 0.93 m to the lid top.
-		["chest"] = new( 0.83f, 0.71f, 0.93f ),
+		// Chest: brown dev box for now (Mark, 2026-10-02) — 1 m long, 0.5 m wide, 0.5 m tall. Rumple's
+		// box1pack.blend imports as 0.83 × 0.71 × 0.93 m when it is wanted (import_artist_pack.py building chest).
+		["chest"] = new( 1f, 0.5f, 0.5f ),
 		// Augment station: Rumple's operating table (augtable1pack.blend), 1 m long, 0.57 m deep, 0.78 m tall.
 		["augment_station"] = new( 1f, 0.57f, 0.78f ),
 		["furniture_campfire"] = new( 0.35f, 0.35f, 0.35f ),
