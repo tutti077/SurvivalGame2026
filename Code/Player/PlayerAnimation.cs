@@ -129,6 +129,11 @@ public sealed partial class PlayerAnimation : Component
 	GameObject _meleeDemoStick;
 	ModelRenderer _meleeDemoStickRenderer;
 	float _demoStickMeshHalfExtentX = 0.5f;
+	/// <summary>Model the current stick was built from (profile <c>heldModel</c> or the dev box), so an item swap rebuilds it.</summary>
+	string _demoStickBuiltModelPath = string.Empty;
+	/// <summary>True when the stick is a real weapon model: shown at its own scale, untinted, fitted by <see cref="HeldModelFit"/>.</summary>
+	bool _demoStickIsHeldModel;
+	HeldModelFit _demoStickFit;
 
 	PlayerEquippedItem _equippedItem;
 	PlayerCombat _combat;
@@ -903,8 +908,18 @@ public sealed partial class PlayerAnimation : Component
 			return;
 		}
 
+		var profile = ResolvePresentationMainHandProfile();
+		var heldModelPath = profile?.HeldModel ?? string.Empty;
+		var modelPath = string.IsNullOrWhiteSpace( heldModelPath ) ? DemoStickModelPath : heldModelPath.Trim();
+
 		if ( _meleeDemoStick is not null && _meleeDemoStick.IsValid() )
-			return;
+		{
+			if ( string.Equals( _demoStickBuiltModelPath, modelPath, StringComparison.OrdinalIgnoreCase ) )
+				return;
+
+			// Main hand changed to an item with a different model - rebuild rather than restyle.
+			DestroyMeleeDemoStick();
+		}
 
 		_meleeDemoStick = new GameObject( true, DemoStickObjectName );
 		// Local presentation only. As a plain child of a networked pawn this replicated to clients,
@@ -914,13 +929,34 @@ public sealed partial class PlayerAnimation : Component
 		_meleeDemoStick.Tags.Add( "ignore" );
 
 		_meleeDemoStickRenderer = _meleeDemoStick.Components.Create<ModelRenderer>();
-		var model = Model.Load( DemoStickModelPath );
+		var model = Model.Load( modelPath );
+		if ( model is null && !string.Equals( modelPath, DemoStickModelPath, StringComparison.OrdinalIgnoreCase ) )
+		{
+			Log.Warning( $"[PlayerAnimation] heldModel '{modelPath}' failed to load; using the box sword." );
+			modelPath = DemoStickModelPath;
+			model = Model.Load( modelPath );
+		}
+
+		_demoStickBuiltModelPath = modelPath;
+		_demoStickIsHeldModel = !string.Equals( modelPath, DemoStickModelPath, StringComparison.OrdinalIgnoreCase );
+		_demoStickFit = _demoStickIsHeldModel ? HeldModelFit.FromModel( model ) : default;
+
 		_meleeDemoStickRenderer.Model = model;
-		_meleeDemoStickRenderer.Tint = MeleeDemoStickTint;
+		_meleeDemoStickRenderer.Tint = _demoStickIsHeldModel ? Color.White : MeleeDemoStickTint;
 		_meleeDemoStickRenderer.RenderType = ModelRenderer.ShadowRenderType.Off;
 
 		_demoStickMeshHalfExtentX = ResolveMeshHalfExtentAlongX( model );
 		DestroyStrayDemoSticks();
+	}
+
+	/// <summary>Equipment profile of whatever this peer knows is in the main hand, or null.</summary>
+	EquipmentProfileData ResolvePresentationMainHandProfile()
+	{
+		var id = ResolvePresentationMainHandId();
+		if ( string.IsNullOrWhiteSpace( id ) )
+			return null;
+
+		return EquipmentCatalog.TryGet( id, out var profile ) ? profile : null;
 	}
 
 	/// <summary>
@@ -958,6 +994,8 @@ public sealed partial class PlayerAnimation : Component
 
 		_meleeDemoStick = null;
 		_meleeDemoStickRenderer = null;
+		_demoStickBuiltModelPath = string.Empty;
+		_demoStickIsHeldModel = false;
 	}
 
 	void TickMeleeDemoStickTransform()
@@ -976,15 +1014,40 @@ public sealed partial class PlayerAnimation : Component
 		if ( !TryResolveDemoStickGrip( out var gripPos, out var tipDir ) )
 			return;
 
+		// GripAlongLength 0 → hands on hilt (rear); 0.5 → geometric center (old wrong look).
+		var along = Math.Clamp( MeleeDemoStickGripAlongLength, 0f, 1f );
+
+		if ( _demoStickIsHeldModel )
+		{
+			// A real weapon model: already in world units from its .vmdl import scale, so no
+			// length / thickness stretch and no tint. HeldModelFit read the mesh once: the head
+			// goes to the tip, the blade edge faces the body's forward, and the butt of the handle
+			// sits in the REAR hand (furthest from the tip) - the lower-hand rule left the other
+			// hand mid-handle. Rotation = (world frame) * (designer trim) * inverse(model frame),
+			// right factor first.
+			if ( TryResolveRearHandPosition( tipDir, out var rearHand ) )
+				gripPos = rearHand;
+
+			var edgeWorld = ResolveHeldModelEdgeDir( tipDir );
+			var modelRot = Rotation.LookAt( tipDir, edgeWorld )
+				* MeleeDemoStickLocalAngles.ToRotation()
+				* Rotation.LookAt( _demoStickFit.HeadDir, _demoStickFit.EdgeDir ).Inverse;
+
+			// Grip point slides up the handle with the stick's grip-along knob (0 = butt).
+			var gripLocal = _demoStickFit.ButtPoint + _demoStickFit.HeadDir * (_demoStickFit.Length * along);
+
+			_meleeDemoStick.WorldRotation = modelRot;
+			_meleeDemoStick.LocalScale = Vector3.One;
+			_meleeDemoStick.WorldPosition = gripPos - modelRot * gripLocal + modelRot * MeleeDemoStickLocalOffset;
+			return;
+		}
+
 		var thickness = MathF.Max( 0.01f, MeleeDemoStickThicknessMeters );
 		var length = MathF.Max( 0.1f, MeleeDemoStickLengthMeters );
 
 		// Long axis = local +X after LookAt(tip). Mesh half-extent × scale = half visual blade.
 		var worldRot = Rotation.LookAt( tipDir ) * MeleeDemoStickLocalAngles.ToRotation();
 		var halfBlade = _demoStickMeshHalfExtentX * length;
-
-		// GripAlongLength 0 → hands on hilt (rear); 0.5 → geometric center (old wrong look).
-		var along = Math.Clamp( MeleeDemoStickGripAlongLength, 0f, 1f );
 		var center = gripPos + tipDir * (halfBlade * (1f - 2f * along));
 
 		_meleeDemoStick.WorldRotation = worldRot;
@@ -1044,6 +1107,48 @@ public sealed partial class PlayerAnimation : Component
 		}
 
 		return false;
+	}
+
+	/// <summary>
+	/// Where a held model's blade edge faces: the body's forward, made perpendicular to the handle.
+	/// Falls back to the pawn's forward, then world forward, when the handle is nearly along it.
+	/// </summary>
+	Vector3 ResolveHeldModelEdgeDir( Vector3 tipDir )
+	{
+		var body = ResolveBody();
+		var forward = body is { IsValid: true } ? body.WorldRotation.Forward : WorldRotation.Forward;
+		var edge = forward - tipDir * forward.Dot( tipDir );
+		if ( edge.LengthSquared < 1e-4f )
+		{
+			edge = Vector3.Forward - tipDir * Vector3.Forward.Dot( tipDir );
+			if ( edge.LengthSquared < 1e-4f )
+				edge = Vector3.Left - tipDir * Vector3.Left.Dot( tipDir );
+		}
+
+		return edge.Normal;
+	}
+
+	/// <summary>The hand furthest back along the handle axis — where a held model's base sits.</summary>
+	bool TryResolveRearHandPosition( Vector3 tipDir, out Vector3 pos )
+	{
+		pos = default;
+		var body = ResolveBody();
+		if ( body is null || !body.IsValid() )
+			return false;
+
+		var hasRight = TryGetFirstBoneTransform( body, DemoStickRightBoneCandidates, out var rightTx );
+		var hasLeft = TryGetFirstBoneTransform( body, DemoStickLeftBoneCandidates, out var leftTx );
+		if ( !hasRight && !hasLeft )
+			return false;
+
+		if ( hasRight && hasLeft )
+		{
+			pos = rightTx.Position.Dot( tipDir ) <= leftTx.Position.Dot( tipDir ) ? rightTx.Position : leftTx.Position;
+			return true;
+		}
+
+		pos = hasRight ? rightTx.Position : leftTx.Position;
+		return true;
 	}
 
 	static Vector3 StabilizeTipDir( Vector3 up )

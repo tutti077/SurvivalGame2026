@@ -1,0 +1,7 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.800"
+	TextureColor "materials/weapons/axe_reforged.png"
+}

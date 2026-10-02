@@ -1,0 +1,395 @@
+{
+  "RootObject": {
+    "__guid": "3216623b-b766-40ce-959d-3e7eb4e3acf5",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "clovertree_chop",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "grapple",
+    "Enabled": true,
+    "NetworkMode": 0,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 0,
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": [],
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "5d99d5fc-afde-4852-bca8-1fd1aba75e6d",
+        "__enabled": true,
+        "Model": "models/environment/clovertree/whole.vmdl",
+        "RenderType": "On",
+        "Tint": "1,1,1,1",
+        "BodyGroups": 18446744073709551615
+      },
+      {
+        "__type": "Sandbox.ModelCollider",
+        "__guid": "cd7cc5a6-46c0-419a-9391-c778ef03089a",
+        "__enabled": true,
+        "Model": "models/environment/clovertree/whole.vmdl",
+        "IsTrigger": false,
+        "Static": true
+      },
+      {
+        "__type": "Survival.DamageReceiver",
+        "__guid": "bd9e9bef-2bab-430a-b477-517c066305c0",
+        "__enabled": true,
+        "DamageMultiplier": 1
+      },
+      {
+        "__type": "Survival.ChopableTree",
+        "__guid": "c496bf8e-5d8f-43e0-9544-10e1c7360a53",
+        "__enabled": true,
+        "RequireAxe": true,
+        "WoodResourceId": "resource_woodBasic",
+        "LogChop": false,
+        "MaxHealth": 40,
+        "CurrentHealth": 40,
+        "StumpModel": "models/environment/clovertree/stump.vmdl",
+        "StumpTopMeters": 1.1,
+        "StumpHealth": 12,
+        "StumpWoodMin": 3,
+        "StumpWoodMax": 4,
+        "WoodDropMin": 16,
+        "WoodDropMax": 20,
+        "FellTipSpeedMeters": 0.6,
+        "CrownPushHeightMeters": 3,
+        "CrownSplitTiltDegrees": 60,
+        "PieceScatterMeters": 1,
+        "PieceLifetimeSeconds": 3
+      }
+    ],
+    "Children": [
+      {
+        "__guid": "278b214d-bffe-47c2-9a2c-656c9a318072",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "crown",
+        "Position": "-5.67999268,5.80000019,44",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "chop_crown",
+        "Enabled": false,
+        "NetworkMode": 2,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "ec66420a-82e3-48f1-abf0-6e7ca008d79d",
+            "__enabled": true,
+            "Model": "models/environment/clovertree/crown.vmdl",
+            "RenderType": "On",
+            "Tint": "1,1,1,1",
+            "BodyGroups": 18446744073709551615
+          },
+          {
+            "__type": "Sandbox.Rigidbody",
+            "__guid": "74971e3f-f17f-4eaf-9421-1e64e6558166",
+            "__enabled": true,
+            "Gravity": true,
+            "MassOverride": 1200.0
+          }
+        ],
+        "Children": [
+          {
+            "__guid": "13b47dcf-5126-42f7-9f85-798ac2bfe8ff",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "butt",
+            "Position": "0,0,0",
+            "Rotation": "0,0,0,1",
+            "Scale": "1,1,1",
+            "Tags": "chop_piece",
+            "Enabled": true,
+            "NetworkMode": 2,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "65bfe716-e916-4e83-be81-a213b58e580f",
+                "__enabled": false,
+                "Model": "models/environment/clovertree/butt.vmdl",
+                "RenderType": "On",
+                "Tint": "1,1,1,1",
+                "BodyGroups": 18446744073709551615
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "8d018e72-e573-4027-9948-f7385c2407eb",
+                "__enabled": true,
+                "Start": "-0.717999995,0.200000003,16",
+                "End": "-4.71799994,-1,32.7999992",
+                "Radius": 8.089,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "a488d111-2b5f-447b-95af-da2d84347b29",
+                "__enabled": true,
+                "Start": "-4.71799994,-1,32.7999992",
+                "End": "-5.91800022,-2.20000005,41.5999985",
+                "Radius": 8.864,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "f91dbc5e-2d66-49f6-a271-8ed4120e7180",
+                "__enabled": true,
+                "Start": "-5.91800022,-2.20000005,41.5999985",
+                "End": "-6.71799994,-3.4000001,50",
+                "Radius": 9.514,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "24c4c28c-7d56-4d10-92cd-f61ad557a6ca",
+                "__enabled": true,
+                "Start": "-6.71799994,-3.4000001,50",
+                "End": "-8.31799984,-3.79999995,58.7999992",
+                "Radius": 10.122,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "4fe95c91-b194-4e6a-ba5e-afca8c831084",
+                "__enabled": true,
+                "Start": "-8.31799984,-3.79999995,58.7999992",
+                "End": "-8.71800041,1.39999998,68",
+                "Radius": 10.828,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "67878221-77d2-4752-8ba1-95fb838a5aa8",
+                "__enabled": true,
+                "Start": "-8.71800041,1.39999998,68",
+                "End": "-19.118,1.39999998,77.5999985",
+                "Radius": 9.973,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "cc2d3eff-2838-4631-8901-a72bda4987af",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "fork",
+            "Position": "-17.397995,2.88640022,72.031601",
+            "Rotation": "0,0,0,1",
+            "Scale": "1,1,1",
+            "Tags": "chop_piece",
+            "Enabled": true,
+            "NetworkMode": 2,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "1ca0ef87-b561-406d-a806-fe766940e35b",
+                "__enabled": false,
+                "Model": "models/environment/clovertree/fork.vmdl",
+                "RenderType": "On",
+                "Tint": "1,1,1,1",
+                "BodyGroups": 18446744073709551615
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "9f3e7120-4bb3-4c35-a564-50759d5d17e4",
+                "__enabled": true,
+                "Start": "-1.72000003,-1.48599994,5.56799984",
+                "End": "-6.51999998,-3.48600006,13.5679998",
+                "Radius": 5.901,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "e9114dd4-da00-491d-8027-6fd6a5df603e",
+                "__enabled": true,
+                "Start": "-6.51999998,-3.48600006,13.5679998",
+                "End": "-4.11999989,-9.88599968,23.9680004",
+                "Radius": 6.39,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "8ffa6ae3-090e-4925-a6e3-02599e120f35",
+                "__enabled": true,
+                "Start": "-4.11999989,-9.88599968,23.9680004",
+                "End": "-0.519999981,-9.88599968,33.5680008",
+                "Radius": 6.303,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "04863f28-8f6c-4ab0-b8e5-fd377d18cf7b",
+                "__enabled": true,
+                "Start": "-0.519999981,-9.88599968,33.5680008",
+                "End": "-4.11999989,-19.0860004,44.7680016",
+                "Radius": 6.838,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "cefc299b-c857-48ba-9e21-b71d1e96ed3e",
+                "__enabled": true,
+                "Start": "-18.9200001,7.31400013,19.9680004",
+                "End": "-23.3199997,10.5139999,27.1679993",
+                "Radius": 5.049,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "67ab782e-580d-4da9-8b4b-b2f05e74b904",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "top",
+            "Position": "-0.133605957,-0.501200199,72.1207962",
+            "Rotation": "0,0,0,1",
+            "Scale": "1,1,1",
+            "Tags": "chop_piece",
+            "Enabled": true,
+            "NetworkMode": 2,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "7faff0fb-036b-4cc3-bc86-c2dcf6f0b90d",
+                "__enabled": false,
+                "Model": "models/environment/clovertree/top.vmdl",
+                "RenderType": "On",
+                "Tint": "1,1,1,1",
+                "BodyGroups": 18446744073709551615
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "2ec5e242-cadd-4934-995f-29820827b9c7",
+                "__enabled": true,
+                "Start": "5.41499996,-0.0989999995,10.2790003",
+                "End": "8.61499977,-2.49900007,18.2789993",
+                "Radius": 7.261,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "dd09a50d-77f2-409a-9ff6-00ace9c82c0d",
+                "__enabled": true,
+                "Start": "8.61499977,-2.49900007,18.2789993",
+                "End": "8.21500015,-1.699,28.2789993",
+                "Radius": 7.273,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "b00fc9db-7d8d-47c5-aa76-69be25595215",
+                "__enabled": true,
+                "Start": "8.21500015,-1.699,28.2789993",
+                "End": "11.8149996,-3.69899988,37.4790001",
+                "Radius": 5.528,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              },
+              {
+                "__type": "Sandbox.CapsuleCollider",
+                "__guid": "40fa4488-dd08-47d6-af4a-86b0eeacf736",
+                "__enabled": true,
+                "Start": "11.8149996,-3.69899988,37.4790001",
+                "End": "12.6149998,-4.09899998,46.6790009",
+                "Radius": 5.28,
+                "IsTrigger": false,
+                "Static": false,
+                "Friction": 0.9,
+                "Elasticity": 0.35
+              }
+            ],
+            "Children": []
+          }
+        ]
+      }
+    ]
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

@@ -202,11 +202,18 @@ Code/
                 WindDirection / WindStrength / WindGust to all shaders through Scene.RenderAttributes once per frame)
                 · GrassPatch + GrassScatterer (grass through the engine Sandbox.Clutter system — GPU instanced/culled/LOD;
                 shader Assets/shaders/grass_blade.shader, models grass_clump1–4 from Blender/scripts/create_grass_clump.py)
-                · ChopableTree (optional felling: tree → its stump + one universal pointy log that tips over → log splits
-                  into two halves → halves / stump drop wood; stages broadcast via WorldScatterIdentity), harvest yields, teleport pads
+                · ChopableTree — two tree types on one component. Type 1 felling (elm): tree → its stump + one universal pointy
+                  log that tips over → log splits into two halves → halves / stump drop wood. Type 2 crown fall (clovertree_chop: a disabled
+                  "chop_crown" child = one rigidbody whose colliders are Rumple's butt / fork / top "chop_piece" children): tree → stump,
+                  the crown tips over away from the chopper (ChopFallingCrown), on landing it splits into the pieces (local ChopDebris,
+                  gone after Piece Lifetime) and the host drops the wood there. Stages broadcast via
+                  WorldScatterIdentity. Models Assets/models/environment/clovertree/, bark shared from materials/environment/cloverhills), harvest yields, teleport pads
                 · SunShadowDistance (on the scene Sun: multiplies the engine's cascade shadow reach so the shadow ring is not at the player's feet)
                 · BearTrap (hammer-placed trap_small / trap_large: holds players 5 s, animals + enemies 10 s by TrapSize band;
                   hold lives on PlayerMovement.TrapLocked / EntityLocomotion.IsTrapped) · DamageOverTimeTrap (scene hazard volume)
+  Rendering/    PixelDitherPostProcess (camera post-process: pixelate + palette quantize + ordered dither, shaders/pixel_dither.shader —
+                reserved for future cyber techniques, not the base look). Lighting playground Assets/scenes/lightTestScene.scene =
+                100 m uniformly scaled dev box (non-uniform scale breaks vertex normals) + clovertree1_chop + fly cam
   World/Terrain/        Streaming, chunk mesh, biome population, world save IO
   World/TerrainPreview/ Offline world generation pipeline + settings
   UI/           PlayerScreenHud, HUDs, Menu/ sections

@@ -99,7 +99,14 @@ public sealed class EquipmentProfileData
 	[JsonPropertyName( "heldLight" )]
 	public HeldLightData HeldLight { get; set; }
 
-	public string HandDisplayPrefab { get; set; } = string.Empty;
+	/// <summary>
+	/// Model shown in the hands instead of the dev-box sword while this melee item is equipped
+	/// (e.g. <c>models/weapons/axe_reforged.vmdl</c>). Empty = the box sword. Built per peer by
+	/// <c>PlayerAnimation.EnsureMeleeDemoStick</c>; the model's own import scale sets its size and
+	/// <see cref="HeldModelFit"/> works out handle / head / edge from the mesh - no angles to tune.
+	/// </summary>
+	[JsonPropertyName( "heldModel" )]
+	public string HeldModel { get; set; } = string.Empty;
 
 	/// <summary>Harvest tool category for world nodes (e.g. <c>Axe</c>). Empty = not a harvest tool.</summary>
 	[JsonPropertyName( "harvestToolType" )]

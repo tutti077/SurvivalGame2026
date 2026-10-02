@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Sandbox;
 
 namespace Survival;
@@ -11,6 +12,12 @@ namespace Survival;
 /// <see cref="FelledLogPrefab"/> balanced on it, tipped away from the chopper. Splitting (optional,
 /// <see cref="SplitPiecePrefab"/> set, used by the log): a break replaces this object with two
 /// pieces offset along its long axis. Plain objects (the log halves) drop wood.</para>
+/// <para>Crown fall (Mark's "type 2" tree): the break swaps the tree to its stump and releases the
+/// authored crown — a child tagged <see cref="CrownTag"/>, one rigidbody whose colliders are its
+/// piece children tagged <see cref="PieceTag"/> — which tips over away from the chopper
+/// (<see cref="ChopFallingCrown"/>). When it lands it splits: the pieces come apart as short-lived
+/// local debris (<see cref="ChopDebris"/>) and the host drops the wood there. Nothing to chop
+/// afterwards but the stump. Crown and pieces are cosmetic on every peer; only the wood is networked.</para>
 /// </summary>
 [Title( "Chopable Tree" )]
 public sealed class ChopableTree : Component
@@ -65,6 +72,27 @@ public sealed class ChopableTree : Component
 	[Property, Group( "Split" ), Title( "Split Centre (m from origin)" ), Range( 0f, 20f )]
 	public float SplitCenterOffsetMeters { get; set; }
 
+	/// <summary>The child carrying this tag is the crown: authored disabled, with its renderer and rigidbody.</summary>
+	public const string CrownTag = "chop_crown";
+
+	/// <summary>Crown children carrying this tag are the pieces: their colliders are the crown's while it falls; their renderer is authored off.</summary>
+	public const string PieceTag = "chop_piece";
+
+	/// <summary>Where the felling push lands on the crown, above its origin. Higher = less speed needed, slower lean.</summary>
+	[Property, Group( "Crown" ), Title( "Crown Push Height (m)" ), Range( 0.5f, 20f )]
+	public float CrownPushHeightMeters { get; set; } = 3f;
+
+	[Property, Group( "Crown" ), Title( "Crown Split Lean (°)" ), Range( 10f, 90f )]
+	public float CrownSplitTiltDegrees { get; set; } = 60f;
+
+	/// <summary>Extra push the pieces get when the crown splits, on top of the crown's own motion. Small: they come apart, not fly.</summary>
+	[Property, Group( "Crown" ), Title( "Piece Scatter (m/s)" ), Range( 0f, 10f )]
+	public float PieceScatterMeters { get; set; } = 1f;
+
+	/// <summary>How long a split piece stays before it is removed — the pieces leave, the wood stays.</summary>
+	[Property, Group( "Crown" ), Title( "Piece Lifetime (s)" ), Range( 0.2f, 20f )]
+	public float PieceLifetimeSeconds { get; set; } = 3f;
+
 	[Property, Group( "Debug" )]
 	public bool LogChop { get; set; }
 
@@ -74,8 +102,14 @@ public sealed class ChopableTree : Component
 
 	bool _broken;
 	bool _isStump;
+	bool _crownReleased;
+	int _crownWood;
+	GameObject _crown;
+	readonly List<GameObject> _pieces = new();
 
 	bool CanFell => StumpModel is not null && !_isStump;
+
+	bool CanFellCrown => _crown is { IsValid: true } && !_crownReleased && !_isStump;
 
 	public bool IsBroken => _broken;
 
@@ -87,6 +121,22 @@ public sealed class ChopableTree : Component
 		base.OnStart();
 		if ( CurrentHealth <= 0f || CurrentHealth > MaxHealth )
 			CurrentHealth = Math.Max( 1f, MaxHealth );
+
+		// Authored once on the prefab; cached once here.
+		foreach ( var child in GameObject.Children )
+		{
+			if ( !child.IsValid() || !child.Tags.Has( CrownTag ) )
+				continue;
+
+			_crown = child;
+			foreach ( var piece in child.Children )
+			{
+				if ( piece.IsValid() && piece.Tags.Has( PieceTag ) )
+					_pieces.Add( piece );
+			}
+
+			break;
+		}
 	}
 
 	/// <summary>Host: apply chop damage from a melee hit. Returns HP removed.</summary>
@@ -115,7 +165,9 @@ public sealed class ChopableTree : Component
 
 		if ( CurrentHealth <= 1e-3f )
 		{
-			if ( CanFell )
+			if ( CanFellCrown )
+				FellCrown( attacker );
+			else if ( CanFell )
 				FellToStump( attacker );
 			else if ( !string.IsNullOrWhiteSpace( SplitPiecePrefab ) )
 				SplitIntoPieces( attacker );
@@ -162,6 +214,105 @@ public sealed class ChopableTree : Component
 		PlayerQuests.FindOnAttacker( attacker )?.HostReport( QuestEventIds.TreeChopped );
 		BroadcastStage( StageStump );
 		EntityNoiseBus.Emit( scene, GameObject.WorldPosition, EntityNoiseKind.ChopTree, NoiseIgnore( attacker ) );
+	}
+
+	/// <summary>Host: the tree becomes its stump and the crown tips over; the wood lands when the crown does.</summary>
+	void FellCrown( Component attacker )
+	{
+		_crownWood = RollWoodCount();
+		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+		var from = attacker is not null && attacker.IsValid() ? attacker.WorldPosition : WorldPosition;
+		ReleaseCrown( (WorldPosition - from).WithZ( 0f ) );
+
+		if ( StumpModel is not null )
+			BecomeStump();
+		else
+		{
+			_broken = true;
+			CurrentHealth = 0f;
+			ApplyBrokenVisual();
+		}
+
+		if ( LogChop )
+			Log.Info( $"[ChopableTree] {GameObject.Name}: crown released, {_crownWood}x wood on landing." );
+
+		PlayerQuests.FindOnAttacker( attacker )?.HostReport( QuestEventIds.TreeChopped );
+		BroadcastStage( StumpModel is not null ? StageStump : StageGone );
+		EntityNoiseBus.Emit( scene, GameObject.WorldPosition, EntityNoiseKind.ChopTree, NoiseIgnore( attacker ) );
+	}
+
+	/// <summary>Every peer: detach the authored crown, enable it and tip it along <paramref name="away"/> (any direction if zero).</summary>
+	void ReleaseCrown( Vector3 away )
+	{
+		if ( _crownReleased || _crown is not { IsValid: true } )
+			return;
+
+		_crownReleased = true;
+		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+		var direction = away.Length > 1f ? away.Normal : Rotation.FromYaw( Sandbox.Game.Random.Float( 0f, 360f ) ).Forward;
+
+		var transform = _crown.WorldTransform;
+		_crown.Parent = scene;
+		_crown.WorldTransform = transform;
+		_crown.Flags |= GameObjectFlags.NotSaved | GameObjectFlags.NotNetworked;
+		_crown.Enabled = true;
+
+		var fall = _crown.Components.Create<ChopFallingCrown>();
+		fall.PushDirection = direction;
+		fall.PushSpeedUnits = TerrainWorldUnits.MetersToEngine( FellTipSpeedMeters );
+		fall.PushHeightUnits = TerrainWorldUnits.MetersToEngine( CrownPushHeightMeters );
+		fall.SplitTiltDegrees = CrownSplitTiltDegrees;
+		fall.OnLanded = SplitCrown;
+	}
+
+	/// <summary>Every peer: the landed crown comes apart into its pieces, which keep its motion and then vanish; the host drops the wood here.</summary>
+	void SplitCrown( ChopFallingCrown crown )
+	{
+		if ( crown is null || !crown.IsValid() || crown.GameObject != _crown )
+			return;
+
+		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+		var crownBody = _crown.Components.Get<Rigidbody>();
+		var linear = crownBody?.PhysicsBody is not null ? crownBody.Velocity : Vector3.Zero;
+		var angular = crownBody?.PhysicsBody is not null ? crownBody.AngularVelocity : Vector3.Zero;
+		var scatter = TerrainWorldUnits.MetersToEngine( PieceScatterMeters );
+		var mass = crownBody is not null ? Math.Max( 1f, crownBody.MassOverride / Math.Max( 1, _pieces.Count ) ) : 100f;
+		var landing = _crown.WorldPosition;
+
+		foreach ( var piece in _pieces )
+		{
+			if ( piece is null || !piece.IsValid() )
+				continue;
+
+			var transform = piece.WorldTransform;
+			piece.Parent = scene;
+			piece.WorldTransform = transform;
+			piece.Flags |= GameObjectFlags.NotSaved | GameObjectFlags.NotNetworked;
+			foreach ( var renderer in piece.Components.GetAll<ModelRenderer>( FindMode.EverythingInSelf ) )
+				renderer.Enabled = true;
+
+			// The piece already owns its colliders; the body is the transient physics for its flight.
+			var body = piece.Components.GetOrCreate<Rigidbody>();
+			body.Gravity = true;
+			body.MassOverride = mass;
+
+			var outward = (piece.WorldPosition - landing).WithZ( 0f );
+			outward = outward.Length > 1f ? outward.Normal : Rotation.FromYaw( Sandbox.Game.Random.Float( 0f, 360f ) ).Forward;
+			var debris = piece.Components.Create<ChopDebris>();
+			debris.Velocity = linear + outward * scatter + Vector3.Up * (scatter * 0.5f);
+			debris.AngularVelocity = angular + Vector3.Random * 1f;
+			debris.LifetimeSeconds = PieceLifetimeSeconds;
+		}
+
+		_pieces.Clear();
+		_crown.Destroy();
+		_crown = null;
+
+		if ( IsHostAuthority )
+		{
+			DropWoodAt( landing, _crownWood, null );
+			_crownWood = 0;
+		}
 	}
 
 	/// <summary>Host: replace this (networked) object with two pieces along its long axis.</summary>
@@ -238,15 +389,41 @@ public sealed class ChopableTree : Component
 		CurrentHealth = 0f;
 		ApplyBrokenVisual();
 
+		var count = RollWoodCount();
+		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+		var ignore = NoiseIgnore( attacker );
+		DropWood( count, attacker );
+
+		if ( LogChop )
+			Log.Info( $"[ChopableTree] {GameObject.Name}: broken — dropped {count}x wood." );
+
+		// tree-chopped fires once per tree: on felling, not again for its stump
+		if ( !_isStump )
+			PlayerQuests.FindOnAttacker( attacker )?.HostReport( QuestEventIds.TreeChopped );
+
+		BroadcastStage( StageGone );
+
+		EntityNoiseBus.Emit( scene, GameObject.WorldPosition, EntityNoiseKind.ChopTree, ignore );
+	}
+
+	int RollWoodCount()
+	{
 		var min = Math.Max( 0, Math.Min( WoodDropMin, WoodDropMax ) );
 		var max = Math.Max( min, WoodDropMax );
-		var count = min;
-		if ( max > min )
-			count = min + (int)MathF.Floor( Sandbox.Game.Random.Float( 0f, max - min + 0.999f ) );
-		var resourceId = string.IsNullOrWhiteSpace( WoodResourceId ) ? "resource_woodBasic" : WoodResourceId;
+		if ( max <= min )
+			return min;
+		return min + (int)MathF.Floor( Sandbox.Game.Random.Float( 0f, max - min + 0.999f ) );
+	}
 
+	/// <summary>Host: scatter <paramref name="count"/> wood pickups around the trunk.</summary>
+	void DropWood( int count, Component attacker ) => DropWoodAt( GameObject.WorldPosition, count, attacker );
+
+	/// <summary>Host: scatter <paramref name="count"/> wood pickups around <paramref name="origin"/>.</summary>
+	void DropWoodAt( Vector3 origin, int count, Component attacker )
+	{
+		var resourceId = string.IsNullOrWhiteSpace( WoodResourceId ) ? "resource_woodBasic" : WoodResourceId;
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
-		var ignore = (attacker?.GameObject.IsValid() == true ? attacker.GameObject : GameObject);
+		var ignore = NoiseIgnore( attacker );
 
 		for ( var i = 0; i < count; i++ )
 		{
@@ -258,29 +435,22 @@ public sealed class ChopableTree : Component
 				scene,
 				resourceId,
 				1,
-				GameObject.WorldPosition + offset,
+				origin + offset,
 				ignore,
 				applyDropperSelfPickupDelay: false );
 			if ( instance is not null && instance.IsValid() )
 				HeldStackWorldDrop.ApplyScatterBurst( instance, outward );
 		}
-
-		if ( LogChop )
-			Log.Info( $"[ChopableTree] {GameObject.Name}: broken — dropped {count}x {resourceId}." );
-
-		// tree-chopped fires once per tree: on felling, not again for its stump
-		if ( !_isStump )
-			PlayerQuests.FindOnAttacker( attacker )?.HostReport( QuestEventIds.TreeChopped );
-
-		BroadcastStage( StageGone );
-
-		EntityNoiseBus.Emit( scene, GameObject.WorldPosition, EntityNoiseKind.ChopTree, ignore );
 	}
 
 	/// <summary>Presentation for a stage the host reached (peers, and the host's own broadcast
 	/// echo): idempotent, so applying the same stage twice changes nothing.</summary>
 	public void ApplyStagePresentation( int stage )
 	{
+		// A crown tree leaves standing only by felling its crown; the host already did, so this is the peers.
+		if ( stage >= StageStump && CanFellCrown && !_broken )
+			ReleaseCrown( Vector3.Zero );
+
 		if ( stage >= StageStump && CanFell && !_broken )
 			BecomeStump();
 		if ( stage >= StageGone || (stage >= StageStump && StumpModel is null) )
