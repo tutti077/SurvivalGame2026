@@ -246,6 +246,9 @@ public partial class PlayerCombat
 		if ( IsCombatActionLocked )
 			return;
 
+		if ( Components.Get<PlayerMovement>() is { IsSeatedDriver: true } )
+			return;
+
 		var weaponId = ResolveEquippedMainHandId();
 		if ( !EquipmentCatalog.HasAction( weaponId, EquippedItemActions.PrimaryRanged ) )
 			return;

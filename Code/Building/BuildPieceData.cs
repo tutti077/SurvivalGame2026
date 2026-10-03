@@ -22,6 +22,12 @@ public sealed class BuildPieceData
 	public bool AllowTerrainPlacement { get; set; } = true;
 	/// <summary>May join a wire circuit (<c>"circuitEnabled": true</c>). The prefab must also carry a <see cref="CircuitNode"/> + its device.</summary>
 	public bool CircuitEnabled { get; set; }
+	/// <summary>
+	/// Hammer-placed vehicle (<c>"vehicle": true</c>): the prefab is a networked <see cref="Rigidbody"/> with a
+	/// <see cref="Vehicle"/> component, not a <see cref="BuildPiece"/> — no static box, no nav bake, no
+	/// structural solve. Placement validity and the ghost still come from <see cref="BuildModuleDimensions.SizesMeters"/>.
+	/// </summary>
+	public bool Vehicle { get; set; }
 	public BuildSnapRole AnchorSnapRole { get; set; } = BuildSnapRole.CornerNorthEast;
 	public float HalfWidth { get; set; } = 30f;
 	public float HalfHeight { get; set; } = 4f;

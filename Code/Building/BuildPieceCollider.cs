@@ -16,10 +16,20 @@ static class BuildPieceCollider
 		if ( previewGhost )
 		{
 			DisableAll( instance );
+			// A vehicle ghost must not fall through the floor while you aim it.
+			foreach ( var body in instance.Components.GetAll<Rigidbody>( FindMode.EverythingInSelfAndDescendants ) )
+			{
+				if ( body is not null )
+					body.Enabled = false;
+			}
 			return;
 		}
 
 		if ( string.IsNullOrWhiteSpace( pieceId ) )
+			return;
+
+		// Vehicles author their own dynamic colliders on the prefab (chassis box, storage box).
+		if ( instance.Components.Get<Vehicle>() is not null )
 			return;
 
 		if ( BuildPieceVisual.UsesMeshCollision( pieceId ) && TryApplyMeshCollider( instance, pieceId ) )

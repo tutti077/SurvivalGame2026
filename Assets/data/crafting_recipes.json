@@ -1492,6 +1492,20 @@
                   { "label": "Description", "value": "Light leather boots — 1 armor, leather set" },
                   { "label": "Type", "value": "Armor" }
                 ]
+              },
+              {
+                "id": "crafted_gasoline",
+                "displayName": "Gasoline",
+                "icon": "ui/items/crafted_gasoline.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 10,
+                "stations": [ "inventory", "workbench" ],
+                "ingredients": [],
+                "stats": [
+                  { "label": "Description", "value": "Vehicle fuel — one unit runs a dune buggy for a minute of driving. Free for now." },
+                  { "label": "Type", "value": "Fuel" }
+                ]
               }
   ]
 }

@@ -159,6 +159,7 @@ public sealed partial class PlayerAnimation : Component
 		TickLedgeMantlePose();
 		TickDodgeRollPose();
 		TickHoldPose();
+		TickSeatedPose();
 		TickLateralSwingPlaybackRestore();
 		TickMeleeSwingPresentationExpiry();
 		TickWornClothing();
@@ -318,6 +319,7 @@ public sealed partial class PlayerAnimation : Component
 		TickLedgeMantlePose();
 		TickDodgeRollPose();
 		TickHoldPose();
+		TickSeatedPose();
 		TickWornClothing();
 		// Facing before the stick transform so the held prop follows the rotated body this frame.
 		TickCombatFacingPresentation( advance: false );

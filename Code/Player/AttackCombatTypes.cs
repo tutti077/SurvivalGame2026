@@ -137,6 +137,10 @@ public sealed class DamageReceiver : Component, IDamageable
 		if ( piece is not null && piece.Enabled )
 			return piece.HostApplyDamage( scaled, attacker );
 
+		var vehicle = Vehicle.FindOnHierarchy( GameObject );
+		if ( vehicle is not null && vehicle.Enabled )
+			return vehicle.HostApplyDamage( scaled, attacker );
+
 		var vitals = Components.Get<PlayerVitals>() ?? FindVitalsInParents( GameObject.Parent );
 		if ( vitals is not null && vitals.Enabled )
 			return vitals.ApplyDamageAfterArmor( scaled, attacker );

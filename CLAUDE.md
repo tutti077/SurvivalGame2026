@@ -221,6 +221,11 @@ Code/
                   mesh collision (no grapple tag) — tubes, holes zipped to branches, platform collar, pond bowls — plus dev-box ledges tagged
                   "grapple", oases, waterfall, host-placed chests; verified by a standalone .NET harness; console cave_regen / cave_info / cave_tp
   Hacks/        GameHacks — console-toggled dev flags (allCrafting), mirrored onto pawns via [Sync] for host checks
+  Vehicles/     Vehicle (+ .Physics raycast springs / .Seats first-in-drives + ownership handoff / .Fuel restricted tank slot / .Health wreck + drops)
+                · VehicleSeat · VehicleDevCommands (vehicle_spawn / enter / exit / fuel / test / damage); hammer-placed via "vehicle": true in
+                build_pieces.json, prefab Assets/prefabs/build/vehicle_dune_buggy.prefab; pawn side = PlayerMovement.Vehicle.cs,
+                PlayerInventoryInteraction.Vehicle.cs, PlayerAnimation.Vehicle.cs; HUD UI/VehicleHud.cs; model Blender/scripts/create_dune_buggy.py
+                → Assets/models/vehicles/ (body + separate wheel, axle on Y) (see AGENTS.md "Vehicles")
   Map/          Player map markup: MapPinCatalog (12 pin icons, Assets/ui/map) · LocalMapMarkup (client-local pins + pen strokes in world
                 meters, write-through to 2Tgames/players/<steamid>/map/<world>.json via MapMarkupSaveStore) · MapPingFeed (MMB pings,
                 crew-scoped RPC on Crew/PlayerCrew.MapPing.cs); drawn by UI/TerrainWorldMapFace, driven by UI/Menu/MapMenuSection (see AGENTS.md "Map")

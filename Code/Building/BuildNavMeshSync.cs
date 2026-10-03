@@ -455,6 +455,17 @@ public static class BuildNavMeshSync
 	/// Already-static colliders (terrain + vegetation) are skipped before GetBounds — critical with
 	/// thousands of trees, or every bake hitch becomes a full-scene scan.
 	/// </summary>
+	static bool IsVehicleHierarchy( GameObject go )
+	{
+		for ( var p = go; p is not null && p.IsValid(); p = p.Parent )
+		{
+			if ( p.Tags.Has( Vehicle.VehicleTag ) )
+				return true;
+		}
+
+		return false;
+	}
+
 	public static void MarkSolidCollidersStaticInBounds( Scene scene, BBox bounds )
 	{
 		if ( !scene.IsValid() )
@@ -482,6 +493,10 @@ public static class BuildNavMeshSync
 
 			// Door leaves are keyframed on purpose (they swing) — nav already includes keyframed bodies.
 			if ( go.Tags.Has( BuildDoor.LeafTag ) )
+				continue;
+
+			// Vehicles drive off; freezing their hull would nail them to the ground.
+			if ( IsVehicleHierarchy( go ) )
 				continue;
 
 			var goBounds = go.GetBounds();

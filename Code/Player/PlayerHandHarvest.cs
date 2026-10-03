@@ -90,6 +90,10 @@ public sealed class PlayerHandHarvest : Component
 		if ( !Input.Pressed( HandHarvestInputAction ) )
 			return;
 
+		// E from a vehicle seat is "get out", not "pick".
+		if ( Components.Get<PlayerMovement>() is { IsSeated: true } )
+			return;
+
 		if ( FocusedNode is null )
 		{
 			if ( LogHandHarvest )

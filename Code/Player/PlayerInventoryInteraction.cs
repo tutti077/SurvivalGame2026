@@ -229,6 +229,17 @@ public sealed partial class PlayerInventoryInteraction : Component
 
 		PollHotbarPointerInput();
 		UpdatePlayerDropZone();
+
+		// Seated: E is "get out"; nothing else in the world is reachable from a seat.
+		TickVehicleAccess();
+		if ( IsSeatedInVehicle )
+		{
+			if ( FocusedContainer is not null )
+				CloseContainer();
+			TickItemTooltip();
+			return;
+		}
+
 		TickContainerAccess();
 		TickAugmentStationAccess();
 		TickWorkbenchAccess();

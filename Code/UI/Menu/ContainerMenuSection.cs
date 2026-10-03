@@ -124,6 +124,23 @@ public sealed class ContainerMenuSection : IPlayerMenuSection
 				slotPanel.Style.Set( "pointer-events", "auto" );
 				slotPanel.Style.Set( "z-index", "10" );
 
+				if ( _boundContainer.IsSlotRestricted( slotIndex ) )
+				{
+					// Fuel tank / furnace input: amber frame and a label so it reads as "only this goes here".
+					slotPanel.Style.Set( "border-color", "#c8902a" );
+					slotPanel.Style.BackgroundColor = new Color( 0.16f, 0.12f, 0.06f, 0.92f );
+					var tag = new Label { Parent = slotPanel, Text = _boundContainer.RestrictedSlotLabel ?? string.Empty };
+					tag.Style.Set( "position", "absolute" );
+					tag.Style.Set( "left", "0" );
+					tag.Style.Set( "right", "0" );
+					tag.Style.Set( "top", "2px" );
+					tag.Style.Set( "text-align", "center" );
+					tag.Style.FontColor = new Color( 0.95f, 0.75f, 0.35f, 0.9f );
+					tag.Style.FontSize = Length.Pixels( InventoryMenuSection.CountFontSize );
+					tag.Style.Set( "font-weight", "bold" );
+					tag.Style.Set( "pointer-events", "none" );
+				}
+
 				_interaction?.RegisterSlot( slotPanel );
 				_slotUi.Add( CreateSlotUi( slotPanel ) );
 				slotIndex++;

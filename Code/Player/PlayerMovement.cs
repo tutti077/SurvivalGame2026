@@ -487,7 +487,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// the air-control target and add swing speed — sprint is a walking thing, not a swinging one.
 		// Holding a player is not a swing: the attacker keeps full ground/air locomotion.
 		// A trap mutes the same way: zero wish so WASD cannot creep the pawn off the plate.
-		if ( WingsuitDeployed || TrapLocked || (GrappleAttached && !IsMovingTargetAttach && !_controller.IsOnGround) )
+		if ( WingsuitDeployed || TrapLocked || IsSeated || (GrappleAttached && !IsMovingTargetAttach && !_controller.IsOnGround) )
 		{
 			if ( !_walkSpeedMuteActive )
 			{
@@ -654,6 +654,12 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		if ( PreInputArenaSpectate() )
 			return;
+
+		if ( IsSeated )
+		{
+			PreInputSeated();
+			return;
+		}
 
 		if ( EventInputLocked || TrapLocked )
 		{
@@ -910,6 +916,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() )
 			return;
 
+		TickSeatedPin();
 		PollCameraScrollZoom();
 		TickFreeLookBodyRotationMode();
 

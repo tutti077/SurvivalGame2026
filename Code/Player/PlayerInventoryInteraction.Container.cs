@@ -175,7 +175,18 @@ public sealed partial class PlayerInventoryInteraction
 		if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() )
 			return false;
 
-		return ContainerInventory.TryFindOnHierarchy( tr.GameObject, out container );
+		if ( !ContainerInventory.TryFindOnHierarchy( tr.GameObject, out container ) )
+			return false;
+
+		// A vehicle's chest is only the storage box on its back; the rest of the hull is "enter".
+		if ( container.GameObject.Components.Get<Vehicle>( FindMode.EverythingInSelfAndAncestors ) is not null
+		     && !Vehicle.IsStorageHit( tr.GameObject ) )
+		{
+			container = null;
+			return false;
+		}
+
+		return true;
 	}
 
 	Vector3 ResolveContainerEyePosition()
@@ -188,6 +199,15 @@ public sealed partial class PlayerInventoryInteraction
 		}
 
 		return GameObject.WorldPosition + Vector3.Up * 64f;
+	}
+
+	/// <summary>Dev consoles only (<c>vehicle_storage</c>): open a container without the look trace.</summary>
+	public void DevOpenContainer( ContainerInventory container )
+	{
+		if ( container is null || !container.IsValid() || !IsLocalInputOwnedPawn() )
+			return;
+
+		OpenContainerView( container );
 	}
 
 	bool IsGrappleRetractActive()

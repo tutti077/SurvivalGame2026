@@ -584,8 +584,9 @@ public sealed partial class PlayerVitals : Component
 
 		_pendingDeathRespawnHost = false;
 		HostClearStatusEffects();
-		// A bear trap does not follow you to the spawn point.
+		// A bear trap does not follow you to the spawn point, and neither does a vehicle seat.
 		Components.Get<PlayerMovement>()?.HostSetTrapped( false );
+		Vehicle.HostEjectIfSeated( GameObject );
 
 		// Death loot: droppable resources leave the pawn here, at the death spot (equipment stays).
 		DeathLootBag.HostSpawnForDeath( GameObject );

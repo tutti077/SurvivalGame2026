@@ -69,6 +69,15 @@ public static class BuildAuthority
 			return false;
 		}
 
+		if ( data.Vehicle )
+		{
+			// A vehicle is a physics object the hammer merely drops into the world: no BuildPiece, no
+			// static collider, no nav rebake, no structural solve. Host-owned until a driver sits down.
+			spawned.Name = pieceId;
+			HostNetworkSpawn.TrySpawn( spawned );
+			return true;
+		}
+
 		spawned.Name = $"build_{pieceId}";
 
 		var piece = spawned.Components.Get<BuildPiece>() ?? spawned.Components.Create<BuildPiece>();

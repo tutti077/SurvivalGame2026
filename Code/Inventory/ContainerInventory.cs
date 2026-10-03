@@ -27,6 +27,22 @@ public sealed class ContainerInventory : Component
 	public bool DestroyWhenEmpty { get; set; }
 
 	/// <summary>Bumps when host contents change — remotes can detect a missed Broadcast.</summary>
+	/// <summary>
+	/// One slot that only accepts <see cref="RestrictedSlotResourceId"/> (a fuel tank, a furnace input).
+	/// -1 = no restriction. Prefab-authored, so every peer knows it without a broadcast. Deposits into
+	/// that slot are refused for anything else, and stack absorbs / quick-moves skip it unless the item
+	/// matches. First user: the vehicle fuel slot (<see cref="Vehicle"/>).
+	/// </summary>
+	[Property, Group( "Restricted Slot" ), Title( "Restricted Slot Index" )]
+	public int RestrictedSlotIndex { get; set; } = -1;
+
+	[Property, Group( "Restricted Slot" ), Title( "Restricted Slot Resource Id" )]
+	public string RestrictedSlotResourceId { get; set; } = string.Empty;
+
+	/// <summary>Short label painted on the empty restricted slot ("FUEL").</summary>
+	[Property, Group( "Restricted Slot" ), Title( "Restricted Slot Label" )]
+	public string RestrictedSlotLabel { get; set; } = string.Empty;
+
 	[Sync( SyncFlags.FromHost )]
 	public int ContentsVersion { get; set; }
 
@@ -69,6 +85,130 @@ public sealed class ContainerInventory : Component
 		return _slots[index];
 	}
 
+	public bool HasRestrictedSlot => RestrictedSlotIndex >= 0 && !string.IsNullOrWhiteSpace( RestrictedSlotResourceId );
+
+	public bool IsSlotRestricted( int slotIndex ) => HasRestrictedSlot && slotIndex == RestrictedSlotIndex;
+
+	/// <summary>May this resource sit in this slot? Everything is fine outside the restricted slot.</summary>
+	public bool SlotAccepts( int slotIndex, string resourceId )
+	{
+		if ( !IsSlotRestricted( slotIndex ) )
+			return true;
+		if ( string.IsNullOrWhiteSpace( resourceId ) )
+			return true;
+		return ResourceCatalog.ResourceIdsMatch( resourceId, RestrictedSlotResourceId );
+	}
+
+	/// <summary>Drag / drop between <paramref name="sourceSlotIndex"/> and <paramref name="targetSlotIndex"/> with <paramref name="held"/> landing on the target: both ends must accept what they receive.</summary>
+	bool DragAccepts( int sourceSlotIndex, int targetSlotIndex, in InventoryCursorStack held )
+	{
+		if ( !HasRestrictedSlot )
+			return true;
+
+		EnsureSlotArray();
+		if ( !SlotAccepts( targetSlotIndex, held.ResourceId ) )
+			return false;
+
+		// Whatever sits on the target moves back to the source.
+		if ( targetSlotIndex >= 0 && targetSlotIndex < _slots.Length && !_slots[targetSlotIndex].IsEmpty
+		     && !SlotAccepts( sourceSlotIndex, _slots[targetSlotIndex].ResourceId ) )
+			return false;
+
+		return true;
+	}
+
+	/// <summary>Absorb into every slot the stack may use (the restricted slot only when it matches).</summary>
+	bool AbsorbRespectingRestriction( ref InventoryCursorStack held )
+	{
+		EnsureSlotArray();
+		if ( !HasRestrictedSlot || RestrictedSlotIndex >= _slots.Length )
+			return InventoryStackRules.AbsorbStack( _slots, ref held );
+
+		if ( SlotAccepts( RestrictedSlotIndex, held.ResourceId ) )
+		{
+			// The matching item fills its own slot first (fuel goes in the tank), then spills over.
+			var single = new[] { _slots[RestrictedSlotIndex] };
+			var changedFirst = InventoryStackRules.AbsorbStack( single, ref held );
+			if ( changedFirst )
+				_slots[RestrictedSlotIndex] = single[0];
+			if ( held.IsEmpty )
+				return changedFirst;
+			return InventoryStackRules.AbsorbStack( _slots, ref held ) || changedFirst;
+		}
+
+		var view = new InventorySlot[_slots.Length - 1];
+		for ( int i = 0, j = 0; i < _slots.Length; i++ )
+		{
+			if ( i == RestrictedSlotIndex )
+				continue;
+			view[j++] = _slots[i];
+		}
+
+		var changed = InventoryStackRules.AbsorbStack( view, ref held );
+		if ( changed )
+		{
+			for ( int i = 0, j = 0; i < _slots.Length; i++ )
+			{
+				if ( i == RestrictedSlotIndex )
+					continue;
+				_slots[i] = view[j++];
+			}
+		}
+
+		return changed;
+	}
+
+	/// <summary>Host: put up to <paramref name="count"/> of a resource straight into one slot (dev fuel fill). Returns the amount placed.</summary>
+	public int HostTryDepositIntoSlot( int slotIndex, string resourceId, int count )
+	{
+		if ( !HasHostAuthority || count <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
+			return 0;
+
+		EnsureSlotArray();
+		if ( slotIndex < 0 || slotIndex >= _slots.Length )
+			return 0;
+
+		var id = ResourceCatalog.NormalizeResourceId( resourceId );
+		if ( !SlotAccepts( slotIndex, id ) )
+			return 0;
+
+		ref var slot = ref _slots[slotIndex];
+		if ( !slot.IsEmpty && !ResourceCatalog.ResourceIdsMatch( slot.ResourceId, id ) )
+			return 0;
+
+		var add = ResourceCatalog.ClampAddToStack( id, slot.IsEmpty ? 0 : slot.Count, count );
+		if ( add <= 0 )
+			return 0;
+
+		if ( slot.IsEmpty )
+			slot = new InventorySlot { ResourceId = id, Count = add };
+		else
+			slot.Count += add;
+
+		Apply( true );
+		return add;
+	}
+
+	/// <summary>Host: take up to <paramref name="count"/> out of one slot (fuel burn, furnace input). Returns the amount removed.</summary>
+	public int HostTryRemoveFromSlot( int slotIndex, int count )
+	{
+		if ( !HasHostAuthority || count <= 0 )
+			return 0;
+
+		EnsureSlotArray();
+		if ( slotIndex < 0 || slotIndex >= _slots.Length || _slots[slotIndex].IsEmpty )
+			return 0;
+
+		ref var slot = ref _slots[slotIndex];
+		var take = Math.Min( count, slot.Count );
+		slot.Count -= take;
+		if ( slot.Count <= 0 )
+			slot = InventorySlot.Empty;
+
+		Apply( true );
+		return take;
+	}
+
 	/// <summary>Owner/client entry: predict locally, host confirms and Broadcasts shared truth.</summary>
 	public bool OwnerTryPickupAll( int slotIndex, out InventorySlot picked )
 	{
@@ -90,7 +230,7 @@ public sealed class ContainerInventory : Component
 		if ( HasHostAuthority )
 			return TryPlaceHeld( slotIndex, ref held );
 
-		if ( TakeOnly )
+		if ( TakeOnly || !SlotAccepts( slotIndex, held.ResourceId ) )
 			return false;
 
 		var snapshot = held;
@@ -111,6 +251,9 @@ public sealed class ContainerInventory : Component
 			return false;
 
 		var snapshot = held;
+		if ( !DragAccepts( sourceSlotIndex, targetSlotIndex, held ) )
+			return false;
+
 		var ok = InventoryStackRules.FinishDragDrop( _slots, sourceSlotIndex, targetSlotIndex, ref held );
 		if ( ok )
 			ContentsChanged?.Invoke();
@@ -128,6 +271,9 @@ public sealed class ContainerInventory : Component
 			return false;
 
 		var snapshot = held;
+		if ( !DragAccepts( sourceSlotIndex, targetSlotIndex, held ) )
+			return false;
+
 		var ok = InventoryStackRules.SwapDragToSlot( _slots, sourceSlotIndex, targetSlotIndex, ref held );
 		if ( ok )
 			ContentsChanged?.Invoke();
@@ -157,6 +303,9 @@ public sealed class ContainerInventory : Component
 			return TryDropOne( slotIndex, held, out placedCount );
 
 		if ( TakeOnly )
+			return false;
+
+		if ( !SlotAccepts( slotIndex, held.ResourceId ) )
 			return false;
 
 		var ok = InventoryStackRules.DropOne( _slots, slotIndex, held, out placedCount );
@@ -190,6 +339,9 @@ public sealed class ContainerInventory : Component
 			return false;
 
 		var snapshot = held;
+		if ( !SlotAccepts( slotIndex, held.ResourceId ) )
+			return false;
+
 		var ok = InventoryStackRules.PlaceHalf( _slots, slotIndex, ref held );
 		if ( ok )
 			ContentsChanged?.Invoke();
@@ -207,7 +359,7 @@ public sealed class ContainerInventory : Component
 			return false;
 
 		var snapshot = held;
-		InventoryStackRules.AbsorbStack( _slots, ref held );
+		AbsorbRespectingRestriction( ref held );
 		ContentsChanged?.Invoke();
 		RpcHostAbsorbStack( snapshot.ResourceId ?? string.Empty, snapshot.Count, snapshot.Wear, snapshot.CrafterName ?? string.Empty );
 		return held.IsEmpty;
@@ -225,7 +377,7 @@ public sealed class ContainerInventory : Component
 
 	public bool TryPlaceHeld( int slotIndex, ref InventoryCursorStack held )
 	{
-		if ( !HasHostAuthority || TakeOnly )
+		if ( !HasHostAuthority || TakeOnly || !SlotAccepts( slotIndex, held.ResourceId ) )
 			return false;
 
 		EnsureSlotArray();
@@ -234,7 +386,7 @@ public sealed class ContainerInventory : Component
 
 	public bool TryFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
 	{
-		if ( !HasHostAuthority || TakeOnly )
+		if ( !HasHostAuthority || TakeOnly || !DragAccepts( sourceSlotIndex, targetSlotIndex, held ) )
 			return false;
 
 		EnsureSlotArray();
@@ -243,7 +395,7 @@ public sealed class ContainerInventory : Component
 
 	public bool TrySwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
 	{
-		if ( !HasHostAuthority || TakeOnly )
+		if ( !HasHostAuthority || TakeOnly || !DragAccepts( sourceSlotIndex, targetSlotIndex, held ) )
 			return false;
 
 		EnsureSlotArray();
@@ -263,7 +415,7 @@ public sealed class ContainerInventory : Component
 	public bool TryDropOne( int slotIndex, in InventoryCursorStack held, out int placedCount )
 	{
 		placedCount = 0;
-		if ( !HasHostAuthority || TakeOnly )
+		if ( !HasHostAuthority || TakeOnly || !SlotAccepts( slotIndex, held.ResourceId ) )
 			return false;
 
 		EnsureSlotArray();
@@ -282,7 +434,7 @@ public sealed class ContainerInventory : Component
 
 	public bool TryPlaceHalf( int slotIndex, ref InventoryCursorStack held )
 	{
-		if ( !HasHostAuthority || TakeOnly )
+		if ( !HasHostAuthority || TakeOnly || !SlotAccepts( slotIndex, held.ResourceId ) )
 			return false;
 
 		EnsureSlotArray();
@@ -295,7 +447,7 @@ public sealed class ContainerInventory : Component
 			return false;
 
 		EnsureSlotArray();
-		Apply( InventoryStackRules.AbsorbStack( _slots, ref held ) );
+		Apply( AbsorbRespectingRestriction( ref held ) );
 		return held.IsEmpty;
 	}
 
@@ -306,7 +458,20 @@ public sealed class ContainerInventory : Component
 			return false;
 
 		EnsureSlotArray();
-		return InventoryStackRules.TryFindQuickMoveTarget( _slots, stack, -1, out targetSlotIndex );
+		if ( HasRestrictedSlot && RestrictedSlotIndex < _slots.Length && !stack.IsEmpty
+		     && ResourceCatalog.ResourceIdsMatch( stack.ResourceId, RestrictedSlotResourceId ) )
+		{
+			// Fuel shift-clicked into the buggy lands in the tank when there is room.
+			var tank = _slots[RestrictedSlotIndex];
+			if ( tank.IsEmpty || ( ResourceCatalog.ResourceIdsMatch( tank.ResourceId, stack.ResourceId ) && tank.Count < ResourceCatalog.GetMaxStack( stack.ResourceId ) ) )
+			{
+				targetSlotIndex = RestrictedSlotIndex;
+				return true;
+			}
+		}
+
+		var excluded = HasRestrictedSlot && !SlotAccepts( RestrictedSlotIndex, stack.ResourceId ) ? RestrictedSlotIndex : -1;
+		return InventoryStackRules.TryFindQuickMoveTarget( _slots, stack, excluded, out targetSlotIndex );
 	}
 
 	public int HostDepositStack( string resourceId, int count )
@@ -317,7 +482,7 @@ public sealed class ContainerInventory : Component
 		EnsureSlotArray();
 		var held = new InventoryCursorStack();
 		held.Set( ResourceCatalog.NormalizeResourceId( resourceId ), count );
-		Apply( InventoryStackRules.AbsorbStack( _slots, ref held ) );
+		Apply( AbsorbRespectingRestriction( ref held ) );
 		return count - held.Count;
 	}
 

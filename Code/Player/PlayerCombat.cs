@@ -558,6 +558,14 @@ public partial class PlayerCombat : Component
 			return;
 		}
 
+		// Vehicle driver: hands on the wheel, no attacks or blocks (passengers keep everything).
+		if ( Components.Get<PlayerMovement>() is { IsSeatedDriver: true } )
+		{
+			CancelBowCharge();
+			_bowAdsActive = false;
+			return;
+		}
+
 		// Shove is a player ability, not a weapon one — it runs before the melee-item gate below and
 		// works bare-handed. (Equipment used to disable this whole component when no melee item was
 		// held, which killed the shove, the hit reaction, and the jump/grapple locks along with it.)

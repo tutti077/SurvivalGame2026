@@ -1,0 +1,7 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.850"
+	TextureColor "models/vehicles/buggy_atlas.png"
+}

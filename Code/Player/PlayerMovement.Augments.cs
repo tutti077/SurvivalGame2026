@@ -114,7 +114,7 @@ public sealed partial class PlayerMovement
 		if ( _controller is null || !_controller.IsValid() || !_controller.IsOnGround )
 			return false;
 
-		if ( IsHitReactionActive() || TrapLocked || GrappleAttached || WingsuitDeployed || EventInputLocked )
+		if ( IsHitReactionActive() || TrapLocked || IsSeated || GrappleAttached || WingsuitDeployed || EventInputLocked )
 			return false;
 
 		var jumpSpeed = Math.Max( 1f, _controller.JumpSpeed ) * Math.Max( 1f, multiplier );
@@ -135,7 +135,7 @@ public sealed partial class PlayerMovement
 		if ( _controller is null || !_controller.IsValid() || !_controller.IsOnGround )
 			return false;
 
-		if ( IsHitReactionActive() || TrapLocked || GrappleAttached || WingsuitDeployed || EventInputLocked )
+		if ( IsHitReactionActive() || TrapLocked || IsSeated || GrappleAttached || WingsuitDeployed || EventInputLocked )
 			return false;
 
 		if ( !WantsSprintStaminaSpend() )
@@ -174,7 +174,7 @@ public sealed partial class PlayerMovement
 			return;
 		}
 
-		if ( Time.NowDouble >= _slideUntil || !_controller.IsOnGround || TrapLocked || IsHitReactionActive() )
+		if ( Time.NowDouble >= _slideUntil || !_controller.IsOnGround || TrapLocked || IsSeated || IsHitReactionActive() )
 		{
 			_slideActive = false;
 			if ( _slideRefundStamina > 0f )

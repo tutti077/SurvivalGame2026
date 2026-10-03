@@ -61,6 +61,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	StatusEffectsHud _statusEffectsHud;
 	BossHealthBarHud _bossHealthBar;
 	BaseRaidHud _baseRaidHud;
+	VehicleHud _vehicleHud;
 	Panel _foodSlotsRoot;
 	readonly Panel[] _foodSlotPanels = new Panel[PlayerFood.MaxFoodSlots];
 	readonly Label[] _foodSlotTimers = new Label[PlayerFood.MaxFoodSlots];
@@ -181,6 +182,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			{
 				_bossHealthBar?.Tick( _vitals.GameObject.WorldPosition );
 				_baseRaidHud?.Tick( _vitals.GameObject );
+				_vehicleHud?.Tick( _vitals.GameObject );
 			}
 		}
 		if ( _inventoryInteraction?.FocusedCampfire is not null
@@ -188,6 +190,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		     || _inventoryInteraction?.FocusedTrap is not null
 	     || _inventoryInteraction?.FocusedLever is not null
 		     || _inventoryInteraction?.FocusedBed is not null
+		     || _inventoryInteraction?.FocusedVehicle is not null
 		     || _inventoryInteraction?.FocusedTimeTrialStand is not null
 		     || _inventoryInteraction?.FocusedArenaMenuButton is not null )
 			OnInteractionPromptChanged();
@@ -237,6 +240,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedDoorChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTrapChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedLeverChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedVehicleChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged -= OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.FocusedArenaButtonChanged -= OnInteractionPromptChanged;
@@ -271,6 +275,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		_bossHealthBar = null;
 		_baseRaidHud?.Dispose();
 		_baseRaidHud = null;
+		_vehicleHud?.Dispose();
+		_vehicleHud = null;
 		_buildMenuHud = null;
 		_wireCableMenuHud = null;
 		_buildSnapReadout = null;
@@ -571,6 +577,8 @@ public sealed class PlayerScreenHud : PanelComponent
 	{
 		_baseRaidHud = new BaseRaidHud();
 		_baseRaidHud.Build( root );
+		_vehicleHud = new VehicleHud();
+		_vehicleHud.Build( root );
 	}
 
 	void BuildHarvestPrompt( Panel root )
@@ -630,6 +638,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedTrapChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedLeverChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedBedChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedVehicleChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.FocusedArenaButtonChanged += OnInteractionPromptChanged;
@@ -1066,6 +1075,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedTrapChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedLeverChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedBedChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedVehicleChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.FocusedArenaButtonChanged += OnInteractionPromptChanged;
@@ -1218,20 +1228,24 @@ public sealed class PlayerScreenHud : PanelComponent
 		var showLever = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && focusedLever is not null && focusedLever.IsValid();
 		var focusedBed = _inventoryInteraction?.FocusedBed;
 		var showBed = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && focusedBed is not null && focusedBed.IsValid();
+		var focusedVehicle = _inventoryInteraction?.FocusedVehicle;
+		var showVehicle = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && !showBed && focusedVehicle is not null && focusedVehicle.IsValid();
 		var farmingPrompt = _farming?.PromptText ?? string.Empty;
-		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && !showBed && farmingPrompt.Length > 0;
-		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && !showBed && !showFarming && _handHarvest?.FocusedNode is not null;
-		var show = showOpen || showTrial || showArena || showCampfire || showDoor || showTrap || showLever || showBed || showFarming || showHarvest;
+		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && !showBed && !showVehicle && farmingPrompt.Length > 0;
+		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && !showBed && !showVehicle && !showFarming && _handHarvest?.FocusedNode is not null;
+		var show = showOpen || showTrial || showArena || showCampfire || showDoor || showTrap || showLever || showBed || showVehicle || showFarming || showHarvest;
 
 		if ( _promptKeyLabel is not null )
 			_promptKeyLabel.Text = showFarming ? (_farming?.PromptKey ?? "E") : "E";
 
 		// Someone else's bed only says whose it is — there is nothing to press.
 		var bedIsInfoOnly = showBed && _inventoryInteraction is { } interaction && !focusedBed.CanClaim( interaction.GameObject );
-		if ( _promptKeyCap is not null && bedIsInfoOnly != _promptKeyCapHidden )
+		var vehicleIsInfoOnly = showVehicle && _inventoryInteraction is { } vInteraction && !focusedVehicle.CanEnter( vInteraction.GameObject );
+		var infoOnly = bedIsInfoOnly || vehicleIsInfoOnly;
+		if ( _promptKeyCap is not null && infoOnly != _promptKeyCapHidden )
 		{
-			_promptKeyCapHidden = bedIsInfoOnly;
-			_promptKeyCap.Style.Set( "display", bedIsInfoOnly ? "none" : "flex" );
+			_promptKeyCapHidden = infoOnly;
+			_promptKeyCap.Style.Set( "display", infoOnly ? "none" : "flex" );
 		}
 
 		if ( _promptLabel is not null )
@@ -1283,6 +1297,10 @@ public sealed class PlayerScreenHud : PanelComponent
 			else if ( showBed )
 			{
 				_promptLabel.Text = focusedBed.PromptTextFor( _inventoryInteraction.GameObject );
+			}
+			else if ( showVehicle )
+			{
+				_promptLabel.Text = focusedVehicle.PromptTextFor( _inventoryInteraction.GameObject );
 			}
 			else if ( showFarming )
 			{

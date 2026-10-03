@@ -75,7 +75,7 @@ public sealed partial class PlayerMovement
 		if ( string.IsNullOrWhiteSpace( JumpInputAction ) || !Input.Pressed( JumpInputAction ) )
 			return;
 
-		if ( IsHitReactionActive() || GrappleAttached || TrapLocked )
+		if ( IsHitReactionActive() || GrappleAttached || TrapLocked || IsSeated )
 			return;
 
 		if ( !TryGetRollDirection( out var dir ) )

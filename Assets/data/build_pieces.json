@@ -442,6 +442,18 @@
           "amount": 1
         }
       ]
+    },
+    {
+      "id": "vehicle_dune_buggy",
+      "displayName": "Dune Buggy",
+      "icon": "",
+      "prefab": "prefabs/build/vehicle_dune_buggy.prefab",
+      "fallbackColor": "0.85,0.5,0.15,1",
+      "vehicle": true,
+      "halfWidth": 75,
+      "halfHeight": 30,
+      "halfDepth": 45,
+      "costs": []
     }
   ]
 }

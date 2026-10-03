@@ -148,6 +148,10 @@ public sealed class CombatAuthority : Component
 		if ( attacker.Network is { Active: true } net && net.Owner is { } owner && Rpc.Caller is { } caller && !ConnectionIdentity.SameClient( caller, owner ) )
 			return Fail( AttackReleaseDebugCode.RejectOwnerMismatch, $"caller [{ConnectionIdentity.Format( caller )}] ≠ owner [{ConnectionIdentity.Format( owner )}]" );
 
+		// Hands on the wheel: a vehicle driver cannot swing (passengers can).
+		if ( attacker.Components.Get<PlayerMovement>() is { IsSeatedDriver: true } )
+			return Fail( AttackReleaseDebugCode.RejectNoMeleeItemEquipped, "attacker is driving a vehicle" );
+
 		if ( ServerAttackRateLimitSeconds > 0f
 		     && _lastAcceptedAttackByAttacker.TryGetValue( attacker.Id, out var last )
 		     && RealTime.GlobalNow - last < ServerAttackRateLimitSeconds )
@@ -435,6 +439,10 @@ public sealed class CombatAuthority : Component
 		if ( piece is not null )
 			return !piece.IsBroken;
 
+		var vehicle = dmg is not null && dmg.GameObject.IsValid() ? Vehicle.FindOnHierarchy( dmg.GameObject ) : null;
+		if ( vehicle is not null )
+			return !vehicle.IsBroken;
+
 		return true;
 	}
 
@@ -477,6 +485,10 @@ public sealed class CombatAuthority : Component
 		var tree = ResolveChopableTreeForDamageReceiver( dmg );
 		if ( tree is not null && tree.GameObject.IsValid() )
 			return tree.GameObject.Id;
+
+		var vehicle = dmg is not null && dmg.GameObject.IsValid() ? Vehicle.FindOnHierarchy( dmg.GameObject ) : null;
+		if ( vehicle is not null && vehicle.GameObject.IsValid() )
+			return vehicle.GameObject.Id;
 
 		return dmg.GameObject.Id;
 	}
