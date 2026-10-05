@@ -125,12 +125,13 @@ If you cannot say what cheat or boundary failure a check stops, it does not belo
 
 ### Human verification log
 
-Anything changed without a player-eye check in the engine (look, feel, collision, timing — whatever
-only a human at the PC can judge) gets a row in **`VERIFY.md`** at the repo root: ID, date, build,
-area, what to check, how to reproduce in under a minute, status. One row per thing. Only Mark closes
-rows (`OK` / `BAD <note>`); Claude never deletes or closes them. Every reply's **What's needed from
-you** lists the IDs it added (`VERIFY V-012`). A `BAD` row is the brief for the fix; the fix adds a
-new row that references the old ID.
+**`VERIFY.md`** at the repo root holds only what Mark explicitly asks to have added ("add this to the
+verify list"). Claude never adds rows on its own initiative — things it could not check by eye go in
+that reply's **What's needed from you** as plain text. When Mark asks for a row: ID, date, build,
+area, what to check, how to reproduce in under a minute, status; cite it in the footer
+(`VERIFY V-003`). Only Mark closes or clears rows. (Mark, 2026-10-05: no running list of things he
+has already verified.) The *Fable review queue* section is separate and still filled per Mark's
+standing request.
 
 ### Cool ideas list
 
