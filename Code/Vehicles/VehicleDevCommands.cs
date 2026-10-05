@@ -347,6 +347,28 @@ public static partial class VehicleDevCommands
 		Log.Info( ok ? $"[Vehicle] entered {vehicle.DisplayName} (seat {vehicle.GetSeatIndexOf( pawn.Id )})." : "[Vehicle] vehicle_enter: refused (full, wrecked or already seated)." );
 	}
 
+	/// <summary>Usage: <c>vehicle_flip</c> — the local pawn presses "Flip" on the nearest vehicle (host only; same path as E).</summary>
+	[ConCmd( "vehicle_flip" )]
+	public static void ConCmdFlip()
+	{
+		if ( Networking.IsActive && !Networking.IsHost )
+		{
+			Log.Warning( "[Vehicle] vehicle_flip: host only." );
+			return;
+		}
+
+		var pawn = FindLocalPawn();
+		var vehicle = FindNearestVehicle( pawn );
+		if ( pawn is null || vehicle is null )
+		{
+			Log.Warning( "[Vehicle] vehicle_flip: no pawn or no vehicle in the scene." );
+			return;
+		}
+
+		var ok = vehicle.HostTryFlip( pawn );
+		Log.Info( ok ? $"[Vehicle] flip push on {vehicle.DisplayName} (up={vehicle.WorldRotation.Up})." : $"[Vehicle] vehicle_flip: refused (flipped={vehicle.IsFlipped}, seated, wrecked or cooling down)." );
+	}
+
 	[ConCmd( "vehicle_exit" )]
 	public static void ConCmdExit()
 	{

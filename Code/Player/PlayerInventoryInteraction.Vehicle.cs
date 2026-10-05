@@ -5,7 +5,8 @@ namespace Survival;
 
 /// <summary>
 /// Look at a <see cref="Vehicle"/>: the prompt says "Drive Dune Buggy" / "Ride in Dune Buggy" / "… is
-/// full"; E gets in (first in drives). While seated, E gets out. Looking at the vehicle's storage box
+/// full"; E gets in (first in drives). A rolled vehicle reads "Flip Dune Buggy" and E pushes it toward
+/// upright (<see cref="Vehicle.HostTryFlip"/>). While seated, E gets out. Looking at the vehicle's storage box
 /// is the chest, not the vehicle (see <see cref="Vehicle.StorageTag"/>). Owner traces and sends intent;
 /// the host re-checks reach once and commits through <see cref="Vehicle.HostTryEnter"/> /
 /// <see cref="Vehicle.HostExit"/>.
@@ -57,10 +58,17 @@ public sealed partial class PlayerInventoryInteraction
 		if ( IsBuildHammerPreviewing() || IsGrappleRetractActive() )
 			return;
 
-		if ( FocusedVehicle is null || !FocusedVehicle.IsValid() || !FocusedVehicle.CanEnter( GameObject ) )
+		if ( FocusedVehicle is null || !FocusedVehicle.IsValid() )
 			return;
 
-		OwnerEnterVehicle( FocusedVehicle );
+		if ( FocusedVehicle.CanFlip( GameObject ) )
+		{
+			OwnerFlipVehicle( FocusedVehicle );
+			return;
+		}
+
+		if ( FocusedVehicle.CanEnter( GameObject ) )
+			OwnerEnterVehicle( FocusedVehicle );
 	}
 
 	void TickVehicleFocusPrompt( bool menuOpen, bool force = false )
@@ -117,6 +125,20 @@ public sealed partial class PlayerInventoryInteraction
 		RpcHostEnterVehicle( vehicle.GameObject.Id );
 	}
 
+	void OwnerFlipVehicle( Vehicle vehicle )
+	{
+		if ( vehicle is null || !vehicle.IsValid() )
+			return;
+
+		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
+		{
+			vehicle.HostTryFlip( GameObject );
+			return;
+		}
+
+		RpcHostFlipVehicle( vehicle.GameObject.Id );
+	}
+
 	void OwnerExitVehicle()
 	{
 		_vehicleMovement ??= Components.Get<PlayerMovement>();
@@ -151,6 +173,23 @@ public sealed partial class PlayerInventoryInteraction
 			return;
 
 		vehicle.HostTryEnter( GameObject );
+	}
+
+	[Rpc.Host]
+	void RpcHostFlipVehicle( Guid vehicleRootId )
+	{
+		if ( !Networking.IsHost )
+			return;
+
+		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
+		     && !ConnectionIdentity.SameClient( caller, owner ) )
+			return;
+
+		var vehicle = Scene.Directory.FindByGuid( vehicleRootId )?.Components.Get<Vehicle>();
+		if ( vehicle is null || !vehicle.IsValid() || !vehicle.IsWithinUseReach( GameObject ) )
+			return;
+
+		vehicle.HostTryFlip( GameObject );
 	}
 
 	[Rpc.Host]

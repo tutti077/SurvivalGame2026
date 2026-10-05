@@ -46,6 +46,33 @@
 					},
 				]
 			},
+			{
+				_class = "PhysicsShapeList"
+				children =
+				[
+					{
+						_class = "PhysicsHullFile"
+						filename = "models/vehicles/dune_buggy.fbx"
+						import_translation = [ 0.0, 0.0, 0.0 ]
+						import_rotation = [ 0.0, 0.0, 0.0 ]
+						import_scale = 0.4
+						align_origin_x_type = "None"
+						align_origin_y_type = "None"
+						align_origin_z_type = "None"
+						parent_bone = ""
+						surface_prop = "metal"
+						collision_tags = "solid"
+						faceMergeAngle = 10.0
+						maxHullVertices = 48
+						hull_mode = "SingleHull"
+						import_filter =
+						{
+							exclude_by_default = true
+							exception_list = [ "dune_buggy" ]
+						}
+					},
+				]
+			},
 		]
 		model_archetype = ""
 		primary_associated_entity = ""

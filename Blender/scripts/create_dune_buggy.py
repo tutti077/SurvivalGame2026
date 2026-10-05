@@ -386,7 +386,7 @@ VMDL = """<!-- kv3 encoding:text:version{{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d}}
 						}}
 					}},
 				]
-			}},
+			}},{physics}
 		]
 		model_archetype = ""
 		primary_associated_entity = ""
@@ -395,6 +395,37 @@ VMDL = """<!-- kv3 encoding:text:version{{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d}}
 	}}
 }}
 """
+
+# Body only: one convex hull of the whole body mesh (cage, nose, rear, A-arms) is the chassis collider, so a
+# rollover lands on the real cage outline — flat roof and sides it can rest on (Mark 2026-10-04). Wheels have none.
+BODY_PHYSICS = """
+			{{
+				_class = "PhysicsShapeList"
+				children =
+				[
+					{{
+						_class = "PhysicsHullFile"
+						filename = "{rel}/{name}.fbx"
+						import_translation = [ 0.0, 0.0, 0.0 ]
+						import_rotation = [ 0.0, 0.0, 0.0 ]
+						import_scale = 0.4
+						align_origin_x_type = "None"
+						align_origin_y_type = "None"
+						align_origin_z_type = "None"
+						parent_bone = ""
+						surface_prop = "metal"
+						collision_tags = "solid"
+						faceMergeAngle = 10.0
+						maxHullVertices = 48
+						hull_mode = "SingleHull"
+						import_filter =
+						{{
+							exclude_by_default = true
+							exception_list = [ "{name}" ]
+						}}
+					}},
+				]
+			}},"""
 
 VMAT = """Layer0
 {
@@ -427,7 +458,8 @@ def export(obj, name):
 							 global_scale=1.0, apply_unit_scale=True, object_types={'MESH'},
 							 mesh_smooth_type='OFF', path_mode='STRIP', embed_textures=False)
 	with open(os.path.join(OUT_DIR, name + ".vmdl"), "w", newline="\n") as f:
-		f.write(VMDL.format(name=name, rel=ASSET_REL, atlas=ATLAS))
+		physics = BODY_PHYSICS.format(name=name, rel=ASSET_REL) if name == BODY else ""
+		f.write(VMDL.format(name=name, rel=ASSET_REL, atlas=ATLAS, physics=physics))
 
 
 def main():

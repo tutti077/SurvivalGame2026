@@ -8,9 +8,13 @@ namespace Survival;
 /// physics step the simulating machine (host, or the driver once it owns the vehicle) traces straight
 /// down from each wheel mount, pushes the chassis up with a spring + damper sized from
 /// <see cref="SuspensionFrequencyHz"/> / <see cref="SuspensionDampingRatio"/> and the chassis mass, kills
-/// sideways slip at each grounded wheel (<see cref="LateralGripMetersPerSecond2"/>) and pushes along the
-/// wheel's forward for throttle / brake. Drive and grip forces act at the mount points (chassis height),
-/// not the contact patch, so a hard turn leans instead of rolling the buggy.
+/// sideways slip at each grounded wheel and pushes along the wheel's forward for throttle / brake.
+/// Tyre forces are plain friction (Mark 2026-10-04: rollover must come out of the physics, not a
+/// scripted roll): each wheel's drive + side force acts at its ground contact and is capped at
+/// <see cref="TyreGripCoefficient"/> × that wheel's own spring load. A hard turn shifts load onto the
+/// outside wheels; whether the chassis then tips, slides or rolls over its cage collider falls out of
+/// speed, steering angle, slope, bumps, mass-centre height and track width. The upright pull only runs
+/// when truly airborne (jumps), so a buggy lying on its side or roof stays there.
 ///
 /// Controls (driver only): W accelerates up to <see cref="MaxSpeedMetersPerSecond"/>; A / D steer;
 /// S brakes while rolling forward and only becomes reverse once the buggy has stopped (Mark: wheels
@@ -38,8 +42,8 @@ public sealed partial class Vehicle
 	[Property, Group( "Drive" ), Title( "Out-of-Fuel Coast Drag (m/s²)" ), Description( "Slow-down once the tank is empty: the engine is dead, W does nothing, the buggy coasts down to a stop at this rate (brakes still work)." )]
 	public float OutOfFuelCoastDragMetersPerSecond2 { get; set; } = 1.5f;
 
-	[Property, Group( "Drive" ), Title( "Lateral Grip (m/s²)" ), Description( "Max sideways correction per grounded wheel. Lower = more slide." )]
-	public float LateralGripMetersPerSecond2 { get; set; } = 90f;
+	[Property, Group( "Drive" ), Title( "Tyre Grip (μ)" ), Description( "Tyre friction coefficient: each wheel's drive + side force is capped at μ × the load on that wheel. Higher = corners harder before sliding, so it tips over instead of sliding out sooner. Dirt ≈ 0.7, grippy rubber on rock ≈ 1.0+." )]
+	public float TyreGripCoefficient { get; set; } = 1.2f;
 
 	[Property, Group( "Steering" ), Title( "Max Steer (deg)" )]
 	public float MaxSteerDegrees { get; set; } = 32f;
@@ -92,7 +96,7 @@ public sealed partial class Vehicle
 		var parts = new string[4];
 		for ( var i = 0; i < 4; i++ )
 			parts[i] = _wheels[i].Grounded ? $"{_wheels[i].Compression:0.0}" : "air";
-		return $"sleeping={_body?.Sleeping} motion={_body?.MotionEnabled} accel={AccelerationMetersPerSecond2} freq={SuspensionFrequencyHz} k={k:0} wheels=[{string.Join( " ", parts )}] grounded={_groundedWheels} steer={_steerDegrees:0.0} grav={Scene.PhysicsWorld.Gravity}";
+		return $"sleeping={_body?.Sleeping} motion={_body?.MotionEnabled} accel={AccelerationMetersPerSecond2} freq={SuspensionFrequencyHz} k={k:0} wheels=[{string.Join( " ", parts )}] grounded={_groundedWheels} spin={MathX.RadianToDegree( _body?.AngularVelocity.Length ?? 0f ):0}°/s steer={_steerDegrees:0.0} grav={Scene.PhysicsWorld.Gravity}";
 	}
 
 	/// <summary>True on the machine that steps the physics (the owner — host until a driver takes over).</summary>
@@ -105,7 +109,9 @@ public sealed partial class Vehicle
 	{
 		public bool Grounded;
 		public float Compression;
+		public float Load;
 		public Vector3 ContactNormal;
+		public Vector3 ContactPoint;
 		public float SpinDegrees;
 	}
 
@@ -179,6 +185,7 @@ public sealed partial class Vehicle
 		}
 
 		SimulateSuspension( dt );
+		UpdateFlippedState();
 		SimulateSteering( steer, dt );
 		SimulateDrive( throttle, dt );
 		SimulateAirStability( dt );
@@ -257,10 +264,13 @@ public sealed partial class Vehicle
 				.WithoutTags( "player", "trigger", "worlddrop" )
 				.Run();
 
-			if ( !tr.Hit )
+			// A ray that starts inside the ground or grazes it sideways is a buggy lying on its side, not a
+			// wheel on the floor: counting it read as full compression and the spring shoved the chassis upright.
+			if ( !tr.Hit || tr.StartedSolid || Vector3.Dot( tr.Normal, up ) < 0.35f )
 			{
 				wheel.Grounded = false;
 				wheel.Compression = 0f;
+				wheel.Load = 0f;
 				continue;
 			}
 
@@ -277,7 +287,9 @@ public sealed partial class Vehicle
 
 			wheel.Grounded = true;
 			wheel.Compression = compression;
+			wheel.Load = force;
 			wheel.ContactNormal = tr.Normal.LengthSquared > 0.01f ? tr.Normal.Normal : Vector3.Up;
+			wheel.ContactPoint = tr.HitPosition;
 			_groundedWheels++;
 		}
 	}
@@ -342,8 +354,8 @@ public sealed partial class Vehicle
 
 		var accelUnits = TerrainWorldUnits.MetersToEngine( accel );
 		var perWheelDrive = mass * accelUnits / _groundedWheels;
-		var gripUnits = TerrainWorldUnits.MetersToEngine( Math.Max( 0f, LateralGripMetersPerSecond2 ) );
 		var perWheelMass = mass * 0.25f;
+		var mu = Math.Max( 0f, TyreGripCoefficient );
 
 		for ( var i = 0; i < 4; i++ )
 		{
@@ -357,16 +369,19 @@ public sealed partial class Vehicle
 			var wheelForward = ( rot.Forward - n * Vector3.Dot( rot.Forward, n ) ).Normal;
 			var wheelRight = ( rot.Right - n * Vector3.Dot( rot.Right, n ) ).Normal;
 
-			// Drive / brake along the (steered) wheel forward.
-			if ( MathF.Abs( perWheelDrive ) > 0.01f )
-				_body.ApplyForceAt( mount, wheelForward * perWheelDrive );
+			// Side force that would cancel this wheel's sideways slip in one step.
+			var lateral = Vector3.Dot( _body.GetVelocityAtPoint( mount ), wheelRight );
+			var sideForce = -perWheelMass * lateral / dt;
 
-			// Sideways grip: cancel lateral slip at this wheel, up to the grip limit.
-			var v = _body.GetVelocityAtPoint( mount );
-			var lateral = Vector3.Dot( v, wheelRight );
-			var wantedAccel = -lateral / dt;
-			wantedAccel = Math.Clamp( wantedAccel, -gripUnits, gripUnits );
-			_body.ApplyForceAt( mount, wheelRight * ( perWheelMass * wantedAccel ) );
+			// Friction circle: drive + side together never exceed μ × this wheel's load. A light inside wheel
+			// slides first; a wheel in the air contributes nothing. Pushed at the ground contact, where a real
+			// tyre pushes — that lever arm under the mass centre is what tips a buggy in a hard turn.
+			var tyreForce = wheelForward * perWheelDrive + wheelRight * sideForce;
+			var limit = mu * wheel.Load;
+			if ( tyreForce.LengthSquared > limit * limit )
+				tyreForce = tyreForce.Normal * limit;
+
+			_body.ApplyForceAt( wheel.ContactPoint, tyreForce );
 		}
 	}
 
@@ -391,6 +406,16 @@ public sealed partial class Vehicle
 	void SimulateAirStability( float dt )
 	{
 		if ( _groundedWheels > 0 )
+			return;
+
+		// No wheel on the ground is not the same as airborne: a rolled buggy lies on its side or roof with
+		// its wheel rays pointing at the sky. Ground under the chassis = it is tipping / lying, leave it be.
+		var probe = TerrainWorldUnits.MetersToEngine( Math.Max( 0.05f, SuspensionLengthMeters + WheelRadiusMeters ) * 1.5f );
+		var ground = Scene.Trace.Ray( WorldPosition, WorldPosition - Vector3.Up * probe )
+			.IgnoreGameObjectHierarchy( GameObject )
+			.WithoutTags( "player", "trigger", "worlddrop" )
+			.Run();
+		if ( ground.Hit )
 			return;
 
 		var damping = Math.Clamp( 1f - Math.Max( 0f, AirborneAngularDamping ) * dt, 0f, 1f );

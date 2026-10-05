@@ -1240,7 +1240,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		// Someone else's bed only says whose it is — there is nothing to press.
 		var bedIsInfoOnly = showBed && _inventoryInteraction is { } interaction && !focusedBed.CanClaim( interaction.GameObject );
-		var vehicleIsInfoOnly = showVehicle && _inventoryInteraction is { } vInteraction && !focusedVehicle.CanEnter( vInteraction.GameObject );
+		var vehicleIsInfoOnly = showVehicle && _inventoryInteraction is { } vInteraction && !focusedVehicle.CanUse( vInteraction.GameObject );
 		var infoOnly = bedIsInfoOnly || vehicleIsInfoOnly;
 		if ( _promptKeyCap is not null && infoOnly != _promptKeyCapHidden )
 		{

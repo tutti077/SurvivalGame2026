@@ -91,6 +91,8 @@ public sealed partial class Vehicle
 		var name = string.IsNullOrWhiteSpace( DisplayName ) ? "Vehicle" : DisplayName;
 		if ( IsBroken )
 			return $"{name} (wrecked)";
+		if ( IsFlipped )
+			return $"Flip {name}";
 		if ( IsFull )
 			return $"{name} is full";
 		return HasDriver ? $"Ride in {name}" : $"Drive {name}";
@@ -98,13 +100,13 @@ public sealed partial class Vehicle
 
 	/// <summary>Can this viewer press E to get in right now?</summary>
 	public bool CanEnter( GameObject viewer )
-		=> !IsBroken && !IsFull && viewer is { IsValid: true }
+		=> !IsBroken && !IsFlipped && !IsFull && viewer is { IsValid: true }
 		   && viewer.Components.Get<PlayerMovement>() is { IsSeated: false };
 
 	/// <summary>Host: seat the pawn in the lowest free seat. Seat 0 also takes the vehicle's network ownership.</summary>
 	public bool HostTryEnter( GameObject pawn )
 	{
-		if ( !HasHostAuthority || IsPreviewGhost || IsBroken )
+		if ( !HasHostAuthority || IsPreviewGhost || IsBroken || IsFlipped )
 			return false;
 		if ( pawn is null || !pawn.IsValid() )
 			return false;
