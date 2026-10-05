@@ -102,12 +102,12 @@ public sealed class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Clover — Tree Prefabs" ), Description( "Large trees; each spawn picks one of these at random." )]
 	public List<string> VegetationCloverTreePrefabs { get; set; } =
 	[
-		"prefabs/environment/tests/environment_elm1_v57.prefab",
-		"prefabs/environment/tests/environment_elm2_v57.prefab",
-		"prefabs/environment/tests/environment_elm3_v57.prefab",
-		"prefabs/environment/tests/environment_elm4_v57.prefab",
-		"prefabs/environment/tests/environment_elm5_v57.prefab",
-		"prefabs/environment/tests/environment_elm6_v57.prefab",
+		"prefabs/environment/tests/environment_elm1_v76.prefab",
+		"prefabs/environment/tests/environment_elm2_v76.prefab",
+		"prefabs/environment/tests/environment_elm3_v76.prefab",
+		"prefabs/environment/tests/environment_elm4_v76.prefab",
+		"prefabs/environment/tests/environment_elm5_v76.prefab",
+		"prefabs/environment/tests/environment_elm6_v76.prefab",
 	];
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Sapling Prefabs" ), Description( "Small trees, Clover Hills only; each spawn picks one of these at random. Empty = no saplings." )]
@@ -202,10 +202,10 @@ public sealed class TerrainWorldManager : Component
 	public float VegetationCloverStickNearLargeTreeMaxRadiusMeters { get; set; } = 6f;
 
 	[Property, Group( "Vegetation" ), Title( "Redwood — Tree Prefab A" )]
-	public string VegetationRedwoodPrefab { get; set; } = "prefabs/environment/tests/environment_elm3_v57.prefab";
+	public string VegetationRedwoodPrefab { get; set; } = "prefabs/environment/tests/environment_elm3_v76.prefab";
 
 	[Property, Group( "Vegetation" ), Title( "Redwood — Tree Prefab B" )]
-	public string VegetationRedwoodPrefabB { get; set; } = "prefabs/environment/tests/environment_elm6_v57.prefab";
+	public string VegetationRedwoodPrefabB { get; set; } = "prefabs/environment/tests/environment_elm6_v76.prefab";
 
 	[Property, Group( "Vegetation" ), Title( "Redwood — Density (0–1)" ), Range( 0.05f, 1f ), Step( 0.05f ), Description( "Fraction of shared forest density for Redwood only. Redwood ignores hard forest patches, so low values still cover the whole biome sparsely." )]
 	public float VegetationRedwoodDensity01 { get; set; } = 0.1f;
