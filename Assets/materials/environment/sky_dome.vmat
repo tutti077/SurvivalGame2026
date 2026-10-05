@@ -1,0 +1,6 @@
+Layer0
+{
+	shader "shaders/environment/sky_dome.shader"
+
+	CloudNoise "materials/environment/sky_clouds.png"
+}

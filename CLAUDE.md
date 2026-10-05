@@ -245,11 +245,21 @@ Code/
                 · SunShadowDistance (on the scene Sun: multiplies the engine's cascade shadow reach so the shadow ring is not at the player's feet)
                 · BearTrap (hammer-placed trap_small / trap_large: holds players 5 s, animals + enemies 10 s by TrapSize band;
                   hold lives on PlayerMovement.TrapLocked / EntityLocomotion.IsTrapped) · DamageOverTimeTrap (scene hazard volume)
+  World/Environment/  EnvironmentDayNightCycle (sun / moon arc, day counter) feeds SkyDome (camera-centred sphere, shaders/environment/sky_dome.shader:
+                gradient + sun glow + two wind-scrolled cloud layers from sky_clouds.png, Blender/scripts/create_sky_clouds.py) from
+                SkyPresetCatalog (Assets/data/sky_presets.json — per-weather night / dawn / day / noon / dusk keyframes); stars are a procedural layer in sky_dome.shader (StarVisibility from the cycle)
+                · sky dome + cycle live in lightingTest (3-minute loop, drives the GradientFog colour) and testscene1 (5 min day /
+                4 min night, no fog); **Y** = jump to noon, **U** = midnight (CycleDay / CycleNight actions; console cycle_day / cycle_night)
   (lighting)    No screen-space pixelation. The look is asset-side (Valheim recipe, Mark 2026-10-02): low-res textures + point filtering +
                 faceted normals baked in the mesh (create_elm_tree.py shade_flat; PixelFlatShading on pixel_lit.shader for meshes that
                 are not), optional point-sampled TextureNormal / TextureRoughness + PixelTexCoordScale on pixel_lit.shader (elm bark
                 v76: colour, normal and roughness all from one height field), then the engine's normal sun/shadows, SSAO, fog, bloom,
-                tonemap. Playground: Assets/scenes/lightingTest.scene (100 m uniformly scaled dev box — non-uniform scale breaks
+                tonemap. **Per-texel lighting** (pixel_lit `PixelTexelLighting`, default on, Valheim sconce reference 2026-10-05):
+                direct light + shadows are evaluated at the texel centre so each texel is one lit block; `PixelLightSteps`
+                (local lights, default 6 bands — Mark 2026-10-05: torch fall-off must be steppy, not a glow), `PixelLightCutoff`
+                and `PixelSunSteps` (default 0, the sun stays smooth) posterise on top. Indirect stays the engine's.
+                Firelight wanders through `Environment/FireLightFlicker` (authored on the campfire prefab's FireLight child, created on
+                the held torch / lantern lamp; wind gusts widen it) — never on the sun. Playground: Assets/scenes/lightingTest.scene (100 m uniformly scaled dev box — non-uniform scale breaks
                 vertex normals — clovertree/whole + fly cam + standard post stack on the camera)
   World/Terrain/        Streaming, chunk mesh, biome population, world save IO
   World/TerrainPreview/ Offline world generation pipeline + settings

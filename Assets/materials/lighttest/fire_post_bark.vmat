@@ -1,0 +1,14 @@
+// lightingTest fixture: a quarter of the elm bark tile across the FirePost dev box face (0.5 m x 7.5 m) so a
+// texel is ~3 cm like Valheim wood, normal map eased so the light bands read as bands, not speckle.
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "1.000"
+	PixelNormalStrength "0.35"
+	PixelFlatShading "1.000"
+	PixelTexCoordScale "[0.250000 3.750000]"
+	TextureColor "models/environment/tests/elm_bark_v76.png"
+	TextureNormal "models/environment/tests/elm_bark_v76_normal.png"
+	TextureRoughness "models/environment/tests/elm_bark_v76_rough.png"
+}

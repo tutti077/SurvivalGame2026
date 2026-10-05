@@ -154800,6 +154800,303 @@
         "caed1a0c-d522-473d-b293-e4e1ffd9746b": "207909c3-5fb6-4cd8-82c2-71778ca7756d",
         "a9f9d48a-7bbf-487e-bb93-4b0ae2373bcc": "be6d3411-556e-4a37-91b5-6dafed2c60b3"
       }
+    },
+    {
+      "__guid": "7da60134-240f-4ee6-b894-424e5f58c54b",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "Moon",
+      "Position": "0,0,0",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "light_directional,light",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Sandbox.DirectionalLight",
+          "__guid": "651b34d7-a927-45a4-86ab-f24537fd19e4",
+          "__enabled": true,
+          "Flags": 0,
+          "ContactShadows": false,
+          "Contribution": "Diffuse, Specular, Transmissive",
+          "FogMode": "Disabled",
+          "FogStrength": 0,
+          "LightColor": "0.55,0.65,0.95,1",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "ShadowBias": 0.0005,
+          "ShadowCascadeCount": 2,
+          "ShadowCascadeSplitRatio": 0.9,
+          "ShadowHardness": 0,
+          "Shadows": true,
+          "SkyColor": "0.22,0.28,0.42,1",
+          "Visualizer": {}
+        }
+      ],
+      "Children": []
+    },
+    {
+      "__guid": "1700a755-7d93-46af-903e-517ca759e991",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "SunDisk",
+      "Position": "0,0,8000",
+      "Rotation": "0,0,0,1",
+      "Scale": "10,10,10",
+      "Tags": "light_directional,light",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Sandbox.ModelRenderer",
+          "__guid": "fd4a5e98-8cff-4ff9-af89-ba6c600c5551",
+          "__enabled": true,
+          "Flags": 0,
+          "BodyGroups": 18446744073709551615,
+          "CreateAttachments": false,
+          "LodOverride": null,
+          "MaterialGroup": null,
+          "MaterialOverride": {
+            "Id": "d32c050b-bc9c-4568-bfea-63d47517d55f",
+            "Path": "materials/environment/sun_disk.vmat"
+          },
+          "Materials": null,
+          "Model": "models/dev/sphere.vmdl",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "RenderOptions": {
+            "GameLayer": true,
+            "OverlayLayer": false,
+            "BloomLayer": true,
+            "AfterUILayer": false
+          },
+          "RenderType": "Off",
+          "Tint": "4,4,4,1"
+        }
+      ],
+      "Children": []
+    },
+    {
+      "__guid": "633e73bc-6358-4ed2-9e65-21b82193fd4b",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "MoonDisk",
+      "Position": "0,0,-8000",
+      "Rotation": "0,0,0,1",
+      "Scale": "65,65,65",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Sandbox.ModelRenderer",
+          "__guid": "f4aff876-05fc-4db9-85c0-6ebb3e974115",
+          "__enabled": true,
+          "Flags": 0,
+          "BodyGroups": 18446744073709551615,
+          "CreateAttachments": false,
+          "LodOverride": null,
+          "MaterialGroup": null,
+          "MaterialOverride": {
+            "Id": "11b34687-a53e-4672-bcd1-eed8e53c00b6",
+            "Path": "materials/environment/moon_disk.vmat"
+          },
+          "Materials": null,
+          "Model": "models/dev/sphere.vmdl",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "RenderOptions": {
+            "GameLayer": true,
+            "OverlayLayer": false,
+            "BloomLayer": false,
+            "AfterUILayer": false
+          },
+          "RenderType": "Off",
+          "Tint": "1,1,1,1"
+        }
+      ],
+      "Children": []
+    },
+    {
+      "__guid": "cd6238b9-34c8-4014-aadb-8da2420cf3e0",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "EnvironmentCycle",
+      "Position": "0,0,0",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Survival.EnvironmentDayNightCycle",
+          "__guid": "0d027761-62e8-4d9d-a229-ebc58577e3fe",
+          "__enabled": true,
+          "Flags": 0,
+          "ArcTiltDegrees": 30,
+          "ArcYawDegrees": 0,
+          "CycleTimeSeconds": 0,
+          "DayNumber": 1,
+          "DaySeconds": 300,
+          "DaySkyAmbient": "0.42,0.54,0.76,1",
+          "DayWeight": 1,
+          "DiskOrbitRadiusMeters": 900,
+          "DiskScale": 0,
+          "Fog": null,
+          "JumpToDayAction": "CycleDay",
+          "JumpToNightAction": "CycleNight",
+          "LogPhaseChanges": false,
+          "MoonColor": "0.9,0.95,1.05,1",
+          "MoonDirectionalBrightness": 0.15,
+          "MoonDisk": {
+            "_type": "gameobject",
+            "go": "633e73bc-6358-4ed2-9e65-21b82193fd4b"
+          },
+          "MoonDiskMaterial": {
+            "Id": "11b34687-a53e-4672-bcd1-eed8e53c00b6",
+            "Path": "materials/environment/moon_disk.vmat"
+          },
+          "MoonLight": {
+            "_type": "component",
+            "component_id": "651b34d7-a927-45a4-86ab-f24537fd19e4",
+            "go": "7da60134-240f-4ee6-b894-424e5f58c54b",
+            "component_type": "DirectionalLight"
+          },
+          "NightAmbientBrightness": 0.3,
+          "NightSeconds": 240,
+          "NightSkyAmbient": "0.22,0.28,0.42,1",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "Paused": false,
+          "Phase": "Day",
+          "SkyDome": {
+            "_type": "component",
+            "component_id": "7217ec62-ce2c-4804-a96e-5d1321a903df",
+            "go": "47575d29-eced-4eaf-9f38-23339b9b5e06",
+            "component_type": "SkyDome"
+          },
+          "SkyPresetId": "clear",
+          "StartAtNight": false,
+          "SunBloomBrightness": 4,
+          "SunDisk": {
+            "_type": "gameobject",
+            "go": "1700a755-7d93-46af-903e-517ca759e991"
+          },
+          "SunDiskMaterial": {
+            "Id": "d32c050b-bc9c-4568-bfea-63d47517d55f",
+            "Path": "materials/environment/sun_disk.vmat"
+          },
+          "SunHorizonColor": "1,0.55,0.28,1",
+          "SunLight": {
+            "_type": "component",
+            "component_id": "d3659344-a90d-48fa-927a-095f70fe041f",
+            "go": "bfc59c12-1ed2-4f91-8956-a95a315eac3c",
+            "component_type": "DirectionalLight"
+          },
+          "SunPeakColor": "1.3,1.18,1,1",
+          "TransitionSeconds": 30,
+          "WorldSaveName": ""
+        }
+      ],
+      "Children": []
+    },
+    {
+      "__guid": "47575d29-eced-4eaf-9f38-23339b9b5e06",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "SkyDome",
+      "Position": "0,0,0",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Survival.SkyDome",
+          "__guid": "7217ec62-ce2c-4804-a96e-5d1321a903df",
+          "__enabled": true,
+          "Flags": 0,
+          "CloudDriftPerSecond": 0.006,
+          "DomeMaterial": {
+            "Id": "3d66b2cd-8515-4f1f-abb6-436384c60939",
+            "Path": "materials/environment/sky_dome.vmat"
+          },
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "RadiusMeters": 1100
+        },
+        {
+          "__type": "Sandbox.ModelRenderer",
+          "__guid": "65e77e33-40d9-47c3-853a-ec3cd1fa55b7",
+          "__enabled": true,
+          "Flags": 0,
+          "BodyGroups": 18446744073709551615,
+          "CreateAttachments": false,
+          "LodOverride": null,
+          "MaterialGroup": null,
+          "MaterialOverride": null,
+          "Materials": null,
+          "Model": null,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "RenderOptions": {
+            "GameLayer": true,
+            "OverlayLayer": false,
+            "BloomLayer": false,
+            "AfterUILayer": false
+          },
+          "RenderType": "Off",
+          "Tint": "1,1,1,1"
+        }
+      ],
+      "Children": []
     }
   ],
   "SceneProperties": {

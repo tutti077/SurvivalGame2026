@@ -5,12 +5,13 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Procedural day/night for <c>environmentTest</c>: sun/moon arc, camera clear-color sky,
-/// and a camera-centered star shell.
+/// Procedural day/night for <c>environmentTest</c> / <c>lightingTest</c>: sun/moon arc, a <see cref="SkyDome"/> fed
+/// from the active <c>data/sky_presets.json</c> preset (gradient + sun glow + wind-scrolled
+/// clouds and a procedural star layer, blended night → dawn → day → noon → dusk).
 /// <para>
 /// Intentionally does <b>not</b> use <see cref="SkyBox2D"/> — stock engine sky materials
-/// (<c>materials/skybox/skybox_*.vmat</c>) hijack that component. Sky color is the camera
-/// background only; stars and celestial disks supply detail.
+/// (<c>materials/skybox/skybox_*.vmat</c>) hijack that component. The camera clear colour
+/// follows the preset horizon as a fallback behind the dome.
 /// </para>
 /// </summary>
 [Title( "Environment Day Night Cycle" )]
@@ -66,23 +67,14 @@ public sealed class EnvironmentDayNightCycle : Component
 	[Property, Group( "Lighting" ), Title( "Sky ambient night" )]
 	public Color NightSkyAmbient { get; set; } = new( 0.22f, 0.28f, 0.42f, 1f );
 
-	[Property, Group( "Sky" ), Title( "Day sky color" )]
-	public Color DaySkyTint { get; set; } = new( 0.55f, 0.72f, 1.05f, 1f );
+	[Property, Group( "Sky" ), Title( "Preset" ), Description( "Id from data/sky_presets.json (clear, overcast, …). Its five keyframes blend through the day." )]
+	public string SkyPresetId { get; set; } = SkyPresetCatalog.DefaultId;
 
-	[Property, Group( "Sky" ), Title( "Noon sky color" )]
-	public Color NoonSkyTint { get; set; } = new( 0.7f, 0.85f, 1.15f, 1f );
+	[Property, Group( "Sky" ), Title( "Sky dome" )]
+	public SkyDome SkyDome { get; set; }
 
-	[Property, Group( "Sky" ), Title( "Dusk sky color" )]
-	public Color DuskSkyTint { get; set; } = new( 1.05f, 0.45f, 0.22f, 1f );
-
-	[Property, Group( "Sky" ), Title( "Dawn sky color" )]
-	public Color DawnSkyTint { get; set; } = new( 1.0f, 0.55f, 0.35f, 1f );
-
-	[Property, Group( "Sky" ), Title( "Night sky color" )]
-	public Color NightSkyTint { get; set; } = new( 0.14f, 0.18f, 0.32f, 1f );
-
-	[Property, Group( "Stars" )]
-	public ProceduralStarField StarField { get; set; }
+	[Property, Group( "Sky" ), Title( "Fog (horizon colour)" ), Description( "Optional. Its colour follows the preset horizon so distant ground melts into the sky day and night." )]
+	public GradientFog Fog { get; set; }
 
 	[Property, Group( "Disks" )]
 	public GameObject SunDisk { get; set; }
@@ -121,6 +113,12 @@ public sealed class EnvironmentDayNightCycle : Component
 	[Property, Group( "Debug" ), Title( "Log phase changes" )]
 	public bool LogPhaseChanges { get; set; }
 
+	[Property, Group( "Debug" ), Title( "Jump-to-noon action" ), Description( "Input action (ProjectSettings/Input.config) that snaps the cycle to noon. Empty = off. Console: cycle_day." )]
+	public string JumpToDayAction { get; set; } = "CycleDay";
+
+	[Property, Group( "Debug" ), Title( "Jump-to-midnight action" ), Description( "Input action that snaps the cycle to midnight. Empty = off. Console: cycle_night." )]
+	public string JumpToNightAction { get; set; } = "CycleNight";
+
 	[Property, Group( "Calendar" ), Title( "World save name" ), Description( "Optional override for world.json. Empty = TerrainWorldManager / menu session world." )]
 	public string WorldSaveName { get; set; } = "";
 
@@ -140,13 +138,14 @@ public sealed class EnvironmentDayNightCycle : Component
 	CyclePhase _loggedPhase = (CyclePhase)255;
 	CyclePhase _previousPhase = (CyclePhase)255;
 	bool _calendarReady;
+	string _presetId;
+	SkyPresetData _preset;
+	SkyLook _night, _dawn, _day, _noon, _dusk;
 
 	protected override void OnStart()
 	{
 		ResolveRefs();
 		BanEngineSkyBoxes();
-		EnsureStarField();
-		CleanupLegacyRuntimeObjects();
 		DisableFogOnLights();
 		EnsureDiskVisualOnly( SunDisk );
 		EnsureDiskVisualOnly( MoonDisk );
@@ -158,18 +157,14 @@ public sealed class EnvironmentDayNightCycle : Component
 		_previousPhase = startPhase;
 		_calendarReady = true;
 		ApplyVisuals( force: true );
-
-		foreach ( var fly in Scene.GetAllComponents<TerrainTestFlyCamera>() )
-		{
-			if ( fly is not null && fly.IsValid() )
-				fly.SetViewLookAt( Vector3.Zero );
-		}
 	}
 
 	protected override void OnUpdate()
 	{
-		// Keep killing any SkyBox2D that appears (editor defaults / prefab leftovers).
-		BanEngineSkyBoxes();
+		if ( !string.IsNullOrEmpty( JumpToDayAction ) && Input.Pressed( JumpToDayAction ) )
+			JumpToNoon();
+		if ( !string.IsNullOrEmpty( JumpToNightAction ) && Input.Pressed( JumpToNightAction ) )
+			JumpToMidnight();
 
 		if ( !Paused )
 		{
@@ -182,19 +177,60 @@ public sealed class EnvironmentDayNightCycle : Component
 		ApplyVisuals( force: false );
 	}
 
+	/// <summary>Snap to the top of the sun's arc (cycle 0.25). Local to this peer — the cycle is not synced.</summary>
+	public void JumpToNoon()
+	{
+		RecalculateCycleLength();
+		CycleTimeSeconds = _cycleLength * 0.25f;
+		ApplyVisuals( force: true );
+	}
+
+	/// <summary>Snap to the top of the moon's arc (cycle 0.75).</summary>
+	public void JumpToMidnight()
+	{
+		RecalculateCycleLength();
+		CycleTimeSeconds = _cycleLength * 0.75f;
+		ApplyVisuals( force: true );
+	}
+
+	static EnvironmentDayNightCycle FindActive()
+	{
+		var scene = Sandbox.Game.ActiveScene;
+		if ( scene is null || !scene.IsValid() )
+			return null;
+		return scene.GetAllComponents<EnvironmentDayNightCycle>().FirstOrDefault( c => c.IsValid() && c.Active );
+	}
+
+	[ConCmd( "cycle_day" )]
+	public static void ConCmdDay()
+	{
+		var cycle = FindActive();
+		if ( cycle is null ) { Log.Warning( "[EnvironmentDayNight] no cycle in the active scene." ); return; }
+		cycle.JumpToNoon();
+		Log.Info( "[EnvironmentDayNight] noon." );
+	}
+
+	[ConCmd( "cycle_night" )]
+	public static void ConCmdNight()
+	{
+		var cycle = FindActive();
+		if ( cycle is null ) { Log.Warning( "[EnvironmentDayNight] no cycle in the active scene." ); return; }
+		cycle.JumpToMidnight();
+		Log.Info( "[EnvironmentDayNight] midnight." );
+	}
+
 	void ResolveRefs()
 	{
+		SkyDome ??= Scene.GetAllComponents<SkyDome>().FirstOrDefault();
 		SunLight ??= Components.Get<DirectionalLight>( FindMode.EnabledInSelfAndDescendants );
 		MoonLight ??= Components.GetAll<DirectionalLight>( FindMode.EnabledInSelfAndDescendants )
 			.FirstOrDefault( l => l != SunLight );
-
-		StarField ??= Components.Get<ProceduralStarField>( FindMode.EnabledInSelfAndDescendants );
-		StarField ??= Scene.GetAllComponents<ProceduralStarField>().FirstOrDefault();
 	}
 
 	/// <summary>
-	/// Destroy every <see cref="SkyBox2D"/> in the scene. Stock HDRI materials live on that
-	/// component path; we never use it.
+	/// Destroy every <see cref="SkyBox2D"/> in the scene once at start. Stock HDRI materials live on
+	/// that component path; we never use it. The scenes no longer carry one — this only guards a
+	/// prefab or editor default slipping back in.
 	/// </summary>
 	void BanEngineSkyBoxes()
 	{
@@ -208,35 +244,6 @@ public sealed class EnvironmentDayNightCycle : Component
 				go.Destroy();
 			else
 				sky.Destroy();
-		}
-	}
-
-	void EnsureStarField()
-	{
-		if ( StarField is not null && StarField.IsValid() )
-			return;
-
-		var go = new GameObject( true, "StarField" );
-		go.Parent = GameObject;
-		StarField = go.Components.Create<ProceduralStarField>();
-		StarField.ShellRadiusMeters = Math.Max(
-			ProceduralStarField.DefaultShellRadiusMeters,
-			DiskOrbitRadiusMeters + 2000f );
-		StarField.StarCount = ProceduralStarField.DefaultStarCount;
-		StarField.StarScale = ProceduralStarField.DefaultStarScale;
-		StarField.BrightStarScale = ProceduralStarField.DefaultBrightStarScale;
-		StarField.MilkyWayFraction = 0.72f;
-	}
-
-	void CleanupLegacyRuntimeObjects()
-	{
-		foreach ( var mr in Scene.GetAllComponents<ModelRenderer>().ToArray() )
-		{
-			var go = mr?.GameObject;
-			if ( go is null || !go.IsValid() )
-				continue;
-			if ( go.Name is "SkyDome" or "SkyProcedural" or "Sky" or "SkyDay" or "SkyNight" )
-				go.Destroy();
 		}
 	}
 
@@ -276,10 +283,10 @@ public sealed class EnvironmentDayNightCycle : Component
 			Log.Info( $"[EnvironmentDayNight] phase={phase} day={DayNumber} dayWeight={dayWeight:0.00} t={CycleTimeSeconds:0.0}s" );
 		}
 
-		UpdateCelestial( SunLight, SunDisk, sunElev01, isSun: true, dayWeight );
-		UpdateCelestial( MoonLight, MoonDisk, moonElev01, isSun: false, dayWeight );
-		UpdateSkyColor( phase, dayWeight, sunElev01 );
-		UpdateStars( dayWeight );
+		var look = SampleSkyLook( phase, dayWeight, sunElev01 );
+		var sunDir = UpdateCelestial( SunLight, SunDisk, sunElev01, isSun: true, dayWeight, look.SunLight );
+		UpdateCelestial( MoonLight, MoonDisk, moonElev01, isSun: false, dayWeight, 1f );
+		UpdateSky( look, sunDir, StarVisibility( dayWeight ) );
 	}
 
 	void LoadDayNumberFromWorldSave()
@@ -376,7 +383,7 @@ public sealed class EnvironmentDayNightCycle : Component
 		}
 	}
 
-	void UpdateCelestial( DirectionalLight light, GameObject disk, float elev01, bool isSun, float dayWeight )
+	Vector3 UpdateCelestial( DirectionalLight light, GameObject disk, float elev01, bool isSun, float dayWeight, float lightScale )
 	{
 		// elev01 on [0,2): full shared ring. Angle 0→2π.
 		var angle = elev01 * MathF.PI;
@@ -414,7 +421,7 @@ public sealed class EnvironmentDayNightCycle : Component
 
 				var sunDir = aboveHorizon ? Math.Clamp( height, 0f, 1f ) : 0f;
 				var color = Color.Lerp( SunHorizonColor, SunPeakColor, sunDir );
-				light.LightColor = color * MathX.Lerp( 0.2f, 1f, sunDir );
+				light.LightColor = color * (MathX.Lerp( 0.2f, 1f, sunDir ) * lightScale);
 			}
 			else
 			{
@@ -470,6 +477,8 @@ public sealed class EnvironmentDayNightCycle : Component
 				}
 			}
 		}
+
+		return dir;
 	}
 
 	/// <summary>Strip colliders so the disks are unreachable scenery, not physical objects.</summary>
@@ -491,21 +500,45 @@ public sealed class EnvironmentDayNightCycle : Component
 		MoonDiskMaterial ??= Material.Load( DefaultMoonDiskMaterialPath );
 	}
 
-	void UpdateSkyColor( CyclePhase phase, float dayWeight, float sunElev01 )
+	void UpdateSky( in SkyLook look, Vector3 sunDir, float starVisibility )
 	{
-		var sky = SampleSkyTint( phase, dayWeight, sunElev01 ).WithAlpha( 1f );
+		if ( SkyDome is not null && SkyDome.IsValid() )
+			SkyDome.Apply( look, sunDir, _preset.CloudScale, _preset.CloudSpeed, starVisibility );
 
+		if ( Fog is not null && Fog.IsValid() )
+			Fog.Color = look.Horizon.WithAlpha( 1f );
+
+		// Clear colour = horizon, so anything past the dome (or a scene without one) still matches.
+		var clear = look.Horizon.WithAlpha( 1f );
 		foreach ( var cam in Scene.GetAllComponents<CameraComponent>() )
 		{
 			if ( cam is null || !cam.IsValid() )
 				continue;
-			cam.BackgroundColor = sky;
+			cam.BackgroundColor = clear;
 			cam.ClearFlags = ClearFlags.All;
 		}
 	}
 
-	Color SampleSkyTint( CyclePhase phase, float dayWeight, float sunElev01 )
+	/// <summary>Parse the preset's keyframes once per preset change, not per frame.</summary>
+	void EnsurePresetLooks()
 	{
+		var id = string.IsNullOrWhiteSpace( SkyPresetId ) ? SkyPresetCatalog.DefaultId : SkyPresetId.Trim();
+		if ( _preset is not null && string.Equals( _presetId, id, StringComparison.OrdinalIgnoreCase ) )
+			return;
+
+		_presetId = id;
+		_preset = SkyPresetCatalog.Resolve( id );
+		_night = SkyLook.From( _preset.Night );
+		_dawn = SkyLook.From( _preset.Dawn );
+		_day = SkyLook.From( _preset.Day );
+		_noon = SkyLook.From( _preset.Noon );
+		_dusk = SkyLook.From( _preset.Dusk );
+	}
+
+	SkyLook SampleSkyLook( CyclePhase phase, float dayWeight, float sunElev01 )
+	{
+		EnsurePresetLooks();
+
 		switch ( phase )
 		{
 			case CyclePhase.Day:
@@ -513,41 +546,30 @@ public sealed class EnvironmentDayNightCycle : Component
 				// Shared-ring elev is 0..2; only the above-horizon half (0..1) maps to day sky.
 				var dayElev = sunElev01 <= 1f ? sunElev01 : Math.Clamp( 2f - sunElev01, 0f, 1f );
 				var noon = MathF.Sin( dayElev * MathF.PI );
-				return Color.Lerp( DaySkyTint, NoonSkyTint, noon );
+				return SkyLook.Lerp( _day, _noon, noon );
 			}
 			case CyclePhase.Dusk:
 			{
 				if ( dayWeight > 0.5f )
-					return Color.Lerp( DuskSkyTint, DaySkyTint, (dayWeight - 0.5f) * 2f );
-				return Color.Lerp( NightSkyTint, DuskSkyTint, dayWeight * 2f );
+					return SkyLook.Lerp( _dusk, _day, (dayWeight - 0.5f) * 2f );
+				return SkyLook.Lerp( _night, _dusk, dayWeight * 2f );
 			}
 			case CyclePhase.Dawn:
 			{
 				if ( dayWeight < 0.5f )
-					return Color.Lerp( NightSkyTint, DawnSkyTint, dayWeight * 2f );
-				return Color.Lerp( DawnSkyTint, DaySkyTint, (dayWeight - 0.5f) * 2f );
+					return SkyLook.Lerp( _night, _dawn, dayWeight * 2f );
+				return SkyLook.Lerp( _dawn, _day, (dayWeight - 0.5f) * 2f );
 			}
 			default:
-				return NightSkyTint;
+				return _night;
 		}
 	}
 
-	void UpdateStars( float dayWeight )
+	/// <summary>0 by day, 1 deep in the night. Invisible through most of dusk / dawn; the dome shader draws the stars.</summary>
+	static float StarVisibility( float dayWeight )
 	{
-		if ( StarField is null || !StarField.IsValid() )
-			return;
-
-		StarField.ShellRadiusMeters = Math.Max(
-			ProceduralStarField.DefaultShellRadiusMeters,
-			DiskOrbitRadiusMeters + 2000f );
-
-		if ( StarField.StarCount < ProceduralStarField.DefaultStarCount )
-			StarField.StarCount = ProceduralStarField.DefaultStarCount;
-
 		var night = Math.Clamp( 1f - dayWeight, 0f, 1f );
-		// Invisible through most of dusk/dawn; opacity only ramps once night is well underway.
-		var fade = Smooth01( Math.Clamp( (night - 0.45f) / 0.55f, 0f, 1f ) );
-		StarField.Visibility = fade;
+		return Smooth01( Math.Clamp( (night - 0.45f) / 0.55f, 0f, 1f ) );
 	}
 
 	static float Smooth01( float t )

@@ -38,6 +38,10 @@ public sealed class Campfire : Component
 	[Property, Group( "Campfire" ), Title( "Unlit color" )]
 	public Color UnlitColor { get; set; } = new( 0.45f, 0.45f, 0.48f );
 
+	/// <summary>Child object carrying the PointLight + FireLightFlicker; enabled only while lit.</summary>
+	[Property, Group( "Campfire" ), Title( "Fire light" )]
+	public GameObject FireLight { get; set; }
+
 	[Sync] public int FuelUnits { get; private set; }
 	[Sync] public bool IsLit { get; private set; }
 
@@ -131,6 +135,9 @@ public sealed class Campfire : Component
 
 	void ApplyLitVisual()
 	{
+		if ( FireLight is not null && FireLight.IsValid() && FireLight.Enabled != IsLit )
+			FireLight.Enabled = IsLit;
+
 		_renderer ??= Components.Get<ModelRenderer>( FindMode.EverythingInSelf );
 		if ( _renderer is null || !_renderer.IsValid() )
 			return;

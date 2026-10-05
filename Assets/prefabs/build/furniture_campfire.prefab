@@ -88,6 +88,10 @@
         "Flags": 0,
         "AddFuelReachMeters": 3,
         "CookingRangeMeters": 5,
+        "FireLight": {
+          "_type": "gameobject",
+          "go": "c0a1f12e-1111-4111-8111-111111111260"
+        },
         "LitColor": "1,0.45,0.12,1",
         "MaxFuelUnits": 20,
         "OnComponentDestroy": null,
@@ -100,7 +104,59 @@
         "UnlitColor": "0.45,0.45,0.48,1"
       }
     ],
-    "Children": [],
+    "Children": [
+      {
+        "__guid": "c0a1f12e-1111-4111-8111-111111111260",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "FireLight",
+        "Position": "0,0,34",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "light_point,light",
+        "Enabled": false,
+        "NetworkMode": 2,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.PointLight",
+            "__guid": "c0a1f12e-1111-4111-8111-111111111261",
+            "__enabled": true,
+            "Flags": 0,
+            "Attenuation": 1,
+            "Contribution": "Diffuse, Specular, Transmissive",
+            "FogMode": "Enabled",
+            "FogStrength": 1,
+            "LightColor": "1,0.55,0.2,1",
+            "OnComponentDestroy": null,
+            "OnComponentDisabled": null,
+            "OnComponentEnabled": null,
+            "OnComponentFixedUpdate": null,
+            "OnComponentStart": null,
+            "OnComponentUpdate": null,
+            "Radius": 400,
+            "ShadowBias": 0,
+            "ShadowHardness": 0,
+            "Shadows": true
+          },
+          {
+            "__type": "Survival.FireLightFlicker",
+            "__guid": "c0a1f12e-1111-4111-8111-111111111262",
+            "__enabled": true,
+            "Flags": 0,
+            "Flicker01": 0.35,
+            "RadiusSwing01": 0.08,
+            "Seed": 0,
+            "SpeedHz": 8,
+            "WindInfluence01": 0.5
+          }
+        ],
+        "Children": []
+      }
+    ],
     "__properties": {
       "NetworkInterpolation": true,
       "TimeScale": 1,

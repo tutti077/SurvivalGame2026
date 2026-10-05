@@ -231,6 +231,13 @@ public sealed partial class PlayerAnimation
 		_heldLight.LightColor = data.ResolveColor();
 		_heldLight.Radius = TerrainWorldUnits.MetersToEngine( MathF.Max( 0.5f, data.RadiusMeters ) );
 
+		// Open flame wanders; a lantern's glass steadies it.
+		var flicker = lamp.Components.Create<FireLightFlicker>();
+		flicker.Flicker01 = anchor == HeldLightAnchor.LanternHang ? 0.1f : 0.35f;
+		flicker.SpeedHz = anchor == HeldLightAnchor.LanternHang ? 5f : 9f;
+		flicker.RadiusSwing01 = anchor == HeldLightAnchor.LanternHang ? 0.03f : 0.08f;
+		flicker.Seed = GameObject.Id.GetHashCode() & 0xFFFF;
+
 		DestroyStrayHeldLightProps();
 	}
 

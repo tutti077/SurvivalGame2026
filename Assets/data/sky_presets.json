@@ -1,0 +1,31 @@
+{
+  // Sky looks per weather. EnvironmentDayNightCycle picks one by id (Sky - Preset) and blends its
+  // five keyframes through the day: night -> dawn -> day -> noon -> day -> dusk -> night.
+  // Colours are "r,g,b" (0-1, may exceed 1 for HDR); sunGlow is "r,g,b,strength".
+  // cloudCover 0 = clear blue, 1 = solid deck. sunLight multiplies the sun's light colour.
+  // cloudScale: bigger = smaller clouds. cloudSpeed multiplies the wind-driven scroll.
+  "presets": [
+    {
+      "id": "clear",
+      "displayName": "Clear",
+      "cloudScale": 0.35,
+      "cloudSpeed": 1.0,
+      "night": { "zenith": "0.02,0.03,0.08", "horizon": "0.07,0.09,0.17", "sunGlow": "0.2,0.25,0.45,0.0", "cloudLit": "0.16,0.18,0.26", "cloudShade": "0.05,0.06,0.10", "cloudCover": 0.35, "sunLight": 0.0 },
+      "dawn":  { "zenith": "0.22,0.30,0.55", "horizon": "0.95,0.62,0.45", "sunGlow": "1.0,0.55,0.30,0.9", "cloudLit": "1.0,0.72,0.55", "cloudShade": "0.45,0.38,0.50", "cloudCover": 0.35, "sunLight": 0.7 },
+      "day":   { "zenith": "0.24,0.46,0.86", "horizon": "0.68,0.80,0.95", "sunGlow": "1.0,0.92,0.75,0.45", "cloudLit": "1.0,1.0,1.0", "cloudShade": "0.62,0.68,0.80", "cloudCover": 0.38, "sunLight": 1.0 },
+      "noon":  { "zenith": "0.18,0.40,0.85", "horizon": "0.62,0.78,0.96", "sunGlow": "1.0,0.96,0.85,0.35", "cloudLit": "1.05,1.05,1.05", "cloudShade": "0.66,0.72,0.84", "cloudCover": 0.40, "sunLight": 1.0 },
+      "dusk":  { "zenith": "0.20,0.22,0.45", "horizon": "1.05,0.48,0.25", "sunGlow": "1.0,0.42,0.18,1.0", "cloudLit": "1.05,0.55,0.35", "cloudShade": "0.38,0.28,0.42", "cloudCover": 0.38, "sunLight": 0.6 }
+    },
+    {
+      "id": "overcast",
+      "displayName": "Overcast",
+      "cloudScale": 0.25,
+      "cloudSpeed": 1.6,
+      "night": { "zenith": "0.03,0.03,0.05", "horizon": "0.06,0.06,0.08", "sunGlow": "0.1,0.1,0.15,0.0", "cloudLit": "0.09,0.09,0.11", "cloudShade": "0.04,0.04,0.06", "cloudCover": 0.85, "sunLight": 0.0 },
+      "dawn":  { "zenith": "0.30,0.32,0.38", "horizon": "0.60,0.52,0.50", "sunGlow": "0.8,0.55,0.40,0.35", "cloudLit": "0.62,0.56,0.55", "cloudShade": "0.24,0.24,0.28", "cloudCover": 0.85, "sunLight": 0.35 },
+      "day":   { "zenith": "0.45,0.50,0.56", "horizon": "0.66,0.70,0.74", "sunGlow": "0.9,0.9,0.85,0.15", "cloudLit": "0.78,0.80,0.83", "cloudShade": "0.34,0.36,0.41", "cloudCover": 0.88, "sunLight": 0.45 },
+      "noon":  { "zenith": "0.48,0.53,0.60", "horizon": "0.70,0.74,0.78", "sunGlow": "0.9,0.9,0.85,0.12", "cloudLit": "0.82,0.84,0.87", "cloudShade": "0.36,0.38,0.43", "cloudCover": 0.88, "sunLight": 0.5 },
+      "dusk":  { "zenith": "0.26,0.26,0.32", "horizon": "0.55,0.42,0.38", "sunGlow": "0.8,0.45,0.30,0.35", "cloudLit": "0.55,0.45,0.42", "cloudShade": "0.21,0.20,0.25", "cloudCover": 0.86, "sunLight": 0.3 }
+    }
+  ]
+}
