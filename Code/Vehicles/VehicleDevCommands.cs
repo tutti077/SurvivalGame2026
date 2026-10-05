@@ -11,7 +11,7 @@ namespace Survival;
 /// <c>vehicle_drive &lt;throttle&gt; &lt;steer&gt; [seconds]</c> holds simulated pedals and wheel for the
 /// local driver. Host / offline only, like the other hacks.
 /// </summary>
-public static class VehicleDevCommands
+public static partial class VehicleDevCommands
 {
 	static float _simThrottle;
 	static float _simSteer;
@@ -57,9 +57,9 @@ public static class VehicleDevCommands
 		Log.Info( "[Vehicle] test started." );
 	}
 
-	sealed class ScriptedTest
+	class ScriptedTest
 	{
-		readonly Vehicle _vehicle;
+		protected readonly Vehicle _vehicle;
 		readonly float _savedSecondsPerUnit;
 		int _fuelAtStart;
 		int _phase;
@@ -132,6 +132,16 @@ public static class VehicleDevCommands
 				Log.Info( $"[Vehicle test]   phase {_phase + 1} t={t:0.0}s speed={speed:0.00} m/s yaw={_vehicle.WorldRotation.Yaw():0} up.z={_vehicle.WorldRotation.Up.z:0.00} fuel={_vehicle.FuelUnits} {_vehicle.DebugWheels()}" );
 			}
 
+			OnTick( speed );
+
+			if ( GetType() != typeof( ScriptedTest ) )
+			{
+				var keep = RunPhases( t, speed, out throttle, out steer );
+				if ( !keep )
+					_test = null;
+				return keep;
+			}
+
 			switch ( _phase )
 			{
 				case 0:   // full throttle
@@ -195,10 +205,25 @@ public static class VehicleDevCommands
 			return false;
 		}
 
+		protected int Phase => _phase;
+
+		protected void NextPhase() => Next();
+
 		void Next()
 		{
 			_phase++;
 			_phaseStartedAt = -1;
+		}
+
+		/// <summary>Per-step hook before the phase switch (the demo moves its camera here).</summary>
+		protected virtual void OnTick( float speed ) { }
+
+		/// <summary>Override to replace the phase script; return false when finished.</summary>
+		protected virtual bool RunPhases( float t, float speed, out float throttle, out float steer )
+		{
+			throttle = 0f;
+			steer = 0f;
+			return false;
 		}
 	}
 
@@ -370,6 +395,18 @@ public static class VehicleDevCommands
 		Log.Info( $"[Vehicle] simulated drive throttle={_simThrottle:0.##} steer={_simSteer:0.##} for {seconds:0.##}s." );
 	}
 
+	/// <summary>Usage: <c>vehicle_look &lt;pitch&gt; &lt;yaw&gt;</c> — points the local pawn's eyes (seat head-tracking check from the editor, which has no mouse).</summary>
+	[ConCmd( "vehicle_look" )]
+	public static void ConCmdLook( float pitch = 0f, float yaw = 0f )
+	{
+		var controller = FindLocalPawn()?.Components.Get<PlayerController>();
+		if ( controller is null )
+			return;
+
+		controller.EyeAngles = new Angles( pitch, yaw, 0f );
+		Log.Info( $"[Vehicle] eyes set to pitch {pitch:0} yaw {yaw:0}." );
+	}
+
 	[ConCmd( "vehicle_info" )]
 	public static void ConCmdInfo()
 	{
@@ -393,6 +430,28 @@ public static class VehicleDevCommands
 			}
 			Log.Info( $"[Vehicle] storage [{string.Join( " ", slots )}] fuelSlot={store.RestrictedSlotIndex}" );
 		}
+		// What a look-trace at the storage box reports (the E-on-chest path): from 2 m behind the box, aimed at its centre.
+		GameObject storageGo = null;
+		foreach ( var child in vehicle.GameObject.GetAllObjects( true ) )
+		{
+			if ( child.Tags.Has( Vehicle.StorageTag ) )
+			{
+				storageGo = child;
+				break;
+			}
+		}
+		if ( storageGo is not null && storageGo.IsValid() )
+		{
+			var target = storageGo.WorldPosition;
+			var from = target - vehicle.WorldRotation.Forward * 80f + Vector3.Up * 20f;
+			var tr = vehicle.Scene.Trace.Ray( from, target ).WithoutTags( "player" ).Run();
+			Log.Info( $"[Vehicle] storage trace: hit={tr.Hit} object={tr.GameObject?.Name ?? "-"} at={tr.HitPosition} storageHit={( tr.Hit && Vehicle.IsStorageHit( tr.GameObject, tr.HitPosition ) )}" );
+		}
+
+		var open = pawn?.Components.Get<PlayerInventoryInteraction>()?.OpenContainer;
+		var storageBox = vehicle.StorageBox;
+		Log.Info( $"[Vehicle] chest open={( open is not null ? open.DisplayName : "none" )} pawn->box={( pawn is not null && storageBox is not null ? Vector3.DistanceBetween( pawn.WorldPosition, storageBox.WorldPosition ) / 40f : 0f ):0.0} m pawn->root={( pawn is not null ? Vector3.DistanceBetween( pawn.WorldPosition, vehicle.WorldPosition ) / 40f : 0f ):0.0} m" );
+
 		var driver = vehicle.GetOccupant( 0 );
 		var anim = driver is null ? "no driver" : $"{driver.Components.Get<PlayerAnimation>()?.SeatedPoseDebug} parent={driver.Parent?.Name} seated={driver.Components.Get<PlayerMovement>()?.IsSeated}";
 		Log.Info( $"[Vehicle] driver anim: {anim}" );

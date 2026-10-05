@@ -1,18 +1,21 @@
 using Sandbox;
+using Sandbox.Citizen;
 
 namespace Survival;
 
 /// <summary>
-/// Seated pose: while the pawn sits in a <see cref="Vehicle"/> the body plays the citizen
-/// <c>sitpose_default</c> sequence with the animgraph off — the same UseAnimGraph=false path the hit
-/// reaction uses, because a graph parameter is rewritten every frame by whoever simulates the pawn.
-/// Ticks from both OnUpdate and OnPreRender like every other pose here, so proxies get it too.
+/// Seated pose: while the pawn sits in a <see cref="Vehicle"/> the citizen animgraph runs its chair
+/// sit (<see cref="CitizenAnimationHelper.Sitting"/>) and this component feeds the graph what the
+/// controller's animator pass normally would — grounded, no velocity, and the look-at from the eye
+/// angles with the body weight at zero, so the torso stays square to the seat (the root and Body
+/// child are pinned to it by <see cref="PlayerMovement"/>) while the head and eyes follow the
+/// camera as they do on foot. Ticks from OnUpdate and OnPreRender like every other pose here, so
+/// proxies get it too.
 /// </summary>
 public sealed partial class PlayerAnimation
 {
-	const string SeatedSequence = "sitpose_default";
-
 	PlayerMovement _seatMovement;
+	PlayerController _seatController;
 	bool _seatedPoseApplied;
 	int _seatedTicks;
 
@@ -22,7 +25,7 @@ public sealed partial class PlayerAnimation
 		get
 		{
 			var body = ResolveBody();
-			var bodyState = body is null || !body.IsValid() ? "body=null" : $"body={body.GameObject.Name} graph={body.UseAnimGraph} seq={body.Sequence.Name ?? "-"} loop={body.Sequence.Looping} t={body.Sequence.Time:0.00}";
+			var bodyState = body is null || !body.IsValid() ? "body=null" : $"body={body.GameObject.Name} graph={body.UseAnimGraph} sit={body.GetInt( "sit" )} grounded={body.GetBool( "b_grounded" )} aim_head={body.GetVector( "aim_head" )} bodyLocalYaw={body.GameObject.LocalRotation.Yaw():0}";
 			return $"applied={_seatedPoseApplied} ticks={_seatedTicks} combatSeq={_combatSequenceActive}:{_activeCombatSequenceName ?? "-"} hit={IsHitReactionActive} {bodyState}";
 		}
 	}
@@ -38,12 +41,32 @@ public sealed partial class PlayerAnimation
 			if ( IsHitReactionActive )
 				return;
 
-			_seatedTicks++;
-			MaintainCombatSequencePose( SeatedSequence, keepMeleeSwordVisible: false );
+			EnsureAnimTargets();
+			var helper = _animHelper;
 			var body = ResolveBody();
-			if ( body is not null && body.IsValid() )
-				body.Sequence.Looping = true;
-			_seatedPoseApplied = true;
+			if ( helper is null || !helper.IsValid() || body is null || !body.IsValid() )
+				return;
+
+			if ( !_seatedPoseApplied )
+			{
+				_seatedPoseApplied = true;
+				if ( _combatSequenceActive || !body.UseAnimGraph )
+				{
+					ClearCombatSequencePose();
+					ForceRestoreLocomotionGraph();
+				}
+			}
+
+			_seatedTicks++;
+			_seatController ??= Components.Get<PlayerController>();
+			var look = _seatController is not null ? _seatController.EyeAngles.Forward : GameObject.WorldRotation.Forward;
+
+			helper.Sitting = CitizenAnimationHelper.SittingStyle.Chair;
+			helper.IsGrounded = true;
+			helper.DuckLevel = 0f;
+			helper.WithVelocity( Vector3.Zero );
+			helper.WithWishVelocity( Vector3.Zero );
+			helper.WithLook( look, 1f, 1f, 0f );
 			return;
 		}
 
@@ -51,10 +74,7 @@ public sealed partial class PlayerAnimation
 			return;
 
 		_seatedPoseApplied = false;
-		if ( IsPlayingCombatSequence( SeatedSequence ) )
-		{
-			ClearCombatSequencePose();
-			ForceRestoreLocomotionGraph();
-		}
+		if ( _animHelper is { IsValid: true } )
+			_animHelper.Sitting = CitizenAnimationHelper.SittingStyle.None;
 	}
 }

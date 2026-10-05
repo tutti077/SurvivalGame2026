@@ -153,8 +153,15 @@ public sealed partial class PlayerInventoryInteraction
 		if ( container is null || !container.IsValid() )
 			return false;
 
+		// A vehicle's chest is the box on its back: measure to that, not to the chassis root (standing
+		// behind the buggy you are already past the keep-open range of the root — it closed at once).
+		var anchor = container.GameObject;
+		var vehicleBox = Vehicle.FindOnHierarchy( container.GameObject )?.StorageBox;
+		if ( vehicleBox is { IsValid: true } )
+			anchor = vehicleBox;
+
 		var maxRange = TerrainWorldUnits.MetersToEngine( Math.Max( 1f, ContainerKeepOpenMeters ) );
-		return Vector3.DistanceBetween( GameObject.WorldPosition, container.GameObject.WorldPosition ) <= maxRange;
+		return Vector3.DistanceBetween( GameObject.WorldPosition, anchor.WorldPosition ) <= maxRange;
 	}
 
 	bool TryTraceOpenableContainer( out ContainerInventory container )
@@ -180,7 +187,7 @@ public sealed partial class PlayerInventoryInteraction
 
 		// A vehicle's chest is only the storage box on its back; the rest of the hull is "enter".
 		if ( container.GameObject.Components.Get<Vehicle>( FindMode.EverythingInSelfAndAncestors ) is not null
-		     && !Vehicle.IsStorageHit( tr.GameObject ) )
+		     && !Vehicle.IsStorageHit( tr.GameObject, tr.HitPosition ) )
 		{
 			container = null;
 			return false;

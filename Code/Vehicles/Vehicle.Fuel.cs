@@ -13,7 +13,7 @@ namespace Survival;
 public sealed partial class Vehicle
 {
 	[Property, Group( "Fuel" ), Title( "Fuel Resource Id" )]
-	public string FuelResourceId { get; set; } = "crafted_gasoline";
+	public string FuelResourceId { get; set; } = "crafted_fuel";
 
 	/// <summary>One fuel unit lasts this long of throttle (W or S held).</summary>
 	[Property, Group( "Fuel" ), Title( "Seconds Per Fuel Unit" )]

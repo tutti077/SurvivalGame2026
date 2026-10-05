@@ -141,7 +141,7 @@ public sealed partial class Vehicle : Component
 		if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() )
 			return false;
 
-		if ( IsStorageHit( tr.GameObject ) )
+		if ( IsStorageHit( tr.GameObject, tr.HitPosition ) )
 			return false;
 
 		for ( var go = tr.GameObject; go is not null && go.IsValid(); go = go.Parent )
@@ -158,17 +158,58 @@ public sealed partial class Vehicle : Component
 	}
 
 	/// <summary>Is this hit object the vehicle's storage box (or inside it)? Stops at the vehicle root.</summary>
-	public static bool IsStorageHit( GameObject hit )
+	public static bool IsStorageHit( GameObject hit, Vector3 hitPosition )
 	{
+		Vehicle vehicle = null;
 		for ( var go = hit; go is not null && go.IsValid(); go = go.Parent )
 		{
 			if ( go.Tags.Has( StorageTag ) )
 				return true;
-			if ( go.Components.Get<Vehicle>() is not null )
-				return false;
+			vehicle = go.Components.Get<Vehicle>();
+			if ( vehicle is not null )
+				break;
 		}
 
-		return false;
+		// The storage box is a child collider of the chassis rigidbody and a trace against that compound
+		// body reports the root object, so decide by where the ray landed instead.
+		return vehicle is not null && vehicle.IsValid() && vehicle.IsInsideStorageBox( hitPosition );
+	}
+
+	GameObject _storageBox;
+
+	/// <summary>The storage box child (<see cref="StorageTag"/>): what chest reach / keep-open distances measure to, not the root.</summary>
+	public GameObject StorageBox
+	{
+		get
+		{
+			if ( _storageBox is { IsValid: true } )
+				return _storageBox;
+
+			foreach ( var child in GameObject.GetAllObjects( true ) )
+			{
+				if ( child.Tags.Has( StorageTag ) )
+				{
+					_storageBox = child;
+					break;
+				}
+			}
+			return _storageBox;
+		}
+	}
+
+	/// <summary>Is this world point on / inside the storage box child, with 2 u of slack?</summary>
+	public bool IsInsideStorageBox( Vector3 worldPosition )
+	{
+		if ( StorageBox is null )
+			return false;
+
+		var box = _storageBox.Components.Get<BoxCollider>();
+		if ( box is null || !box.IsValid() )
+			return false;
+
+		var local = _storageBox.WorldTransform.PointToLocal( worldPosition ) - box.Center;
+		var half = box.Scale * 0.5f + 2f;
+		return MathF.Abs( local.x ) <= half.x && MathF.Abs( local.y ) <= half.y && MathF.Abs( local.z ) <= half.z;
 	}
 
 	public static Vehicle FindOnHierarchy( GameObject hit )

@@ -118,7 +118,7 @@ public static class BuildModuleDimensions
 		// 0.83 × 0.71 × 0.93 m, augtable1pack.blend as 1 × 0.57 × 0.78 m.
 		// Chest: 1 m long, 0.5 m wide, 0.5 m tall.
 		["chest"] = new( 1f, 0.5f, 0.5f ),
-		["vehicle_dune_buggy"] = new( 3f, 1.8f, 1.2f ),   // ghost / placement box only; the prefab authors the real colliders
+		["vehicle_dune_buggy"] = new( 4.2f, 2.5f, 1.7f ),   // ghost / placement box only; the prefab authors the real colliders
 		["augment_station"] = new( 1f, 0.6f, 0.75f ),
 		["furniture_campfire"] = new( 0.35f, 0.35f, 0.35f ),
 		// Foot traps (BearTrap): flat plates you walk onto. The solid is the thin base; the

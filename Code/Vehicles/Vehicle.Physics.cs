@@ -21,7 +21,7 @@ namespace Survival;
 public sealed partial class Vehicle
 {
 	[Property, Group( "Drive" ), Title( "Max Speed (m/s)" ), Description( "27 m/s ≈ 60 mph." )]
-	public float MaxSpeedMetersPerSecond { get; set; } = 27f;
+	public float MaxSpeedMetersPerSecond { get; set; } = 54f;
 
 	[Property, Group( "Drive" ), Title( "Reverse Speed (m/s)" )]
 	public float ReverseSpeedMetersPerSecond { get; set; } = 7f;
@@ -34,6 +34,9 @@ public sealed partial class Vehicle
 
 	[Property, Group( "Drive" ), Title( "Rolling Drag (m/s²)" ), Description( "Slow-down with no pedal held." )]
 	public float RollingDragMetersPerSecond2 { get; set; } = 4f;
+
+	[Property, Group( "Drive" ), Title( "Out-of-Fuel Coast Drag (m/s²)" ), Description( "Slow-down once the tank is empty: the engine is dead, W does nothing, the buggy coasts down to a stop at this rate (brakes still work)." )]
+	public float OutOfFuelCoastDragMetersPerSecond2 { get; set; } = 1.5f;
 
 	[Property, Group( "Drive" ), Title( "Lateral Grip (m/s²)" ), Description( "Max sideways correction per grounded wheel. Lower = more slide." )]
 	public float LateralGripMetersPerSecond2 { get; set; } = 90f;
@@ -332,9 +335,10 @@ public sealed partial class Vehicle
 			}
 		}
 
-		// No pedal, an empty tank, or sitting on the limiter: the tyres roll the buggy down to a stop.
+		// No pedal or sitting on the limiter: the tyres roll the buggy down to a stop. An empty tank is a
+		// dead engine: the pedal does nothing and the buggy coasts down more gently (S still brakes above).
 		if ( !driving )
-			accel = RollTowardStop( forwardSpeed, dt );
+			accel = RollTowardStop( forwardSpeed, dt, HasFuel ? RollingDragMetersPerSecond2 : OutOfFuelCoastDragMetersPerSecond2 );
 
 		var accelUnits = TerrainWorldUnits.MetersToEngine( accel );
 		var perWheelDrive = mass * accelUnits / _groundedWheels;
@@ -374,13 +378,13 @@ public sealed partial class Vehicle
 		return -MathF.Sign( forwardSpeed ) * decel;
 	}
 
-	float RollTowardStop( float forwardSpeed, float dt )
+	float RollTowardStop( float forwardSpeed, float dt, float dragMetersPerSecond2 )
 	{
 		if ( MathF.Abs( forwardSpeed ) < 0.05f )
 			return 0f;
 
 		var maxStep = MathF.Abs( forwardSpeed ) / dt;
-		var decel = Math.Min( Math.Max( 0f, RollingDragMetersPerSecond2 ), maxStep );
+		var decel = Math.Min( Math.Max( 0f, dragMetersPerSecond2 ), maxStep );
 		return -MathF.Sign( forwardSpeed ) * decel;
 	}
 

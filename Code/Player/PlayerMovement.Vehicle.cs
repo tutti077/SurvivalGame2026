@@ -38,6 +38,7 @@ public sealed partial class PlayerMovement
 	bool _seatSavedUseInput = true;
 	bool _seatSavedUseAnimator = true;
 	Rotation _seatSavedRootRotation = Rotation.Identity;
+	GameObject _seatBodyObject;
 
 	public Vehicle SeatedVehicle
 	{
@@ -154,6 +155,16 @@ public sealed partial class PlayerMovement
 		GameObject.LocalRotation = Rotation.Identity;
 		GameObject.Transform.ClearInterpolation();
 		GameObject.Network?.ClearInterpolation();
+
+		// The controller turns the Body child toward the look yaw, not the root; with its animator pass
+		// off that child would keep whatever facing it had on entry. Square it to the seat (the head
+		// still follows the camera through the animgraph look-at, see PlayerAnimation.Vehicle).
+		_seatBodyObject = _controller?.Renderer?.GameObject;
+		if ( _seatBodyObject is { IsValid: true } )
+		{
+			_seatBodyObject.LocalRotation = Rotation.Identity;
+			_seatBodyObject.Transform.ClearInterpolation();
+		}
 	}
 
 	void ExitSeatLocal( Vector3 exitWorldPos )
@@ -169,6 +180,10 @@ public sealed partial class PlayerMovement
 		if ( exitWorldPos != default )
 			GameObject.WorldPosition = exitWorldPos;
 		GameObject.WorldRotation = _seatSavedRootRotation;
+
+		if ( _seatBodyObject is { IsValid: true } && _controller is not null )
+			_seatBodyObject.WorldRotation = Rotation.FromYaw( _controller.EyeAngles.yaw );
+		_seatBodyObject = null;
 
 		for ( var i = 0; i < _seatDisabledColliders.Count; i++ )
 		{
@@ -225,6 +240,8 @@ public sealed partial class PlayerMovement
 			GameObject.LocalPosition = Vector3.Zero;
 		if ( GameObject.LocalRotation != Rotation.Identity )
 			GameObject.LocalRotation = Rotation.Identity;
+		if ( _seatBodyObject is { IsValid: true } && _seatBodyObject.LocalRotation != Rotation.Identity )
+			_seatBodyObject.LocalRotation = Rotation.Identity;
 
 		// Belt and braces: nothing of the pawn may collide with the chassis while it rides.
 		if ( _seatDisabledColliderObject is { IsValid: true, Enabled: true } )

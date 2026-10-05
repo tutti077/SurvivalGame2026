@@ -8,8 +8,9 @@ Writes Assets/models/vehicles/: dune_buggy.fbx/.vmdl (body, origin = chassis cen
 component expects), dune_buggy_wheel.fbx/.vmdl (one wheel, axle along local Y so the Vehicle code's
 pitch spin / yaw steer rotates it), buggy_atlas.png (64 px palette atlas, 8 px cells) + buggy_atlas.vmat
 (pixel_lit, point-sampled). Blender meters, exported 1:1; the vmdls use import_scale 0.4 (40 u/m).
-Geometry matches the prefab: wheel mounts at x ±1.2 m, y ±0.85 m; seats at (0.2, ±0.4, 0.3); the
-storage crate on the prefab sits against the rear plate at x -1.65 m.
+Geometry is modelled at 1:1 then scaled by SCALE (1.4) at export; the prefab matches the scaled
+model: wheel mounts at x ±1.68 m, y ±1.19 m, seat anchors (11, ±22, -2) u, the storage crate against
+the rear plate at x -2.25 m.
 """
 import bpy, bmesh, math, os, struct, zlib
 import numpy as np
@@ -408,7 +409,11 @@ VMAT = """Layer0
 # Blender +X lands on the engine's +Y (see memory: artist-pack import). The body is modelled with forward = +X
 # and left = +Y in Blender; this quarter turn makes forward = engine +X (the Vehicle's drive axis) and the
 # wheel axle = engine Y, which is the axis Vehicle.UpdateWheelVisuals spins around.
-EXPORT_YAW = Matrix.Rotation(math.radians(-90.0), 4, 'Z')
+# Whole-model scale (Mark, 2026-10-03: the citizen's head poked through the roof at 1:1 — a buggy this
+# size needs to be ~1.4x so the 1.8 m pawn sits inside the cage). The prefab's wheel base / track /
+# wheel radius / suspension / colliders / seat anchors carry the same factor.
+SCALE = 1.4
+EXPORT_YAW = Matrix.Rotation(math.radians(-90.0), 4, 'Z') @ Matrix.Scale(SCALE, 4)
 
 
 def export(obj, name):
