@@ -48,7 +48,7 @@
 							exclude_by_default = true
 							exception_list = 
 							[
-								"tripo_node_f9a790d0",
+								"swordnightmesh",
 							]
 						}
 					},
