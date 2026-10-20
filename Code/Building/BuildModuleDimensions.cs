@@ -114,10 +114,9 @@ public static class BuildModuleDimensions
 		// Furniture / stations (unchanged by the wood rename). When a real model lands, use the bounds
 		// printed by Blender/scripts/import_artist_pack.py (building category: bbox centred on the
 		// origin, width X / depth Y / height Z), so the box collider and ground-sit match the mesh.
-		// Both stay dev boxes for now (Mark, 2026-10-02): Rumple's box1pack.blend imports as
-		// 0.83 × 0.71 × 0.93 m, augtable1pack.blend as 1 × 0.57 × 0.78 m.
-		// Chest: 1 m long, 0.5 m wide, 0.5 m tall.
-		["chest"] = new( 1f, 0.5f, 0.5f ),
+		// Chest: Rumple's box1pack.blend imported 2026-10-06 (models/building/chest.vmdl).
+		// The augment station stays a dev box (augtable1pack.blend imports as 1 × 0.57 × 0.78 m).
+		["chest"] = new( 0.83f, 0.71f, 0.93f ),
 		["vehicle_dune_buggy"] = new( 4.2f, 2.5f, 1.7f ),   // ghost / placement box only; the prefab authors the real colliders
 		// Hover platform: 3 × 2 build tiles of deck (6 × 4 m, create_hover_platform.py) plus the console; ghost box only.
 		["vehicle_hover_platform"] = new( 6f, 4f, 1.5f ),

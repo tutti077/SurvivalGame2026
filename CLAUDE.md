@@ -178,6 +178,10 @@ Invoke by slash command or by saying the phrase:
   safe fixes applied, the rest proposed.
 - **bug test routine** (`/bug-test-routine`) — reproduce a defect in the live editor through the
   sbox MCP, instrument, fix, pass three consecutive runs. Full scene / play-mode access granted.
+- **fps routine** — console `perf_bisect` (Code/World/Terrain/TerrainPerfBench.Bisect.cs): 3 s baseline, every
+  switch off in turn for 3 s (pawn FOV 60, HUD, body, animgraph, crosshair, aim assist, AI, sun shadows, scatter,
+  grass, wind), table sorted by saving. Claude runs it through the sbox MCP as the pawn and as the fly camera and
+  compares; the pawn and the fly camera should land at about the same frame time (Mark 2026-10-13).
 
 ## Layout
 
@@ -222,11 +226,17 @@ Code/
                   mesh collision (no grapple tag) — tubes, holes zipped to branches, platform collar, pond bowls — plus dev-box ledges tagged
                   "grapple", oases, waterfall, host-placed chests; verified by a standalone .NET harness; console cave_regen / cave_info / cave_tp
   Hacks/        GameHacks — console-toggled dev flags (allCrafting), mirrored onto pawns via [Sync] for host checks
+                · ConsoleHelp — `help [filter]` / `commands`: the hand-kept table of every project ConCmd (args, what, example).
+                  RULE: every new [ConCmd] gets a row there in the same change.
   Vehicles/     Vehicle (+ .Physics raycast springs / .Seats first-in-drives + ownership handoff / .Fuel restricted tank slot / .Health wreck + drops)
                 · VehicleSeat · VehicleDevCommands (vehicle_spawn / enter / exit / fuel / test / damage); hammer-placed via "vehicle": true in
                 build_pieces.json, prefab Assets/prefabs/build/vehicle_dune_buggy.prefab; pawn side = PlayerMovement.Vehicle.cs,
                 PlayerInventoryInteraction.Vehicle.cs, PlayerAnimation.Vehicle.cs; HUD UI/VehicleHud.cs; model Blender/scripts/create_dune_buggy.py
                 → Assets/models/vehicles/ (body + separate wheel, axle on Y) (see AGENTS.md "Vehicles")
+                · Hover platform = the same Vehicle with DriveModel Hover (Vehicle.Hover.cs): 6 × 4 m buildable deck, standing driver at the
+                front console, A / D turn (spin in place with W / S up), Space / Ctrl height 1–30 m, ice drift, power cells (crafted_power_cell, 120 s each), live map pin; pieces built on
+                the deck are parented under it (BuildAuthority.HostPlacePiece); prefab Assets/prefabs/build/vehicle_hover_platform.prefab,
+                model Blender/scripts/create_hover_platform.py (see AGENTS.md "Vehicles — hover platform")
   Map/          Player map markup: MapPinCatalog (12 pin icons, Assets/ui/map) · LocalMapMarkup (client-local pins + pen strokes in world
                 meters, write-through to 2Tgames/players/<steamid>/map/<world>.json via MapMarkupSaveStore) · MapPingFeed (MMB pings,
                 crew-scoped RPC on Crew/PlayerCrew.MapPing.cs); drawn by UI/TerrainWorldMapFace, driven by UI/Menu/MapMenuSection (see AGENTS.md "Map")
@@ -237,6 +247,30 @@ Code/
                 WindDirection / WindStrength / WindGust to all shaders through Scene.RenderAttributes once per frame)
                 · GrassPatch + GrassScatterer (grass through the engine Sandbox.Clutter system — GPU instanced/culled/LOD;
                 shader Assets/shaders/grass_blade.shader, models grass_clump1–4 from Blender/scripts/create_grass_clump.py)
+                · World grass = TerrainWorldManager.Grass.cs: ONE ClutterComponent in INFINITE streaming mode (a ring of tiles the engine
+                keeps around the camera, Grass — Range (m) default 300) planted on the loaded chunks' meshed height grids (BuildResult.HeightsZ,
+                bilinear — no physics, no collider, nothing else can be hit); a chunk arriving / remeshing invalidates its tiles; ONE density,
+                grass_blade.shader thins clumps by camera distance (Thin Full / Far / Keep / Cull on grass_blade.vmat); console grass_toggle;
+                Clover Hills only via an 8×8 biome mask cached per chunk
+                · Wind arrow: TerrainMinimapHud draws "wind" + an arrow under the zoom buttons (map orientation, points the way the
+                wind blows, brightens with gusts; hidden without a WindSystem)
+                · Tree wind = pixel_lit.shader's F_WIND feature (vertex stage, same WindDirection / WindStrength / WindGust inputs
+                as grass_blade): trunk lean + slow rock from object-space height, limb bob / flap from radius off the trunk axis,
+                optional leaf-card rustle — no vertex colours, weights are continuous in position so faceted meshes never tear.
+                Only the STANDING elm gets it: elm_bark_v76_wind.vmat + elm_leaves_v76.vmat (written by create_elm_tree.py); stump,
+                log and halves keep the static bark. Rumple's clover tree (cloverhills/bark.vmat) is deliberately left alone (Mark 2026-10-13).
+                Knobs are metres on the vmat ("Wind" group: Tree Height, Crown Radius, Trunk Sway, Limb Bob, Fade Start / End …).
+                The shader's strength / gust DEFAULTS are 0 and every term is proportional to them (ONE bend per tree, a ROTATION about the root with the angle growing up the trunk — never a stretch — swinging from past
+                upright to 1.4x the lean; limbs rotate about the trunk axis so downwind limbs dip, upwind lift, both compress;
+                WindGust is one scene-wide value so every tree leans together; leaf cards wiggle in their own random direction / rate / phase hashed
+                from the card's face normal, so nothing tears and no two cards jiggle alike; grass gusts are a drifting value-noise
+                field in grass_blade.shader, not sine bands), so trees only move while a
+                WindSystem is publishing (play mode, scene has one — testscene1 + terrainTest do; WindSystem "Wind Enabled" /
+                console wind_toggle switches it off live; windtest [1-5] = wind perpendicular to the camera
+                (toward its right) + a forced gust of that strength HELD until a plain windtest; 3+ exceeds the normal
+                gust ceiling, 5 = hurricane ×2.5, the usable max — the shader does not cap the gust); the editor viewport is still (Mark 2026-10-12). Sway fades out
+                Fade Start → Fade End metres from the camera (300 → 360 on the elm). Shadow passes must sway identically to the main pass (a cheaper
+                shadow sway self-shadowed the displaced crowns blue) and the vertex stage skips the math past it.
                 · ChopableTree — two tree types on one component. Type 1 felling (elm): tree → its stump + one universal pointy
                   log that tips over → log splits into two halves → halves / stump drop wood. Type 2 crown fall (clovertree_chop: a disabled
                   "chop_crown" child = one rigidbody whose colliders are Rumple's butt / fork / top "chop_piece" children): tree → stump,
@@ -249,8 +283,10 @@ Code/
   World/Environment/  EnvironmentDayNightCycle (sun / moon arc, day counter) feeds SkyDome (camera-centred sphere, shaders/environment/sky_dome.shader:
                 gradient + sun glow + two wind-scrolled cloud layers from sky_clouds.png, Blender/scripts/create_sky_clouds.py) from
                 SkyPresetCatalog (Assets/data/sky_presets.json — per-weather night / dawn / day / noon / dusk keyframes); stars are a procedural layer in sky_dome.shader (StarVisibility from the cycle)
-                · sky dome + cycle live in lightingTest (3-minute loop, drives the GradientFog colour) and testscene1 (5 min day /
-                4 min night, no fog); **Y** = jump to noon, **U** = midnight (CycleDay / CycleNight actions; console cycle_day / cycle_night)
+                · sky dome + cycle live in lightingTest (3-minute loop, drives the GradientFog colour), testscene1 (5 min day /
+                4 min night, no fog) and terrainTest (the lightingTest 3-minute group copied as one DISABLED "DayNightCycle" object —
+                cycle + sky dome + disks + moon, driving the scene Sun; console cycle_toggle switches it on / off);
+                **Y** = jump to noon, **U** = midnight (CycleDay / CycleNight actions; console cycle_day / cycle_night)
   (lighting)    No screen-space pixelation. The look is asset-side (Valheim recipe, Mark 2026-10-02): low-res textures + point filtering +
                 faceted normals baked in the mesh (create_elm_tree.py shade_flat; PixelFlatShading on pixel_lit.shader for meshes that
                 are not), optional point-sampled TextureNormal / TextureRoughness + PixelTexCoordScale on pixel_lit.shader (elm bark
@@ -258,11 +294,18 @@ Code/
                 tonemap. **Per-texel lighting** (pixel_lit `PixelTexelLighting`, default on, Valheim sconce reference 2026-10-05):
                 direct light + shadows are evaluated at the texel centre so each texel is one lit block; `PixelLightSteps`
                 (local lights, default 6 bands — Mark 2026-10-05: torch fall-off must be steppy, not a glow), `PixelLightCutoff`
-                and `PixelSunSteps` (default 0, the sun stays smooth) posterise on top. Indirect stays the engine's.
+                and `PixelSunSteps` (default 0, the sun stays smooth — banding is for fires, torches and lanterns only; a 5-step sun was tried and rejected 2026-10-13) posterise on top. Indirect stays the engine's.
                 Firelight wanders through `Environment/FireLightFlicker` (authored on the campfire prefab's FireLight child, created on
                 the held torch / lantern lamp; wind gusts widen it) — never on the sun. Playground: Assets/scenes/lightingTest.scene (100 m uniformly scaled dev box — non-uniform scale breaks
                 vertex normals — clovertree/whole + fly cam + standard post stack on the camera)
-  World/Terrain/        Streaming, chunk mesh, biome population, world save IO
+  World/Terrain/        Streaming, chunk mesh, biome population, world save IO. The load screen stays up through "Generating
+                        map…" (the 512 px minimap raster runs behind it at 40 ms/frame) and then "Settling…" until 90 consecutive
+                        frames are under 16.7 ms or 30 s pass — never a lagging first look (Mark 2026-10-13). terrainTest: L toggles
+                        pawn ↔ fly camera.
+                        Ground = materials/terrain/terrain_ground.vmat
+                        (pixel_lit F_VERTEX_PAINT: painted biome vertex colours; Clover Hills vertices carry alpha = "Clover Ground
+                        Texture Blend" so the lightingTest ground_grass.png tiles there in world space, 3.2 m per repeat —
+                        TerrainGroundTextureMask writes the alpha)
   World/TerrainPreview/ Offline world generation pipeline + settings
   UI/           PlayerScreenHud, HUDs, Menu/ sections
   Networking/   Host spawn, synced UI content, connection identity
