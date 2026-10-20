@@ -341,7 +341,7 @@
         "AssistStickBreakPixels": 18,
         "AttachStaminaCost": 0,
         "AttachVelocityScale": 1,
-        "CameraFarClipMeters": 50000,
+        "CameraFarClipMeters": 12000,
         "CameraKeyboardZoomEnabled": true,
         "CameraScrollZoomEnabled": false,
         "CameraZoomMaxDistance": 800,

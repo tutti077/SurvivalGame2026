@@ -49,6 +49,13 @@ public sealed partial class Vehicle
 		return seatIndex >= 0 && seatIndex < _seats.Count ? _seats[seatIndex].GameObject : null;
 	}
 
+	public VehicleSeat GetSeat( int seatIndex )
+	{
+		if ( _seats.Count == 0 )
+			CollectSeats();
+		return seatIndex >= 0 && seatIndex < _seats.Count ? _seats[seatIndex] : null;
+	}
+
 	public Guid GetOccupantId( int seatIndex )
 		=> seatIndex >= 0 && seatIndex < SeatOccupants.Count ? SeatOccupants[seatIndex] : Guid.Empty;
 
@@ -183,21 +190,133 @@ public sealed partial class Vehicle
 		}
 	}
 
+	/// <summary>Dev readout for <c>vehicle_info</c>: which spot the last exit chose.</summary>
+	public string LastExitPlacement { get; private set; }
+
+	/// <summary>
+	/// Where the feet go on exit (Mark 2026-10-06: seat side first, the other side if that spot is under
+	/// the ground or inside something, else the roof — he kept falling through the earth). A side spot
+	/// counts only when the line from inside the hull to it at mid-hull height is clear (a hillside, wall
+	/// or tree in the way means the spot is inside or behind it), a floor lies under it no more than
+	/// <see cref="ExitMaxDropUnits"/> below the hull and is not a steep bank, and a pawn fits standing
+	/// there. The roof is the one spot never under the ground, because the vehicle itself stands there.
+	/// </summary>
 	Vector3 ComputeExitPosition( int seatIndex )
 	{
 		var seatGo = GetSeatObject( seatIndex );
-		var seatPos = seatGo is { IsValid: true } ? seatGo.WorldPosition : WorldPosition;
-		var sideSign = seatGo is { IsValid: true } && seatGo.LocalPosition.y < 0f ? -1f : 1f;
-		var side = WorldRotation.Left * sideSign;
-		var half = GameObject.GetBounds().Size.y * 0.5f;
-		var outPos = seatPos + side * ( half + TerrainWorldUnits.MetersToEngine( Math.Max( 0.5f, ExitSideMeters ) ) * 0.5f );
 
-		// Feet on the ground beside the vehicle; fall back to the seat height if nothing is below.
-		var tr = Scene.Trace.Ray( outPos + Vector3.Up * 60f, outPos - Vector3.Up * 200f )
+		// A standing seat (hover platform console) lets go onto the deck itself: a step to the seat's side
+		// or behind it, wherever the deck is under foot and nothing stands there.
+		if ( GetSeat( seatIndex ) is { Standing: true } && seatGo is { IsValid: true } && TryFindStandingExit( seatGo, out var deckFeet ) )
+		{
+			LastExitPlacement = "deck";
+			return deckFeet;
+		}
+		var sideSign = seatGo is { IsValid: true } && seatGo.LocalPosition.y < 0f ? -1f : 1f;
+		var bounds = GameObject.GetBounds();
+		var centre = bounds.Center;
+
+		// The hull's left, flat — a buggy on its side still puts you down beside it, not above or below.
+		var side = WorldRotation.Left.WithZ( 0f );
+		if ( side.LengthSquared < 0.09f )
+			side = Vector3.Cross( Vector3.Up, WorldRotation.Forward.WithZ( 0f ) );
+		if ( side.LengthSquared < 1e-4f )
+			side = Vector3.Left;
+		side = side.Normal;
+
+		var ext = bounds.Extents;
+		var halfWidth = MathF.Abs( side.x ) * ext.x + MathF.Abs( side.y ) * ext.y;
+		var reach = halfWidth + TerrainWorldUnits.MetersToEngine( Math.Max( 0.5f, ExitSideMeters ) ) * 0.5f;
+
+		if ( TryFindExitFootingBeside( centre, side * sideSign, reach, bounds.Mins.z, out var feet ) )
+		{
+			LastExitPlacement = sideSign > 0f ? "left" : "right";
+			return feet;
+		}
+
+		if ( TryFindExitFootingBeside( centre, side * -sideSign, reach, bounds.Mins.z, out feet ) )
+		{
+			LastExitPlacement = sideSign > 0f ? "right (left blocked)" : "left (right blocked)";
+			return feet;
+		}
+
+		var roof = centre.WithZ( bounds.Maxs.z + 2f );
+		LastExitPlacement = IsExitStandingRoomClear( roof ) ? "roof (both sides blocked)" : "roof (both sides blocked, roof tight)";
+		return roof;
+	}
+
+	/// <summary>Furthest a side spot may lie below the hull's lowest point before it counts as a cliff (3 m).</summary>
+	const float ExitMaxDropUnits = 120f;
+
+	/// <summary>Standing seat: left, right, then behind the console; a floor (the deck, or a piece built on it) must lie within 0.75 m under the spot.</summary>
+	bool TryFindStandingExit( GameObject seatGo, out Vector3 feet )
+	{
+		feet = default;
+		var step = TerrainWorldUnits.MetersToEngine( Math.Max( 0.5f, ExitSideMeters ) ) * 0.6f;
+		Span<Vector3> tries = stackalloc Vector3[3];
+		tries[0] = seatGo.WorldPosition + seatGo.WorldRotation.Left * step;
+		tries[1] = seatGo.WorldPosition + seatGo.WorldRotation.Right * step;
+		tries[2] = seatGo.WorldPosition + seatGo.WorldRotation.Backward * step;
+
+		for ( var i = 0; i < tries.Length; i++ )
+		{
+			var spot = tries[i];
+			var floor = Scene.Trace.Ray( spot + Vector3.Up * 20f, spot - Vector3.Up * 30f )
+				.WithoutTags( "player", "trigger", "worlddrop" )
+				.Run();
+			if ( !floor.Hit || floor.StartedSolid || floor.Normal.z < 0.5f )
+				continue;
+
+			var candidate = floor.HitPosition + Vector3.Up * 2f;
+			if ( !IsExitStandingRoomClear( candidate ) )
+				continue;
+
+			feet = candidate;
+			return true;
+		}
+
+		return false;
+	}
+
+	bool TryFindExitFootingBeside( Vector3 from, Vector3 direction, float reach, float hullBottomZ, out Vector3 feet )
+	{
+		feet = default;
+		var hand = from + direction * reach;
+
+		var line = Scene.Trace.Ray( from, hand )
 			.IgnoreGameObjectHierarchy( GameObject )
-			.WithoutTags( "player", "trigger" )
+			.WithoutTags( "player", "trigger", "worlddrop" )
 			.Run();
-		return tr.Hit ? tr.HitPosition + Vector3.Up * 2f : outPos;
+		if ( line.Hit )
+			return false;
+
+		var floor = Scene.Trace.Ray( hand, hand - Vector3.Up * ( hand.z - hullBottomZ + ExitMaxDropUnits ) )
+			.IgnoreGameObjectHierarchy( GameObject )
+			.WithoutTags( "player", "trigger", "worlddrop" )
+			.Run();
+		if ( !floor.Hit || floor.StartedSolid || floor.Normal.z < 0.5f )
+			return false;
+
+		feet = floor.HitPosition + Vector3.Up * 2f;
+		return IsExitStandingRoomClear( feet );
+	}
+
+	/// <summary>Two sphere overlaps where a standing pawn's legs and chest would be.</summary>
+	bool IsExitStandingRoomClear( Vector3 feet )
+	{
+		const float radius = 14f;
+		for ( var h = 18f; h <= 52f; h += 34f )
+		{
+			var at = feet + Vector3.Up * h;
+			var overlap = Scene.Trace.Sphere( radius, at, at )
+				.IgnoreGameObjectHierarchy( GameObject )
+				.WithoutTags( "player", "trigger", "worlddrop" )
+				.Run();
+			if ( overlap.Hit && overlap.StartedSolid )
+				return false;
+		}
+
+		return true;
 	}
 
 	void HostAssignDriverOwnership( GameObject pawn )

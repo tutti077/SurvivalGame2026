@@ -220,6 +220,16 @@ public static class BuildNavMeshSync
 	/// </summary>
 	public static StructureRebakeMode RebakeMode = StructureRebakeMode.Tiles;
 
+	/// <summary>Streamed terrain chunks coming online bake incrementally (RequestTilesGeneration) instead of a synchronous physics bake. Console <c>nav_stream_request 0|1</c>.</summary>
+	public static bool StreamedChunksUseRequest = true;
+
+	[ConCmd( "nav_stream_request" )]
+	public static void ConCmdStreamRequest( string on = "1" )
+	{
+		StreamedChunksUseRequest = on != "0" && !string.Equals( on, "false", StringComparison.OrdinalIgnoreCase );
+		Log.Info( $"[BuildNav] streamed chunk bakes: {(StreamedChunksUseRequest ? "incremental (RequestTilesGeneration)" : "synchronous (GenerateTiles from physics)")}" );
+	}
+
 	/// <summary>Pending verification of a tile rebake: the area must contain nav again once generation settles.</summary>
 	static BBox _tileVerifyBounds;
 	static double _tileVerifyAt = -1d;
@@ -628,11 +638,16 @@ public static class BuildNavMeshSync
 		MarkSolidCollidersStaticInBounds( scene, bounds );
 		EnsureNavBoundsCover( navMesh, bounds );
 
-		Log.Info( $"[BuildNav] rebake tiles from physics around {bounds.Center} size {bounds.Size} (physics={(physics is not null)} slope={navMesh.AgentMaxSlope} step={navMesh.AgentStepSize} height={navMesh.AgentHeight})" );
-		if ( physics is not null )
-			RegenerateTilesFromPhysics( navMesh, physics, bounds );
-		else
+		// Streamed terrain: chunks coming online once a second used to run a synchronous GenerateTiles from physics
+		// (100-150 ms, the once-per-second hitch while flying at 55 m/s, perf_watch 2026-10-14). New ground has no
+		// stale tiles to worry about, so the engine's incremental RequestTilesGeneration spreads it over frames.
+		// nav_stream_request 0 restores the synchronous bake for A/B.
+		var incremental = StreamedChunksUseRequest || physics is null;
+		Log.Info( $"[BuildNav] rebake tiles {(incremental ? "incrementally" : "from physics")} around {bounds.Center} size {bounds.Size} (slope={navMesh.AgentMaxSlope} step={navMesh.AgentStepSize} height={navMesh.AgentHeight})" );
+		if ( incremental )
 			navMesh.RequestTilesGeneration( bounds );
+		else
+			RegenerateTilesFromPhysics( navMesh, physics, bounds );
 
 		NotifyEnemiesNavUpdated( scene );
 	}

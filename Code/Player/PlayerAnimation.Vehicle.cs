@@ -61,7 +61,9 @@ public sealed partial class PlayerAnimation
 			_seatController ??= Components.Get<PlayerController>();
 			var look = _seatController is not null ? _seatController.EyeAngles.Forward : GameObject.WorldRotation.Forward;
 
-			helper.Sitting = CitizenAnimationHelper.SittingStyle.Chair;
+			// A standing seat (the hover platform's console) is the idle stance, pinned to the seat like the sit.
+			var standing = _seatMovement.SeatedVehicle?.GetSeat( _seatMovement.SeatedSeatIndex ) is { Standing: true };
+			helper.Sitting = standing ? CitizenAnimationHelper.SittingStyle.None : CitizenAnimationHelper.SittingStyle.Chair;
 			helper.IsGrounded = true;
 			helper.DuckLevel = 0f;
 			helper.WithVelocity( Vector3.Zero );

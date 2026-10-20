@@ -549,6 +549,10 @@ public sealed partial class EntityBrain : Component
 		if ( !CanRunHostLogic() )
 			return;
 
+		// Nobody within Sleep Range: locomotion / agent / body are off and nothing below runs (EntityBrain.Dormancy.cs).
+		if ( TickDormancy() )
+			return;
+
 		if ( Vitals is not null && Vitals.IsDead )
 			return;
 

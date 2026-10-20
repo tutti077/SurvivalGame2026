@@ -11,17 +11,13 @@ namespace Survival;
 /// </summary>
 public static partial class VehicleDevCommands
 {
-	/// <summary>Usage: <c>vehicle_demo</c> — the local pawn must be driving (vehicle_spawn, vehicle_enter, vehicle_fuel first).</summary>
+	/// <summary>Usage: <c>vehicle_demo</c> — on the vehicle the local pawn drives, else the nearest one (driverless, host-simulated; vehicle_spawn + vehicle_fuel first).</summary>
 	[ConCmd( "vehicle_demo" )]
 	public static void ConCmdDemo()
 	{
-		var pawn = FindLocalPawn();
-		var vehicle = pawn?.Components.Get<PlayerMovement>()?.SeatedVehicle;
-		if ( vehicle is null || !vehicle.IsValid() )
-		{
-			Log.Warning( "[Vehicle] vehicle_demo: the local pawn must be driving (vehicle_spawn, vehicle_enter, vehicle_fuel first)." );
+		var vehicle = FindTestVehicle( "vehicle_demo" );
+		if ( vehicle is null )
 			return;
-		}
 
 		_test = new ScriptedDemo( vehicle );
 		Log.Info( "[Vehicle demo] started." );

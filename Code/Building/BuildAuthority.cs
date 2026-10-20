@@ -80,6 +80,13 @@ public static class BuildAuthority
 
 		spawned.Name = $"build_{pieceId}";
 
+		// A piece standing on a buildable deck (the hover platform) is parented under that vehicle before
+		// it is configured: its colliders then join the hull's body instead of being static, the structural
+		// solver treats it as grounded, and it rides along. Decided once here, on the host, per placement.
+		var deck = Vehicle.FindBuildHostUnder( scene, spawned, pieceId );
+		if ( deck is not null )
+			spawned.SetParent( deck.GameObject, true );
+
 		var piece = spawned.Components.Get<BuildPiece>() ?? spawned.Components.Create<BuildPiece>();
 		piece.Configure( pieceId, blueprint, previewGhost: false );
 
@@ -87,7 +94,9 @@ public static class BuildAuthority
 		HostNetworkSpawn.TrySpawn( spawned );
 
 		BuildSnapPlacement.InvalidatePieceCache();
-		BuildNavMeshSync.OnBuildPieceChanged( scene, spawned );
+		// Nothing on a moving deck is nav-walkable for entities; the world bake leaves vehicles alone.
+		if ( deck is null )
+			BuildNavMeshSync.OnBuildPieceChanged( scene, spawned );
 
 		// Valheim-style: placement always succeeds, then the solver may collapse the piece
 		// (and anything that only stood because of intermediate state) immediately.
@@ -107,7 +116,8 @@ public static class BuildAuthority
 			return false;
 
 		target.Configure( target.PieceId, blueprint: false, previewGhost: false );
-		BuildNavMeshSync.OnBuildPieceChanged( target.Scene, target.GameObject );
+		if ( !Vehicle.IsDeckMounted( target.GameObject ) )
+			BuildNavMeshSync.OnBuildPieceChanged( target.Scene, target.GameObject );
 
 		// Build hammer durability: 1 tick per successful structure repair.
 		ToolDurability.HostAddWearToActiveTool( placer );
@@ -140,9 +150,10 @@ public static class BuildAuthority
 		if ( bounds.Size.LengthSquared < 1f )
 			bounds = BBox.FromPositionAndSize( target.GameObject.WorldPosition, 120f );
 
+		var deckMounted = Vehicle.IsDeckMounted( removedRoot );
 		target.GameObject.Destroy();
 		BuildSnapPlacement.InvalidatePieceCache();
-		if ( scene.IsValid() )
+		if ( scene.IsValid() && !deckMounted )
 			BuildNavMeshSync.OnBuildPieceBoundsChanged( scene, bounds );
 
 		// Re-solve what the piece used to touch — collapses anything it solely held up. The root is

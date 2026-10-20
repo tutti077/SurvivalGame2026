@@ -1527,6 +1527,7 @@ partial class PlayerMovement
 		GrappleRopeLengthEngine = length;
 		ClearGrapplePlayerAttachState();
 		ClearGrappleTowAttachState();
+		ClearGrappleRideAttachState();
 		Components.Get<PlayerQuests>()?.HostReport( QuestEventIds.GrappleAttached );
 
 		if ( playerTargetId != Guid.Empty && TryResolveGrapplePlayerTarget( playerTargetId, out var target ) )
@@ -1544,10 +1545,15 @@ partial class PlayerMovement
 			// the rope stays as long as the shot was - no cap, so attaching never moves the holder
 			GrappleRopeLengthEngine = Math.Min( Vector3.DistanceBetween( GameObject.WorldPosition, ResolveTowAnchor( towed ).anchor ), GetHardMaxLengthEngine() );
 		}
+		else
+		{
+			// A surface hook on something that moves (hover platform, buggy, a piece on the deck) rides it.
+			HostTryBindGrappleRide( validatedPoint );
+		}
 
 		if ( LogGrapple )
 		{
-			var kind = playerTargetId != Guid.Empty ? "player" : towTargetId != Guid.Empty ? "tow" : "surface";
+			var kind = playerTargetId != Guid.Empty ? "player" : towTargetId != Guid.Empty ? "tow" : GrappleAttachRideId != Guid.Empty ? "riding surface" : "surface";
 			Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: attached ({kind}) len={TerrainWorldUnits.EngineToMeters( length ):0.##}m" );
 		}
 	}
@@ -1594,6 +1600,7 @@ partial class PlayerMovement
 		GrappleRopeLengthEngine = 0f;
 		ClearGrapplePlayerAttachState();
 		ClearGrappleTowAttachState();
+		ClearGrappleRideAttachState();
 		_airborneStaminaDebt = 0f;
 		_grappleReleaseAir = true;
 

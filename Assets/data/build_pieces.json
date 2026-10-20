@@ -454,6 +454,18 @@
       "halfHeight": 30,
       "halfDepth": 45,
       "costs": []
+    },
+    {
+      "id": "vehicle_hover_platform",
+      "displayName": "Hover Platform",
+      "icon": "",
+      "prefab": "prefabs/build/vehicle_hover_platform.prefab",
+      "fallbackColor": "0.35,0.6,0.75,1",
+      "vehicle": true,
+      "halfWidth": 120,
+      "halfHeight": 30,
+      "halfDepth": 80,
+      "costs": []
     }
   ]
 }

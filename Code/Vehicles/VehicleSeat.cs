@@ -14,5 +14,9 @@ public sealed class VehicleSeat : Component
 	[Property, Title( "Seat Index" )]
 	public int SeatIndex { get; set; }
 
+	/// <summary>The pawn stands here instead of sitting (the hover platform's steering console: feet on the deck, like a pallet truck driven from behind). Exit steps aside on the deck.</summary>
+	[Property, Title( "Standing" )]
+	public bool Standing { get; set; }
+
 	public bool IsDriverSeat => SeatIndex == 0;
 }

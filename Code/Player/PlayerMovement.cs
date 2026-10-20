@@ -848,7 +848,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() || !camera.IsValid() )
 			return;
 
-		camera.ZFar = Math.Max( 100f, CameraFarClipMeters );
+		// Metres on the prefab, engine units on the camera (this line used to assign metres as units: 50 000 "m" was 1 250 m of view).
+		camera.ZFar = Math.Max( TerrainWorldUnits.MetersToEngine( Math.Max( 100f, CameraFarClipMeters ) ), camera.ZFar );
 		if ( PerfFovOverride > 0f )
 			camera.FieldOfView = Math.Clamp( PerfFovOverride, 20f, 140f );
 
@@ -1083,8 +1084,11 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		             + rot.Right * offset.z;
 
 		var radius = Math.Max( 6f, _controller.BodyRadius * 0.45f );
+		// Ignore from the ROOT, like the stock controller's own boom trace: while seated the pawn is
+		// parented under its vehicle seat, and ignoring only the pawn let this sweep start solid inside
+		// the chassis and pin the camera at the eye (dune buggy, 2026-10-05).
 		var tr = Scene.Trace.Sphere( radius, eye, target )
-			.IgnoreGameObjectHierarchy( GameObject )
+			.IgnoreGameObjectHierarchy( GameObject.Root )
 			.WithoutTags( "player", "trigger" )
 			.Run();
 
@@ -1265,6 +1269,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		TickGrapplePlayerTargetValidity();
 		TickGrappledByValidity();
 		TickGrappleTowValidity();
+		TickGrappleRideValidity();
 		TickGrappleTowPull( Time.Delta );   // host drives the towed log, whoever holds the rope
 
 		if ( !IsLocalMovementDriver() )

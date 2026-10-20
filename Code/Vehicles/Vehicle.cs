@@ -4,8 +4,15 @@ using Sandbox;
 
 namespace Survival;
 
+/// <summary>How a <see cref="Vehicle"/> moves: four raycast wheels (dune buggy) or a hover cushion (platform).</summary>
+public enum VehicleDriveModel
+{
+	Wheels,
+	Hover,
+}
+
 /// <summary>
-/// A drivable vehicle (first one: the dune buggy). Placed with the build hammer like a piece
+/// A drivable vehicle (the dune buggy; the hover platform). Placed with the build hammer like a piece
 /// (<c>"vehicle": true</c> in <c>build_pieces.json</c>) but it is NOT a <see cref="BuildPiece"/>: it is a
 /// host-spawned networked <see cref="Rigidbody"/> with raycast suspension (<c>Vehicle.Physics.cs</c>),
 /// seats (<see cref="VehicleSeat"/> children — first in is the driver, the rest are passengers, see
@@ -21,6 +28,21 @@ public sealed partial class Vehicle : Component
 {
 	[Property, Group( "Vehicle" ), Title( "Display Name" )]
 	public string DisplayName { get; set; } = "Dune Buggy";
+
+	/// <summary>Wheels = the buggy's raycast suspension (<c>Vehicle.Physics.cs</c>); Hover = the platform's cushion (<c>Vehicle.Hover.cs</c>).</summary>
+	[Property, Group( "Vehicle" ), Title( "Drive Model" )]
+	public VehicleDriveModel DriveModel { get; set; } = VehicleDriveModel.Wheels;
+
+	/// <summary>Build pieces placed on this hull are parented under it and ride along (the hover platform's deck). See <c>BuildAuthority.HostPlacePiece</c>.</summary>
+	[Property, Group( "Vehicle" ), Title( "Buildable Deck" )]
+	public bool BuildableDeck { get; set; }
+
+	/// <summary>Map pin drawn live at the vehicle's position for every player (empty = none). "platform" or any <see cref="MapPinCatalog"/> icon id.</summary>
+	[Property, Group( "Vehicle" ), Title( "Map Pin Icon" )]
+	public string MapPinIcon { get; set; } = string.Empty;
+
+	public bool IsHover => DriveModel == VehicleDriveModel.Hover;
+	public bool ShowsMapPin => !string.IsNullOrWhiteSpace( MapPinIcon );
 
 	/// <summary>How close a pawn must stand to press E (meters).</summary>
 	[Property, Group( "Vehicle" ), Title( "Use Reach (m)" )]
@@ -79,7 +101,7 @@ public sealed partial class Vehicle : Component
 		if ( !HasHostAuthority )
 			return;
 
-		var restHeight = TerrainWorldUnits.MetersToEngine( SuspensionLengthMeters + WheelRadiusMeters );
+		var restHeight = TerrainWorldUnits.MetersToEngine( IsHover ? HoverHullBottomMeters + HoverMinHeightMeters : SuspensionLengthMeters + WheelRadiusMeters );
 		var origin = WorldPosition;
 		var tr = Scene.Trace.Ray( origin + Vector3.Up * 400f, origin - Vector3.Up * 400f )
 			.IgnoreGameObjectHierarchy( GameObject )
@@ -144,17 +166,13 @@ public sealed partial class Vehicle : Component
 		if ( IsStorageHit( tr.GameObject, tr.HitPosition ) )
 			return false;
 
-		for ( var go = tr.GameObject; go is not null && go.IsValid(); go = go.Parent )
-		{
-			var v = go.Components.Get<Vehicle>();
-			if ( v is not null && v.IsValid() && !v.IsPreviewGhost )
-			{
-				vehicle = v;
-				return true;
-			}
-		}
+		// A wall built on the platform's deck is that wall, not the platform: FindOnHierarchy stops at it.
+		var v = FindOnHierarchy( tr.GameObject );
+		if ( v is null || !v.IsValid() || v.IsPreviewGhost )
+			return false;
 
-		return false;
+		vehicle = v;
+		return true;
 	}
 
 	/// <summary>Is this hit object the vehicle's storage box (or inside it)? Stops at the vehicle root.</summary>
@@ -212,15 +230,129 @@ public sealed partial class Vehicle : Component
 		return MathF.Abs( local.x ) <= half.x && MathF.Abs( local.y ) <= half.y && MathF.Abs( local.z ) <= half.z;
 	}
 
+	/// <summary>
+	/// The vehicle this object belongs to — its own hull, seats, storage box, wheels. A <see cref="BuildPiece"/>
+	/// met on the way up is a boundary: pieces built on a deck (<see cref="BuildableDeck"/>) are parented under
+	/// the vehicle so they ride with it, but they are their own thing for prompts, damage and containers.
+	/// </summary>
 	public static Vehicle FindOnHierarchy( GameObject hit )
 	{
 		for ( var go = hit; go is not null && go.IsValid(); go = go.Parent )
 		{
+			if ( go.Components.Get<BuildPiece>() is not null )
+				return null;
 			var v = go.Components.Get<Vehicle>();
 			if ( v is not null )
 				return v;
 		}
 
 		return null;
+	}
+
+	/// <summary>The buildable-deck vehicle this object (a build piece, or a part of the hull) is carried by, through any pieces between.</summary>
+	public static Vehicle FindDeckOnHierarchy( GameObject go )
+	{
+		for ( var current = go; current is not null && current.IsValid(); current = current.Parent )
+		{
+			var v = current.Components.Get<Vehicle>();
+			if ( v is not null )
+				return v.BuildableDeck && !v.IsPreviewGhost ? v : null;
+		}
+
+		return null;
+	}
+
+	/// <summary>Is this build piece parented under a buildable deck (rides a vehicle)?</summary>
+	public static bool IsDeckMounted( GameObject pieceRoot )
+		=> pieceRoot is { IsValid: true } && pieceRoot.Parent is { } parent && FindDeckOnHierarchy( parent ) is not null;
+
+	/// <summary>Probe reach below a freshly placed piece's lowest corners when looking for a deck under it (units, 0.4 m).</summary>
+	const float DeckProbeUnits = 16f;
+
+	/// <summary>
+	/// Host, once per placement: the buildable deck a just-spawned piece stands on — a short ray down from
+	/// each of its lowest corners (and a copy pulled toward the centre), the way the structural solver
+	/// probes for ground. A piece that rests on a deck, or on a piece already riding one, finds it; a piece
+	/// that only touches a deck piece sideways (a wall hung off the edge) is found through a box overlap.
+	/// Null when the piece stands on the world.
+	/// </summary>
+	public static Vehicle FindBuildHostUnder( Scene scene, GameObject pieceRoot, string pieceId )
+	{
+		if ( !scene.IsValid() || pieceRoot is null || !pieceRoot.IsValid() || Registered.Count == 0 )
+			return null;
+
+		var anyDeck = false;
+		for ( var i = 0; i < Registered.Count; i++ )
+		{
+			if ( Registered[i] is { IsValid: true, BuildableDeck: true } )
+			{
+				anyDeck = true;
+				break;
+			}
+		}
+		if ( !anyDeck )
+			return null;
+
+		var rotation = BuildColliderSnap.GetSnapWorldRotation( pieceRoot, pieceId );
+		var origin = pieceRoot.WorldPosition;
+		var half = BuildColliderSnap.GetColliderHalfForPiece( pieceId );
+
+		var corners = new Vector3[8];
+		var index = 0;
+		var minZ = float.MaxValue;
+		for ( var xi = -1; xi <= 1; xi += 2 )
+		for ( var yi = -1; yi <= 1; yi += 2 )
+		for ( var zi = -1; zi <= 1; zi += 2 )
+		{
+			var corner = origin + rotation * new Vector3( xi * half.x, yi * half.y, zi * half.z );
+			corners[index++] = corner;
+			minZ = MathF.Min( minZ, corner.z );
+		}
+
+		for ( var i = 0; i < 8; i++ )
+		{
+			var corner = corners[i];
+			if ( corner.z > minZ + 6f )
+				continue;
+
+			var deck = ProbeDeckBelow( scene, pieceRoot, corner );
+			if ( deck is not null )
+				return deck;
+
+			var pulled = new Vector3( corner.x + ( origin.x - corner.x ) * 0.25f, corner.y + ( origin.y - corner.y ) * 0.25f, corner.z );
+			deck = ProbeDeckBelow( scene, pieceRoot, pulled );
+			if ( deck is not null )
+				return deck;
+		}
+
+		// Side-snapped to a piece that rides a deck: whatever this piece overlaps (with the solver's contact slack).
+		var bounds = BBox.FromPositionAndSize( origin, 1f );
+		for ( var i = 0; i < 8; i++ )
+			bounds = bounds.AddPoint( corners[i] );
+		bounds = bounds.Grow( 6f );
+		foreach ( var go in scene.FindInPhysics( bounds ) )
+		{
+			if ( go is null || !go.IsValid() || go.Root == pieceRoot.Root )
+				continue;
+			if ( go.Components.Get<BuildPiece>( FindMode.EverythingInSelfAndAncestors ) is null )
+				continue;
+			var deck = FindDeckOnHierarchy( go );
+			if ( deck is not null )
+				return deck;
+		}
+
+		return null;
+	}
+
+	static Vehicle ProbeDeckBelow( Scene scene, GameObject pieceRoot, Vector3 point )
+	{
+		var tr = scene.Trace.Ray( point + Vector3.Up * 4f, point - Vector3.Up * DeckProbeUnits )
+			.IgnoreGameObjectHierarchy( pieceRoot )
+			.WithoutTags( "player", "trigger", "worlddrop", "buildpreview" )
+			.Run();
+		if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() )
+			return null;
+
+		return FindDeckOnHierarchy( tr.GameObject );
 	}
 }

@@ -16,17 +16,22 @@ public static partial class VehicleDevCommands
 	static float _simThrottle;
 	static float _simSteer;
 	static double _simUntilGlobal;
+	static Vehicle _simVehicle;
 
-	/// <summary><see cref="Vehicle"/> owner input tick: simulated pedals while a <c>vehicle_drive</c> hold or a <c>vehicle_test</c> runs.</summary>
-	public static bool TryGetSimulatedInput( out float throttle, out float steer )
+	/// <summary>
+	/// <see cref="Vehicle"/> input tick on the simulating machine: simulated pedals for THIS vehicle while a
+	/// <c>vehicle_drive</c> hold or a scripted test targets it. No driver is needed (2026-10-06: the tests
+	/// run on an empty buggy so tuning does not borrow Mark's pawn while he plays); other vehicles ignore it.
+	/// </summary>
+	public static bool TryGetSimulatedInput( Vehicle vehicle, out float throttle, out float steer )
 	{
 		throttle = 0f;
 		steer = 0f;
 
 		if ( _test is not null )
-			return _test.Tick( out throttle, out steer );
+			return ReferenceEquals( _test.Vehicle, vehicle ) && _test.Tick( out throttle, out steer );
 
-		if ( RealTime.GlobalNow >= _simUntilGlobal )
+		if ( !ReferenceEquals( _simVehicle, vehicle ) || RealTime.GlobalNow >= _simUntilGlobal )
 			return false;
 
 		throttle = _simThrottle;
@@ -45,21 +50,40 @@ public static partial class VehicleDevCommands
 	[ConCmd( "vehicle_test" )]
 	public static void ConCmdTest()
 	{
-		var pawn = FindLocalPawn();
-		var vehicle = pawn?.Components.Get<PlayerMovement>()?.SeatedVehicle;
-		if ( vehicle is null || !vehicle.IsValid() )
-		{
-			Log.Warning( "[Vehicle] vehicle_test: the local pawn must be driving (vehicle_spawn, vehicle_enter, vehicle_fuel first)." );
+		var vehicle = FindTestVehicle( "vehicle_test" );
+		if ( vehicle is null )
 			return;
-		}
 
 		_test = new ScriptedTest( vehicle );
 		Log.Info( "[Vehicle] test started." );
 	}
 
+	/// <summary>The vehicle a scripted test or <c>vehicle_drive</c> acts on: the one the local pawn drives, else the nearest (driverless — the host simulates it).</summary>
+	static Vehicle FindTestVehicle( string command )
+	{
+		var pawn = FindLocalPawn();
+		var vehicle = pawn?.Components.Get<PlayerMovement>()?.SeatedVehicle;
+		if ( vehicle is null || !vehicle.IsValid() )
+			vehicle = FindNearestVehicle( pawn );
+		if ( vehicle is null || !vehicle.IsValid() )
+		{
+			Log.Warning( $"[Vehicle] {command}: no vehicle in the scene (vehicle_spawn first)." );
+			return null;
+		}
+
+		if ( !vehicle.IsSimulatingMachine )
+		{
+			Log.Warning( $"[Vehicle] {command}: this machine does not simulate {vehicle.DisplayName} (owned by {vehicle.GameObject.Network?.Owner?.DisplayName ?? "?"})." );
+			return null;
+		}
+
+		return vehicle;
+	}
+
 	class ScriptedTest
 	{
 		protected readonly Vehicle _vehicle;
+		public Vehicle Vehicle => _vehicle;
 		readonly float _savedSecondsPerUnit;
 		int _fuelAtStart;
 		int _phase;
@@ -347,9 +371,9 @@ public static partial class VehicleDevCommands
 		Log.Info( ok ? $"[Vehicle] entered {vehicle.DisplayName} (seat {vehicle.GetSeatIndexOf( pawn.Id )})." : "[Vehicle] vehicle_enter: refused (full, wrecked or already seated)." );
 	}
 
-	/// <summary>Usage: <c>vehicle_flip</c> — the local pawn presses "Flip" on the nearest vehicle (host only; same path as E).</summary>
+	/// <summary>Usage: <c>vehicle_flip [roof|wheels|front|back]</c> — the local pawn presses "Flip" on the nearest vehicle (host only; same path as E). With a side named, the pawn is first stood 1.2 m off that face of the hull (roof = the side the roof faces, which rolls it onto its wheels) so the shove direction can be tested without a mouse.</summary>
 	[ConCmd( "vehicle_flip" )]
-	public static void ConCmdFlip()
+	public static void ConCmdFlip( string from = "" )
 	{
 		if ( Networking.IsActive && !Networking.IsHost )
 		{
@@ -365,8 +389,68 @@ public static partial class VehicleDevCommands
 			return;
 		}
 
+		if ( !string.IsNullOrWhiteSpace( from ) )
+		{
+			var rot = vehicle.WorldRotation;
+			var dir = from.ToLowerInvariant() switch
+			{
+				"roof" => rot.Up.WithZ( 0f ),
+				"wheels" => -rot.Up.WithZ( 0f ),
+				"front" => rot.Forward.WithZ( 0f ),
+				"back" => -rot.Forward.WithZ( 0f ),
+				_ => Vector3.Zero,
+			};
+			if ( dir.LengthSquared < 1e-3f )
+			{
+				Log.Warning( $"[Vehicle] vehicle_flip: '{from}' is not a side (roof / wheels / front / back) or that face points straight up." );
+				return;
+			}
+
+			dir = dir.Normal;
+			var bounds = vehicle.GameObject.GetBounds();
+			var ext = bounds.Extents;
+			var reach = MathF.Abs( dir.x ) * ext.x + MathF.Abs( dir.y ) * ext.y + TerrainWorldUnits.MetersToEngine( 1.2f );
+			var at = bounds.Center + dir * reach;
+			var tr = pawn.Scene.Trace.Ray( at + Vector3.Up * 100f, at - Vector3.Up * 300f )
+				.IgnoreGameObjectHierarchy( vehicle.GameObject )
+				.WithoutTags( "player", "trigger", "worlddrop" )
+				.Run();
+			pawn.WorldPosition = ( tr.Hit ? tr.HitPosition : at ) + Vector3.Up * 2f;
+			pawn.Transform.ClearInterpolation();
+			var pawnBody = pawn.Components.Get<Rigidbody>();
+			if ( pawnBody is not null && pawnBody.IsValid() )
+				pawnBody.Velocity = Vector3.Zero;
+		}
+
 		var ok = vehicle.HostTryFlip( pawn );
-		Log.Info( ok ? $"[Vehicle] flip push on {vehicle.DisplayName} (up={vehicle.WorldRotation.Up})." : $"[Vehicle] vehicle_flip: refused (flipped={vehicle.IsFlipped}, seated, wrecked or cooling down)." );
+		Log.Info( ok ? $"[Vehicle] flip push on {vehicle.DisplayName} from {pawn.WorldPosition} (up={vehicle.WorldRotation.Up})." : $"[Vehicle] vehicle_flip: refused (flipped={vehicle.IsFlipped}, seated, wrecked or cooling down)." );
+	}
+
+	/// <summary>Usage: <c>vehicle_tip [side|roof]</c> — lays the nearest vehicle on its side (roll 90°) or roof (180°), lifted 1.5 m so physics settles it; then <c>vehicle_flip</c> shoves it from where the pawn stands.</summary>
+	[ConCmd( "vehicle_tip" )]
+	public static void ConCmdTip( string how = "side" )
+	{
+		var pawn = FindLocalPawn();
+		var vehicle = FindNearestVehicle( pawn );
+		if ( vehicle is null )
+		{
+			Log.Warning( "[Vehicle] vehicle_tip: no vehicle in the scene." );
+			return;
+		}
+
+		var roll = string.Equals( how, "roof", StringComparison.OrdinalIgnoreCase ) ? 180f : 90f;
+		vehicle.WorldRotation = Rotation.FromYaw( vehicle.WorldRotation.Yaw() ) * Rotation.FromRoll( roll );
+		vehicle.WorldPosition += Vector3.Up * TerrainWorldUnits.MetersToEngine( 1.5f );
+		vehicle.GameObject.Transform.ClearInterpolation();
+		var body = vehicle.Components.Get<Rigidbody>();
+		if ( body is not null && body.IsValid() )
+		{
+			body.Velocity = Vector3.Zero;
+			body.AngularVelocity = Vector3.Zero;
+			body.Sleeping = false;
+		}
+
+		Log.Info( $"[Vehicle] tipped {vehicle.DisplayName} onto its {( roll > 100f ? "roof" : "side" )}." );
 	}
 
 	[ConCmd( "vehicle_exit" )]
@@ -408,9 +492,36 @@ public static partial class VehicleDevCommands
 		Log.Info( $"[Vehicle] tank now holds {storage.GetSlot( storage.RestrictedSlotIndex ).Count} (added {added})." );
 	}
 
+	/// <summary>
+	/// Usage: <c>vehicle_hover [meters]</c> — on the nearest / driven hover platform: with a number, set the
+	/// target height (clamped to its min / max); without, print the hover readout (target, measured
+	/// clearance, tilt, spin, speed).
+	/// </summary>
+	[ConCmd( "vehicle_hover" )]
+	public static void ConCmdHover( float meters = -1f )
+	{
+		var vehicle = FindTestVehicle( "vehicle_hover" );
+		if ( vehicle is null )
+			return;
+
+		if ( !vehicle.IsHover )
+		{
+			Log.Warning( $"[Vehicle] vehicle_hover: {vehicle.DisplayName} is not a hover vehicle." );
+			return;
+		}
+
+		if ( meters >= 0f )
+			vehicle.SetHoverTargetHeight( meters );
+		Log.Info( $"[Vehicle] {vehicle.DisplayName}: {vehicle.DebugHover()}" );
+	}
+
 	[ConCmd( "vehicle_drive" )]
 	public static void ConCmdDrive( float throttle = 1f, float steer = 0f, float seconds = 3f )
 	{
+		_simVehicle = FindTestVehicle( "vehicle_drive" );
+		if ( _simVehicle is null )
+			return;
+
 		_simThrottle = Math.Clamp( throttle, -1f, 1f );
 		_simSteer = Math.Clamp( steer, -1f, 1f );
 		_simUntilGlobal = RealTime.GlobalNow + Math.Clamp( seconds, 0.05f, 60f );
@@ -477,6 +588,7 @@ public static partial class VehicleDevCommands
 		var driver = vehicle.GetOccupant( 0 );
 		var anim = driver is null ? "no driver" : $"{driver.Components.Get<PlayerAnimation>()?.SeatedPoseDebug} parent={driver.Parent?.Name} seated={driver.Components.Get<PlayerMovement>()?.IsSeated}";
 		Log.Info( $"[Vehicle] driver anim: {anim}" );
+		Log.Info( $"[Vehicle] flipped={vehicle.IsFlipped} lastPush={vehicle.LastFlipPushDebug ?? "-"} lastExit={vehicle.LastExitPlacement ?? "-"}" );
 		Log.Info( $"[Vehicle] {vehicle.DisplayName} pos={vehicle.WorldPosition} speed={vehicle.SyncedSpeedMetersPerSecond:0.0} m/s ({vehicle.SpeedMph:0} mph) fuel={vehicle.FuelUnits} hp={vehicle.Health:0}/{vehicle.MaxHealth:0} mass={body?.Mass:0} dt={vehicle.LastStepDelta:0.####} seats={string.Join( ",", vehicle.SeatOccupants )} owner={vehicle.GameObject.Network?.Owner?.DisplayName ?? "host"} up={vehicle.WorldRotation.Up} vel={body?.Velocity} {vehicle.DebugWheels()}" );
 	}
 

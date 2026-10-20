@@ -119,6 +119,8 @@ public static class BuildModuleDimensions
 		// Chest: 1 m long, 0.5 m wide, 0.5 m tall.
 		["chest"] = new( 1f, 0.5f, 0.5f ),
 		["vehicle_dune_buggy"] = new( 4.2f, 2.5f, 1.7f ),   // ghost / placement box only; the prefab authors the real colliders
+		// Hover platform: 3 × 2 build tiles of deck (6 × 4 m, create_hover_platform.py) plus the console; ghost box only.
+		["vehicle_hover_platform"] = new( 6f, 4f, 1.5f ),
 		["augment_station"] = new( 1f, 0.6f, 0.75f ),
 		["furniture_campfire"] = new( 0.35f, 0.35f, 0.35f ),
 		// Foot traps (BearTrap): flat plates you walk onto. The solid is the thin base; the

@@ -5,7 +5,7 @@ namespace Survival;
 
 /// <summary>
 /// <c>vehicle_rolltest</c>: rollover tuning for the local driver — from the <c>vehicle_test</c> start,
-/// full throttle up to a target speed, then a held steer (full left lock by default), then hands off. Logs the lowest up.z, how
+/// full throttle up to a target speed, then a held steer (full left lock by default) at that speed, then hands off. Logs the lowest up.z, how
 /// many times the chassis went over (up.z below −0.5) and whether it ended flipped. Dev only.
 /// </summary>
 public static partial class VehicleDevCommands
@@ -14,13 +14,9 @@ public static partial class VehicleDevCommands
 	[ConCmd( "vehicle_rolltest" )]
 	public static void ConCmdRollTest( float mph = 60f, float turnSeconds = 2f, float steer = 1f )
 	{
-		var pawn = FindLocalPawn();
-		var vehicle = pawn?.Components.Get<PlayerMovement>()?.SeatedVehicle;
-		if ( vehicle is null || !vehicle.IsValid() )
-		{
-			Log.Warning( "[Vehicle] vehicle_rolltest: the local pawn must be driving (vehicle_spawn, vehicle_enter, vehicle_fuel first)." );
+		var vehicle = FindTestVehicle( "vehicle_rolltest" );
+		if ( vehicle is null )
 			return;
-		}
 
 		_test = new ScriptedRollTest( vehicle, mph / 2.23694f, turnSeconds, steer );
 		Log.Info( $"[Vehicle rolltest] started: {mph:0} mph, {turnSeconds:0.0} s at {steer:0.##} steer." );
@@ -73,8 +69,9 @@ public static partial class VehicleDevCommands
 						NextPhase();
 					}
 					return true;
-				case 1:   // steer held (1 = full left lock), throttle held
-					throttle = 1f;
+				case 1:   // steer held (1 = full left lock); throttle only to hold the entry speed, so the
+					// number in the log is the cornering speed (held wide open it reached 37 mph on a "25 mph" run)
+					throttle = speed < _targetSpeed ? 1f : 0f;
 					steer = _steer;
 					if ( t >= _turnSeconds )
 						NextPhase();

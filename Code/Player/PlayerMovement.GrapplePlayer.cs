@@ -38,11 +38,16 @@ partial class PlayerMovement
 	public float GrappleVictimCooldownRemainingSeconds =>
 		Math.Max( 0f, (float)( GrappleVictimCooldownEndsAt - Time.NowDouble ) );
 
-	/// <summary>World attach point — static from sync, or recomputed from a hooked player each frame.</summary>
+	/// <summary>World attach point — static from sync, or recomputed each frame from a hooked player, towed log or ridden body.</summary>
 	Vector3 ResolveGrappleAttachWorldPoint()
 	{
 		if ( !GrappleAttached )
 			return GrappleAttachWorldPoint;
+
+		if ( GrappleAttachRideId != Guid.Empty )
+			return TryResolveGrappleRideTarget( GrappleAttachRideId, out var ridden )
+				? ridden.WorldTransform.PointToWorld( GrappleAttachLocalOffset )
+				: GrappleAttachWorldPoint;
 
 		if ( GrappleAttachTowId != Guid.Empty )
 			return TryResolveGrappleTowTarget( GrappleAttachTowId, out var towed )

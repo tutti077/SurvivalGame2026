@@ -51,8 +51,14 @@ public sealed partial class Vehicle
 	[Property, Group( "Steering" ), Title( "Steer Speed (deg/s)" )]
 	public float SteerSpeedDegreesPerSecond { get; set; } = 160f;
 
-	[Property, Group( "Steering" ), Title( "Steer at Top Speed (fraction)" ), Description( "Steering lock shrinks toward this at max speed so the buggy does not spin out." )]
-	public float HighSpeedSteerFraction { get; set; } = 0.35f;
+	[Property, Group( "Steering" ), Title( "Steer Lateral Limit (g)" ), Description( "The most sideways g a full-lock turn may ask for at low and mid speed: the lock shrinks with speed so v²·tan(lock)/wheelbase never exceeds it. Kept under the roll-over point (~0.9–1.0 g for this chassis) so a hard turn at 30–45 mph rides on three wheels or slides instead of rolling (Mark 2026-10-06: \"far too easy to flip\")." )]
+	public float SteerLateralLimitG { get; set; } = 0.75f;
+
+	[Property, Group( "Steering" ), Title( "Steer Lateral Limit at Top Speed (g)" ), Description( "The limit climbs toward this at max speed, so a full-lock yank at highway speed can still roll it. ~1.05 g is reached near 60 mph with the defaults." )]
+	public float SteerLateralLimitTopSpeedG { get; set; } = 3.25f;
+
+	[Property, Group( "Steering" ), Title( "Steer Lateral Limit Curve" ), Description( "Exponent on speed / max speed for the climb between the two limits: 1 = linear, 3 = stays low until the last third of the speed range." )]
+	public float SteerLateralLimitCurve { get; set; } = 3f;
 
 	[Property, Group( "Suspension" ), Title( "Wheel Base (m)" )]
 	public float WheelBaseMeters { get; set; } = 2.4f;
@@ -72,11 +78,14 @@ public sealed partial class Vehicle
 	[Property, Group( "Suspension" ), Title( "Damping Ratio" ), Description( "0.7–1.0 soaks bumps without bouncing." )]
 	public float SuspensionDampingRatio { get; set; } = 0.85f;
 
-	[Property, Group( "Suspension" ), Title( "Airborne Spin Damping" ), Description( "How fast tumbling dies off with all four wheels off the ground." )]
+	[Property, Group( "Suspension" ), Title( "Bump Stop (× wheel load)" ), Description( "Most one spring + damper may push, as a multiple of the static load on that wheel. A wheel that lands fully compressed used to fire the whole spring and damper at once and kick the chassis back over (Mark 2026-10-06: \"keeps rolling\"). 3 carries bumps and landings without launching it." )]
+	public float SuspensionBumpStopMultiple { get; set; } = 3f;
+
+	[Property, Group( "Suspension" ), Title( "Airborne Spin Damping" ), Description( "Rigidbody angular damping while truly airborne (all four wheels up and no ground under the chassis); the prefab's own value is restored on touchdown." )]
 	public float AirborneAngularDamping { get; set; } = 2.5f;
 
-	[Property, Group( "Suspension" ), Title( "Airborne Self-Right" ), Description( "Pull toward upright in the air so a jump lands on its wheels." )]
-	public float AirborneUprightStrength { get; set; } = 4f;
+	[Property, Group( "Suspension" ), Title( "Airborne Self-Right (rad/s²)" ), Description( "Torque toward upright while truly airborne, so a jump lands on its wheels. A real torque through the physics (it used to write angular velocity, which fed a tumble past 90°). 0 = none, the chassis lands however it flies." )]
+	public float AirborneUprightStrength { get; set; } = 0f;
 
 	/// <summary>Signed speed along the chassis forward, m/s (simulating machine writes; HUD reads anywhere).</summary>
 	[Sync]
@@ -174,17 +183,30 @@ public sealed partial class Vehicle
 			return;
 		LastStepDelta = dt;
 
-		ReadDriverInput( out var throttle, out var steer, out var throttleHeld );
+		ReadDriverInput( out var throttle, out var steer, out var vertical, out var throttleHeld );
 
 		// A body that came to a dead stop falls asleep and then ignores applied forces: pedals wake it.
 		// Unconditional — the Sleeping getter can lag the physics world's own state by a step.
-		if ( throttleHeld || MathF.Abs( steer ) > 0.01f )
+		if ( throttleHeld || MathF.Abs( steer ) > 0.01f || MathF.Abs( vertical ) > 0.01f )
 		{
 			_body.Sleeping = false;
 			_body.Velocity = _body.Velocity;
 		}
 
+		if ( IsHover )
+		{
+			// Hover platform: cushion, levelling, ice drive (Vehicle.Hover.cs). No wheels, never "flipped".
+			SimulateHover( throttle, steer, vertical, dt );
+			SimulateFlipPush( dt );
+			if ( IsFlipped )
+				IsFlipped = false;
+			SyncedSpeedMetersPerSecond = HoverSignedPlanarSpeedMetersPerSecond();
+			TickFuelBurn( dt, throttleHeld || MathF.Abs( vertical ) > 0.01f );
+			return;
+		}
+
 		SimulateSuspension( dt );
+		SimulateFlipPush( dt );
 		UpdateFlippedState();
 		SimulateSteering( steer, dt );
 		SimulateDrive( throttle, dt );
@@ -203,12 +225,28 @@ public sealed partial class Vehicle
 		UpdateWheelVisuals( Time.Delta );
 	}
 
-	/// <summary>Only the local pawn in seat 0 drives. Steer: +1 = left (Source yaw), so D gives -1.</summary>
-	void ReadDriverInput( out float throttle, out float steer, out bool throttleHeld )
+	/// <summary>
+	/// Only the local pawn in seat 0 drives. W / S throttle, A / D steer (+1 = left, Source yaw) on both drive
+	/// models — on a hover vehicle A / D alone spin it in place (<see cref="HoverSpinRateDegreesPerSecond"/>).
+	/// Vertical (hover only): +1 = the pawn's jump action, -1 = its sneak action — read off the driver's
+	/// <see cref="PlayerMovement"/> so the key names live in one place.
+	/// </summary>
+	void ReadDriverInput( out float throttle, out float steer, out float vertical, out bool throttleHeld )
 	{
 		throttle = 0f;
 		steer = 0f;
+		vertical = 0f;
 		throttleHeld = false;
+
+		// Editor filming / tuning: `vehicle_drive` and the scripted tests hold the pedals of THIS vehicle the
+		// way a driver would — with or without one in the seat (the simulating machine runs them).
+		if ( VehicleDevCommands.TryGetSimulatedInput( this, out var simThrottle, out var simSteer ) )
+		{
+			throttle = simThrottle;
+			steer = simSteer;
+			throttleHeld = MathF.Abs( simThrottle ) > 0.01f;
+			return;
+		}
 
 		var driver = GetOccupant( 0 );
 		if ( driver is null || !driver.IsValid() )
@@ -222,15 +260,6 @@ public sealed partial class Vehicle
 		if ( menu is { IsMenuOpen: true } )
 			return;
 
-		// Editor filming: `vehicle_drive` holds pedals the way a key would.
-		if ( VehicleDevCommands.TryGetSimulatedInput( out var simThrottle, out var simSteer ) )
-		{
-			throttle = simThrottle;
-			steer = simSteer;
-			throttleHeld = MathF.Abs( simThrottle ) > 0.01f;
-			return;
-		}
-
 		var forward = Input.Down( "Forward" ) ? 1f : 0f;
 		var backward = Input.Down( "Backward" ) ? 1f : 0f;
 		var left = Input.Down( "Left" ) ? 1f : 0f;
@@ -239,6 +268,13 @@ public sealed partial class Vehicle
 		throttle = forward - backward;
 		steer = left - right;
 		throttleHeld = forward > 0f || backward > 0f;
+
+		if ( UsesVerticalInput && driver.Components.Get<PlayerMovement>() is { } movement )
+		{
+			var up = !string.IsNullOrWhiteSpace( movement.JumpInputAction ) && Input.Down( movement.JumpInputAction ) ? 1f : 0f;
+			var down = !string.IsNullOrWhiteSpace( movement.SneakInputAction ) && Input.Down( movement.SneakInputAction ) ? 1f : 0f;
+			vertical = up - down;
+		}
 	}
 
 	void SimulateSuspension( float dt )
@@ -253,6 +289,7 @@ public sealed partial class Vehicle
 		var radius = TerrainWorldUnits.MetersToEngine( Math.Max( 0.05f, WheelRadiusMeters ) );
 		var springLength = TerrainWorldUnits.MetersToEngine( Math.Max( 0.05f, SuspensionLengthMeters ) );
 		var rayLength = springLength + radius;
+		var gravityUnits = Math.Max( 1f, Scene.PhysicsWorld.Gravity.Length );
 
 		_groundedWheels = 0;
 		for ( var i = 0; i < 4; i++ )
@@ -281,6 +318,12 @@ public sealed partial class Vehicle
 			if ( force < 0f )
 				force = 0f;
 
+			// Bump stop: the spring and damper together never exceed a few times this wheel's static load,
+			// so a wheel that lands fully compressed cannot launch the chassis.
+			var bumpStop = Math.Max( 1f, SuspensionBumpStopMultiple ) * sprung * gravityUnits;
+			if ( force > bumpStop )
+				force = bumpStop;
+
 			// ApplyForceAt, measured in engine (2026-10-02): force × Scene.FixedDelta as an impulse came out
 			// several times weaker than the same force applied here, so the force path is the calibrated one.
 			_body.ApplyForceAt( mount, up * force );
@@ -296,11 +339,33 @@ public sealed partial class Vehicle
 
 	void SimulateSteering( float steerInput, float dt )
 	{
-		var speedFraction = Math.Clamp( MathF.Abs( SyncedSpeedMetersPerSecond ) / Math.Max( 1f, MaxSpeedMetersPerSecond ), 0f, 1f );
-		var lock_ = MaxSteerDegrees * MathX.Lerp( 1f, Math.Clamp( HighSpeedSteerFraction, 0.05f, 1f ), speedFraction );
-		var target = Math.Clamp( steerInput, -1f, 1f ) * lock_;
+		var target = Math.Clamp( steerInput, -1f, 1f ) * SteerLockDegreesAtSpeed( MathF.Abs( SyncedSpeedMetersPerSecond ) );
 		var step = Math.Max( 10f, SteerSpeedDegreesPerSecond ) * dt;
 		_steerDegrees = MathX.Approach( _steerDegrees, target, step );
+	}
+
+	/// <summary>
+	/// Speed-sensitive lock: the largest wheel angle whose steady-state lateral demand v²·tan(δ)/L stays
+	/// under the lateral limit for this speed (the limit itself climbs from <see cref="SteerLateralLimitG"/>
+	/// to <see cref="SteerLateralLimitTopSpeedG"/> along <see cref="SteerLateralLimitCurve"/>), never more
+	/// than <see cref="MaxSteerDegrees"/>. Parked it is the full lock; at 60 mph with the defaults about 6°.
+	/// </summary>
+	public float SteerLockDegreesAtSpeed( float speedMetersPerSecond )
+	{
+		var maxLock = Math.Max( 1f, MaxSteerDegrees );
+		var speed = Math.Max( 0f, speedMetersPerSecond );
+		if ( speed < 0.5f )
+			return maxLock;
+
+		var fraction = Math.Clamp( speed / Math.Max( 1f, MaxSpeedMetersPerSecond ), 0f, 1f );
+		var climb = MathF.Pow( fraction, Math.Clamp( SteerLateralLimitCurve, 0.2f, 6f ) );
+		var limitG = MathX.Lerp( Math.Max( 0.05f, SteerLateralLimitG ), Math.Max( 0.05f, SteerLateralLimitTopSpeedG ), climb );
+
+		// Everything in meters: gravity and the wheelbase converted once here.
+		var gravity = TerrainWorldUnits.EngineToMeters( Math.Max( 1f, Scene.PhysicsWorld.Gravity.Length ) );
+		var wheelBase = Math.Max( 0.5f, WheelBaseMeters );
+		var tanLock = limitG * gravity * wheelBase / ( speed * speed );
+		return Math.Min( maxLock, MathX.RadianToDegree( MathF.Atan( tanLock ) ) );
 	}
 
 	Rotation WheelRotation( int i )
@@ -403,28 +468,60 @@ public sealed partial class Vehicle
 		return -MathF.Sign( forwardSpeed ) * decel;
 	}
 
+	float _groundAngularDamping = -1f;
+	bool _airborneDampingApplied;
+
+	/// <summary>
+	/// Truly airborne (no wheel down and no ground under the chassis): the rigidbody's angular damping is
+	/// raised to <see cref="AirborneAngularDamping"/> and, if <see cref="AirborneUprightStrength"/> is set, a
+	/// torque toward upright is applied through the physics. Nothing writes velocities: a tumble keeps the
+	/// momentum it earned. A rolled buggy lying on its side or roof has ground under it and is left alone.
+	/// </summary>
 	void SimulateAirStability( float dt )
 	{
-		if ( _groundedWheels > 0 )
+		if ( _groundAngularDamping < 0f )
+			_groundAngularDamping = _body.AngularDamping;
+
+		var airborne = _groundedWheels == 0;
+		if ( airborne )
+		{
+			var probe = TerrainWorldUnits.MetersToEngine( Math.Max( 0.05f, SuspensionLengthMeters + WheelRadiusMeters ) * 1.5f );
+			var ground = Scene.Trace.Ray( WorldPosition, WorldPosition - Vector3.Up * probe )
+				.IgnoreGameObjectHierarchy( GameObject )
+				.WithoutTags( "player", "trigger", "worlddrop" )
+				.Run();
+			airborne = !ground.Hit;
+		}
+
+		if ( !airborne )
+		{
+			if ( _airborneDampingApplied )
+			{
+				_body.AngularDamping = _groundAngularDamping;
+				_airborneDampingApplied = false;
+			}
+			return;
+		}
+
+		if ( !_airborneDampingApplied )
+		{
+			_body.AngularDamping = Math.Max( 0f, AirborneAngularDamping );
+			_airborneDampingApplied = true;
+		}
+
+		var strength = Math.Max( 0f, AirborneUprightStrength );
+		if ( strength <= 0f )
 			return;
 
-		// No wheel on the ground is not the same as airborne: a rolled buggy lies on its side or roof with
-		// its wheel rays pointing at the sky. Ground under the chassis = it is tipping / lying, leave it be.
-		var probe = TerrainWorldUnits.MetersToEngine( Math.Max( 0.05f, SuspensionLengthMeters + WheelRadiusMeters ) * 1.5f );
-		var ground = Scene.Trace.Ray( WorldPosition, WorldPosition - Vector3.Up * probe )
-			.IgnoreGameObjectHierarchy( GameObject )
-			.WithoutTags( "player", "trigger", "worlddrop" )
-			.Run();
-		if ( ground.Hit )
-			return;
-
-		var damping = Math.Clamp( 1f - Math.Max( 0f, AirborneAngularDamping ) * dt, 0f, 1f );
-		_body.AngularVelocity *= damping;
-
-		// Nudge the chassis up-vector toward world up so a jump comes down on its wheels.
+		// Torque sized from a box estimate of the hull's inertia so the knob reads as rad/s² toward upright.
 		var axis = Vector3.Cross( WorldRotation.Up, Vector3.Up );
-		if ( axis.LengthSquared > 1e-6f )
-			_body.AngularVelocity += axis * ( Math.Max( 0f, AirborneUprightStrength ) * dt );
+		if ( axis.LengthSquared < 1e-6f )
+			return;
+
+		var track = TerrainWorldUnits.MetersToEngine( Math.Max( 0.5f, TrackWidthMeters ) );
+		var height = TerrainWorldUnits.MetersToEngine( 1.2f );
+		var inertia = Math.Max( 1f, _body.Mass ) / 12f * ( track * track + height * height );
+		_body.ApplyTorque( axis * ( strength * inertia ) );
 	}
 
 	/// <summary>Every machine: wheel meshes sit at the spring length (proxies show rest length), steer and spin.</summary>

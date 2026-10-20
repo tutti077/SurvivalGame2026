@@ -254,10 +254,16 @@ public sealed partial class PlayerMovement
 
 	void PreInputSeated()
 	{
-		ClearActionIfPressed( JumpInputAction );
+		// The hover platform's driver flies on jump / sneak (Space up, Ctrl down): the Vehicle reads those
+		// actions itself, so they stay live for that one pawn. Everyone else seated loses them.
+		var flying = IsSeatedDriver && SeatedVehicle is { UsesVerticalInput: true };
+		if ( !flying )
+		{
+			ClearActionIfPressed( JumpInputAction );
+			ClearActionIfPressed( SneakInputAction );
+		}
 		if ( !string.IsNullOrWhiteSpace( SprintInputAction ) )
 			ClearActionIfPressed( SprintInputAction );
-		ClearActionIfPressed( SneakInputAction );
 
 		if ( IsSeatedDriver )
 		{

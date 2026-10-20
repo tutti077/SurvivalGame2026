@@ -15,6 +15,10 @@ public sealed partial class Vehicle
 	[Property, Group( "Fuel" ), Title( "Fuel Resource Id" )]
 	public string FuelResourceId { get; set; } = "crafted_fuel";
 
+	/// <summary>What the HUD calls a unit: "Fuel" on the buggy, "Cells" on the hover platform.</summary>
+	[Property, Group( "Fuel" ), Title( "Fuel Label" )]
+	public string FuelLabel { get; set; } = "Fuel";
+
 	/// <summary>One fuel unit lasts this long of throttle (W or S held).</summary>
 	[Property, Group( "Fuel" ), Title( "Seconds Per Fuel Unit" )]
 	public float SecondsPerFuelUnit { get; set; } = 60f;

@@ -74,6 +74,9 @@ public sealed class TerrainWorldMapFace
 	readonly List<(Panel Ring, double StartedAt)> _pingPanels = new();
 	readonly List<PlayerCrew> _crewMates = new();
 	readonly Dictionary<Guid, Panel> _crewMarkers = new();
+	readonly Dictionary<Guid, Panel> _vehicleMarkers = new();
+	readonly List<Guid> _staleVehicleKeys = new();
+	Panel _vehicleLayer;
 	readonly List<Guid> _staleCrewKeys = new();
 	int _builtRemotePinKey;
 	/// <summary>Dungeon layer rebuild key: generator map identity, discovery version and the viewer's floor.</summary>
@@ -148,6 +151,7 @@ public sealed class TerrainWorldMapFace
 		_dungeonLayer = CreateLayer( _worldLayer, 0 );
 		_strokeLayer = CreateLayer( _worldLayer, 1 );
 		_pinLayer = CreateLayer( _worldLayer, 3 );
+		_vehicleLayer = CreateLayer( _worldLayer, 3 );
 		_pingLayer = CreateLayer( _worldLayer, 4 );
 		_crewLayer = CreateLayer( _worldLayer, 5 );
 
@@ -785,6 +789,7 @@ public sealed class TerrainWorldMapFace
 
 		UpdateDungeon( stagePixels, span );
 		UpdateCrewMarkers();
+		UpdateVehicleMarkers();
 
 		// Reading Pings prunes expired ones (and bumps the version), so compare afterwards.
 		var pings = MapPingFeed.Pings;
@@ -1154,6 +1159,62 @@ public sealed class TerrainWorldMapFace
 				dot?.Delete( true );
 			}
 			_crewMarkers.Remove( _staleCrewKeys[i] );
+		}
+	}
+
+	/// <summary>
+	/// Vehicles that carry a map pin (<see cref="Vehicle.MapPinIcon"/> — the hover platform, so nobody loses
+	/// their base): a pin-sized icon that follows the hull every tick, for every player on the map. Not a
+	/// saved pin: nothing to place, cross off or remove.
+	/// </summary>
+	void UpdateVehicleMarkers()
+	{
+		if ( _vehicleLayer is null || !_vehicleLayer.IsValid() )
+			return;
+
+		_staleVehicleKeys.Clear();
+		foreach ( var key in _vehicleMarkers.Keys )
+			_staleVehicleKeys.Add( key );
+
+		var half = PinSizePixels * 0.5f;
+		var vehicles = Vehicle.Registered;
+		for ( var i = 0; i < vehicles.Count; i++ )
+		{
+			var vehicle = vehicles[i];
+			if ( vehicle is null || !vehicle.IsValid() || vehicle.IsPreviewGhost || !vehicle.ShowsMapPin )
+				continue;
+
+			var key = vehicle.GameObject.Id;
+			_staleVehicleKeys.Remove( key );
+
+			if ( !_vehicleMarkers.TryGetValue( key, out var icon ) || icon is null || !icon.IsValid() )
+			{
+				icon = new Panel { Parent = _vehicleLayer };
+				icon.Style.Set( "position", "absolute" );
+				icon.Style.Width = Length.Pixels( PinSizePixels );
+				icon.Style.Height = Length.Pixels( PinSizePixels );
+				icon.Style.Set( "overflow", "visible" );
+				icon.Style.Set( "pointer-events", "none" );
+				MenuUiTextures.ApplyBackground( icon, MapPinCatalog.VehicleTexturePathFor( vehicle.MapPinIcon ) );
+				if ( _showPinNames )
+					AddMarkerLabel( icon, vehicle.DisplayName, PinSizePixels + 1f, Color.White );
+				_vehicleMarkers[key] = icon;
+			}
+
+			var meters = TerrainWorldUnits.EngineToMeters( vehicle.WorldPosition );
+			var uv = WorldToLayerUv( new Vector2( meters.x, meters.y ) );
+			PlaceCenter( icon, uv, -half, -half );
+		}
+
+		for ( var i = 0; i < _staleVehicleKeys.Count; i++ )
+		{
+			if ( _vehicleMarkers.TryGetValue( _staleVehicleKeys[i], out var icon ) )
+			{
+				if ( icon is not null )
+					_placed.Remove( icon );
+				icon?.Delete( true );
+			}
+			_vehicleMarkers.Remove( _staleVehicleKeys[i] );
 		}
 	}
 

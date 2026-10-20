@@ -151,11 +151,16 @@ public sealed class ToolBuildHammer : Component
 		if ( !IsLocalDriver() )
 			return;
 
-		if ( _menu is not null && _menu.IsMenuOpen )
+		// Seated in a vehicle: the hammer stands down entirely — its hardcoded E snap cycle would fire on
+		// the same press that exits the vehicle, and a ghost cannot be aimed from a seat.
+		var seated = Pawn.IsValid() && Pawn.Components.Get<PlayerMovement>() is { IsSeated: true };
+		if ( seated || ( _menu is not null && _menu.IsMenuOpen ) )
 		{
 			ClearSupportHover();
 			if ( IsBuildMenuOpen )
 				SetBuildMenuOpen( false );
+			if ( seated )
+				DestroyPreview();
 			return;
 		}
 

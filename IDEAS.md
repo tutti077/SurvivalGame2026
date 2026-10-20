@@ -19,6 +19,7 @@ conversation gave one. Nothing here is a commitment or a brief.
 | ID | Date | Idea | Context |
 |----|------|------|---------|
 | I-001 | 2026-10-02 | Long road prefabs (straight, curve, etc.) that pull the terrain mesh to meet them nicely underneath, so players can create proper roads and racetracks for vehicles easily. | Said while reviewing the elm tree work in testscene1. |
+| I-002 | 2026-10-06 | Some kinda loot inside resource nodes so the resource gatherer gets a little extra bonus and promotes others to join them. | Said right after placing the 128-texel clover tree beside the 256 one in testscene1. |
 
 ## Picked up
 

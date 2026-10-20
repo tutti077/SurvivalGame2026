@@ -32,7 +32,11 @@ static class BuildPieceCollider
 		if ( instance.Components.Get<Vehicle>() is not null )
 			return;
 
-		if ( BuildPieceVisual.UsesMeshCollision( pieceId ) && TryApplyMeshCollider( instance, pieceId ) )
+		// A piece riding a buildable deck is part of that vehicle's compound body: a Static collider
+		// under a Rigidbody would stay nailed to the world while the platform flew off without it.
+		var deckMounted = Vehicle.IsDeckMounted( instance );
+
+		if ( BuildPieceVisual.UsesMeshCollision( pieceId ) && TryApplyMeshCollider( instance, pieceId, !deckMounted ) )
 			return;
 
 		// Same extents the snap corners use, turned into the frame the mesh occupies, so the solid
@@ -51,7 +55,7 @@ static class BuildPieceCollider
 		// Origin-centred like the snap corners — see BuildColliderSnap.GetCornerSnapLocal.
 		box.Center = Vector3.Zero;
 		box.Scale = size;
-		box.Static = true;
+		box.Static = !deckMounted;
 		box.IsTrigger = false;
 		box.Enabled = true;
 	}
@@ -63,7 +67,7 @@ static class BuildPieceCollider
 	/// the yaw-only root stays flat under a leaning roof, and fills a corner's open underside.
 	/// Returns false when the model has no usable physics geometry so the caller keeps the box.
 	/// </summary>
-	static bool TryApplyMeshCollider( GameObject instance, string pieceId )
+	static bool TryApplyMeshCollider( GameObject instance, string pieceId, bool isStatic )
 	{
 		// All three roof vmdls declare PhysicsMeshFromRender; a model that ever loses it falls back to the box.
 		if ( !BuildPieceModelCache.TryGetModel( pieceId, out var model ) )
@@ -77,7 +81,7 @@ static class BuildPieceCollider
 
 		var mesh = instance.Components.Get<ModelCollider>() ?? instance.Components.Create<ModelCollider>();
 		mesh.Model = model;
-		mesh.Static = true;
+		mesh.Static = isStatic;
 		mesh.IsTrigger = false;
 		mesh.Enabled = true;
 		return true;

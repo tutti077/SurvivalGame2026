@@ -37,6 +37,13 @@ public static class MapPinCatalog
 		new PinIcon { Id = "bonfire", Title = "Bonfire", TexturePath = "ui/map/pin_bonfire.png" },
 	};
 
+	/// <summary>Live vehicle markers (<see cref="Vehicle.MapPinIcon"/>): not in the pin grid, drawn at the vehicle's position for everyone.</summary>
+	public const string PlatformPinTexturePath = "ui/map/pin_platform.png";
+
+	/// <summary>Texture for a vehicle's map pin: "platform" is the hover platform's own icon, anything else is a catalog id.</summary>
+	public static string VehicleTexturePathFor( string iconId )
+		=> string.Equals( iconId, "platform", StringComparison.OrdinalIgnoreCase ) ? PlatformPinTexturePath : TexturePathFor( iconId );
+
 	public static string TexturePathFor( string iconId )
 	{
 		foreach ( var icon in Icons )

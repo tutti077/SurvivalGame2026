@@ -182,14 +182,13 @@ public sealed class EnemyHealthBar : Component
 		if ( !GameObject.IsValid() || Vitals is { IsDead: true } )
 			return false;
 
-		var localPawn = FindLocalViewerPawn( Scene );
-		if ( localPawn is null )
-			return true;
-
 		EnsureAnchor();
 		var worldPos = _anchor.WorldPosition;
 
-		var cam = BuildViewCamera.Resolve( localPawn );
+		// No local pawn (the terrainTest fly camera): the scene camera is the viewer. Returning true here kept every
+		// bar's world panel alive at any distance — 33 panels laid out and drawn each frame (fps work, 2026-10-20).
+		var localPawn = FindLocalViewerPawn( Scene );
+		var cam = localPawn is not null ? BuildViewCamera.Resolve( localPawn ) : Scene.Camera;
 		if ( cam.IsValid() )
 		{
 			if ( MaxDisplayDistance > 0f )

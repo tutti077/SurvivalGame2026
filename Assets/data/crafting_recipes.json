@@ -1162,6 +1162,23 @@
                 ]
               },
               {
+                "id": "crafted_power_cell",
+                "displayName": "Power Cell",
+                "icon": "ui/items/crafted_power_cell.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 10,
+                "ingredients": [
+                  { "resourceId": "resource_lithium", "amount": 2 },
+                  { "resourceId": "crafted_ingotCopper", "amount": 1 },
+                  { "resourceId": "crafted_plastics", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Charged cell for hover machines — one cell flies a hover platform for two minutes" },
+                  { "label": "Type", "value": "Resource" }
+                ]
+              },
+              {
                 "id": "crafted_vinyl",
                 "displayName": "Vinyl",
                 "icon": "ui/items/crafted_vinyl.png",

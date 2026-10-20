@@ -185,8 +185,9 @@ public sealed partial class PlayerInventoryInteraction
 		if ( !ContainerInventory.TryFindOnHierarchy( tr.GameObject, out container ) )
 			return false;
 
-		// A vehicle's chest is only the storage box on its back; the rest of the hull is "enter".
-		if ( container.GameObject.Components.Get<Vehicle>( FindMode.EverythingInSelfAndAncestors ) is not null
+		// A vehicle's chest is only the storage box on its back; the rest of the hull is "enter". A chest
+		// built on the hover platform's deck is its own container (FindOnHierarchy stops at the build piece).
+		if ( Vehicle.FindOnHierarchy( container.GameObject ) is not null
 		     && !Vehicle.IsStorageHit( tr.GameObject, tr.HitPosition ) )
 		{
 			container = null;

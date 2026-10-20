@@ -370,7 +370,10 @@ public static class BuildStructuralIntegrity
 		if ( GroundedCache.TryGetValue( piece, out var cached ) )
 			return cached;
 
-		var grounded = ProbeGrounded( scene, piece );
+		// The hover platform's deck is the foundation of whatever is built on it: a piece parented under
+		// a buildable deck is grounded wherever the platform flies (a dynamic hull is never a world anchor
+		// for the probe below, and the deck moves anyway).
+		var grounded = Vehicle.IsDeckMounted( piece.GameObject ) || ProbeGrounded( scene, piece );
 		GroundedCache[piece] = grounded;
 		return grounded;
 	}
