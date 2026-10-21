@@ -37,7 +37,8 @@ public static class TerrainPreviewRivers
 		public float LevelA, LevelB;
 		public float HalfA, HalfB;
 		public float BankA, BankB;
-		public float DepthA, DepthB;   // bed depth under the surface (deeper in pools)
+		public float DepthA, DepthB;   // bed depth under the surface (deeper in pools, scaled per river; the pipeline caps it per biome)
+		public float ArcA, ArcB;       // metres along the river from its source — the water shader's flow coordinate
 		public int River;
 	}
 
@@ -49,6 +50,8 @@ public static class TerrainPreviewRivers
 		public int[] RiverFirstSegment = Array.Empty<int>();
 		public int[] RiverSegmentCount = Array.Empty<int>();
 		public int RiverCount;
+		/// <summary>Width of the curved bank wall outside the channel (River Bank Slide Width): part of every segment's reach.</summary>
+		public float SlideWidthMeters;
 		public int Attempted;
 		public int Failed;
 		public int DesertDropped;   // routes dropped because they entered Amber Dunes
@@ -65,7 +68,12 @@ public static class TerrainPreviewRivers
 		int fieldRes,
 		Func<float, float, float> preRiverHeightMeters )
 	{
-		var net = new Network { FineRes = fieldRes, FineSegment = new int[fieldRes * fieldRes] };
+		var net = new Network
+		{
+			FineRes = fieldRes,
+			FineSegment = new int[fieldRes * fieldRes],
+			SlideWidthMeters = Math.Clamp( settings.RiverBankSlideWidthMeters, 0.5f, 30f ),
+		};
 		Array.Fill( net.FineSegment, -1 );
 		if ( settings.RiverCount <= 0 || landDisk is null || openWater is null || landDisk.Length != fieldRes * fieldRes )
 			return net;
@@ -345,11 +353,16 @@ public static class TerrainPreviewRivers
 				total += Vector2.Distance( pts[i - 1], pts[i] );
 			net.TotalLengthMeters += total;
 
+			// Some rivers run shallower than others (Mark 2026-10-21): a seeded 0.6–1.2x on the bed depth per river.
+			// Pools multiply on top; TerrainPreviewPipeline caps the result per biome (Clover Hills 4 m).
+			var riverDepthMul = 0.6f + (0.6f * TerrainPreviewNoise.Hash01( seed + 775, riverId, 9 ));
+
 			firstSegment.Add( segments.Count );
 			var run = 0f;
 			for ( var i = 1; i < pts.Count; i++ )
 			{
 				var ta = total <= 0f ? 0f : run / total;
+				var arcA = run;
 				run += Vector2.Distance( pts[i - 1], pts[i] );
 				var tb = total <= 0f ? 1f : run / total;
 				var halfA = (halfMin + ((halfMax - halfMin) * MathF.Sqrt( ta ))) * widthMul[i - 1];
@@ -369,8 +382,10 @@ public static class TerrainPreviewRivers
 					HalfB = halfB,
 					BankA = bankA,
 					BankB = bankB,
-					DepthA = bedDepth * depthMul[i - 1],
-					DepthB = bedDepth * depthMul[i],
+					DepthA = bedDepth * depthMul[i - 1] * riverDepthMul,
+					DepthB = bedDepth * depthMul[i] * riverDepthMul,
+					ArcA = arcA,
+					ArcB = run,
 					River = built,
 				} );
 			}
@@ -425,7 +440,7 @@ public static class TerrainPreviewRivers
 		ref var b = ref net.Segments[bestIndex];
 		var half = b.HalfA + ((b.HalfB - b.HalfA) * bestT);
 		var bank = b.BankA + ((b.BankB - b.BankA) * bestT);
-		if ( bestDist > half + bank )
+		if ( bestDist > half + net.SlideWidthMeters + bank )
 			return default;
 
 		return new Hit
@@ -440,8 +455,14 @@ public static class TerrainPreviewRivers
 		};
 	}
 
+	public enum RiverPoint { Mid, Source, Mouth }
+
 	/// <summary>World point on the middle of river <paramref name="river"/> (dev teleport). False when no such river.</summary>
 	public static bool TryGetRiverMidpoint( Network net, int river, out Vector2 point, out Vector2 forward, out float level )
+		=> TryGetRiverPoint( net, river, RiverPoint.Mid, out point, out forward, out level );
+
+	/// <summary>World point on river <paramref name="river"/>: its middle segment, its source (first vertex) or its mouth (last vertex). False when no such river.</summary>
+	public static bool TryGetRiverPoint( Network net, int river, RiverPoint at, out Vector2 point, out Vector2 forward, out float level )
 	{
 		point = default;
 		forward = Vector2.Zero;
@@ -450,12 +471,34 @@ public static class TerrainPreviewRivers
 			return false;
 
 		var first = net.RiverFirstSegment[river];
-		var mid = first + (net.RiverSegmentCount[river] / 2);
-		ref var s = ref net.Segments[mid];
-		point = new Vector2( (s.Ax + s.Bx) * 0.5f, (s.Ay + s.By) * 0.5f );
-		forward = new Vector2( s.Bx - s.Ax, s.By - s.Ay ).Normal;
-		level = (s.LevelA + s.LevelB) * 0.5f;
-		return true;
+		var count = net.RiverSegmentCount[river];
+		switch ( at )
+		{
+			case RiverPoint.Source:
+			{
+				ref var s = ref net.Segments[first];
+				point = new Vector2( s.Ax, s.Ay );
+				forward = new Vector2( s.Bx - s.Ax, s.By - s.Ay ).Normal;
+				level = s.LevelA;
+				return true;
+			}
+			case RiverPoint.Mouth:
+			{
+				ref var s = ref net.Segments[first + count - 1];
+				point = new Vector2( s.Bx, s.By );
+				forward = new Vector2( s.Bx - s.Ax, s.By - s.Ay ).Normal;
+				level = s.LevelB;
+				return true;
+			}
+			default:
+			{
+				ref var s = ref net.Segments[first + (count / 2)];
+				point = new Vector2( (s.Ax + s.Bx) * 0.5f, (s.Ay + s.By) * 0.5f );
+				forward = new Vector2( s.Bx - s.Ax, s.By - s.Ay ).Normal;
+				level = (s.LevelA + s.LevelB) * 0.5f;
+				return true;
+			}
+		}
 	}
 
 	static void RasterizeSegments( Network net, TerrainPreviewSettings settings )
@@ -470,7 +513,7 @@ public static class TerrainPreviewRivers
 		for ( var si = 0; si < net.Segments.Length; si++ )
 		{
 			ref var s = ref net.Segments[si];
-			var reach = Math.Max( s.HalfA + s.BankA, s.HalfB + s.BankB ) + (cellSize * 1.5f);
+			var reach = Math.Max( s.HalfA + s.BankA, s.HalfB + s.BankB ) + net.SlideWidthMeters + (cellSize * 1.5f);
 			var minX = Math.Min( s.Ax, s.Bx ) - reach;
 			var maxX = Math.Max( s.Ax, s.Bx ) + reach;
 			var minY = Math.Min( s.Ay, s.By ) - reach;

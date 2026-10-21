@@ -465,6 +465,7 @@ public sealed partial class TerrainWorldManager : Component
 		try
 		{
 			OnUpdateInner();
+			TickRiverSurface();   // merged river surface: rebuilds only after a chunk with river loaded / unloaded
 		}
 		finally
 		{
@@ -2050,7 +2051,7 @@ public sealed partial class TerrainWorldManager : Component
 		collider.Static = true;
 		collider.Enabled = IsChunkInCollisionRange( distance, chunkSize );
 
-		TryBuildRiverWater( go, settings, chunkMinX, chunkMinY, ChunkSizeMeters );
+		TryBuildRiverWater( go, coord, settings, chunkMinX, chunkMinY, ChunkSizeMeters );
 
 		var entry = new LoadedChunk
 		{
@@ -2561,6 +2562,7 @@ public sealed partial class TerrainWorldManager : Component
 		if ( entry.GameObject is not null && entry.GameObject.IsValid() )
 			entry.GameObject.Destroy();
 		_loaded.Remove( coord );
+		ReleaseRiverWater( coord );
 		// Deterministic per-coord value — drop it with the chunk so the map does not grow with everything ever explored.
 		_chunkGroundZMeters.Remove( coord );
 	}
@@ -2610,6 +2612,7 @@ public sealed partial class TerrainWorldManager : Component
 			entry.GameObject.Destroy();
 
 		_loaded.Clear();
+		DestroyRiverSurface();
 		DestroyWorldGrass();
 		DestroyFarTreeCards();
 		_streamNeeded.Clear();

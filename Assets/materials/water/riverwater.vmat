@@ -1,0 +1,24 @@
+Layer0
+{
+	shader "shaders/riverwater.shader"
+
+	CloudNoise "materials/environment/sky_clouds.png"
+
+	ClearDistance "3200.000"
+	AbsorbTint "[0.780000 0.860000 0.880000]"
+	InScatter "0.050"
+	RefractionStrength "0.200"
+	ReflectionStrength "1.000"
+	FresnelF0 "0.020"
+	SunGlintStrength "2.000"
+	SunGlintPower "300.000"
+	NoDomeSkyColor "[0.333000 0.463000 0.522000]"
+	FlowSpeed "1.500"
+	RippleScale "2.500"
+	RippleStrength "0.030"
+	FoamStrength "0.350"
+	FoamScaleMeters "8.000"
+	FoamThreshold "0.620"
+	EdgeFoamStrength "0.600"
+	EdgeFoamDepth01 "0.100"
+}

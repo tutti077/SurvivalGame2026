@@ -155,29 +155,48 @@ public static class TerrainPreviewPipeline
 		// Rivers (after lakes, before the sea clamp below): inside the channel the ground IS the sloped water
 		// surface — flat across, falling along — and the bank blends from just above the water up to the land.
 		var riverWater = false;
+		var riverBank = false;   // the slide wall: ground, but no trees / scatter standing in the water's edge
 		if ( applyRivers && !submerged && settings.EnableRivers )
 		{
 			var river = TerrainPreviewLandDiskFields.SampleRiver( settings, worldXMeters, worldYMeters );
 			if ( river.Near )
 			{
 				var level = Math.Max( settings.SeaLevelMeters, river.Level );
+				var slide = Math.Clamp( settings.RiverBankSlideWidthMeters, 0.5f, 30f );
+				var rim = level + Math.Clamp( settings.RiverBankHeightMeters, 0f, 10f );
 				if ( river.Distance <= river.HalfWidth )
 				{
 					// The bed: a parabola from the water's edge down to Bed Depth under the surface at the centre
 					// (Mark 2026-10-07: "actually carve out the land, slope inward, not a hard drop"). The water
-					// mesh fills it to the level.
+					// mesh fills it to the level. The depth is capped per biome (Mark 2026-10-21: Clover Hills at
+					// most 4 m, other biomes gentle for now) on the continuous Clover weight, so the cap never
+					// steps at a biome border.
+					var total = placementWeights.Total;
+					var cloverShare = total > 1e-4f ? Math.Clamp( placementWeights.Clover / total, 0f, 1f ) : 1f;
+					var bedCap = settings.RiverBedMaxDepthOtherMeters + ((settings.RiverBedMaxDepthCloverMeters - settings.RiverBedMaxDepthOtherMeters) * cloverShare);
+					var bedDepth = Math.Clamp( river.BedDepthMeters, 0f, Math.Max( 0f, bedCap ) );
 					var u = river.Distance / Math.Max( 0.5f, river.HalfWidth );
-					var bed = level - (Math.Max( 0f, river.BedDepthMeters ) * (1f - (u * u)));   // deeper in pools
+					var bed = level - (bedDepth * (1f - (u * u)));   // deeper in pools
 					dryLandHeightMeters = Math.Min( dryLandHeightMeters, bed );
 					riverWater = true;
+				}
+				else if ( river.Distance <= river.HalfWidth + slide )
+				{
+					// The slide (Mark 2026-10-21: "a water-slide shape I can fill with water" — easing the land
+					// straight down to the water's edge gave a 50 m dish with no channel): a curved wall from the
+					// water's edge up to the rim, gentle at the water and steepest at the rim. Cut only.
+					var t = (river.Distance - river.HalfWidth) / slide;
+					var wall = level + ((rim - level) * t * t);
+					dryLandHeightMeters = Math.Min( dryLandHeightMeters, wall );
+					riverBank = true;
 				}
 				else
 				{
 					// Cut only (never lift the ground into a levee): the bank is the ground eased down to the
-					// water's edge over the bank width; land already lower than that stays as it is.
-					var t = Math.Clamp( (river.Distance - river.HalfWidth) / Math.Max( 0.5f, river.BankWidth ), 0f, 1f );
+					// rim over the bank width; land already lower than that stays as it is.
+					var t = Math.Clamp( (river.Distance - river.HalfWidth - slide) / Math.Max( 0.5f, river.BankWidth ), 0f, 1f );
 					t = t * t * (3f - (2f * t));
-					var eased = level + ((dryLandHeightMeters - level) * t);
+					var eased = rim + ((dryLandHeightMeters - rim) * t);
 					dryLandHeightMeters = Math.Min( dryLandHeightMeters, eased );
 				}
 			}
@@ -213,7 +232,7 @@ public static class TerrainPreviewPipeline
 
 			IsInsideWorld = true,
 
-			IsOnLand = !submerged && !riverWater && dryLandHeightMeters > sea + 0.05f,
+			IsOnLand = !submerged && !riverWater && !riverBank && dryLandHeightMeters > sea + 0.05f,
 
 			RiverWater = riverWater,
 

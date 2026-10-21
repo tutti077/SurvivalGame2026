@@ -1056,6 +1056,7 @@ public static class TerrainPreviewLandDiskFields
 		hash.Add( settings.RiverDepthMeters );
 		hash.Add( settings.RiverBankMaxSlopeDegrees );
 		hash.Add( settings.RiverBedDepthMeters );
+		hash.Add( settings.RiverBankSlideWidthMeters );   // part of every segment's raster reach
 		hash.Add( _biomePlacementFingerprint );   // the Amber Dunes veto follows biome placement
 		var fingerprint = hash.ToHashCode();
 		if ( fingerprint == _riverFingerprint && _rivers is not null )

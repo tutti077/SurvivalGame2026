@@ -36,7 +36,9 @@ static class TerrainChunkBiomeDisplay
 
 		Color[] colors,
 
-		TerrainPreviewSample[] prefetchedSamples = null )
+		TerrainPreviewSample[] prefetchedSamples = null,
+
+		bool riverBedAsGround = true )
 
 	{
 
@@ -98,11 +100,29 @@ static class TerrainChunkBiomeDisplay
 
 
 
-				var displayWater = TerrainShorelineDisplay.IsDisplayWaterColor( settings, wx, wy );   // river beds paint blue too (Mark 2026-10-07: keep that area blue)
+				var displayWater = TerrainShorelineDisplay.IsDisplayWaterColor( settings, wx, wy );
 
 				isWater[idx] = displayWater;
 
 				biomeMap[idx] = displayWater ? TerrainPreviewBiomeId.Water : TerrainPreviewBiomeId.None;
+
+
+
+				// River beds: the near chunks carry a see-through water surface now, so the bed under it is the biome
+				// ground darkened like wet soil (Mark 2026-10-21: "see-through but not totally clear" — a palette-blue
+				// bed under refracting water read as solid teal). Lakes stay palette-blue (no surface yet), and so do
+				// the far tier's river creases, which have no water strip (riverBedAsGround false).
+				if ( displayWater && riverBedAsGround && TerrainPreviewLandDiskFields.IsRiverWaterAtWorld( settings, wx, wy ) )
+
+				{
+
+					var bedResolved = TerrainPreviewBiomeResolver.ResolveLandOverlay( settings, sample, wx, wy );
+
+					colors[idx] = RiverBedColor( TerrainPreviewBiomeColors.SampleBiomeOverlay( settings, sample, wx, wy, bedResolved ) );
+
+					continue;
+
+				}
 
 
 
@@ -164,5 +184,18 @@ static class TerrainChunkBiomeDisplay
 
 	}
 
-}
+	/// <summary>Sandy light grey-brown riverbed (Mark 2026-10-21: "more grey or light brown, sandy-ish").</summary>
+	static readonly Color RiverBedSand = new( 0.60f, 0.54f, 0.44f );
 
+	/// <summary>
+	/// The riverbed under the clear water: sand, with a fifth of the biome ground mixed in so a Clover bed is a touch
+	/// warmer than a Redwood one, and never the bank's own grass colour (the first pass darkened the ground instead and
+	/// the Clover bed stayed a green sheet).
+	/// </summary>
+	static Color RiverBedColor( Color ground )
+		=> new(
+			(RiverBedSand.r * 0.8f) + (ground.r * 0.2f),
+			(RiverBedSand.g * 0.8f) + (ground.g * 0.2f),
+			(RiverBedSand.b * 0.8f) + (ground.b * 0.2f),
+			ground.a );
+}

@@ -55,6 +55,10 @@ public sealed class SkyDome : Component
 		var attrs = _renderer.Attributes;
 		attrs.Set( "CloudOffset", _cloudOffset );
 		attrs.Set( "CloudScale", _cloudScale );
+		// Scene-wide too: the river water mirrors the dome's clouds (riverwater.shader samples the same ceiling).
+		var scene = Scene.RenderAttributes;
+		scene.Set( "CloudOffset", _cloudOffset );
+		scene.Set( "CloudScale", _cloudScale );
 	}
 
 	protected override void OnPreRender()
@@ -84,6 +88,25 @@ public sealed class SkyDome : Component
 		attrs.Set( "CloudCover", look.CloudCover );
 		attrs.Set( "SunDirection", sunDirection.Normal );
 		attrs.Set( "StarVisibility", Math.Clamp( starVisibility, 0f, 1f ) );
+
+		// Scene-wide copy for anything that mirrors the sky (river water reflects it off-screen, 2026-10-21):
+		// renderer attributes only reach the dome's own draw. SkyDomeActive 1 = these values are live.
+		var scene = Scene.RenderAttributes;
+		scene.Set( "SkyZenith", Rgb( look.Zenith ) );
+		scene.Set( "SkyHorizon", Rgb( look.Horizon ) );
+		scene.Set( "SkySunGlow", new Vector4( look.SunGlow.r, look.SunGlow.g, look.SunGlow.b, look.SunGlow.a ) );
+		scene.Set( "CloudLit", Rgb( look.CloudLit ) );
+		scene.Set( "CloudShade", Rgb( look.CloudShade ) );
+		scene.Set( "CloudCover", look.CloudCover );
+		scene.Set( "SunDirection", sunDirection.Normal );
+		scene.Set( "SkyDomeActive", 1f );
+	}
+
+	protected override void OnDisabled()
+	{
+		// No dome → no sky colours to mirror; the water falls back to its flat no-dome sky.
+		if ( Scene.IsValid() )
+			Scene.RenderAttributes.Set( "SkyDomeActive", 0f );
 	}
 
 	static Vector3 Rgb( Color c ) => new( c.r, c.g, c.b );

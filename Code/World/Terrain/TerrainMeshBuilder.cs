@@ -163,7 +163,8 @@ public static class TerrainMeshBuilder
 		int verticesPerSide,
 		int heightSmoothPasses,
 		float heightSmoothStrength01,
-		int borderLatticeVerticesPerSide )
+		int borderLatticeVerticesPerSide,
+		bool riverBedAsGround = true )
 	{
 		backend ??= TerrainPreviewBackendRegistry.Active;
 		verticesPerSide = Math.Clamp( verticesPerSide, 4, 256 );
@@ -237,7 +238,8 @@ public static class TerrainMeshBuilder
 			isWater,
 			biomeMap,
 			colors,
-			samples );
+			samples,
+			riverBedAsGround );
 
 		TerrainGroundTextureMask.Apply( settings, colors, biomeMap, verticesPerSide );
 

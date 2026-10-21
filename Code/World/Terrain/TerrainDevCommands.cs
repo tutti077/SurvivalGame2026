@@ -118,9 +118,9 @@ public static partial class TerrainDevCommands
 		Log.Info( $"[TerrainDev] far trees {( manager.VegetationFarCardsEnabled ? "on" : "off" )}" );
 	}
 
-	/// <summary>Usage: <c>terrain_tp_river [index]</c> — park the fly camera over the middle of river N looking downstream; no argument lists the rivers.</summary>
+	/// <summary>Usage: <c>terrain_tp_river [index] [mid|source|mouth]</c> — park the fly camera over river N (its middle, its source or its mouth) looking downstream; no argument lists the rivers.</summary>
 	[ConCmd( "terrain_tp_river" )]
-	public static void ConCmdTeleportRiver( int index = -1 )
+	public static void ConCmdTeleportRiver( int index = -1, string where = "mid" )
 	{
 		var scene = global::Sandbox.Game.ActiveScene;
 		var manager = scene.IsValid() ? scene.GetAllComponents<TerrainWorldManager>().FirstOrDefault() : null;
@@ -150,7 +150,13 @@ public static partial class TerrainDevCommands
 			return;
 		}
 
-		if ( !TerrainPreviewRivers.TryGetRiverMidpoint( net, index, out var point, out var forward, out var level ) )
+		var at = (where ?? "mid").ToLowerInvariant() switch
+		{
+			"source" or "start" => TerrainPreviewRivers.RiverPoint.Source,
+			"mouth" or "end" => TerrainPreviewRivers.RiverPoint.Mouth,
+			_ => TerrainPreviewRivers.RiverPoint.Mid,
+		};
+		if ( !TerrainPreviewRivers.TryGetRiverPoint( net, index, at, out var point, out var forward, out var level ) )
 		{
 			Log.Warning( $"[TerrainDev] river {index} does not exist ({net.RiverCount} rivers)" );
 			return;
@@ -159,10 +165,14 @@ public static partial class TerrainDevCommands
 		if ( camera is null || !camera.IsValid() )
 			return;
 
-		var eye = TerrainWorldUnits.MetersToEngine( new Vector3( point.x - (forward.x * 120f), point.y - (forward.y * 120f), level + 60f ) );
-		var look = TerrainWorldUnits.MetersToEngine( new Vector3( point.x + (forward.x * 150f), point.y + (forward.y * 150f), level ) );
+		// The ends get a close look (a source is a few metres across); the middle the wide downstream view.
+		var back = at == TerrainPreviewRivers.RiverPoint.Mid ? 120f : 30f;
+		var up = at == TerrainPreviewRivers.RiverPoint.Mid ? 60f : 14f;
+		var ahead = at == TerrainPreviewRivers.RiverPoint.Mid ? 150f : 20f;
+		var eye = TerrainWorldUnits.MetersToEngine( new Vector3( point.x - (forward.x * back), point.y - (forward.y * back), level + up ) );
+		var look = TerrainWorldUnits.MetersToEngine( new Vector3( point.x + (forward.x * ahead), point.y + (forward.y * ahead), level ) );
 		camera.TeleportTo( eye, look );
-		Log.Info( $"[TerrainDev] camera over river {index} at {point.x:0},{point.y:0} m (water {level:0.#} m)" );
+		Log.Info( $"[TerrainDev] camera over river {index} {at} at {point.x:0},{point.y:0} m (water {level:0.#} m)" );
 	}
 
 	/// <summary>Usage: <c>terrain_river_check [index]</c> — measures river N (all when omitted): at every segment, water level against the pre-river ground at the centre line and both channel edges. Water above ground is the bug.</summary>
@@ -194,6 +204,10 @@ public static partial class TerrainDevCommands
 			var above = 0;
 			var worstX = 0f;
 			var worstY = 0f;
+			var bedMax = 0f;
+			var rimMin = float.MaxValue;
+			var rimMax = float.MinValue;
+			var slide = Math.Clamp( settings.RiverBankSlideWidthMeters, 0.5f, 30f );
 			for ( var s = first; s < first + count; s++ )
 			{
 				var seg = net.Segments[s];
@@ -216,8 +230,17 @@ public static partial class TerrainDevCommands
 					worstY = my;
 				}
 				worstBelow = Math.Min( worstBelow, delta );
+
+				// The carved channel itself: bed depth under the water at the centre line, and how far the rim
+				// (the top of the slide wall) stands above the water on each side.
+				bedMax = Math.Max( bedMax, level - TerrainPreviewPipeline.Sample( settings, mx, my ).HeightMeters );
+				var reach = half + slide;
+				var rimL = TerrainPreviewPipeline.Sample( settings, mx + (side.x * reach), my + (side.y * reach) ).HeightMeters - level;
+				var rimR = TerrainPreviewPipeline.Sample( settings, mx - (side.x * reach), my - (side.y * reach) ).HeightMeters - level;
+				rimMin = Math.Min( rimMin, Math.Min( rimL, rimR ) );
+				rimMax = Math.Max( rimMax, Math.Max( rimL, rimR ) );
 			}
-			Log.Info( $"[TerrainDev] river {r}: {count} segments, water above ground at {above}, worst +{worstAbove:0.00} m at {worstX:0},{worstY:0}, deepest cut {-worstBelow:0.0} m" );
+			Log.Info( $"[TerrainDev] river {r}: {count} segments, water above ground at {above}, worst +{worstAbove:0.00} m at {worstX:0},{worstY:0}, deepest cut {-worstBelow:0.0} m, bed up to {bedMax:0.0} m deep, rim {rimMin:+0.0;-0.0}..{rimMax:+0.0;-0.0} m above the water" );
 		}
 	}
 

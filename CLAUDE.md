@@ -287,8 +287,9 @@ Code/
                 gradient + sun glow + two wind-scrolled cloud layers from sky_clouds.png, Blender/scripts/create_sky_clouds.py) from
                 SkyPresetCatalog (Assets/data/sky_presets.json — per-weather night / dawn / day / noon / dusk keyframes); stars are a procedural layer in sky_dome.shader (StarVisibility from the cycle)
                 · sky dome + cycle live in lightingTest (3-minute loop, drives the GradientFog colour), testscene1 (5 min day /
-                4 min night, no fog) and terrainTest (the lightingTest 3-minute group copied as one DISABLED "DayNightCycle" object —
-                cycle + sky dome + disks + moon, driving the scene Sun; console cycle_toggle switches it on / off);
+                4 min night, no fog) and terrainTest (the lightingTest 3-minute group copied as one "DayNightCycle" object — ENABLED by default since
+                2026-10-21 (Mark: "it should be running the short daylight cycle") — cycle + sky dome + disks + moon, driving the
+                scene Sun; console cycle_toggle switches it on / off);
                 **Y** = jump to noon, **U** = midnight (CycleDay / CycleNight actions; console cycle_day / cycle_night)
   (lighting)    No screen-space pixelation. The look is asset-side (Valheim recipe, Mark 2026-10-02): low-res textures + point filtering +
                 faceted normals baked in the mesh (create_elm_tree.py shade_flat; PixelFlatShading on pixel_lit.shader for meshes that

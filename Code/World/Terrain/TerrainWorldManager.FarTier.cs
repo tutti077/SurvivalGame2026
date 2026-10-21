@@ -266,7 +266,8 @@ public sealed partial class TerrainWorldManager
 		float impostorHeightMeters,
 		float nearChunkSize )
 	{
-		var g = TerrainMeshBuilder.BuildChunkGeometry( settings, backend, coord, size, verts, 0, 0f, 0 );
+		// riverBedAsGround false: the far tier has no water strip, so its river creases stay palette-blue.
+		var g = TerrainMeshBuilder.BuildChunkGeometry( settings, backend, coord, size, verts, 0, 0f, 0, riverBedAsGround: false );
 		if ( g is null )
 			return null;
 

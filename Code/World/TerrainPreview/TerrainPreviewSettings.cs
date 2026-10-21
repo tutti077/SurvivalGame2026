@@ -374,6 +374,21 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Rivers" ), Title( "River Bed Depth (m)" ), Range( 0.5f, 10f ), Step( 0.25f ), Description( "How far the carved bed dips below the water surface at the centre line (a parabola from the edges). The water mesh fills it." )]
 	public float RiverBedDepthMeters { get; set; } = 2.5f;
 
+	[Property, Group( "Rivers" ), Title( "River Bed Max Depth, Clover Hills (m)" ), Range( 0.5f, 12f ), Step( 0.25f ), Description( "Deepest the bed may dip below the water in Clover Hills, pools included (Mark 2026-10-21: gentle rivers, 4 m at most). Blends to the other-biome cap across a biome border." )]
+	public float RiverBedMaxDepthCloverMeters { get; set; } = 4f;
+
+	[Property, Group( "Rivers" ), Title( "River Bed Max Depth, Other Biomes (m)" ), Range( 0.5f, 30f ), Step( 0.25f ), Description( "Deepest the bed may dip below the water outside Clover Hills. Kept gentle for now; raise it for wild redwood / mountain rivers." )]
+	public float RiverBedMaxDepthOtherMeters { get; set; } = 6f;
+
+	[Property, Group( "Rivers" ), Title( "River Bank Height (m)" ), Range( 0f, 10f ), Step( 0.25f ), Description( "The channel rim stands this far above the water: the trough you can see (Mark 2026-10-21: a water-slide shape, not a dish). Cut only — ground already lower than the rim is left alone." )]
+	public float RiverBankHeightMeters { get; set; } = 1.5f;
+
+	[Property, Group( "Rivers" ), Title( "River Bank Slide Width (m)" ), Range( 0.5f, 30f ), Step( 0.5f ), Description( "Horizontal width of the curved wall from the water's edge up to the rim (gentle at the water, steepest at the rim). Beyond it the ground blends out over River Bank (× width)." )]
+	public float RiverBankSlideWidthMeters { get; set; } = 4f;
+
+	[Property, Group( "Rivers" ), Title( "River Flow Speed (m/s)" ), Range( 0f, 10f ), Step( 0.1f ), Description( "The current along every river, source to mouth: scrolls the water surface ripples and sets the swim volume's fluid velocity." )]
+	public float RiverFlowSpeedMetersPerSecond { get; set; } = 1.5f;
+
 	[Property, Group( "Water" ), Title( "Sea Level (m)" ), Range( -50f, 200f ), Step( 1f ), Description( "Flat height for all water (rim ocean + lakes). Default 0 — every water surface is exactly this world meter." )]
 	public float SeaLevelMeters { get; set; }
 
