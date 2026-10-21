@@ -14,7 +14,7 @@ three are swapped. The trees' sapling, log and half-log prefabs are left alone.
 import json, os, re, sys, uuid
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-PREFAB_DIR = os.path.join(ROOT, "Assets", "prefabs", "environment", "tests")
+PREFAB_DIR = os.path.join(ROOT, "Assets", "prefabs", "environment", "cloverHills", "trees", "elm")
 
 
 def prefab_ids(n, ver):
@@ -36,7 +36,7 @@ def main(scene_path, old, new):
 	text = open(scene_path, encoding="utf-8").read()
 	swapped = 0
 	for n in range(1, 7):
-		old_path = f"prefabs/environment/tests/environment_elm{n}_v{old}.prefab"
+		old_path = f"prefabs/environment/cloverHills/trees/elm/environment_elm{n}_v{old}.prefab"
 		if old_path not in text:
 			continue
 		new_root, new_asset = prefab_ids(n, new)
@@ -46,7 +46,7 @@ def main(scene_path, old, new):
 		m = re.search(re.escape(old_path) + r'.*?"IdValue": "([0-9a-f-]+)"', text, re.S)
 		old_root = m.group(1) if m else None
 		count = len(pat.findall(text))
-		text = pat.sub('"__Prefab": {\n        "Id": "%s",\n        "Path": "prefabs/environment/tests/environment_elm%d_v%d.prefab"\n      }' % (new_asset, n, new), text)
+		text = pat.sub('"__Prefab": {\n        "Id": "%s",\n        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elm%d_v%d.prefab"\n      }' % (new_asset, n, new), text)
 		if old_root:
 			text = text.replace(f'"IdValue": "{old_root}"', f'"IdValue": "{new_root}"')
 		text = text.replace(f'"environment_elm{n}_v{old}', f'"environment_elm{n}_v{new}')

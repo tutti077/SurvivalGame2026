@@ -5,7 +5,7 @@ namespace Survival;
 /// Beyond the instanced LOD3 ring the forest is drawn as crossed TEXTURED cards — two crown quads, a cap and two
 /// trunk quads, 10 triangles, a ragged round crown with a sphere normal map (far_tree_card_*.png) — out to the far tier's edge (<see cref="FarViewDistanceMeters"/>). They are
 /// planted on the far tier's worker at the REAL tree positions (the scatter's own planner, one card per tree), and BAKED into the far chunk's
-/// own model as a second mesh with <c>materials/environment/far_tree_card.vmat</c>: no instance list, no
+/// own model as a second mesh with <c>materials/environment/cloverHills/trees/far_tree_card.vmat</c>: no instance list, no
 /// per-frame upload — the 32 k-instance command list this replaced cost 1.45 ms of main thread every frame
 /// (perf_bisect, 2026-10-20). The cards fade in with their chunk through the renderer's <c>FarCardFade</c>
 /// attribute and take <see cref="FarImpostorTint"/> through <c>FarCardTint</c> (pixel_lit, materials with
@@ -96,7 +96,7 @@ public sealed partial class TerrainWorldManager
 	{
 		if ( _farCardMaterial is not null && _farCardMaterial.IsValid )
 			return _farCardMaterial;
-		_farCardMaterial = Material.Load( "materials/environment/far_tree_card.vmat" );
+		_farCardMaterial = Material.Load( "materials/environment/cloverHills/trees/far_tree_card.vmat" );
 		if ( _farCardMaterial is null || !_farCardMaterial.IsValid )
 			_farCardMaterial = TerrainMeshBuilder.GetTerrainMaterial();
 		return _farCardMaterial;

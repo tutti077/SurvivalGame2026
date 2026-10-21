@@ -1399,7 +1399,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "dd5a0a56-c4be-45cc-81df-84ca8ddbcea5",
-        "Path": "prefabs/environment/rock.prefab"
+        "Path": "prefabs/environment/cloverHills/rocks/rock.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -1429,7 +1429,7 @@
             "Property": "Model",
             "Value": {
               "Id": "94c09378-b0a7-4b17-aeb4-348cc0d7d43c",
-              "Path": "models/environment/lowpolyrock.vmdl"
+              "Path": "models/environment/cloverHills/rocks/lowpolyrock.vmdl"
             }
           }
         ],
@@ -2057,7 +2057,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "dc5c31e4-c596-4057-ad67-42bcf1d786d6",
-        "Path": "prefabs/environment/stick.prefab"
+        "Path": "prefabs/environment/cloverHills/resources/stick.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -2124,7 +2124,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "4d03e29c-e159-4b34-91fc-3bc99a15be5a",
-        "Path": "prefabs/environment/feathers.prefab"
+        "Path": "prefabs/environment/cloverHills/resources/feathers.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [
@@ -2233,7 +2233,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "2eb54e6f-e392-49e6-af68-5cc8bc30643c",
-        "Path": "prefabs/environment/samplebush.prefab"
+        "Path": "prefabs/environment/cloverHills/resources/sampleBush.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -2297,7 +2297,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "1e8a3e4b-c4b5-497b-9385-12fe58d2195a",
-        "Path": "prefabs/environment/femur.prefab"
+        "Path": "prefabs/environment/cloverHills/resources/femur.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -158920,7 +158920,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "3117ba31-7e33-479b-9588-cc3ca8f78d95",
-        "Path": "prefabs/environment/environment_rockspire.prefab"
+        "Path": "prefabs/environment/mountain/rocks/environment_rockspire.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -158958,7 +158958,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "7ae0c0db-d045-43c7-8ff0-416eaed9d87b",
-        "Path": "environment_rockspire2.prefab"
+        "Path": "prefabs/environment/mountain/rocks/environment_rockspire2.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -158996,7 +158996,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "d09cbcad-71b8-47fc-aed7-b78dfaf6bc33",
-        "Path": "environment_rockspire3.prefab"
+        "Path": "prefabs/environment/mountain/rocks/environment_rockspire3.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -159169,19 +159169,19 @@
           "ClumpModels": [
             {
               "Id": "25bd536b-37ed-44db-a7f9-6d575a1e07c4",
-              "Path": "models/environment/grass/grass_clump1.vmdl"
+              "Path": "models/environment/cloverHills/groundFoliage/grass/grass_clump1.vmdl"
             },
             {
               "Id": "7042c5e6-3e06-4c8b-a6f5-4edf5fd9574d",
-              "Path": "models/environment/grass/grass_clump2.vmdl"
+              "Path": "models/environment/cloverHills/groundFoliage/grass/grass_clump2.vmdl"
             },
             {
               "Id": "d333d867-7a48-4254-9108-e7ad4e3e9d77",
-              "Path": "models/environment/grass/grass_clump3.vmdl"
+              "Path": "models/environment/cloverHills/groundFoliage/grass/grass_clump3.vmdl"
             },
             {
               "Id": "4ddb150e-0e33-4dea-b310-524f25143158",
-              "Path": "models/environment/grass/grass_clump4.vmdl"
+              "Path": "models/environment/cloverHills/groundFoliage/grass/grass_clump4.vmdl"
             }
           ],
           "ClumpsPerSquareMeter": 3,
@@ -159263,7 +159263,7 @@
           "WindMaterials": [
             {
               "Id": "a8ecc01e-bb11-40d5-95e5-8d5d09633bc6",
-              "Path": "materials/environment/grass_blade.vmat"
+              "Path": "materials/environment/cloverHills/groundFoliage/grass_blade.vmat"
             }
           ],
           "YawDegrees": 35
@@ -159965,7 +159965,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "7d051ddd-72b8-455b-a857-7a519b217fc0",
-        "Path": "prefabs/environment/tests/environment_elmsapling1_v15.prefab"
+        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elmsapling1_v15.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160285,7 +160285,7 @@
           "MaterialGroup": null,
           "MaterialOverride": {
             "Id": "d32c050b-bc9c-4568-bfea-63d47517d55f",
-            "Path": "materials/environment/sun_disk.vmat"
+            "Path": "materials/environment/sky/sun_disk.vmat"
           },
           "Materials": null,
           "Model": {
@@ -160337,7 +160337,7 @@
           "MaterialGroup": null,
           "MaterialOverride": {
             "Id": "11b34687-a53e-4672-bcd1-eed8e53c00b6",
-            "Path": "materials/environment/moon_disk.vmat"
+            "Path": "materials/environment/sky/moon_disk.vmat"
           },
           "Materials": null,
           "Model": {
@@ -160404,7 +160404,7 @@
           },
           "MoonDiskMaterial": {
             "Id": "11b34687-a53e-4672-bcd1-eed8e53c00b6",
-            "Path": "materials/environment/moon_disk.vmat"
+            "Path": "materials/environment/sky/moon_disk.vmat"
           },
           "MoonLight": {
             "_type": "component",
@@ -160438,7 +160438,7 @@
           },
           "SunDiskMaterial": {
             "Id": "d32c050b-bc9c-4568-bfea-63d47517d55f",
-            "Path": "materials/environment/sun_disk.vmat"
+            "Path": "materials/environment/sky/sun_disk.vmat"
           },
           "SunHorizonColor": "1,0.55,0.28,1",
           "SunLight": {
@@ -160478,7 +160478,7 @@
           "CloudDriftPerSecond": 0.006,
           "DomeMaterial": {
             "Id": "3d66b2cd-8515-4f1f-abb6-436384c60939",
-            "Path": "materials/environment/sky_dome.vmat"
+            "Path": "materials/environment/sky/sky_dome.vmat"
           },
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
@@ -160523,7 +160523,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "d75bc15e-90fd-4ceb-92b6-43b79374aa11",
-        "Path": "prefabs/environment/tests/environment_elm1_v76.prefab"
+        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elm1_v76.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160553,7 +160553,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "53fdff20-d665-4695-9842-e9c2029df1ba",
-        "Path": "prefabs/environment/tests/environment_elm2_v76.prefab"
+        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elm2_v76.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160583,7 +160583,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "c09b6bcb-6849-44df-b842-4557f27e245d",
-        "Path": "prefabs/environment/tests/environment_elm3_v76.prefab"
+        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elm3_v76.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160613,7 +160613,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "7ebb0659-a742-4687-ac8c-3c8614f992ad",
-        "Path": "prefabs/environment/tests/environment_elm4_v76.prefab"
+        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elm4_v76.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160643,7 +160643,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "53891615-d216-4cb1-a770-a7a53f28cd3c",
-        "Path": "prefabs/environment/tests/environment_elm5_v76.prefab"
+        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elm5_v76.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160673,7 +160673,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "1de79b55-6760-4370-b2af-26afc9a4a0d1",
-        "Path": "prefabs/environment/tests/environment_elm6_v76.prefab"
+        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elm6_v76.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160801,7 +160801,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "66b6f861-ed6c-44d6-8da9-0c9981fd7bc1",
-        "Path": "prefabs/environment/clovertree_chop.prefab"
+        "Path": "prefabs/environment/cloverHills/trees/clovertree_chop.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160839,7 +160839,7 @@
             "Property": "Model",
             "Value": {
               "Id": "224884ee-8557-4f25-a83f-73d74625d58e",
-              "Path": "models/environment/clovertree/whole128.vmdl"
+              "Path": "models/environment/cloverHills/trees/cloverTree/whole128.vmdl"
             }
           },
           {
@@ -160850,7 +160850,7 @@
             "Property": "Model",
             "Value": {
               "Id": "224884ee-8557-4f25-a83f-73d74625d58e",
-              "Path": "models/environment/clovertree/whole128.vmdl"
+              "Path": "models/environment/cloverHills/trees/cloverTree/whole128.vmdl"
             }
           }
         ],

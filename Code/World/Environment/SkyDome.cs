@@ -12,7 +12,7 @@ namespace Survival;
 [Title( "Sky Dome" )]
 public sealed class SkyDome : Component
 {
-	public const string DefaultMaterialPath = "materials/environment/sky_dome.vmat";
+	public const string DefaultMaterialPath = "materials/environment/sky/sky_dome.vmat";
 
 	[Property, Title( "Material" )]
 	public Material DomeMaterial { get; set; }

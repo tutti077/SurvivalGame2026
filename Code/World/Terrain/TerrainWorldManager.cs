@@ -160,22 +160,22 @@ public sealed partial class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Clover — Tree Prefabs" ), Description( "Large trees; each spawn picks one of these at random." )]
 	public List<string> VegetationCloverTreePrefabs { get; set; } =
 	[
-		"prefabs/environment/tests/environment_elm1_v76.prefab",
-		"prefabs/environment/tests/environment_elm2_v76.prefab",
-		"prefabs/environment/tests/environment_elm3_v76.prefab",
-		"prefabs/environment/tests/environment_elm4_v76.prefab",
-		"prefabs/environment/tests/environment_elm5_v76.prefab",
-		"prefabs/environment/tests/environment_elm6_v76.prefab",
+		"prefabs/environment/cloverHills/trees/elm/environment_elm1_v76.prefab",
+		"prefabs/environment/cloverHills/trees/elm/environment_elm2_v76.prefab",
+		"prefabs/environment/cloverHills/trees/elm/environment_elm3_v76.prefab",
+		"prefabs/environment/cloverHills/trees/elm/environment_elm4_v76.prefab",
+		"prefabs/environment/cloverHills/trees/elm/environment_elm5_v76.prefab",
+		"prefabs/environment/cloverHills/trees/elm/environment_elm6_v76.prefab",
 	];
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Sapling Prefabs" ), Description( "Small trees, Clover Hills only; each spawn picks one of these at random. Empty = no saplings." )]
 	public List<string> VegetationCloverSaplingPrefabs { get; set; } =
 	[
-		"prefabs/environment/tests/environment_elmsapling1_v15.prefab",
-		"prefabs/environment/tests/environment_elmsapling2_v15.prefab",
-		"prefabs/environment/tests/environment_elmsapling3_v15.prefab",
-		"prefabs/environment/tests/environment_elmsapling4_v15.prefab",
-		"prefabs/environment/tests/environment_elmsapling5_v15.prefab",
+		"prefabs/environment/cloverHills/trees/elm/environment_elmsapling1_v15.prefab",
+		"prefabs/environment/cloverHills/trees/elm/environment_elmsapling2_v15.prefab",
+		"prefabs/environment/cloverHills/trees/elm/environment_elmsapling3_v15.prefab",
+		"prefabs/environment/cloverHills/trees/elm/environment_elmsapling4_v15.prefab",
+		"prefabs/environment/cloverHills/trees/elm/environment_elmsapling5_v15.prefab",
 	];
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Sapling Cell Spacing (m)" ), Range( 2f, 32f ), Step( 1f ), Description( "Grid for the sapling layer (separate from the large-tree grid). Lower = more candidates." )]
@@ -209,7 +209,7 @@ public sealed partial class TerrainWorldManager : Component
 	public float VegetationSlopeTiltMaxDegrees { get; set; } = 15f;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Rock Prefab" )]
-	public string VegetationCloverRockPrefab { get; set; } = "prefabs/environment/rock.prefab";
+	public string VegetationCloverRockPrefab { get; set; } = "prefabs/environment/cloverHills/rocks/rock.prefab";
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Scatter Rocks" )]
 	public bool VegetationCloverRocksEnabled { get; set; } = true;
@@ -230,7 +230,7 @@ public sealed partial class TerrainWorldManager : Component
 	public float VegetationCloverRockClusterRadiusMeters { get; set; } = 3f;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Stick Prefab" )]
-	public string VegetationCloverStickPrefab { get; set; } = "prefabs/environment/samplestick.prefab";
+	public string VegetationCloverStickPrefab { get; set; } = "prefabs/environment/cloverHills/resources/samplestick.prefab";
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Scatter Sticks" )]
 	public bool VegetationCloverSticksEnabled { get; set; } = true;
@@ -263,10 +263,10 @@ public sealed partial class TerrainWorldManager : Component
 	public float VegetationCloverStickNearLargeTreeMaxRadiusMeters { get; set; } = 6f;
 
 	[Property, Group( "Vegetation" ), Title( "Redwood — Tree Prefab A" )]
-	public string VegetationRedwoodPrefab { get; set; } = "prefabs/environment/tests/environment_elm3_v76.prefab";
+	public string VegetationRedwoodPrefab { get; set; } = "prefabs/environment/cloverHills/trees/elm/environment_elm3_v76.prefab";
 
 	[Property, Group( "Vegetation" ), Title( "Redwood — Tree Prefab B" )]
-	public string VegetationRedwoodPrefabB { get; set; } = "prefabs/environment/tests/environment_elm6_v76.prefab";
+	public string VegetationRedwoodPrefabB { get; set; } = "prefabs/environment/cloverHills/trees/elm/environment_elm6_v76.prefab";
 
 	[Property, Group( "Vegetation" ), Title( "Redwood — Density (0–1)" ), Range( 0.05f, 1f ), Step( 0.05f ), Description( "Fraction of shared forest density for Redwood only. Redwood ignores hard forest patches, so low values still cover the whole biome sparsely." )]
 	public float VegetationRedwoodDensity01 { get; set; } = 0.1f;

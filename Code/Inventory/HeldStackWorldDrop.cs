@@ -6,7 +6,7 @@ namespace Survival;
 /// <summary>Spawns physics world pickups when a held stack is dropped into the world.</summary>
 public static class HeldStackWorldDrop
 {
-	const string DropPrefabPath = "prefabs/environment/rock.prefab";
+	const string DropPrefabPath = "prefabs/environment/cloverHills/rocks/rock.prefab";
 	const float DefaultColliderRadius = 8f;
 
 	public static bool TryDrop( GameObject owner, ref InventoryCursorStack held ) =>

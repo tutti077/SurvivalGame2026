@@ -30,9 +30,9 @@ Structure of each model (one .fbx, two objects):
                    on purpose (sky_through prints the % per tree). No collision on leaves (vmdl physics = wood only).
 
 Textures (true 256x256 bark, 64x64 end grain, 256x256 leaf card; shaders/pixel_lit.shader point-samples them):
-    Assets/models/environment/tests/elm_bark_v<N>.png        grey-brown ridged bark (7-tone ramp), 1.25 cm per texel (Mark's D3 pick, 2026-10-02)
-    Assets/models/environment/tests/elm_leaves_v<N>.png      bushy branch: brown stem, leaf-sleeved arms of small flat-toned leaves, no baked light
-    Assets/models/environment/tests/elm_leaves_v<N>_mask.png cutout mask (pixel_lit TextureTranslucency)
+    Assets/models/environment/cloverHills/trees/elm/elm_bark_v<N>.png        grey-brown ridged bark (7-tone ramp), 1.25 cm per texel (Mark's D3 pick, 2026-10-02)
+    Assets/models/environment/cloverHills/trees/elm/elm_leaves_v<N>.png      bushy branch: brown stem, leaf-sleeved arms of small flat-toned leaves, no baked light
+    Assets/models/environment/cloverHills/trees/elm/elm_leaves_v<N>_mask.png cutout mask (pixel_lit TextureTranslucency)
 """
 import bpy, bmesh, math, os, random, struct, sys, zlib
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -43,7 +43,7 @@ from mathutils import Vector, noise
 
 ROOT = r"M:\s&box\Projects\SurvivalGame2026"
 # Mark's demo folder for generated models: models AND their materials/textures live here.
-MODEL_DIR = os.path.join(ROOT, "Assets", "models", "environment", "tests")
+MODEL_DIR = os.path.join(ROOT, "Assets", "models", "environment", "cloverHills", "trees", "elm")
 MAT_DIR = MODEL_DIR
 # where earlier versions were written; remove_old_versions() also sweeps these
 OLD_DIRS = [os.path.join(ROOT, "Assets", "models", "environment"),
@@ -55,9 +55,9 @@ BARK = f"elm_bark_v{VERSION}"
 GRAIN = f"elm_endgrain_v{VERSION}"
 LOG = f"environment_elm_log_v{VERSION}"
 HALF = f"environment_elm_loghalf_v{VERSION}"
-ASSET_DIR = "models/environment/tests"
-PREFAB_DIR = os.path.join(ROOT, "Assets", "prefabs", "environment", "tests")
-PREFAB_REL = "prefabs/environment/tests"
+ASSET_DIR = "models/environment/cloverHills/trees/elm"
+PREFAB_DIR = os.path.join(ROOT, "Assets", "prefabs", "environment", "cloverHills", "trees", "elm")
+PREFAB_REL = "prefabs/environment/cloverHills/trees/elm"
 LEAVES = f"elm_leaves_v{VERSION}"
 BLEND_OUT = os.path.join(ROOT, "Blender", "blenderprojects", f"environment_elm_v{VERSION}.blend")
 PREVIEW_DIR = os.path.join(ROOT, "Blender", "blenderprojects", "elm_preview")
@@ -1599,7 +1599,7 @@ VMAT_BARK = """Layer0
 	shader "shaders/pixel_lit.shader"
 
 	PixelRoughness "0.900"
-	TextureColor "models/environment/tests/elm_bark.png"
+	TextureColor "models/environment/cloverHills/trees/elm/elm_bark.png"
 }
 """
 
@@ -1610,9 +1610,9 @@ VMAT_BARK_NORMAL = """Layer0
 
 	PixelRoughness "1.000"
 	PixelNormalStrength "1.000"
-	TextureColor "models/environment/tests/elm_bark.png"
-	TextureNormal "models/environment/tests/elm_bark_normal.png"
-	TextureRoughness "models/environment/tests/elm_bark_rough.png"
+	TextureColor "models/environment/cloverHills/trees/elm/elm_bark.png"
+	TextureNormal "models/environment/cloverHills/trees/elm/elm_bark_normal.png"
+	TextureRoughness "models/environment/cloverHills/trees/elm/elm_bark_rough.png"
 }
 """
 
@@ -1648,8 +1648,8 @@ VMAT_LEAVES = """Layer0
 	PixelAlphaCutoff "0.500"
 	PixelNormalUp "0.000"
 	PixelDirectMax "0.550"
-	TextureColor "models/environment/tests/elm_leaves.png"
-	TextureTranslucency "models/environment/tests/elm_leaves_mask.png"
+	TextureColor "models/environment/cloverHills/trees/elm/elm_leaves.png"
+	TextureTranslucency "models/environment/cloverHills/trees/elm/elm_leaves_mask.png"
 
 """ + VMAT_WIND_PARAMS + """	WindLeafFlutterMeters "0.080"
 	WindLeafHz "2.500"
@@ -1788,7 +1788,7 @@ def vmdl_text(name, lods=((0.0, None, 1.0, 1.0),), physics_lod=0):
 		return f"""					{{
 						_class = "RenderMeshFile"
 						name = "{obj}"
-						filename = "models/environment/tests/{name}.fbx"
+						filename = "models/environment/cloverHills/trees/elm/{name}.fbx"
 						import_translation = [ 0.0, 0.0, 0.0 ]
 						import_rotation = [ 0.0, 0.0, 0.0 ]
 						import_scale = 0.4
@@ -1843,16 +1843,16 @@ def vmdl_text(name, lods=((0.0, None, 1.0, 1.0),), physics_lod=0):
 						remaps =
 						[
 							{{
-								from = "models/environment/tests/elm_bark.vmat"
-								to = "models/environment/tests/elm_bark_wind.vmat"
+								from = "models/environment/cloverHills/trees/elm/elm_bark.vmat"
+								to = "models/environment/cloverHills/trees/elm/elm_bark_wind.vmat"
 							}},
 							{{
 								from = "elm_leaves.vmat"
-								to = "models/environment/tests/elm_leaves.vmat"
+								to = "models/environment/cloverHills/trees/elm/elm_leaves.vmat"
 							}}
 						]
 						use_global_default = false
-						global_default_material = "models/environment/tests/elm_bark_wind.vmat"
+						global_default_material = "models/environment/cloverHills/trees/elm/elm_bark_wind.vmat"
 					}},
 				]
 			}},
@@ -1872,7 +1872,7 @@ def vmdl_text(name, lods=((0.0, None, 1.0, 1.0),), physics_lod=0):
 						align_origin_x_type = "None"
 						align_origin_y_type = "None"
 						align_origin_z_type = "None"
-						filename = "models/environment/tests/{name}.fbx"
+						filename = "models/environment/cloverHills/trees/elm/{name}.fbx"
 						import_scale = 0.4
 						maxMeshVertices = 0
 						qemError = 0.0
@@ -1922,16 +1922,16 @@ FAR_VMDL_TEMPLATE = """<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a7
 						remaps =
 						[
 							{
-								from = "models/environment/tests/elm_bark.vmat"
-								to = "models/environment/tests/elm_bark_wind.vmat"
+								from = "models/environment/cloverHills/trees/elm/elm_bark.vmat"
+								to = "models/environment/cloverHills/trees/elm/elm_bark_wind.vmat"
 							},
 							{
 								from = "elm_leaves.vmat"
-								to = "models/environment/tests/elm_leaves.vmat"
+								to = "models/environment/cloverHills/trees/elm/elm_leaves.vmat"
 							}
 						]
 						use_global_default = false
-						global_default_material = "models/environment/tests/elm_bark_wind.vmat"
+						global_default_material = "models/environment/cloverHills/trees/elm/elm_bark_wind.vmat"
 					},
 				]
 			},
@@ -1942,7 +1942,7 @@ FAR_VMDL_TEMPLATE = """<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a7
 					{
 						_class = "RenderMeshFile"
 						name = "MESH"
-						filename = "models/environment/tests/NAME.fbx"
+						filename = "models/environment/cloverHills/trees/elm/NAME.fbx"
 						import_translation = [ 0.0, 0.0, 0.0 ]
 						import_rotation = [ 0.0, 0.0, 0.0 ]
 						import_scale = 0.4

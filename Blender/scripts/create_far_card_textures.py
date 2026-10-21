@@ -1,6 +1,6 @@
 """Far impostor card textures (plain Python + numpy, no Blender needed).
 
-Writes Assets/materials/environment/far_tree_card_{color,mask,normal}.png (256x256): a ragged round crown blob
+Writes Assets/materials/environment/cloverHills/trees/far_tree_card_{color,mask,normal}.png (256x256): a ragged round crown blob
 (rows 0-191) and a bark strip (rows 205-255) with a sphere / cylinder tangent-space normal map, so the card is lit
 like a crown from any sun angle instead of as a flat plate (Mark 2026-10-20: "VERY square ... the way the lighting
 hits them makes them clearly not a part of the other trees"). Colours come from the elm textures (percentiles of
@@ -11,7 +11,7 @@ import os, struct, zlib
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-OUT = os.path.join(ROOT, "Assets", "materials", "environment")
+OUT = os.path.join(ROOT, "Assets", "materials", "environment", "cloverHills", "trees")
 SIZE = 256
 CROWN_ROWS = 192          # rows 0..191 = crown (v 0 .. 0.75)
 TRUNK_ROW0 = 205          # rows 205..255 = trunk strip (v 0.8 .. 1.0)

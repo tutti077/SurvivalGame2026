@@ -35,7 +35,7 @@ import_scale 0.4 to land on the terrain's 40 u/m.
 
 Outputs
 -------
-  Assets/models/environment/grass/grass_clump<N>.fbx   (one per variant, origin at 0,0,0)
+  Assets/models/environment/cloverHills/groundFoliage/grass/grass_clump<N>.fbx   (one per variant, origin at 0,0,0)
   Blender/blenderprojects/grass_clumps.blend           (all variants on a row for eyeballing)
 """
 
@@ -45,7 +45,7 @@ import random
 import bpy
 
 _REPO_ROOT = os.path.abspath( os.path.join( os.path.dirname( os.path.abspath( __file__ ) ), "..", ".." ) )
-FBX_DIR = os.path.join( _REPO_ROOT, "Assets", "models", "environment", "grass" )
+FBX_DIR = os.path.join( _REPO_ROOT, "Assets", "models", "environment", "cloverHills", "groundFoliage", "grass" )
 BLEND_PATH = os.path.join( _REPO_ROOT, "Blender", "blenderprojects", "grass_clumps.blend" )
 
 WRITE_FBX = True

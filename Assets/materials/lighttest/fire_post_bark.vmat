@@ -8,7 +8,7 @@ Layer0
 	PixelNormalStrength "0.35"
 	PixelFlatShading "1.000"
 	PixelTexCoordScale "[0.250000 3.750000]"
-	TextureColor "models/environment/tests/elm_bark_v76.png"
-	TextureNormal "models/environment/tests/elm_bark_v76_normal.png"
-	TextureRoughness "models/environment/tests/elm_bark_v76_rough.png"
+	TextureColor "models/environment/cloverHills/trees/elm/elm_bark_v76.png"
+	TextureNormal "models/environment/cloverHills/trees/elm/elm_bark_v76_normal.png"
+	TextureRoughness "models/environment/cloverHills/trees/elm/elm_bark_v76_rough.png"
 }

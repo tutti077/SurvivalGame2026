@@ -2,7 +2,7 @@ Layer0
 {
 	shader "shaders/riverwater.shader"
 
-	CloudNoise "materials/environment/sky_clouds.png"
+	CloudNoise "materials/environment/sky/sky_clouds.png"
 
 	ClearDistance "3200.000"
 	AbsorbTint "[0.780000 0.860000 0.880000]"

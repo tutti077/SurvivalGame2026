@@ -34,7 +34,7 @@ public sealed partial class TerrainWorldManager
 	public float VegetationFarCardRangeMeters { get; set; } = 1200f;
 
 	[Property, Group( "Vegetation" ), Title( "Far Trees — Fallback Model" ), Description( "Used for a tree prefab whose model has no <model>_far.vmdl beside it (the elm script writes one per variant)." )]
-	public string VegetationFarCardModel { get; set; } = "models/environment/tests/environment_elm1_v76_far.vmdl";
+	public string VegetationFarCardModel { get; set; } = "models/environment/cloverHills/trees/elm/environment_elm1_v76_far.vmdl";
 
 	[Property, Group( "Vegetation" ), Title( "Far Trees — Plan Tasks In Flight" ), Range( 1, 8 ), Step( 1 ), Description( "Worker tasks planning far-tree chunks at once (each plans a batch of chunks)." )]
 	public int VegetationFarPlanTasks { get; set; } = 6;

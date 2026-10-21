@@ -280,7 +280,7 @@ Code/
                   "chop_crown" child = one rigidbody whose colliders are Rumple's butt / fork / top "chop_piece" children): tree → stump,
                   the crown tips over away from the chopper (ChopFallingCrown), on landing it splits into the pieces (local ChopDebris,
                   gone after Piece Lifetime) and the host drops the wood there. Stages broadcast via
-                  WorldScatterIdentity. Models Assets/models/environment/clovertree/, bark shared from materials/environment/cloverhills), harvest yields, teleport pads
+                  WorldScatterIdentity. Models Assets/models/environment/cloverHills/trees/cloverTree/, bark shared from materials/environment/cloverHills/trees/cloverTree), harvest yields, teleport pads
                 · SunShadowDistance (on the scene Sun: multiplies the engine's cascade shadow reach so the shadow ring is not at the player's feet)
                 · BearTrap (hammer-placed trap_small / trap_large: holds players 5 s, animals + enemies 10 s by TrapSize band;
                   hold lives on PlayerMovement.TrapLocked / EntityLocomotion.IsTrapped) · DamageOverTimeTrap (scene hazard volume)
@@ -329,8 +329,13 @@ Assets/prefabs/ player/basicplayer · entity/scavT1 · build/* · environment/*
   bbox-centred + `SizesMeters` row for build pieces, Blender X lands on engine Y).
 - Scatter / foliage models (plants, mushrooms, ferns, weeds, rocks …) are always **one standalone object per
   model** — never a baked cluster or patch (Mark 2026-10-21). Clusters come from spawning several instances with
-  varied height / tilt / yaw. Generator: `Blender/scripts/create_ground_plants.py` → `Assets/models/environment/plants/`
+  varied height / tilt / yaw. Generator: `Blender/scripts/create_ground_plants.py` → `Assets/models/environment/<biome>/groundFoliage/`
   (per-model uniform scale in `MODELS` — small plants are 2.5–5× life size so they read at distance).
+- Environment asset layout (Mark 2026-10-21): `Assets/{models,materials,prefabs}/environment/<biome>/<category>/` —
+  biomes `cloverHills`, `redwoodForest`, `amberDunes`, `mountain` (camelCase); categories `trees`, `rocks`,
+  `groundFoliage`, `resources`, plus `tests` and `blenderFiles` (models only). Materials used by every biome live in
+  `materials/environment/shared/`, sky / sun / moon in `materials/environment/sky/`. A Tripo FBX finds its texture by
+  material name, so its `textures/` folder stays beside the model. New environment assets go in this tree.
 - Host authority: `CombatAuthority` (melee), `VitalsAuthority` (pools), `BuildAuthority` (placement).
   Clients send intent; the host validates and broadcasts.
 - Melee damage never comes from weapon colliders — only from the phased server attack on

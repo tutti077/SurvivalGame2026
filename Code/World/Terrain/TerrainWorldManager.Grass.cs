@@ -20,10 +20,10 @@ public sealed partial class TerrainWorldManager
 	/// <summary>The four blade fans from Blender/scripts/create_grass_clump.py — used when the scene lists none.</summary>
 	static readonly string[] DefaultGrassClumpModels =
 	[
-		"models/environment/grass/grass_clump1.vmdl",
-		"models/environment/grass/grass_clump2.vmdl",
-		"models/environment/grass/grass_clump3.vmdl",
-		"models/environment/grass/grass_clump4.vmdl",
+		"models/environment/cloverHills/groundFoliage/grass/grass_clump1.vmdl",
+		"models/environment/cloverHills/groundFoliage/grass/grass_clump2.vmdl",
+		"models/environment/cloverHills/groundFoliage/grass/grass_clump3.vmdl",
+		"models/environment/cloverHills/groundFoliage/grass/grass_clump4.vmdl",
 	];
 
 	[Property, Group( "Vegetation" ), Title( "Grass — Clump Models" ), Description( "Picked at random per clump. Empty = the built-in grass_clump1–4 (a scene saved before this property existed loads it as empty)." )]

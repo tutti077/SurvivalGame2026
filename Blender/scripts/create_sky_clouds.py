@@ -3,7 +3,7 @@ create_sky_clouds.py — tileable cloud noise for the sky dome (shaders/environm
 
 Plain numpy, no Blender needed:  python Blender/scripts/create_sky_clouds.py
 
-Writes Assets/materials/environment/sky_clouds.png, 256x256, linear data (not colour):
+Writes Assets/materials/environment/sky/sky_clouds.png, 256x256, linear data (not colour):
   R = big billowy layer (cumulus masses)      — low-frequency fbm
   G = fine wispy layer (streaks / breakup)    — higher-frequency fbm, stretched along X
   B = 0, A = 1
@@ -19,7 +19,7 @@ from PIL import Image
 
 SIZE = 256
 SEED = 2026
-OUT = os.path.join( os.path.dirname( __file__ ), "..", "..", "Assets", "materials", "environment", "sky_clouds.png" )
+OUT = os.path.join( os.path.dirname( __file__ ), "..", "..", "Assets", "materials", "environment", "sky", "sky_clouds.png" )
 
 
 def periodic_value_noise( rng, size, cells_x, cells_y ):

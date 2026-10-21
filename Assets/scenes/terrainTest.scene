@@ -77,7 +77,7 @@
           "WindMaterials": [
             {
               "Id": "a8ecc01e-bb11-40d5-95e5-8d5d09633bc6",
-              "Path": "materials/environment/grass_blade.vmat"
+              "Path": "materials/environment/cloverHills/groundFoliage/grass_blade.vmat"
             }
           ],
           "YawDegrees": 35
@@ -170,7 +170,7 @@
           },
           "MoonDiskMaterial": {
             "Id": "11b34687-a53e-4672-bcd1-eed8e53c00b6",
-            "Path": "materials/environment/moon_disk.vmat"
+            "Path": "materials/environment/sky/moon_disk.vmat"
           },
           "MoonLight": {
             "_type": "component",
@@ -204,7 +204,7 @@
           },
           "SunDiskMaterial": {
             "Id": "d32c050b-bc9c-4568-bfea-63d47517d55f",
-            "Path": "materials/environment/sun_disk.vmat"
+            "Path": "materials/environment/sky/sun_disk.vmat"
           },
           "SunHorizonColor": "1,0.55,0.28,1",
           "SunLight": {
@@ -243,7 +243,7 @@
               "CloudDriftPerSecond": 0.006,
               "DomeMaterial": {
                 "Id": "3d66b2cd-8515-4f1f-abb6-436384c60939",
-                "Path": "materials/environment/sky_dome.vmat"
+                "Path": "materials/environment/sky/sky_dome.vmat"
               },
               "OnComponentDestroy": null,
               "OnComponentDisabled": null,
@@ -310,7 +310,7 @@
               "MaterialGroup": null,
               "MaterialOverride": {
                 "Id": "d32c050b-bc9c-4568-bfea-63d47517d55f",
-                "Path": "materials/environment/sun_disk.vmat"
+                "Path": "materials/environment/sky/sun_disk.vmat"
               },
               "Materials": null,
               "Model": {
@@ -362,7 +362,7 @@
               "MaterialGroup": null,
               "MaterialOverride": {
                 "Id": "11b34687-a53e-4672-bcd1-eed8e53c00b6",
-                "Path": "materials/environment/moon_disk.vmat"
+                "Path": "materials/environment/sky/moon_disk.vmat"
               },
               "Materials": null,
               "Model": {
@@ -535,7 +535,7 @@
           "VegetationCloverRockClusterMax": 5,
           "VegetationCloverRockClusterMin": 2,
           "VegetationCloverRockClusterRadiusMeters": 3,
-          "VegetationCloverRockPrefab": "prefabs/environment/rock.prefab",
+          "VegetationCloverRockPrefab": "prefabs/environment/cloverHills/rocks/rock.prefab",
           "VegetationCloverRocksEnabled": true,
           "VegetationCloverRockSpacingMeters": 50,
           "VegetationCloverSaplingChance01": 0.5,
@@ -544,11 +544,11 @@
           "VegetationCloverSaplingMaxPerChunk": 64,
           "VegetationCloverSaplingNearTrunkMeters": 10,
           "VegetationCloverSaplingPrefabs": [
-            "prefabs/environment/tests/environment_elmsapling1_v15.prefab",
-            "prefabs/environment/tests/environment_elmsapling2_v15.prefab",
-            "prefabs/environment/tests/environment_elmsapling3_v15.prefab",
-            "prefabs/environment/tests/environment_elmsapling4_v15.prefab",
-            "prefabs/environment/tests/environment_elmsapling5_v15.prefab"
+            "prefabs/environment/cloverHills/trees/elm/environment_elmsapling1_v15.prefab",
+            "prefabs/environment/cloverHills/trees/elm/environment_elmsapling2_v15.prefab",
+            "prefabs/environment/cloverHills/trees/elm/environment_elmsapling3_v15.prefab",
+            "prefabs/environment/cloverHills/trees/elm/environment_elmsapling4_v15.prefab",
+            "prefabs/environment/cloverHills/trees/elm/environment_elmsapling5_v15.prefab"
           ],
           "VegetationCloverSaplingScaleMax": 3.6,
           "VegetationCloverSaplingScaleMin": 2.4,
@@ -561,27 +561,27 @@
           "VegetationCloverStickNearLargeTreeEnabled": true,
           "VegetationCloverStickNearLargeTreeMaxRadiusMeters": 6,
           "VegetationCloverStickNearLargeTreeMinRadiusMeters": 2.5,
-          "VegetationCloverStickPrefab": "prefabs/environment/samplestick.prefab",
+          "VegetationCloverStickPrefab": "prefabs/environment/cloverHills/resources/samplestick.prefab",
           "VegetationCloverSticksEnabled": true,
           "VegetationCloverStickSpacingMeters": 50,
           "VegetationCloverTreePrefabs": [
-            "prefabs/environment/tests/environment_elm1_v76.prefab",
-            "prefabs/environment/tests/environment_elm2_v76.prefab",
-            "prefabs/environment/tests/environment_elm3_v76.prefab",
-            "prefabs/environment/tests/environment_elm4_v76.prefab",
-            "prefabs/environment/tests/environment_elm5_v76.prefab",
-            "prefabs/environment/tests/environment_elm6_v76.prefab"
+            "prefabs/environment/cloverHills/trees/elm/environment_elm1_v76.prefab",
+            "prefabs/environment/cloverHills/trees/elm/environment_elm2_v76.prefab",
+            "prefabs/environment/cloverHills/trees/elm/environment_elm3_v76.prefab",
+            "prefabs/environment/cloverHills/trees/elm/environment_elm4_v76.prefab",
+            "prefabs/environment/cloverHills/trees/elm/environment_elm5_v76.prefab",
+            "prefabs/environment/cloverHills/trees/elm/environment_elm6_v76.prefab"
           ],
-          "VegetationFarCardModel": "models/environment/tests/environment_elm1_v76_far.vmdl",
+          "VegetationFarCardModel": "models/environment/cloverHills/trees/elm/environment_elm1_v76_far.vmdl",
           "VegetationFarCardRangeMeters": 1200,
           "VegetationFarCardsEnabled": true,
           "VegetationFarFadeSeconds": 0,
           "VegetationFarPlanTasks": 6,
           "VegetationGrassClumpModels": [
-            "models/environment/grass/grass_clump1.vmdl",
-            "models/environment/grass/grass_clump2.vmdl",
-            "models/environment/grass/grass_clump3.vmdl",
-            "models/environment/grass/grass_clump4.vmdl"
+            "models/environment/cloverHills/groundFoliage/grass/grass_clump1.vmdl",
+            "models/environment/cloverHills/groundFoliage/grass/grass_clump2.vmdl",
+            "models/environment/cloverHills/groundFoliage/grass/grass_clump3.vmdl",
+            "models/environment/cloverHills/groundFoliage/grass/grass_clump4.vmdl"
           ],
           "VegetationGrassClumpsPerSquareMeter": 1.5,
           "VegetationGrassEnabled": true,
@@ -595,8 +595,8 @@
           "VegetationPatchWavelengthMeters": 100,
           "VegetationPropRangeMeters": 192,
           "VegetationRedwoodDensity01": 0.1,
-          "VegetationRedwoodPrefab": "prefabs/environment/tests/environment_elm3_v76.prefab",
-          "VegetationRedwoodPrefabB": "prefabs/environment/tests/environment_elm6_v76.prefab",
+          "VegetationRedwoodPrefab": "prefabs/environment/cloverHills/trees/elm/environment_elm3_v76.prefab",
+          "VegetationRedwoodPrefabB": "prefabs/environment/cloverHills/trees/elm/environment_elm6_v76.prefab",
           "VegetationSaplingVisibleMeters": 50,
           "VegetationScaleMax": 1.15,
           "VegetationScaleMin": 0.9,

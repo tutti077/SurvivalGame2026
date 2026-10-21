@@ -101,8 +101,8 @@ public sealed class EnvironmentDayNightCycle : Component
 	[Property, Group( "Disks" ), Title( "Sun bloom brightness" ), Range( 1f, 8f ), Step( 0.1f ), Description( "HDR tint (>1) so Bloom can glow; stays spectrally white." )]
 	public float SunBloomBrightness { get; set; } = 4f;
 
-	public const string DefaultSunDiskMaterialPath = "materials/environment/sun_disk.vmat";
-	public const string DefaultMoonDiskMaterialPath = "materials/environment/moon_disk.vmat";
+	public const string DefaultSunDiskMaterialPath = "materials/environment/sky/sun_disk.vmat";
+	public const string DefaultMoonDiskMaterialPath = "materials/environment/sky/moon_disk.vmat";
 
 	[Property, Group( "Path" ), Title( "Arc yaw (°)" ), Description( "Compass heading of the sun/moon rise→set plane." )]
 	public float ArcYawDegrees { get; set; } = 0f;

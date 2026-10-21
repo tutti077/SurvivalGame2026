@@ -288,7 +288,7 @@
           "CreateAttachments": false,
           "LodOverride": null,
           "MaterialGroup": null,
-          "MaterialOverride": "materials/environment/sun_disk.vmat",
+          "MaterialOverride": "materials/environment/sky/sun_disk.vmat",
           "Materials": null,
           "Model": "models/dev/sphere.vmdl",
           "OnComponentDestroy": null,
@@ -334,7 +334,7 @@
           "CreateAttachments": false,
           "LodOverride": null,
           "MaterialGroup": null,
-          "MaterialOverride": "materials/environment/moon_disk.vmat",
+          "MaterialOverride": "materials/environment/sky/moon_disk.vmat",
           "Materials": null,
           "Model": "models/dev/sphere.vmdl",
           "OnComponentDestroy": null,
@@ -391,7 +391,7 @@
             "_type": "gameobject",
             "go": "a1b2c3d4-e5f6-7890-abcd-ef1234567760"
           },
-          "MoonDiskMaterial": "materials/environment/moon_disk.vmat",
+          "MoonDiskMaterial": "materials/environment/sky/moon_disk.vmat",
           "MoonLight": {
             "_type": "component",
             "component_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567741",
@@ -416,7 +416,7 @@
             "_type": "gameobject",
             "go": "a1b2c3d4-e5f6-7890-abcd-ef1234567750"
           },
-          "SunDiskMaterial": "materials/environment/sun_disk.vmat",
+          "SunDiskMaterial": "materials/environment/sky/sun_disk.vmat",
           "SunHorizonColor": "1,0.55,0.28,1",
           "SunLight": {
             "_type": "component",

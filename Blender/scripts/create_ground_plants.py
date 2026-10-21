@@ -28,7 +28,7 @@ Amber Dunes
   dead_shrub           leafless branching twig bush                          ~0.50 m
 
 Every model is flat shaded (faceted, the project's low-poly look) and textured from ONE shared
-16-swatch palette (models/environment/plants/plants_palette.png, point-sampled by pixel_lit):
+16-swatch palette (materials/environment/shared/plants_palette.png, point-sampled by pixel_lit):
 each face's UVs sit in the centre of one swatch, so every plant is a single draw with one material.
 Thin parts (petals, leaves, fronds, ribbons) are single-sided cards — the material renders backfaces.
 
@@ -44,8 +44,8 @@ Tumbleweeds keep their origin at the bottom like everything else so they sit on 
 
 Outputs
 -------
-  Assets/models/environment/plants/<name>.fbx + <name>.vmdl
-  Assets/models/environment/plants/plants_palette.png + plants.vmat
+  Assets/models/environment/<biome>/groundFoliage/<name>.fbx + <name>.vmdl
+  Assets/materials/environment/shared/plants_palette.png + plants.vmat
   Blender/blenderprojects/ground_plants.blend   (all models on a grid for eyeballing)
 """
 
@@ -59,8 +59,19 @@ import bpy
 from mathutils import Matrix, Vector
 
 _REPO_ROOT = os.path.abspath( os.path.join( os.path.dirname( os.path.abspath( __file__ ) ), "..", ".." ) )
-OUT_DIR = os.path.join( _REPO_ROOT, "Assets", "models", "environment", "plants" )
-ASSET_REL_DIR = "models/environment/plants"
+# Models land in models/environment/<biome>/groundFoliage/ (biome per model in MODELS); the shared palette
+# material in materials/environment/shared/ because every biome's plants use it.
+MAT_REL_DIR = "materials/environment/shared"
+MAT_DIR = os.path.join( _REPO_ROOT, "Assets", *MAT_REL_DIR.split( "/" ) )
+
+
+def model_rel_dir( biome: str ) -> str:
+	return f"models/environment/{biome}/groundFoliage"
+
+
+def model_dir( biome: str ) -> str:
+	return os.path.join( _REPO_ROOT, "Assets", *model_rel_dir( biome ).split( "/" ) )
+
 BLEND_PATH = os.path.join( _REPO_ROOT, "Blender", "blenderprojects", "ground_plants.blend" )
 
 WRITE_FBX = True
@@ -572,25 +583,25 @@ def build_dead_shrub( m ):
 		branch( m, Vector( ( 0, 0, -ROOT_SINK ) ), d, m.rng.uniform( 0.16, 0.22 ), 0.012, 2 )
 
 
-# ( name, seed, builder[, uniform scale] ). The scale is a readability boost on top of real-world size (Mark 2026-10-21:
+# ( name, biome folder, seed, builder[, uniform scale] ). The scale is a readability boost on top of real-world size (Mark 2026-10-21:
 # clover, daisy and small ferns were invisible past a few metres at life size).
 # Every model is ONE plant (Mark 2026-10-21) — clusters are made by spawning several, never baked in.
 MODELS = [
-	( "daisy", 101, build_daisy, 2.5 ),
-	( "clover", 103, build_clover, 5.0 ),
-	( "weed_sprout", 105, build_weed_sprout ),
-	( "weed_rosette", 106, build_weed_rosette ),
-	( "weed_dandelion", 107, build_weed_dandelion ),
-	( "weed_broadleaf", 108, build_weed_broadleaf ),
-	( "fern_fiddlehead", 201, build_fern_fiddlehead, 2.5 ),
-	( "fern_young", 202, build_fern_young, 2.0 ),
-	( "fern_full", 203, build_fern_full ),
-	( "redwood_sorrel", 204, build_redwood_sorrel, 4.5 ),
-	( "mushroom", 205, build_mushroom, 2.5 ),
-	( "tumbleweed_small", 301, build_tumbleweed_small ),
-	( "tumbleweed_large", 302, build_tumbleweed_large ),
-	( "dune_grass_tuft", 303, build_dune_grass ),
-	( "dead_shrub", 304, build_dead_shrub ),
+	( "daisy", "cloverHills", 101, build_daisy, 2.5 ),
+	( "clover", "cloverHills", 103, build_clover, 5.0 ),
+	( "weed_sprout", "cloverHills", 105, build_weed_sprout ),
+	( "weed_rosette", "cloverHills", 106, build_weed_rosette ),
+	( "weed_dandelion", "cloverHills", 107, build_weed_dandelion ),
+	( "weed_broadleaf", "cloverHills", 108, build_weed_broadleaf ),
+	( "fern_fiddlehead", "redwoodForest", 201, build_fern_fiddlehead, 2.5 ),
+	( "fern_young", "redwoodForest", 202, build_fern_young, 2.0 ),
+	( "fern_full", "redwoodForest", 203, build_fern_full ),
+	( "redwood_sorrel", "redwoodForest", 204, build_redwood_sorrel, 4.5 ),
+	( "mushroom", "redwoodForest", 205, build_mushroom, 2.5 ),
+	( "tumbleweed_small", "amberDunes", 301, build_tumbleweed_small ),
+	( "tumbleweed_large", "amberDunes", 302, build_tumbleweed_large ),
+	( "dune_grass_tuft", "amberDunes", 303, build_dune_grass ),
+	( "dead_shrub", "amberDunes", 304, build_dead_shrub ),
 ]
 
 
@@ -746,23 +757,23 @@ VMAT_TEXT = """Layer0
 """
 
 
-def write_vmdl( name: str ) -> None:
-	path = os.path.join( OUT_DIR, f"{name}.vmdl" )
+def write_vmdl( name: str, biome: str ) -> None:
+	path = os.path.join( model_dir( biome ), f"{name}.vmdl" )
 	with open( path, "w", newline="\n" ) as f:
-		f.write( VMDL_TEMPLATE.format( material=f"{ASSET_REL_DIR}/{MATERIAL_NAME}.vmat", fbx=f"{ASSET_REL_DIR}/{name}.fbx" ) )
+		f.write( VMDL_TEMPLATE.format( material=f"{MAT_REL_DIR}/{MATERIAL_NAME}.vmat", fbx=f"{model_rel_dir( biome )}/{name}.fbx" ) )
 
 
 def write_vmat() -> None:
-	path = os.path.join( OUT_DIR, f"{MATERIAL_NAME}.vmat" )
+	path = os.path.join( MAT_DIR, f"{MATERIAL_NAME}.vmat" )
 	with open( path, "w", newline="\n" ) as f:
-		f.write( VMAT_TEXT.format( palette=f"{ASSET_REL_DIR}/plants_palette.png" ) )
+		f.write( VMAT_TEXT.format( palette=f"{MAT_REL_DIR}/plants_palette.png" ) )
 
 
 def main() -> None:
 	_reset_scene()
-	os.makedirs( OUT_DIR, exist_ok=True )
+	os.makedirs( MAT_DIR, exist_ok=True )
 
-	palette_path = os.path.join( OUT_DIR, "plants_palette.png" )
+	palette_path = os.path.join( MAT_DIR, "plants_palette.png" )
 	if WRITE_TEXTURE:
 		write_palette_png( palette_path )
 		write_vmat()
@@ -770,14 +781,14 @@ def main() -> None:
 
 	objects = []
 	columns = 6
-	for index, ( name, seed, build, *scale ) in enumerate( MODELS ):
+	for index, ( name, biome, seed, build, *scale ) in enumerate( MODELS ):
 		m = PlantMesh( seed )
 		build( m )
 		if scale:
 			m.verts = [ v * scale[0] for v in m.verts ]
 		obj = to_object( name, m, material )
 		obj.location = ( ( index % columns ) * LAYOUT_SPACING, -( index // columns ) * LAYOUT_SPACING, 0.0 )
-		objects.append( obj )
+		objects.append( ( obj, biome ) )
 
 		xs = [ v.x for v in m.verts ]
 		ys = [ v.y for v in m.verts ]
@@ -787,11 +798,11 @@ def main() -> None:
 			   f"footprint {max( xs ) - min( xs ):.2f} x {max( ys ) - min( ys ):.2f} m" )
 
 	if WRITE_FBX:
-		for obj in objects:
-			export_fbx( obj, OUT_DIR )
+		for obj, biome in objects:
+			export_fbx( obj, model_dir( biome ) )
 	if WRITE_VMDL:
-		for obj in objects:
-			write_vmdl( obj.name )
+		for obj, biome in objects:
+			write_vmdl( obj.name, biome )
 
 	if WRITE_BLEND:
 		os.makedirs( os.path.dirname( BLEND_PATH ), exist_ok=True )

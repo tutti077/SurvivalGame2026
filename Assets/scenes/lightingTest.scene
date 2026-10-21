@@ -143,7 +143,7 @@
           "Materials": null,
           "Model": {
             "Id": "c2703cca-97a1-4d36-a327-e02f20070238",
-            "Path": "models/environment/tests/environment_elm1_v76.vmdl"
+            "Path": "models/environment/cloverHills/trees/elm/environment_elm1_v76.vmdl"
           },
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
@@ -433,7 +433,7 @@
           "MaterialGroup": null,
           "MaterialOverride": {
             "Id": "d32c050b-bc9c-4568-bfea-63d47517d55f",
-            "Path": "materials/environment/sun_disk.vmat"
+            "Path": "materials/environment/sky/sun_disk.vmat"
           },
           "Materials": null,
           "Model": "models/dev/sphere.vmdl",
@@ -482,7 +482,7 @@
           "MaterialGroup": null,
           "MaterialOverride": {
             "Id": "11b34687-a53e-4672-bcd1-eed8e53c00b6",
-            "Path": "materials/environment/moon_disk.vmat"
+            "Path": "materials/environment/sky/moon_disk.vmat"
           },
           "Materials": null,
           "Model": "models/dev/sphere.vmdl",
@@ -551,7 +551,7 @@
           },
           "MoonDiskMaterial": {
             "Id": "11b34687-a53e-4672-bcd1-eed8e53c00b6",
-            "Path": "materials/environment/moon_disk.vmat"
+            "Path": "materials/environment/sky/moon_disk.vmat"
           },
           "MoonLight": {
             "_type": "component",
@@ -585,7 +585,7 @@
           },
           "SunDiskMaterial": {
             "Id": "d32c050b-bc9c-4568-bfea-63d47517d55f",
-            "Path": "materials/environment/sun_disk.vmat"
+            "Path": "materials/environment/sky/sun_disk.vmat"
           },
           "SunHorizonColor": "1,0.55,0.28,1",
           "SunLight": {
@@ -625,7 +625,7 @@
           "CloudDriftPerSecond": 0.006,
           "DomeMaterial": {
             "Id": "3d66b2cd-8515-4f1f-abb6-436384c60939",
-            "Path": "materials/environment/sky_dome.vmat"
+            "Path": "materials/environment/sky/sky_dome.vmat"
           },
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,

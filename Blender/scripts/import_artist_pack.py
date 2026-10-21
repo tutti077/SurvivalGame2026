@@ -21,7 +21,7 @@ Run:
                   pack whose mesh is already in game as hand-split pieces (Rumple's clover tree:
                   clovertree1.blend is the same 1217-vertex mesh as clovertree/whole.fbx, only the
                   colour chain changed). <name> may carry a sub-folder: environment cloverhills/bark
-                  writes Assets/materials/environment/cloverhills/bark.png + .vmat.
+                  writes Assets/materials/environment/cloverHills/trees/cloverTree/bark.png + .vmat.
 
 What it does
   1. Applies the artist's object rotation / scale (Rumple straightens Tripo meshes with the object
