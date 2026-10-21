@@ -13,8 +13,10 @@ namespace Survival;
 /// scripted roll): each wheel's drive + side force acts at its ground contact and is capped at
 /// <see cref="TyreGripCoefficient"/> × that wheel's own spring load. A hard turn shifts load onto the
 /// outside wheels; whether the chassis then tips, slides or rolls over its cage collider falls out of
-/// speed, steering angle, slope, bumps, mass-centre height and track width. The upright pull only runs
-/// when truly airborne (jumps), so a buggy lying on its side or roof stays there.
+/// speed, steering angle, slope, bumps, mass-centre height and track width. Nothing caps the turn and
+/// nothing damps or rights the chassis in the air (Mark 2026-10-21: flipping must be entirely physics —
+/// a sharp turn plus a bump can roll it). μ sits under the tip point (half-track ÷ mass-centre height),
+/// so on flat ground a hard turn slides; a bump or slope on top of it is what trips it over.
 ///
 /// Controls (driver only): W accelerates up to <see cref="MaxSpeedMetersPerSecond"/>; A / D steer;
 /// S brakes while rolling forward and only becomes reverse once the buggy has stopped (Mark: wheels
@@ -42,23 +44,14 @@ public sealed partial class Vehicle
 	[Property, Group( "Drive" ), Title( "Out-of-Fuel Coast Drag (m/s²)" ), Description( "Slow-down once the tank is empty: the engine is dead, W does nothing, the buggy coasts down to a stop at this rate (brakes still work)." )]
 	public float OutOfFuelCoastDragMetersPerSecond2 { get; set; } = 1.5f;
 
-	[Property, Group( "Drive" ), Title( "Tyre Grip (μ)" ), Description( "Tyre friction coefficient: each wheel's drive + side force is capped at μ × the load on that wheel. Higher = corners harder before sliding, so it tips over instead of sliding out sooner. Dirt ≈ 0.7, grippy rubber on rock ≈ 1.0+." )]
-	public float TyreGripCoefficient { get; set; } = 1.2f;
+	[Property, Group( "Drive" ), Title( "Tyre Grip (μ)" ), Description( "Tyre friction coefficient: each wheel's drive + side force is capped at μ × the load on that wheel. This is the rollover knob: below the chassis tip point (≈1.05 g for the buggy) a flat hard turn slides and only a bump or slope rolls it; at or above it a flat full-lock turn rolls on its own. Dirt ≈ 0.7, grippy rubber on rock ≈ 1.0+." )]
+	public float TyreGripCoefficient { get; set; } = 0.9f;
 
 	[Property, Group( "Steering" ), Title( "Max Steer (deg)" )]
 	public float MaxSteerDegrees { get; set; } = 32f;
 
 	[Property, Group( "Steering" ), Title( "Steer Speed (deg/s)" )]
 	public float SteerSpeedDegreesPerSecond { get; set; } = 160f;
-
-	[Property, Group( "Steering" ), Title( "Steer Lateral Limit (g)" ), Description( "The most sideways g a full-lock turn may ask for at low and mid speed: the lock shrinks with speed so v²·tan(lock)/wheelbase never exceeds it. Kept under the roll-over point (~0.9–1.0 g for this chassis) so a hard turn at 30–45 mph rides on three wheels or slides instead of rolling (Mark 2026-10-06: \"far too easy to flip\")." )]
-	public float SteerLateralLimitG { get; set; } = 0.75f;
-
-	[Property, Group( "Steering" ), Title( "Steer Lateral Limit at Top Speed (g)" ), Description( "The limit climbs toward this at max speed, so a full-lock yank at highway speed can still roll it. ~1.05 g is reached near 60 mph with the defaults." )]
-	public float SteerLateralLimitTopSpeedG { get; set; } = 3.25f;
-
-	[Property, Group( "Steering" ), Title( "Steer Lateral Limit Curve" ), Description( "Exponent on speed / max speed for the climb between the two limits: 1 = linear, 3 = stays low until the last third of the speed range." )]
-	public float SteerLateralLimitCurve { get; set; } = 3f;
 
 	[Property, Group( "Suspension" ), Title( "Wheel Base (m)" )]
 	public float WheelBaseMeters { get; set; } = 2.4f;
@@ -80,12 +73,6 @@ public sealed partial class Vehicle
 
 	[Property, Group( "Suspension" ), Title( "Bump Stop (× wheel load)" ), Description( "Most one spring + damper may push, as a multiple of the static load on that wheel. A wheel that lands fully compressed used to fire the whole spring and damper at once and kick the chassis back over (Mark 2026-10-06: \"keeps rolling\"). 3 carries bumps and landings without launching it." )]
 	public float SuspensionBumpStopMultiple { get; set; } = 3f;
-
-	[Property, Group( "Suspension" ), Title( "Airborne Spin Damping" ), Description( "Rigidbody angular damping while truly airborne (all four wheels up and no ground under the chassis); the prefab's own value is restored on touchdown." )]
-	public float AirborneAngularDamping { get; set; } = 2.5f;
-
-	[Property, Group( "Suspension" ), Title( "Airborne Self-Right (rad/s²)" ), Description( "Torque toward upright while truly airborne, so a jump lands on its wheels. A real torque through the physics (it used to write angular velocity, which fed a tumble past 90°). 0 = none, the chassis lands however it flies." )]
-	public float AirborneUprightStrength { get; set; } = 0f;
 
 	/// <summary>Signed speed along the chassis forward, m/s (simulating machine writes; HUD reads anywhere).</summary>
 	[Sync]
@@ -210,7 +197,6 @@ public sealed partial class Vehicle
 		UpdateFlippedState();
 		SimulateSteering( steer, dt );
 		SimulateDrive( throttle, dt );
-		SimulateAirStability( dt );
 
 		SyncedSpeedMetersPerSecond = TerrainWorldUnits.EngineToMeters( Vector3.Dot( _body.Velocity, WorldRotation.Forward ) );
 		TickFuelBurn( dt, throttleHeld );
@@ -339,33 +325,9 @@ public sealed partial class Vehicle
 
 	void SimulateSteering( float steerInput, float dt )
 	{
-		var target = Math.Clamp( steerInput, -1f, 1f ) * SteerLockDegreesAtSpeed( MathF.Abs( SyncedSpeedMetersPerSecond ) );
+		var target = Math.Clamp( steerInput, -1f, 1f ) * Math.Max( 1f, MaxSteerDegrees );
 		var step = Math.Max( 10f, SteerSpeedDegreesPerSecond ) * dt;
 		_steerDegrees = MathX.Approach( _steerDegrees, target, step );
-	}
-
-	/// <summary>
-	/// Speed-sensitive lock: the largest wheel angle whose steady-state lateral demand v²·tan(δ)/L stays
-	/// under the lateral limit for this speed (the limit itself climbs from <see cref="SteerLateralLimitG"/>
-	/// to <see cref="SteerLateralLimitTopSpeedG"/> along <see cref="SteerLateralLimitCurve"/>), never more
-	/// than <see cref="MaxSteerDegrees"/>. Parked it is the full lock; at 60 mph with the defaults about 6°.
-	/// </summary>
-	public float SteerLockDegreesAtSpeed( float speedMetersPerSecond )
-	{
-		var maxLock = Math.Max( 1f, MaxSteerDegrees );
-		var speed = Math.Max( 0f, speedMetersPerSecond );
-		if ( speed < 0.5f )
-			return maxLock;
-
-		var fraction = Math.Clamp( speed / Math.Max( 1f, MaxSpeedMetersPerSecond ), 0f, 1f );
-		var climb = MathF.Pow( fraction, Math.Clamp( SteerLateralLimitCurve, 0.2f, 6f ) );
-		var limitG = MathX.Lerp( Math.Max( 0.05f, SteerLateralLimitG ), Math.Max( 0.05f, SteerLateralLimitTopSpeedG ), climb );
-
-		// Everything in meters: gravity and the wheelbase converted once here.
-		var gravity = TerrainWorldUnits.EngineToMeters( Math.Max( 1f, Scene.PhysicsWorld.Gravity.Length ) );
-		var wheelBase = Math.Max( 0.5f, WheelBaseMeters );
-		var tanLock = limitG * gravity * wheelBase / ( speed * speed );
-		return Math.Min( maxLock, MathX.RadianToDegree( MathF.Atan( tanLock ) ) );
 	}
 
 	Rotation WheelRotation( int i )
@@ -466,62 +428,6 @@ public sealed partial class Vehicle
 		var maxStep = MathF.Abs( forwardSpeed ) / dt;
 		var decel = Math.Min( Math.Max( 0f, dragMetersPerSecond2 ), maxStep );
 		return -MathF.Sign( forwardSpeed ) * decel;
-	}
-
-	float _groundAngularDamping = -1f;
-	bool _airborneDampingApplied;
-
-	/// <summary>
-	/// Truly airborne (no wheel down and no ground under the chassis): the rigidbody's angular damping is
-	/// raised to <see cref="AirborneAngularDamping"/> and, if <see cref="AirborneUprightStrength"/> is set, a
-	/// torque toward upright is applied through the physics. Nothing writes velocities: a tumble keeps the
-	/// momentum it earned. A rolled buggy lying on its side or roof has ground under it and is left alone.
-	/// </summary>
-	void SimulateAirStability( float dt )
-	{
-		if ( _groundAngularDamping < 0f )
-			_groundAngularDamping = _body.AngularDamping;
-
-		var airborne = _groundedWheels == 0;
-		if ( airborne )
-		{
-			var probe = TerrainWorldUnits.MetersToEngine( Math.Max( 0.05f, SuspensionLengthMeters + WheelRadiusMeters ) * 1.5f );
-			var ground = Scene.Trace.Ray( WorldPosition, WorldPosition - Vector3.Up * probe )
-				.IgnoreGameObjectHierarchy( GameObject )
-				.WithoutTags( "player", "trigger", "worlddrop" )
-				.Run();
-			airborne = !ground.Hit;
-		}
-
-		if ( !airborne )
-		{
-			if ( _airborneDampingApplied )
-			{
-				_body.AngularDamping = _groundAngularDamping;
-				_airborneDampingApplied = false;
-			}
-			return;
-		}
-
-		if ( !_airborneDampingApplied )
-		{
-			_body.AngularDamping = Math.Max( 0f, AirborneAngularDamping );
-			_airborneDampingApplied = true;
-		}
-
-		var strength = Math.Max( 0f, AirborneUprightStrength );
-		if ( strength <= 0f )
-			return;
-
-		// Torque sized from a box estimate of the hull's inertia so the knob reads as rad/s² toward upright.
-		var axis = Vector3.Cross( WorldRotation.Up, Vector3.Up );
-		if ( axis.LengthSquared < 1e-6f )
-			return;
-
-		var track = TerrainWorldUnits.MetersToEngine( Math.Max( 0.5f, TrackWidthMeters ) );
-		var height = TerrainWorldUnits.MetersToEngine( 1.2f );
-		var inertia = Math.Max( 1f, _body.Mass ) / 12f * ( track * track + height * height );
-		_body.ApplyTorque( axis * ( strength * inertia ) );
 	}
 
 	/// <summary>Every machine: wheel meshes sit at the spring length (proxies show rest length), steer and spin.</summary>
