@@ -1,0 +1,9 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+	F_RENDER_BACKFACES 1
+
+	PixelRoughness "0.900"
+	PixelFlatShading "1.000"
+	TextureColor "models/environment/plants/plants_palette.png"
+}

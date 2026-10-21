@@ -327,6 +327,10 @@ Assets/prefabs/ player/basicplayer · entity/scavT1 · build/* · environment/*
   — one command writes fbx + vmdl + baked png + vmat in the right frame for `weapons` / `building` /
   `environment`; see AGENTS.md "Artist model import" for the rules (origin at the butt for weapons,
   bbox-centred + `SizesMeters` row for build pieces, Blender X lands on engine Y).
+- Scatter / foliage models (plants, mushrooms, ferns, weeds, rocks …) are always **one standalone object per
+  model** — never a baked cluster or patch (Mark 2026-10-21). Clusters come from spawning several instances with
+  varied height / tilt / yaw. Generator: `Blender/scripts/create_ground_plants.py` → `Assets/models/environment/plants/`
+  (per-model uniform scale in `MODELS` — small plants are 2.5–5× life size so they read at distance).
 - Host authority: `CombatAuthority` (melee), `VitalsAuthority` (pools), `BuildAuthority` (placement).
   Clients send intent; the host validates and broadcasts.
 - Melee damage never comes from weapon colliders — only from the phased server attack on
