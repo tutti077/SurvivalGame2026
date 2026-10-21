@@ -228,7 +228,8 @@ Code/
                   junctions and drops, ledge route with descend / climb steppers; CaveGeometry (+ .Dressing) builds one runtime rock model with
                   mesh collision (no grapple tag) — tubes, holes zipped to branches, platform collar, pond bowls — plus dev-box ledges tagged
                   "grapple", oases, waterfall, host-placed chests; verified by a standalone .NET harness; console cave_regen / cave_info / cave_tp
-  Hacks/        GameHacks — console-toggled dev flags (allCrafting), mirrored onto pawns via [Sync] for host checks
+  Hacks/        GameHacks — console-toggled dev flags (allCrafting, devSupply = X opens an infinite grid of every resource + ingredient,
+                PlayerInventoryInteraction.DevSupply.cs), mirrored onto pawns via [Sync] for host checks
                 · ConsoleHelp — `help [filter]` / `commands`: the hand-kept table of every project ConCmd (args, what, example).
                   RULE: every new [ConCmd] gets a row there in the same change.
   Vehicles/     Vehicle (+ .Physics raycast springs / .Seats first-in-drives + ownership handoff / .Fuel restricted tank slot / .Health wreck + drops)

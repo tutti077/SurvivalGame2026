@@ -9,7 +9,7 @@ namespace Survival;
 /// that need host validation to honour a flag mirror it onto the pawn (e.g.
 /// <see cref="PlayerCrafting.AllCraftingHack"/>) so the host reads the owner's setting.
 /// <para>
-/// Console: <c>allCrafting true</c> / <c>allCrafting false</c>, <c>freeAugments true|false</c> — <c>hacks</c> lists every flag.
+/// Console: <c>allCrafting true</c> / <c>allCrafting false</c>, <c>freeAugments true|false</c>, <c>devSupply true|false</c> — <c>hacks</c> lists every flag.
 /// </para>
 /// </summary>
 public static class GameHacks
@@ -28,6 +28,13 @@ public static class GameHacks
 
 	/// <summary>Forces the Thermal Eye view on for the local player without the augment (<c>thermalView true|false</c>). Off by default.</summary>
 	public static bool ThermalView { get; private set; }
+
+	/// <summary>
+	/// Unlocks the dev supply: a take-only grid with a full stack of every resource and crafting
+	/// ingredient that refills after every take (<c>devSupply true</c>, then key X or <c>devSupplyOpen</c>).
+	/// Off by default.
+	/// </summary>
+	public static bool DevSupply { get; private set; }
 
 	/// <summary>Bumps whenever any flag changes — UI that caches a hack-dependent layout rebuilds on this.</summary>
 	public static int Version { get; private set; }
@@ -54,6 +61,50 @@ public static class GameHacks
 		ThermalView = value;
 		Version++;
 		Log.Info( $"[Hacks] thermalView = {(value ? "true" : "false")}" );
+	}
+
+	/// <summary>Usage: <c>devSupply true</c> / <c>devSupply false</c>. No argument prints the current state.</summary>
+	[ConCmd( "devSupply" )]
+	public static void ConCmdDevSupply( string enabled )
+	{
+		if ( string.IsNullOrWhiteSpace( enabled ) )
+		{
+			Log.Info( $"[Hacks] devSupply is {(DevSupply ? "true" : "false")} (usage: devSupply true|false)" );
+			return;
+		}
+
+		if ( !TryParseBool( enabled, out var value ) )
+		{
+			Log.Warning( $"[Hacks] devSupply: '{enabled}' is not true/false." );
+			return;
+		}
+
+		if ( value == DevSupply )
+			return;
+
+		DevSupply = value;
+		Version++;
+		Log.Info( $"[Hacks] devSupply = {(value ? "true" : "false")}{(value ? " — press X or run devSupplyOpen" : string.Empty)}" );
+	}
+
+	/// <summary>Usage: <c>devSupplyOpen</c> — opens (or closes) the dev supply next to your bag. Needs <c>devSupply true</c>.</summary>
+	[ConCmd( "devSupplyOpen" )]
+	public static void ConCmdDevSupplyOpen()
+	{
+		if ( !DevSupply )
+		{
+			Log.Warning( "[Hacks] devSupplyOpen: run devSupply true first." );
+			return;
+		}
+
+		var interaction = FindLocalPawnVitals()?.Components.Get<PlayerInventoryInteraction>( FindMode.EverythingInSelfAndDescendants );
+		if ( interaction is null )
+		{
+			Log.Warning( "[Hacks] devSupplyOpen: no local player pawn." );
+			return;
+		}
+
+		interaction.ToggleDevSupply();
 	}
 
 	public static void SetFreeAugments( bool enabled )
@@ -302,6 +353,8 @@ public static class GameHacks
 		sb.Append( "  allCrafting  " ).AppendLine( AllCrafting ? "true" : "false" );
 		sb.Append( "  freeAugments " ).AppendLine( FreeAugments ? "true" : "false" );
 		sb.Append( "  thermalView  " ).AppendLine( ThermalView ? "true" : "false" );
+		sb.Append( "  devSupply    " ).AppendLine( DevSupply ? "true" : "false" );
+		sb.AppendLine( "  devSupplyOpen  open / close the dev supply (key X; needs devSupply true)" );
 		sb.AppendLine( "  status <id> <seconds>  apply a buff / debuff (status clear)" );
 		sb.AppendLine( "  spawnPatrolBot  host: drop a robot patrol unit in front of you" );
 		sb.AppendLine( "  give <resourceId> [amount]  host: put an item in your hotbar / inventory" );

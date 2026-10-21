@@ -153,6 +153,10 @@ public sealed partial class PlayerInventoryInteraction
 		if ( container is null || !container.IsValid() )
 			return false;
 
+		// The dev supply has no place in the world: it stays open anywhere until the hack is switched off.
+		if ( IsDevSupply( container ) )
+			return GameHacks.DevSupply;
+
 		// A vehicle's chest is the box on its back: measure to that, not to the chassis root (standing
 		// behind the buggy you are already past the keep-open range of the root — it closed at once).
 		var anchor = container.GameObject;

@@ -67,6 +67,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 			_menu.MenuLayoutChanged -= OnMenuLayoutChanged;
 		}
 
+		DestroyDevSupply();
 		base.OnDestroy();
 	}
 
@@ -240,6 +241,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 			return;
 		}
 
+		TickDevSupplyAccess();
 		TickContainerAccess();
 		TickAugmentStationAccess();
 		TickWorkbenchAccess();
@@ -1282,6 +1284,10 @@ public sealed partial class PlayerInventoryInteraction : Component
 
 			movedAny = true;
 		}
+
+		// The dev supply refills itself — whatever did not fit is simply not taken.
+		if ( fromHost is ContainerInventoryGridHost { Container: var fromContainer } && IsDevSupply( fromContainer ) )
+			return movedAny;
 
 		if ( !held.IsEmpty )
 			fromHost.OwnerTryPlaceHeld( fromIndex, ref held );

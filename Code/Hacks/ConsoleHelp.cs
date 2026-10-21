@@ -32,6 +32,8 @@ public static class ConsoleHelp
 		new( "Hacks", "spawnPatrolBot", "", "Host drops a patrol bot 3 m in front of your pawn (Medusa Eye / Hackd testing).", "spawnPatrolBot" ),
 		new( "Hacks", "thermalView", "true|false", "Force the Thermal Eye post-process on / off.", "thermalView true" ),
 		new( "Hacks", "freeAugments", "true|false", "Enhance / Augment cost nothing. No argument prints the state.", "freeAugments true" ),
+		new( "Hacks", "devSupply", "true|false", "Unlock the dev supply: a full, never-emptying stack of every resource and crafting ingredient. No argument prints the state.", "devSupply true" ),
+		new( "Hacks", "devSupplyOpen", "", "Open / close the dev supply next to your bag (key X does the same). Needs devSupply true.", "devSupplyOpen" ),
 		new( "Hacks", "allCrafting", "true|false", "Every recipe craftable anywhere. No argument prints the state.", "allCrafting true" ),
 
 		// ---- terrain

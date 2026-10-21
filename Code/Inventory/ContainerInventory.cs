@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Sandbox;
 
 namespace Survival;
@@ -43,12 +44,21 @@ public sealed class ContainerInventory : Component
 	[Property, Group( "Restricted Slot" ), Title( "Restricted Slot Label" )]
 	public string RestrictedSlotLabel { get; set; } = string.Empty;
 
+	/// <summary>
+	/// Every slot snaps back to the stock set by <see cref="HostStockInfiniteSupply"/> after each take, so
+	/// stacks never run out. Only the dev supply (<see cref="GameHacks.DevSupply"/>) uses it; pair with
+	/// <see cref="TakeOnly"/>.
+	/// </summary>
+	[Property, Title( "Infinite Supply" )]
+	public bool InfiniteSupply { get; set; }
+
 	[Sync( SyncFlags.FromHost )]
 	public int ContentsVersion { get; set; }
 
 	public event Action ContentsChanged;
 
 	InventorySlot[] _slots = Array.Empty<InventorySlot>();
+	InventorySlot[] _supplyStock = Array.Empty<InventorySlot>();
 	int _lastSeenContentsVersion = -1;
 
 	public bool HasHostAuthority =>
@@ -486,6 +496,26 @@ public sealed class ContainerInventory : Component
 		return count - held.Count;
 	}
 
+	/// <summary>Host: one full stack of each id, one per slot; with <see cref="InfiniteSupply"/> the grid refills to this after every take.</summary>
+	public void HostStockInfiniteSupply( IReadOnlyList<string> resourceIds )
+	{
+		if ( !HasHostAuthority || resourceIds is null )
+			return;
+
+		SlotCount = Math.Max( 1, resourceIds.Count );
+		EnsureSlotArray();
+		_supplyStock = new InventorySlot[_slots.Length];
+		for ( var i = 0; i < resourceIds.Count; i++ )
+		{
+			var id = ResourceCatalog.NormalizeResourceId( resourceIds[i] );
+			_supplyStock[i] = new InventorySlot { ResourceId = id, Count = Math.Max( 1, ResourceCatalog.GetMaxStack( id ) ) };
+		}
+
+		Array.Copy( _supplyStock, _slots, _slots.Length );
+		ContentsChanged?.Invoke();
+		PushContentsToPeers();
+	}
+
 	public bool IsEmpty
 	{
 		get
@@ -531,6 +561,9 @@ public sealed class ContainerInventory : Component
 	{
 		if ( !changed )
 			return false;
+
+		if ( InfiniteSupply && _supplyStock.Length == _slots.Length )
+			Array.Copy( _supplyStock, _slots, _slots.Length );
 
 		ContentsChanged?.Invoke();
 		PushContentsToPeers();
