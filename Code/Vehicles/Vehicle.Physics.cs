@@ -9,14 +9,21 @@ namespace Survival;
 /// down from each wheel mount, pushes the chassis up with a spring + damper sized from
 /// <see cref="SuspensionFrequencyHz"/> / <see cref="SuspensionDampingRatio"/> and the chassis mass, kills
 /// sideways slip at each grounded wheel and pushes along the wheel's forward for throttle / brake.
-/// Tyre forces are plain friction (Mark 2026-10-04: rollover must come out of the physics, not a
-/// scripted roll): each wheel's drive + side force acts at its ground contact and is capped at
-/// <see cref="TyreGripCoefficient"/> × that wheel's own spring load. A hard turn shifts load onto the
+/// Tyres follow GTA V's traction curve (handling.meta fTractionCurveMax / Min / Lateral, fTractionBiasFront;
+/// Mark 2026-10-21: "feel like GTA 5"): side grip builds with slip angle up to <see cref="TyreGripCoefficient"/>
+/// at <see cref="TyrePeakSlipDegrees"/>, then falls to <see cref="TyreSlideGripCoefficient"/> once the tyre
+/// slides; side force takes that grip × the wheel's own spring load first and drive / brake get what is
+/// left (friction circle), both acting at the ground contact (Mark 2026-10-04: rollover must come out of the physics). A hard turn shifts load onto the
 /// outside wheels; whether the chassis then tips, slides or rolls over its cage collider falls out of
 /// speed, steering angle, slope, bumps, mass-centre height and track width. Nothing caps the turn and
 /// nothing damps or rights the chassis in the air (Mark 2026-10-21: flipping must be entirely physics —
 /// a sharp turn plus a bump can roll it). μ sits under the tip point (half-track ÷ mass-centre height),
 /// so on flat ground a hard turn slides; a bump or slope on top of it is what trips it over.
+///
+/// Steering is GTA's speed-limited lock: the front wheels never turn further than
+/// <see cref="SteerSlipAssistFraction"/> of the peak slip angle past the way the front axle is travelling,
+/// so at speed the fronts stay near peak grip with room left for throttle — holding W + A widens the
+/// line and keeps accelerating instead of scrubbing at the grip limit. Parked or slow it is the full lock.
 ///
 /// Controls (driver only): W accelerates up to <see cref="MaxSpeedMetersPerSecond"/>; A / D steer;
 /// S brakes while rolling forward and only becomes reverse once the buggy has stopped (Mark: wheels
@@ -44,14 +51,26 @@ public sealed partial class Vehicle
 	[Property, Group( "Drive" ), Title( "Out-of-Fuel Coast Drag (m/s²)" ), Description( "Slow-down once the tank is empty: the engine is dead, W does nothing, the buggy coasts down to a stop at this rate (brakes still work)." )]
 	public float OutOfFuelCoastDragMetersPerSecond2 { get; set; } = 1.5f;
 
-	[Property, Group( "Drive" ), Title( "Tyre Grip (μ)" ), Description( "Tyre friction coefficient: each wheel's drive + side force is capped at μ × the load on that wheel. This is the rollover knob: below the chassis tip point (≈1.05 g for the buggy) a flat hard turn slides and only a bump or slope rolls it; at or above it a flat full-lock turn rolls on its own. Dirt ≈ 0.7, grippy rubber on rock ≈ 1.0+." )]
+	[Property, Group( "Tyres" ), Title( "Tyre Grip (μ)" ), Description( "Peak grip while the tyre holds (GTA fTractionCurveMax, in g): drive + side force per wheel up to μ × its load. This is also the rollover knob: below the chassis tip point (≈1.05 g for the buggy) a flat hard turn slides and only a bump or slope rolls it; at or above it a flat full-lock turn rolls on its own. Dirt ≈ 0.7, grippy rubber on rock ≈ 1.0+ (GTA road cars run 2+ with a mass centre too low to roll)." )]
 	public float TyreGripCoefficient { get; set; } = 0.9f;
+
+	[Property, Group( "Tyres" ), Title( "Tyre Slide Grip (μ)" ), Description( "Grip once a tyre slides past its peak slip angle (GTA fTractionCurveMin). Lower than Tyre Grip = a slide is hard to catch; equal = no drop-off. GTA cars sit around 0.8 × the peak." )]
+	public float TyreSlideGripCoefficient { get; set; } = 0.75f;
+
+	[Property, Group( "Tyres" ), Title( "Tyre Peak Slip (deg)" ), Description( "Slip angle at which a tyre reaches full grip and past which it starts to slide (GTA fTractionCurveLateral). Lower = sharper, more planted; higher = softer, the body swings out further before it bites. Real tyres peak around 6–10°; GTA's usual 22.5 feels drifty on this model. Grip falls to Slide Grip over the same angle again past the peak." )]
+	public float TyrePeakSlipDegrees { get; set; } = 10f;
+
+	[Property, Group( "Tyres" ), Title( "Tyre Grip Bias Front (0–1)" ), Description( "Share of grip on the front axle (GTA fTractionBiasFront): 0.5 even, below 0.5 the rear holds better than the front so the tail stays planted and the nose washes wide first (GTA's arcade cars sit at about 0.48)." )]
+	public float TyreGripBiasFront { get; set; } = 0.48f;
 
 	[Property, Group( "Steering" ), Title( "Max Steer (deg)" )]
 	public float MaxSteerDegrees { get; set; } = 32f;
 
 	[Property, Group( "Steering" ), Title( "Steer Speed (deg/s)" )]
 	public float SteerSpeedDegreesPerSecond { get; set; } = 160f;
+
+	[Property, Group( "Steering" ), Title( "Steer Slip Assist (× peak slip)" ), Description( "GTA-style speed-limited lock: the front wheels turn at most this share of Tyre Peak Slip past the direction the front axle is moving, so they stay just under peak grip and leave room for throttle. Below ~1 the buggy keeps accelerating through a held turn (the line widens); 1 = exactly at peak; 0 = off (full lock at any speed — the tyres saturate and a turn scrubs speed)." )]
+	public float SteerSlipAssistFraction { get; set; } = 0.8f;
 
 	[Property, Group( "Suspension" ), Title( "Wheel Base (m)" )]
 	public float WheelBaseMeters { get; set; } = 2.4f;
@@ -326,8 +345,40 @@ public sealed partial class Vehicle
 	void SimulateSteering( float steerInput, float dt )
 	{
 		var target = Math.Clamp( steerInput, -1f, 1f ) * Math.Max( 1f, MaxSteerDegrees );
+		target = ApplySteerSlipAssist( target );
 		var step = Math.Max( 10f, SteerSpeedDegreesPerSecond ) * dt;
 		_steerDegrees = MathX.Approach( _steerDegrees, target, step );
+	}
+
+	/// <summary>
+	/// GTA's speed-limited lock, as a slip limit rather than a speed table: the front tyre's slip angle is
+	/// wheel angle − the angle the front axle is travelling at (β), so the wheel may turn at most β ± the
+	/// assist share of <see cref="TyrePeakSlipDegrees"/> in the direction the driver asks. Only ever reduces
+	/// the input; no input leaves the wheels straight. Fades in from 2 to 6 m/s; reversing gets the full lock.
+	/// </summary>
+	float ApplySteerSlipAssist( float targetDegrees )
+	{
+		var assist = Math.Max( 0f, SteerSlipAssistFraction );
+		if ( assist <= 0f || MathF.Abs( targetDegrees ) < 0.01f )
+			return targetDegrees;
+
+		var halfBase = TerrainWorldUnits.MetersToEngine( WheelBaseMeters ) * 0.5f;
+		var frontAxle = WorldTransform.PointToWorld( new Vector3( halfBase, 0f, 0f ) );
+		var velocity = _body.GetVelocityAtPoint( frontAxle );
+		var along = Vector3.Dot( velocity, WorldRotation.Forward );
+		var left = -Vector3.Dot( velocity, WorldRotation.Right );
+		var speed = TerrainWorldUnits.EngineToMeters( MathF.Sqrt( along * along + left * left ) );
+		var fade = Math.Clamp( ( speed - 2f ) / 4f, 0f, 1f );
+		if ( fade <= 0f || along <= 0f )
+			return targetDegrees;
+
+		var beta = MathX.RadianToDegree( MathF.Atan2( left, along ) );
+		var slip = assist * Math.Max( 1f, TyrePeakSlipDegrees );
+		var maxLock = Math.Max( 1f, MaxSteerDegrees );
+		var limited = targetDegrees > 0f
+			? Math.Min( targetDegrees, Math.Clamp( beta + slip, 0f, maxLock ) )
+			: Math.Max( targetDegrees, Math.Clamp( beta - slip, -maxLock, 0f ) );
+		return MathX.Lerp( targetDegrees, limited, fade );
 	}
 
 	Rotation WheelRotation( int i )
@@ -382,7 +433,7 @@ public sealed partial class Vehicle
 		var accelUnits = TerrainWorldUnits.MetersToEngine( accel );
 		var perWheelDrive = mass * accelUnits / _groundedWheels;
 		var perWheelMass = mass * 0.25f;
-		var mu = Math.Max( 0f, TyreGripCoefficient );
+		var bias = Math.Clamp( TyreGripBiasFront, 0.01f, 0.99f );
 
 		for ( var i = 0; i < 4; i++ )
 		{
@@ -396,20 +447,47 @@ public sealed partial class Vehicle
 			var wheelForward = ( rot.Forward - n * Vector3.Dot( rot.Forward, n ) ).Normal;
 			var wheelRight = ( rot.Right - n * Vector3.Dot( rot.Right, n ) ).Normal;
 
-			// Side force that would cancel this wheel's sideways slip in one step.
-			var lateral = Vector3.Dot( _body.GetVelocityAtPoint( mount ), wheelRight );
-			var sideForce = -perWheelMass * lateral / dt;
+			// Traction curve: grip rises with slip angle to the peak, then falls to the slide grip. The side
+			// force is that grip × load, never more than would cancel the slip in one step (so a slow or
+			// barely-slipping wheel settles instead of overshooting).
+			var velocityAtMount = _body.GetVelocityAtPoint( mount );
+			var lateral = Vector3.Dot( velocityAtMount, wheelRight );
+			var rolling = MathF.Abs( Vector3.Dot( velocityAtMount, wheelForward ) );
+			var slipDegrees = MathX.RadianToDegree( MathF.Atan2( MathF.Abs( lateral ), rolling ) );
+			var axleGrip = 2f * ( IsFrontWheel( i ) ? bias : 1f - bias );
+			var mu = TractionCurve( slipDegrees ) * axleGrip;
+			var cancelForce = perWheelMass * MathF.Abs( lateral ) / dt;
+			var sideForce = -MathF.Sign( lateral ) * Math.Min( cancelForce, mu * wheel.Load );
 
-			// Friction circle: drive + side together never exceed μ × this wheel's load. A light inside wheel
-			// slides first; a wheel in the air contributes nothing. Pushed at the ground contact, where a real
-			// tyre pushes — that lever arm under the mass centre is what tips a buggy in a hard turn.
-			var tyreForce = wheelForward * perWheelDrive + wheelRight * sideForce;
-			var limit = mu * wheel.Load;
-			if ( tyreForce.LengthSquared > limit * limit )
-				tyreForce = tyreForce.Normal * limit;
+			// Friction circle with the side force first: drive / brake get the grip the corner leaves over, so
+			// holding W through a turn keeps accelerating on a widening line instead of throttle stealing the
+			// rear's side grip and spinning it (an even split spun it out in a planar sim, 2026-10-21). A light
+			// inside wheel slides first; a wheel in the air contributes nothing. Pushed at the ground contact,
+			// where a real tyre pushes — that lever arm under the mass centre is what tips a buggy in a hard turn.
+			var sliding = slipDegrees > Math.Max( 1f, TyrePeakSlipDegrees );
+			var limit = ( sliding ? mu : Math.Max( 0f, TyreGripCoefficient ) * axleGrip ) * wheel.Load;
+			sideForce = Math.Clamp( sideForce, -limit, limit );
+			var driveRoom = MathF.Sqrt( Math.Max( 0f, limit * limit - sideForce * sideForce ) );
+			var driveForce = Math.Clamp( perWheelDrive, -driveRoom, driveRoom );
 
-			_body.ApplyForceAt( wheel.ContactPoint, tyreForce );
+			_body.ApplyForceAt( wheel.ContactPoint, wheelForward * driveForce + wheelRight * sideForce );
 		}
+	}
+
+	/// <summary>
+	/// Grip (μ) at a slip angle, GTA's fTractionCurveMax / Min / Lateral: a sine rise to <see cref="TyreGripCoefficient"/>
+	/// at <see cref="TyrePeakSlipDegrees"/>, then a linear fall to <see cref="TyreSlideGripCoefficient"/> over the
+	/// same angle again.
+	/// </summary>
+	float TractionCurve( float slipDegrees )
+	{
+		var peak = Math.Max( 1f, TyrePeakSlipDegrees );
+		var max = Math.Max( 0f, TyreGripCoefficient );
+		if ( slipDegrees <= peak )
+			return max * MathF.Sin( slipDegrees / peak * MathF.PI * 0.5f );
+
+		var slide = Math.Clamp( ( slipDegrees - peak ) / peak, 0f, 1f );
+		return MathX.Lerp( max, Math.Max( 0f, TyreSlideGripCoefficient ), slide );
 	}
 
 	/// <summary>Decelerate toward zero without crossing it (m/s²).</summary>
