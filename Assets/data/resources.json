@@ -343,14 +343,14 @@
     },
     {
       "id": "resource_femur",
-      "displayName": "Femur",
+      "displayName": "Bone",
       "icon": "ui/items/resource_femur.png",
       "maxStack": 20,
       "fallbackColor": "0.9,0.9,0.9,1"
     },
     {
       "id": "resource_hide",
-      "displayName": "Hide",
+      "displayName": "Deer Hide",
       "icon": "ui/items/resource_hide.png",
       "maxStack": 20,
       "fallbackColor": "0.5,0.04,0.04,1"
@@ -392,7 +392,7 @@
     },
     {
       "id": "resource_silica",
-      "displayName": "Silica",
+      "displayName": "Quartz",
       "icon": "ui/items/resource_silica.png",
       "maxStack": 20,
       "fallbackColor": "0.95,0.87,0.87,1"
@@ -599,7 +599,7 @@
     },
     {
       "id": "rawmeat_bird",
-      "displayName": "Bird Meat",
+      "displayName": "Wings",
       "icon": "ui/items/rawmeat_bird.png",
       "maxStack": 20,
       "fallbackColor": "0.72,0.45,0.4,1"
@@ -673,6 +673,803 @@
       "icon": "ui/items/food_hunter_stew.png",
       "maxStack": 5,
       "fallbackColor": "0.55,0.35,0.18,1"
+    },
+    {
+      // RawMats from the item list.
+      "id": "resource_hardwood",
+      "displayName": "Hardwood",
+      "icon": "ui/items/resource_hardwood.png",
+      "maxStack": 20,
+      "fallbackColor": "0.50,0.24,0.17,1"
+    },
+    {
+      "id": "resource_peat",
+      "displayName": "Peat",
+      "icon": "ui/items/resource_peat.png",
+      "maxStack": 20,
+      "fallbackColor": "0.30,0.21,0.14,1"
+    },
+    {
+      "id": "resource_mycelium",
+      "displayName": "Mycelium",
+      "icon": "ui/items/resource_mycelium.png",
+      "maxStack": 20,
+      "fallbackColor": "0.80,0.69,0.82,1"
+    },
+    {
+      "id": "resource_kelp",
+      "displayName": "Kelp",
+      "icon": "ui/items/resource_kelp.png",
+      "maxStack": 20,
+      "fallbackColor": "0.34,0.51,0.20,1"
+    },
+    {
+      // Bio Mats from the item list.
+      "id": "resource_spiderSilk",
+      "displayName": "Spider Silk",
+      "icon": "ui/items/resource_spiderSilk.png",
+      "maxStack": 20,
+      "fallbackColor": "0.91,0.91,0.93,1"
+    },
+    {
+      "id": "resource_lynxPelt",
+      "displayName": "Lynx Pelt",
+      "icon": "ui/items/resource_lynxPelt.png",
+      "maxStack": 20,
+      "fallbackColor": "0.80,0.68,0.52,1"
+    },
+    {
+      "id": "rawmeat_blackBear",
+      "displayName": "Black Bear Meat",
+      "icon": "ui/items/rawmeat_blackBear.png",
+      "maxStack": 10,
+      "fallbackColor": "0.73,0.33,0.34,1"
+    },
+    {
+      "id": "resource_blackBearFur",
+      "displayName": "Black Bear Fur",
+      "icon": "ui/items/resource_blackBearFur.png",
+      "maxStack": 20,
+      "fallbackColor": "0.23,0.19,0.17,1"
+    },
+    {
+      "id": "rawmeat_jackrabbit",
+      "displayName": "Jackrabbit Meat",
+      "icon": "ui/items/rawmeat_jackrabbit.png",
+      "maxStack": 10,
+      "fallbackColor": "0.86,0.51,0.50,1"
+    },
+    {
+      "id": "resource_vultureTalons",
+      "displayName": "Vulture Talons",
+      "icon": "ui/items/resource_vultureTalons.png",
+      "maxStack": 20,
+      "fallbackColor": "0.28,0.22,0.19,1"
+    },
+    {
+      "id": "resource_dunewyrmScales",
+      "displayName": "Dunewyrm Scales",
+      "icon": "ui/items/resource_dunewyrmScales.png",
+      "maxStack": 20,
+      "fallbackColor": "0.84,0.68,0.40,1"
+    },
+    {
+      "id": "rawmeat_coyote",
+      "displayName": "Coyote Meat",
+      "icon": "ui/items/rawmeat_coyote.png",
+      "maxStack": 10,
+      "fallbackColor": "0.79,0.41,0.39,1"
+    },
+    {
+      "id": "rawmeat_otter",
+      "displayName": "Otter Meat",
+      "icon": "ui/items/rawmeat_otter.png",
+      "maxStack": 10,
+      "fallbackColor": "0.83,0.43,0.42,1"
+    },
+    {
+      "id": "resource_otterPelt",
+      "displayName": "Otter Pelt",
+      "icon": "ui/items/resource_otterPelt.png",
+      "maxStack": 20,
+      "fallbackColor": "0.48,0.34,0.23,1"
+    },
+    {
+      "id": "rawmeat_stingray",
+      "displayName": "Stingray Filet",
+      "icon": "ui/items/rawmeat_stingray.png",
+      "maxStack": 10,
+      "fallbackColor": "0.94,0.79,0.75,1"
+    },
+    {
+      "id": "resource_stingrayBarbs",
+      "displayName": "Barbs",
+      "icon": "ui/items/resource_stingrayBarbs.png",
+      "maxStack": 20,
+      "fallbackColor": "0.77,0.73,0.65,1"
+    },
+    {
+      "id": "rawmeat_crab",
+      "displayName": "Crab Meat",
+      "icon": "ui/items/rawmeat_crab.png",
+      "maxStack": 10,
+      "fallbackColor": "0.91,0.41,0.30,1"
+    },
+    {
+      "id": "rawmeat_shark",
+      "displayName": "Shark Meat",
+      "icon": "ui/items/rawmeat_shark.png",
+      "maxStack": 10,
+      "fallbackColor": "0.92,0.71,0.69,1"
+    },
+    {
+      "id": "rawmeat_snowHare",
+      "displayName": "Snow Hare Meat",
+      "icon": "ui/items/rawmeat_snowHare.png",
+      "maxStack": 10,
+      "fallbackColor": "0.87,0.54,0.53,1"
+    },
+    {
+      "id": "rawmeat_wolf",
+      "displayName": "Wolf Meat",
+      "icon": "ui/items/rawmeat_wolf.png",
+      "maxStack": 10,
+      "fallbackColor": "0.76,0.36,0.35,1"
+    },
+    {
+      "id": "resource_wolfFangs",
+      "displayName": "Wolf Fangs",
+      "icon": "ui/items/resource_wolfFangs.png",
+      "maxStack": 20,
+      "fallbackColor": "0.92,0.89,0.82,1"
+    },
+    {
+      "id": "resource_wolfPelt",
+      "displayName": "Wolf Pelt",
+      "icon": "ui/items/resource_wolfPelt.png",
+      "maxStack": 20,
+      "fallbackColor": "0.60,0.59,0.60,1"
+    },
+    {
+      "id": "rawmeat_goat",
+      "displayName": "Mountain Goat Meat",
+      "icon": "ui/items/rawmeat_goat.png",
+      "maxStack": 10,
+      "fallbackColor": "0.81,0.41,0.38,1"
+    },
+    {
+      "id": "resource_goatHorns",
+      "displayName": "Goat Horns",
+      "icon": "ui/items/resource_goatHorns.png",
+      "maxStack": 20,
+      "fallbackColor": "0.75,0.69,0.60,1"
+    },
+    {
+      "id": "rawmeat_boar",
+      "displayName": "Wild Boar Meat",
+      "icon": "ui/items/rawmeat_boar.png",
+      "maxStack": 10,
+      "fallbackColor": "0.81,0.42,0.42,1"
+    },
+    {
+      "id": "rawmeat_iguana",
+      "displayName": "Iguana Meat",
+      "icon": "ui/items/rawmeat_iguana.png",
+      "maxStack": 10,
+      "fallbackColor": "0.83,0.55,0.48,1"
+    },
+    {
+      "id": "resource_turtleShell",
+      "displayName": "Turtle Shell",
+      "icon": "ui/items/resource_turtleShell.png",
+      "maxStack": 20,
+      "fallbackColor": "0.39,0.50,0.26,1"
+    },
+    {
+      "id": "resource_dragonflyWings",
+      "displayName": "Dragonfly Wings",
+      "icon": "ui/items/resource_dragonflyWings.png",
+      "maxStack": 20,
+      "fallbackColor": "0.50,0.71,0.83,1"
+    },
+    {
+      "id": "rawmeat_bullFrog",
+      "displayName": "Bull Frog Meat",
+      "icon": "ui/items/rawmeat_bullFrog.png",
+      "maxStack": 10,
+      "fallbackColor": "0.90,0.70,0.66,1"
+    },
+    {
+      "id": "resource_alligatorTeeth",
+      "displayName": "Alligator Teeth",
+      "icon": "ui/items/resource_alligatorTeeth.png",
+      "maxStack": 20,
+      "fallbackColor": "0.92,0.91,0.85,1"
+    },
+    {
+      // Agriculture from the item list — seeds here are not sowable yet (no "seed" block).
+      "id": "resource_hobbitsLeaf",
+      "displayName": "Hobbit's Leaf",
+      "icon": "ui/items/resource_hobbitsLeaf.png",
+      "maxStack": 20,
+      "fallbackColor": "0.35,0.58,0.23,1"
+    },
+    {
+      "id": "resource_honey",
+      "displayName": "Honey",
+      "icon": "ui/items/resource_honey.png",
+      "maxStack": 20,
+      "fallbackColor": "0.87,0.64,0.22,1"
+    },
+    {
+      "id": "resource_wheat",
+      "displayName": "Wheat",
+      "icon": "ui/items/resource_wheat.png",
+      "maxStack": 20,
+      "fallbackColor": "0.85,0.70,0.31,1"
+    },
+    {
+      "id": "seed_elm",
+      "displayName": "Elm Seed",
+      "icon": "ui/items/seed_elm.png",
+      "maxStack": 20,
+      "fallbackColor": "0.68,0.60,0.38,1"
+    },
+    {
+      "id": "seed_ash",
+      "displayName": "Ash Seed",
+      "icon": "ui/items/seed_ash.png",
+      "maxStack": 20,
+      "fallbackColor": "0.71,0.61,0.39,1"
+    },
+    {
+      "id": "seed_wheat",
+      "displayName": "Wheat Seed",
+      "icon": "ui/items/seed_wheat.png",
+      "maxStack": 20,
+      "fallbackColor": "0.75,0.62,0.40,1"
+    },
+    {
+      "id": "seed_carrot",
+      "displayName": "Carrot Seed",
+      "icon": "ui/items/seed_carrot.png",
+      "maxStack": 20,
+      "fallbackColor": "0.75,0.60,0.39,1"
+    },
+    {
+      "id": "seed_potato",
+      "displayName": "Potato Seed",
+      "icon": "ui/items/seed_potato.png",
+      "maxStack": 20,
+      "fallbackColor": "0.74,0.60,0.40,1"
+    },
+    {
+      "id": "seed_aloe",
+      "displayName": "Aloe Seeds",
+      "icon": "ui/items/seed_aloe.png",
+      "maxStack": 20,
+      "fallbackColor": "0.69,0.61,0.42,1"
+    },
+    {
+      "id": "seed_pepper",
+      "displayName": "Hot Pepper Seeds",
+      "icon": "ui/items/seed_pepper.png",
+      "maxStack": 20,
+      "fallbackColor": "0.75,0.57,0.38,1"
+    },
+    {
+      "id": "seed_watermelon",
+      "displayName": "Watermelon Seeds",
+      "icon": "ui/items/seed_watermelon.png",
+      "maxStack": 20,
+      "fallbackColor": "0.72,0.57,0.39,1"
+    },
+    {
+      "id": "seed_joshua",
+      "displayName": "Joshua Seeds",
+      "icon": "ui/items/seed_joshua.png",
+      "maxStack": 20,
+      "fallbackColor": "0.69,0.59,0.39,1"
+    },
+    {
+      "id": "seed_cacti",
+      "displayName": "Cacti Seeds",
+      "icon": "ui/items/seed_cacti.png",
+      "maxStack": 20,
+      "fallbackColor": "0.65,0.60,0.39,1"
+    },
+    {
+      // Fishing bait from the item list.
+      "id": "bait_nightCrawlers",
+      "displayName": "Night Crawlers",
+      "icon": "ui/items/bait_nightCrawlers.png",
+      "maxStack": 50,
+      "fallbackColor": "0.62,0.41,0.36,1"
+    },
+    {
+      "id": "bait_glowBug",
+      "displayName": "Glow Bugs",
+      "icon": "ui/items/bait_glowBug.png",
+      "maxStack": 50,
+      "fallbackColor": "0.36,0.43,0.26,1"
+    },
+    {
+      // Trophies from the item list — creature / enemy heads.
+      "id": "trophy_scav",
+      "displayName": "Scav Head",
+      "icon": "ui/items/trophy_scav.png",
+      "maxStack": 10,
+      "fallbackColor": "0.56,0.42,0.30,1"
+    },
+    {
+      "id": "trophy_boneback",
+      "displayName": "Boneback Head",
+      "icon": "ui/items/trophy_boneback.png",
+      "maxStack": 10,
+      "fallbackColor": "0.53,0.43,0.34,1"
+    },
+    {
+      "id": "trophy_fox",
+      "displayName": "Fox Head",
+      "icon": "ui/items/trophy_fox.png",
+      "maxStack": 10,
+      "fallbackColor": "0.70,0.44,0.24,1"
+    },
+    {
+      "id": "trophy_jay",
+      "displayName": "Jay Head",
+      "icon": "ui/items/trophy_jay.png",
+      "maxStack": 10,
+      "fallbackColor": "0.39,0.39,0.46,1"
+    },
+    {
+      "id": "trophy_feralChieftain",
+      "displayName": "Feral Chieftain Head",
+      "icon": "ui/items/trophy_feralChieftain.png",
+      "maxStack": 10,
+      "fallbackColor": "0.60,0.42,0.31,1"
+    },
+    {
+      "id": "trophy_lynx",
+      "displayName": "Lynx Head",
+      "icon": "ui/items/trophy_lynx.png",
+      "maxStack": 10,
+      "fallbackColor": "0.67,0.53,0.36,1"
+    },
+    {
+      "id": "trophy_blackBear",
+      "displayName": "Black Bear Head",
+      "icon": "ui/items/trophy_blackBear.png",
+      "maxStack": 10,
+      "fallbackColor": "0.37,0.27,0.19,1"
+    },
+    {
+      "id": "trophy_raven",
+      "displayName": "Raven Head",
+      "icon": "ui/items/trophy_raven.png",
+      "maxStack": 10,
+      "fallbackColor": "0.37,0.27,0.20,1"
+    },
+    {
+      "id": "trophy_traitor",
+      "displayName": "Surveyor Traitor Head",
+      "icon": "ui/items/trophy_traitor.png",
+      "maxStack": 10,
+      "fallbackColor": "0.60,0.46,0.34,1"
+    },
+    {
+      "id": "trophy_howler",
+      "displayName": "Howler Head",
+      "icon": "ui/items/trophy_howler.png",
+      "maxStack": 10,
+      "fallbackColor": "0.52,0.43,0.32,1"
+    },
+    {
+      "id": "trophy_rager",
+      "displayName": "Rager Head",
+      "icon": "ui/items/trophy_rager.png",
+      "maxStack": 10,
+      "fallbackColor": "0.64,0.34,0.25,1"
+    },
+    {
+      "id": "trophy_mangler",
+      "displayName": "Mangler Head",
+      "icon": "ui/items/trophy_mangler.png",
+      "maxStack": 10,
+      "fallbackColor": "0.54,0.41,0.32,1"
+    },
+    {
+      "id": "trophy_spitter",
+      "displayName": "Spitter Head",
+      "icon": "ui/items/trophy_spitter.png",
+      "maxStack": 10,
+      "fallbackColor": "0.50,0.48,0.27,1"
+    },
+    {
+      "id": "trophy_patrol",
+      "displayName": "Patrol Head",
+      "icon": "ui/items/trophy_patrol.png",
+      "maxStack": 10,
+      "fallbackColor": "0.51,0.40,0.28,1"
+    },
+    {
+      "id": "trophy_jackrabbit",
+      "displayName": "Jackrabbit Head",
+      "icon": "ui/items/trophy_jackrabbit.png",
+      "maxStack": 10,
+      "fallbackColor": "0.68,0.54,0.40,1"
+    },
+    {
+      "id": "trophy_vulture",
+      "displayName": "Vulture Head",
+      "icon": "ui/items/trophy_vulture.png",
+      "maxStack": 10,
+      "fallbackColor": "0.55,0.38,0.28,1"
+    },
+    {
+      "id": "trophy_dunewyrm",
+      "displayName": "Dunewyrm Head",
+      "icon": "ui/items/trophy_dunewyrm.png",
+      "maxStack": 10,
+      "fallbackColor": "0.65,0.49,0.32,1"
+    },
+    {
+      "id": "trophy_coyote",
+      "displayName": "Coyote Head",
+      "icon": "ui/items/trophy_coyote.png",
+      "maxStack": 10,
+      "fallbackColor": "0.62,0.48,0.34,1"
+    },
+    {
+      "id": "trophy_greatDunewyrm",
+      "displayName": "Great Dunewyrm Head",
+      "icon": "ui/items/trophy_greatDunewyrm.png",
+      "maxStack": 10,
+      "fallbackColor": "0.65,0.41,0.29,1"
+    },
+    {
+      "id": "trophy_welder",
+      "displayName": "Welder Head",
+      "icon": "ui/items/trophy_welder.png",
+      "maxStack": 10,
+      "fallbackColor": "0.41,0.36,0.26,1"
+    },
+    {
+      "id": "trophy_hauler",
+      "displayName": "Hauler Head",
+      "icon": "ui/items/trophy_hauler.png",
+      "maxStack": 10,
+      "fallbackColor": "0.49,0.37,0.25,1"
+    },
+    {
+      "id": "trophy_enforcer",
+      "displayName": "Enforcer Head",
+      "icon": "ui/items/trophy_enforcer.png",
+      "maxStack": 10,
+      "fallbackColor": "0.50,0.37,0.26,1"
+    },
+    {
+      "id": "trophy_warden",
+      "displayName": "Warden Head",
+      "icon": "ui/items/trophy_warden.png",
+      "maxStack": 10,
+      "fallbackColor": "0.58,0.43,0.27,1"
+    },
+    {
+      "id": "trophy_hornet",
+      "displayName": "Hornet Head",
+      "icon": "ui/items/trophy_hornet.png",
+      "maxStack": 10,
+      "fallbackColor": "0.68,0.52,0.19,1"
+    },
+    {
+      "id": "trophy_otter",
+      "displayName": "Otter Head",
+      "icon": "ui/items/trophy_otter.png",
+      "maxStack": 10,
+      "fallbackColor": "0.50,0.35,0.22,1"
+    },
+    {
+      "id": "trophy_stingray",
+      "displayName": "Stingray Head",
+      "icon": "ui/items/trophy_stingray.png",
+      "maxStack": 10,
+      "fallbackColor": "0.51,0.41,0.31,1"
+    },
+    {
+      "id": "trophy_crab",
+      "displayName": "Crab Head",
+      "icon": "ui/items/trophy_crab.png",
+      "maxStack": 10,
+      "fallbackColor": "0.72,0.31,0.20,1"
+    },
+    {
+      "id": "trophy_shark",
+      "displayName": "Shark Head",
+      "icon": "ui/items/trophy_shark.png",
+      "maxStack": 10,
+      "fallbackColor": "0.54,0.47,0.44,1"
+    },
+    {
+      "id": "trophy_snowHare",
+      "displayName": "Snow Hare Head",
+      "icon": "ui/items/trophy_snowHare.png",
+      "maxStack": 10,
+      "fallbackColor": "0.78,0.69,0.64,1"
+    },
+    {
+      "id": "trophy_wolf",
+      "displayName": "Wolf Head",
+      "icon": "ui/items/trophy_wolf.png",
+      "maxStack": 10,
+      "fallbackColor": "0.54,0.47,0.41,1"
+    },
+    {
+      "id": "trophy_goat",
+      "displayName": "Mountain Goat Head",
+      "icon": "ui/items/trophy_goat.png",
+      "maxStack": 10,
+      "fallbackColor": "0.78,0.71,0.62,1"
+    },
+    {
+      "id": "trophy_adversary",
+      "displayName": "Adversary Head",
+      "icon": "ui/items/trophy_adversary.png",
+      "maxStack": 10,
+      "fallbackColor": "0.49,0.37,0.33,1"
+    },
+    {
+      "id": "trophy_volt",
+      "displayName": "Volt Head",
+      "icon": "ui/items/trophy_volt.png",
+      "maxStack": 10,
+      "fallbackColor": "0.47,0.40,0.33,1"
+    },
+    {
+      "id": "trophy_leech",
+      "displayName": "Leech Head",
+      "icon": "ui/items/trophy_leech.png",
+      "maxStack": 10,
+      "fallbackColor": "0.47,0.32,0.29,1"
+    },
+    {
+      "id": "trophy_raptor",
+      "displayName": "Raptor Head",
+      "icon": "ui/items/trophy_raptor.png",
+      "maxStack": 10,
+      "fallbackColor": "0.50,0.47,0.29,1"
+    },
+    {
+      "id": "trophy_shatter",
+      "displayName": "Shatter Head",
+      "icon": "ui/items/trophy_shatter.png",
+      "maxStack": 10,
+      "fallbackColor": "0.51,0.48,0.44,1"
+    },
+    {
+      "id": "trophy_stalker",
+      "displayName": "Stalker Head",
+      "icon": "ui/items/trophy_stalker.png",
+      "maxStack": 10,
+      "fallbackColor": "0.27,0.23,0.22,1"
+    },
+    {
+      "id": "trophy_barrage",
+      "displayName": "Barrage Head",
+      "icon": "ui/items/trophy_barrage.png",
+      "maxStack": 10,
+      "fallbackColor": "0.48,0.36,0.28,1"
+    },
+    {
+      "id": "trophy_adversaryGeneral",
+      "displayName": "Adversary General Head",
+      "icon": "ui/items/trophy_adversaryGeneral.png",
+      "maxStack": 10,
+      "fallbackColor": "0.48,0.38,0.36,1"
+    },
+    {
+      "id": "trophy_boar",
+      "displayName": "Wild Boar Head",
+      "icon": "ui/items/trophy_boar.png",
+      "maxStack": 10,
+      "fallbackColor": "0.50,0.36,0.25,1"
+    },
+    {
+      "id": "trophy_iguana",
+      "displayName": "Iguana Head",
+      "icon": "ui/items/trophy_iguana.png",
+      "maxStack": 10,
+      "fallbackColor": "0.45,0.50,0.27,1"
+    },
+    {
+      "id": "trophy_kamikaze",
+      "displayName": "Kamikaze Head",
+      "icon": "ui/items/trophy_kamikaze.png",
+      "maxStack": 10,
+      "fallbackColor": "0.55,0.40,0.28,1"
+    },
+    {
+      "id": "trophy_turtle",
+      "displayName": "Turtle Head",
+      "icon": "ui/items/trophy_turtle.png",
+      "maxStack": 10,
+      "fallbackColor": "0.49,0.46,0.24,1"
+    },
+    {
+      "id": "trophy_dragonfly",
+      "displayName": "Dragonfly Head",
+      "icon": "ui/items/trophy_dragonfly.png",
+      "maxStack": 10,
+      "fallbackColor": "0.38,0.50,0.42,1"
+    },
+    {
+      "id": "trophy_alligator",
+      "displayName": "Alligator Head",
+      "icon": "ui/items/trophy_alligator.png",
+      "maxStack": 10,
+      "fallbackColor": "0.45,0.40,0.24,1"
+    },
+    {
+      "id": "trophy_bullfrog",
+      "displayName": "Bull Frog Head",
+      "icon": "ui/items/trophy_bullfrog.png",
+      "maxStack": 10,
+      "fallbackColor": "0.42,0.47,0.21,1"
+    },
+    {
+      // Equipment from the item list — registered as items only; each still needs a crafting recipe and an equipment_profiles.json row to be crafted / equipped.
+      "id": "shield_wood",
+      "displayName": "Wooden Shield",
+      "icon": "ui/items/shield_wood.png",
+      "maxStack": 1,
+      "fallbackColor": "0.55,0.41,0.29,1"
+    },
+    {
+      "id": "arrow_fire",
+      "displayName": "Fire Arrow",
+      "icon": "ui/items/arrow_fire.png",
+      "maxStack": 50,
+      "fallbackColor": "0.83,0.56,0.29,1"
+    },
+    {
+      "id": "arrow_flint",
+      "displayName": "Flint Arrow",
+      "icon": "ui/items/arrow_flint.png",
+      "maxStack": 50,
+      "fallbackColor": "0.67,0.47,0.36,1"
+    },
+    {
+      "id": "bandana_leather",
+      "displayName": "Bandana",
+      "icon": "ui/items/bandana_leather.png",
+      "maxStack": 1,
+      "fallbackColor": "0.64,0.19,0.17,1"
+    },
+    {
+      "id": "handwraps_leather",
+      "displayName": "Hand Wraps",
+      "icon": "ui/items/handwraps_leather.png",
+      "maxStack": 1,
+      "fallbackColor": "0.87,0.82,0.71,1"
+    },
+    {
+      "id": "cowl_leather",
+      "displayName": "Cowl",
+      "icon": "ui/items/cowl_leather.png",
+      "maxStack": 1,
+      "fallbackColor": "0.52,0.34,0.20,1"
+    },
+    {
+      "id": "headdress",
+      "displayName": "Headdress",
+      "icon": "ui/items/headdress.png",
+      "maxStack": 1,
+      "fallbackColor": "0.69,0.55,0.45,1"
+    },
+    {
+      "id": "greatsword_scrap",
+      "displayName": "Scrap Greatsword",
+      "icon": "ui/items/greatsword_scrap.png",
+      "maxStack": 1,
+      "fallbackColor": "0.53,0.47,0.41,1"
+    },
+    {
+      "id": "helmet_scrap",
+      "displayName": "Scrap Helmet",
+      "icon": "ui/items/helmet_scrap.png",
+      "maxStack": 1,
+      "fallbackColor": "0.56,0.52,0.48,1"
+    },
+    {
+      "id": "chestplate_scrap",
+      "displayName": "Scrap Chest Plate",
+      "icon": "ui/items/chestplate_scrap.png",
+      "maxStack": 1,
+      "fallbackColor": "0.56,0.52,0.48,1"
+    },
+    {
+      "id": "pants_scrap",
+      "displayName": "Scrap Pants",
+      "icon": "ui/items/pants_scrap.png",
+      "maxStack": 1,
+      "fallbackColor": "0.54,0.50,0.46,1"
+    },
+    {
+      "id": "greatsword_reforged",
+      "displayName": "Reforged Greatsword",
+      "icon": "ui/items/greatsword_reforged.png",
+      "maxStack": 1,
+      "fallbackColor": "0.38,0.36,0.36,1"
+    },
+    {
+      "id": "goggles_sand",
+      "displayName": "Sand Goggles",
+      "icon": "ui/items/goggles_sand.png",
+      "maxStack": 1,
+      "fallbackColor": "0.65,0.50,0.26,1"
+    },
+    {
+      "id": "helmet_reforged",
+      "displayName": "Reforged Helmet",
+      "icon": "ui/items/helmet_reforged.png",
+      "maxStack": 1,
+      "fallbackColor": "0.39,0.40,0.43,1"
+    },
+    {
+      "id": "chestplate_reforged",
+      "displayName": "Reforged Chest Plate",
+      "icon": "ui/items/chestplate_reforged.png",
+      "maxStack": 1,
+      "fallbackColor": "0.39,0.40,0.43,1"
+    },
+    {
+      "id": "arms_reforged",
+      "displayName": "Reforged Arms",
+      "icon": "ui/items/arms_reforged.png",
+      "maxStack": 1,
+      "fallbackColor": "0.38,0.40,0.43,1"
+    },
+    {
+      "id": "gloves_reforged",
+      "displayName": "Reforged Gloves",
+      "icon": "ui/items/gloves_reforged.png",
+      "maxStack": 1,
+      "fallbackColor": "0.36,0.37,0.41,1"
+    },
+    {
+      "id": "boots_reforged",
+      "displayName": "Reforged Boots",
+      "icon": "ui/items/boots_reforged.png",
+      "maxStack": 1,
+      "fallbackColor": "0.36,0.37,0.41,1"
+    },
+    {
+      "id": "pants_reforged",
+      "displayName": "Reforged Pants",
+      "icon": "ui/items/pants_reforged.png",
+      "maxStack": 1,
+      "fallbackColor": "0.37,0.38,0.42,1"
+    },
+    {
+      "id": "greatsword_iron",
+      "displayName": "Iron Greatsword",
+      "icon": "ui/items/greatsword_iron.png",
+      "maxStack": 1,
+      "fallbackColor": "0.59,0.58,0.57,1"
+    },
+    {
+      "id": "fist_arcsteel",
+      "displayName": "Arc Fists",
+      "icon": "ui/items/fist_arcsteel.png",
+      "maxStack": 1,
+      "fallbackColor": "0.44,0.56,0.67,1"
+    },
+    {
+      "id": "trinket_luckyRabbitsFoot",
+      "displayName": "Lucky Rabbit's Foot",
+      "icon": "ui/items/trinket_luckyRabbitsFoot.png",
+      "maxStack": 1,
+      "fallbackColor": "0.90,0.86,0.75,1"
     }
   ]
 }

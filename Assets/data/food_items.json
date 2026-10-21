@@ -44,7 +44,7 @@
     },
     {
       "resourceId": "rawmeat_bird",
-      "displayName": "Bird Meat",
+      "displayName": "Wings",
       "edible": false,
       "fallbackColor": "0.72,0.45,0.4,1"
     },

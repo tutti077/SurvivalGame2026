@@ -353,7 +353,7 @@ public static class EquipmentCatalog
 		yield return new EquipmentProfileData
 		{
 			ResourceId = "build_hammer",
-			DisplayName = "Building Hammer",
+			DisplayName = "Build Hammer",
 			Slot = "mainHand",
 			AllowedSlots = { "mainHand" },
 			Actions = { "BuildHammer" },
@@ -364,7 +364,7 @@ public static class EquipmentCatalog
 		yield return new EquipmentProfileData
 		{
 			ResourceId = "basic_hook",
-			DisplayName = "Basic Hook",
+			DisplayName = "Basic Grapple",
 			Slot = "grapple",
 			AllowedSlots = { "grapple" },
 			Actions = { "Grapple" },
@@ -411,7 +411,7 @@ public static class EquipmentCatalog
 		yield return new EquipmentProfileData
 		{
 			ResourceId = "basic_bow",
-			DisplayName = "Basic Bow",
+			DisplayName = "Simple Bow",
 			Slot = "mainHand",
 			AllowedSlots = { "mainHand" },
 			Actions = { "PrimaryRanged" },
