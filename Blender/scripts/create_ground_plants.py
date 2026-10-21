@@ -7,17 +7,17 @@ Run in Blender Scripting workspace, or headless:
 What it builds (all real-world metres, origin at the root on Z = 0)
 -------------------------------------------------------------------
 Clover Hills
-  daisy_single         one daisy on a stem + two basal leaves                ~0.18 m
-  daisy_cluster        three daisies and a leaf rosette                      ~0.22 m
-  clover_patch_small   four three-leaf clovers                               ~0.09 m
-  clover_patch_large   nine three-leaf clovers                               ~0.11 m
+  daisy                one upright daisy on a stem + two basal leaves        ~0.40 m  (2.5x life size)
+  clover               one upright three-leaf clover                         ~0.17 m  (2.5x life size)
+                       (single plants on purpose — clusters are made by spawning several with varied
+                       height / tilt / yaw, not baked into a model)
   weed_sprout          tiny two-to-four leaf seedling                        ~0.06 m
   weed_rosette         flat jagged dandelion-style leaf rosette              ~0.04 m
   weed_dandelion       rosette + one yellow dandelion head                   ~0.16 m
   weed_broadleaf       plantain-style broad leaves                           ~0.08 m
 Redwood Forest
-  fern_fiddlehead      curled young shoots                                   ~0.20 m
-  fern_young           four short fronds                                     ~0.45 m
+  fern_fiddlehead      curled young shoots                                   ~0.45 m  (2.5x)
+  fern_young           four short fronds                                     ~0.74 m  (2x)
   fern_full            ten arching sword-fern fronds                         ~1.00 m
   redwood_sorrel       oxalis patch (purple-backed clover leaves)            ~0.12 m
   mushroom_cluster     three red-capped mushrooms                            ~0.12 m
@@ -262,16 +262,17 @@ def clover_leaf( m: PlantMesh, top: Vector, size: float, yaw: float, swatch: str
 				m.add_face( ( low[0], low[i + 1], low[i] ), back_swatch )
 
 
-def clover( m: PlantMesh, root: Vector, height: float, size: float, swatch: str = "clover", back_swatch: str = None ) -> None:
-	lean = Vector( ( m.rng.uniform( -1, 1 ), m.rng.uniform( -1, 1 ), 0 ) ) * height * 0.25
+def clover( m: PlantMesh, root: Vector, height: float, size: float, swatch: str = "clover", back_swatch: str = None,
+			lean_amount: float = 0.25 ) -> None:
+	lean = Vector( ( m.rng.uniform( -1, 1 ), m.rng.uniform( -1, 1 ), 0 ) ) * height * lean_amount
 	top = root + Vector( ( 0, 0, height ) ) + lean
 	mid = root + Vector( ( 0, 0, height * 0.6 ) ) + lean * 0.2
 	tube( m, curve_points( root - Vector( ( 0, 0, ROOT_SINK ) ), mid, top, 2 ), [ 0.0025, 0.002, 0.0015 ], "leaf", sides=3, cap=False )
 	clover_leaf( m, top, size, m.rng.uniform( 0, math.tau ), swatch, back_swatch )
 
 
-def daisy( m: PlantMesh, root: Vector, height: float, head_radius: float ) -> None:
-	lean = Vector( ( m.rng.uniform( -1, 1 ), m.rng.uniform( -1, 1 ), 0 ) ).normalized() * height * m.rng.uniform( 0.08, 0.2 )
+def daisy( m: PlantMesh, root: Vector, height: float, head_radius: float, lean_amount: float = 0.0 ) -> None:
+	lean = Vector( ( m.rng.uniform( -1, 1 ), m.rng.uniform( -1, 1 ), 0 ) ).normalized() * height * lean_amount
 	top = root + Vector( ( 0, 0, height ) ) + lean
 	mid = root + Vector( ( 0, 0, height * 0.55 ) )
 	tube( m, curve_points( root - Vector( ( 0, 0, ROOT_SINK ) ), mid, top, 3 ), [ 0.003, 0.0025, 0.002, 0.002 ], "leaf", sides=3, cap=False )
@@ -476,25 +477,15 @@ def _scatter_points( rng: random.Random, count: int, radius: float, min_gap: flo
 	return pts
 
 
-def build_daisy_single( m ):
+# Daisy and clover are ONE plant each, upright (no baked lean): height, tilt and yaw come from whatever spawns them,
+# so a cluster is three instances side by side, not a model.
+def build_daisy( m ):
 	daisy( m, Vector(), 0.15, 0.038 )
 	leaf_rosette( m, Vector(), 2, ( 0.05, 0.07 ), ( 0.018, 0.024 ), ( 15, 30 ), ( "leaf", "leaf_dark" ) )
 
 
-def build_daisy_cluster( m ):
-	for p, h in zip( _scatter_points( m.rng, 3, 0.05, 0.04 ), ( 0.19, 0.15, 0.11 ) ):
-		daisy( m, p, h, m.rng.uniform( 0.032, 0.04 ) )
-	leaf_rosette( m, Vector(), 6, ( 0.05, 0.08 ), ( 0.018, 0.026 ), ( 10, 30 ), ( "leaf", "leaf_dark", "leaf_light" ) )
-
-
-def build_clover_small( m ):
-	for p in _scatter_points( m.rng, 5, 0.06, 0.035 ):
-		clover( m, p, m.rng.uniform( 0.04, 0.07 ), m.rng.uniform( 0.022, 0.028 ) )
-
-
-def build_clover_large( m ):
-	for p in _scatter_points( m.rng, 12, 0.12, 0.04 ):
-		clover( m, p, m.rng.uniform( 0.04, 0.09 ), m.rng.uniform( 0.022, 0.03 ), swatch=m.rng.choice( ( "clover", "clover", "leaf_light" ) ) )
+def build_clover( m ):
+	clover( m, Vector(), 0.06, 0.026, lean_amount=0.0 )
 
 
 def build_weed_sprout( m ):
@@ -587,17 +578,17 @@ def build_dead_shrub( m ):
 		branch( m, Vector( ( 0, 0, -ROOT_SINK ) ), d, m.rng.uniform( 0.16, 0.22 ), 0.012, 2 )
 
 
+# ( name, seed, builder[, uniform scale] ). The scale is a readability boost on top of real-world size (Mark 2026-10-21:
+# clover, daisy and small ferns were invisible past a few metres at life size).
 MODELS = [
-	( "daisy_single", 101, build_daisy_single ),
-	( "daisy_cluster", 102, build_daisy_cluster ),
-	( "clover_patch_small", 103, build_clover_small ),
-	( "clover_patch_large", 104, build_clover_large ),
+	( "daisy", 101, build_daisy, 2.5 ),
+	( "clover", 103, build_clover, 2.5 ),
 	( "weed_sprout", 105, build_weed_sprout ),
 	( "weed_rosette", 106, build_weed_rosette ),
 	( "weed_dandelion", 107, build_weed_dandelion ),
 	( "weed_broadleaf", 108, build_weed_broadleaf ),
-	( "fern_fiddlehead", 201, build_fern_fiddlehead ),
-	( "fern_young", 202, build_fern_young ),
+	( "fern_fiddlehead", 201, build_fern_fiddlehead, 2.5 ),
+	( "fern_young", 202, build_fern_young, 2.0 ),
 	( "fern_full", 203, build_fern_full ),
 	( "redwood_sorrel", 204, build_redwood_sorrel ),
 	( "mushroom_cluster", 205, build_mushroom_cluster ),
@@ -784,9 +775,11 @@ def main() -> None:
 
 	objects = []
 	columns = 6
-	for index, ( name, seed, build ) in enumerate( MODELS ):
+	for index, ( name, seed, build, *scale ) in enumerate( MODELS ):
 		m = PlantMesh( seed )
 		build( m )
+		if scale:
+			m.verts = [ v * scale[0] for v in m.verts ]
 		obj = to_object( name, m, material )
 		obj.location = ( ( index % columns ) * LAYOUT_SPACING, -( index // columns ) * LAYOUT_SPACING, 0.0 )
 		objects.append( obj )
