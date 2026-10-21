@@ -108,12 +108,35 @@ public static class InventoryScreenPointer
 		return true;
 	}
 
+	// The resolve below walks every ancestor's whole subtree looking for a camera; from a HUD object that reaches the
+	// scene root it was a full-scene walk (every tree) EVERY FRAME a menu held the cursor — 1 ms a frame on the pawn
+	// (perf_suite 2026-10-20). Resolve once per source object and keep it while the camera stays valid.
+	static GameObject _cachedFrom;
+	static CameraComponent _cachedCam;
+
 	static bool TryResolveViewCamera( GameObject from, out CameraComponent cam )
 	{
 		cam = default;
 		if ( !from.IsValid() )
 			return false;
 
+		if ( ReferenceEquals( _cachedFrom, from ) && _cachedCam.IsValid() && _cachedCam.Active )
+		{
+			cam = _cachedCam;
+			return true;
+		}
+
+		if ( !ResolveViewCameraUncached( from, out cam ) )
+			return false;
+
+		_cachedFrom = from;
+		_cachedCam = cam;
+		return true;
+	}
+
+	static bool ResolveViewCameraUncached( GameObject from, out CameraComponent cam )
+	{
+		cam = default;
 		for ( var go = from; go.IsValid(); go = go.Parent )
 		{
 			if ( TryFindFirstCameraInHierarchy( go, out cam ) && cam.IsValid() )

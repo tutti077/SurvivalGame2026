@@ -15,7 +15,6 @@ public static class BiomePopulationRespawnQueue
 		public int Tier;
 		public bool Respawn;
 		public float RespawnDelaySeconds;
-		public string Near;
 		public Vector3 WorldPosition;
 		public GameObject ChunkRoot;
 		public double ReadyAt;
@@ -24,31 +23,6 @@ public static class BiomePopulationRespawnQueue
 	static readonly List<Pending> Queue = new();
 
 	public static void Clear() => Queue.Clear();
-
-	public static void Enqueue(
-		string slotKey,
-		BiomePopulationEntry entry,
-		Vector3 worldPosition,
-		GameObject chunkRoot,
-		float delaySeconds )
-	{
-		if ( string.IsNullOrWhiteSpace( slotKey ) || chunkRoot is null || !chunkRoot.IsValid() )
-			return;
-
-		Queue.Add( new Pending
-		{
-			SlotKey = slotKey,
-			PrefabPath = entry.PrefabPath,
-			EnemyType = entry.EnemyType,
-			Tier = entry.Tier,
-			Respawn = entry.Respawn,
-			RespawnDelaySeconds = entry.RespawnDelaySeconds,
-			Near = entry.Near,
-			WorldPosition = worldPosition,
-			ChunkRoot = chunkRoot,
-			ReadyAt = Time.NowDouble + Math.Max( 0f, delaySeconds ),
-		} );
-	}
 
 	public static void EnqueueFromSlot(
 		string slotKey,
@@ -106,7 +80,6 @@ public static class BiomePopulationRespawnQueue
 					Tier = pending.Tier,
 					Respawn = pending.Respawn,
 					RespawnDelaySeconds = pending.RespawnDelaySeconds,
-					Near = pending.Near,
 					SpacingMeters = 250f,
 					SpawnWeight = 1f,
 				},

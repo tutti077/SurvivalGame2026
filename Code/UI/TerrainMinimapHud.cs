@@ -4,7 +4,7 @@ using Sandbox.UI;
 
 namespace Survival;
 
-/// <summary>Top-right terrain biome minimap with +/− zoom under the bottom-right corner.</summary>
+/// <summary>Top-right terrain biome minimap with +/− zoom under the bottom-right corner, and the wind arrow under that.</summary>
 public sealed class TerrainMinimapHud
 {
 	const float ZoomButtonSize = 26f;
@@ -13,6 +13,12 @@ public sealed class TerrainMinimapHud
 	readonly TerrainWorldMapFace _face = new();
 	Panel _frame;
 	Panel _zoomRow;
+	Panel _windRow;
+	Panel _windArrow;
+	int _windDeg = int.MinValue;
+	int _windOpacityStep = -1;
+	bool _windShown = true;
+	RealTimeSince _windStyled;
 	TerrainMinimapZoomButton _zoomOutButton;
 	TerrainMinimapZoomButton _zoomInButton;
 	bool _built;
@@ -55,7 +61,96 @@ public sealed class TerrainMinimapHud
 		_zoomOutButton = CreateZoomButton( "−", zoomIn: false );
 		_zoomInButton = CreateZoomButton( "+", zoomIn: true );
 		RefreshButtonStyles();
+		BuildWindRow();
 		_built = true;
+	}
+
+	/// <summary>
+	/// "wind" + an arrow under the zoom buttons: the arrow points the way the wind BLOWS, in map orientation
+	/// (same mapping as the heading tick), and brightens with the current gust. Hidden when the scene has no WindSystem.
+	/// </summary>
+	void BuildWindRow()
+	{
+		_windRow = new Panel { Parent = _frame };
+		_windRow.Style.Set( "position", "relative" );
+		_windRow.Style.Set( "flex-direction", "row" );
+		_windRow.Style.Set( "justify-content", "flex-end" );
+		_windRow.Style.Set( "align-items", "center" );
+		_windRow.Style.Set( "gap", "6px" );
+		_windRow.Style.Set( "margin-top", "4px" );
+		_windRow.Style.Set( "pointer-events", "none" );
+
+		var label = new Label { Parent = _windRow, Text = "wind" };
+		label.Style.FontColor = new Color( 0.75f, 0.8f, 0.88f, 0.9f );
+		label.Style.FontSize = Length.Pixels( 11f );
+
+		_windArrow = new Panel { Parent = _windRow };
+		_windArrow.Style.Width = Length.Pixels( 22f );
+		_windArrow.Style.Height = Length.Pixels( 22f );
+		_windArrow.Style.Set( "position", "relative" );
+		_windArrow.Style.Set( "transform-origin", "center center" );
+
+		var shaft = new Panel { Parent = _windArrow };
+		shaft.Style.Set( "position", "absolute" );
+		shaft.Style.Set( "left", "10px" );
+		shaft.Style.Set( "top", "4px" );
+		shaft.Style.Width = Length.Pixels( 2f );
+		shaft.Style.Height = Length.Pixels( 16f );
+		shaft.Style.BackgroundColor = new Color( 0.2f, 0.95f, 1f, 0.95f );
+
+		// Two borders of a small square, turned 45°, make the arrow head.
+		var head = new Panel { Parent = _windArrow };
+		head.Style.Set( "position", "absolute" );
+		head.Style.Set( "left", "7px" );
+		head.Style.Set( "top", "3px" );
+		head.Style.Width = Length.Pixels( 8f );
+		head.Style.Height = Length.Pixels( 8f );
+		head.Style.Set( "border-top-width", "2px" );
+		head.Style.Set( "border-left-width", "2px" );
+		head.Style.Set( "border-color", "#33f2ff" );
+		head.Style.Set( "transform", "rotate(45deg)" );
+	}
+
+	void UpdateWindArrow()
+	{
+		if ( _windRow is null || !_windRow.IsValid() )
+			return;
+
+		var wind = WindSystem.Current;
+		var show = wind.IsValid() && wind.WindEnabled;
+		if ( show != _windShown )
+		{
+			_windShown = show;
+			_windRow.Style.Set( "display", show ? "flex" : "none" );
+		}
+
+		if ( !show )
+			return;
+
+		// Style.Set re-lays the HUD out; four times a second is plenty for an arrow.
+		if ( _windStyled < 0.25f )
+			return;
+		_windStyled = 0;
+
+		var dir = TerrainBiomeMapCoordinates.WorldForwardToPreviewMapDirection( wind.Direction );
+		if ( dir.LengthSquared > 1e-8f )
+		{
+			dir = dir.Normal;
+			var deg = (int)MathF.Round( MathF.Atan2( dir.x, -dir.y ) * (180f / MathF.PI) );
+			if ( deg != _windDeg )
+			{
+				_windDeg = deg;
+				_windArrow.Style.Set( "transform", $"rotate({deg}deg)" );
+			}
+		}
+
+		// Brightness follows the summed wind in four steps, so a gust visibly lights the arrow up.
+		var step = (int)MathF.Round( wind.Strength01 * 4f );
+		if ( step != _windOpacityStep )
+		{
+			_windOpacityStep = step;
+			_windArrow.Style.Set( "opacity", $"{0.35f + (0.1625f * step):0.00}" );
+		}
 	}
 
 	TerrainMinimapZoomButton CreateZoomButton( string label, bool zoomIn )
@@ -133,6 +228,7 @@ public sealed class TerrainMinimapHud
 		PollPointerZoom();
 		_face.Tick();
 		RefreshButtonStyles();
+		UpdateWindArrow();
 	}
 
 	/// <summary>
@@ -155,6 +251,7 @@ public sealed class TerrainMinimapHud
 
 		_face.Tick();
 		RefreshButtonStyles();
+		UpdateWindArrow();
 	}
 
 	void PollPointerZoom()

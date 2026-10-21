@@ -4,11 +4,8 @@ using Sandbox.Movement;
 namespace Survival;
 
 /// <summary>
-/// Terrain-test only:
-/// <list type="bullet">
-/// <item><b>J</b> (<c>SpawnPlayer</c>) — scale-reference doll (no controller; fly cam stays).</item>
-/// <item><b>L</b> (<c>SpawnPlayablePlayer</c>) — full playable pawn; fly input off, PlayerController owns the scene camera.</item>
-/// </list>
+/// Terrain-test only: <b>L</b> (<c>SpawnPlayablePlayer</c>) toggles between the full playable pawn (fly input off,
+/// PlayerController owns the scene camera) and the fly camera, which resumes from the pawn's eyes. (The J scale-reference doll — a stripped, T-posed player clone — was deleted 2026-10-13.)
 /// </summary>
 [Title( "Terrain Test Player Spawn" )]
 public sealed class TerrainTestPlayerSpawn : Component
@@ -37,7 +34,6 @@ public sealed class TerrainTestPlayerSpawn : Component
 	[Property, Title( "Infinite stamina on L spawn" )]
 	public bool InfiniteStaminaOnPlayable { get; set; } = true;
 
-	readonly List<GameObject> _spawnedScaleDolls = new();
 	GameObject _playablePlayer;
 	GameObject _flyView;
 	TerrainTestFlyCamera _flyControl;
@@ -55,19 +51,43 @@ public sealed class TerrainTestPlayerSpawn : Component
 
 		if ( IsPlayableActive() )
 			MaintainPlayableControl();
-		else if ( _spawnedScaleDolls.Count > 0 )
-			MaintainFlyCamera();
 
-		if ( WasPlayableSpawnPressed() )
+		if ( !WasPlayableSpawnPressed() )
+			return;
+
+		TogglePawn();
+	}
+
+	Transform? _pendingFlyEye;
+
+	/// <summary>L / <c>pawn_toggle</c>: fly camera → pawn, pawn → fly camera (resumes from the pawn's eyes).</summary>
+	public void TogglePawn()
+	{
+		if ( IsPlayableActive() )
 		{
-			SpawnPlayableAtCamera();
+			// Destroy is deferred to the end of the frame and the pawn's controller releases the camera / mouse in
+			// its own teardown, so restoring the fly camera NOW gets undone a moment later (Mark 2026-10-13: "can't
+			// be flown"). Mark the pawn for destruction and let PruneDestroyedSpawns restore next frame, after it is gone.
+			_pendingFlyEye = Scene?.Camera?.WorldTransform;
+			_playablePlayer.Destroy();
+			Log.Info( "[TerrainTestPlayerSpawn] Pawn removed (L) — fly camera resumes next frame." );
 			return;
 		}
 
-		if ( !Input.Pressed( "SpawnPlayer" ) )
-			return;
+		SpawnPlayableAtCamera();
+	}
 
-		SpawnScaleDollAtCamera();
+	/// <summary>Dev: the same as pressing L.</summary>
+	[ConCmd( "pawn_toggle" )]
+	public static void ConCmdPawnToggle()
+	{
+		var spawn = Sandbox.Game.ActiveScene?.GetAllComponents<TerrainTestPlayerSpawn>().FirstOrDefault();
+		if ( spawn is null )
+		{
+			Log.Warning( "[TerrainTestPlayerSpawn] no TerrainTestPlayerSpawn in the active scene." );
+			return;
+		}
+		spawn.TogglePawn();
 	}
 
 	static bool WasPlayableSpawnPressed()
@@ -122,41 +142,6 @@ public sealed class TerrainTestPlayerSpawn : Component
 		Log.Info( "[TerrainTestPlayerSpawn] Playable control (L) — fly cam input disabled; middle-mouse grapple." );
 	}
 
-	void SpawnScaleDollAtCamera()
-	{
-		var view = ResolveViewCamera();
-		if ( view is null || !view.IsValid() )
-		{
-			Log.Warning( "[TerrainTestPlayerSpawn] No view camera — assign FlyCamera or tag a CameraComponent." );
-			return;
-		}
-
-		var scene = Scene;
-		if ( !scene.IsValid() )
-			return;
-
-		var instance = BuildPrefabUtility.GetTemplate( PlayerPrefabPath )?.Clone();
-		if ( instance is null || !instance.IsValid() )
-		{
-			Log.Warning( $"[TerrainTestPlayerSpawn] Failed to clone '{PlayerPrefabPath}'." );
-			return;
-		}
-
-		instance.Parent = scene;
-		instance.WorldPosition = view.WorldPosition;
-		instance.WorldRotation = view.WorldRotation;
-
-		ConfigureScaleReferencePawn( instance );
-
-		instance.Enabled = true;
-		_spawnedScaleDolls.Add( instance );
-
-		CacheFlyRefs( view );
-		AssertSceneCameraMain( view );
-
-		Log.Info( $"[TerrainTestPlayerSpawn] Scale doll #{_spawnedScaleDolls.Count} at camera (J)." );
-	}
-
 	bool IsPlayableActive() => _playablePlayer is not null && _playablePlayer.IsValid();
 
 	void DestroyPlayableIfAny()
@@ -173,16 +158,14 @@ public sealed class TerrainTestPlayerSpawn : Component
 
 	void PruneDestroyedSpawns()
 	{
-		for ( var i = _spawnedScaleDolls.Count - 1; i >= 0; i-- )
-		{
-			if ( !_spawnedScaleDolls[i].IsValid() )
-				_spawnedScaleDolls.RemoveAt( i );
-		}
-
 		if ( _playablePlayer is not null && !_playablePlayer.IsValid() )
 		{
 			_playablePlayer = null;
 			RestoreFlyControl();
+			// The fly camera owns its transform every frame — hand it the pawn's last eye through its own teleport.
+			if ( _pendingFlyEye.HasValue && _flyControl is { IsValid: true } )
+				_flyControl.TeleportTo( _pendingFlyEye.Value.Position, _pendingFlyEye.Value.Position + (_pendingFlyEye.Value.Forward * 1000f) );
+			_pendingFlyEye = null;
 		}
 	}
 
@@ -291,35 +274,6 @@ public sealed class TerrainTestPlayerSpawn : Component
 		}
 	}
 
-	void ConfigureScaleReferencePawn( GameObject root )
-	{
-		StripCameraDrivingSystems( root );
-
-		if ( DisableFallDamage )
-			DisableImpactDamage( root );
-
-		EnsureRigidbodyFalls( root );
-	}
-
-	static void StripCameraDrivingSystems( GameObject root )
-	{
-		DestroyComponent<PlayerController>( root );
-		DestroyComponent<PlayerGameMenuController>( root );
-		DestroyComponent<PlayerScreenHud>( root );
-		DestroyComponent<ScreenPanel>( root );
-		DestroyComponent<MoveModeWalk>( root );
-		DestroyComponent<MoveModeSwim>( root );
-		DestroyComponent<MoveModeLadder>( root );
-
-		foreach ( var cam in root.Components.GetAll<CameraComponent>( FindMode.EverythingInSelfAndDescendants ) )
-		{
-			if ( cam is null || !cam.IsValid() )
-				continue;
-
-			cam.Destroy();
-		}
-	}
-
 	static void EnsureRigidbodyFalls( GameObject root )
 	{
 		var body = root.Components.Get<Rigidbody>( FindMode.EverythingInSelfAndDescendants );
@@ -328,12 +282,6 @@ public sealed class TerrainTestPlayerSpawn : Component
 
 		body.MotionEnabled = true;
 		body.Gravity = true;
-	}
-
-	static void DestroyComponent<T>( GameObject root ) where T : Component
-	{
-		foreach ( var component in root.Components.GetAll<T>( FindMode.EverythingInSelfAndDescendants ) )
-			component?.Destroy();
 	}
 
 	static void DisableImpactDamage( GameObject root )
@@ -350,7 +298,9 @@ public sealed class TerrainTestPlayerSpawn : Component
 	void CacheFlyRefs( GameObject view )
 	{
 		_flyView = view;
-		_flyControl = view.Components.Get<TerrainTestFlyCamera>();
+		// EverythingInSelf: the fly control is DISABLED while the pawn is up, and the default (enabled-only) lookup
+		// returned null on restore, so it was never switched back on — the "can't fly after L" bug (2026-10-13).
+		_flyControl = view.Components.Get<TerrainTestFlyCamera>( FindMode.EverythingInSelf );
 		_sceneCamera = view.Components.Get<CameraComponent>();
 	}
 
@@ -418,29 +368,8 @@ public sealed class TerrainTestPlayerSpawn : Component
 			_flyControl.Enabled = true;
 			_flyControl.SetInputLocked( false );
 		}
-	}
 
-	void MaintainFlyCamera()
-	{
-		if ( IsPlayableActive() )
-			return;
-
-		if ( _flyView is null || !_flyView.IsValid() )
-		{
-			var view = ResolveViewCamera();
-			if ( view is null )
-				return;
-			CacheFlyRefs( view );
-			AssertSceneCameraMain( view );
-		}
-
-		if ( _flyControl is not null && _flyControl.IsValid() )
-		{
-			if ( !_flyControl.Enabled )
-				_flyControl.Enabled = true;
-			if ( _flyControl.InputLocked )
-				_flyControl.SetInputLocked( false );
-		}
+		Log.Info( $"[TerrainTestPlayerSpawn] Fly camera restored: control {(_flyControl.IsValid() ? (_flyControl.Enabled ? "on" : "DISABLED") : "missing")}, input {(_flyControl.IsValid() && _flyControl.InputLocked ? "LOCKED" : "free")}, scene camera '{Scene?.Camera?.GameObject?.Name}', mouse {Mouse.Visibility}." );
 	}
 
 	static void AssertSceneCameraMain( GameObject view )

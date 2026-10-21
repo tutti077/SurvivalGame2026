@@ -14,16 +14,6 @@ static class TerrainPreviewPatchFilter
 		=> TerrainPreviewMountainSpeckFilter.RemoveSmallPatches(
 			mask, width, height, metersPerPixel, minPatchDiameterMeters );
 
-	public static void RemoveOversizedPatches(
-		bool[] mask,
-		int width,
-		int height,
-		float metersPerPixel,
-		float maxPatchDiameterMeters,
-		int maxPasses = 2 )
-		=> TerrainPreviewMountainSpeckFilter.RemoveOversizedPatches(
-			mask, width, height, metersPerPixel, maxPatchDiameterMeters, maxPasses );
-
 	public static void FillSmallDryIslandsInWater(
 		bool[] openWater,
 		bool[] landDisk,

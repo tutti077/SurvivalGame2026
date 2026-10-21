@@ -208,12 +208,20 @@ public static class MeleeWeaponClassCatalog
 
 	static bool _loaded;
 	static int _loadedJsonHash;
+	// Same throttled change check as EquipmentCatalog: read + hash the JSON at most every JsonChangeCheckSeconds, never per call
+	// (PlayerCombat calls EnsureLoaded every frame on the JSON-file path).
+	const float JsonChangeCheckSeconds = 2f;
+	static float _lastJsonChangeCheckTime = float.NegativeInfinity;
 
 	/// <summary>Bumped on every reload so cached resolved timings can invalidate.</summary>
 	public static int Version { get; private set; }
 
 	public static void EnsureLoaded()
 	{
+		if ( _loaded && RealTime.Now - _lastJsonChangeCheckTime < JsonChangeCheckSeconds )
+			return;
+
+		_lastJsonChangeCheckTime = RealTime.Now;
 		var jsonHash = TryReadJsonHash();
 		if ( _loaded && jsonHash == _loadedJsonHash )
 			return;

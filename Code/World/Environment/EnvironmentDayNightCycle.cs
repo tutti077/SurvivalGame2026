@@ -47,7 +47,7 @@ public sealed class EnvironmentDayNightCycle : Component
 	public DirectionalLight MoonLight { get; set; }
 
 	[Property, Group( "Lighting" ), Title( "Sun peak color" )]
-	public Color SunPeakColor { get; set; } = new( 1.05f, 1.0f, 0.95f, 1f );
+	public Color SunPeakColor { get; set; } = new( 3.2f, 2.95f, 2.6f, 1f );   // blinding noon sun; shade falls to the sky ambient (Mark 2026-10-13)
 
 	[Property, Group( "Lighting" ), Title( "Sun horizon color" )]
 	public Color SunHorizonColor { get; set; } = new( 1.0f, 0.55f, 0.28f, 1f );
@@ -62,7 +62,7 @@ public sealed class EnvironmentDayNightCycle : Component
 	public float MoonDirectionalBrightness { get; set; } = 0.15f;
 
 	[Property, Group( "Lighting" ), Title( "Sky ambient day" )]
-	public Color DaySkyAmbient { get; set; } = new( 0.4f, 0.5f, 0.7f, 1f );
+	public Color DaySkyAmbient { get; set; } = new( 0.18f, 0.23f, 0.33f, 1f );   // ~1/14 of the sun so standing out of it is clearly darker
 
 	[Property, Group( "Lighting" ), Title( "Sky ambient night" )]
 	public Color NightSkyAmbient { get; set; } = new( 0.22f, 0.28f, 0.42f, 1f );
@@ -199,6 +199,32 @@ public sealed class EnvironmentDayNightCycle : Component
 		if ( scene is null || !scene.IsValid() )
 			return null;
 		return scene.GetAllComponents<EnvironmentDayNightCycle>().FirstOrDefault( c => c.IsValid() && c.Active );
+	}
+
+	/// <summary>
+	/// Dev: switch the scene's day / night cycle on or off. Finds the cycle's GameObject even while it is disabled
+	/// (terrainTest ships its DayNightCycle group — cycle + sky dome + sun / moon disks + moon light — disabled, so
+	/// the plain sun stays until you ask for the 3-minute loop).
+	/// </summary>
+	[ConCmd( "cycle_toggle" )]
+	public static void ConCmdToggle()
+	{
+		var scene = Sandbox.Game.ActiveScene;
+		if ( scene is null )
+			return;
+
+		// Walk the whole hierarchy including disabled objects and components: GetAllObjects( true ) did not
+		// surface terrainTest's disabled DayNightCycle group in play (Mark 2026-10-13, "no cycle object").
+		var cycle = scene.Components.GetAll<EnvironmentDayNightCycle>( FindMode.EverythingInSelfAndDescendants ).FirstOrDefault();
+		var owner = cycle?.GameObject;
+		if ( owner is null || !owner.IsValid() )
+		{
+			Log.Warning( $"[EnvironmentDayNight] no cycle object in the active scene '{scene.Name}' — add a DayNightCycle group (see terrainTest / testscene1)." );
+			return;
+		}
+
+		owner.Enabled = !owner.Enabled;
+		Log.Info( $"[EnvironmentDayNight] cycle {(owner.Enabled ? "ON" : "OFF")} ('{owner.Name}')." );
 	}
 
 	[ConCmd( "cycle_day" )]

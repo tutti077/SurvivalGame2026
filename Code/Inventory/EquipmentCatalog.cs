@@ -16,6 +16,11 @@ public static class EquipmentCatalog
 
 	static bool _loaded;
 	static int _loadedJsonHash;
+	// A JSON edit is picked up without a restart, but the file is read + hashed at most every JsonChangeCheckSeconds —
+	// never per call. HasGrappleEquipped → TryGet runs every frame from the HUD; the per-call hash was 1.1 ms a
+	// frame and ~36 MB/s of string garbage with the pawn standing (perf_suite, 2026-10-20).
+	const float JsonChangeCheckSeconds = 2f;
+	static float _lastJsonChangeCheckTime = float.NegativeInfinity;
 
 	public static IReadOnlyList<EquipmentProfileData> All
 	{
@@ -35,6 +40,10 @@ public static class EquipmentCatalog
 
 	public static void EnsureLoaded()
 	{
+		if ( _loaded && RealTime.Now - _lastJsonChangeCheckTime < JsonChangeCheckSeconds )
+			return;
+
+		_lastJsonChangeCheckTime = RealTime.Now;
 		var jsonHash = TryReadJsonHash();
 		if ( _loaded && jsonHash == _loadedJsonHash )
 			return;

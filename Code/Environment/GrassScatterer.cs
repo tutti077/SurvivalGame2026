@@ -29,17 +29,42 @@ public sealed class GrassScatterer : Scatterer
 	[Property, Title( "Tilt With Ground" ), Description( "Off = clumps stand straight up (reads best for flat cards). On = lean with the surface normal." )]
 	public bool TiltWithGround { get; set; }
 
+	[Property, Title( "Ground Tag" ), Description( "Only colliders carrying this tag count as ground. Empty = anything solid. Ignored when a height field is set." )]
+	public string GroundTag { get; set; } = "";
+
+	Func<Vector3, bool> _worldFilter;
+	Func<float, float, (float Z, float NormalZ)?> _heightField;
+
+	/// <summary>Runtime-only: skip probes this returns false for (the terrain's biome mask). Not serialized.</summary>
+	public void SetWorldFilter( Func<Vector3, bool> filter ) => _worldFilter = filter;
+
+	/// <summary>
+	/// Runtime-only: ground from a height grid (world xy → ground z + normal z) instead of a physics trace — the
+	/// streamed terrain plants on its own mesh heights, so no collider is needed and nothing else can be hit.
+	/// </summary>
+	public void SetHeightField( Func<float, float, (float Z, float NormalZ)?> field ) => _heightField = field;
+
+	static bool _loggedFirstGenerate;
+
 	protected override List<ClutterInstance> Generate( BBox bounds, ClutterDefinition clutter, Scene scene )
 	{
 		var result = new List<ClutterInstance>();
 		if ( clutter is null || clutter.IsEmpty )
 			return result;
 
+		int probes = 0, filtered = 0, misses = 0, steep = 0;
+		string error = null;
+
 		var density = Math.Max( 0.01f, ClumpsPerSquareMeter );
-		var spacingUnits = TerrainWorldUnits.MetersToEngine( 1f / MathF.Sqrt( density ) );
-		var cellsX = Math.Max( 1, (int)MathF.Floor( bounds.Size.x / spacingUnits ) );
-		var cellsY = Math.Max( 1, (int)MathF.Floor( bounds.Size.y / spacingUnits ) );
-		var jitter = Math.Clamp( Jitter01, 0f, 1f ) * spacingUnits * 0.5f;
+		var wantedSpacing = TerrainWorldUnits.MetersToEngine( 1f / MathF.Sqrt( density ) );
+		// Round UP and stretch the grid to the bounds: the engine hands this method one 512-unit tile at a
+		// time, and flooring left an unplanted strip at the end of every tile — a visible grid of bare lines.
+		var cellsX = Math.Max( 1, (int)MathF.Ceiling( bounds.Size.x / wantedSpacing ) );
+		var cellsY = Math.Max( 1, (int)MathF.Ceiling( bounds.Size.y / wantedSpacing ) );
+		var spacingX = bounds.Size.x / cellsX;
+		var spacingY = bounds.Size.y / cellsY;
+		var jitterX = Math.Clamp( Jitter01, 0f, 1f ) * spacingX * 0.5f;
+		var jitterY = Math.Clamp( Jitter01, 0f, 1f ) * spacingY * 0.5f;
 		var minNormalZ = MathF.Cos( Math.Clamp( MaxSlopeDegrees, 0f, 90f ).DegreeToRadian() );
 		var scaleMin = Math.Min( ScaleMin, ScaleMax );
 		var scaleMax = Math.Max( ScaleMin, ScaleMax );
@@ -48,17 +73,62 @@ public sealed class GrassScatterer : Scatterer
 		{
 			for ( var ix = 0; ix < cellsX; ix++ )
 			{
-				var x = bounds.Mins.x + ((ix + 0.5f) * spacingUnits) + Random.Float( -jitter, jitter );
-				var y = bounds.Mins.y + ((iy + 0.5f) * spacingUnits) + Random.Float( -jitter, jitter );
+				var x = bounds.Mins.x + ((ix + 0.5f) * spacingX) + Random.Float( -jitterX, jitterX );
+				var y = bounds.Mins.y + ((iy + 0.5f) * spacingY) + Random.Float( -jitterY, jitterY );
 				var probe = new Vector3( x, y, bounds.Maxs.z );
-
-				var trace = TraceGround( scene, probe, bounds );
-				if ( !trace.Hit || trace.Normal.z < minNormalZ )
+				probes++;
+				if ( _worldFilter is not null && !_worldFilter( probe ) )
+				{
+					filtered++;
 					continue;
+				}
+
+				Vector3 groundPos;
+				Vector3 groundNormal;
+				if ( _heightField is not null )
+				{
+					var ground = _heightField( x, y );
+					if ( ground is null )
+					{
+						misses++;
+						continue;
+					}
+					groundPos = new Vector3( x, y, ground.Value.Z );
+					groundNormal = new Vector3( 0f, 0f, ground.Value.NormalZ );
+				}
+				else
+				{
+					SceneTraceResult trace;
+					try
+					{
+						trace = string.IsNullOrEmpty( GroundTag )
+							? TraceGround( scene, probe, bounds )
+							: scene.Trace.Ray( probe, probe.WithZ( bounds.Mins.z ) ).WithTag( GroundTag ).Run();
+					}
+					catch ( Exception e )
+					{
+						error ??= e.GetType().Name + ": " + e.Message;
+						break;
+					}
+
+					if ( !trace.Hit )
+					{
+						misses++;
+						continue;
+					}
+					groundPos = trace.EndPosition;
+					groundNormal = trace.Normal;
+				}
+
+				if ( groundNormal.z < minNormalZ )
+				{
+					steep++;
+					continue;
+				}
 
 				var yaw = Random.Float( 0f, 360f );
-				var rotation = TiltWithGround
-					? GetAlignedRotation( trace.Normal, yaw )
+				var rotation = TiltWithGround && _heightField is null
+					? GetAlignedRotation( groundNormal, yaw )
 					: Rotation.FromYaw( yaw );
 
 				// Uniform pick with our own Random — every clump model gets an equal share.
@@ -68,10 +138,16 @@ public sealed class GrassScatterer : Scatterer
 
 				result.Add( new ClutterInstance
 				{
-					Transform = new Transform( trace.EndPosition, rotation, Random.Float( scaleMin, scaleMax ) ),
+					Transform = new Transform( groundPos, rotation, Random.Float( scaleMin, scaleMax ) ),
 					Entry = entry,
 				} );
 			}
+		}
+
+		if ( !_loggedFirstGenerate )
+		{
+			_loggedFirstGenerate = true;
+			Log.Info( $"[GrassScatterer] first generate: bounds {bounds.Mins} … {bounds.Maxs}, {cellsX}×{cellsY} cells, {probes} probes, {filtered} filtered, {misses} missed, {steep} too steep, {result.Count} clumps, {(_heightField is null ? "traced" : "height field")}, main thread {ThreadSafe.IsMainThread}{(error is null ? "" : ", ERROR " + error)}" );
 		}
 
 		return result;

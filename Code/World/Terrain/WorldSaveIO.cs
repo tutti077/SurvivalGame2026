@@ -11,7 +11,7 @@ public sealed class WorldSaveRecipe
 	public string GameVersion { get; set; } = GameBuildLabel.Display;
 	public string WorldName { get; set; } = "DefaultWorld";
 	public int WorldSeed { get; set; } = 1337;
-	public float WorldDiameterMeters { get; set; } = 20000f;
+	public float WorldDiameterMeters { get; set; } = 40000f;
 	public float OceanRingWidthMeters { get; set; } = 2500f;
 	public float MaxTerrainHeightMeters { get; set; } = 700f;
 	public float ChunkSizeMeters { get; set; } = 512f;
@@ -46,6 +46,7 @@ public static class WorldSaveIO
 	const string RecipeFileName = "world.json";
 	const string SeedFileName = "seed.txt";
 	const string BiomeMapFileName = "biome_map.png";
+	const string BiomeMapStampFileName = "biome_map.json";
 	const string IndexFileName = "worlds.index";
 
 	public static string GetRecipeRelativePath( string worldName )
@@ -146,7 +147,19 @@ public static class WorldSaveIO
 		WriteRecipe( recipe );
 	}
 
-	public static void WriteBiomeMapPng( string worldName, Bitmap bitmap )
+	/// <summary>Which world a saved <c>biome_map.png</c> was baked from — compared against the live settings fingerprint.</summary>
+	public sealed class BiomeMapStamp
+	{
+		public string SettingsFingerprint { get; set; } = "";
+		public int WorldSeed { get; set; }
+		public int Resolution { get; set; }
+		public string GeneratedUtc { get; set; } = "";
+	}
+
+	public static string GetBiomeMapStampRelativePath( string worldName )
+		=> $"{GetWorldFolder( worldName )}/{BiomeMapStampFileName}";
+
+	public static void WriteBiomeMapPng( string worldName, Bitmap bitmap, BiomeMapStamp stamp )
 	{
 		if ( string.IsNullOrWhiteSpace( worldName ) || bitmap is null )
 			return;
@@ -154,6 +167,46 @@ public static class WorldSaveIO
 		var path = GetBiomeMapRelativePath( worldName );
 		EnsureWorldDirectory( worldName );
 		FileSystem.Data.WriteAllBytes( path, bitmap.ToPng() );
+		if ( stamp is null )
+			return;
+
+		stamp.GeneratedUtc = UtcNowString();
+		FileSystem.Data.WriteAllText( GetBiomeMapStampRelativePath( worldName ), JsonSerializer.Serialize( stamp, WorldSaveRecipe.JsonOptions ) );
+	}
+
+	/// <summary>Null when there is no PNG, or a PNG without a stamp (baked before stamps existed — treat as stale).</summary>
+	public static BiomeMapStamp TryReadBiomeMapStamp( string worldName )
+	{
+		var path = GetBiomeMapStampRelativePath( worldName );
+		if ( !FileSystem.Data.FileExists( path ) )
+			return null;
+
+		try
+		{
+			return JsonSerializer.Deserialize<BiomeMapStamp>( FileSystem.Data.ReadAllText( path ), WorldSaveRecipe.JsonOptions );
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	/// <summary>FNV-1a of the raw world.json text, or "" when there is none: the cheapest way to notice the recipe changed on disk.</summary>
+	public static string ReadRecipeFileFingerprint( string worldName )
+	{
+		var path = GetRecipeRelativePath( SanitizeWorldName( worldName ) );
+		if ( !FileSystem.Data.FileExists( path ) )
+			return "";
+
+		var text = FileSystem.Data.ReadAllText( path );
+		ulong hash = 14695981039346656037UL;
+		foreach ( var c in text )
+		{
+			hash ^= c;
+			hash *= 1099511628211UL;
+		}
+
+		return hash.ToString( "x16" );
 	}
 
 	public static WorldSaveRecipe TryReadRecipe( string worldName )

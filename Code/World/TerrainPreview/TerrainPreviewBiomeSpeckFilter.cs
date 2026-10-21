@@ -48,20 +48,6 @@ public static class TerrainPreviewBiomeSpeckFilter
 		}
 	}
 
-	public static void MergeSmallPatches(
-		TerrainPreviewBiomeId[] map,
-		int width,
-		int height,
-		float metersPerPixel,
-		TerrainBiomeMapPreviewOptions preview,
-		int maxPasses = 2 )
-	{
-		if ( preview is null || !preview.SpeckFilterEnabled )
-			return;
-
-		MergeSmallPatches( map, width, height, metersPerPixel, preview.MinPatchDiameterMeters, maxPasses );
-	}
-
 	static float ComputeComponentDiameterMeters( int width, List<int> component, float metersPerPixel )
 	{
 		var minX = int.MaxValue;

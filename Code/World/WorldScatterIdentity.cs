@@ -12,6 +12,36 @@ namespace Survival;
 public sealed class WorldScatterIdentity : Component
 {
 	static readonly Dictionary<string, WorldScatterIdentity> ByKey = new( StringComparer.Ordinal );
+	/// <summary>
+	/// Keys whose tree was felled (stage) or whose node was harvested, remembered for the session: a deterministic
+	/// scatter object that is destroyed and re-planted (chunk unload / reload, the tree object range) comes back in
+	/// that state instead of regrowing (2026-10-20). Cleared with the world.
+	/// </summary>
+	static readonly Dictionary<string, int> BrokenStages = new( StringComparer.Ordinal );
+	static readonly HashSet<string> DepletedKeys = new( StringComparer.Ordinal );
+
+	public static void ClearRemembered()
+	{
+		BrokenStages.Clear();
+		DepletedKeys.Clear();
+	}
+
+	/// <summary>Re-apply a remembered felled / harvested state to a freshly planted object (called right after Configure).</summary>
+	public static void ReapplyRemembered( WorldScatterIdentity identity )
+	{
+		if ( identity is null || !identity.IsValid() || string.IsNullOrWhiteSpace( identity.StableKey ) )
+			return;
+
+		if ( BrokenStages.TryGetValue( identity.StableKey, out var stage ) )
+		{
+			var tree = identity.Components.Get<ChopableTree>( FindMode.EverythingInSelfAndDescendants );
+			if ( tree is not null && tree.IsValid() )
+				tree.ApplyStagePresentation( stage );
+		}
+
+		if ( DepletedKeys.Contains( identity.StableKey ) && TryFindHarvestNode( identity.StableKey, out var node ) )
+			node.ApplyRemoteDepletedPresentation();
+	}
 
 	[Property] public string StableKey { get; set; } = string.Empty;
 
@@ -115,6 +145,8 @@ public sealed class WorldScatterIdentity : Component
 
 	internal static void ApplyBrokenLocal( string stableKey, int stage )
 	{
+		if ( !string.IsNullOrWhiteSpace( stableKey ) )
+			BrokenStages[stableKey] = stage;
 		if ( !TryFindChopableTree( stableKey, out var tree ) )
 			return;
 
@@ -123,6 +155,8 @@ public sealed class WorldScatterIdentity : Component
 
 	internal static void ApplyHarvestDepletedLocal( string stableKey )
 	{
+		if ( !string.IsNullOrWhiteSpace( stableKey ) )
+			DepletedKeys.Add( stableKey );
 		if ( !TryFindHarvestNode( stableKey, out var node ) )
 			return;
 

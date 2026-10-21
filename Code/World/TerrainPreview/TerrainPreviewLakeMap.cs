@@ -24,12 +24,6 @@ static class TerrainPreviewLakeMap
 		return SampleMask01( settings, nx, ny, seed );
 	}
 
-	public static bool IsOpenWaterAtWorldMeters(
-		TerrainPreviewSettings settings,
-		float worldXMeters,
-		float worldYMeters )
-		=> TerrainPreviewLandDiskFields.IsOpenWater( settings, worldXMeters, worldYMeters );
-
 	public static float SampleMask01(
 		TerrainPreviewSettings settings,
 		float nx,

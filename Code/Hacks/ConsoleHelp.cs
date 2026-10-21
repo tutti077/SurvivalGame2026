@@ -42,7 +42,6 @@ public static class ConsoleHelp
 		new( "Terrain", "flash_probe", "[seconds] [ignoreSeconds]", "Per-frame image-change readout of the main camera (abrupt change %, change-and-return %); writes the worst frame pair and the frames around the worst vanish-and-return as PPM to the data folder; spikes in the first ignoreSeconds are not recorded. 0 stops.", "flash_probe 26 6" ),
 		new( "Terrain", "terrain_stream_offset", "[m/s] [seconds] [startMeters]", "Move the STREAM origin along the camera heading while the camera stays parked (start negative = behind, so the load edge sweeps through the view) — chunk hand-overs happen in front of a still camera for the flash probe; 0 resets.", "terrain_stream_offset 55 20 -700" ),
 		new( "Terrain", "terrain_stream_radius", "[chunks] [margin]", "Set the live stream radius / unload margin (flash probe rigs: 5 = hand-over at 320 m, past the elm's LOD3 switch).", "terrain_stream_radius 5 1" ),
-		new( "Terrain", "tree_lod_fade", "[seconds]", "Live cross-fade length for tree LOD changes (0 = hard switch); the scene's Vegetation - Tree LOD Fade (s) is the saved value.", "tree_lod_fade 3" ),
 		new( "Terrain", "far_trees_mode", "[0|1|2]", "Dev: far-tree draw path — 0 instanced far model, 1 one DrawModel per tree (first 400), 2 instanced dev box.", "far_trees_mode 0" ),
 		new( "Terrain", "far_card_calibrate", "[apply]", "Measure the far impostor cards against the LOD3 ring on screen (mean colour + cover per band); apply ambient (by night, cycle paused, 25 s after the jump) sets Far Impostor Ambient Light, apply direct (by day) sets Far Impostor Direct Light, apply tint recolours — run each 3-5 times, alternate night / day twice.", "far_card_calibrate apply direct" ),
 		new( "Terrain", "far_trees", "0|1", "Far-tree ring (each tree's lowest LOD past the loaded chunks) on / off, live — the fps bisect for the far forest.", "far_trees 0" ),
@@ -72,6 +71,9 @@ public static class ConsoleHelp
 		new( "Perf", "perf_far_ring", "0|1", "The instanced LOD3 far ring draw alone hidden / shown.", "perf_far_ring 0" ),
 		new( "Perf", "perf_impostors", "0|1", "The far impostor cards alone hidden / shown.", "perf_impostors 0" ),
 		new( "Perf", "perf_types", "[minCount]", "Disable every component TYPE in the scene in turn (1 s each, types with at least minCount instances, default 1) and print a table sorted by saving — where Update / Animation go.", "perf_types 5" ),
+		new( "Perf", "hud_profile", "0|1", "Per-frame cost of every pawn HUD sub-tick (pickups, wheel, build, minimap, passive readouts…), one line a second.", "hud_profile 1" ),
+		new( "Perf", "perf_suite", "", "Mark's standard fps test (~45 s, hands off, fly camera, caps lifted): hover 3 m, 2 m at 55 m/s, 2 m at 5 m/s, 500 m at 55 m/s, 500 m straight down, pawn standing — PASS/FAIL table against 5.0 ms (200 fps).", "perf_suite" ),
+		new( "Perf", "perf_scenario", "[1-6]", "Park the fly camera in that perf_suite row and HOLD it (row 6 spawns the pawn) so perf_cpu / perf_gpu / perf_bisect can dissect one row; perf_scenario 0 releases.", "perf_scenario 5" ),
 		new( "Perf", "perf_bisect", "", "The fps routine: 3 s baseline, then FOV 60 / HUD / body / anim / crosshair / aim assist / AI / shadows / scatter / objects-only / far ring / impostors / chunk shadows / entity anim / UI / grass / wind off one at a time, 3 s each, table sorted by saving. Run as pawn and as fly cam, stand still (~40 s).", "perf_bisect" ),
 
 		// ---- nav / AI

@@ -1,0 +1,17 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+	F_VERTEX_PAINT 1
+	F_RENDER_BACKFACES 1
+	F_ALPHA_TEST 1
+
+	PixelRoughness "1.000"
+	PixelSpecular "0.000"
+	PixelFarCard "1.000"
+	PixelAlphaCutoff "0.500"
+	PixelNormalStrength "1.000"
+	PixelNormalUp "0.000"
+	TextureColor "materials/environment/far_tree_card_color.png"
+	TextureTranslucency "materials/environment/far_tree_card_mask.png"
+	TextureNormal "materials/environment/far_tree_card_normal.png"
+}

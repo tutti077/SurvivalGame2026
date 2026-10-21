@@ -18,10 +18,6 @@ public sealed class TerrainWorldPreviewJob
 
 	readonly TerrainPreviewBiomeId[] _biomeMap;
 
-	readonly float[] _shadeMap;
-
-	readonly float[] _heightMap;
-
 	readonly bool[] _insideWorld;
 
 	readonly bool[] _isWater;
@@ -96,10 +92,6 @@ public sealed class TerrainWorldPreviewJob
 
 		TerrainPreviewBiomeId[] biomeMap,
 
-		float[] shadeMap,
-
-		float[] heightMap,
-
 		bool[] insideWorld,
 
 		bool[] isWater )
@@ -117,10 +109,6 @@ public sealed class TerrainWorldPreviewJob
 		_colors = colors;
 
 		_biomeMap = biomeMap;
-
-		_shadeMap = shadeMap;
-
-		_heightMap = heightMap;
 
 		_insideWorld = insideWorld;
 
@@ -161,10 +149,6 @@ public sealed class TerrainWorldPreviewJob
 			new Color[pixelCount],
 
 			new TerrainPreviewBiomeId[pixelCount],
-
-			new float[pixelCount],
-
-			new float[pixelCount],
 
 			new bool[pixelCount],
 
@@ -272,12 +256,6 @@ public sealed class TerrainWorldPreviewJob
 
 
 
-	public Texture FinishTexture()
-
-		=> FinishBitmap().ToTexture( false );
-
-
-
 	public Bitmap FinishBitmap()
 
 	{
@@ -287,6 +265,8 @@ public sealed class TerrainWorldPreviewJob
 			Step( _resolution );
 
 
+
+		TerrainRiverMapOverlay.Stamp( _worldSettings, _colors, _resolution, _insideWorld );
 
 		var bitmap = new Bitmap( _resolution, _resolution );
 
@@ -348,10 +328,6 @@ public sealed class TerrainWorldPreviewJob
 
 					_biomeMap[idx] = TerrainPreviewBiomeId.None;
 
-					_shadeMap[idx] = 1f;
-
-					_heightMap[idx] = 0f;
-
 					_colors[idx] = Color.Black;
 
 					continue;
@@ -363,10 +339,6 @@ public sealed class TerrainWorldPreviewJob
 				var landResolved = TerrainPreviewBiomeResolver.ResolveLandOverlay( _worldSettings, sample, wx, wy );
 
 				_biomeMap[idx] = landResolved.BiomeId;
-
-				_shadeMap[idx] = landResolved.Shade01;
-
-				_heightMap[idx] = sample.Height01;
 
 				_colors[idx] = TerrainPreviewBiomeColors.ColorizeOverlay(
 

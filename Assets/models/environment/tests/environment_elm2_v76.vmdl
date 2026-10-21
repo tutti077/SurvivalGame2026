@@ -14,8 +14,8 @@
 						remaps =
 						[
 							{
-								from = "elm_bark_v76.vmat"
-								to = "models/environment/tests/elm_bark_v76.vmat"
+								from = "models/environment/tests/elm_bark_v76.vmat"
+								to = "models/environment/tests/elm_bark_v76_wind.vmat"
 							},
 							{
 								from = "elm_leaves_v76.vmat"
@@ -23,7 +23,7 @@
 							}
 						]
 						use_global_default = false
-						global_default_material = "models/environment/tests/elm_bark_v76.vmat"
+						global_default_material = "models/environment/tests/elm_bark_v76_wind.vmat"
 					},
 				]
 			},

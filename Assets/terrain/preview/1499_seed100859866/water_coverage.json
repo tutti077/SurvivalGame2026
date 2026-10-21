@@ -1,0 +1,18 @@
+{
+  "insideWorldPixels": 951204,
+  "landPixels": 691960,
+  "oceanPixels": 259244,
+  "interiorOceanPixels": 91463,
+  "exteriorOceanPixels": 167781,
+  "landFraction": 0.727457,
+  "waterOnLandFraction": 0.16002564,
+  "targetLakeCoverageOnLand": 0.16,
+  "oceanFractionWholeMap": 0.272543,
+  "interiorOceanFraction": 0.09615498,
+  "exteriorOceanFraction": 0.17638803,
+  "lakeCoverageOnLand": 0.16002564,
+  "lakeOffsetXMeters": 0,
+  "lakeOffsetYMeters": 0,
+  "lakeMacroFrequency": 0.22,
+  "lakeMediumFrequency": 0.15
+}

@@ -104,46 +104,6 @@ static class TerrainPreviewLakeMaskShift
 		};
 	}
 
-	public static float MeasureNearestWetMeters(
-		bool[] landDisk,
-		int res,
-		float radius,
-		float diameter,
-		float[] lakeMaskGrid,
-		float threshold01,
-		float offsetXMeters,
-		float offsetYMeters,
-		float searchRadiusMeters )
-	{
-		searchRadiusMeters = Math.Max( 10f, searchRadiusMeters );
-		var nearest = float.MaxValue;
-
-		for ( var py = 0; py < res; py++ )
-		{
-			for ( var px = 0; px < res; px++ )
-			{
-				var idx = (py * res) + px;
-				if ( !landDisk[idx] )
-					continue;
-
-				TerrainBiomeMapCoordinates.RasterPixelToWorldMeters(
-					px, py, res, radius, diameter, out var wx, out var wy );
-				var dist = MathF.Sqrt( (wx * wx) + (wy * wy) );
-				if ( dist < 1f || dist > searchRadiusMeters )
-					continue;
-
-				if ( !IsWetAtWorld(
-						wx, wy, offsetXMeters, offsetYMeters,
-						landDisk, res, radius, diameter, lakeMaskGrid, threshold01 ) )
-					continue;
-
-				nearest = Math.Min( nearest, dist );
-			}
-		}
-
-		return nearest < float.MaxValue ? nearest : -1f;
-	}
-
 	public static bool TryFindNearestWetWorld(
 		bool[] landDisk,
 		int res,

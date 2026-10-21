@@ -10,8 +10,6 @@ public static class WorldSessionState
 	static int _worldSeed = 1337;
 	static TerrainWorldSettingsSource _settingsSource = TerrainWorldSettingsSource.WorldRecipeFirst;
 
-	public static bool HasPendingWorld => _hasPendingWorld;
-
 	/// <summary>Last world chosen from the menu (survives after <see cref="ApplyTo"/>).</summary>
 	public static string ActiveWorldName
 		=> string.IsNullOrWhiteSpace( _worldName ) ? "TestWorld" : _worldName;
@@ -46,7 +44,4 @@ public static class WorldSessionState
 		manager.OverrideWorldScalarsFromComponent = false;
 		_hasPendingWorld = false;
 	}
-
-	public static void Clear()
-		=> _hasPendingWorld = false;
 }

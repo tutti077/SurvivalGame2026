@@ -9,10 +9,4 @@ public static class TerrainPreviewBackendRegistry
 
 	public static ITerrainPreviewBackend Active => _active;
 
-	public static void UseBackend( ITerrainPreviewBackend backend )
-	{
-		_active = backend ?? new SimpleTerrainPreviewBackend();
-	}
-
-	public static void UseSimplePreview() => _active = new SimpleTerrainPreviewBackend();
 }

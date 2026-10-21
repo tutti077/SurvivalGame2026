@@ -178,7 +178,10 @@ Invoke by slash command or by saying the phrase:
   safe fixes applied, the rest proposed.
 - **bug test routine** (`/bug-test-routine`) — reproduce a defect in the live editor through the
   sbox MCP, instrument, fix, pass three consecutive runs. Full scene / play-mode access granted.
-- **fps routine** — console `perf_bisect` (Code/World/Terrain/TerrainPerfBench.Bisect.cs): 3 s baseline, every
+- **fps routine** — FIRST `perf_suite` (Mark 2026-10-20: "when I say FPS is bad run the same tests every time"): fly camera, caps lifted
+  (`fps_max 0`, `fps_max_inactive 0`), hands off — hover 3 m above the terrain, 2 m off the terrain at 55 m/s turning, 2 m at 5 m/s,
+  500 m up at 55 m/s, 500 m straight down, the pawn standing; every row must PASS 5.0 ms (200 fps) on the RTX 4090; `perf_scenario N` holds one row for
+  perf_cpu / perf_gpu / perf_bisect, `hud_profile 1` splits the pawn HUD. Then console `perf_bisect` (Code/World/Terrain/TerrainPerfBench.Bisect.cs): 3 s baseline, every
   switch off in turn for 3 s (pawn FOV 60, HUD, body, animgraph, crosshair, aim assist, AI, sun shadows, scatter,
   grass, wind), table sorted by saving. Claude runs it through the sbox MCP as the pawn and as the fly camera and
   compares; the pawn and the fly camera should land at about the same frame time (Mark 2026-10-13).
@@ -248,7 +251,7 @@ Code/
                 · GrassPatch + GrassScatterer (grass through the engine Sandbox.Clutter system — GPU instanced/culled/LOD;
                 shader Assets/shaders/grass_blade.shader, models grass_clump1–4 from Blender/scripts/create_grass_clump.py)
                 · World grass = TerrainWorldManager.Grass.cs: ONE ClutterComponent in INFINITE streaming mode (a ring of tiles the engine
-                keeps around the camera, Grass — Range (m) default 300) planted on the loaded chunks' meshed height grids (BuildResult.HeightsZ,
+                keeps around the camera — ALWAYS 12 tiles, so Grass — Range (m), default 150, picks the tile size) planted on the loaded chunks' meshed height grids (BuildResult.HeightsZ,
                 bilinear — no physics, no collider, nothing else can be hit); a chunk arriving / remeshing invalidates its tiles; ONE density,
                 grass_blade.shader thins clumps by camera distance (Thin Full / Far / Keep / Cull on grass_blade.vmat); console grass_toggle;
                 Clover Hills only via an 8×8 biome mask cached per chunk

@@ -20,7 +20,7 @@ static class TerrainPreviewMountainSpawnMask
 		public float RangeField01 { get; init; }
 	}
 
-	public static void AddSettingsFingerprint( HashCode hash, TerrainPreviewSettings settings )
+	public static void AddSettingsFingerprint( ref HashCode hash, TerrainPreviewSettings settings )
 	{
 		hash.Add( settings.EnableMountainLayer );
 		hash.Add( settings.BiomeMinMountainMask01 );
@@ -40,6 +40,8 @@ static class TerrainPreviewMountainSpawnMask
 		hash.Add( settings.MountainSpawnBreakerMin01 );
 		hash.Add( settings.MountainSpawnBreakerSpan01 );
 		hash.Add( settings.MountainSpawnBreakerStrength01 );
+		hash.Add( settings.MountainSpawnBlobWavelengthMeters );
+		hash.Add( settings.MountainSpawnBlobThreshold01 );
 		hash.Add( settings.MountainSpawnWarpStrength01 );
 		hash.Add( settings.MountainSpawnRangeStretch01 );
 		hash.Add( settings.MountainSpawnRangePower01 );
@@ -285,7 +287,43 @@ static class TerrainPreviewMountainSpawnMask
 	public static float SampleRangeField01( TerrainPreviewSettings settings, float nx, float ny, float worldDiameterMeters )
 		=> BuildRidgeFrame( settings, nx, ny, worldDiameterMeters ).RangeField01;
 
+	// One sample evaluates the same (nx, ny) frame up to eight times (placement, influence, resolver, peaks,
+	// crest centre …). A tiny per-thread memo keyed on the settings instance makes those free — the frame is a
+	// pure function of (settings, nx, ny), and editor Generate always runs on a fresh settings clone.
+	[ThreadStatic] static RidgeFrame[] _frameMemo;
+	[ThreadStatic] static TerrainPreviewSettings _frameMemoSettings;
+	[ThreadStatic] static int _frameMemoNext;
+	const int FrameMemoSlots = 4;
+
 	static RidgeFrame BuildRidgeFrame(
+		TerrainPreviewSettings settings,
+		float nx,
+		float ny,
+		float worldDiameterMeters )
+	{
+		if ( !ReferenceEquals( _frameMemoSettings, settings ) || _frameMemo is null )
+		{
+			_frameMemo = new RidgeFrame[FrameMemoSlots];
+			_frameMemoSettings = settings;
+			_frameMemoNext = 0;
+			for ( var i = 0; i < FrameMemoSlots; i++ )
+				_frameMemo[i] = new RidgeFrame { Nx = float.NaN, Ny = float.NaN };
+		}
+
+		for ( var i = 0; i < FrameMemoSlots; i++ )
+		{
+			var f = _frameMemo[i];
+			if ( f.Nx == nx && f.Ny == ny )
+				return f;
+		}
+
+		var frame = BuildRidgeFrameUncached( settings, nx, ny, worldDiameterMeters );
+		_frameMemo[_frameMemoNext] = frame;
+		_frameMemoNext = (_frameMemoNext + 1) % FrameMemoSlots;
+		return frame;
+	}
+
+	static RidgeFrame BuildRidgeFrameUncached(
 		TerrainPreviewSettings settings,
 		float nx,
 		float ny,
@@ -329,6 +367,16 @@ static class TerrainPreviewMountainSpawnMask
 		var breakerCut = SmoothStep01( (breaker - breakerMin) / breakerSpan );
 		var breakerStrength = Math.Clamp( settings.MountainSpawnBreakerStrength01, 0f, 0.9f );
 		shaped *= Lerp( 1f - breakerStrength, 1f, breakerCut );
+
+		// Range belt (Mark 2026-10-08: ranges should be bold stripes across the map, "not these whispy little
+		// things"): the ridged field is confined to a long-wavelength plain-FBM belt so each range has an extent,
+		// while the width comes from Ridge Sharpness 1 + a 6 km macro wavelength + 2 octaves (no sub-ridges).
+		var blobWavelength = Math.Max( 1000f, settings.MountainSpawnBlobWavelengthMeters );
+		var blobFreq = worldDiameterMeters / blobWavelength;
+		var blob = TerrainPreviewNoise.Fbm( seed + 646, wx * blobFreq, wy * blobFreq, 2 );
+		var blobThreshold = Math.Clamp( settings.MountainSpawnBlobThreshold01, 0.2f, 0.8f );
+		var blobGate = SmoothStep01( (blob - blobThreshold) / 0.10f );
+		shaped *= blobGate;
 
 		var power = Math.Clamp( settings.MountainSpawnRangePower01, 0.55f, 1.6f );
 		var rangeField = MathF.Pow( Math.Clamp( shaped, 0f, 1f ), power );

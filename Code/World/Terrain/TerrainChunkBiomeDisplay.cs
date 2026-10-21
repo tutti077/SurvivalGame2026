@@ -98,7 +98,7 @@ static class TerrainChunkBiomeDisplay
 
 
 
-				var displayWater = TerrainShorelineDisplay.IsDisplayWaterColor( settings, wx, wy );
+				var displayWater = TerrainShorelineDisplay.IsDisplayWaterColor( settings, wx, wy );   // river beds paint blue too (Mark 2026-10-07: keep that area blue)
 
 				isWater[idx] = displayWater;
 

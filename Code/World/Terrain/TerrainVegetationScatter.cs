@@ -12,6 +12,81 @@ namespace Survival;
 /// </summary>
 public static class TerrainVegetationScatter
 {
+	/// <summary>One planned scatter instance: everything a clone needs, computed at chunk load, spawned later under a budget.</summary>
+	public readonly struct SpawnPlan
+	{
+		public string Path { get; init; }
+		public string Name { get; init; }
+		public Vector3 LocalPosition { get; init; }
+		public Rotation LocalRotation { get; init; }
+		public Vector3 LocalScale { get; init; }
+		public string StableKey { get; init; }
+		/// <summary>Small-tree layer: spawned hidden, shown by TerrainWorldManager.TickSaplingVisibility within Sapling Visible Range (m).</summary>
+		public bool Sapling { get; init; }
+		/// <summary>"tree" (large, LOD-switched, never fades), "sapling", "stick", "rock" … (no LODs: fade in / out).</summary>
+		public string Kind { get; init; }
+	}
+
+	// The plan list the populate calls write into (main thread only). Null = spawn immediately (legacy callers).
+	static List<SpawnPlan> _plans;
+	static readonly Dictionary<string, Vector3> _authoredScale = new();
+
+	/// <summary>
+	/// Clone and place a planned instance. Main thread; called by the manager's budgeted spawner.
+	/// <paramref name="collidersEnabled"/> is the chunk's collision state: a tree's mesh collider (the elm's is the
+	/// 4k-triangle wood) is switched off BEFORE the clone is enabled when the chunk is out of collision range, so the
+	/// physics shape is never built for a tree 400 m away only to be disabled a few frames later (single elm clones
+	/// cost 6-13 ms that way, perf_watch 2026-10-15).
+	/// </summary>
+	public static GameObject SpawnPlanned( GameObject chunkRoot, in SpawnPlan plan, bool collidersEnabled = true )
+	{
+		if ( chunkRoot is null || !chunkRoot.IsValid() )
+			return null;
+
+		var instance = ClonePrefab( plan.Path );
+		if ( instance is null || !instance.IsValid() )
+			return null;
+
+		instance.NetworkMode = NetworkMode.Never;
+		instance.Flags |= GameObjectFlags.NotSaved;
+		instance.Parent = chunkRoot;
+		instance.Name = plan.Name;
+		MakeScatterStatic( instance );
+		instance.LocalPosition = plan.LocalPosition;
+		instance.LocalRotation = plan.LocalRotation;
+		instance.LocalScale = plan.LocalScale;
+		if ( !collidersEnabled )
+		{
+			foreach ( var col in instance.Components.GetAll<ModelCollider>( FindMode.EverythingInSelfAndDescendants ) )
+				col.Enabled = false;
+		}
+		instance.Enabled = !plan.Sapling;   // saplings wait for the 50 m visibility tick (no flash at chunk promotion distance)
+
+		var identity = instance.Components.Get<WorldScatterIdentity>()
+			?? instance.Components.Create<WorldScatterIdentity>();
+		identity.Configure( plan.StableKey );
+		WorldScatterIdentity.ReapplyRemembered( identity );   // a felled tree comes back as its stump, a harvested node empty
+		return instance;
+	}
+
+	static Vector3 AuthoredScale( string path )
+	{
+		if ( _authoredScale.TryGetValue( path, out var cached ) )
+			return cached;
+
+		var scale = Vector3.One;
+		var template = GameObject.GetPrefab( path );
+		if ( template is { IsValid: true } )
+		{
+			scale = template.LocalScale;
+			if ( scale.x < 0.001f || scale.y < 0.001f || scale.z < 0.001f )
+				scale = Vector3.One;
+		}
+
+		_authoredScale[path] = scale;
+		return scale;
+	}
+
 	public readonly struct BiomeScatterProfile
 	{
 		public TerrainPreviewBiomeId BiomeId { get; init; }
@@ -29,7 +104,10 @@ public static class TerrainVegetationScatter
 		public float SmallCellSpacingMeters { get; init; }
 		public float SmallChance01 { get; init; }
 		/// <summary>0 = saplings anywhere in the biome; 1 = only along forest edges (patch-noise threshold).</summary>
-		public float SmallEdgeBias01 { get; init; }
+		/// <summary>Saplings roll SmallChance01 only within this of a large trunk (and outside the clearance).</summary>
+		public float SmallNearTrunkMeters { get; init; }
+		/// <summary>Per-cell chance away from every large trunk — the odd lone sapling in a clearing.</summary>
+		public float SmallClearingChance01 { get; init; }
 		/// <summary>No sapling closer than this to a large trunk spawned in the same chunk.</summary>
 		public float SmallTrunkClearanceMeters { get; init; }
 		public float SmallScaleMin { get; init; }
@@ -112,7 +190,10 @@ public static class TerrainVegetationScatter
 		int verticesPerSide,
 		int fullDetailVertices,
 		Options options,
-		List<Vector2> trunks )
+		List<Vector2> trunks,
+		List<SpawnPlan> plans = null,
+		bool largeTrees = true,
+		bool props = true )
 	{
 		if ( !options.Enabled || chunkRoot is null || !chunkRoot.IsValid() )
 			return;
@@ -120,6 +201,28 @@ public static class TerrainVegetationScatter
 		if ( options.SkipFarLodChunks && verticesPerSide < fullDetailVertices )
 			return;
 
+		_plans = plans;
+		try
+		{
+			PopulateChunkCore( chunkRoot, coord, settings, backend, chunkSizeMeters, options, trunks, largeTrees, props );
+		}
+		finally
+		{
+			_plans = null;
+		}
+	}
+
+	static void PopulateChunkCore(
+		GameObject chunkRoot,
+		TerrainChunkCoord coord,
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		float chunkSizeMeters,
+		Options options,
+		List<Vector2> trunks,
+		bool largeTrees,
+		bool props )
+	{
 		var profiles = ResolveProfiles( options.Profiles );
 		var chunkSize = Math.Max( 32f, chunkSizeMeters );
 		var worldRadius = settings.TotalWorldRadiusMeters;
@@ -127,7 +230,7 @@ public static class TerrainVegetationScatter
 		var chunkMinY = -worldRadius + (coord.Y * chunkSize);
 		var seed = settings.WorldSeed;
 
-		if ( profiles.Count > 0 )
+		if ( largeTrees && profiles.Count > 0 )
 			ScatterTrees(
 				chunkRoot,
 				coord,
@@ -141,7 +244,7 @@ public static class TerrainVegetationScatter
 				options,
 				trunks ?? [] );
 
-		if ( options.PropClusters is null )
+		if ( !props || options.PropClusters is null )
 			return;
 
 		foreach ( var cluster in options.PropClusters )
@@ -209,54 +312,15 @@ public static class TerrainVegetationScatter
 		{
 			for ( var ix = 0; ix < cells && spawned < maxTrees; ix++ )
 			{
-				var jitterX = (TerrainPreviewNoise.Hash01( seed + 901, coord.X * 64 + ix, coord.Y * 64 + iy ) - 0.5f) * cell * 0.7f;
-				var jitterY = (TerrainPreviewNoise.Hash01( seed + 902, coord.X * 64 + ix, coord.Y * 64 + iy ) - 0.5f) * cell * 0.7f;
-				var wx = chunkMinX + ((ix + 0.5f) * cell) + jitterX;
-				var wy = chunkMinY + ((iy + 0.5f) * cell) + jitterY;
-
-				if ( !IsInsideLandDisk( settings, wx, wy ) )
+				if ( !TryPlanTree( settings, backend, coord, chunkMinX, chunkMinY, cell, ix, iy, seed, profiles, patchWave, clumpWave, patchThreshold, spawnChance, out var plan ) )
 					continue;
 
-				var sample = backend.Sample( settings, wx, wy );
-				if ( !sample.IsInsideWorld || !sample.IsOnLand || sample.OceanHeight01 > 0.5f )
-					continue;
-
-				var biome = TerrainPreviewBiomeResolver.ResolveLandOverlay( settings, sample, wx, wy );
-				var profile = FindProfile( profiles, biome.BiomeId );
-				if ( profile is null )
-					continue;
-
-				var noiseSeed = seed + profile.NoiseSalt;
-
-				var patch = TerrainPreviewNoise.Fbm( noiseSeed + 910, wx / patchWave, wy / patchWave, 4, 2.05f, 0.5f );
-				if ( !profile.IgnoreForestPatches && patch < patchThreshold )
-					continue;
-
-				var forestT = profile.IgnoreForestPatches
-					? Math.Clamp( patch, 0f, 1f )
-					: Math.Clamp(
-						(patch - patchThreshold) / Math.Max( 0.05f, 1f - patchThreshold ),
-						0f,
-						1f );
-				forestT = forestT * MathF.Sqrt( forestT );
-
-				var clump = TerrainPreviewNoise.Fbm( noiseSeed + 915, wx / clumpWave, wy / clumpWave, 3, 2.1f, 0.5f );
-				var clumpPeak = clump * clump;
-				var clumpMul = 0.42f + (0.58f * clumpPeak);
-
-				var densify = TerrainPreviewNoise.Hash01( noiseSeed + 920, coord.X * 128 + ix, coord.Y * 128 + iy );
-				var density = Math.Clamp( profile.Density01, 0.05f, 1f );
-				var localChance = spawnChance
-					* Math.Clamp( 0.65f + (0.35f * forestT), 0f, 1f )
-					* clumpMul
-					* density;
-
-				// Dense grove cores skip the chance roll only at full density; thinned biomes always roll.
-				var denseCore = !profile.IgnoreForestPatches && density >= 0.999f && forestT > 0.55f && clump > 0.58f;
-				if ( !denseCore && densify > localChance )
-					continue;
-
-				var pick = PickIndex( profile.Paths.Length, TerrainPreviewNoise.Hash01( noiseSeed + 930, coord.X * 256 + ix, coord.Y * 256 + iy ) );
+				var wx = plan.X;
+				var wy = plan.Y;
+				var sample = plan.Sample;
+				var profile = plan.Profile;
+				var noiseSeed = plan.NoiseSeed;
+				var pick = plan.Pick;
 				var path = profile.Paths[pick];
 				var variant = pick.ToString();
 				var tilt = SlopeTilt( settings, backend, wx, wy, sample.HeightMeters, options );
@@ -320,7 +384,8 @@ public static class TerrainVegetationScatter
 		ITerrainPreviewBackend backend,
 		float chunkSizeMeters,
 		Options options,
-		List<Vector2> trunks )
+		List<Vector2> trunks,
+		List<SpawnPlan> plans = null )
 	{
 		if ( !options.Enabled || chunkRoot is null || !chunkRoot.IsValid() )
 			return;
@@ -329,18 +394,26 @@ public static class TerrainVegetationScatter
 		var worldRadius = settings.TotalWorldRadiusMeters;
 		var chunkMinX = -worldRadius + (coord.X * chunkSize);
 		var chunkMinY = -worldRadius + (coord.Y * chunkSize);
-		foreach ( var profile in ResolveProfiles( options.Profiles ) )
+		_plans = plans;
+		try
 		{
-			if ( profile.SmallPaths.Length > 0 )
-				ScatterSmallTrees( chunkRoot, coord, settings, backend, chunkSize, chunkMinX, chunkMinY, settings.WorldSeed, profile, trunks ?? [], options );
+			foreach ( var profile in ResolveProfiles( options.Profiles ) )
+			{
+				if ( profile.SmallPaths.Length > 0 )
+					ScatterSmallTrees( chunkRoot, coord, settings, backend, chunkSize, chunkMinX, chunkMinY, settings.WorldSeed, profile, trunks ?? [], options );
+			}
+		}
+		finally
+		{
+			_plans = null;
 		}
 	}
 
 	/// <summary>
-	/// Small-tree layer: its own jittered grid, same forest-patch noise as the large trees. Chance peaks
-	/// at the forest edge (patch value near the threshold) and falls off into deep canopy and open
-	/// clearings by <see cref="BiomeScatterProfile.SmallEdgeBias01"/>. Skips cells too close to a trunk
-	/// already placed in this chunk (one list scan per candidate, chunk load only).
+	/// Small-tree layer: its own jittered grid. Saplings cluster under the big elms — the full chance only
+	/// within <see cref="BiomeScatterProfile.SmallNearTrunkMeters"/> of a large trunk placed in this chunk,
+	/// <see cref="BiomeScatterProfile.SmallClearingChance01"/> anywhere else — and never inside the trunk
+	/// clearance (one list scan per candidate, chunk load only).
 	/// </summary>
 	static void ScatterSmallTrees(
 		GameObject chunkRoot,
@@ -358,20 +431,19 @@ public static class TerrainVegetationScatter
 		var src = profile.Source;
 		var cell = Math.Clamp( src.SmallCellSpacingMeters, 2f, chunkSize * 0.5f );
 		var chance = Math.Clamp( src.SmallChance01, 0f, 1f );
-		if ( chance <= 1e-6f )
+		var clearingChance = Math.Clamp( src.SmallClearingChance01, 0f, 1f );
+		if ( chance <= 1e-6f && clearingChance <= 1e-6f )
 			return;
 
-		var edgeBias = Math.Clamp( src.SmallEdgeBias01, 0f, 1f );
+		// Saplings cluster under the big elms (Mark 2026-10-13): the full chance only inside Near Trunk of a large
+		// trunk (this chunk's trunks — the edge of a neighbour's grove is the one blind spot), a small chance anywhere else.
+		var nearTrunk = Math.Max( 0f, src.SmallNearTrunkMeters );
+		var nearTrunkSq = nearTrunk * nearTrunk;
 		var clearance = Math.Max( 0f, src.SmallTrunkClearanceMeters );
 		var clearanceSq = clearance * clearance;
 		var maxSmall = Math.Clamp( src.SmallMaxPerChunk, 1, 256 );
 		var scaleMin = Math.Clamp( src.SmallScaleMin, 0.05f, 4f );
 		var scaleMax = Math.Max( scaleMin, Math.Clamp( src.SmallScaleMax, 0.05f, 4f ) );
-		var patchWave = Math.Max( 32f, options.PatchWavelengthMeters );
-		var patchThreshold = Math.Clamp( options.PatchThreshold01, 0.05f, 0.95f );
-		// Patch-noise distance from the threshold that still counts as "edge".
-		const float edgeBand = 0.15f;
-
 		var noiseSeed = seed + profile.NoiseSalt;
 		var cells = Math.Max( 1, (int)MathF.Floor( chunkSize / cell ) );
 		var prefix = profile.InstancePrefix + "_small";
@@ -390,13 +462,11 @@ public static class TerrainVegetationScatter
 					continue;
 
 				// Cheap rolls before the terrain sample.
-				var patch = TerrainPreviewNoise.Fbm( noiseSeed + 910, wx / patchWave, wy / patchWave, 4, 2.05f, 0.5f );
-				var edge = 1f - Math.Clamp( MathF.Abs( patch - patchThreshold ) / edgeBand, 0f, 1f );
-				var localChance = chance * ((1f - edgeBias) + (edgeBias * edge));
-				if ( TerrainPreviewNoise.Hash01( noiseSeed + 1920, coord.X * 128 + ix, coord.Y * 128 + iy ) > localChance )
+				if ( clearanceSq > 0f && NearAnyTrunk( trunks, wx, wy, clearanceSq ) )
 					continue;
 
-				if ( clearanceSq > 0f && NearAnyTrunk( trunks, wx, wy, clearanceSq ) )
+				var localChance = nearTrunkSq > 0f && NearAnyTrunk( trunks, wx, wy, nearTrunkSq ) ? chance : clearingChance;
+				if ( TerrainPreviewNoise.Hash01( noiseSeed + 1920, coord.X * 128 + ix, coord.Y * 128 + iy ) > localChance )
 					continue;
 
 				var sample = backend.Sample( settings, wx, wy );
@@ -434,6 +504,192 @@ public static class TerrainVegetationScatter
 					continue;
 
 				spawned++;
+			}
+		}
+	}
+
+	/// <summary>One large tree the deterministic grid decided to put down: shared by the real scatter and the far card ring.</summary>
+	readonly struct TreePlan
+	{
+		public float X { get; init; }
+		public float Y { get; init; }
+		public TerrainPreviewSample Sample { get; init; }
+		public ResolvedProfile Profile { get; init; }
+		public int NoiseSeed { get; init; }
+		public int Pick { get; init; }
+	}
+
+	/// <summary>
+	/// The per-cell decision of <see cref="ScatterTrees"/> (jitter, land test, biome profile, forest patch, clump,
+	/// chance roll, variant pick) with nothing spawned — pure, seeded, thread-safe, so the far tree cards
+	/// (TerrainWorldManager.FarTrees.cs) stand exactly where the real trees will.
+	/// </summary>
+	static bool TryPlanTree(
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		TerrainChunkCoord coord,
+		float chunkMinX,
+		float chunkMinY,
+		float cell,
+		int ix,
+		int iy,
+		int seed,
+		List<ResolvedProfile> profiles,
+		float patchWave,
+		float clumpWave,
+		float patchThreshold,
+		float spawnChance,
+		out TreePlan plan )
+	{
+		plan = default;
+		var jitterX = (TerrainPreviewNoise.Hash01( seed + 901, coord.X * 64 + ix, coord.Y * 64 + iy ) - 0.5f) * cell * 0.7f;
+		var jitterY = (TerrainPreviewNoise.Hash01( seed + 902, coord.X * 64 + ix, coord.Y * 64 + iy ) - 0.5f) * cell * 0.7f;
+		var wx = chunkMinX + ((ix + 0.5f) * cell) + jitterX;
+		var wy = chunkMinY + ((iy + 0.5f) * cell) + jitterY;
+
+		if ( !IsInsideLandDisk( settings, wx, wy ) )
+			return false;
+
+		var sample = backend.Sample( settings, wx, wy );
+		if ( !sample.IsInsideWorld || !sample.IsOnLand || sample.OceanHeight01 > 0.5f )
+			return false;
+
+		var biome = TerrainPreviewBiomeResolver.ResolveLandOverlay( settings, sample, wx, wy );
+		var profile = FindProfile( profiles, biome.BiomeId );
+		if ( profile is null )
+			return false;
+
+		var noiseSeed = seed + profile.NoiseSalt;
+
+		var patch = TerrainPreviewNoise.Fbm( noiseSeed + 910, wx / patchWave, wy / patchWave, 4, 2.05f, 0.5f );
+		if ( !profile.IgnoreForestPatches && patch < patchThreshold )
+			return false;
+
+		var forestT = profile.IgnoreForestPatches
+			? Math.Clamp( patch, 0f, 1f )
+			: Math.Clamp(
+				(patch - patchThreshold) / Math.Max( 0.05f, 1f - patchThreshold ),
+				0f,
+				1f );
+		forestT = forestT * MathF.Sqrt( forestT );
+
+		var clump = TerrainPreviewNoise.Fbm( noiseSeed + 915, wx / clumpWave, wy / clumpWave, 3, 2.1f, 0.5f );
+		var clumpPeak = clump * clump;
+		var clumpMul = 0.42f + (0.58f * clumpPeak);
+
+		var densify = TerrainPreviewNoise.Hash01( noiseSeed + 920, coord.X * 128 + ix, coord.Y * 128 + iy );
+		var density = Math.Clamp( profile.Density01, 0.05f, 1f );
+		var localChance = spawnChance
+			* Math.Clamp( 0.65f + (0.35f * forestT), 0f, 1f )
+			* clumpMul
+			* density;
+
+		// Dense grove cores skip the chance roll only at full density; thinned biomes always roll.
+		var denseCore = !profile.IgnoreForestPatches && density >= 0.999f && forestT > 0.55f && clump > 0.58f;
+		if ( !denseCore && densify > localChance )
+			return false;
+
+		var pick = PickIndex( profile.Paths.Length, TerrainPreviewNoise.Hash01( noiseSeed + 930, coord.X * 256 + ix, coord.Y * 256 + iy ) );
+		plan = new TreePlan { X = wx, Y = wy, Sample = sample, Profile = profile, NoiseSeed = noiseSeed, Pick = pick };
+		return true;
+	}
+
+	/// <summary>
+	/// Forest cover 0-1 at a point for the far canopy tint: the same forest-patch noise and threshold the tree
+	/// planner uses, times the biome's density, with the clump term averaged out. 0 where this biome plants
+	/// nothing. Thread-safe (noise only).
+	/// </summary>
+	public static float SampleForestCover01( TerrainPreviewSettings settings, Options options, TerrainPreviewBiomeId biome, float wx, float wy )
+	{
+		if ( !options.Enabled || options.Profiles is null )
+			return 0f;
+
+		var profile = FindProfile( ResolveProfiles( options.Profiles ), biome );
+		if ( profile is null )
+			return 0f;
+
+		var patchWave = Math.Max( 32f, options.PatchWavelengthMeters );
+		var patchThreshold = Math.Clamp( options.PatchThreshold01, 0.05f, 0.95f );
+		var noiseSeed = settings.WorldSeed + profile.NoiseSalt;
+		var patch = TerrainPreviewNoise.Fbm( noiseSeed + 910, wx / patchWave, wy / patchWave, 4, 2.05f, 0.5f );
+		if ( !profile.IgnoreForestPatches && patch < patchThreshold )
+			return 0f;
+
+		var forestT = profile.IgnoreForestPatches
+			? Math.Clamp( patch, 0f, 1f )
+			: Math.Clamp( (patch - patchThreshold) / Math.Max( 0.05f, 1f - patchThreshold ), 0f, 1f );
+		forestT = forestT * MathF.Sqrt( forestT );
+		return Math.Clamp( (0.35f + (0.65f * forestT)) * Math.Clamp( profile.Density01, 0.05f, 1f ), 0f, 1f );
+	}
+
+	/// <summary>A planned large tree for the far card ring: world metres, ground height, the real tree's scale multiplier and yaw.</summary>
+	public readonly struct FarTree
+	{
+		public float X { get; init; }
+		public float Y { get; init; }
+		public float HeightMeters { get; init; }
+		public float ScaleMul { get; init; }
+		public float YawDegrees { get; init; }
+		/// <summary>The prefab the real scatter would clone here — the far ring draws its model's _far sibling.</summary>
+		public string PrefabPath { get; init; }
+	}
+
+	/// <summary>
+	/// Every large tree the real scatter would put on this chunk, without spawning anything. Same grid, same
+	/// hashes, same chance rolls as <see cref="ScatterTrees"/>, so a card and the tree that later replaces it
+	/// share position, size and heading. Thread-safe (pipeline samples + hashes only).
+	/// </summary>
+	public static void EnumerateTrees(
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		TerrainChunkCoord coord,
+		float chunkSizeMeters,
+		Options options,
+		List<FarTree> result )
+	{
+		if ( !options.Enabled || options.Profiles is null )
+			return;
+
+		var profiles = ResolveProfiles( options.Profiles );
+		if ( profiles.Count == 0 )
+			return;
+
+		var chunkSize = Math.Max( 32f, chunkSizeMeters );
+		var worldRadius = settings.TotalWorldRadiusMeters;
+		var chunkMinX = -worldRadius + (coord.X * chunkSize);
+		var chunkMinY = -worldRadius + (coord.Y * chunkSize);
+		var seed = settings.WorldSeed;
+		var cell = Math.Clamp( options.CellSpacingMeters, 4f, chunkSize * 0.5f );
+		var patchWave = Math.Max( 32f, options.PatchWavelengthMeters );
+		var clumpWave = Math.Max( 24f, patchWave * 0.22f );
+		var patchThreshold = Math.Clamp( options.PatchThreshold01, 0.05f, 0.95f );
+		var spawnChance = Math.Clamp( options.SpawnChanceInPatch01, 0.05f, 1f );
+		var maxTrees = Math.Clamp( options.MaxTreesPerChunk, 1, 128 );
+		var scaleMin = Math.Clamp( options.ScaleMin, 0.05f, 4f );
+		var scaleMax = Math.Max( scaleMin, Math.Clamp( options.ScaleMax, 0.05f, 4f ) );
+		var yawJitter = Math.Max( 0f, options.YawJitterDegrees );
+		var cells = Math.Max( 1, (int)MathF.Floor( chunkSize / cell ) );
+		var count = 0;
+
+		for ( var iy = 0; iy < cells && count < maxTrees; iy++ )
+		{
+			for ( var ix = 0; ix < cells && count < maxTrees; ix++ )
+			{
+				if ( !TryPlanTree( settings, backend, coord, chunkMinX, chunkMinY, cell, ix, iy, seed, profiles, patchWave, clumpWave, patchThreshold, spawnChance, out var plan ) )
+					continue;
+
+				count++;
+				var yaw = TerrainPreviewNoise.Hash01( plan.NoiseSeed + 940, coord.X * 512 + ix, coord.Y * 512 + iy ) * yawJitter;
+				var scaleT = TerrainPreviewNoise.Hash01( plan.NoiseSeed + 950, coord.X * 1024 + ix, coord.Y * 1024 + iy );
+				result.Add( new FarTree
+				{
+					X = plan.X,
+					Y = plan.Y,
+					HeightMeters = plan.Sample.HeightMeters,
+					ScaleMul = scaleMin + ((scaleMax - scaleMin) * scaleT),
+					YawDegrees = yaw,
+					PrefabPath = plan.Profile.Paths[plan.Pick],
+				} );
 			}
 		}
 	}
@@ -502,16 +758,15 @@ public static class TerrainVegetationScatter
 		int iy,
 		Options options )
 	{
-		var stickPath = NormalizePrefabPath( options.NearLargeTreeStickPrefab );
-		if ( !PrefabPathResolves( stickPath ) )
-			return;
-
+		// Roll first: the prefab lookup is the expensive part and 95 % of trees never need it.
 		var chance = Math.Clamp( options.NearLargeTreeStickChance01, 0f, 1f );
 		if ( chance <= 1e-6f )
 			return;
-
 		var roll = TerrainPreviewNoise.Hash01( noiseSeed + 960, coord.X * 384 + ix, coord.Y * 384 + iy );
 		if ( roll > chance )
+			return;
+		var stickPath = NormalizePrefabPath( options.NearLargeTreeStickPrefab );
+		if ( !PrefabPathResolves( stickPath ) )
 			return;
 
 		var minR = Math.Clamp( options.NearLargeTreeStickMinRadiusMeters, 1f, 24f );
@@ -758,58 +1013,63 @@ public static class TerrainVegetationScatter
 		_ = loggedFirst;
 		_ = kindLabel;
 
-		var instance = ClonePrefab( path );
-		if ( instance is null || !instance.IsValid() )
+		if ( string.IsNullOrWhiteSpace( path ) || !PrefabPathResolves( path ) )
 			return false;
 
-		instance.NetworkMode = NetworkMode.Never;
-		instance.Parent = chunkRoot;
-		instance.Name = memberIndex > 0
+		var name = memberIndex > 0
 			? $"{instancePrefix}_{variant}_{memberIndex}"
 			: $"{instancePrefix}_{variant}";
-		MakeScatterStatic( instance );
 
 		var localMeters = new Vector3( wx - chunkMinX, wy - chunkMinY, heightMeters );
-		instance.LocalPosition = TerrainWorldUnits.MetersToEngine( localMeters );
+		var localPosition = TerrainWorldUnits.MetersToEngine( localMeters );
 
 		var yaw = TerrainPreviewNoise.Hash01(
 			seed + 940 + memberIndex,
 			coord.X * 512 + ix,
 			coord.Y * 512 + iy ) * yawJitter;
 		var yawRotation = Rotation.FromYaw( yaw );
+		Rotation localRotation;
 		if ( up.z > 0.9999f )
 		{
-			instance.LocalRotation = yawRotation;
+			localRotation = yawRotation;
 		}
 		else
 		{
 			// Keep the random heading, stand the model on the tilted up axis.
 			var forward = yawRotation.Forward;
 			forward = (forward - (up * Vector3.Dot( forward, up ))).Normal;
-			instance.LocalRotation = Rotation.LookAt( forward, up );
+			localRotation = Rotation.LookAt( forward, up );
 		}
 
-		var authored = instance.LocalScale;
-		if ( authored.x < 0.001f || authored.y < 0.001f || authored.z < 0.001f )
-			authored = Vector3.One;
 		var scaleT = TerrainPreviewNoise.Hash01(
 			seed + 950 + memberIndex,
 			coord.X * 1024 + ix,
 			coord.Y * 1024 + iy );
 		var mul = scaleMin + ((scaleMax - scaleMin) * scaleT);
-		instance.LocalScale = authored * mul;
+		var localScale = AuthoredScale( path ) * mul;
 
-		instance.Enabled = true;
+		var plan = new SpawnPlan
+		{
+			Path = path,
+			Name = name,
+			LocalPosition = localPosition,
+			LocalRotation = localRotation,
+			LocalScale = localScale,
+			StableKey = $"veg:{coord.X}:{coord.Y}:{ix}:{iy}:{memberIndex}:{instancePrefix}:{variant}",
+			Sapling = kindLabel == "sapling",
+			Kind = kindLabel,
+		};
 
-		var stableKey = $"veg:{coord.X}:{coord.Y}:{ix}:{iy}:{memberIndex}:{instancePrefix}:{variant}";
-		var identity = instance.Components.Get<WorldScatterIdentity>()
-			?? instance.Components.Create<WorldScatterIdentity>();
-		identity.Configure( stableKey );
+		// Planned: the manager clones it later under its per-frame budget. No list = spawn right now (legacy).
+		if ( _plans is not null )
+			_plans.Add( plan );
+		else
+			SpawnPlanned( chunkRoot, plan );
 
 		return true;
 	}
 
-	static string NormalizePrefabPath( string path )
+	internal static string NormalizePrefabPath( string path )
 	{
 		if ( string.IsNullOrWhiteSpace( path ) )
 			return "";

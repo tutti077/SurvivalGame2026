@@ -3,6 +3,13 @@ namespace Survival;
 /// <summary>Deserialize-only fields for old preview JSON bundles. No [Property] — not shown in the editor.</summary>
 public sealed partial class TerrainPreviewSettings
 {
+	// bush.png vertex-colour tiling (replaced by the world-tiled terrain_ground.vmat texture 2026-10-12).
+	public float BiomeCloverGroundTextureTileMeters { get; set; } = 12f;
+
+	// Noise-scatter biome placement (replaced by seeded regions 2026-10-08) - still in saved recipes.
+	public int BiomeScatterOctaves { get; set; } = 1;
+	public float AzureCoastMinDistanceFromSpawnMeters { get; set; } = 5500f;   // replaced by AzureCoastMinDistanceFromSpawn01 (2026-10-13)
+	public float BiomePickerFrequency { get; set; } = 30f;
 	public bool EnableValleyAutoTune { get; set; }
 	public bool RetrySeedsUntilSolved { get; set; }
 	public int ValleyAutoMaxSeedAttempts { get; set; } = 100;
@@ -133,4 +140,44 @@ public sealed partial class TerrainPreviewSettings
 	public float LandRollingDetailFrequencyScale { get; set; } = 2.5f;
 	public float LandRollingDetailAmplitude01 { get; set; } = 0.12f;
 	public bool NormalizeLandRollingHeights { get; set; }
+}
+
+// Biome slope smoothing pass (removed 2026-10-05: the pass had no caller) and the first-generation Redwood knobs.
+public sealed partial class TerrainPreviewSettings
+{
+	public bool EnableBiomeSlopeSmoothing { get; set; }
+	public float BiomeRedwoodSlopeSmooth01 { get; set; } = 0.38f;
+	public float BiomeAmberSlopeSmooth01 { get; set; } = 0.82f;
+	public float BiomeMountainSlopeSmooth01 { get; set; } = 0.12f;
+	public float BiomeSlopeDetailGate01 { get; set; } = 0.12f;
+	public float BiomeRedwoodHillFrequency { get; set; } = 6f;
+	public float BiomeRedwoodHillAmplitude01 { get; set; } = 0.11f;
+	public float BiomeRedwoodRidgeAmplitude01 { get; set; } = 0.045f;
+}
+
+// Blended post-cap gates (the pass had no caller) and the unreachable Mountain base shaper, removed 2026-10-05.
+public sealed partial class TerrainPreviewSettings
+{
+	public float BiomeMountainMinSlopeDegrees { get; set; } = 8f;
+	public float BiomeMountainMinPeakLift01 { get; set; } = 0.12f;
+	public float BiomeMountainCapWeightFullAt01 { get; set; } = 0.35f;
+	public float BiomeMountainMinHeight01 { get; set; } = 0.34f;
+	public float BiomeHeightCapBorderSharpness { get; set; } = 1.35f;
+	public bool EnableBiomeHeightBlend { get; set; } = true;
+	public float BiomeMountainBaseRuggedAmplitude01 { get; set; } = 0.06f;
+}
+
+// Knobs with no read site (dead peak cap, summit flatten, boundary/weight noise, picker octaves), retired 2026-10-05.
+public sealed partial class TerrainPreviewSettings
+{
+	public float MountainTypicalPeakMax01 { get; set; } = 0.78f;
+	public float MountainAbsolutePeakMax01 { get; set; } = 0.985f;
+	public float MountainSummitLocalPeakMin01 { get; set; } = 0.38f;
+	public float CoastalInlandHeightMargin01 { get; set; } = 0.12f;
+	public float BiomeMountainSummitFlattenStart01 { get; set; } = 0.88f;
+	public float BiomeMountainSummitFlattenStrength01 { get; set; } = 0.55f;
+	public float BiomeBoundaryNoiseFrequency { get; set; } = 8f;
+	public float BiomeDistanceWarpMeters { get; set; } = 0f;
+	public float BiomeWeightNoiseStrength01 { get; set; } = 0f;
+	public int BiomePickerOctaves { get; set; } = 3;
 }

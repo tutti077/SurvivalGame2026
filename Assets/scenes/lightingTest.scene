@@ -188,7 +188,7 @@
           "Contribution": "Diffuse, Specular, Transmissive",
           "FogMode": "Disabled",
           "FogStrength": 0,
-          "LightColor": "1.3,1.18,1,1",
+          "LightColor": "3.2,2.95,2.6,1",
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
@@ -200,7 +200,7 @@
           "ShadowCascadeSplitRatio": 0.91,
           "ShadowHardness": 0,
           "Shadows": true,
-          "SkyColor": "0.42,0.54,0.76,1",
+          "SkyColor": "0.18,0.23,0.33,1",
           "Visualizer": {}
         }
       ],
@@ -530,7 +530,7 @@
           "CycleTimeSeconds": 0,
           "DayNumber": 1,
           "DaySeconds": 75,
-          "DaySkyAmbient": "0.42,0.54,0.76,1",
+          "DaySkyAmbient": "0.18,0.23,0.33,1",
           "DayWeight": 1,
           "DiskOrbitRadiusMeters": 5200,
           "DiskScale": 0,
@@ -594,7 +594,7 @@
             "go": "8fd87d7e-835f-4899-9799-69e5df2f0bbd",
             "component_type": "DirectionalLight"
           },
-          "SunPeakColor": "1.3,1.18,1,1",
+          "SunPeakColor": "3.2,2.95,2.6,1",
           "TransitionSeconds": 15,
           "WorldSaveName": ""
         }

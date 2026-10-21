@@ -23,6 +23,13 @@ public static class TerrainPreviewLandDiskFields
 	static bool[] _openWater = Array.Empty<bool>();
 	static TerrainPreviewBiomeId[] _rawLandBiomes = Array.Empty<TerrainPreviewBiomeId>();
 	static TerrainPreviewBiomeResolver.LandBiomeWeights[] _placementWeights = Array.Empty<TerrainPreviewBiomeResolver.LandBiomeWeights>();
+	// Per raster cell: the biome the speck merge removed there (None = the cell was not a speck) and what replaced it.
+	static TerrainPreviewBiomeId[] _speckOriginal = Array.Empty<TerrainPreviewBiomeId>();
+	static TerrainPreviewRivers.Network _rivers;
+	static int _riverFingerprint = int.MinValue;
+	static TerrainPreviewBiomeId[] _speckReplacement = Array.Empty<TerrainPreviewBiomeId>();
+	// 1 on merged cells, 0 elsewhere - sampled bilinearly so the override fades over a cell instead of switching per cell.
+	static float[] _speckMerge01 = Array.Empty<float>();
 	static bool[] _blackwater = Array.Empty<bool>();
 	static int _blackwaterFingerprint = int.MinValue;
 	static TerrainPreviewBlackwater.Spot[] _blackwaterSpots = Array.Empty<TerrainPreviewBlackwater.Spot>();
@@ -49,6 +56,8 @@ public static class TerrainPreviewLandDiskFields
 	{
 		_biomePlacementFingerprint = int.MinValue;
 		_waterFingerprint = int.MinValue;
+		_rivers = null;
+		_riverFingerprint = int.MinValue;
 		_finalizeFingerprint = int.MinValue;
 		_blackwaterFingerprint = int.MinValue;
 		_isBuilding = false;
@@ -62,12 +71,17 @@ public static class TerrainPreviewLandDiskFields
 		_distanceToDisplayLakeMeters = Array.Empty<float>();
 		_rawLandBiomes = Array.Empty<TerrainPreviewBiomeId>();
 		_placementWeights = Array.Empty<TerrainPreviewBiomeResolver.LandBiomeWeights>();
+		_speckOriginal = Array.Empty<TerrainPreviewBiomeId>();
+		_speckReplacement = Array.Empty<TerrainPreviewBiomeId>();
+		_speckMerge01 = Array.Empty<float>();
 	}
 
 	/// <summary>Drop lake mask only — biome placement on land is unchanged.</summary>
 	public static void InvalidateWaterCache()
 	{
 		_waterFingerprint = int.MinValue;
+		_rivers = null;
+		_riverFingerprint = int.MinValue;
 		_finalizeFingerprint = int.MinValue;
 		_blackwaterFingerprint = int.MinValue;
 		_openWater = Array.Empty<bool>();
@@ -85,7 +99,12 @@ public static class TerrainPreviewLandDiskFields
 		_biomePlacementFingerprint = int.MinValue;
 		_finalizeFingerprint = int.MinValue;
 		_rawLandBiomes = Array.Empty<TerrainPreviewBiomeId>();
+		_rivers = null;
+		_riverFingerprint = int.MinValue;
 		_placementWeights = Array.Empty<TerrainPreviewBiomeResolver.LandBiomeWeights>();
+		_speckOriginal = Array.Empty<TerrainPreviewBiomeId>();
+		_speckReplacement = Array.Empty<TerrainPreviewBiomeId>();
+		_speckMerge01 = Array.Empty<float>();
 		_blackwaterFingerprint = int.MinValue;
 		_blackwater = Array.Empty<bool>();
 		_blackwaterSpots = Array.Empty<TerrainPreviewBlackwater.Spot>();
@@ -329,9 +348,6 @@ public static class TerrainPreviewLandDiskFields
 		return nearest < float.MaxValue ? nearest : -1f;
 	}
 
-	public static bool IsAzureCoast( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
-		=> TerrainPreviewAzureCoast.SampleAtWorldMeters( settings, worldXMeters, worldYMeters );
-
 	public static bool IsBlackwater( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
 	{
 		if ( !settings.EnableBlackwaterBiome )
@@ -399,8 +415,137 @@ public static class TerrainPreviewLandDiskFields
 		return _placementWeights[idx];
 	}
 
+	/// <summary>
+	/// True when the speck merge changed the raster cell under this point: <paramref name="original"/> is the
+	/// biome the continuous picker would put here (the speck), <paramref name="replacement"/> the surrounding
+	/// biome it was merged into. The continuous sampler uses it to drop the speck biome at sample time, so the
+	/// live terrain, trees and map agree with the merged raster instead of showing 30–150 m islands.
+	/// </summary>
+	public static bool TryGetSpeckMerge(
+		TerrainPreviewSettings settings,
+		float worldXMeters,
+		float worldYMeters,
+		out TerrainPreviewBiomeId original,
+		out TerrainPreviewBiomeId replacement,
+		out float strength01 )
+	{
+		original = TerrainPreviewBiomeId.None;
+		replacement = TerrainPreviewBiomeId.None;
+		strength01 = 0f;
+		EnsureBuilt( settings );
+		var res = _fieldResolution;
+		if ( _speckOriginal.Length != res * res || _speckMerge01.Length != res * res )
+			return false;
+
+		var radius = settings.WorldRadiusMeters;
+		var diameter = settings.WorldDiameterMeters;
+		if ( diameter <= 0f )
+			return false;
+
+		// Bilinear strength over the four cells around the point (cell centres at +0.5), so a merged island's
+		// override fades in over one raster cell instead of painting a hard-edged rectangle.
+		var fy = (((worldYMeters + radius) / diameter) * res) - 0.5f;
+		var fm = (((worldXMeters + radius) / diameter) * res) - 0.5f;
+		var y0 = (int)MathF.Floor( fy );
+		var m0 = (int)MathF.Floor( fm );
+		var ty = fy - y0;
+		var tm = fm - m0;
+		var sum = 0f;
+		var bestWeight = 0f;
+		for ( var dy = 0; dy <= 1; dy++ )
+		{
+			for ( var dm = 0; dm <= 1; dm++ )
+			{
+				var py = y0 + dy;
+				var pm = m0 + dm;
+				if ( py < 0 || pm < 0 || py >= res || pm >= res )
+					continue;
+				var px = (res - 1) - pm;
+				var idx = (py * res) + px;
+				var w = (dy == 0 ? 1f - ty : ty) * (dm == 0 ? 1f - tm : tm);
+				var m = _speckMerge01[idx];
+				if ( m <= 0f )
+					continue;
+				sum += w * m;
+				if ( w > bestWeight )
+				{
+					bestWeight = w;
+					original = _speckOriginal[idx];
+					replacement = _speckReplacement[idx];
+				}
+			}
+		}
+
+		if ( sum <= 0.01f || replacement == TerrainPreviewBiomeId.None )
+			return false;
+
+		strength01 = Math.Clamp( sum, 0f, 1f );
+		return true;
+	}
+
+	/// <summary>
+	/// The merged raster's biome when the four cells around the point all agree (and are dry land): a point
+	/// whose continuous pick differs there is a speck smaller than a raster cell. Near a raster boundary the
+	/// four cells differ, so the continuous field keeps deciding and boundaries stay smooth.
+	/// </summary>
+	public static bool TryGetUniformRasterBiome( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters, out TerrainPreviewBiomeId biome )
+	{
+		biome = TerrainPreviewBiomeId.None;
+		EnsureBuilt( settings );
+		var res = _fieldResolution;
+		if ( _placementWeights.Length != res * res || _openWater.Length != res * res )
+			return false;
+
+		var radius = settings.WorldRadiusMeters;
+		var diameter = settings.WorldDiameterMeters;
+		if ( diameter <= 0f )
+			return false;
+
+		var y0 = (int)MathF.Floor( (((worldYMeters + radius) / diameter) * res) - 0.5f );
+		var m0 = (int)MathF.Floor( (((worldXMeters + radius) / diameter) * res) - 0.5f );
+		for ( var dy = 0; dy <= 1; dy++ )
+		{
+			for ( var dm = 0; dm <= 1; dm++ )
+			{
+				var py = y0 + dy;
+				var pm = m0 + dm;
+				if ( py < 0 || pm < 0 || py >= res || pm >= res )
+					return false;
+				var idx = (py * res) + ((res - 1) - pm);
+				if ( !_landDisk[idx] || _openWater[idx] )
+					return false;
+				var cell = TerrainPreviewBiomeResolver.PickDominantPlacementBiome( _placementWeights[idx] );
+				if ( cell == TerrainPreviewBiomeId.None )
+					return false;
+				if ( biome == TerrainPreviewBiomeId.None )
+					biome = cell;
+				else if ( biome != cell )
+					return false;
+			}
+		}
+
+		return biome != TerrainPreviewBiomeId.None;
+	}
+
+	// One Pipeline.Sample used to re-verify the cache fingerprints ~6 times (every shore / coastal / water lookup).
+	// BeginSample verifies once per sample on this thread; the inner calls then short-circuit.
+	[ThreadStatic] static TerrainPreviewSettings _verifiedSettings;
+	[ThreadStatic] static int _verifiedStamp;
+	[ThreadStatic] static int _sampleStamp;
+
+	/// <summary>Called once at the top of <see cref="TerrainPreviewPipeline.Sample"/>: full cache check, then free for the rest of the sample.</summary>
+	public static void BeginSample( TerrainPreviewSettings settings )
+	{
+		_sampleStamp++;
+		EnsureBuilt( settings );
+		_verifiedSettings = settings;
+		_verifiedStamp = _sampleStamp;
+	}
+
 	static void EnsureBuilt( TerrainPreviewSettings settings )
 	{
+		if ( _verifiedStamp == _sampleStamp && ReferenceEquals( _verifiedSettings, settings ) )
+			return;
 		lock ( _buildLock )
 		{
 			if ( _isBuilding )
@@ -423,6 +568,10 @@ public static class TerrainPreviewLandDiskFields
 					return;
 
 				EnsureBlackwaterMask( settings );
+				if ( TerrainPreviewGenerateProgress.ShouldAbort() )
+					return;
+
+				EnsureRivers( settings );
 			}
 			finally
 			{
@@ -711,7 +860,7 @@ public static class TerrainPreviewLandDiskFields
 		hash.Add( _waterFingerprint );
 		hash.Add( settings.WorldSeed );
 		hash.Add( settings.EnableBlackwaterBiome );
-		TerrainPreviewMountainSpawnMask.AddSettingsFingerprint( hash, settings );
+		TerrainPreviewMountainSpawnMask.AddSettingsFingerprint( ref hash, settings );
 		hash.Add( settings.BlackwaterSpotCount );
 		hash.Add( settings.BlackwaterMinDiameterMeters );
 		hash.Add( settings.BlackwaterMaxDiameterMeters );
@@ -738,6 +887,8 @@ public static class TerrainPreviewLandDiskFields
 		if ( !WaterRasterReady( res ) || _rawLandBiomes.Length != RasterCellCount( res ) )
 		{
 			_waterFingerprint = int.MinValue;
+		_rivers = null;
+		_riverFingerprint = int.MinValue;
 			EnsureWaterMask( settings );
 		}
 
@@ -760,11 +911,30 @@ public static class TerrainPreviewLandDiskFields
 			dryBiomeMap[i] = _rawLandBiomes[i];
 		}
 
+		var speckOriginal = new TerrainPreviewBiomeId[dryBiomeMap.Length];
+		var speckReplacement = new TerrainPreviewBiomeId[dryBiomeMap.Length];
 		if ( settings.BiomeSpeckFilterEnabled )
 		{
+			var beforeMerge = new TerrainPreviewBiomeId[dryBiomeMap.Length];
+			Array.Copy( dryBiomeMap, beforeMerge, dryBiomeMap.Length );
+			// Up to three passes: a speck that is itself surrounded by a smaller speck only merges once the
+			// inner one has gone (Mark 2026-10-06: every tiny patch becomes the biome around it).
 			TerrainPreviewBiomeSpeckFilter.MergeSmallPatches(
-				dryBiomeMap, res, res, metersPerPixel, settings.BiomeMinPatchDiameterMeters, maxPasses: 1 );
+				dryBiomeMap, res, res, metersPerPixel, settings.BiomeMinPatchDiameterMeters, maxPasses: 3 );
+			for ( var i = 0; i < dryBiomeMap.Length; i++ )
+			{
+				if ( beforeMerge[i] == dryBiomeMap[i] )
+					continue;
+				speckOriginal[i] = beforeMerge[i];
+				speckReplacement[i] = dryBiomeMap[i];
+			}
 		}
+		var speckMerge01 = new float[dryBiomeMap.Length];
+		for ( var i = 0; i < dryBiomeMap.Length; i++ )
+			speckMerge01[i] = speckOriginal[i] == TerrainPreviewBiomeId.None ? 0f : 1f;
+		_speckOriginal = speckOriginal;
+		_speckReplacement = speckReplacement;
+		_speckMerge01 = speckMerge01;
 
 		for ( var i = 0; i < dryBiomeMap.Length; i++ )
 		{
@@ -839,6 +1009,73 @@ public static class TerrainPreviewLandDiskFields
 		}
 	}
 
+	/// <summary>The river network for these settings (built by <see cref="EnsureReady"/>; null when rivers are off).</summary>
+	public static TerrainPreviewRivers.Network RiverNetwork
+	{
+		get
+		{
+			return _rivers;
+		}
+	}
+
+	/// <summary>Nearest river at a world point (default = none within the bank).</summary>
+	public static TerrainPreviewRivers.Hit SampleRiver( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
+	{
+		if ( !settings.EnableRivers )
+			return default;
+		EnsureBuilt( settings );
+		return _rivers is null ? default : TerrainPreviewRivers.Sample( _rivers, settings, worldXMeters, worldYMeters );
+	}
+
+	/// <summary>True inside a river channel (the water surface).</summary>
+	public static bool IsRiverWaterAtWorld( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
+	{
+		var hit = SampleRiver( settings, worldXMeters, worldYMeters );
+		return hit.Near && hit.Distance <= hit.HalfWidth;
+	}
+
+	static void EnsureRivers( TerrainPreviewSettings settings )
+	{
+		if ( !settings.EnableRivers || !WaterRasterReady( _fieldResolution ) )
+		{
+			_rivers = null;
+			return;
+		}
+
+		var hash = new HashCode();
+		hash.Add( _waterFingerprint );
+		hash.Add( settings.WorldSeed );
+		hash.Add( settings.RiverCount );
+		hash.Add( settings.RiverWidthMinMeters );
+		hash.Add( settings.RiverWidthMaxMeters );
+		hash.Add( settings.RiverBankWidthScale );
+		hash.Add( settings.RiverMinGradePercent );
+		hash.Add( settings.RiverMaxCutMeters );
+		hash.Add( settings.RiverSourceSpacingMeters );
+		hash.Add( settings.RiverSmoothingMeters );
+		hash.Add( settings.RiverDepthMeters );
+		hash.Add( settings.RiverBankMaxSlopeDegrees );
+		hash.Add( settings.RiverBedDepthMeters );
+		hash.Add( _biomePlacementFingerprint );   // the Amber Dunes veto follows biome placement
+		var fingerprint = hash.ToHashCode();
+		if ( fingerprint == _riverFingerprint && _rivers is not null )
+			return;
+
+		TerrainPreviewGenerateProgress.SetStage( "Rivers" );
+		var watch = System.Diagnostics.Stopwatch.StartNew();
+		// Routing samples the pipeline WITHOUT rivers; EnsureBuilt is re-entered on this thread and returns at once (_isBuilding).
+		var desert = new bool[_placementWeights.Length];
+		for ( var i = 0; i < desert.Length; i++ )
+			desert[i] = TerrainPreviewBiomeResolver.PickDominantPlacementBiome( _placementWeights[i] ) == TerrainPreviewBiomeId.AmberDunes;
+		_rivers = TerrainPreviewRivers.Build(
+			settings, _landDisk, _openWater, desert, _fieldResolution,
+			( x, y ) => TerrainPreviewPipeline.SampleDryLandHeightMetersNoRivers( settings, x, y ) );
+		_riverFingerprint = fingerprint;
+		Log.Info( $"[Rivers] {_rivers.RiverCount} rivers from {_rivers.Attempted} sources ({_rivers.Failed} dropped), {_rivers.TotalLengthMeters / 1000f:0.0} km total, {watch.ElapsedMilliseconds} ms" );
+		if ( _rivers.DesertDropped > 0 )
+			Log.Info( $"[Rivers] {_rivers.DesertDropped} routes dropped at the Amber Dunes edge (no rivers in the desert)." );
+	}
+
 	public static bool TryWorldToIndex(
 		TerrainPreviewSettings settings,
 		float worldXMeters,
@@ -883,13 +1120,15 @@ public static class TerrainPreviewLandDiskFields
 		hash.Add( settings.ValleyWeight );
 		hash.Add( settings.EnableHeightCurveLayer );
 		hash.Add( settings.HeightCurvePower );
-		hash.Add( settings.BiomePickerFrequency );
+		hash.Add( settings.BiomeRegionsPerBiome );
+		hash.Add( settings.BiomeRegionBorderWarpMeters );
+		hash.Add( settings.BiomeRegionEdgeBlendMeters );
 		hash.Add( settings.BiomeCloverGuaranteeSpawn );
 		hash.Add( settings.BiomeMinPatchDiameterMeters );
 		hash.Add( settings.BiomeAmberWeight );
 		hash.Add( settings.BiomeCloverWeight );
 		hash.Add( settings.BiomeRedwoodWeight );
-		TerrainPreviewMountainSpawnMask.AddSettingsFingerprint( hash, settings );
+		TerrainPreviewMountainSpawnMask.AddSettingsFingerprint( ref hash, settings );
 		return hash.ToHashCode();
 	}
 

@@ -23,7 +23,6 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 		nameof( Survival.TerrainWorldManager.SideViewRadiusChunks ),
 		nameof( Survival.TerrainWorldManager.CollisionRangeMeters ),
 		nameof( Survival.TerrainWorldManager.ChunksPerFrame ),
-		nameof( Survival.TerrainWorldManager.MeshBorderPrefetch01 ),
 		nameof( Survival.TerrainWorldManager.MeshedChunkCount ),
 		nameof( Survival.TerrainWorldManager.BiomePreviewMetersPerPixel ),
 		nameof( Survival.TerrainWorldManager.BiomePreviewMapMaxResolution ),
@@ -39,6 +38,7 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 		nameof( Survival.TerrainWorldManager.EffectiveMetersPerPixel ),
 		nameof( Survival.TerrainWorldManager.BiomePreviewMapSeed ),
 		nameof( Survival.TerrainWorldManager.IsBiomePreviewMapStale ),
+		nameof( Survival.TerrainWorldManager.IsSavedBiomeMapStale ),
 		nameof( Survival.TerrainWorldManager.HasStreamPosition ),
 		nameof( Survival.TerrainWorldManager.StreamWorldPosition ),
 		nameof( Survival.TerrainWorldManager.StreamXMeters ),
@@ -56,6 +56,9 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 	Vector3 _lastStreamPositionForStatus;
 	float _lastMapProgress01 = -1f;
 	string _lastMapStatus;
+	RealTimeSince _lastStaleCheck;
+	string _lastAutoBakeFingerprint;
+	RealTimeSince _lastAutoBakeStarted;
 
 	public TerrainWorldManagerWidget( SerializedObject obj ) : base( obj )
 	{
@@ -129,6 +132,63 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 			$"Biome map ready — {manager.EffectiveBiomePreviewResolution}px, {manager.EffectiveMetersPerPixel:0.##} m/px (saved WorldSaves/{manager.WorldName}/biome_map.png)";
 	}
 
+	/// <summary>
+	/// Edit mode: a saved map that no longer matches the world's settings is rebuilt here, budgeted per
+	/// frame at <see cref="Survival.TerrainWorldManager.EditorAutoBakeMaxResolution"/>, so the inspector
+	/// always shows the world the current recipe would spawn (Mark 2026-10-08: look before committing).
+	/// </summary>
+	void TryAutoBakeStaleMap( Survival.TerrainWorldManager manager )
+	{
+		if ( Sandbox.Game.IsPlaying || manager.IsMapGenerating )
+			return;
+
+		// Bake when there is no in-memory map at all (fresh editor session) or the saved one is stale.
+		if ( manager.BiomePreviewMap.IsValid() && !manager.IsSavedBiomeMapStale )
+			return;
+
+		var fingerprint = manager.GenerationSettingsFingerprint;
+		if ( fingerprint == _lastAutoBakeFingerprint && _lastAutoBakeStarted < 120f )
+			return;   // already baking / just baked this exact settings set; retry after two minutes if it never landed
+
+		_lastAutoBakeFingerprint = fingerprint;
+		_lastAutoBakeStarted = 0;
+		manager.StartBiomePreviewGenerationBudgeted( Survival.TerrainWorldManager.EditorAutoBakeMaxResolution );
+	}
+
+	[EditorEvent.Frame]
+	void TickEditorBake()
+	{
+		if ( Sandbox.Game.IsPlaying )
+			return;
+
+		var manager = GetManager();
+		if ( manager is null || !manager.IsValid )
+			return;
+
+		if ( manager.IsMapGenerating )
+		{
+			manager.TickMapGenerationBudgeted( 12f );
+			if ( !manager.IsMapGenerating )
+				RefreshPreview();
+			Update();
+			return;
+		}
+
+		// OnPaint only repaints on change, so the stale check has to live on the frame event.
+		if ( _lastStaleCheck > 1f )
+		{
+			_lastStaleCheck = 0;
+			var wasStale = manager.IsSavedBiomeMapStale;
+			manager.RefreshSavedBiomeMapStaleState();
+			TryAutoBakeStaleMap( manager );
+			if ( wasStale != manager.IsSavedBiomeMapStale || manager.IsMapGenerating )
+			{
+				RefreshPreview();
+				Update();
+			}
+		}
+	}
+
 	void RefreshPreview()
 	{
 		var manager = GetManager();
@@ -156,10 +216,6 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 			_previewStatus.Text =
 				$"Biome map ready — {manager.EffectiveBiomePreviewResolution}px, {manager.EffectiveMetersPerPixel:0.##} m/px, seed {mapSeed}{staleNote}{streamNote}";
 		}
-		else if ( manager.GetHudBiomeMapTexture().IsValid() )
-		{
-			_previewStatus.Text = $"Showing saved WorldSaves/{manager.WorldName}/biome_map.png — Regenerate to rebuild for seed {manager.WorldSeed}{streamNote}";
-		}
 		else if ( manager.IsMapGenerating || manager.MapGenerationProgress01 > 0f )
 		{
 			_previewStatus.Text = $"{manager.MapGenerationStatus}{streamNote}";
@@ -173,7 +229,7 @@ public sealed class TerrainWorldManagerWidget : ComponentEditorWidget
 		{
 			_previewStatus.Text = Sandbox.Game.IsPlaying
 				? $"Waiting for biome map…{streamNote}"
-				: $"No biome map yet — press Play to generate (Regenerate Preview On Start), or Regenerate Biome Map for an editor bake.";
+				: "No map in memory yet — baking from the world recipe now (every map is rasterised live; the PNG on disk is never shown).";
 		}
 	}
 

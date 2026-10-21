@@ -84,14 +84,6 @@ public static class TerrainPreviewBiomeResolver
 		};
 	}
 
-	/// <summary>Caps picker frequency so noise patches are not narrower than min patch diameter.</summary>
-	public static float GetEffectivePatchFrequency( TerrainPreviewSettings settings )
-	{
-		var minPatch = Math.Max( 20f, settings.BiomeMinPatchDiameterMeters );
-		var maxFrequency = settings.WorldDiameterMeters / minPatch;
-		return Math.Min( Math.Max( 0.5f, settings.BiomePickerFrequency ), maxFrequency );
-	}
-
 	static bool QualifiesAsMountainBiome( LandBiomeWeights weights )
 		=> weights.Mountain >= 0.5f;
 
@@ -165,13 +157,11 @@ public static class TerrainPreviewBiomeResolver
 		}
 		else
 		{
-			var patchFreq = GetEffectivePatchFrequency( settings );
-			var scatterOctaves = Math.Clamp( settings.BiomeScatterOctaves, 1, 6 );
 			var influenceScale = Math.Clamp( settings.BiomeDistanceInfluenceScale01, 0f, 1f );
 			var cloverRampStart = Math.Max( 0f, settings.BiomeCloverPriorityEndMeters );
 
 			cloverW = ComputeLandWeight(
-				settings, distMeters, nx, ny, patchFreq, scatterOctaves, influenceScale,
+				settings, distMeters, nx, ny, influenceScale,
 				hardMinMeters: 0f,
 				rampStartMeters: cloverRampStart,
 				rampFullMeters: settings.BiomeCloverRampFullDistanceMeters,
@@ -184,7 +174,7 @@ public static class TerrainPreviewBiomeResolver
 				530 );
 
 			redwoodW = ComputeLandWeight(
-				settings, distMeters, nx, ny, patchFreq, scatterOctaves, influenceScale,
+				settings, distMeters, nx, ny, influenceScale,
 				hardMinMeters: settings.BiomeRedwoodHardMinDistanceMeters,
 				rampStartMeters: settings.BiomeRedwoodHardMinDistanceMeters,
 				rampFullMeters: settings.BiomeRedwoodRampFullDistanceMeters,
@@ -197,7 +187,7 @@ public static class TerrainPreviewBiomeResolver
 				531 );
 
 			amberW = ComputeLandWeight(
-				settings, distMeters, nx, ny, patchFreq, scatterOctaves, influenceScale,
+				settings, distMeters, nx, ny, influenceScale,
 				hardMinMeters: settings.BiomeAmberHardMinDistanceMeters,
 				rampStartMeters: settings.BiomeAmberHardMinDistanceMeters,
 				rampFullMeters: settings.BiomeAmberRampFullDistanceMeters,
@@ -233,6 +223,74 @@ public static class TerrainPreviewBiomeResolver
 			Redwood = redwoodW,
 			Amber = amberW,
 			Mountain = mountainW,
+		};
+	}
+
+	/// <summary>
+	/// Speck merge for what a point LOOKS like (Mark 2026-10-06): where the filtered raster merged a small
+	/// island into the biome around it, the island's biome loses its weight so colour, trees and map show
+	/// the surround. Height shaping must keep the raw weights (see the pipeline) or the merged cells turn
+	/// into flat-topped blocks.
+	/// </summary>
+	public static LandBiomeWeights ApplySpeckMerge( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters, LandBiomeWeights weights )
+	{
+		if ( !TerrainPreviewLandDiskFields.TryGetSpeckMerge( settings, worldXMeters, worldYMeters, out var speck, out var surround, out var strength ) )
+			return SnapSubCellSpeckToRaster( settings, worldXMeters, worldYMeters, weights );
+
+		// Feathered: the speck biome fades out and the surround fades in with the bilinear merge strength.
+		var keep = 1f - strength;
+		var cloverW = weights.Clover;
+		var redwoodW = weights.Redwood;
+		var amberW = weights.Amber;
+		var mountainW = weights.Mountain;
+		switch ( speck )
+		{
+			case TerrainPreviewBiomeId.CloverHills: cloverW *= keep; break;
+			case TerrainPreviewBiomeId.RedwoodForest: redwoodW *= keep; break;
+			case TerrainPreviewBiomeId.AmberDunes: amberW *= keep; break;
+			case TerrainPreviewBiomeId.Mountain: mountainW = Math.Min( mountainW, MathX.Lerp( mountainW, 0.45f, strength ) ); break;
+		}
+
+		var floor = 0.6f * strength;
+		switch ( surround )
+		{
+			case TerrainPreviewBiomeId.CloverHills: cloverW = Math.Max( cloverW, floor ); break;
+			case TerrainPreviewBiomeId.RedwoodForest: redwoodW = Math.Max( redwoodW, floor ); break;
+			case TerrainPreviewBiomeId.AmberDunes: amberW = Math.Max( amberW, floor ); break;
+			case TerrainPreviewBiomeId.Mountain: mountainW = Math.Max( mountainW, 0.55f * strength ); break;
+		}
+
+		return new LandBiomeWeights { Clover = cloverW, Redwood = redwoodW, Amber = amberW, Mountain = mountainW };
+	}
+
+	/// <summary>
+	/// Specks smaller than a raster cell: where the four cells around the point agree on a biome and the
+	/// continuous pick says otherwise, the surround's weight is lifted to the pick's weight. The pick's own
+	/// weight varies continuously across the speck, so the result stays smooth; at a real boundary the two
+	/// weights are already close and the change is tiny.
+	/// </summary>
+	static LandBiomeWeights SnapSubCellSpeckToRaster( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters, LandBiomeWeights weights )
+	{
+		var pick = PickDominantPlacementBiome( weights );
+		if ( !TerrainPreviewLandDiskFields.TryGetUniformRasterBiome( settings, worldXMeters, worldYMeters, out var uniform ) || uniform == pick )
+			return weights;
+
+		var pickWeight = pick switch
+		{
+			TerrainPreviewBiomeId.CloverHills => weights.Clover,
+			TerrainPreviewBiomeId.RedwoodForest => weights.Redwood,
+			TerrainPreviewBiomeId.AmberDunes => weights.Amber,
+			TerrainPreviewBiomeId.Mountain => weights.Mountain,
+			_ => 0f,
+		};
+		var lift = pickWeight + 0.02f;
+		return uniform switch
+		{
+			TerrainPreviewBiomeId.CloverHills => weights with { Clover = Math.Max( weights.Clover, lift ) },
+			TerrainPreviewBiomeId.RedwoodForest => weights with { Redwood = Math.Max( weights.Redwood, lift ) },
+			TerrainPreviewBiomeId.AmberDunes => weights with { Amber = Math.Max( weights.Amber, lift ) },
+			TerrainPreviewBiomeId.Mountain => weights with { Mountain = Math.Max( weights.Mountain, 0.55f ) },
+			_ => weights,
 		};
 	}
 
@@ -283,14 +341,12 @@ public static class TerrainPreviewBiomeResolver
 		};
 	}
 
-	/// <summary>Noise scatter is primary; distance falloff is a capped soft nudge.</summary>
+	/// <summary>Seeded region is primary; distance falloff is a capped soft nudge.</summary>
 	static float ComputeLandWeight(
 		TerrainPreviewSettings settings,
 		float distMeters,
 		float nx,
 		float ny,
-		float patchFrequency,
-		int scatterOctaves,
 		float influenceScale,
 		float hardMinMeters,
 		float rampStartMeters,
@@ -317,7 +373,7 @@ public static class TerrainPreviewBiomeResolver
 		if ( allow <= 0.0001f )
 			return 0f;
 
-		var patch = ScatterPatch01( settings, nx, ny, patchSeed, patchFrequency, scatterOctaves );
+		var patch = RegionPatch01( settings, nx, ny, patchSeed - 530 );
 		var scatter = Math.Clamp( scatterWeight, 0f, 1f ) * patch;
 		var falloff = DistanceFalloff01( distMeters, falloffStart, falloffEnd )
 			* Math.Clamp( distanceInfluence, 0f, 1f )
@@ -369,16 +425,121 @@ public static class TerrainPreviewBiomeResolver
 		return t * t * (3f - 2f * t);
 	}
 
-	static float ScatterPatch01(
-		TerrainPreviewSettings settings,
-		float nx,
-		float ny,
-		int seedOffset,
-		float frequency,
-		int octaves )
+	/// <summary>
+	/// Seeded regions (Mark 2026-10-08: "biomes spanning many kilometres, at most 5 sections each"). The three
+	/// land biomes share 3 × <c>Regions Per Biome</c> sites on a golden-angle spiral over the land disc (even
+	/// spread, seeded jitter). Biomes are handed to sites greedily so each new site takes the biome whose
+	/// existing sites are farthest away — same-biome sites never sit side by side, so the pieces stay
+	/// separate and the count really is N per biome (a plain interleave merged neighbours into 2 blobs).
+	/// A point belongs to its nearest site measured in a two-layer domain-warped frame (coarse swells plus
+	/// fine wobble, <c>Region Border Warp (m)</c>) so the pieces are weird blobs rather than Voronoi polygons;
+	/// the weight is 1 inside the piece and crosses 0.5 at the border over <c>Region Edge Blend (m)</c>.
+	/// </summary>
+	static float RegionPatch01( TerrainPreviewSettings settings, float nx, float ny, int biome )
 	{
-		var n = TerrainPreviewNoise.Fbm( settings.WorldSeed + seedOffset, nx * frequency, ny * frequency, octaves );
-		return Math.Clamp( (n - 0.32f) / 0.45f, 0f, 1f );
+		var layout = GetRegionLayout( settings );
+		var diameter = Math.Max( 1f, settings.WorldDiameterMeters );
+		var seed = settings.WorldSeed;
+
+		var warpN = Math.Clamp( settings.BiomeRegionBorderWarpMeters, 0f, diameter * 0.25f ) / diameter;
+		var coarseX = (TerrainPreviewNoise.Fbm( seed + 611, nx * 5f, ny * 5f, 3 ) - 0.5f) * 2f * warpN;
+		var coarseY = (TerrainPreviewNoise.Fbm( seed + 612, nx * 5f, ny * 5f, 3 ) - 0.5f) * 2f * warpN;
+		var fineX = (TerrainPreviewNoise.Fbm( seed + 617, nx * 18f, ny * 18f, 2 ) - 0.5f) * 0.5f * warpN;
+		var fineY = (TerrainPreviewNoise.Fbm( seed + 618, nx * 18f, ny * 18f, 2 ) - 0.5f) * 0.5f * warpN;
+		var wx = nx + coarseX + fineX;
+		var wy = ny + coarseY + fineY;
+
+		var bestOwn = float.MaxValue;
+		var bestOther = float.MaxValue;
+		for ( var i = 0; i < layout.X.Length; i++ )
+		{
+			var dx = wx - layout.X[i];
+			var dy = wy - layout.Y[i];
+			var d = (dx * dx) + (dy * dy);
+			if ( layout.Biome[i] == biome )
+				bestOwn = Math.Min( bestOwn, d );
+			else
+				bestOther = Math.Min( bestOther, d );
+		}
+
+		bestOwn = MathF.Sqrt( bestOwn );
+		bestOther = MathF.Sqrt( bestOther );
+		var blend = Math.Max( 50f, settings.BiomeRegionEdgeBlendMeters ) / diameter;
+		var t = (bestOther - bestOwn) / blend;   // > 0 inside this biome's region, 0 on the border
+		return Smoothstep01( (t + 1f) * 0.5f );
+	}
+
+	sealed class RegionLayout
+	{
+		public int Seed;
+		public int PerBiome;
+		public float[] X = Array.Empty<float>();
+		public float[] Y = Array.Empty<float>();
+		public int[] Biome = Array.Empty<int>();
+	}
+
+	static RegionLayout _regionLayout;
+
+	/// <summary>Site positions + biome assignment, built once per (seed, count); immutable so a stale read is still consistent.</summary>
+	static RegionLayout GetRegionLayout( TerrainPreviewSettings settings )
+	{
+		var perBiome = Math.Clamp( settings.BiomeRegionsPerBiome, 1, 16 );
+		var cached = _regionLayout;
+		if ( cached is not null && cached.Seed == settings.WorldSeed && cached.PerBiome == perBiome )
+			return cached;
+
+		var seed = settings.WorldSeed;
+		var total = perBiome * 3;
+		var layout = new RegionLayout { Seed = seed, PerBiome = perBiome, X = new float[total], Y = new float[total], Biome = new int[total] };
+
+		var rotation = TerrainPreviewNoise.Hash01( seed + 613, 1, 1 ) * MathF.PI * 2f;
+		const float goldenAngle = 2.399963f;
+		const float discRadius = 0.46f;   // land disc in normalised [0,1] map space
+		for ( var i = 0; i < total; i++ )
+		{
+			var r = discRadius * MathF.Sqrt( (i + 0.5f) / total );
+			var a = (i * goldenAngle) + rotation;
+			layout.X[i] = 0.5f + (MathF.Cos( a ) * r) + ((TerrainPreviewNoise.Hash01( seed + 615, i, 3 ) - 0.5f) * 0.05f);
+			layout.Y[i] = 0.5f + (MathF.Sin( a ) * r) + ((TerrainPreviewNoise.Hash01( seed + 616, i, 5 ) - 0.5f) * 0.05f);
+			layout.Biome[i] = -1;
+		}
+
+		// Greedy spread: every site takes the biome (with quota left) whose already-placed sites are farthest.
+		var quota = new[] { perBiome, perBiome, perBiome };
+		var firstBiome = (int)(TerrainPreviewNoise.Hash01( seed + 614, 2, 2 ) * 3f) % 3;
+		for ( var i = 0; i < total; i++ )
+		{
+			var bestBiome = -1;
+			var bestScore = float.MinValue;
+			for ( var step = 0; step < 3; step++ )
+			{
+				var b = (firstBiome + step) % 3;
+				if ( quota[b] <= 0 )
+					continue;
+
+				var nearest = float.MaxValue;
+				for ( var j = 0; j < i; j++ )
+				{
+					if ( layout.Biome[j] != b )
+						continue;
+					var dx = layout.X[i] - layout.X[j];
+					var dy = layout.Y[i] - layout.Y[j];
+					nearest = Math.Min( nearest, (dx * dx) + (dy * dy) );
+				}
+
+				if ( nearest > bestScore )
+				{
+					bestScore = nearest;
+					bestBiome = b;
+				}
+			}
+
+			layout.Biome[i] = bestBiome < 0 ? 0 : bestBiome;
+			quota[layout.Biome[i]]--;
+		}
+
+		_regionLayout = layout;
+		return layout;
 	}
 
 	/// <summary>Smooth 0–1 bump peaking at the midpoint of the falloff band.</summary>

@@ -10,10 +10,6 @@ public static class GameSceneIdentity
 		=> TryGetSceneTitle( scene, out var title )
 			&& title.Equals( "mainmenu", StringComparison.OrdinalIgnoreCase );
 
-	public static bool IsGameWorld( Scene scene )
-		=> TryGetSceneTitle( scene, out var title )
-			&& title.Equals( "terrainTest", StringComparison.OrdinalIgnoreCase );
-
 	static bool TryGetSceneTitle( Scene scene, out string title )
 	{
 		title = null;

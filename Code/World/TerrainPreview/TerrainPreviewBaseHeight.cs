@@ -16,19 +16,6 @@ static class TerrainPreviewBaseHeight
 		TerrainPreviewSettings settings,
 		float worldXMeters,
 		float worldYMeters,
-		int seed )
-	{
-		var diameter = Math.Max( 1f, settings.WorldDiameterMeters );
-		var landRadius = settings.LandRadiusMeters;
-		var nx = (worldXMeters + landRadius) / diameter;
-		var ny = (worldYMeters + landRadius) / diameter;
-		return Sample( settings, worldXMeters, worldYMeters, nx, ny, seed );
-	}
-
-	public static Layers Sample(
-		TerrainPreviewSettings settings,
-		float worldXMeters,
-		float worldYMeters,
 		float nx,
 		float ny,
 		int seed )

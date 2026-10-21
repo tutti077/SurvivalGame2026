@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Sandbox;
 using Sandbox.UI;
 
@@ -146,9 +147,72 @@ public sealed class PlayerScreenHud : PanelComponent
 		base.OnMouseWheel( value );
 	}
 
+	// hud_profile 1: per-frame cost of every HUD sub-tick, one line a second (perf work: "pawn HUD off" was +2 ms, 2026-10-20).
+	internal static bool ProfileEnabled;
+	static readonly System.Diagnostics.Stopwatch _profileClock = new();
+	static readonly Dictionary<string, double> _profileMs = new();
+	static int _profileFrames;
+	static double _profileLastLog;
+
+	// A struct scope: no delegate, no closure, nothing allocated per frame when profiling is off.
+	readonly struct ProfileScope : IDisposable
+	{
+		readonly string _name;
+		readonly double _start;
+
+		public ProfileScope( string name )
+		{
+			_name = name;
+			_start = ProfileEnabled ? _profileClock.Elapsed.TotalMilliseconds : 0;
+		}
+
+		public void Dispose()
+		{
+			if ( !ProfileEnabled )
+				return;
+			var ms = _profileClock.Elapsed.TotalMilliseconds - _start;
+			_profileMs[_name] = _profileMs.TryGetValue( _name, out var sum ) ? sum + ms : ms;
+		}
+	}
+
+	static ProfileScope Prof( string name ) => new( name );
+
+	static void ProfileFrameDone()
+	{
+		if ( !ProfileEnabled )
+			return;
+		_profileFrames++;
+		if ( !_profileClock.IsRunning )
+			_profileClock.Start();
+		if ( _profileClock.Elapsed.TotalSeconds - _profileLastLog < 1.0 )
+			return;
+		_profileLastLog = _profileClock.Elapsed.TotalSeconds;
+		var frames = Math.Max( 1, _profileFrames );
+		var total = 0.0;
+		foreach ( var v in _profileMs.Values )
+			total += v;
+		var parts = _profileMs.OrderByDescending( p => p.Value ).Select( p => $"{p.Key} {p.Value / frames:0.000}" );
+		Log.Info( $"[HudProfile] {total / frames:0.000} ms/frame over {frames} frames: {string.Join( ", ", parts )}" );
+		_profileMs.Clear();
+		_profileFrames = 0;
+	}
+
+	[ConCmd( "hud_profile" )]
+	public static void ConCmdHudProfile( string on = "1" )
+	{
+		ProfileEnabled = on?.Trim() is "1" or "on" or "true";
+		_profileMs.Clear();
+		_profileFrames = 0;
+		_profileClock.Restart();
+		_profileLastLog = 0;
+		Log.Info( $"[HudProfile] {(ProfileEnabled ? "on — one line a second" : "off")}" );
+	}
+
 	protected override void OnUpdate()
 	{
-		base.OnUpdate();
+		if ( !_profileClock.IsRunning )
+			_profileClock.Start();
+		using ( Prof( "base" ) ) base.OnUpdate();
 		if ( !_built )
 			TryBuildHud();
 
@@ -159,14 +223,14 @@ public sealed class PlayerScreenHud : PanelComponent
 				_sections[i].TickMenu( true );
 		}
 
-		_pickupNotifications?.Tick();
-		_augmentWheelHud?.Tick();
-		_buildMenuHud?.Tick();
-		_wireCableMenuHud?.Tick();
-		_buildSnapReadout?.Tick();
-		_buildSupportReadout?.Tick();
-		_fishingHud?.Tick( _fishing );
-		_minimapHud?.TickInput();
+		using ( Prof( "pickups" ) ) _pickupNotifications?.Tick();
+		using ( Prof( "augmentWheel" ) ) _augmentWheelHud?.Tick();
+		using ( Prof( "buildMenu" ) ) _buildMenuHud?.Tick();
+		using ( Prof( "wireMenu" ) ) _wireCableMenuHud?.Tick();
+		using ( Prof( "snapReadout" ) ) _buildSnapReadout?.Tick();
+		using ( Prof( "supportReadout" ) ) _buildSupportReadout?.Tick();
+		using ( Prof( "fishing" ) ) _fishingHud?.Tick( _fishing );
+		using ( Prof( "minimapInput" ) ) _minimapHud?.TickInput();
 
 		// Passive readouts (Mark: HUD was the biggest player-mode cost; "static unless the player does
 		// something"): refreshed at PassiveHudTickSeconds instead of every frame. Anything the player
@@ -174,15 +238,15 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _sincePassiveHudTick >= PassiveHudTickSeconds )
 		{
 			_sincePassiveHudTick = 0f;
-			_minimapHud?.TickVisuals();
-			_augmentBindsHud?.Tick();
-			RefreshFoodSlots();
-			_statusEffectsHud?.Tick( _menuController is { IsMenuOpen: true } );
+			using ( Prof( "minimapVisuals" ) ) _minimapHud?.TickVisuals();
+			using ( Prof( "augmentBinds" ) ) _augmentBindsHud?.Tick();
+			using ( Prof( "foodSlots" ) ) RefreshFoodSlots();
+			using ( Prof( "statusEffects" ) ) _statusEffectsHud?.Tick( _menuController is { IsMenuOpen: true } );
 			if ( _vitals is not null && _vitals.GameObject.IsValid() )
 			{
-				_bossHealthBar?.Tick( _vitals.GameObject.WorldPosition );
-				_baseRaidHud?.Tick( _vitals.GameObject );
-				_vehicleHud?.Tick( _vitals.GameObject );
+				using ( Prof( "bossBar" ) ) _bossHealthBar?.Tick( _vitals.GameObject.WorldPosition );
+				using ( Prof( "raidHud" ) ) _baseRaidHud?.Tick( _vitals.GameObject );
+				using ( Prof( "vehicleHud" ) ) _vehicleHud?.Tick( _vitals.GameObject );
 			}
 		}
 		if ( _inventoryInteraction?.FocusedCampfire is not null
@@ -193,7 +257,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		     || _inventoryInteraction?.FocusedVehicle is not null
 		     || _inventoryInteraction?.FocusedTimeTrialStand is not null
 		     || _inventoryInteraction?.FocusedArenaMenuButton is not null )
-			OnInteractionPromptChanged();
+			using ( Prof( "interactionPrompt" ) ) OnInteractionPromptChanged();
 
 		if ( _timeTrialMenu is not null && _inventoryInteraction is { IsTimeTrialMenuOpen: true } )
 			_timeTrialMenu.TickOpen();
@@ -201,7 +265,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _arenaMenu is not null && _inventoryInteraction is { IsArenaMenuOpen: true } )
 			_arenaMenu.TickOpen();
 
-		TickGrappleControlPrompt();
+		using ( Prof( "grapplePrompt" ) ) TickGrappleControlPrompt();
+		ProfileFrameDone();
 
 		if ( _timeTrialBanner is not null && _timeTrialBannerUntil > 0 && Time.NowDouble >= _timeTrialBannerUntil )
 		{
@@ -728,21 +793,27 @@ public sealed class PlayerScreenHud : PanelComponent
 
 	void TickGrappleControlPrompt()
 	{
-		_movement ??= FindOnAncestors<PlayerMovement>();
-		_equipment ??= FindOnAncestors<PlayerEquipment>();
+		using ( Prof( "gp.find" ) )
+		{
+			_movement ??= FindOnAncestors<PlayerMovement>();
+			_equipment ??= FindOnAncestors<PlayerEquipment>();
+		}
 
 		var menuOpen = _menuController is { IsMenuOpen: true };
 		var trialOpen = _inventoryInteraction is { IsTimeTrialMenuOpen: true };
 		var arenaOpen = _inventoryInteraction is { IsArenaMenuOpen: true };
-		var equipped = _movement is not null && _movement.HasGrappleEquipped();
-		var want = equipped && GrappleControlSchemeStore.NeedsChoice && !menuOpen && !trialOpen && !arenaOpen;
+		var equipped = false;
+		using ( Prof( "gp.equipped" ) ) equipped = _movement is not null && _movement.HasGrappleEquipped();
+		var needs = false;
+		using ( Prof( "gp.needs" ) ) needs = GrappleControlSchemeStore.NeedsChoice;
+		var want = equipped && needs && !menuOpen && !trialOpen && !arenaOpen;
 
-		_grappleControlPrompt?.SetOpen( want );
+		using ( Prof( "gp.setOpen" ) ) _grappleControlPrompt?.SetOpen( want );
 
 		if ( want )
-			ApplyGrapplePromptCapture();
+			using ( Prof( "gp.apply" ) ) ApplyGrapplePromptCapture();
 		else
-			RestoreGrapplePromptCapture();
+			using ( Prof( "gp.restore" ) ) RestoreGrapplePromptCapture();
 	}
 
 	void ApplyGrapplePromptCapture()

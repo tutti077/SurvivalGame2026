@@ -1,7 +1,7 @@
 {
-  "bundle": "1496_seed1337",
-  "iteration": 1496,
-  "seed": 1337,
+  "bundle": "1501_seed30519832",
+  "iteration": 1501,
+  "seed": 30519832,
   "png": "biomes.png",
   "metricsFile": "generation_metrics.json"
 }

@@ -1,0 +1,22 @@
+{
+  "iteration": 1501,
+  "seed": 30519832,
+  "bundle": "1501_seed30519832",
+  "previewMode": "Biomes",
+  "waterOnLandFraction": 0.15997222,
+  "lakePatchCount": 8,
+  "medianLakeDiameterMeters": 2734.375,
+  "meanLakeDiameterMeters": 5458.9844,
+  "lakeArchipelagoScore": 0.50008684,
+  "mountainLandFraction": 0.016634384,
+  "nearestShowcaseWaterMeters": 55.242718,
+  "showcaseWaterRadiusMeters": 300,
+  "lakesLookCohesive": true,
+  "mountainsLookReasonable": true,
+  "targets": {
+    "lakePatchCountMax": 24,
+    "medianLakeDiameterMetersMin": 600,
+    "lakeArchipelagoScoreMax": 1.6,
+    "mountainLandFractionMax": 0.38
+  }
+}

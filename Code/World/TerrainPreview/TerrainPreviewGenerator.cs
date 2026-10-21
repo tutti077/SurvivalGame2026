@@ -8,7 +8,6 @@ public static class TerrainPreviewGenerator
 		if ( TerrainPreviewMapIterationTracker.IsAbortRequested )
 			return default;
 
-		TerrainPreviewMapIterationTracker.NotifyMapRasterized();
 		backend ??= TerrainPreviewBackendRegistry.Active;
 
 		var res = settings.ClampedResolution;
@@ -32,47 +31,13 @@ public static class TerrainPreviewGenerator
 		return BuildResult( settings, insideWorld, ocean, colors );
 	}
 
-	public static TerrainPreviewWaterCoverageStats MeasureWaterCoverage(
-		TerrainPreviewSettings settings,
-		ITerrainPreviewBackend backend = null )
-	{
-		if ( TerrainPreviewMapIterationTracker.IsAbortRequested )
-			return default;
-
-		TerrainPreviewMapIterationTracker.NotifyMapRasterized();
-		backend ??= TerrainPreviewBackendRegistry.Active;
-
-		var res = TerrainPreviewAutoTuneScope.IsActive
-			? TerrainPreviewAutoTuneScope.MeasureResolution( settings )
-			: settings.ClampedResolution;
-		var insideWorld = new bool[res * res];
-		var ocean = new bool[res * res];
-		var radius = settings.WorldRadiusMeters;
-		var diameter = settings.WorldDiameterMeters;
-
-		RasterOcean(
-			settings,
-			backend,
-			res,
-			radius,
-			diameter,
-			insideWorld,
-			ocean,
-			colors: null,
-			fillColors: false );
-
-		return BuildWaterCoverage( settings, insideWorld, ocean, res, radius, diameter );
-	}
-
 	static TerrainPreviewGenerateResult BuildResult(
 		TerrainPreviewSettings settings,
 		bool[] insideWorld,
 		bool[] ocean,
 		Color[] colors )
 	{
-		var res = TerrainPreviewAutoTuneScope.IsActive
-			? TerrainPreviewAutoTuneScope.MeasureResolution( settings )
-			: settings.ClampedResolution;
+		var res = settings.ClampedResolution;
 		var radius = settings.WorldRadiusMeters;
 		var diameter = settings.WorldDiameterMeters;
 
@@ -94,6 +59,9 @@ public static class TerrainPreviewGenerator
 		if ( settings.PreviewMode == TerrainPreviewMode.Water )
 			ApplyWaterZoneColors( colors, ocean, interiorOcean, exteriorOcean, insideWorld );
 
+		if ( settings.PreviewMode is TerrainPreviewMode.Biomes or TerrainPreviewMode.Water or TerrainPreviewMode.Lakes )
+			TerrainRiverMapOverlay.Stamp( settings, colors, res, insideWorld );
+
 		if ( settings.ShowPreviewDistanceRings )
 		{
 			TerrainPreviewDistanceRings.Stamp(
@@ -113,28 +81,6 @@ public static class TerrainPreviewGenerator
 			WaterCoverage = waterCoverage,
 			Metrics = metrics,
 		};
-	}
-
-	static TerrainPreviewWaterCoverageStats BuildWaterCoverage(
-		TerrainPreviewSettings settings,
-		bool[] insideWorld,
-		bool[] ocean,
-		int res,
-		float radius,
-		float diameter )
-	{
-		TerrainPreviewWaterCoverage.ClassifyOceanZones(
-			ocean,
-			insideWorld,
-			res,
-			settings,
-			radius,
-			diameter,
-			out var interiorOcean,
-			out var exteriorOcean );
-
-		return TerrainPreviewWaterCoverage.ComputeStats( ocean, interiorOcean, exteriorOcean, insideWorld )
-			.WithLandDiskLakeFraction( TerrainPreviewWaterCoverage.MeasureLandDiskLakeFraction( settings ) );
 	}
 
 	static void RasterOcean(
@@ -335,7 +281,7 @@ public static class TerrainPreviewGenerator
 				TerrainBiomeMapCoordinates.RasterPixelToWorldMeters(
 					px, py, res, radius, diameter, out var wx, out var wy );
 				var sample = backend.Sample( settings, wx, wy );
-				mask[idx] = sample.MountainMask01 >= 0.5f;
+				mask[idx] = TerrainPreviewMountainSpawnMask.SampleMask01( settings, wx, wy ) >= 0.5f;
 			}
 		}
 
@@ -345,20 +291,6 @@ public static class TerrainPreviewGenerator
 
 		for ( var i = 0; i < mask.Length; i++ )
 			colors[i] = mask[i] ? Color.White : Color.Black;
-	}
-
-	public static Color[] GenerateColors( TerrainPreviewSettings settings, ITerrainPreviewBackend backend = null )
-		=> Generate( settings, backend ).Colors;
-
-	public static Bitmap GenerateBitmap( TerrainPreviewSettings settings, ITerrainPreviewBackend backend = null )
-	{
-		var res = TerrainPreviewAutoTuneScope.IsActive
-			? TerrainPreviewAutoTuneScope.MeasureResolution( settings )
-			: settings.ClampedResolution;
-		var result = Generate( settings, backend );
-		var bitmap = new Bitmap( res, res );
-		bitmap.SetPixels( result.Colors );
-		return bitmap;
 	}
 
 	public static string ModeDisplayName( TerrainPreviewMode mode ) => mode switch
@@ -400,26 +332,6 @@ public static class TerrainPreviewGenerator
 		TerrainPreviewMode.BiomeTransition => "biome_transition",
 		_ => "preview",
 	};
-
-	public static TerrainPreviewMode ModeForTabName( string tabName ) => tabName switch
-	{
-		"Continental" => TerrainPreviewMode.Continental,
-		"Hills" => TerrainPreviewMode.Hills,
-		"Valleys" => TerrainPreviewMode.Valleys,
-		"Height Curve" => TerrainPreviewMode.HeightCurve,
-		"Water" => TerrainPreviewMode.Water,
-		"Lakes" => TerrainPreviewMode.Lakes,
-		"Mountain Mask" => TerrainPreviewMode.MountainMask,
-		"Mountain Field" => TerrainPreviewMode.MountainField,
-		"Mountain Falloff" => TerrainPreviewMode.MountainFalloff,
-		"Biomes" => TerrainPreviewMode.Biomes,
-		"Biome Shape" => TerrainPreviewMode.BiomeShape,
-		"Biome Weights" => TerrainPreviewMode.BiomeWeights,
-		"Slope" => TerrainPreviewMode.Slope,
-		"Biome Transition" => TerrainPreviewMode.BiomeTransition,
-		_ => TerrainPreviewMode.World,
-	};
-
 	static Color SampleToColor( TerrainPreviewSettings settings, TerrainPreviewSample sample, float worldXMeters, float worldYMeters )
 	{
 		if ( !sample.IsInsideWorld )
@@ -437,12 +349,12 @@ public static class TerrainPreviewGenerator
 			TerrainPreviewMode.HeightCurve => Grayscale( sample.HeightAfterCurve01 ),
 			TerrainPreviewMode.Water => Color.Black,
 			TerrainPreviewMode.Lakes => Grayscale( sample.LakeMask01 ),
-			TerrainPreviewMode.MountainMask => sample.MountainMask01 >= 0.5f ? Color.White : Color.Black,
-			TerrainPreviewMode.MountainField => Grayscale( sample.MountainField01 ),
-			TerrainPreviewMode.MountainFalloff => Grayscale( sample.MountainFalloff01 ),
+			TerrainPreviewMode.MountainMask => TerrainPreviewMountainSpawnMask.SampleMask01( settings, worldXMeters, worldYMeters ) >= 0.5f ? Color.White : Color.Black,
+			TerrainPreviewMode.MountainField => Grayscale( TerrainPreviewMountainSpawnMask.SamplePlacement01( settings, worldXMeters, worldYMeters ) ),
+			TerrainPreviewMode.MountainFalloff => Grayscale( TerrainPreviewMountainFalloff.SampleSpawnBand01( settings, MathF.Sqrt( (worldXMeters * worldXMeters) + (worldYMeters * worldYMeters) ) ) ),
 			TerrainPreviewMode.BiomeShape => Grayscale( sample.HeightAfterBiomeShape01 ),
 			TerrainPreviewMode.BiomeWeights => BiomeWeightColor( sample.LandWeights ),
-			TerrainPreviewMode.Slope => SlopeColor( sample.MountainSlopeDegrees ),
+			TerrainPreviewMode.Slope => SlopeColor( SampleSlopeDegreesForPreview( settings, worldXMeters, worldYMeters ) ),
 			TerrainPreviewMode.BiomeTransition => Grayscale( sample.BiomeTransition01 ),
 			_ => Color.Black,
 		};
@@ -462,6 +374,17 @@ public static class TerrainPreviewGenerator
 			Math.Clamp( r + (gray * 0.35f), 0f, 1f ),
 			Math.Clamp( g + (gray * 0.35f), 0f, 1f ),
 			Math.Clamp( b + (gray * 0.55f), 0f, 1f ) );
+	}
+
+	/// <summary>Slope preview mode only — the runtime sample no longer pays for this (nothing in play reads it).</summary>
+	static float SampleSlopeDegreesForPreview( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
+	{
+		var diameter = Math.Max( 1f, settings.WorldDiameterMeters );
+		var landRadius = settings.LandRadiusMeters;
+		var nx = (worldXMeters + landRadius) / diameter;
+		var ny = (worldYMeters + landRadius) / diameter;
+		return TerrainPreviewMountainSlope.SampleSlopeDegrees(
+			settings, nx, ny, settings.WorldSeed, Math.Max( 50f, settings.MaxTerrainHeightMeters ), diameter );
 	}
 
 	static Color SlopeColor( float slopeDegrees )

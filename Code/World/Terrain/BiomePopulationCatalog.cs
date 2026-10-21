@@ -13,12 +13,6 @@ public static class BiomePopulationCatalog
 	static readonly Dictionary<TerrainPreviewBiomeId, List<BiomePopulationEntry>> ByBiome = new();
 	static bool _loaded;
 
-	public static void ForceReload()
-	{
-		_loaded = false;
-		ReloadFromDisk();
-	}
-
 	public static void EnsureLoaded()
 	{
 		if ( _loaded )

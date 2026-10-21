@@ -17,14 +17,6 @@ public static class TerrainPreviewBiomeColors
 		return Color.Lerp( heightGray, biomeColor, overlay );
 	}
 
-	/// <summary>Shared land tint for preview PNG and streamed chunk meshes — hard water, soft land-biome edges only.</summary>
-	public static Color UnifiedDisplayColor(
-		TerrainPreviewSettings settings,
-		TerrainPreviewSample sample,
-		float worldXMeters,
-		float worldYMeters )
-		=> SampleBiomeOverlay( settings, sample, worldXMeters, worldYMeters );
-
 	public static Color SampleBiomeOverlay(
 		TerrainPreviewSettings settings,
 		TerrainPreviewSample sample,

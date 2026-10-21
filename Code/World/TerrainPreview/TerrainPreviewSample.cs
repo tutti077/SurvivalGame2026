@@ -10,20 +10,17 @@ public readonly struct TerrainPreviewSample
 	public float ContinentalNoise01 { get; init; }
 	public float HillsNoise01 { get; init; }
 	public float ValleysNoise01 { get; init; }
-	public float BaseHeightBeforeCurve01 { get; init; }
 	public float HeightAfterCurve01 { get; init; }
 	public float HeightAfterBiomeShape01 { get; init; }
-	public float TerrainDetail01 { get; init; }
 	public float BiomeTransition01 { get; init; }
-	public float MountainMask01 { get; init; }
-	public float MountainField01 { get; init; }
-	public float MountainFalloff01 { get; init; }
-	public float MountainPeakHeight01 { get; init; }
-	public float MountainFoothillLift01 { get; init; }
-	public float MountainSlopeDegrees { get; init; }
 	public float LakeMask01 { get; init; }
 	public bool IsInsideWorld { get; init; }
 	public bool IsOnLand { get; init; }
 	public bool HasLandWeights { get; init; }
 	public TerrainPreviewBiomeResolver.LandBiomeWeights LandWeights { get; init; }
+	/// <summary>Nearest sharp biome ledge (Redwood terraces) — lets the chunk mesh snap vertices onto the drop line.</summary>
+	public TerrainBiomeLedgeInfo Ledge { get; init; }
+
+	/// <summary>Inside a river channel: the height is the sloped water surface, not ground.</summary>
+	public bool RiverWater { get; init; }
 }

@@ -206,17 +206,32 @@ public sealed class EnemyHealthBar : Component
 		return true;
 	}
 
+	// One scene scan for all bars, refreshed every ViewerRefreshSeconds: every bar asked twice a frame
+	// (SyncWorldPanelTransform + ShouldShowToLocalViewer), 30+ bars = 60+ PlayerVitals scene queries a frame
+	// and their enumerator garbage (perf_memory, 2026-10-20). A pawn spawn / despawn shows up within a quarter second.
+	const float ViewerRefreshSeconds = 0.25f;
+	static GameObject _viewerPawn;
+	static float _viewerCheckedAt = float.NegativeInfinity;
+
 	static GameObject FindLocalViewerPawn( Scene scene )
 	{
 		if ( !scene.IsValid() )
 			return null;
 
+		if ( RealTime.Now - _viewerCheckedAt < ViewerRefreshSeconds && (_viewerPawn is null || _viewerPawn.IsValid()) )
+			return _viewerPawn;
+
+		_viewerCheckedAt = RealTime.Now;
+		_viewerPawn = null;
 		foreach ( var vitals in scene.GetAllComponents<PlayerVitals>() )
 		{
 			if ( vitals is not null && vitals.IsLocalInputOwnedPawn() )
-				return vitals.GameObject;
+			{
+				_viewerPawn = vitals.GameObject;
+				break;
+			}
 		}
 
-		return null;
+		return _viewerPawn;
 	}
 }

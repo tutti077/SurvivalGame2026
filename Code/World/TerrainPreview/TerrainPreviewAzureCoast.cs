@@ -16,12 +16,6 @@ static class TerrainPreviewAzureCoast
 	const float TaperInlandEdgeStartFraction = 0.78f;
 	const float TipAlongShoreFraction = 0.28f;
 
-	public static bool SampleAtWorldMeters(
-		TerrainPreviewSettings settings,
-		float worldXMeters,
-		float worldYMeters )
-		=> SampleCoverage01( settings, worldXMeters, worldYMeters ) > 0.5f;
-
 	public static float SampleCoverage01(
 		TerrainPreviewSettings settings,
 		float worldXMeters,
@@ -34,7 +28,8 @@ static class TerrainPreviewAzureCoast
 		if ( distFromCenter > settings.LandRadiusMeters )
 			return 0f;
 
-		if ( distFromCenter < settings.AzureCoastMinDistanceFromSpawnMeters )
+		// Outer band only: the fraction scales with the world, a fixed 5.5 km sat right next to spawn on 40 km.
+		if ( distFromCenter < Math.Clamp( settings.AzureCoastMinDistanceFromSpawn01, 0f, 1f ) * settings.WorldRadiusMeters )
 			return 0f;
 
 		var widthMeters = ResolveWidthMeters( settings );

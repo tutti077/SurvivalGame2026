@@ -22,6 +22,25 @@ public static class TerrainPreviewPipeline
 
 		float worldYMeters )
 
+		=> Sample( settings, worldXMeters, worldYMeters, applyRivers: true );
+
+	/// <summary>Dry-land height before the river carve — what the river router walks downhill on.</summary>
+	public static float SampleDryLandHeightMetersNoRivers( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
+	{
+		var sample = Sample( settings, worldXMeters, worldYMeters, applyRivers: false );
+		return sample.IsInsideWorld ? sample.HeightMeters : settings.SeaLevelMeters;
+	}
+
+	static TerrainPreviewSample Sample(
+
+		TerrainPreviewSettings settings,
+
+		float worldXMeters,
+
+		float worldYMeters,
+
+		bool applyRivers )
+
 	{
 
 		var landRadius = settings.LandRadiusMeters;
@@ -60,6 +79,10 @@ public static class TerrainPreviewPipeline
 
 
 
+		// One cache verification per sample (the shore / coastal / water lookups below then skip theirs),
+		// and it guarantees the lake grid below is built rather than falling back to per-sample lake noise.
+		TerrainPreviewLandDiskFields.BeginSample( settings );
+
 		var rawLakeMask = TerrainPreviewLandDiskFields.TrySampleLakeMask01AtWorld(
 			settings, worldXMeters, worldYMeters, out var cachedLakeMask )
 			? cachedLakeMask
@@ -68,7 +91,6 @@ public static class TerrainPreviewPipeline
 
 		var baseLayers = TerrainPreviewBaseHeight.Sample(
 			settings, worldXMeters, worldYMeters, nx, ny, seed );
-		var baseBeforeCurve = baseLayers.BeforeCurve01;
 		var heightAfterCurve = baseLayers.AfterCurve01;
 
 
@@ -79,16 +101,18 @@ public static class TerrainPreviewPipeline
 			: TerrainPreviewLandDiskFields.GetFilteredPlacementWeights(
 				settings, worldXMeters, worldYMeters );
 
-		var mountainSpawnMask = TerrainPreviewMountainSpawnMask.SampleMask01(
-			settings, worldXMeters, worldYMeters );
-
-		var mountainField = TerrainPreviewMountainSpawnMask.SamplePlacement01(
-			settings, worldXMeters, worldYMeters );
-
+		// Mask / field / falloff / slope previews are editor PNG modes; TerrainPreviewGenerator computes them
+		// directly. The runtime path only needs the height influence (the mask alone was ~60 % of a mountain sample).
 		var mountainHeightInfluence = TerrainPreviewMountainSpawnMask.SampleMountainHeightInfluence01(
 			settings, worldXMeters, worldYMeters );
 
+		// Height shaping keeps the raw continuous weights: the speck merge below only decides what a point
+		// LOOKS like (colour, trees). Shaping with merged one-hot weights raised whole raster cells into
+		// flat-topped blocks with vertical walls where a clover island became redwood (Mark 2026-10-07).
 		var lowlandWeights = TerrainPreviewBiomeResolver.LandWeightsWithoutMountain( placementWeights );
+		var displayWeights = settings.UseContinuousBiomePlacementAtSample
+			? TerrainPreviewBiomeResolver.ApplySpeckMerge( settings, worldXMeters, worldYMeters, placementWeights )
+			: placementWeights;
 		var lowlandShaped01 = TerrainPreviewBiomeTerrainShaper.ApplyBlendedShape01(
 			settings,
 			heightAfterCurve,
@@ -97,7 +121,7 @@ public static class TerrainPreviewPipeline
 			ny,
 			seed,
 			maxHeight,
-			out var terrainDetail01 );
+			out var ledgeInfo );
 
 		var mountainBoost01 = TerrainPreviewBiomeMountainPeaks.SampleBoost01(
 			settings,
@@ -107,7 +131,7 @@ public static class TerrainPreviewPipeline
 			nx,
 			ny,
 			seed,
-			out var mountain );
+			out _ );
 
 		var dryLandHeightMeters = TerrainPreviewLandHeightDisplay.ApplyDryLandMeters(
 			settings,
@@ -127,12 +151,39 @@ public static class TerrainPreviewPipeline
 			settings, dryLandHeightMeters, isFilteredOpenWater: false ).HeightMeters;
 
 		var submerged = TerrainPreviewLakeShoreHeight.IsSubmergedByLakeMask( settings, rawLakeMask );
+
+		// Rivers (after lakes, before the sea clamp below): inside the channel the ground IS the sloped water
+		// surface — flat across, falling along — and the bank blends from just above the water up to the land.
+		var riverWater = false;
+		if ( applyRivers && !submerged && settings.EnableRivers )
+		{
+			var river = TerrainPreviewLandDiskFields.SampleRiver( settings, worldXMeters, worldYMeters );
+			if ( river.Near )
+			{
+				var level = Math.Max( settings.SeaLevelMeters, river.Level );
+				if ( river.Distance <= river.HalfWidth )
+				{
+					// The bed: a parabola from the water's edge down to Bed Depth under the surface at the centre
+					// (Mark 2026-10-07: "actually carve out the land, slope inward, not a hard drop"). The water
+					// mesh fills it to the level.
+					var u = river.Distance / Math.Max( 0.5f, river.HalfWidth );
+					var bed = level - (Math.Max( 0f, river.BedDepthMeters ) * (1f - (u * u)));   // deeper in pools
+					dryLandHeightMeters = Math.Min( dryLandHeightMeters, bed );
+					riverWater = true;
+				}
+				else
+				{
+					// Cut only (never lift the ground into a levee): the bank is the ground eased down to the
+					// water's edge over the bank width; land already lower than that stays as it is.
+					var t = Math.Clamp( (river.Distance - river.HalfWidth) / Math.Max( 0.5f, river.BankWidth ), 0f, 1f );
+					t = t * t * (3f - (2f * t));
+					var eased = level + ((dryLandHeightMeters - level) * t);
+					dryLandHeightMeters = Math.Min( dryLandHeightMeters, eased );
+				}
+			}
+		}
 		var height01 = Math.Clamp( dryLandHeightMeters / maxHeight, 0f, 1f );
 		var sea = settings.SeaLevelMeters;
-
-		var mountainZone = TerrainPreviewMountainFalloff.SampleSpawnBand01( settings, distMeters );
-		var slopeDegrees = TerrainPreviewMountainSlope.SampleSlopeDegrees(
-			settings, nx, ny, seed, maxHeight, diameter );
 
 		return new TerrainPreviewSample
 
@@ -150,37 +201,25 @@ public static class TerrainPreviewPipeline
 
 			ValleysNoise01 = settings.EnableValleyLayer ? baseLayers.Valleys01 : 0f,
 
-			BaseHeightBeforeCurve01 = baseBeforeCurve,
-
 			HeightAfterCurve01 = heightAfterCurve,
 
 			HeightAfterBiomeShape01 = lowlandShaped01,
 
-			TerrainDetail01 = terrainDetail01,
+			Ledge = submerged ? TerrainBiomeLedgeInfo.None : ledgeInfo,
 
-			BiomeTransition01 = ComputeBiomeTransition01( placementWeights ),
-
-			MountainMask01 = mountainSpawnMask,
-
-			MountainField01 = mountainField,
-
-			MountainFalloff01 = mountainZone,
-
-			MountainPeakHeight01 = mountain.PeakLift01,
-
-			MountainFoothillLift01 = mountain.FoothillLift01,
-
-			MountainSlopeDegrees = slopeDegrees,
+			BiomeTransition01 = ComputeBiomeTransition01( displayWeights ),
 
 			LakeMask01 = rawLakeMask,
 
 			IsInsideWorld = true,
 
-			IsOnLand = !submerged && dryLandHeightMeters > sea + 0.05f,
+			IsOnLand = !submerged && !riverWater && dryLandHeightMeters > sea + 0.05f,
+
+			RiverWater = riverWater,
 
 			HasLandWeights = true,
 
-			LandWeights = placementWeights,
+			LandWeights = displayWeights,
 
 		};
 

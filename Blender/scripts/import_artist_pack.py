@@ -17,6 +17,11 @@ Run:
                   uses the source texture as painted, only downsampled to the pixel grid. Use raw
                   when the Posterize steps destroy the texture (the sword's brown grip became
                   black / red bands at 8 steps; the chest and table were fine).
+  model=none     material only: bake the texture and write the .vmat, skip the fbx / vmdl. For a
+                  pack whose mesh is already in game as hand-split pieces (Rumple's clover tree:
+                  clovertree1.blend is the same 1217-vertex mesh as clovertree/whole.fbx, only the
+                  colour chain changed). <name> may carry a sub-folder: environment cloverhills/bark
+                  writes Assets/materials/environment/cloverhills/bark.png + .vmat.
 
 What it does
   1. Applies the artist's object rotation / scale (Rumple straightens Tripo meshes with the object
@@ -60,17 +65,20 @@ if category not in IMPORT_SCALE:
 if category == "weapons" and opts.get("head", "").lower() not in AXES:
     raise SystemExit("weapons need head=+x|-x|+y|-y|+z|-z (which way the blade tip / head points in the blend)")
 physics = opts.get("physics", DEFAULT_PHYSICS[category]).lower()
+model_mode = opts.get("model", "mesh").lower()
+if model_mode not in ("mesh", "none"):
+    raise SystemExit("model must be mesh (default) or none")
 if physics not in ("hull", "mesh", "none"):
     raise SystemExit("physics must be hull, mesh or none")
 
 MODEL_DIR = os.path.join(ROOT, "models", category)
 MAT_DIR = os.path.join(ROOT, "materials", category)
-os.makedirs(MODEL_DIR, exist_ok=True)
-os.makedirs(MAT_DIR, exist_ok=True)
 FBX = os.path.join(MODEL_DIR, name + ".fbx")
 VMDL = os.path.join(MODEL_DIR, name + ".vmdl")
 PNG = os.path.join(MAT_DIR, name + ".png")
 VMAT = os.path.join(MAT_DIR, name + ".vmat")
+os.makedirs(os.path.dirname(FBX), exist_ok=True)   # name may carry a sub-folder
+os.makedirs(os.path.dirname(PNG), exist_ok=True)
 
 # ---------------------------------------------------------------- 1. the mesh
 meshes = [o for o in bpy.data.objects if o.type == 'MESH']
@@ -79,6 +87,9 @@ if not meshes:
 for o in list(bpy.data.objects):
     if o.type != 'MESH':
         bpy.data.objects.remove(o, do_unlink=True)
+active = bpy.context.view_layer.objects.active
+if active is not None and active.mode != 'OBJECT':
+    bpy.ops.object.mode_set(mode='OBJECT')  # packs saved in Texture Paint / Edit mode (clovertree1.blend)
 bpy.ops.object.select_all(action='DESELECT')
 for o in meshes:
     o.select_set(True)
@@ -167,7 +178,8 @@ def apply_node(node, c):
         steps = unlinked(node, 'Steps')
         return np.floor(c * steps) / steps
     if node.type == 'HUE_SAT':
-        hue, sat, val, fac = (unlinked(node, k) for k in ('Hue', 'Saturation', 'Value', 'Fac'))
+        fac_name = 'Factor' if 'Factor' in node.inputs else 'Fac'  # renamed in Blender 4.x+
+        hue, sat, val, fac = (unlinked(node, k) for k in ('Hue', 'Saturation', 'Value', fac_name))
         import colorsys
         flat = c.reshape(-1, 3)
         out = np.empty_like(flat)
@@ -204,6 +216,23 @@ baked.filepath_raw = PNG
 baked.file_format = 'PNG'
 baked.save()
 print(f"BAKED {PNG} {N}x{N} from {W}x{H} (chain {chain_mode}: {[n.name for n in chain]}, pixelate {pixelate.inputs['Pixels'].default_value if pixelate else 'none'})")
+
+rel_vmat = f"materials/{category}/{name}.vmat"
+rel_png = f"materials/{category}/{name}.png"
+vmat_text = f"""Layer0
+{{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "{roughness_value:.3f}"
+	TextureColor "{rel_png}"
+}}
+"""
+with open(VMAT, "w", encoding="utf-8", newline="\n") as f:
+    f.write(vmat_text)
+
+if model_mode == "none":
+    print(f"WROTE {VMAT} (PixelRoughness {roughness_value:.2f}); model=none, no fbx / vmdl written")
+    raise SystemExit(0)
 
 # ---------------------------------------------------------------- 3. frame for the category
 def verts():
@@ -260,8 +289,6 @@ bpy.ops.export_scene.fbx(filepath=FBX, use_selection=True, global_scale=1.0, app
                          embed_textures=False, axis_forward='-Z', axis_up='Y')
 
 rel_fbx = f"models/{category}/{name}.fbx"
-rel_vmat = f"materials/{category}/{name}.vmat"
-rel_png = f"materials/{category}/{name}.png"
 PHYSICS_BLOCKS = {
     "hull": """			{
 				_class = "PhysicsShapeList"
@@ -353,17 +380,6 @@ vmdl_text = f"""<!-- kv3 encoding:text:version{{e21c7f3c-8a33-41c5-9977-a76d3a32
 """
 with open(VMDL, "w", encoding="utf-8", newline="\n") as f:
     f.write(vmdl_text)
-
-vmat_text = f"""Layer0
-{{
-	shader "shaders/pixel_lit.shader"
-
-	PixelRoughness "{roughness_value:.3f}"
-	TextureColor "{rel_png}"
-}}
-"""
-with open(VMAT, "w", encoding="utf-8", newline="\n") as f:
-    f.write(vmat_text)
 
 print(f"EXPORTED {FBX}")
 print(f"WROTE {VMDL} (import_scale {IMPORT_SCALE[category]}, physics {physics}) and {VMAT} (PixelRoughness {roughness_value:.2f})")

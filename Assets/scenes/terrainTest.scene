@@ -40,6 +40,52 @@
       "Children": []
     },
     {
+      "__guid": "e57b6ea4-0376-4ee3-ade5-3c7cdb9fd8ec",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "Wind",
+      "Position": "0,0,0",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Survival.WindSystem",
+          "__guid": "1ddb6fd5-56f8-4f42-a944-03e8bfa569e2",
+          "__enabled": true,
+          "Flags": 0,
+          "BaseStrength01": 0.25,
+          "GustPeriodSeconds": 7,
+          "GustStrength01": 0.8,
+          "GustVariationPeriodSeconds": 45,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "RandomHeadingOnStart": true,
+          "WanderDegrees": 10,
+          "WanderPeriodSeconds": 120,
+          "WindEnabled": true,
+          "WindMaterials": [
+            {
+              "Id": "a8ecc01e-bb11-40d5-95e5-8d5d09633bc6",
+              "Path": "materials/environment/grass_blade.vmat"
+            }
+          ],
+          "YawDegrees": 35
+        }
+      ],
+      "Children": []
+    },
+    {
       "__guid": "d4e5f6a7-b8c9-0123-def0-234567890123",
       "__version": 2,
       "Flags": 0,
@@ -62,9 +108,9 @@
           "Flags": 0,
           "ContactShadows": true,
           "Contribution": "Diffuse, Specular, Transmissive",
-          "FogMode": "Enabled",
-          "FogStrength": 1,
-          "LightColor": "0.94419,0.97767,1,1",
+          "FogMode": "Disabled",
+          "FogStrength": 0,
+          "LightColor": "3.2,2.95,2.6,1",
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
@@ -76,11 +122,315 @@
           "ShadowCascadeSplitRatio": 0.91,
           "ShadowHardness": 0,
           "Shadows": true,
-          "SkyColor": "0.2532,0.32006,0.35349,1",
+          "SkyColor": "0.18,0.23,0.33,1",
           "Visualizer": {}
         }
       ],
       "Children": []
+    },
+    {
+      "__guid": "a3f2440b-dd6f-43f4-8401-de6bc2869126",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "DayNightCycle",
+      "Position": "0,0,0",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "",
+      "Enabled": false,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Survival.EnvironmentDayNightCycle",
+          "__guid": "5b1e43be-d2f5-4e31-9f60-df8c447d9614",
+          "__enabled": true,
+          "Flags": 0,
+          "ArcTiltDegrees": 30,
+          "ArcYawDegrees": 0,
+          "CycleTimeSeconds": 0,
+          "DayNumber": 1,
+          "DaySeconds": 75,
+          "DaySkyAmbient": "0.18,0.23,0.33,1",
+          "DayWeight": 1,
+          "DiskOrbitRadiusMeters": 5200,
+          "DiskScale": 0,
+          "Fog": null,
+          "JumpToDayAction": "CycleDay",
+          "JumpToNightAction": "CycleNight",
+          "LogPhaseChanges": false,
+          "MoonColor": "0.9,0.95,1.05,1",
+          "MoonDirectionalBrightness": 0.15,
+          "MoonDisk": {
+            "_type": "gameobject",
+            "go": "6f8768c0-6acc-4c7c-a095-4aef57b2bb23"
+          },
+          "MoonDiskMaterial": {
+            "Id": "11b34687-a53e-4672-bcd1-eed8e53c00b6",
+            "Path": "materials/environment/moon_disk.vmat"
+          },
+          "MoonLight": {
+            "_type": "component",
+            "component_id": "93a36539-0476-490a-a24d-43913f964465",
+            "go": "36cccd4a-e634-42f0-88cf-b923423b0f35",
+            "component_type": "DirectionalLight"
+          },
+          "NightAmbientBrightness": 0.3,
+          "NightSeconds": 75,
+          "NightSkyAmbient": "0.22,0.28,0.42,1",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "Paused": false,
+          "Phase": "Day",
+          "SkyDome": {
+            "_type": "component",
+            "component_id": "f9989c9a-a9f0-467d-9c38-50be9f479f65",
+            "go": "5faea1b2-bd58-4047-b666-b50a2e0c72fb",
+            "component_type": "SkyDome"
+          },
+          "SkyPresetId": "clear",
+          "StartAtNight": false,
+          "SunBloomBrightness": 4,
+          "SunDisk": {
+            "_type": "gameobject",
+            "go": "4e4e9064-2ac9-41c7-8ca8-b9a8ec403367"
+          },
+          "SunDiskMaterial": {
+            "Id": "d32c050b-bc9c-4568-bfea-63d47517d55f",
+            "Path": "materials/environment/sun_disk.vmat"
+          },
+          "SunHorizonColor": "1,0.55,0.28,1",
+          "SunLight": {
+            "_type": "component",
+            "component_id": "e5f6a7b8-c9d0-1234-ef01-345678901234",
+            "go": "d4e5f6a7-b8c9-0123-def0-234567890123",
+            "component_type": "DirectionalLight"
+          },
+          "SunPeakColor": "3.2,2.95,2.6,1",
+          "TransitionSeconds": 15,
+          "WorldSaveName": ""
+        }
+      ],
+      "Children": [
+        {
+          "__guid": "5faea1b2-bd58-4047-b666-b50a2e0c72fb",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "SkyDome",
+          "Position": "0,0,0",
+          "Rotation": "0,0,0,1",
+          "Scale": "1,1,1",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "Survival.SkyDome",
+              "__guid": "f9989c9a-a9f0-467d-9c38-50be9f479f65",
+              "__enabled": true,
+              "Flags": 0,
+              "CloudDriftPerSecond": 0.006,
+              "DomeMaterial": {
+                "Id": "3d66b2cd-8515-4f1f-abb6-436384c60939",
+                "Path": "materials/environment/sky_dome.vmat"
+              },
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "RadiusMeters": 9000
+            },
+            {
+              "__type": "Sandbox.ModelRenderer",
+              "__guid": "5dd2aafb-155f-4df5-989f-f29235eabc0c",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyGroups": 18446744073709551615,
+              "CreateAttachments": false,
+              "LodOverride": null,
+              "MaterialGroup": null,
+              "MaterialOverride": null,
+              "Materials": null,
+              "Model": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "RenderOptions": {
+                "GameLayer": true,
+                "OverlayLayer": false,
+                "BloomLayer": false,
+                "AfterUILayer": false
+              },
+              "RenderType": "Off",
+              "Tint": "1,1,1,1"
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "4e4e9064-2ac9-41c7-8ca8-b9a8ec403367",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "SunDisk",
+          "Position": "0,0,8000",
+          "Rotation": "0,0,0,1",
+          "Scale": "10,10,10",
+          "Tags": "light_directional,light",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "Sandbox.ModelRenderer",
+              "__guid": "9089fe71-ce15-4a90-8250-db625e4b9481",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyGroups": 18446744073709551615,
+              "CreateAttachments": false,
+              "LodOverride": null,
+              "MaterialGroup": null,
+              "MaterialOverride": {
+                "Id": "d32c050b-bc9c-4568-bfea-63d47517d55f",
+                "Path": "materials/environment/sun_disk.vmat"
+              },
+              "Materials": null,
+              "Model": {
+                "Id": "00000000-0000-0000-f09f-a6f0fe7f0000",
+                "Path": "models/dev/sphere.vmdl"
+              },
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "RenderOptions": {
+                "GameLayer": true,
+                "OverlayLayer": false,
+                "BloomLayer": true,
+                "AfterUILayer": false
+              },
+              "RenderType": "Off",
+              "Tint": "4,4,4,1"
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "6f8768c0-6acc-4c7c-a095-4aef57b2bb23",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "MoonDisk",
+          "Position": "0,0,-8000",
+          "Rotation": "0,0,0,1",
+          "Scale": "65,65,65",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "Sandbox.ModelRenderer",
+              "__guid": "39edf0f2-43a3-4577-b09f-3bfb07153be0",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyGroups": 18446744073709551615,
+              "CreateAttachments": false,
+              "LodOverride": null,
+              "MaterialGroup": null,
+              "MaterialOverride": {
+                "Id": "11b34687-a53e-4672-bcd1-eed8e53c00b6",
+                "Path": "materials/environment/moon_disk.vmat"
+              },
+              "Materials": null,
+              "Model": {
+                "Id": "00000000-0000-0000-f09f-a6f0fe7f0000",
+                "Path": "models/dev/sphere.vmdl"
+              },
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "RenderOptions": {
+                "GameLayer": true,
+                "OverlayLayer": false,
+                "BloomLayer": false,
+                "AfterUILayer": false
+              },
+              "RenderType": "Off",
+              "Tint": "1,1,1,1"
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "36cccd4a-e634-42f0-88cf-b923423b0f35",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Moon",
+          "Position": "0,0,0",
+          "Rotation": "0,0,0,1",
+          "Scale": "1,1,1",
+          "Tags": "light_directional,light",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "Sandbox.DirectionalLight",
+              "__guid": "93a36539-0476-490a-a24d-43913f964465",
+              "__enabled": true,
+              "Flags": 0,
+              "ContactShadows": false,
+              "Contribution": "Diffuse, Specular, Transmissive",
+              "FogMode": "Disabled",
+              "FogStrength": 0,
+              "LightColor": "0.55,0.65,0.95,1",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "ShadowBias": 0.0005,
+              "ShadowCascadeCount": 2,
+              "ShadowCascadeSplitRatio": 0.9,
+              "ShadowHardness": 0,
+              "Shadows": true,
+              "SkyColor": "0.22,0.28,0.42,1",
+              "Visualizer": {}
+            }
+          ],
+          "Children": []
+        }
+      ]
     },
     {
       "__guid": "f6a7b8c9-d0e1-2345-f012-456789012345",
@@ -105,29 +455,43 @@
           "Flags": 0,
           "BiomePreviewMap": null,
           "BiomePreviewMapMaxResolution": 4096,
-          "BiomePreviewMapSeed": -2147483648,
+          "BiomePreviewMapSeed": 1337,
           "BiomePreviewMetersPerPixel": 0,
           "ChunkHeightSmoothPasses": 0,
           "ChunkHeightSmoothStrength01": 0.38,
           "ChunkSizeMeters": 64,
-          "ChunksPerFrame": 3,
+          "ChunksPerFrame": 1,
           "ChunkVerticesPerSide": 33,
           "CollisionRangeMeters": 192,
-          "EffectiveBiomePreviewResolution": 0,
-          "EffectiveMetersPerPixel": 0,
+          "EffectiveBiomePreviewResolution": 512,
+          "EffectiveMetersPerPixel": 78.125,
           "EntityPopulationEnabled": true,
+          "FarAsyncBuildsInFlight": 4,
+          "FarBuildBudgetMs": 6,
+          "FarCanopyTint01": 0.45,
+          "FarChunkCount": 812,
+          "FarChunkSizeMeters": 512,
+          "FarImpostorAmbient": 0.78,
+          "FarImpostorDirect": 0.15,
+          "FarImpostorHeightMeters": 22,
+          "FarImpostorsEnabled": true,
+          "FarImpostorTint": "1,1,1,1",
+          "FarSinkMeters": 2.5,
+          "FarTerrainEnabled": true,
+          "FarVerticesPerSide": 33,
+          "FarViewDistanceMeters": 8000,
           "ForwardViewConeDegrees": 120,
           "ForwardViewRadiusChunks": 8,
-          "HasStreamPosition": false,
+          "HasStreamPosition": true,
           "IsBiomePreviewMapStale": false,
           "IsMapGenerating": false,
+          "IsSavedBiomeMapStale": false,
           "IsWorldLoading": false,
-          "LoadedChunkCount": 0,
-          "MapGenerationProgress01": 0,
-          "MapGenerationStatus": "",
+          "LoadedChunkCount": 121,
+          "MapGenerationProgress01": 1,
+          "MapGenerationStatus": "Map ready (seed 1337)",
           "MaxTerrainHeightMeters": 700,
-          "MeshBorderPrefetch01": 0.35,
-          "MeshedChunkCount": 0,
+          "MeshedChunkCount": 127,
           "OceanRingWidthMeters": 2500,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
@@ -139,24 +503,32 @@
           "PreviewMapRowsPerFrame": 128,
           "RegeneratePreviewOnStart": false,
           "RunLakeSpawnSolveOnLoad": false,
-          "SettingsSource": "TunedPreviewFirst",
+          "SettingsSource": "WorldRecipeFirst",
           "ShowWorldLoadScreen": true,
           "SideViewRadiusChunks": 4,
-          "StreamChunkX": 0,
-          "StreamChunkY": 0,
-          "StreamElevationMeters": 0,
+          "StreamAsyncBuildsInFlight": 6,
+          "StreamAsyncGeometry": true,
+          "StreamChunkX": 350,
+          "StreamChunkY": 353,
+          "StreamElevationMeters": 24.891582,
           "StreamFarVerticesPerSide": 17,
-          "StreamHeadingDegrees": 0,
+          "StreamHeadingDegrees": 166.87497,
           "StreamHighPriorityRadiusChunks": 2,
-          "StreamLookDirectionMap": "0,0",
-          "StreamMaxSyncChunksPerRefresh": 4,
-          "StreamMeshBuildBudgetMs": 10,
+          "StreamLodDemoteMarginChunks": 2,
+          "StreamLookDirectionMap": "0.973876953,0.227076605",
+          "StreamMaxSyncChunksPerRefresh": 1,
+          "StreamMeshBuildBudgetMs": 5,
           "StreamMeshLodEnabled": true,
           "StreamRadiusChunks": 8,
+          "StreamRemeshesPerFrame": 2,
           "StreamUnloadMarginChunks": 2,
-          "StreamWorldPosition": "0,0,0",
-          "StreamXMeters": 0,
-          "StreamYMeters": 0,
+          "StreamUnloadsPerFrame": 6,
+          "StreamWorldPosition": "-1618.1543,5887.2959,995.66333",
+          "StreamXMeters": -40.453857,
+          "StreamYMeters": 147.1824,
+          "TreeLod1Meters": 180,
+          "TreeLod2Meters": 270,
+          "TreeLod3Meters": 330,
           "UseForwardConeStreaming": false,
           "VegetationCellSpacingMeters": 10,
           "VegetationCloverRockChance01": 0.7,
@@ -166,6 +538,21 @@
           "VegetationCloverRockPrefab": "prefabs/environment/rock.prefab",
           "VegetationCloverRocksEnabled": true,
           "VegetationCloverRockSpacingMeters": 50,
+          "VegetationCloverSaplingChance01": 0.5,
+          "VegetationCloverSaplingClearanceMeters": 2.5,
+          "VegetationCloverSaplingClearingChance01": 0.03,
+          "VegetationCloverSaplingMaxPerChunk": 64,
+          "VegetationCloverSaplingNearTrunkMeters": 10,
+          "VegetationCloverSaplingPrefabs": [
+            "prefabs/environment/tests/environment_elmsapling1_v15.prefab",
+            "prefabs/environment/tests/environment_elmsapling2_v15.prefab",
+            "prefabs/environment/tests/environment_elmsapling3_v15.prefab",
+            "prefabs/environment/tests/environment_elmsapling4_v15.prefab",
+            "prefabs/environment/tests/environment_elmsapling5_v15.prefab"
+          ],
+          "VegetationCloverSaplingScaleMax": 3.6,
+          "VegetationCloverSaplingScaleMin": 2.4,
+          "VegetationCloverSaplingSpacingMeters": 8,
           "VegetationCloverStickChance01": 0.7,
           "VegetationCloverStickClusterMax": 2,
           "VegetationCloverStickClusterMin": 1,
@@ -175,20 +562,6 @@
           "VegetationCloverStickNearLargeTreeMaxRadiusMeters": 6,
           "VegetationCloverStickNearLargeTreeMinRadiusMeters": 2.5,
           "VegetationCloverStickPrefab": "prefabs/environment/samplestick.prefab",
-          "VegetationCloverSaplingChance01": 0.5,
-          "VegetationCloverSaplingClearanceMeters": 2.5,
-          "VegetationCloverSaplingEdgeBias01": 0.7,
-          "VegetationCloverSaplingMaxPerChunk": 64,
-          "VegetationCloverSaplingPrefabs": [
-            "prefabs/environment/tests/environment_elmsapling1_v15.prefab",
-            "prefabs/environment/tests/environment_elmsapling2_v15.prefab",
-            "prefabs/environment/tests/environment_elmsapling3_v15.prefab",
-            "prefabs/environment/tests/environment_elmsapling4_v15.prefab",
-            "prefabs/environment/tests/environment_elmsapling5_v15.prefab"
-          ],
-          "VegetationCloverSaplingScaleMax": 1.2,
-          "VegetationCloverSaplingScaleMin": 0.8,
-          "VegetationCloverSaplingSpacingMeters": 8,
           "VegetationCloverSticksEnabled": true,
           "VegetationCloverStickSpacingMeters": 50,
           "VegetationCloverTreePrefabs": [
@@ -199,21 +572,45 @@
             "prefabs/environment/tests/environment_elm5_v76.prefab",
             "prefabs/environment/tests/environment_elm6_v76.prefab"
           ],
+          "VegetationFarCardModel": "models/environment/tests/environment_elm1_v76_far.vmdl",
+          "VegetationFarCardRangeMeters": 1200,
+          "VegetationFarCardsEnabled": true,
+          "VegetationFarFadeSeconds": 0,
+          "VegetationFarPlanTasks": 6,
+          "VegetationGrassClumpModels": [
+            "models/environment/grass/grass_clump1.vmdl",
+            "models/environment/grass/grass_clump2.vmdl",
+            "models/environment/grass/grass_clump3.vmdl",
+            "models/environment/grass/grass_clump4.vmdl"
+          ],
+          "VegetationGrassClumpsPerSquareMeter": 1.5,
+          "VegetationGrassEnabled": true,
+          "VegetationGrassMaxSlopeDegrees": 40,
+          "VegetationGrassRangeMeters": 150,
+          "VegetationGrassScaleMax": 1.25,
+          "VegetationGrassScaleMin": 0.8,
           "VegetationMaxTreesPerChunk": 40,
+          "VegetationObjectRangeMeters": 330,
           "VegetationPatchThreshold01": 0.5,
           "VegetationPatchWavelengthMeters": 100,
+          "VegetationPropRangeMeters": 192,
           "VegetationRedwoodDensity01": 0.1,
           "VegetationRedwoodPrefab": "prefabs/environment/tests/environment_elm3_v76.prefab",
           "VegetationRedwoodPrefabB": "prefabs/environment/tests/environment_elm6_v76.prefab",
+          "VegetationSaplingVisibleMeters": 50,
           "VegetationScaleMax": 1.15,
           "VegetationScaleMin": 0.9,
           "VegetationScatterEnabled": true,
+          "VegetationShadowRangeMeters": 100,
+          "VegetationSkipFarLodChunks": false,
           "VegetationSlopeTiltInfluence01": 0.5,
           "VegetationSlopeTiltMaxDegrees": 15,
-          "VegetationSkipFarLodChunks": false,
+          "VegetationSmallFadeSeconds": 0.5,
+          "VegetationSpawnBudgetMs": 2,
           "VegetationSpawnChance01": 0.7,
+          "VegetationSpawnsPerFrame": 16,
           "ViewDistanceMeters": 0,
-          "WorldDiameterMeters": 20000,
+          "WorldDiameterMeters": 40000,
           "WorldName": "TestWorld",
           "WorldSeed": 1337
         },
@@ -224,6 +621,7 @@
           "Flags": 0,
           "DisableFallDamage": true,
           "EquipGrappleOnPlayable": true,
+          "EquipWingsuitOnPlayable": true,
           "GrappleResourceId": "basic_hook",
           "InfiniteStaminaOnPlayable": true,
           "OnComponentDestroy": null,
@@ -236,7 +634,8 @@
           "ViewCamera": {
             "_type": "gameobject",
             "go": "b8c9d0e1-f2a3-4567-1234-678901234567"
-          }
+          },
+          "WingsuitResourceId": "basic_wingsuit"
         }
       ],
       "Children": []
@@ -246,8 +645,8 @@
       "__version": 2,
       "Flags": 0,
       "Name": "FlyCamera",
-      "Position": "0,-400,800",
-      "Rotation": "0.349999994,0,0,0.93599999",
+      "Position": "-1618.1543,5887.2959,995.66333",
+      "Rotation": "-0.0422508307,0.00486057391,-0.992548883,-0.114183724",
       "Scale": "1,1,1",
       "Tags": "maincamera",
       "Enabled": true,
@@ -283,7 +682,7 @@
           "RenderTexture": null,
           "TargetEye": "None",
           "Viewport": "0,0,1,1",
-          "ZFar": 50000,
+          "ZFar": 400000,
           "ZNear": 10
         },
         {
@@ -297,6 +696,132 @@
           "InputLocked": false,
           "LookSensitivity": 0.075,
           "MoveSpeed": 2220,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null
+        },
+        {
+          "__type": "Sandbox.Tonemapping",
+          "__guid": "dc995d43-a428-4404-8355-29228dc1e128",
+          "__enabled": true,
+          "Flags": 0,
+          "__version": 3,
+          "AutoExposureEnabled": true,
+          "ExposureCompensation": 0.1,
+          "ExposureMethod": "RGB",
+          "MaximumExposure": 3,
+          "MinimumExposure": 1,
+          "Mode": "HableFilmic",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "Rate": 1
+        },
+        {
+          "__type": "Sandbox.Bloom",
+          "__guid": "fd8db435-6822-4031-a43e-2eeac009e659",
+          "__enabled": true,
+          "Flags": 0,
+          "__version": 1,
+          "Mode": "Additive",
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "Strength": 0.25,
+          "Threshold": 1,
+          "Tint": "1,1,1,1"
+        },
+        {
+          "__type": "Sandbox.AmbientOcclusion",
+          "__guid": "077e27ec-e922-4bf4-85ac-a707779471a9",
+          "__enabled": true,
+          "Flags": 0,
+          "__version": 1,
+          "FalloffRange": 1,
+          "Intensity": 1.5,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "Radius": 64,
+          "ThinCompensation": 5
+        },
+        {
+          "__type": "Survival.TerrainWorldLoadScreenHost",
+          "__guid": "2a1964e2-3153-418e-8a69-dea13473d999",
+          "__enabled": true,
+          "Flags": 0,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null
+        },
+        {
+          "__type": "Sandbox.ScreenPanel",
+          "__guid": "e5449a4f-5956-4592-9fef-913170f0b5c3",
+          "__enabled": true,
+          "Flags": 0,
+          "AutoScreenScale": true,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "Opacity": 1,
+          "Scale": 1,
+          "ScaleStrategy": "ConsistentHeight",
+          "TargetCamera": {
+            "_type": "component",
+            "component_id": "c9d0e1f2-a3b4-5678-2345-789012345678",
+            "go": "b8c9d0e1-f2a3-4567-1234-678901234567",
+            "component_type": "CameraComponent"
+          },
+          "Timing": "AfterPostProcess",
+          "ZIndex": 100
+        },
+        {
+          "__type": "Survival.TerrainWorldLoadScreen",
+          "__guid": "25b308bc-531b-433f-abb0-7eda48fdd644",
+          "__enabled": true,
+          "Flags": 0,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null
+        },
+        {
+          "__type": "Survival.TerrainMinimapScreenHost",
+          "__guid": "47c2ec56-29a9-4790-b071-5c74b216140e",
+          "__enabled": true,
+          "Flags": 0,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null
+        },
+        {
+          "__type": "Survival.TerrainMinimapScreen",
+          "__guid": "dd12def1-14da-4d06-b6bb-bcf50623aac7",
+          "__enabled": true,
+          "Flags": 0,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
@@ -334,7 +859,10 @@
           "MaterialGroup": null,
           "MaterialOverride": null,
           "Materials": null,
-          "Model": "models/dev/box.vmdl",
+          "Model": {
+            "Id": "8a84e5a0-01f8-0000-f0db-b088f8010000",
+            "Path": "models/dev/box.vmdl"
+          },
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
@@ -352,10 +880,3240 @@
         }
       ],
       "Children": []
+    },
+    {
+      "__guid": "4c33903c-4ce2-4d4c-a2a3-8ef4eb2f7272",
+      "__version": 2,
+      "Flags": 0,
+      "Name": "Fog",
+      "Position": "0,0,0",
+      "Rotation": "0,0,0,1",
+      "Scale": "1,1,1",
+      "Tags": "",
+      "Enabled": true,
+      "NetworkMode": 2,
+      "NetworkFlags": 0,
+      "NetworkOrphaned": 0,
+      "NetworkTransmit": true,
+      "OwnerTransfer": 1,
+      "Components": [
+        {
+          "__type": "Sandbox.GradientFog",
+          "__guid": "33312327-dfb3-4f21-a35d-2e62b8acbe51",
+          "__enabled": true,
+          "Flags": 0,
+          "Color": "0.72,0.76,0.84,1",
+          "EndDistance": 480000,
+          "FalloffExponent": 1.5,
+          "Height": 120,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "StartDistance": 40000,
+          "VerticalFalloffExponent": 2
+        }
+      ],
+      "Children": []
+    },
+    {
+      "__guid": "a75316a5-f4f6-4831-8c4c-e91ac0a5ce3e",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "490909d1-fcd9-41bc-9e22-d99ddb06efe8"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "490909d1-fcd9-41bc-9e22-d99ddb06efe8",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:0:-1",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "878dedd3-6cd9-47a6-a41f-18cbe0c30c66"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "490909d1-fcd9-41bc-9e22-d99ddb06efe8"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "878dedd3-6cd9-47a6-a41f-18cbe0c30c66",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "22591.7812,-11142.3906,2877.16357"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "-0,0,-0.0085259201,0.999963701"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "3284.83789,-4321.18701,640.365234"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "878dedd3-6cd9-47a6-a41f-18cbe0c30c66",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "b_grounded": true,
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 83.63481,
+                "move_y": 0.054877996,
+                "move_x": 83.63479,
+                "move_z": -7.0349317,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "a75316a5-f4f6-4831-8c4c-e91ac0a5ce3e",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "097fcaf3-5f7e-4077-973d-5acaddf6e179",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "d1100df4-a360-4818-a7b0-00c54141f798",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "bfd1d3d8-bc74-4670-a8c6-13930b5dfa49",
+        "6f708192-a3b4-2345-f012-456789012345": "11d2f031-628b-4869-beee-47eaf1c513cb",
+        "8192a3b4-c5d6-4567-1234-678901234567": "84904c94-5b60-41cc-9938-d7d4ebe87d0e",
+        "708192a3-b4c5-3456-0123-567890123456": "d54e58d2-863f-4646-b12b-aca6a022d330",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "adf1a5b2-b890-4a93-8556-1d947a43f0ee",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "5a0c9e92-b7cc-4840-b32e-0f90839b3977",
+        "b4c5d6e7-f809-7890-4567-901234567890": "e7327cc9-09d6-4a6f-8f92-8b338b58c575",
+        "c5d6e7f8-091a-8901-5678-012345678901": "a11df5ef-d5b1-476b-a7eb-56762ad368e6",
+        "d6e7f809-1a2b-9012-6789-123456789012": "b336fcac-e421-49f1-8951-6c510497ba27",
+        "e7f8091a-2b3c-0123-789a-234567890123": "460a452d-8e93-42a6-80f2-ca3ae75ec419",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "f938972e-aa10-49a9-b08b-2c12d1014821",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "3850ea45-6b7a-4d69-992a-bbec39050fe4",
+        "4d5e6f70-8192-0123-def0-234567890123": "372fba84-0c22-4b5c-aa00-647b220118cc",
+        "5e6f7081-92a3-1234-ef01-345678901234": "3e25d9b5-4dc6-4195-a9c1-bcf9a5671fd6"
+      }
+    },
+    {
+      "__guid": "741cec6c-4730-4351-ad06-d35e9ef75671",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "27de1019-a5bc-4111-99c3-17030d209c37"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "27de1019-a5bc-4111-99c3-17030d209c37",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:-1:-1",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "83e793ca-f58e-4eb3-8cf7-89c4ae2ee48d"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "27de1019-a5bc-4111-99c3-17030d209c37"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "83e793ca-f58e-4eb3-8cf7-89c4ae2ee48d",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "938.778625,-99.1466751,720.667603"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "0,0,0.73353821,0.679648221"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "-4405.75977,-3697.64331,726.58374"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "83e793ca-f58e-4eb3-8cf7-89c4ae2ee48d",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "b_grounded": true,
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 0,
+                "move_y": 0,
+                "move_x": 0,
+                "move_z": 0,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "741cec6c-4730-4351-ad06-d35e9ef75671",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "befe52c0-7832-4806-9836-f2cee106c587",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "bdfd9573-45a9-4f98-ab3c-e3d15f0200ab",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "3b297f2f-fb3a-4a64-b3f9-84a7a3d0f7d3",
+        "6f708192-a3b4-2345-f012-456789012345": "f6a53f56-2fca-46c6-89b8-a969d226af4c",
+        "8192a3b4-c5d6-4567-1234-678901234567": "5f1f24d0-161e-4c55-a08c-8cde2f0de4b7",
+        "708192a3-b4c5-3456-0123-567890123456": "04f85467-f6a5-452d-96b5-a3dd55d12314",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "f72b96fb-81e4-46cd-a89a-8a68f18d72ab",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "8149ff56-2625-4ca7-8637-a35541bd8f02",
+        "b4c5d6e7-f809-7890-4567-901234567890": "0ebc6762-366f-43b9-b07f-fc40a1a18bc9",
+        "c5d6e7f8-091a-8901-5678-012345678901": "8193e47b-8c07-46b0-9d82-2f4d856896c4",
+        "d6e7f809-1a2b-9012-6789-123456789012": "1bb858cf-24cf-4722-9213-77dde3c4304c",
+        "e7f8091a-2b3c-0123-789a-234567890123": "22ce4f3e-aea7-4c91-a9ac-f6f5bccd48d8",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "fba8449f-1b9b-4ea5-9f93-860e27b42594",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "7ee51a67-1e72-4484-ac29-eabe8fd86ed5",
+        "4d5e6f70-8192-0123-def0-234567890123": "b9a87101-fb05-4172-aa03-5ccade4a5f1b",
+        "5e6f7081-92a3-1234-ef01-345678901234": "d0dc77ac-6e49-46b1-8ab0-593ccd4a6ec3"
+      }
+    },
+    {
+      "__guid": "0feb90b7-ee07-42a6-8401-bf027f9a4471",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "16e8be5e-813f-4672-bad0-e8d2838b3069"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "16e8be5e-813f-4672-bad0-e8d2838b3069",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:-1:0",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "813cf2e6-92bb-4db3-ac33-6d22aafeef7f"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "16e8be5e-813f-4672-bad0-e8d2838b3069"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "813cf2e6-92bb-4db3-ac33-6d22aafeef7f",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "-15403.2402,714.131775,2205.54297"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "-0,0,-0.830274284,0.557354927"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "-4274.83984,4915.41553,1044.72803"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "813cf2e6-92bb-4db3-ac33-6d22aafeef7f",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "b_grounded": true,
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 0,
+                "move_y": 0,
+                "move_x": 0,
+                "move_z": 0,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "0feb90b7-ee07-42a6-8401-bf027f9a4471",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "a514387d-4983-4807-bf4f-13df05973259",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "91ce532f-8f14-4520-8be3-c4b11a2f68d3",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "2451a77a-b841-4157-a505-051f4af195e7",
+        "6f708192-a3b4-2345-f012-456789012345": "b71ab43b-85b5-4c6c-93a3-faf70380e189",
+        "8192a3b4-c5d6-4567-1234-678901234567": "59b2f20f-0b39-40b8-afe3-b0e7c96602da",
+        "708192a3-b4c5-3456-0123-567890123456": "fe4fa7d6-1817-4f39-accb-770ad1cfe13d",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "9af1915d-8b99-4e49-86cb-9894cc82b79a",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "958c28fc-afe5-478f-a471-03a393588470",
+        "b4c5d6e7-f809-7890-4567-901234567890": "edcad83b-5601-46fd-a363-934501c03f81",
+        "c5d6e7f8-091a-8901-5678-012345678901": "1594129a-8527-4f37-b3b0-13947649eb9c",
+        "d6e7f809-1a2b-9012-6789-123456789012": "8ca82693-e520-4324-9a9d-fef4297db9b8",
+        "e7f8091a-2b3c-0123-789a-234567890123": "7a2f7c93-d363-43e4-aa04-b8b53463f899",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "f6130afd-50ff-469a-9a71-770b80523d90",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "05007b1c-176c-4c94-ae46-f531970158dc",
+        "4d5e6f70-8192-0123-def0-234567890123": "f9e3b3d1-bca1-4819-bd78-8d8f86f684e0",
+        "5e6f7081-92a3-1234-ef01-345678901234": "db3d0be5-e01d-4db4-9e53-3728a237bb64"
+      }
+    },
+    {
+      "__guid": "ceebd1da-9bca-4590-b0fc-e192f01bc823",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "b0235ae4-b725-41bc-af29-1887dda0a7fd"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "b0235ae4-b725-41bc-af29-1887dda0a7fd",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:0:0",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "788f87c3-d6e1-4d7d-a7d6-d1beb8a2e0aa"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "b0235ae4-b725-41bc-af29-1887dda0a7fd"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "788f87c3-d6e1-4d7d-a7d6-d1beb8a2e0aa",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "10214.7051,-2111.10645,1106.71277"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "0,0,0.971354485,-0.237635046"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "4083.21313,3714.4585,875.769897"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "788f87c3-d6e1-4d7d-a7d6-d1beb8a2e0aa",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "b_grounded": true,
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 83.4917,
+                "move_y": -0.022022247,
+                "move_x": 83.4917,
+                "move_z": -2.3354833,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "ceebd1da-9bca-4590-b0fc-e192f01bc823",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "3869cb71-c30e-4fea-866c-7c3620550eb2",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "88855fa8-7e42-4462-ab9f-0339fb158574",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "3f1b335f-74c3-4210-b96c-5d8f3c3b4af4",
+        "6f708192-a3b4-2345-f012-456789012345": "0a0175f5-2357-4b87-a7e5-4baaedd8e9af",
+        "8192a3b4-c5d6-4567-1234-678901234567": "63d020b4-3eae-45e0-a18f-dd1d3d2552ca",
+        "708192a3-b4c5-3456-0123-567890123456": "6294c1ea-cb91-4072-80b5-ac3b0d8b2d10",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "c54dbe5c-e1df-4d1c-9a73-7af0cf331152",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "04244add-4736-40fa-8a06-ac109124c050",
+        "b4c5d6e7-f809-7890-4567-901234567890": "4cfbaca4-2e29-4484-be7c-e6dbbc381360",
+        "c5d6e7f8-091a-8901-5678-012345678901": "c741a737-9649-48f4-a51b-7b923eac8e2d",
+        "d6e7f809-1a2b-9012-6789-123456789012": "69ee8098-f70d-46fc-8b7c-65bf6eca192b",
+        "e7f8091a-2b3c-0123-789a-234567890123": "24e83b77-a846-4237-8bdd-fb0ca95336bc",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "e4a3c1dc-ebbc-4710-ba3b-f23df4a357c6",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "387cbb60-749d-473d-9d17-fa135bb0fe15",
+        "4d5e6f70-8192-0123-def0-234567890123": "aef1fd4f-b159-4a36-88fd-c5af4598063d",
+        "5e6f7081-92a3-1234-ef01-345678901234": "5d752bb0-9d01-47dd-92cb-47a8996a9429"
+      }
+    },
+    {
+      "__guid": "2b78f106-1fef-4cde-9420-188da4814cbf",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "eb97df04-82af-4c7b-bb70-ad5dd08b40e7"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "eb97df04-82af-4c7b-bb70-ad5dd08b40e7",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:0:1",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "7bc0f2c7-3c0a-499e-ae7a-3c52a54aecf5"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "eb97df04-82af-4c7b-bb70-ad5dd08b40e7"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "7bc0f2c7-3c0a-499e-ae7a-3c52a54aecf5",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "12934.3145,6547.65527,1253.12024"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "-0,0,-0.82125175,0.570565999"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "3502.97437,15967.5195,1957.42236"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "7bc0f2c7-3c0a-499e-ae7a-3c52a54aecf5",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "b_grounded": true,
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 83.52456,
+                "move_y": 0.0240345,
+                "move_x": 83.52456,
+                "move_z": -2.1503537,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "2b78f106-1fef-4cde-9420-188da4814cbf",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "b45ff8d8-29ed-4282-926c-1ba9480d4fe2",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "f12082eb-7c75-471f-9450-10a6d21479f4",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "3be956dc-264c-4aee-b78f-1bf2d704ec02",
+        "6f708192-a3b4-2345-f012-456789012345": "82dccd7a-a62e-4117-976c-ca37f5773cf2",
+        "8192a3b4-c5d6-4567-1234-678901234567": "8daba18d-d6f9-4199-ac46-4fc9d8f5d85b",
+        "708192a3-b4c5-3456-0123-567890123456": "c2974036-952b-4f8d-aa1b-c47130190d20",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "5842d45b-5012-4914-9b70-c2c50295d605",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "14949366-d9d9-4266-a5c6-663645017a3e",
+        "b4c5d6e7-f809-7890-4567-901234567890": "df6c6e43-3e13-4d12-926f-2d9a78df1d39",
+        "c5d6e7f8-091a-8901-5678-012345678901": "960a169f-c1d3-4b2d-9839-ca1c8bfe25d4",
+        "d6e7f809-1a2b-9012-6789-123456789012": "7dfa6d77-2ef4-466f-9ae2-edfe43461198",
+        "e7f8091a-2b3c-0123-789a-234567890123": "ef195cea-3aca-49b1-8de9-e0a6ba31e4ca",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "7c3c2dc2-3969-4308-9333-606c1c32a2e9",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "39fd4e84-5208-41cc-906b-0772c7e430d8",
+        "4d5e6f70-8192-0123-def0-234567890123": "5349764b-c261-489c-829d-603afc69ba9e",
+        "5e6f7081-92a3-1234-ef01-345678901234": "05187ea9-0cff-4a92-b511-1428cf248532"
+      }
+    },
+    {
+      "__guid": "82274aa7-0c8d-4fe8-83f3-99d790b48cdb",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "04d8d66c-4aa3-4fcd-af58-593ff2ffce96"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "04d8d66c-4aa3-4fcd-af58-593ff2ffce96",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:-5:0",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "2bc1ae0a-c93e-4f51-8467-cdfa2bf60369"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "04d8d66c-4aa3-4fcd-af58-593ff2ffce96"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "2bc1ae0a-c93e-4f51-8467-cdfa2bf60369",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "-50060.3789,2450.1709,3467.34644"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "0,0,-0.859574258,0.511010826"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "-45960.9609,4699.12549,3755.6897"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "2bc1ae0a-c93e-4f51-8467-cdfa2bf60369",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "b_grounded": true,
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 0,
+                "move_y": 0,
+                "move_x": 0,
+                "move_z": 0,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "82274aa7-0c8d-4fe8-83f3-99d790b48cdb",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "807822d7-ff09-4682-b2cd-15500562650d",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "e3480d9d-0aec-4c8c-92ce-d9aa350a2c7c",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "8b94b353-48b4-48dc-99d4-f5234de10927",
+        "6f708192-a3b4-2345-f012-456789012345": "82f24fd2-a408-408a-9a64-12d56710f7a5",
+        "8192a3b4-c5d6-4567-1234-678901234567": "97a754ae-c11a-4bc7-aac0-e0d6d5564d10",
+        "708192a3-b4c5-3456-0123-567890123456": "687bc293-5dbd-4c08-8090-e6afd436a26d",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "d399ac97-c8b6-4e80-a28d-f73818a8b15b",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "95c30ea8-905c-47b9-8382-6f84ea5c6224",
+        "b4c5d6e7-f809-7890-4567-901234567890": "cb31e03d-ac20-4b21-b1da-95921e8ff568",
+        "c5d6e7f8-091a-8901-5678-012345678901": "ee9e2337-c131-43f1-98f7-47a302feb5fb",
+        "d6e7f809-1a2b-9012-6789-123456789012": "39da0998-b9ed-4c10-891c-6ea40ffa9ad8",
+        "e7f8091a-2b3c-0123-789a-234567890123": "b6c9518f-eeaf-45e0-bfbb-24d645b2f773",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "d8b12078-d54b-4508-91d8-e6ce6afbb7bb",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "9f18ab52-18ff-471c-aab3-fddfe5cf80a9",
+        "4d5e6f70-8192-0123-def0-234567890123": "3a23a7e8-deb2-47bb-845c-89e9430132ec",
+        "5e6f7081-92a3-1234-ef01-345678901234": "4f2fe725-9b9f-40a2-b09e-1497ab4db641"
+      }
+    },
+    {
+      "__guid": "a6390e35-fe21-44ce-abcc-71353af3f22c",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "aaed81c6-24fe-48cc-b269-ca1a3f43362d"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "aaed81c6-24fe-48cc-b269-ca1a3f43362d",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:-4:0",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "f07ea452-a481-4da1-9f19-f21be79f4f06"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "aaed81c6-24fe-48cc-b269-ca1a3f43362d"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "f07ea452-a481-4da1-9f19-f21be79f4f06",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "-20075.0879,-5709.00098,2471.27271"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "-0,0,-0.359380662,0.933191061"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "-35104.2383,4442.89697,3576.22949"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "f07ea452-a481-4da1-9f19-f21be79f4f06",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "b_grounded": true,
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 83.56301,
+                "move_y": 0.0032577515,
+                "move_x": 83.563,
+                "move_z": 18.00031,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "a6390e35-fe21-44ce-abcc-71353af3f22c",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "585fe5bc-c253-4cb0-bab7-cbdeb1023281",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "c4be90cf-dab9-40b4-a3b3-0fb2d79d8e54",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "bc9ec95a-e82e-40bc-b4b8-2757771c1d33",
+        "6f708192-a3b4-2345-f012-456789012345": "55218a81-d1ad-4b70-a9d2-342d1941336f",
+        "8192a3b4-c5d6-4567-1234-678901234567": "8e6c1a23-0d1b-44d5-acaf-5e16357d0465",
+        "708192a3-b4c5-3456-0123-567890123456": "1f0603ea-277a-41bf-94e6-d2f9bc94045d",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "3367c33e-5367-4bcb-b3e6-dff71a66f2f1",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "7e54f9ff-49cf-480f-afda-a7b634f75623",
+        "b4c5d6e7-f809-7890-4567-901234567890": "37d0eb5e-36b5-4489-9aec-317e35617212",
+        "c5d6e7f8-091a-8901-5678-012345678901": "c9b4d268-cb52-41ce-8caa-7cb819d02804",
+        "d6e7f809-1a2b-9012-6789-123456789012": "35d9c918-7483-416f-bdcf-7fba4952b863",
+        "e7f8091a-2b3c-0123-789a-234567890123": "594acd9a-f117-44f3-8d57-9d06e692c76c",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "1d3c2996-a0db-4707-bc04-02d6fa2f7fde",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "571a7833-b98d-4537-82bc-0ddbfa55bb85",
+        "4d5e6f70-8192-0123-def0-234567890123": "850a5a90-8867-4441-8871-080a0cc37e45",
+        "5e6f7081-92a3-1234-ef01-345678901234": "ea2e0ba8-7a6d-420d-9ce4-9afbbfc00ed2"
+      }
+    },
+    {
+      "__guid": "4a586a7d-4247-4a56-9027-6c78479ec4b3",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "06d8e5ea-f5ba-4405-b35e-50c6787acf87"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "06d8e5ea-f5ba-4405-b35e-50c6787acf87",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:-4:1",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "79c4173b-b74d-43ae-9e3c-38ed6672a888"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "06d8e5ea-f5ba-4405-b35e-50c6787acf87"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "79c4173b-b74d-43ae-9e3c-38ed6672a888",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "-38349.6484,13921.6094,1869.32593"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "0,0,0.816089034,0.577926278"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "-34059.3359,13372.3447,1577.99548"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "79c4173b-b74d-43ae-9e3c-38ed6672a888",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false,
+                "b_grounded": true
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 83.59407,
+                "move_y": -0.04689026,
+                "move_x": 83.594055,
+                "move_z": -21.432333,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "4a586a7d-4247-4a56-9027-6c78479ec4b3",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "543bb702-3390-4bf0-969b-3db3aa750e43",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "7323a5c4-4c12-49d4-b939-bdfbc244aebe",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "207eabda-35d7-4b2a-9b88-d7758f85993b",
+        "6f708192-a3b4-2345-f012-456789012345": "9370fde3-4c1f-43b7-ae77-a6bbb290170a",
+        "8192a3b4-c5d6-4567-1234-678901234567": "da41ae8f-c75b-4936-a3e1-56e834b5b4da",
+        "708192a3-b4c5-3456-0123-567890123456": "a664dc71-606a-47d3-9a58-f62e3d214431",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "57c03650-4e32-4a5d-92bc-d76942189ae8",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "d5dd8d9e-c36c-443d-b8e8-331884e3c0da",
+        "b4c5d6e7-f809-7890-4567-901234567890": "0fe98b24-43c1-4d96-84cf-41d8ab436616",
+        "c5d6e7f8-091a-8901-5678-012345678901": "04218564-0228-4b8b-b6a4-8cc5e07420f4",
+        "d6e7f809-1a2b-9012-6789-123456789012": "76bd7d62-1860-49d1-bd94-ec6b63be6173",
+        "e7f8091a-2b3c-0123-789a-234567890123": "b4cd1ed4-3767-4eb9-a687-74d2b75369e1",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "7a19fa2b-c9dd-4217-a9e2-e3fb70695b77",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "c1f24ab8-0ce8-4d09-9ad4-8878452b4852",
+        "4d5e6f70-8192-0123-def0-234567890123": "0560d384-ee65-46a9-a8d5-72f45c7b7d35",
+        "5e6f7081-92a3-1234-ef01-345678901234": "6eb6dbcc-fc60-4e34-a32c-b4771a53251f"
+      }
+    },
+    {
+      "__guid": "246bb40b-d4b4-4133-b65d-2365162b6806",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "fa7864ca-18fc-4120-8049-6648cf22962c"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "fa7864ca-18fc-4120-8049-6648cf22962c",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:-3:0",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "935f645f-18b3-4a6c-9e99-1754d8c60502"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "fa7864ca-18fc-4120-8049-6648cf22962c"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "935f645f-18b3-4a6c-9e99-1754d8c60502",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "-17829.1387,15308.7256,1643.34888"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "0,0,-0.232692063,0.972550452"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "-24586.3574,5162.78027,2051.53882"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "935f645f-18b3-4a6c-9e99-1754d8c60502",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "b_grounded": true,
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 0,
+                "move_y": 0,
+                "move_x": 0,
+                "move_z": 0,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "246bb40b-d4b4-4133-b65d-2365162b6806",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "74cb2f9d-dc4c-47f2-847d-0df83c89cbe7",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "e8c8db4d-a9f4-48ec-ab76-ace2df0a6b66",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "3f1a7e34-ddf7-4de8-bc1e-ec4161c3ceba",
+        "6f708192-a3b4-2345-f012-456789012345": "e52268a2-d391-4d86-8a9a-e8cf9e9c0474",
+        "8192a3b4-c5d6-4567-1234-678901234567": "2fbb7232-026a-45e4-be91-aeffe6439947",
+        "708192a3-b4c5-3456-0123-567890123456": "0cbc04a8-ee47-4cb5-aefd-573285c3aeb6",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "e4d9f01e-1560-417f-aafb-f8db6f9dd057",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "933fadec-1bcd-439b-aee9-5717eae86ac9",
+        "b4c5d6e7-f809-7890-4567-901234567890": "42072cfb-559f-4fc1-a567-5aee0b736061",
+        "c5d6e7f8-091a-8901-5678-012345678901": "0204148a-a785-43d7-8398-d101b9e0566b",
+        "d6e7f809-1a2b-9012-6789-123456789012": "0b81a9ff-2373-418b-b4b6-69be6ed05f9f",
+        "e7f8091a-2b3c-0123-789a-234567890123": "37aca217-4f6b-4c43-a66c-27025b825f35",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "2b0c90a9-b9ca-4785-bcb1-7ddb6cf57070",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "7da854d9-8562-4a35-87fe-fea7bae31a30",
+        "4d5e6f70-8192-0123-def0-234567890123": "bb163f7f-0cab-43fd-9efc-15ba79f5b9b9",
+        "5e6f7081-92a3-1234-ef01-345678901234": "969fbb07-0a97-4b30-a4be-8559976c14a1"
+      }
+    },
+    {
+      "__guid": "4befdf56-064d-4788-bb70-d8c5ce8284c8",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "ee311290-8587-4f1d-aff3-4f61d6910a13"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "ee311290-8587-4f1d-aff3-4f61d6910a13",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:-2:0",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "861c41a4-30c4-4616-ae6f-70540067ed9d"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "ee311290-8587-4f1d-aff3-4f61d6910a13"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "861c41a4-30c4-4616-ae6f-70540067ed9d",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "-11087.7246,-10081.0898,886.038513"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "-0,0,-0.115973108,0.993252337"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "-14757.165,6484.7085,2296.64624"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "861c41a4-30c4-4616-ae6f-70540067ed9d",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "b_grounded": true,
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 83.59073,
+                "move_y": -0.00434494,
+                "move_x": 83.59073,
+                "move_z": 3.7524383,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "4befdf56-064d-4788-bb70-d8c5ce8284c8",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "8a99cdca-bf4a-4e2d-a8d6-d7588856c2d3",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "507fcd13-3eff-48db-a5db-1e9713e9a527",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "7482a4b4-481b-4061-8414-039a62eedbb7",
+        "6f708192-a3b4-2345-f012-456789012345": "ca52e323-5508-4ff5-855d-5a95e0af7a44",
+        "8192a3b4-c5d6-4567-1234-678901234567": "4a7eaea9-ed11-4d3e-b2f4-3a8a8a70b0cc",
+        "708192a3-b4c5-3456-0123-567890123456": "17311bae-721b-42a2-844e-e8235d08cc22",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "9c2d0a77-a18d-4d17-9ff3-8464018d405e",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "baa2d93a-ba04-4fe2-9ea2-70b0d8cd3934",
+        "b4c5d6e7-f809-7890-4567-901234567890": "25c00319-8abc-49e4-9a95-09a6c4550b87",
+        "c5d6e7f8-091a-8901-5678-012345678901": "804a8509-5622-4340-9148-a3063e5627af",
+        "d6e7f809-1a2b-9012-6789-123456789012": "a509abaf-fdbe-494a-a939-999c5f87c6e9",
+        "e7f8091a-2b3c-0123-789a-234567890123": "4555f49b-955e-4344-b6ba-5d1173675d0a",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "d285a261-1ad6-4dc9-9f3a-34f886748465",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "2d96791c-9eca-4c8f-8a2f-2ffa024990ce",
+        "4d5e6f70-8192-0123-def0-234567890123": "74cbdc59-a6ee-4274-9408-e94745e02a9e",
+        "5e6f7081-92a3-1234-ef01-345678901234": "969e3f86-9a78-4477-8557-7c79356dfc6c"
+      }
+    },
+    {
+      "__guid": "86ff7cf7-fe1e-4181-9f67-7affd0c37b83",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "87603caa-ef0c-476f-b97e-cc4d169527f0"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "87603caa-ef0c-476f-b97e-cc4d169527f0",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:-1:1",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "1ec84318-3100-41d7-9fce-2ccae24a5c64"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "87603caa-ef0c-476f-b97e-cc4d169527f0"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "1ec84318-3100-41d7-9fce-2ccae24a5c64",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "2595.83618,21343.3164,1957.2876"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "-0,0,0.670342803,0.742051482"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "-3695.65747,14578.168,1436.70508"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "1ec84318-3100-41d7-9fce-2ccae24a5c64",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false,
+                "b_grounded": true
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 83.59508,
+                "move_y": -0.007619858,
+                "move_x": 83.59506,
+                "move_z": -0.2705743,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "86ff7cf7-fe1e-4181-9f67-7affd0c37b83",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "80a0cf86-0e71-40f8-88ef-723f7d851742",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "21c0cfa8-cba8-4c1d-9651-c665cbda35b2",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "9ec9b6f0-d0b6-4da7-be10-7ea6ac368935",
+        "6f708192-a3b4-2345-f012-456789012345": "157a723f-ce5d-4150-96c2-1f52f7e7d4a6",
+        "8192a3b4-c5d6-4567-1234-678901234567": "1d4370ad-321a-4dbb-9a37-40d77bb2871f",
+        "708192a3-b4c5-3456-0123-567890123456": "f14bdb2c-1ab6-474c-875e-aaa60d9519e0",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "6a2b6035-b7fa-4292-bb4a-12bac6758521",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "f962f6fa-54e3-4488-bc35-054b7f342249",
+        "b4c5d6e7-f809-7890-4567-901234567890": "d29384cb-1846-42c1-a720-b6b69dea989a",
+        "c5d6e7f8-091a-8901-5678-012345678901": "604db23b-63f9-464d-8395-4a9d1df19382",
+        "d6e7f809-1a2b-9012-6789-123456789012": "8812c37d-4bfa-4e3d-a564-58e3c92c3d61",
+        "e7f8091a-2b3c-0123-789a-234567890123": "327bd9d1-1279-4f36-8807-8b35cc0ddf9a",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "5bf43858-aa50-4784-ba2d-8cdb2b6e8540",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "4d891ba6-f557-4ed2-9ed3-f062bd5915aa",
+        "4d5e6f70-8192-0123-def0-234567890123": "e024f290-d882-44e6-924a-6e72dce1dc07",
+        "5e6f7081-92a3-1234-ef01-345678901234": "73fc415d-3efc-441b-a038-c7a0dc7cf2d6"
+      }
+    },
+    {
+      "__guid": "d92eca35-397f-4829-8c2b-45c928698fe0",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "25457dcc-11a3-459a-8e7d-e01bdedfaa3d"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "25457dcc-11a3-459a-8e7d-e01bdedfaa3d",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:1:0",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "71457fa3-7401-421d-bb42-ce543ef815c7"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "25457dcc-11a3-459a-8e7d-e01bdedfaa3d"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "71457fa3-7401-421d-bb42-ce543ef815c7",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "36447.2266,553.801636,1208.79797"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "-0,0,-0.703483343,0.710711658"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "14941.9023,5946.82373,959.673889"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "71457fa3-7401-421d-bb42-ce543ef815c7",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "b_grounded": true,
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 83.54122,
+                "move_y": -0.057314575,
+                "move_x": 83.54121,
+                "move_z": -17.20283,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "d92eca35-397f-4829-8c2b-45c928698fe0",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "39c305f7-6a98-4ba1-bd4c-907fd4efea91",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "7da54b03-18ed-4169-95b0-03d082b9fdcd",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "f23bd50f-9d21-4a56-b50e-a413738d53d6",
+        "6f708192-a3b4-2345-f012-456789012345": "1d1283db-5106-4428-bac5-555ef1b197bd",
+        "8192a3b4-c5d6-4567-1234-678901234567": "b7323369-b022-460d-b40b-66154f348b51",
+        "708192a3-b4c5-3456-0123-567890123456": "ffd69319-95ab-478f-a2d3-a69887c147d2",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "ed1c5fb3-46b1-48ed-9764-2ecad0d7808a",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "674bb6fb-118d-4c73-aa55-5b5e663875a9",
+        "b4c5d6e7-f809-7890-4567-901234567890": "0d9685ed-d29c-4db3-8c13-281063fc2cbb",
+        "c5d6e7f8-091a-8901-5678-012345678901": "97d1772b-fb04-4f9e-8d1c-ef8eb2a78868",
+        "d6e7f809-1a2b-9012-6789-123456789012": "fff2883a-1de8-433f-b118-fe320069a832",
+        "e7f8091a-2b3c-0123-789a-234567890123": "46c5e9d9-4251-4803-9c0a-1e5eeac22e97",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "90454d5b-b50c-439d-b024-0af014dbdb5b",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "52520141-949b-4800-9d36-887ebc8e4495",
+        "4d5e6f70-8192-0123-def0-234567890123": "42c62847-1079-4aa0-9152-f07439c8455e",
+        "5e6f7081-92a3-1234-ef01-345678901234": "f6eb1e00-0b48-48c5-8308-253271ba9b65"
+      }
+    },
+    {
+      "__guid": "baa66b83-335c-4f69-99fe-7033a2165237",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "0d14dc73-777f-4602-9e13-96eb6301c29d"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "0d14dc73-777f-4602-9e13-96eb6301c29d",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:1:1",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "e1716de9-ceec-4082-a521-01a7e5664363"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "0d14dc73-777f-4602-9e13-96eb6301c29d"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "e1716de9-ceec-4082-a521-01a7e5664363",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "-618.685974,14559.3838,1770.6731"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "0,0,0.986413836,0.164279416"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "14243.8838,13764.9199,1994.62524"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "e1716de9-ceec-4082-a521-01a7e5664363",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "b_grounded": true,
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 0,
+                "move_y": 0,
+                "move_x": 0,
+                "move_z": 0,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "baa66b83-335c-4f69-99fe-7033a2165237",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "f00038fb-2b65-4548-b7e6-f193bd0d4063",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "49b7e1db-2030-4d26-b047-47b5e4ca29e8",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "ff7eea07-b13e-4c13-ab8d-1bfe6136de08",
+        "6f708192-a3b4-2345-f012-456789012345": "ec7ae98e-95f0-4199-8b93-76c6c79093de",
+        "8192a3b4-c5d6-4567-1234-678901234567": "5ebac2da-dbe4-400e-95fa-938186ed248e",
+        "708192a3-b4c5-3456-0123-567890123456": "44a88f43-0ef2-4fd6-a56e-cf820af49fc2",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "94501eac-492c-40e5-98f5-a9b0f030f219",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "ab4363c0-5614-4cc5-8e40-2693b16be5e7",
+        "b4c5d6e7-f809-7890-4567-901234567890": "0f005b66-eece-4fac-b88b-2d01d6f38bf7",
+        "c5d6e7f8-091a-8901-5678-012345678901": "d557c982-db8c-48d4-8820-9e747b7c94c1",
+        "d6e7f809-1a2b-9012-6789-123456789012": "40d45c72-5da1-4300-a47c-860e7b549298",
+        "e7f8091a-2b3c-0123-789a-234567890123": "30febe1c-2e0e-4f57-8e82-58afe0241fcf",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "dd54fc53-b4c4-41f2-a16b-17fe02bcba59",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "3e0710a4-e645-4933-95f7-dd0824f6d54c",
+        "4d5e6f70-8192-0123-def0-234567890123": "dffd07c1-fb1a-4216-b994-9364ff57c320",
+        "5e6f7081-92a3-1234-ef01-345678901234": "174c258b-361b-4e63-8e6c-3fb420638292"
+      }
+    },
+    {
+      "__guid": "d1bd19bd-3050-4892-a346-c1806929f973",
+      "__version": 2,
+      "__Prefab": {
+        "Id": "75a54743-7e3c-48d0-8f30-8567e3883f9f",
+        "Path": "prefabs/entity/scavt1.prefab"
+      },
+      "__PrefabInstancePatch": {
+        "AddedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "fb14f8a8-8fbd-4310-a323-b9be98c04c01"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "f8091a2b-3c4d-1234-89ab-345678901234"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Survival.BiomePopulationSlot",
+              "__guid": "fb14f8a8-8fbd-4310-a323-b9be98c04c01",
+              "__enabled": true,
+              "Flags": 0,
+              "EnemyType": "Scav",
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "PrefabPath": "prefabs/entity/scavT1.prefab",
+              "Respawn": true,
+              "RespawnDelaySeconds": 90,
+              "SlotKey": "scavT1:g:2:0",
+              "Tier": 1
+            }
+          },
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "8d0ffb06-bcb4-43c3-82c3-eb2b6bb79929"
+            },
+            "Parent": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "PreviousElement": {
+              "Type": "Component",
+              "IdValue": "fb14f8a8-8fbd-4310-a323-b9be98c04c01"
+            },
+            "ContainerProperty": "Components",
+            "IsContainerArray": true,
+            "Data": {
+              "__type": "Sandbox.Citizen.CitizenAnimationHelper",
+              "__guid": "8d0ffb06-bcb4-43c3-82c3-eb2b6bb79929",
+              "__enabled": true,
+              "Flags": 0,
+              "BodyWeight": 1,
+              "EyeSource": null,
+              "EyesWeight": 1,
+              "HeadWeight": 1,
+              "Height": null,
+              "IkLeftFoot": null,
+              "IkLeftHand": null,
+              "IkRightFoot": null,
+              "IkRightHand": null,
+              "LookAt": null,
+              "LookAtEnabled": false,
+              "LookAtEyes": null,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null,
+              "Sitting": "None",
+              "SittingOffsetHeight": 0,
+              "SpecialMove": "None",
+              "Target": {
+                "_type": "component",
+                "component_id": "3c4d5e6f-7081-9012-cdef-123456789012",
+                "go": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+                "component_type": "SkinnedModelRenderer"
+              }
+            }
+          }
+        ],
+        "RemovedObjects": [],
+        "PropertyOverrides": [
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Name",
+            "Value": "enemy_Scav_t1"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Position",
+            "Value": "19229.2656,-11754.7227,2857.49609"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Rotation",
+            "Value": "-0,0,-0.0615241006,0.998105645"
+          },
+          {
+            "Target": {
+              "Type": "GameObject",
+              "IdValue": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6"
+            },
+            "Property": "Enabled",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "708192a3-b4c5-3456-0123-567890123456"
+            },
+            "Property": "MaxSpeed",
+            "Value": 88
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 40
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "d6e7f809-1a2b-9012-6789-123456789012"
+            },
+            "Property": "HomePosition",
+            "Value": "23832.6992,3878.21118,1006.89569"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "AnimHelper",
+            "Value": {
+              "_type": "component",
+              "component_id": "8d0ffb06-bcb4-43c3-82c3-eb2b6bb79929",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "CitizenAnimationHelper"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "e7f8091a-2b3c-0123-789a-234567890123"
+            },
+            "Property": "Vitals",
+            "Value": {
+              "_type": "component",
+              "component_id": "b4c5d6e7-f809-7890-4567-901234567890",
+              "go": "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6",
+              "component_type": "EntityVitals"
+            }
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "3c4d5e6f-7081-9012-cdef-123456789012"
+            },
+            "Property": "Parameters",
+            "Value": {
+              "bools": {
+                "b_grounded": true,
+                "ik.hand_left.enabled": false,
+                "ik.hand_right.enabled": false,
+                "ik.foot_left.enabled": false,
+                "ik.foot_right.enabled": false
+              },
+              "floats": {
+                "scale_height": 1,
+                "scale_heel": 0,
+                "move_groundspeed": 0,
+                "move_y": 0,
+                "move_x": 0,
+                "move_z": 0,
+                "wish_groundspeed": 0,
+                "wish_y": 0,
+                "wish_x": 0,
+                "wish_z": 0
+              }
+            }
+          }
+        ],
+        "MovedObjects": []
+      },
+      "__PrefabIdToInstanceId": {
+        "7f3e8a21-4b5c-6d7e-8f90-a1b2c3d4e5f6": "d1bd19bd-3050-4892-a346-c1806929f973",
+        "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "fca41bde-8099-4857-a59d-212dc8f2fe9b",
+        "2b3c4d5e-6f70-8901-bcde-f12345678901": "e825b6a3-fc14-4d71-b25b-15ad14380d8e",
+        "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "b88799ec-2365-4379-a953-d4cb1f0b430e",
+        "6f708192-a3b4-2345-f012-456789012345": "329243d5-8207-4a65-b8bc-59adf754ecd5",
+        "8192a3b4-c5d6-4567-1234-678901234567": "c1ecf483-85dc-4701-83f8-806528316839",
+        "708192a3-b4c5-3456-0123-567890123456": "16a86cdd-f301-4b8c-846e-a2008752fcfd",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "0dd8f12d-7a07-4435-b1b8-15351aa710eb",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "e5c7d9ab-ec3a-49a5-ab9b-c1b12be536fc",
+        "b4c5d6e7-f809-7890-4567-901234567890": "4be53eac-d3f1-43c5-88e8-12b128967aa2",
+        "c5d6e7f8-091a-8901-5678-012345678901": "71573c22-3898-41e1-95c7-87567af683e7",
+        "d6e7f809-1a2b-9012-6789-123456789012": "35072f5d-9a39-407f-80f9-b8150d83af91",
+        "e7f8091a-2b3c-0123-789a-234567890123": "7a0a987a-7224-4752-b145-aeff4d3a414f",
+        "f8091a2b-3c4d-1234-89ab-345678901234": "8413a206-4695-4a2d-a9f2-54b975b46978",
+        "3c4d5e6f-7081-9012-cdef-123456789012": "5ff54d26-9555-4647-bcb2-2551cabe92e9",
+        "4d5e6f70-8192-0123-def0-234567890123": "e68ded63-fc38-4b81-8c08-399f300558eb",
+        "5e6f7081-92a3-1234-ef01-345678901234": "f5a00571-c691-42e4-8aa2-99a84919bba6"
+      }
     }
   ],
   "SceneProperties": {
     "NetworkInterpolation": true,
+    "PhysicsMode": "Physics3D",
     "TimeScale": 1,
     "WantsSystemScene": true,
     "Metadata": {
@@ -381,7 +4139,8 @@
     "GameObjectSystems": {
       "Sandbox.Clutter.ClutterGridSystem": {
         "Storage": {
-          "$blob": "1bef76d2-1832-45f8-88fc-b6a2fa0bb462"
+          "$blob": "64db792e-5935-8fbc-8cfa-050cd49fa7fd",
+          "$refs": []
         }
       },
       "Sandbox.SelectionSetsSystem": {

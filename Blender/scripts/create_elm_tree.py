@@ -1616,17 +1616,44 @@ VMAT_BARK_NORMAL = """Layer0
 }
 """
 
+# Wind (pixel_lit F_WIND, driven by Survival.WindSystem): the STANDING tree's bark and its leaf cards sway;
+# the stump, log and halves keep the static VMAT_BARK_NORMAL (a felled log must not wave its far end).
+# Distances are metres. The elm is 23-28 m tall and its wood reaches ~9 m from the axis, so the top leans 2.5 m at
+# full wind, swinging at 0.5 Hz from a little past upright to 1.4x that lean (a hurricane multiplies it); limbs ride the
+# same bend as a rotation about the trunk (50 cm dip / lift at the crown edge, no stretch); leaf cards wiggle each in their own random direction. Sway fades out 300-360 m from the camera (Mark 2026-10-13: full sway to 300 m)
+# and the shader skips the math past that.
+VMAT_WIND_PARAMS = """	WindTreeHeightMeters "25.000"
+	WindCrownRadiusMeters "9.000"
+	WindTrunkSwayMeters "2.500"
+	WindTrunkRockHz "0.500"
+	WindLimbBobMeters "0.500"
+	WindLimbHz "0.600"
+	WindBendPower "1.500"
+	WindFadeStartMeters "300.000"
+	WindFadeEndMeters "360.000"
+"""
+
+VMAT_BARK_WIND = (VMAT_BARK_NORMAL
+	.replace('	shader "shaders/pixel_lit.shader"\n', '	shader "shaders/pixel_lit.shader"\n	F_WIND 1\n')
+	.replace("}\n", "\n" + VMAT_WIND_PARAMS + "}\n"))
+
 VMAT_LEAVES = """Layer0
 {
 	shader "shaders/pixel_lit.shader"
 	F_ALPHA_TEST 1
 	F_RENDER_BACKFACES 1
+	F_WIND 1
 
 	PixelRoughness "0.900"
 	PixelAlphaCutoff "0.500"
 	PixelNormalUp "0.000"
+	PixelDirectMax "0.550"
 	TextureColor "models/environment/tests/elm_leaves.png"
 	TextureTranslucency "models/environment/tests/elm_leaves_mask.png"
+
+""" + VMAT_WIND_PARAMS + """	WindLeafFlutterMeters "0.080"
+	WindLeafHz "2.500"
+	WindLeafGustMeters "0.350"
 }
 """
 
@@ -1656,6 +1683,11 @@ TREE_LODS = [
 # mesh itself is cheap enough: the collider then sits exactly on the bark (Mark, v71: the LOD2 collider sat up to
 # 5 cm inside the rendered surface).
 TREE_PHYSICS_LOD = 0
+# The far-forest ring (Code/World/Terrain/TerrainWorldManager.FarTrees.cs) draws every tree past the loaded
+# chunks as THIS LOD level through its own instanced draw: <name>_far.vmdl is that level's render mesh; <name>_lod0..2.vmdl
+# are the single-LOD models the game cross-fades between (TerrainWorldManager.TreeLod.cs, 2026-10-20)
+# alone (no physics, same materials) from the same fbx, so a far elm is the elm (Mark 2026-10-15).
+FAR_LOD = 3
 
 
 
@@ -1771,6 +1803,8 @@ def vmdl_text(name, lods=((0.0, None, 1.0, 1.0),), physics_lod=0):
 						}}
 					}},
 """
+	# The bark remap's "from" must be the path the compiler RESOLVES the fbx material to (a sibling vmat of the same
+	# name), not the bare name — a bare "elm_bark.vmat" silently matches nothing and the tree keeps the static bark.
 	physics_mesh = lod_name(name, "wood", physics_lod)
 	# One render mesh per level (wood + leaves merged, see merge_lod_meshes): the engine picks a LOD per
 	# render mesh from that mesh's own bounds, so separate trunk / crown meshes switched at different distances.
@@ -1809,8 +1843,8 @@ def vmdl_text(name, lods=((0.0, None, 1.0, 1.0),), physics_lod=0):
 						remaps =
 						[
 							{{
-								from = "elm_bark.vmat"
-								to = "models/environment/tests/elm_bark.vmat"
+								from = "models/environment/tests/elm_bark.vmat"
+								to = "models/environment/tests/elm_bark_wind.vmat"
 							}},
 							{{
 								from = "elm_leaves.vmat"
@@ -1818,7 +1852,7 @@ def vmdl_text(name, lods=((0.0, None, 1.0, 1.0),), physics_lod=0):
 							}}
 						]
 						use_global_default = false
-						global_default_material = "models/environment/tests/elm_bark.vmat"
+						global_default_material = "models/environment/tests/elm_bark_wind.vmat"
 					}},
 				]
 			}},
@@ -1863,6 +1897,74 @@ def vmdl_text(name, lods=((0.0, None, 1.0, 1.0),), physics_lod=0):
 		base_model_name = ""
 	}}
 }}
+"""
+
+
+def far_vmdl_text(name, level):
+	"""The far-ring model: one render mesh (LOD <level>), no physics, the tree's own materials."""
+	mesh = merged_lod_name(name, level)
+	return FAR_VMDL_TEMPLATE.replace("MESH", mesh).replace("NAME", name)
+
+
+FAR_VMDL_TEMPLATE = """<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:modeldoc30:version{8c2d7a91-9c42-4bf0-883a-5a3b1762d4f1} -->
+{
+	rootNode =
+	{
+		_class = "RootNode"
+		children =
+		[
+			{
+				_class = "MaterialGroupList"
+				children =
+				[
+					{
+						_class = "DefaultMaterialGroup"
+						remaps =
+						[
+							{
+								from = "models/environment/tests/elm_bark.vmat"
+								to = "models/environment/tests/elm_bark_wind.vmat"
+							},
+							{
+								from = "elm_leaves.vmat"
+								to = "models/environment/tests/elm_leaves.vmat"
+							}
+						]
+						use_global_default = false
+						global_default_material = "models/environment/tests/elm_bark_wind.vmat"
+					},
+				]
+			},
+			{
+				_class = "RenderMeshList"
+				children =
+				[
+					{
+						_class = "RenderMeshFile"
+						name = "MESH"
+						filename = "models/environment/tests/NAME.fbx"
+						import_translation = [ 0.0, 0.0, 0.0 ]
+						import_rotation = [ 0.0, 0.0, 0.0 ]
+						import_scale = 0.4
+						align_origin_x_type = "None"
+						align_origin_y_type = "None"
+						align_origin_z_type = "None"
+						parent_bone = ""
+						import_filter =
+						{
+							exclude_by_default = true
+							exception_list = [ "MESH" ]
+						}
+					},
+				]
+			},
+		]
+		model_archetype = ""
+		primary_associated_entity = ""
+		anim_graph_name = ""
+		base_model_name = ""
+	}
+}
 """
 
 
@@ -2063,6 +2165,8 @@ def main():
 	write_png(os.path.join(MAT_DIR, LEAVES + "_mask.png"), mask, LEAF_BLOCK)
 	with open(os.path.join(MAT_DIR, BARK + ".vmat"), "w", newline="\n") as f:
 		f.write(VMAT_BARK_NORMAL.replace("elm_bark", BARK))
+	with open(os.path.join(MAT_DIR, BARK + "_wind.vmat"), "w", newline="\n") as f:
+		f.write(VMAT_BARK_WIND.replace("elm_bark", BARK))
 	with open(os.path.join(MAT_DIR, LEAVES + ".vmat"), "w", newline="\n") as f:
 		f.write(VMAT_LEAVES.replace("elm_leaves", LEAVES))
 	bark = blender_material(BARK, bark_png, False)
@@ -2152,6 +2256,11 @@ def main():
 		with open(os.path.join(MODEL_DIR, name + ".vmdl"), "w", newline="\n") as f:
 			f.write(vmdl_text(name, TREE_LODS, TREE_PHYSICS_LOD)
 					.replace("elm_bark", BARK).replace("elm_leaves", LEAVES))
+		with open(os.path.join(MODEL_DIR, name + "_far.vmdl"), "w", newline="\n") as f:
+			f.write(far_vmdl_text(name, FAR_LOD).replace("elm_bark", BARK).replace("elm_leaves", LEAVES))
+		for level in range(FAR_LOD):
+			with open(os.path.join(MODEL_DIR, f"{name}_lod{level}.vmdl"), "w", newline="\n") as f:
+				f.write(far_vmdl_text(name, level).replace("elm_bark", BARK).replace("elm_leaves", LEAVES))
 		for o in lod_objs + merged:
 			o.hide_render = True
 			o.hide_set(True)

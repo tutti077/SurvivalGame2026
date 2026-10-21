@@ -27,8 +27,10 @@ public sealed class TerrainNoisePreviewTool : EditorTool
 /// <summary>Draggable scene overlay for terrain preview controls and live texture.</summary>
 sealed class TerrainNoisePreviewWindow : WidgetWindow
 {
-	readonly TerrainPreviewSettings _settings = new();
+	TerrainPreviewSettings _settings = new();
 	SerializedObject _serializedSettings;
+	string _settingsSourceNote = "component defaults";
+	Label _sourceLabel;
 	TextureWidget _previewWidget;
 	Label _statusLabel;
 	Label _statsLabel;
@@ -54,7 +56,95 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 		Layout.Margin = 8;
 		Layout.Spacing = 8;
 
+		// The tool edits THE world: it opens on the scene's world recipe (what the terrain and the minimap
+		// generate from), not on code defaults (Mark 2026-10-08: tool, minimap and world all disagreed).
+		TryLoadWorldRecipe( announce: false );
 		BuildUi();
+	}
+
+	static Survival.TerrainWorldManager FindSceneManager()
+	{
+		var scene = Sandbox.Game.ActiveScene;
+		if ( !scene.IsValid() )
+			return null;
+
+		return scene.GetAllComponents<Survival.TerrainWorldManager>().FirstOrDefault( m => m.IsValid() );
+	}
+
+	bool TryLoadWorldRecipe( bool announce )
+	{
+		var manager = FindSceneManager();
+		var worldName = manager?.WorldName;
+		if ( string.IsNullOrWhiteSpace( worldName ) )
+		{
+			_settingsSourceNote = "component defaults (no TerrainWorldManager in the scene)";
+			if ( announce )
+				SetStatusText( "No TerrainWorldManager in the active scene: editing component defaults." );
+			return false;
+		}
+
+		var recipe = Survival.WorldSaveIO.TryReadRecipe( worldName );
+		if ( recipe?.PreviewSettings is null )
+		{
+			_settingsSourceNote = $"component defaults (world '{worldName}' has no recipe yet)";
+			if ( announce )
+				SetStatusText( $"World '{worldName}' has no world.json yet: editing component defaults. Apply To World Recipe writes one." );
+			return false;
+		}
+
+		_settings = recipe.PreviewSettings.CloneForGenerate( false );
+		_settingsSourceNote = $"world recipe '{worldName}'";
+		if ( _serializedSettings is not null )
+		{
+			_serializedSettings = EditorTypeLibrary.GetSerializedObject( _settings );
+			RebuildSettingsTabs();
+			_settingsFingerprint = ComputeSettingsFingerprint();
+		}
+		if ( announce )
+			SetStatusText( $"Loaded settings from WorldSaves/{worldName}/world.json (seed {_settings.WorldSeed})." );
+		UpdateSourceLabel();
+		return true;
+	}
+
+	void ApplyToWorldRecipe()
+	{
+		var manager = FindSceneManager();
+		var worldName = manager?.WorldName;
+		if ( string.IsNullOrWhiteSpace( worldName ) )
+		{
+			SetStatusText( "No TerrainWorldManager in the active scene: nothing to apply to." );
+			return;
+		}
+
+		var recipe = Survival.WorldSaveIO.TryReadRecipe( worldName ) ?? new Survival.WorldSaveRecipe { WorldName = worldName };
+		recipe.PreviewSettings = _settings.CloneForGenerate( false );
+		recipe.WorldSeed = _settings.WorldSeed;
+		recipe.WorldDiameterMeters = _settings.WorldDiameterMeters;
+		recipe.OceanRingWidthMeters = _settings.OceanRingWidthMeters;
+		recipe.MaxTerrainHeightMeters = _settings.MaxTerrainHeightMeters;
+		Survival.WorldSaveIO.WriteRecipe( recipe );
+		manager.ReloadWorldRecipe();
+		_settingsSourceNote = $"world recipe '{worldName}'";
+		UpdateSourceLabel();
+		SetStatusText( Sandbox.Game.IsPlaying
+			? $"Written to WorldSaves/{worldName}/world.json. Stop and Play again to regenerate the terrain; the minimap rebuilds itself."
+			: $"Written to WorldSaves/{worldName}/world.json. The next Play generates this world; the saved biome map is now marked stale." );
+	}
+
+	void UpdateSourceLabel()
+	{
+		if ( _sourceLabel is not null )
+			_sourceLabel.Text = $"Editing: {_settingsSourceNote}";
+	}
+
+	void RebuildSettingsTabs()
+	{
+		if ( _controlsPanel is null )
+			return;
+
+		_tabs = null;
+		_controlsPanel.Layout.Clear( true );
+		BuildControls();
 	}
 
 	public override void OnDestroyed()
@@ -79,15 +169,25 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 		_statsLabel.Text = text;
 	}
 
+	Widget _controlsPanel;
+
 	void BuildUi()
 	{
-		var controlsPanel = new Widget( this );
-		controlsPanel.Layout = Layout.Column();
-		controlsPanel.Layout.Spacing = 6;
-		controlsPanel.MinimumWidth = 360;
-		controlsPanel.MaximumWidth = 420;
+		_controlsPanel = new Widget( this );
+		_controlsPanel.Layout = Layout.Column();
+		_controlsPanel.Layout.Spacing = 6;
+		_controlsPanel.MinimumWidth = 360;
+		_controlsPanel.MaximumWidth = 420;
 
 		_serializedSettings = EditorTypeLibrary.GetSerializedObject( _settings );
+		BuildControls();
+		Layout.Add( _controlsPanel );
+		BuildPreviewPanels();
+	}
+
+	void BuildControls()
+	{
+		var controlsPanel = _controlsPanel;
 
 		var tabs = new TerrainPreviewCategoryTabs( controlsPanel )
 		{
@@ -141,6 +241,26 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 		actionRow.Layout.Add( _cancelButton );
 		controlsPanel.Layout.Add( actionRow );
 
+		var recipeRow = new Widget( this );
+		recipeRow.Layout = Layout.Row();
+		recipeRow.Layout.Spacing = 6;
+		var loadRecipe = new Button( "Load World Recipe", "download" )
+		{
+			ToolTip = "Replace these settings with WorldSaves/<world>/world.json: what the terrain and minimap generate from",
+		};
+		loadRecipe.Clicked = () => TryLoadWorldRecipe( announce: true );
+		var applyRecipe = new Button( "Apply To World Recipe", "upload" )
+		{
+			ToolTip = "Write these settings into WorldSaves/<world>/world.json so the next Play, the minimap and this preview are the same world",
+		};
+		applyRecipe.Clicked = ApplyToWorldRecipe;
+		recipeRow.Layout.Add( loadRecipe );
+		recipeRow.Layout.Add( applyRecipe );
+		controlsPanel.Layout.Add( recipeRow );
+
+		_sourceLabel = new Label( $"Editing: {_settingsSourceNote}" ) { WordWrap = true };
+		controlsPanel.Layout.Add( _sourceLabel );
+
 		var liveRow = new Widget( this );
 		liveRow.Layout = Layout.Row();
 		liveRow.Layout.Spacing = 6;
@@ -153,9 +273,10 @@ sealed class TerrainNoisePreviewWindow : WidgetWindow
 		_statusLabel = new Label( "Press Generate Preview to sample the current settings." );
 		_statusLabel.WordWrap = true;
 		controlsPanel.Layout.Add( _statusLabel );
+	}
 
-		Layout.Add( controlsPanel );
-
+	void BuildPreviewPanels()
+	{
 		var previewPanel = new Widget( this );
 		previewPanel.Layout = Layout.Column();
 		previewPanel.Layout.Spacing = 4;
@@ -437,22 +558,30 @@ static class TerrainPreviewControlTabs
 		nameof( TerrainPreviewSettings.LakeMaxOffsetMeters ),
 		nameof( TerrainPreviewSettings.LakeSpawnCheckRadiusMeters ),
 		nameof( TerrainPreviewSettings.LakeSpawnShowcaseWaterRadiusMeters ),
+		nameof( TerrainPreviewSettings.EnableRivers ),
+		nameof( TerrainPreviewSettings.RiverCount ),
+		nameof( TerrainPreviewSettings.RiverWidthMinMeters ),
+		nameof( TerrainPreviewSettings.RiverWidthMaxMeters ),
+		nameof( TerrainPreviewSettings.RiverBankWidthScale ),
+		nameof( TerrainPreviewSettings.RiverMinGradePercent ),
+		nameof( TerrainPreviewSettings.RiverMaxCutMeters ),
+		nameof( TerrainPreviewSettings.RiverSourceSpacingMeters ),
+		nameof( TerrainPreviewSettings.RiverSmoothingMeters ),
+		nameof( TerrainPreviewSettings.RiverDepthMeters ),
+		nameof( TerrainPreviewSettings.RiverBankMaxSlopeDegrees ),
+		nameof( TerrainPreviewSettings.RiverBedDepthMeters ),
 	};
 
 	public static readonly HashSet<string> Biomes = new( StringComparer.Ordinal )
 	{
 		nameof( TerrainPreviewSettings.BiomeOverlayStrength01 ),
 		nameof( TerrainPreviewSettings.BiomeNoiseFrequency ),
-		nameof( TerrainPreviewSettings.BiomeBoundaryNoiseFrequency ),
-		nameof( TerrainPreviewSettings.BiomeDistanceWarpMeters ),
-		nameof( TerrainPreviewSettings.BiomeWeightNoiseStrength01 ),
-		nameof( TerrainPreviewSettings.BiomeScatterOctaves ),
-		nameof( TerrainPreviewSettings.BiomePickerOctaves ),
-		nameof( TerrainPreviewSettings.BiomePickerFrequency ),
+		nameof( TerrainPreviewSettings.BiomeRegionsPerBiome ),
+		nameof( TerrainPreviewSettings.BiomeRegionBorderWarpMeters ),
+		nameof( TerrainPreviewSettings.BiomeRegionEdgeBlendMeters ),
 		nameof( TerrainPreviewSettings.BiomeDistanceInfluenceScale01 ),
 		nameof( TerrainPreviewSettings.BiomeSpeckFilterEnabled ),
 		nameof( TerrainPreviewSettings.BiomeMinPatchDiameterMeters ),
-		nameof( TerrainPreviewSettings.BiomeMountainMinHeight01 ),
 		nameof( TerrainPreviewSettings.BiomeAppearInnerRampPower ),
 		nameof( TerrainPreviewSettings.BiomeCloverGuaranteeSpawn ),
 		nameof( TerrainPreviewSettings.BiomeSpawnBlendEndMeters ),
@@ -485,7 +614,7 @@ static class TerrainPreviewControlTabs
 		nameof( TerrainPreviewSettings.EnableAzureCoastBiome ),
 		nameof( TerrainPreviewSettings.AzureCoastIncludeRimOcean ),
 		nameof( TerrainPreviewSettings.AzureCoastWidthMeters ),
-		nameof( TerrainPreviewSettings.AzureCoastMinDistanceFromSpawnMeters ),
+		nameof( TerrainPreviewSettings.AzureCoastMinDistanceFromSpawn01 ),
 		nameof( TerrainPreviewSettings.EnableBlackwaterBiome ),
 		nameof( TerrainPreviewSettings.BlackwaterSpotCount ),
 		nameof( TerrainPreviewSettings.BlackwaterMinDiameterMeters ),
@@ -498,7 +627,6 @@ static class TerrainPreviewControlTabs
 
 	public static readonly HashSet<string> BiomeTerrain = new( StringComparer.Ordinal )
 	{
-		nameof( TerrainPreviewSettings.EnableBiomeHeightBlend ),
 		nameof( TerrainPreviewSettings.BiomeCloverMaxHeightMeters ),
 		nameof( TerrainPreviewSettings.BiomeRedwoodMaxHeightMeters ),
 		nameof( TerrainPreviewSettings.BiomeAmberMaxHeightMeters ),
@@ -519,21 +647,27 @@ static class TerrainPreviewControlTabs
 		nameof( TerrainPreviewSettings.BiomeCloverSlopeSmooth01 ),
 		nameof( TerrainPreviewSettings.BiomeCloverGrassTintStrength01 ),
 		nameof( TerrainPreviewSettings.BiomeCloverGroundTextureStrength01 ),
-		nameof( TerrainPreviewSettings.BiomeCloverGroundTextureTileMeters ),
-		nameof( TerrainPreviewSettings.BiomeRedwoodHillFrequency ),
-		nameof( TerrainPreviewSettings.BiomeRedwoodHillAmplitude01 ),
-		nameof( TerrainPreviewSettings.BiomeRedwoodRidgeAmplitude01 ),
-		nameof( TerrainPreviewSettings.BiomeRedwoodSlopeSmooth01 ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodHillsideWavelengthMeters ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodHillsideReliefMeters ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodRavineWavelengthMeters ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodRavineDepthMeters ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodMicroAmplitudeMeters ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodLedgeHeightMinMeters ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodLedgeHeightMaxMeters ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodLedgeHeightWavelengthMeters ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodLedgeRiseIntervalMeters ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodLedgeLineOctaves ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodLedgeFaceWidthMeters ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodLedgeFaceSlopeDegrees ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodLedgeRampSpacingMeters ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodLedgeRampWidthMeters ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodLedgeRampGradeDegrees ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodLedgeBlendCoverage01 ),
+		nameof( TerrainPreviewSettings.BiomeRedwoodLedgeBlendLengthMeters ),
 		nameof( TerrainPreviewSettings.BiomeAmberDuneFrequency ),
 		nameof( TerrainPreviewSettings.BiomeAmberDuneFloor01 ),
 		nameof( TerrainPreviewSettings.BiomeAmberDuneAmplitude01 ),
 		nameof( TerrainPreviewSettings.BiomeAmberDuneReshapeBlend01 ),
-		nameof( TerrainPreviewSettings.BiomeAmberSlopeSmooth01 ),
-		nameof( TerrainPreviewSettings.BiomeMountainBaseRuggedAmplitude01 ),
-		nameof( TerrainPreviewSettings.BiomeMountainSlopeSmooth01 ),
-		nameof( TerrainPreviewSettings.BiomeMountainSummitFlattenStart01 ),
-		nameof( TerrainPreviewSettings.BiomeMountainSummitFlattenStrength01 ),
-		nameof( TerrainPreviewSettings.BiomeSlopeDetailGate01 ),
 	};
 
 	public static readonly HashSet<string> BiomeWeights = new( StringComparer.Ordinal )
@@ -545,13 +679,11 @@ static class TerrainPreviewControlTabs
 	{
 		nameof( TerrainPreviewSettings.PreviewMode ),
 		nameof( TerrainPreviewSettings.MountainSlopeSampleStepMeters ),
-		nameof( TerrainPreviewSettings.BiomeMountainMinSlopeDegrees ),
 	};
 
 	public static readonly HashSet<string> BiomeTransition = new( StringComparer.Ordinal )
 	{
 		nameof( TerrainPreviewSettings.PreviewMode ),
-		nameof( TerrainPreviewSettings.BiomeHeightCapBorderSharpness ),
 	};
 
 	public static readonly HashSet<string> MountainMask = new( StringComparer.Ordinal )
@@ -572,6 +704,8 @@ static class TerrainPreviewControlTabs
 		nameof( TerrainPreviewSettings.MountainSpawnBreakerMin01 ),
 		nameof( TerrainPreviewSettings.MountainSpawnBreakerSpan01 ),
 		nameof( TerrainPreviewSettings.MountainSpawnBreakerStrength01 ),
+		nameof( TerrainPreviewSettings.MountainSpawnBlobWavelengthMeters ),
+		nameof( TerrainPreviewSettings.MountainSpawnBlobThreshold01 ),
 		nameof( TerrainPreviewSettings.MountainSpawnWarpStrength01 ),
 		nameof( TerrainPreviewSettings.MountainSpawnRangeStretch01 ),
 		nameof( TerrainPreviewSettings.MountainSpawnRangePower01 ),
@@ -589,11 +723,8 @@ static class TerrainPreviewControlTabs
 		nameof( TerrainPreviewSettings.MountainMinPeakHeight01 ),
 		nameof( TerrainPreviewSettings.MountainPeakVariationFrequency ),
 		nameof( TerrainPreviewSettings.MountainPeakRarityPower ),
-		nameof( TerrainPreviewSettings.MountainTypicalPeakMax01 ),
-		nameof( TerrainPreviewSettings.MountainAbsolutePeakMax01 ),
 		nameof( TerrainPreviewSettings.MountainSummitMacroFrequency ),
 		nameof( TerrainPreviewSettings.MountainSummitMacroThreshold01 ),
-		nameof( TerrainPreviewSettings.MountainSummitLocalPeakMin01 ),
 		nameof( TerrainPreviewSettings.MountainPeakBandWidth01 ),
 		nameof( TerrainPreviewSettings.MountainPeakSharpnessPower ),
 		nameof( TerrainPreviewSettings.MountainSummitExtraLift01 ),

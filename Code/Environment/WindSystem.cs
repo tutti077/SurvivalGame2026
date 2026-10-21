@@ -22,6 +22,9 @@ public sealed class WindSystem : Component
 	const string AttrStrength = "WindStrength";
 	const string AttrGust = "WindGust";
 
+	[Property, Group( "Wind" ), Title( "Wind Enabled" ), Description( "Off = every tree and grass blade stands still (zero published each frame). Flip live in play; console wind_toggle does the same." )]
+	public bool WindEnabled { get; set; } = true;
+
 	[Property, Group( "Direction" ), Title( "Random Heading On Start" ), Description( "Host picks a random heading each session instead of the authored yaw." )]
 	public bool RandomHeadingOnStart { get; set; } = true;
 
@@ -60,7 +63,7 @@ public sealed class WindSystem : Component
 	/// <summary>World-space unit vector (XY) the wind blows toward. Read this from gameplay code.</summary>
 	public Vector3 Direction { get; private set; } = Vector3.Forward;
 
-	/// <summary>Local gust contribution this frame (0–1).</summary>
+	/// <summary>Local gust contribution this frame (0–1 simulated; a windtest can push it past 1).</summary>
 	public float Gust01 { get; private set; }
 
 	/// <summary>Base + gust, clamped 0–1.</summary>
@@ -68,6 +71,12 @@ public sealed class WindSystem : Component
 
 	float _sessionYaw;
 	float _gustSeed;
+
+	// windtest: a forced gust held on top of the simulated one (local, like every gust); may exceed 1 (hurricane).
+	float _testGustStrength;
+	float _testGustStart = float.MinValue;
+	float _testGustEnd = float.MinValue;
+	const float TestGustRampSeconds = 0.6f;
 
 	protected override void OnEnabled()
 	{
@@ -87,7 +96,31 @@ public sealed class WindSystem : Component
 	{
 		if ( Current == this )
 			Current = null;
+		// Leave no wind behind: the attributes outlive the component (play stop, scene unload), and the
+		// tree / grass shaders would keep swaying on whatever was last published.
+		Publish( Direction, 0f, 0f );
 		base.OnDisabled();
+	}
+
+	void Publish( Vector3 direction, float strength, float gust )
+	{
+		var attrs = Scene.RenderAttributes;
+		attrs.Set( AttrDirection, direction );
+		attrs.Set( AttrStrength, strength );
+		attrs.Set( AttrGust, gust );
+
+		if ( WindMaterials is null )
+			return;
+
+		foreach ( var material in WindMaterials )
+		{
+			if ( material is null || !material.IsValid )
+				continue;
+
+			material.Set( AttrDirection, direction );
+			material.Set( AttrStrength, strength );
+			material.Set( AttrGust, gust );
+		}
 	}
 
 	/// <summary>Single player or listen-server host; clients only read the synced values.</summary>
@@ -109,24 +142,82 @@ public sealed class WindSystem : Component
 
 		Direction = Rotation.FromYaw( CurrentYawDegrees ).Forward.WithZ( 0f ).Normal;
 		Gust01 = SampleGust( now + _gustSeed ) * Math.Clamp( GustStrength01, 0f, 1f );
+		if ( now < _testGustEnd )
+			Gust01 = Math.Max( Gust01, _testGustStrength * TestGustEnvelope( now ) );
 
-		var attrs = Scene.RenderAttributes;
-		attrs.Set( AttrDirection, Direction );
-		attrs.Set( AttrStrength, CurrentBaseStrength01 );
-		attrs.Set( AttrGust, Gust01 );
+		if ( WindEnabled )
+			Publish( Direction, CurrentBaseStrength01, Gust01 );
+		else
+			Publish( Direction, 0f, 0f );
+	}
 
-		if ( WindMaterials is null )
-			return;
+	/// <summary>0–1 ramp in, hold, ramp out for the windtest gust.</summary>
+	float TestGustEnvelope( float now )
+	{
+		var rampIn = Math.Clamp( (now - _testGustStart) / TestGustRampSeconds, 0f, 1f );
+		var rampOut = Math.Clamp( (_testGustEnd - now) / TestGustRampSeconds, 0f, 1f );
+		return Math.Min( rampIn, rampOut );
+	}
 
-		foreach ( var material in WindMaterials )
+	/// <summary>
+	/// Dev: <c>windtest 1..5</c> turns the wind perpendicular to the camera (blowing toward the camera's RIGHT — face
+	/// north and it blows east) and holds a forced gust of that strength until <c>windtest</c> alone switches it off.
+	/// 1 = a stiff breeze (0.4), 3 = past the normal gust ceiling (1.3), 5 = hurricane (2.5 — the usable maximum,
+	/// Mark 2026-10-13; the shaders are not capped at 1, every term scales). Heading changes are local to this machine.
+	/// </summary>
+	[ConCmd( "windtest" )]
+	static void WindTestCommand( int level = 0 )
+	{
+		if ( !Current.IsValid() )
 		{
-			if ( material is null || !material.IsValid )
-				continue;
-
-			material.Set( AttrDirection, Direction );
-			material.Set( AttrStrength, CurrentBaseStrength01 );
-			material.Set( AttrGust, Gust01 );
+			Log.Info( "[Wind] no WindSystem in the active scene" );
+			return;
 		}
+
+		var wind = Current;
+		var now = Time.Now;
+		if ( level <= 0 )
+		{
+			if ( wind._testGustEnd <= now )
+			{
+				Log.Info( "[Wind] windtest: nothing to stop (windtest 1..5 starts one)" );
+				return;
+			}
+
+			wind._testGustEnd = now + TestGustRampSeconds;
+			Log.Info( "[Wind] windtest: off" );
+			return;
+		}
+
+		level = Math.Clamp( level, 1, 5 );
+		var camera = wind.Scene?.Camera;
+		if ( camera.IsValid() )
+		{
+			// Perpendicular to the view: the camera's right (yaw − 90°).
+			var yaw = (camera.WorldRotation.Yaw() - 90f + 360f) % 360f;
+			wind._sessionYaw = yaw;
+			wind.CurrentYawDegrees = yaw;
+		}
+
+		wind._testGustStrength = level switch { 1 => 0.4f, 2 => 0.8f, 3 => 1.3f, 4 => 1.9f, _ => 2.5f };
+		if ( wind._testGustEnd <= now )
+			wind._testGustStart = now; // a running test just changes strength, no re-ramp
+		wind._testGustEnd = float.MaxValue;
+		Log.Info( $"[Wind] windtest {level}: gust {wind._testGustStrength:0.0} held until 'windtest', blowing toward {Rotation.FromYaw( wind.CurrentYawDegrees ).Forward.WithZ( 0f ).Normal}" );
+	}
+
+	/// <summary>Dev: flip the scene wind on / off (the same as the Wind Enabled checkbox).</summary>
+	[ConCmd( "wind_toggle" )]
+	static void WindToggleCommand()
+	{
+		if ( !Current.IsValid() )
+		{
+			Log.Info( "[Wind] no WindSystem in the active scene" );
+			return;
+		}
+
+		Current.WindEnabled = !Current.WindEnabled;
+		Log.Info( $"[Wind] {(Current.WindEnabled ? "enabled" : "disabled")}" );
 	}
 
 	/// <summary>

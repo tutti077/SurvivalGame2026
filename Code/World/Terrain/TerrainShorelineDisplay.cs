@@ -14,13 +14,8 @@ static class TerrainShorelineDisplay
 
 {
 
-	public static bool IsDisplayWaterColor(
-
-		TerrainPreviewSettings settings,
-
-		float worldXMeters,
-
-		float worldYMeters )
+	/// <summary>Map, preview and chunk vertex colour: lakes, the rim ocean and river channels read as water (river beds paint blue under the water strip too — Mark 2026-10-07).</summary>
+	public static bool IsDisplayWaterColor( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
 
 	{
 
@@ -54,6 +49,8 @@ static class TerrainShorelineDisplay
 
 
 
+		if ( TerrainPreviewLandDiskFields.IsRiverWaterAtWorld( settings, worldXMeters, worldYMeters ) )
+			return true;
 		return IsDisplayLakeWaterAtSample( settings, worldXMeters, worldYMeters );
 
 	}

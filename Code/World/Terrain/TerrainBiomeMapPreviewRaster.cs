@@ -95,6 +95,8 @@ public static class TerrainBiomeMapPreviewRaster
 			isWater,
 			biomeMap,
 			colors );
+
+		TerrainRiverMapOverlay.Stamp( worldSettings, colors, res, insideWorld );
 	}
 
 	public static void FillBiomeColors(

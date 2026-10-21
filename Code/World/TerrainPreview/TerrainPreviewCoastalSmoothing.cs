@@ -40,7 +40,9 @@ static class TerrainPreviewCoastalSmoothing
 
 		var landRadius = settings.LandRadiusMeters;
 		var distFromLandEdge = landRadius - distFromCenterMeters;
-		if ( distFromLandEdge > 0f )
+		// The personality noise only decides beach-vs-cliff band width; past the widest possible fade it cannot change the result.
+		var widestFade = Math.Max( Math.Max( 50f, settings.CoastalBeachBlendBandMeters ), Math.Max( 25f, settings.CoastalCliffBlendBandMeters ) ) * DrainFadeBandMultiplier;
+		if ( distFromLandEdge > 0f && distFromLandEdge < widestFade )
 		{
 			var beachBand = Math.Max( 50f, settings.CoastalBeachBlendBandMeters );
 			var cliffBand = Math.Max( 25f, settings.CoastalCliffBlendBandMeters );

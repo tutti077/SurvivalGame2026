@@ -1,0 +1,10 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+	F_VERTEX_PAINT 1
+
+	PixelRoughness "1.000"
+	PixelSpecular "0.000"
+	PixelWorldUvMeters "3.200"
+	TextureColor "materials/lighttest/ground_grass.png"
+}

@@ -2,24 +2,6 @@ namespace Survival;
 
 public static class TerrainPreviewSettingsResolver
 {
-	public static TerrainPreviewSettings ResolveForWorld(
-		int worldSeed,
-		float worldDiameterMeters,
-		float maxTerrainHeightMeters,
-		float oceanRingWidthMeters,
-		ITerrainPreviewBackend backend,
-		bool runLakeSpawnSolve = false )
-		=> ResolveForWorldGeneration( new TerrainWorldGenerationRequest
-		{
-			WorldSeed = worldSeed,
-			WorldDiameterMeters = worldDiameterMeters,
-			MaxTerrainHeightMeters = maxTerrainHeightMeters,
-			OceanRingWidthMeters = oceanRingWidthMeters,
-			Source = TerrainWorldSettingsSource.ComponentDefaultsOnly,
-			OverrideWorldScalarsFromComponent = true,
-			RunLakeSpawnSolveOnLoad = runLakeSpawnSolve,
-		} );
-
 	public static TerrainPreviewSettings ResolveForWorldGeneration( TerrainWorldGenerationRequest request )
 	{
 		_ = TerrainPreviewBackendRegistry.Active;

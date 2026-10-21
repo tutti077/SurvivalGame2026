@@ -24,7 +24,7 @@ namespace Survival;
 /// Measure with the same window size, graphics settings and FPS cap each time — vsync / a frame cap
 /// hide real headroom.
 /// </summary>
-public sealed class TerrainPerfBench : GameObjectSystem
+public sealed partial class TerrainPerfBench : GameObjectSystem
 {
 	const string Folder = "perf";
 	const string BaselinePath = "perf/terrain_baseline.json";
@@ -527,9 +527,11 @@ public sealed class TerrainPerfBench : GameObjectSystem
 		_watchCamPos = cam?.WorldPosition ?? default;
 
 		Log.Info( $"[PerfWatch] avg {_watchSumMs / Math.Max( 1, _watchFrames ):0.0} ms, worst {_watchMaxMs:0.0} ms, >20ms {_watchSlowFrames} | "
-			+ $"chunks +{stats.Loads - _watchStats.Loads} -{stats.Unloads - _watchStats.Unloads} remesh {stats.Remeshes - _watchStats.Remeshes} nearFlips {stats.NearFlips - _watchStats.NearFlips} | "
+			+ $"chunks +{stats.Loads - _watchStats.Loads} -{stats.Unloads - _watchStats.Unloads} remesh {stats.Remeshes - _watchStats.Remeshes} nearFlips {stats.NearFlips - _watchStats.NearFlips} spawns {stats.ScatterSpawns - _watchStats.ScatterSpawns} | "
 			+ $"cam {(camSwitched ? "SWITCHED " : "")}moved {camMoved:0.0} m, per-frame max {_jitterCamMaxUnits:0.000} u / {_jitterCamMaxDeg:0.000} deg, moving frames {_jitterCamMovingFrames}/{_watchFrames} | "
-			+ $"pawn per-frame max {_jitterPawnMaxUnits:0.000} u | sun {(lightChanged ? "CHANGED " : "")}{lightState}" );
+			+ $"pawn per-frame max {_jitterPawnMaxUnits:0.000} u | {stats.PhaseLine()} | sun {(lightChanged ? "CHANGED " : "")}{lightState}" );
+		if ( manager is not null )
+			manager.Stats.ResetPhaseMaxima();
 		_jitterCamMaxUnits = 0f;
 		_jitterCamMaxDeg = 0f;
 		_jitterPawnMaxUnits = 0f;
@@ -652,6 +654,11 @@ public sealed class TerrainPerfBench : GameObjectSystem
 
 		if ( _autoRunning )
 			TickAutoComponents();
+
+		if ( _bisectRunning )
+			TickBisect();
+		if ( _suiteRunning )
+			TickSuite();
 
 		if ( !_running )
 			return;
