@@ -16,7 +16,7 @@ Clover Hills
   weed_dandelion       rosette + one yellow dandelion head                   ~0.16 m
   weed_broadleaf       plantain-style broad leaves                           ~0.08 m
 Redwood Forest
-  fern_fiddlehead      one curled young shoot                                ~0.45 m  (2.5x)
+  fern_fiddlehead      one curled young shoot, oversized coil + stalk        ~0.80 m  (2.5x)
   fern_young           four short fronds                                     ~0.74 m  (2x)
   fern_full            twelve arching sword-fern fronds from one crown       ~1.26 m
   redwood_sorrel       one oxalis (purple-backed clover leaf)                ~0.32 m  (4.5x)
@@ -350,22 +350,22 @@ def fern_frond( m: PlantMesh, root: Vector, yaw: float, length: float, rise: flo
 	m.add_poly( ( p2 - side * w, p2 + tip_dir * pinna_len * 0.6, p2 + side * w ), swatch )
 
 
-def fiddlehead( m: PlantMesh, root: Vector, height: float, coil_r: float, yaw: float ) -> None:
-	"""Young frond: a stalk rising into a flattened spiral coil."""
+def fiddlehead( m: PlantMesh, root: Vector, height: float, coil_r: float, yaw: float, stem_r: float ) -> None:
+	"""Young frond: a stalk rising into a flattened spiral coil. The coil starts a little thicker than the stalk."""
 	out = Vector( ( math.cos( yaw ), math.sin( yaw ), 0 ) )
 	pts = [ root - Vector( ( 0, 0, ROOT_SINK ) ), root + Vector( ( 0, 0, height * 0.5 ) ) + out * coil_r * 0.2 ]
 	top = root + Vector( ( 0, 0, height - coil_r ) ) + out * coil_r * 0.6
 	pts.append( top )
 	turns = 1.4
-	steps = 9
+	steps = 14
 	c = top + out * coil_r
 	for i in range( 1, steps + 1 ):
 		t = i / steps
 		theta = t * turns * math.tau      # 0 = the stalk top, then up, over toward `out`, down and back under
 		r = coil_r * ( 1.0 - 0.75 * t )
 		pts.append( c + ( -out * math.cos( theta ) + Vector( ( 0, 0, 1 ) ) * math.sin( theta ) ) * r )
-	radii = [ 0.006 ] * 3 + [ 0.009 - 0.006 * ( i / steps ) for i in range( 1, steps + 1 ) ]
-	tube( m, pts, radii, "leaf", sides=4 )
+	radii = [ stem_r * 1.15, stem_r, stem_r ] + [ stem_r * ( 1.4 - 0.9 * ( i / steps ) ) for i in range( 1, steps + 1 ) ]
+	tube( m, pts, radii, "leaf", sides=6 )
 
 
 def mushroom( m: PlantMesh, root: Vector, height: float, cap_r: float ) -> None:
@@ -523,7 +523,7 @@ def build_weed_broadleaf( m ):
 
 
 def build_fern_fiddlehead( m ):
-	fiddlehead( m, Vector(), 0.18, 0.024, 0.0 )
+	fiddlehead( m, Vector(), 0.32, 0.05, 0.0, 0.012 )
 
 
 def build_fern_young( m ):
