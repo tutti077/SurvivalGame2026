@@ -8,7 +8,7 @@ What it builds (all real-world metres, origin at the root on Z = 0)
 -------------------------------------------------------------------
 Clover Hills
   daisy                one upright daisy on a stem + two basal leaves        ~0.40 m  (2.5x life size)
-  clover               one upright three-leaf clover                         ~0.17 m  (2.5x life size)
+  clover               one upright three-leaf clover                         ~0.30 m  (5x life size)
                        (single plants on purpose — clusters are made by spawning several with varied
                        height / tilt / yaw, not baked into a model)
   weed_sprout          tiny two-to-four leaf seedling                        ~0.06 m
@@ -16,11 +16,11 @@ Clover Hills
   weed_dandelion       rosette + one yellow dandelion head                   ~0.16 m
   weed_broadleaf       plantain-style broad leaves                           ~0.08 m
 Redwood Forest
-  fern_fiddlehead      curled young shoots                                   ~0.45 m  (2.5x)
+  fern_fiddlehead      one curled young shoot                                ~0.45 m  (2.5x)
   fern_young           four short fronds                                     ~0.74 m  (2x)
-  fern_full            ten arching sword-fern fronds                         ~1.00 m
-  redwood_sorrel       oxalis patch (purple-backed clover leaves)            ~0.12 m
-  mushroom_cluster     three red-capped mushrooms                            ~0.12 m
+  fern_full            twelve arching sword-fern fronds from one crown       ~1.26 m
+  redwood_sorrel       one oxalis (purple-backed clover leaf)                ~0.32 m  (4.5x)
+  mushroom             one red-capped mushroom                               ~0.28 m  (2.5x)
 Amber Dunes
   tumbleweed_small     tangle of dry twigs, roughly round                    ~0.45 m
   tumbleweed_large     same, bigger and denser                               ~0.85 m
@@ -523,9 +523,7 @@ def build_weed_broadleaf( m ):
 
 
 def build_fern_fiddlehead( m ):
-	for i, p in enumerate( _scatter_points( m.rng, 3, 0.04, 0.03 ) ):
-		fiddlehead( m, p, m.rng.uniform( 0.13, 0.2 ), m.rng.uniform( 0.018, 0.026 ), m.rng.uniform( 0, math.tau ) )
-	leaf_rosette( m, Vector(), 3, ( 0.06, 0.09 ), ( 0.02, 0.03 ), ( 20, 40 ), ( "fern", ), droop=0.4 )
+	fiddlehead( m, Vector(), 0.18, 0.024, 0.0 )
 
 
 def build_fern_young( m ):
@@ -545,18 +543,14 @@ def build_fern_full( m ):
 					m.rng.uniform( 0.95, 1.2 ) if upright else m.rng.uniform( 0.8, 1.05 ),
 					m.rng.uniform( 1.5, 1.8 ) if upright else m.rng.uniform( 0.95, 1.3 ),
 					15, 0.14, m.rng.choice( ( "fern", "fern", "leaf" ) ) )
-	for i in range( 2 ):
-		fiddlehead( m, Vector( ( m.rng.uniform( -0.04, 0.04 ), m.rng.uniform( -0.04, 0.04 ), 0 ) ), 0.16, 0.022, m.rng.uniform( 0, math.tau ) )
 
 
 def build_redwood_sorrel( m ):
-	for p in _scatter_points( m.rng, 7, 0.13, 0.06 ):
-		clover( m, p, m.rng.uniform( 0.07, 0.12 ), m.rng.uniform( 0.026, 0.034 ), swatch=m.rng.choice( ( "clover", "leaf" ) ), back_swatch="sorrel_back" )
+	clover( m, Vector(), 0.07, 0.03, back_swatch="sorrel_back", lean_amount=0.0 )
 
 
-def build_mushroom_cluster( m ):
-	for p, h in zip( _scatter_points( m.rng, 3, 0.05, 0.04 ), ( 0.11, 0.08, 0.05 ) ):
-		mushroom( m, p, h, h * m.rng.uniform( 0.38, 0.5 ) )
+def build_mushroom( m ):
+	mushroom( m, Vector(), 0.11, 0.05 )
 
 
 def build_tumbleweed_small( m ):
@@ -580,9 +574,10 @@ def build_dead_shrub( m ):
 
 # ( name, seed, builder[, uniform scale] ). The scale is a readability boost on top of real-world size (Mark 2026-10-21:
 # clover, daisy and small ferns were invisible past a few metres at life size).
+# Every model is ONE plant (Mark 2026-10-21) — clusters are made by spawning several, never baked in.
 MODELS = [
 	( "daisy", 101, build_daisy, 2.5 ),
-	( "clover", 103, build_clover, 2.5 ),
+	( "clover", 103, build_clover, 5.0 ),
 	( "weed_sprout", 105, build_weed_sprout ),
 	( "weed_rosette", 106, build_weed_rosette ),
 	( "weed_dandelion", 107, build_weed_dandelion ),
@@ -590,8 +585,8 @@ MODELS = [
 	( "fern_fiddlehead", 201, build_fern_fiddlehead, 2.5 ),
 	( "fern_young", 202, build_fern_young, 2.0 ),
 	( "fern_full", 203, build_fern_full ),
-	( "redwood_sorrel", 204, build_redwood_sorrel ),
-	( "mushroom_cluster", 205, build_mushroom_cluster ),
+	( "redwood_sorrel", 204, build_redwood_sorrel, 4.5 ),
+	( "mushroom", 205, build_mushroom, 2.5 ),
 	( "tumbleweed_small", 301, build_tumbleweed_small ),
 	( "tumbleweed_large", 302, build_tumbleweed_large ),
 	( "dune_grass_tuft", 303, build_dune_grass ),
