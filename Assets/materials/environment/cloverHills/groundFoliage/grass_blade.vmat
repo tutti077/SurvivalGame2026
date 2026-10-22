@@ -17,7 +17,5 @@ Layer0
 	BaseColor "[0.055000 0.110000 0.032000]"
 	TipColor "[0.105000 0.180000 0.052000]"
 	ColorVariation "0.150"
-	NormalUp "0.750"
-	GrassRoughness "0.850"
 	RootDarkening "0.450"
 }

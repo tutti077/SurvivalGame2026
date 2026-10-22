@@ -26,23 +26,20 @@ public sealed class GrassScatterer : Scatterer
 	[Property, Title( "Max Slope (degrees)" ), Range( 0f, 90f ), Step( 1f ), Description( "Ground steeper than this gets no grass." )]
 	public float MaxSlopeDegrees { get; set; } = 50f;
 
-	[Property, Title( "Tilt With Ground" ), Description( "Off = clumps stand straight up (reads best for flat cards). On = lean with the surface normal." )]
-	public bool TiltWithGround { get; set; }
-
 	[Property, Title( "Ground Tag" ), Description( "Only colliders carrying this tag count as ground. Empty = anything solid. Ignored when a height field is set." )]
 	public string GroundTag { get; set; } = "";
 
 	Func<Vector3, bool> _worldFilter;
-	Func<float, float, (float Z, float NormalZ)?> _heightField;
+	Func<float, float, (float Z, Vector3 Normal)?> _heightField;
 
 	/// <summary>Runtime-only: skip probes this returns false for (the terrain's biome mask). Not serialized.</summary>
 	public void SetWorldFilter( Func<Vector3, bool> filter ) => _worldFilter = filter;
 
 	/// <summary>
-	/// Runtime-only: ground from a height grid (world xy → ground z + normal z) instead of a physics trace — the
+	/// Runtime-only: ground from a height grid (world xy → ground z + normal) instead of a physics trace — the
 	/// streamed terrain plants on its own mesh heights, so no collider is needed and nothing else can be hit.
 	/// </summary>
-	public void SetHeightField( Func<float, float, (float Z, float NormalZ)?> field ) => _heightField = field;
+	public void SetHeightField( Func<float, float, (float Z, Vector3 Normal)?> field ) => _heightField = field;
 
 	static bool _loggedFirstGenerate;
 
@@ -94,7 +91,7 @@ public sealed class GrassScatterer : Scatterer
 						continue;
 					}
 					groundPos = new Vector3( x, y, ground.Value.Z );
-					groundNormal = new Vector3( 0f, 0f, ground.Value.NormalZ );
+					groundNormal = ground.Value.Normal;
 				}
 				else
 				{
@@ -127,9 +124,10 @@ public sealed class GrassScatterer : Scatterer
 				}
 
 				var yaw = Random.Float( 0f, 360f );
-				var rotation = TiltWithGround && _heightField is null
-					? GetAlignedRotation( groundNormal, yaw )
-					: Rotation.FromYaw( yaw );
+				// The instance is tilted onto the ground normal only to carry that normal to grass_blade.shader, which
+				// stands the blades back up and lights them with it — the same normal the terrain under them is lit with
+				// (Mark 2026-10-21: the grass must take the terrain's lighting so it does not stand out).
+				var rotation = GetAlignedRotation( groundNormal, yaw );
 
 				// Uniform pick with our own Random — every clump model gets an equal share.
 				var entry = clutter.Entries[Random.Next( clutter.Entries.Count )];

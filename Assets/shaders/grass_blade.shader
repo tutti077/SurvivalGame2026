@@ -12,6 +12,12 @@
 //     sweep the field instead of flapping every clump in unison — no visible stripes or spacing;
 //     a small cross-wind flutter breaks up the remaining regularity.
 //
+// Lit like the ground it stands on (Mark 2026-10-21: "it should have the same properties as the terrain so it
+// doesn't stand out"): GrassScatterer tilts every instance onto the ground normal, the vertex stage stands the
+// blades back upright about their root and hands that normal to the pixel stage, which lights it the way
+// pixel_lit.shader lights terrain_ground.vmat — Lambert sun / moon + local lights (6 bands, like the ground), no
+// specular, roughness 1, the engine's sky ambient and AO. Only the albedo (Base → Tip) and the root AO differ.
+//
 // Written against the "common/*.hlsl" path like tempwater.shader; the vertex block follows
 // the core foliage.shader pattern (bend in world space after the instance transform, so the
 // same shader works on Clutter batches and on ordinary ModelRenderers).
@@ -50,10 +56,8 @@ struct PixelInput
 	#include "common/pixelinput.hlsl"
 
 	float4 vColor : COLOR0;
-
-	#if ( PROGRAM == VFX_PROGRAM_PS )
-		bool bIsFrontface : SV_IsFrontFace;
-	#endif
+	// The ground normal under the clump (the instance's up axis) — the pixel stage lights the blade with it.
+	float3 vGroundNormalWs : TEXCOORD9;
 };
 
 VS
@@ -107,6 +111,14 @@ VS
 		return lerp( lerp( a, b, f.x ), lerp( c, d, f.x ), f.y );
 	}
 
+	// Rotate v by the shortest arc that takes the unit vector vUp onto +Z (Rodrigues; vUp.z > 0 — grass never
+	// grows past Max Slope).
+	float3 RotateUpToZ( float3 v, float3 vUp )
+	{
+		float3 vAxis = cross( vUp, float3( 0.0, 0.0, 1.0 ) );
+		return v * vUp.z + cross( vAxis, v ) + vAxis * ( dot( vAxis, v ) / ( 1.0 + vUp.z ) );
+	}
+
 	PixelInput MainVs( VertexInput i )
 	{
 		PixelInput o = ProcessVertex( i );
@@ -115,6 +127,12 @@ VS
 		float3x4 matObjectToWorld = GetTransformMatrix( i.nInstanceTransformID );
 		float3 vRootWs = mul( matObjectToWorld, float4( 0.0, 0.0, 0.0, 1.0 ) );
 		float3 vPositionWs = mul( matObjectToWorld, float4( i.vPositionOs.xyz, 1.0 ) );
+
+		// The instance leans with the ground only to carry its normal: stand the blades back up about the root.
+		float3 vUpWs = normalize( mul( matObjectToWorld, float4( 0.0, 0.0, 1.0, 0.0 ) ) );
+		o.vGroundNormalWs = vUpWs;
+		vPositionWs = vRootWs + RotateUpToZ( vPositionWs - vRootWs, vUpWs );
+		o.vNormalWs = RotateUpToZ( o.vNormalWs, vUpWs );
 
 		float flHeight01 = saturate( i.vColor.r );
 		float flWeight = pow( flHeight01, BendPower );
@@ -167,6 +185,7 @@ VS
 PS
 {
 	#include "common/pixel.hlsl"
+	#include "common/classes/Light.hlsl"
 
 	// Both faces of every blade: the clump is a single plane and must read from behind.
 	RenderState( CullMode, NONE );
@@ -174,19 +193,18 @@ PS
 	float3 BaseColor < UiType( Color ); Default3( 0.13, 0.30, 0.07 ); UiGroup( "Grass,10/10" ); >;
 	float3 TipColor < UiType( Color ); Default3( 0.56, 0.74, 0.24 ); UiGroup( "Grass,10/20" ); >;
 	float ColorVariation < Default( 0.15 ); Range( 0.0, 1.0 ); UiGroup( "Grass,10/30" ); >;
-	// 1 = shade every blade as if it faced straight up (soft, matches the ground); 0 = true card normal.
-	float NormalUp < Default( 0.75 ); Range( 0.0, 1.0 ); UiGroup( "Grass,10/40" ); >;
-	float GrassRoughness < Default( 0.85 ); Range( 0.0, 1.0 ); UiGroup( "Grass,10/50" ); >;
 	float RootDarkening < Default( 0.45 ); Range( 0.0, 1.0 ); UiGroup( "Grass,10/60" ); >;
+	// Local lights (torches, fires) in brightness bands — pixel_lit's PixelLightSteps, which the ground uses at 6.
+	float LightSteps < Default( 6.0 ); Range( 0.0, 16.0 ); UiGroup( "Lighting,20/10" ); >;
 
 	float4 MainPs( PixelInput i ) : SV_Target0
 	{
 		Material m = Material::Init( i );
+		// Before any branch: derivatives.
+		float3 vReceiverNormalWs = ComputeShadowReceiverNormal( m.WorldPosition );
 
-		float3 vNormal = normalize( i.vNormalWs );
-		if ( !i.bIsFrontface )
-			vNormal = -vNormal;
-		m.Normal = normalize( lerp( vNormal, float3( 0.0, 0.0, 1.0 ), NormalUp ) );
+		// The ground's normal, not the blade's: a clump is lit exactly like the terrain under it.
+		m.Normal = normalize( i.vGroundNormalWs );
 
 		float flHeight01 = saturate( i.vColor.r );
 		float3 vAlbedo = lerp( BaseColor, TipColor, flHeight01 );
@@ -194,11 +212,54 @@ PS
 
 		m.Albedo = vAlbedo;
 		m.Metalness = 0.0;
-		m.Roughness = GrassRoughness;
+		m.Roughness = 1.0;   // the ground's PixelSpecular 0: no highlight, flattest sky reflection
 		m.AmbientOcclusion = lerp( 1.0 - RootDarkening, 1.0, flHeight01 );
 		m.Opacity = 1.0;
 
-		// Shade() already applies scene fog (DoAtmospherics) — do not fog again here.
-		return ShadingModelStandard::Shade( i, m );
+		// Direct light as pixel_lit.shader does it for terrain_ground.vmat: Lambert, no specular.
+		float3 N = m.Normal;
+		float3 vDirectDiffuse = 0.0;
+		bool bSunDone = false;
+		if ( g_DirectionalLightEnabled )
+		{
+			bSunDone = true;
+			float3 L = normalize( -g_DirectionalLightDirection.xyz );
+			float flVis = 1.0;
+			if ( g_DirectionalLightCascadeCount > 0 )
+				flVis = DirectionalLightShadow::GetVisibility( m.WorldPosition, vReceiverNormalWs, i.vPositionSs );
+			vDirectDiffuse += g_DirectionalLightColor.rgb * ( saturate( dot( N, L ) ) * flVis );
+		}
+
+		uint nLightCount = Light::Count( i.vPositionSs );
+		[loop]
+		for ( uint n = 0; n < nLightCount; n++ )
+		{
+			Light light = Light::From( m.WorldPosition, i.vPositionSs, n, i.vLightmapUV, vReceiverNormalWs );
+			bool bDirectional = light.LightData.Type == LightType::LightTypeDirectional;
+			if ( bDirectional && bSunDone )
+				continue; // already lit through the constants above
+			if ( !bDirectional )
+			{
+				float3 vToLight = light.Position - m.WorldPosition;
+				if ( dot( vToLight, vToLight ) > light.LightData.RadiusSquared )
+					continue;
+			}
+			float f = saturate( dot( N, light.Direction ) ) * light.Attenuation * light.Visibility;
+			if ( !bDirectional && LightSteps >= 1.0 )
+				f = floor( f * LightSteps + 0.5 ) / LightSteps;
+			vDirectDiffuse += light.Color * f;
+		}
+
+		// Indirect (sky ambient, probes, AO) from the engine, like the ground.
+		CombinerInput ci = ShadingModelStandard::MaterialToCombinerInput( m );
+		LightingTerms_t lt = InitLightingTerms();
+		CalculateIndirectLighting( lt, ci );
+		float3 vDiffuseAO = CalculateDiffuseAmbientOcclusion( ci, lt );
+		lt.vIndirectDiffuse.rgb *= vDiffuseAO;
+		lt.vIndirectSpecular.rgb *= CalculateSpecularAmbientOcclusion( ci, lt );
+		vDirectDiffuse *= lerp( float3( 1.0, 1.0, 1.0 ), vDiffuseAO, ci.flAmbientOcclusionDirectDiffuse );
+
+		float3 vColor = ( vDirectDiffuse + lt.vIndirectDiffuse.rgb ) * ci.vDiffuseColor.rgb + lt.vIndirectSpecular.rgb;
+		return DoAtmospherics( m.WorldPosition, m.ScreenPosition.xy, float4( vColor, 1.0 ) );
 	}
 }

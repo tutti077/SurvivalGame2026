@@ -214,8 +214,8 @@ public sealed partial class TerrainWorldManager
 		return _loaded.TryGetValue( new TerrainChunkCoord { X = cx, Y = cy }, out var entry ) ? entry : null;
 	}
 
-	/// <summary>Bilinear ground sample on the chunk's meshed height grid: world xy → (ground z, normal z). Null off the loaded world.</summary>
-	(float Z, float NormalZ)? SampleGrassGround( float wx, float wy )
+	/// <summary>Bilinear ground sample on the chunk's meshed height grid: world xy → (ground z, ground normal). Null off the loaded world.</summary>
+	(float Z, Vector3 Normal)? SampleGrassGround( float wx, float wy )
 	{
 		var entry = FindLoadedChunkAt( wx, wy );
 		if ( entry is null || entry.GrassHeightsZ is null || entry.GrassHeightsSide < 2 || entry.GameObject is null || !entry.GameObject.IsValid() )
@@ -239,8 +239,7 @@ public sealed partial class TerrainWorldManager
 		var z = ((h00 * (1f - tx)) + (h10 * tx)) * (1f - ty) + ((h01 * (1f - tx)) + (h11 * tx)) * ty;
 		var gx = (((h10 - h00) * (1f - ty)) + ((h11 - h01) * ty)) / step;
 		var gy = (((h01 - h00) * (1f - tx)) + ((h11 - h10) * tx)) / step;
-		var normalZ = 1f / MathF.Sqrt( 1f + (gx * gx) + (gy * gy) );
-		return (origin.z + z, normalZ);
+		return (origin.z + z, new Vector3( -gx, -gy, 1f ).Normal);
 	}
 
 	bool IsGrassAllowedAt( Vector3 world )
