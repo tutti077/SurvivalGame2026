@@ -53,13 +53,13 @@ public sealed class EnvironmentDayNightCycle : Component
 	public Color SunHorizonColor { get; set; } = new( 1.0f, 0.55f, 0.28f, 1f );
 
 	[Property, Group( "Lighting" ), Title( "Moon color" )]
-	public Color MoonColor { get; set; } = new( 0.9f, 0.95f, 1.05f, 1f );
+	public Color MoonColor { get; set; } = new( 0.74f, 0.86f, 1.15f, 1f );   // cool, slightly desaturated blue (Mark 2026-10-21)
 
-	[Property, Group( "Lighting" ), Title( "Night ambient (vs day)" ), Range( 0.01f, 1f ), Step( 0.01f ), Description( "Base fill when the sun is down — what you see out of the moonlight. Default 0.07." )]
-	public float NightAmbientBrightness { get; set; } = 0.07f;   // dark out of the moonlight (Mark 2026-10-21; was 0.30)
+	[Property, Group( "Lighting" ), Title( "Night ambient (vs day)" ), Range( 0.01f, 1f ), Step( 0.01f ), Description( "Base fill when the sun is down — what you see out of the moonlight. Default 0.06." )]
+	public float NightAmbientBrightness { get; set; } = 0.06f;   // dark out of the moonlight (Mark 2026-10-21; was 0.30)
 
-	[Property, Group( "Lighting" ), Title( "Moonlight (vs day)" ), Range( 0f, 1f ), Step( 0.01f ), Description( "Extra directional light from the moon on top of night ambient. Default 0.40." )]
-	public float MoonDirectionalBrightness { get; set; } = 0.40f;   // moonlit ground readable, moon shadows dark
+	[Property, Group( "Lighting" ), Title( "Moonlight (vs day)" ), Range( 0f, 1f ), Step( 0.01f ), Description( "Extra directional light from the moon on top of night ambient. Default 0.34." )]
+	public float MoonDirectionalBrightness { get; set; } = 0.34f;   // moonlit ground readable, moon shadows dark
 
 	[Property, Group( "Lighting" ), Title( "Night max exposure" ), Range( 0.25f, 3f ), Step( 0.05f ), Description( "Ceiling for the camera's auto-exposure at night, so the eye cannot brighten the dark back to dusk. Blends to the camera's own Maximum Exposure by day. Default 1 = no night boost." )]
 	public float NightMaxExposure { get; set; } = 1f;

@@ -543,8 +543,8 @@
           "JumpToDayAction": "CycleDay",
           "JumpToNightAction": "CycleNight",
           "LogPhaseChanges": false,
-          "MoonColor": "0.9,0.95,1.05,1",
-          "MoonDirectionalBrightness": 0.4,
+          "MoonColor": "0.74,0.86,1.15,1",
+          "MoonDirectionalBrightness": 0.34,
           "MoonDisk": {
             "_type": "gameobject",
             "go": "58a989f3-89d0-4f17-85f7-4c4f2c9c458f"
@@ -559,7 +559,7 @@
             "go": "b400f2d5-dfe8-45be-b080-4cad883851e5",
             "component_type": "DirectionalLight"
           },
-          "NightAmbientBrightness": 0.07,
+          "NightAmbientBrightness": 0.06,
           "NightSeconds": 75,
           "NightSkyAmbient": "0.22,0.28,0.42,1",
           "OnComponentDestroy": null,
