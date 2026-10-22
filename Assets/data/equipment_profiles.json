@@ -123,7 +123,7 @@
       "hotbarEquipable": true,
       "durabilityMax": 100,
       "durabilityDrainSecondsEquipped": 5,
-      "heldLight": { "anchor": "torchTip", "radiusMeters": 6, "color": "1,0.72,0.35,1" },
+      "heldLight": { "anchor": "torchTip", "radiusMeters": 12, "color": "1,0.72,0.35,1" },
       "statModifiers": { "armor": 0, "damage": 1, "speed": 0 }
     },
     {
