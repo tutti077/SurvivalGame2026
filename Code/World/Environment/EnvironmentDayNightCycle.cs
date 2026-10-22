@@ -55,11 +55,14 @@ public sealed class EnvironmentDayNightCycle : Component
 	[Property, Group( "Lighting" ), Title( "Moon color" )]
 	public Color MoonColor { get; set; } = new( 0.9f, 0.95f, 1.05f, 1f );
 
-	[Property, Group( "Lighting" ), Title( "Night ambient (vs day)" ), Range( 0.05f, 1f ), Step( 0.01f ), Description( "Base fill when the sun is down — even out of moonlight. Default 0.30." )]
-	public float NightAmbientBrightness { get; set; } = 0.30f;
+	[Property, Group( "Lighting" ), Title( "Night ambient (vs day)" ), Range( 0.01f, 1f ), Step( 0.01f ), Description( "Base fill when the sun is down — what you see out of the moonlight. Default 0.07." )]
+	public float NightAmbientBrightness { get; set; } = 0.07f;   // dark out of the moonlight (Mark 2026-10-21; was 0.30)
 
-	[Property, Group( "Lighting" ), Title( "Moonlight (vs day)" ), Range( 0f, 1f ), Step( 0.01f ), Description( "Extra directional light from the moon on top of night ambient. Default 0.15." )]
-	public float MoonDirectionalBrightness { get; set; } = 0.15f;
+	[Property, Group( "Lighting" ), Title( "Moonlight (vs day)" ), Range( 0f, 1f ), Step( 0.01f ), Description( "Extra directional light from the moon on top of night ambient. Default 0.40." )]
+	public float MoonDirectionalBrightness { get; set; } = 0.40f;   // moonlit ground readable, moon shadows dark
+
+	[Property, Group( "Lighting" ), Title( "Night max exposure" ), Range( 0.25f, 3f ), Step( 0.05f ), Description( "Ceiling for the camera's auto-exposure at night, so the eye cannot brighten the dark back to dusk. Blends to the camera's own Maximum Exposure by day. Default 1 = no night boost." )]
+	public float NightMaxExposure { get; set; } = 1f;
 
 	[Property, Group( "Lighting" ), Title( "Sky ambient day" )]
 	public Color DaySkyAmbient { get; set; } = new( 0.18f, 0.23f, 0.33f, 1f );   // ~1/14 of the sun so standing out of it is clearly darker
@@ -141,6 +144,7 @@ public sealed class EnvironmentDayNightCycle : Component
 	string _presetId;
 	SkyPresetData _preset;
 	SkyLook _night, _dawn, _day, _noon, _dusk;
+	readonly System.Collections.Generic.Dictionary<Tonemapping, float> _authoredMaxExposure = new();
 
 	protected override void OnStart()
 	{
@@ -312,7 +316,7 @@ public sealed class EnvironmentDayNightCycle : Component
 		var look = SampleSkyLook( phase, dayWeight, sunElev01 );
 		var sunDir = UpdateCelestial( SunLight, SunDisk, sunElev01, isSun: true, dayWeight, look.SunLight );
 		UpdateCelestial( MoonLight, MoonDisk, moonElev01, isSun: false, dayWeight, 1f );
-		UpdateSky( look, sunDir, StarVisibility( dayWeight ) );
+		UpdateSky( look, sunDir, StarVisibility( dayWeight ), dayWeight );
 	}
 
 	void LoadDayNumberFromWorldSave()
@@ -526,7 +530,7 @@ public sealed class EnvironmentDayNightCycle : Component
 		MoonDiskMaterial ??= Material.Load( DefaultMoonDiskMaterialPath );
 	}
 
-	void UpdateSky( in SkyLook look, Vector3 sunDir, float starVisibility )
+	void UpdateSky( in SkyLook look, Vector3 sunDir, float starVisibility, float dayWeight )
 	{
 		if ( SkyDome is not null && SkyDome.IsValid() )
 			SkyDome.Apply( look, sunDir, _preset.CloudScale, _preset.CloudSpeed, starVisibility );
@@ -542,6 +546,14 @@ public sealed class EnvironmentDayNightCycle : Component
 				continue;
 			cam.BackgroundColor = clear;
 			cam.ClearFlags = ClearFlags.All;
+
+			// Auto-exposure would lift the night back up to ~3x; cap its ceiling as the sun goes down.
+			var tonemap = cam.GetComponent<Tonemapping>();
+			if ( tonemap is null || !tonemap.IsValid() )
+				continue;
+			if ( !_authoredMaxExposure.TryGetValue( tonemap, out var dayMax ) )
+				_authoredMaxExposure[tonemap] = dayMax = tonemap.MaximumExposure;
+			tonemap.MaximumExposure = MathX.Lerp( Math.Min( NightMaxExposure, dayMax ), dayMax, dayWeight );
 		}
 	}
 

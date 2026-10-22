@@ -386,7 +386,7 @@
           "DiskScale": 0,
           "LogPhaseChanges": true,
           "MoonColor": "0.9,0.95,1.05,1",
-          "MoonDirectionalBrightness": 0.15,
+          "MoonDirectionalBrightness": 0.4,
           "MoonDisk": {
             "_type": "gameobject",
             "go": "a1b2c3d4-e5f6-7890-abcd-ef1234567760"
@@ -398,7 +398,7 @@
             "go": "a1b2c3d4-e5f6-7890-abcd-ef1234567740",
             "component_type": "DirectionalLight"
           },
-          "NightAmbientBrightness": 0.3,
+          "NightAmbientBrightness": 0.07,
           "NightSeconds": 10,
           "NightSkyAmbient": "0.22,0.28,0.42,1",
           "OnComponentDestroy": null,
