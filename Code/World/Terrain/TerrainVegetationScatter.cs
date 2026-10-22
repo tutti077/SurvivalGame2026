@@ -373,8 +373,8 @@ public static class TerrainVegetationScatter
 	}
 
 	/// <summary>
-	/// Small-tree (sapling) layer for one chunk. Only runs on full-detail chunks — a 2 m sapling is
-	/// sub-pixel on far chunks — so the manager calls it again when a far chunk is promoted.
+	/// Small-tree (sapling) layer for one chunk. The manager runs it once the chunk is inside sapling reach
+	/// (Sapling Visible Range + ¾ chunk, large trees planned), whatever the chunk's mesh detail.
 	/// <paramref name="trunks"/> = large-tree positions from <see cref="PopulateChunk"/> (clearance).
 	/// </summary>
 	public static void PopulateSmallTrees(

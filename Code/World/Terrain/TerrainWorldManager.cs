@@ -120,8 +120,8 @@ public sealed partial class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Small Object Fade (s)" ), Range( 0f, 2f ), Step( 0.05f ), Description( "Rocks, sticks and saplings (no LODs) dither-fade in over this when they appear, saplings also out when they leave Sapling Visible Range. Large trees never fade: a LOD change is a one-frame model swap." )]
 	public float VegetationSmallFadeSeconds { get; set; } = 0.5f;
 
-	[Property, Group( "Vegetation" ), Title( "Sapling Visible Range (m)" ), Range( 10f, 300f ), Step( 5f ), Description( "A sapling is drawn only while the camera is within this distance of it — the same distance in and out, no hysteresis (Mark 2026-10-20). Checked every frame per sapling on the nearby chunks. Saplings only exist on full-detail chunks (High-Priority Radius 2 × 64 m chunks reaches every direction to ~83 m), so past ~80 m they would show patchily (2026-10-21: 50 → 80, Mark: they faded in too close)." )]
-	public float VegetationSaplingVisibleMeters { get; set; } = 80f;
+	[Property, Group( "Vegetation" ), Title( "Sapling Visible Range (m)" ), Range( 10f, 300f ), Step( 5f ), Description( "A sapling is drawn only while the camera is within this distance of it — the same distance in and out, no hysteresis (Mark 2026-10-20). Checked every frame per sapling on the nearby chunks. Saplings are planted on every chunk within this range + ¾ chunk that has its large trees (they cluster on the trunks), whatever its mesh detail (2026-10-22: 80 → 200, Mark: 2-3x as far)." )]
+	public float VegetationSaplingVisibleMeters { get; set; } = 200f;
 
 	[Property, Group( "Vegetation" ), Title( "Prop Objects Range (m)" ), Range( 50f, 600f ), Step( 10f ), Description( "Rocks and sticks are planted only once their chunk is within this distance (they are pickups: a chunk keeps them until it unloads)." )]
 	public float VegetationPropRangeMeters { get; set; } = 192f;
@@ -1762,7 +1762,7 @@ public sealed partial class TerrainWorldManager : Component
 
 			if ( wantVegetation && !entry.HasVegetation )
 				ScatterVegetationOnChunk( entry, settings, desiredVerts );
-			else if ( !_vegetationHidden && entry.HasVegetation && !entry.HasSmallVegetation && entry.VerticesPerSide >= ChunkVerticesPerSide )
+			else if ( !_vegetationHidden && entry.HasVegetation && !entry.HasSmallVegetation && WantsSaplings( entry.HasLargeTrees, distance, chunkSize ) )
 				ScatterSmallVegetationOnChunk( entry, settings );
 
 			if ( !_vegetationHidden && entry.HasVegetation )
@@ -2099,8 +2099,8 @@ public sealed partial class TerrainWorldManager : Component
 	}
 
 	/// <summary>
-	/// Large trees + props (once per chunk), plus saplings when the chunk is full detail; far chunks get
-	/// their saplings on promotion (<see cref="ScatterSmallVegetationOnChunk"/>).
+	/// Large trees + props (once per chunk), plus saplings when the chunk is inside sapling reach; chunks further out
+	/// get theirs as the camera comes within reach (<see cref="ScatterSmallVegetationOnChunk"/>).
 	/// </summary>
 	void ScatterVegetationOnChunk( LoadedChunk entry, TerrainPreviewSettings settings, int verticesPerSide )
 	{
@@ -2127,7 +2127,7 @@ public sealed partial class TerrainWorldManager : Component
 		entry.HasLargeTrees = largeTrees;
 		entry.HasProps = props;
 
-		if ( verticesPerSide >= ChunkVerticesPerSide )
+		if ( WantsSaplings( largeTrees, distance, Math.Max( 32f, ChunkSizeMeters ) ) )
 		{
 			TerrainVegetationScatter.PopulateSmallTrees( entry.GameObject, entry.Coord, settings, _backend, ChunkSizeMeters, options, entry.Trunks, entry.PendingSpawns );
 			entry.HasSmallVegetation = true;
@@ -2280,6 +2280,14 @@ public sealed partial class TerrainWorldManager : Component
 			CollectVegetationColliders( entry );
 		}
 	}
+
+	/// <summary>
+	/// Saplings are planted by distance, not mesh detail: on a chunk whose centre is within Sapling Visible Range + ¾ chunk
+	/// (every sapling that could come inside the range), and only once its large trees are planned — saplings cluster on
+	/// those trunks. They sit on the sampled terrain height, so a far-LOD mesh under them does not matter.
+	/// </summary>
+	bool WantsSaplings( bool hasLargeTrees, float chunkDistanceMeters, float chunkSize )
+		=> hasLargeTrees && chunkDistanceMeters <= Math.Max( 5f, VegetationSaplingVisibleMeters ) + (chunkSize * 0.75f);
 
 	void ScatterSmallVegetationOnChunk( LoadedChunk entry, TerrainPreviewSettings settings )
 	{

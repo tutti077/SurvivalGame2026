@@ -95,7 +95,7 @@ engine setting but not in our menu yet (where it lives is noted) · `[ ]` = noth
       tiles, so this picks the tile size: 77 / 153 / 307 / 614 m).
 - [~] Grass density — **Grass — Clumps Per m²** (**1.5**).
 - [~] Grass thinning distances — `ThinFullMeters` / `ThinFarMeters` / `ThinCullMeters` on grass_blade.vmat.
-- [~] Small-object (rocks, sticks, saplings) visible distance — **Vegetation — Sapling Visible (m)** (**80**).
+- [~] Small-object (rocks, sticks, saplings) visible distance — **Vegetation — Sapling Visible (m)** (**200**).
 - [~] Vegetation / scatter objects on/off — `perf_veg_objects` dev switch.
 - [ ] Terrain mesh detail (chunk vertex spacing, currently 2 m).
 - [ ] Terrain texture / splat detail.
