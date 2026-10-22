@@ -1080,15 +1080,19 @@ public static class TerrainVegetationScatter
 		return path;
 	}
 
+	// Profiles are re-resolved on every chunk populate (several per chunk while streaming): remember each path's answer.
+	static readonly Dictionary<string, bool> _prefabResolves = new();
+
 	static bool PrefabPathResolves( string path )
 	{
 		if ( string.IsNullOrWhiteSpace( path ) )
 			return false;
+		if ( _prefabResolves.TryGetValue( path, out var known ) )
+			return known;
 
-		if ( GameObject.GetPrefab( path ) is { IsValid: true } )
-			return true;
-
-		return ResourceLibrary.Get<PrefabFile>( path ) is not null;
+		var resolves = GameObject.GetPrefab( path ) is { IsValid: true } || ResourceLibrary.Get<PrefabFile>( path ) is not null;
+		_prefabResolves[path] = resolves;
+		return resolves;
 	}
 
 	static GameObject ClonePrefab( string path )

@@ -597,7 +597,7 @@
           "VegetationRedwoodDensity01": 0.1,
           "VegetationRedwoodPrefab": "prefabs/environment/cloverHills/trees/elm/environment_elm3_v76.prefab",
           "VegetationRedwoodPrefabB": "prefabs/environment/cloverHills/trees/elm/environment_elm6_v76.prefab",
-          "VegetationSaplingVisibleMeters": 200,
+          "VegetationSaplingVisibleMeters": 150,
           "VegetationScaleMax": 1.15,
           "VegetationScaleMin": 0.9,
           "VegetationScatterEnabled": true,

@@ -120,8 +120,8 @@ public sealed partial class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Small Object Fade (s)" ), Range( 0f, 2f ), Step( 0.05f ), Description( "Rocks, sticks and saplings (no LODs) dither-fade in over this when they appear, saplings also out when they leave Sapling Visible Range. Large trees never fade: a LOD change is a one-frame model swap." )]
 	public float VegetationSmallFadeSeconds { get; set; } = 0.5f;
 
-	[Property, Group( "Vegetation" ), Title( "Sapling Visible Range (m)" ), Range( 10f, 300f ), Step( 5f ), Description( "A sapling is drawn only while the camera is within this distance of it — the same distance in and out, no hysteresis (Mark 2026-10-20). Checked every frame per sapling on the nearby chunks. Saplings are planted on every chunk within this range + ¾ chunk that has its large trees (they cluster on the trunks), whatever its mesh detail (2026-10-22: 80 → 200, Mark: 2-3x as far)." )]
-	public float VegetationSaplingVisibleMeters { get; set; } = 200f;
+	[Property, Group( "Vegetation" ), Title( "Sapling Visible Range (m)" ), Range( 10f, 300f ), Step( 5f ), Description( "A sapling is drawn only while the camera is within this distance of it — the same distance in and out, no hysteresis (Mark 2026-10-20). Checked every frame per sapling on the nearby chunks. Saplings are planted on every chunk within this range + ¾ chunk that has its large trees (they cluster on the trunks), whatever its mesh detail (2026-10-22: 80 → 200, Mark: 2-3x as far; → 150 the same day: "way too many" seen from above)." )]
+	public float VegetationSaplingVisibleMeters { get; set; } = 150f;
 
 	[Property, Group( "Vegetation" ), Title( "Prop Objects Range (m)" ), Range( 50f, 600f ), Step( 10f ), Description( "Rocks and sticks are planted only once their chunk is within this distance (they are pickups: a chunk keeps them until it unloads)." )]
 	public float VegetationPropRangeMeters { get; set; } = 192f;
@@ -826,6 +826,8 @@ public sealed partial class TerrainWorldManager : Component
 						child.Enabled = !value;
 				}
 			}
+			if ( !value )
+				ResyncSaplingObjects();
 		}
 	}
 
@@ -932,6 +934,24 @@ public sealed partial class TerrainWorldManager : Component
 					if ( child.Name.StartsWith( "veg_", StringComparison.Ordinal ) )
 						child.Enabled = !value;
 				}
+			}
+			if ( !value )
+				ResyncSaplingObjects();
+		}
+	}
+
+	/// <summary>
+	/// After a perf switch shows the scatter again: a sapling the visibility tick had faded out goes back off. Re-enabled
+	/// at fade 0 it was invisible but drawn, and the tick never touched it again (2026-10-22: 605 of them out to 854 m).
+	/// </summary>
+	void ResyncSaplingObjects()
+	{
+		foreach ( var entry in _loaded.Values )
+		{
+			foreach ( var sapling in entry.Saplings )
+			{
+				if ( sapling.Go is not null && sapling.Go.IsValid() && sapling.Fade <= 0f )
+					sapling.Go.Enabled = false;
 			}
 		}
 	}
