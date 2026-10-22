@@ -140,6 +140,18 @@ root in his own words: sequential `I-NNN`, date, the idea, one optional context 
 design: no plan, estimate or counter-proposal. Only Mark reorders, merges or removes ideas; when one
 is picked up he moves it to *Picked up*. Mention the new ID in **What's needed from you** (`IDEAS I-003`).
 
+### Commit messages
+
+Every commit subject starts with a lowercase **`[area]`** tag, then a short lowercase summary:
+`[terrain] river trough carve, flowing clear water …`. No untagged subjects, merges included.
+
+- **`[environment]`** for ALL things pertaining to the environment (Mark, 2026-10-21): trees, rocks,
+  ground foliage, grass, wind, sky, day/night, environment asset moves — anything under
+  `Code/Environment/`, `Code/World/Environment/` or `Assets/*/environment/`.
+- Other tags in use: `[terrain]` `[building]` `[vehicles]` `[weapons]` `[items]` `[ui]` `[player]`
+  `[ai]` `[lighting]` `[assets]` `[hacks]` `[extras]` (build label bumps and small misc). Reuse one of
+  these before inventing a new tag.
+
 ### Patch bump
 
 Every user prompt bumps the semver **patch** of `GameBuildLabel.Display` **once**, at the end of
