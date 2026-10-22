@@ -120,8 +120,8 @@ public sealed partial class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Small Object Fade (s)" ), Range( 0f, 2f ), Step( 0.05f ), Description( "Rocks, sticks and saplings (no LODs) dither-fade in over this when they appear, saplings also out when they leave Sapling Visible Range. Large trees never fade: a LOD change is a one-frame model swap." )]
 	public float VegetationSmallFadeSeconds { get; set; } = 0.5f;
 
-	[Property, Group( "Vegetation" ), Title( "Sapling Visible Range (m)" ), Range( 10f, 300f ), Step( 5f ), Description( "A sapling is drawn only while the camera is within this distance of it — the same distance in and out, no hysteresis (Mark 2026-10-20). Checked every frame per sapling on the nearby chunks." )]
-	public float VegetationSaplingVisibleMeters { get; set; } = 50f;
+	[Property, Group( "Vegetation" ), Title( "Sapling Visible Range (m)" ), Range( 10f, 300f ), Step( 5f ), Description( "A sapling is drawn only while the camera is within this distance of it — the same distance in and out, no hysteresis (Mark 2026-10-20). Checked every frame per sapling on the nearby chunks. Saplings only exist on full-detail chunks (High-Priority Radius 2 × 64 m chunks reaches every direction to ~83 m), so past ~80 m they would show patchily (2026-10-21: 50 → 80, Mark: they faded in too close)." )]
+	public float VegetationSaplingVisibleMeters { get; set; } = 80f;
 
 	[Property, Group( "Vegetation" ), Title( "Prop Objects Range (m)" ), Range( 50f, 600f ), Step( 10f ), Description( "Rocks and sticks are planted only once their chunk is within this distance (they are pickups: a chunk keeps them until it unloads)." )]
 	public float VegetationPropRangeMeters { get; set; } = 192f;
