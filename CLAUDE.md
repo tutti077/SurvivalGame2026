@@ -142,8 +142,8 @@ is picked up he moves it to *Picked up*. Mention the new ID in **What's needed f
 
 ### Commit messages
 
-Every commit subject starts with a lowercase **`[area]`** tag, then a short lowercase summary:
-`[terrain] river trough carve, flowing clear water …`. No untagged subjects, merges included.
+Every commit subject starts with one of the lowercase bracket tags below, then a short lowercase
+summary: `[terrain] river trough carve, flowing clear water …`. No untagged subjects, merges included.
 
 - **`[environment]`** for ALL things pertaining to the environment (Mark, 2026-10-21): trees, rocks,
   ground foliage, grass, wind, sky, day/night, environment asset moves — anything under
