@@ -1,6 +1,9 @@
 # Routines
 
-A **routine** is a named, well-defined job Mark can hand off and walk away from. Each one lives in
+A **routine** is a named, well-defined job Mark can hand off and walk away from: Claude runs the game
+and works inside it — playing, rendering, measuring — to see how the game needs to be edited to be more
+to Mark's specs (Mark 2026-10-27). Pass/fail regression guards that fire on their own whenever a system
+is touched are **automated tests**, not routines (CLAUDE.md *Automated tests*). Each routine lives in
 `.claude/skills/<name>/SKILL.md` and is invoked either by slash command (`/art-routine …`) or by
 plain language ("run our art routine on the elm stump to …"). The skill description is what makes
 the plain-language form trigger, so keep the trigger phrase in it.

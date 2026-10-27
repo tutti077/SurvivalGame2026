@@ -121,6 +121,7 @@ public static class ConsoleHelp
 		new( "Vehicles", "vehicle_test", "", "Timed throttle / brake / reverse / turn / fuel script with logged numbers.", "vehicle_test" ),
 		new( "Vehicles", "vehicle_demo", "", "Scripted showcase run with a chase camera (vehicle_spawn + vehicle_fuel first).", "vehicle_demo" ),
 		new( "Vehicles", "vehicle_rolltest", "[mph] [turnSeconds] [steer]", "Full throttle to a speed, then a held steer; logs whether it rolled.", "vehicle_rolltest 60 2 1" ),
+		new( "Tests", "combat_test", "", "Automated melee regression suite (play mode, testscene1): scripted fights, PASS/FAIL per case.", "combat_test" ),
 	];
 
 	[ConCmd( "help" )]

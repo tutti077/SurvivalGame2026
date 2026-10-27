@@ -374,6 +374,12 @@ public partial class PlayerCombat
 		     && !ConnectionIdentity.SameClient( caller, owner ) )
 			return;
 
+		HostAcceptBlockState( active, direction, blockPressedSandboxTime, basisYaw );
+	}
+
+	/// <summary>Host intake of a remote owner's guard state (the body of <see cref="RpcSubmitMeleeBlockState"/>).</summary>
+	void HostAcceptBlockState( bool active, byte direction, double blockPressedSandboxTime, float basisYaw )
+	{
 		_hostReportedBlockActive = active;
 		if ( direction is SwingDirs.Left or SwingDirs.Right or SwingDirs.Up )
 			_hostReportedBlockDirection = direction;
@@ -390,6 +396,10 @@ public partial class PlayerCombat
 			SetAuthoritativeMeleeBlockState( active, direction, basisYaw );
 		}
 	}
+
+	/// <summary>Automated combat test (<c>combat_test</c>): feeds a guard through the same host intake a remote owner's block RPC uses.</summary>
+	internal void TestSubmitBlockIntent( bool active, double pressedSandboxTime, float basisYaw ) =>
+		HostAcceptBlockState( active, SwingDirs.Up, pressedSandboxTime, basisYaw );
 
 	/// <summary>
 	/// Dodge roll started: the roll's i-frames + reposition replace the guard, so drop it the same
