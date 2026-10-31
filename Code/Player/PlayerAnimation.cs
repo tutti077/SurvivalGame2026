@@ -65,7 +65,7 @@ public sealed partial class PlayerAnimation : Component
 	[Property, Group( "Melee demo stick" ), Title( "Show demo stick" )]
 	public bool ShowMeleeDemoStick { get; set; } = true;
 
-	/// <summary>The sword sits in the right hand only: grip and tip direction come from <c>hold_R</c> (its up axis is the blade).</summary>
+	/// <summary>The sword sits in the right hand only, rigid on <c>hold_R</c> (its up axis is the blade). Off = the old two-hand fit between both hands.</summary>
 	[Property, Group( "Melee demo stick" ), Title( "One-handed grip (right hand)" )]
 	public bool MeleeOneHandedGrip { get; set; } = true;
 
@@ -955,6 +955,12 @@ public sealed partial class PlayerAnimation : Component
 		if ( _meleeDemoStick is null || !_meleeDemoStick.IsValid() )
 			return;
 
+		if ( MeleeOneHandedGrip )
+		{
+			TickOneHandedSwordTransform();
+			return;
+		}
+
 		if ( !TryResolveDemoStickGrip( out var gripPos, out var tipDir ) )
 			return;
 
@@ -1002,6 +1008,55 @@ public sealed partial class PlayerAnimation : Component
 			_meleeDemoStickRenderer.Tint = MeleeDemoStickTint;
 	}
 
+	/// <summary>
+	/// Blade edge direction in the <c>hold_R</c> bone frame (x forward, y left, z up = blade tip): the
+	/// forearm direction of the rig's own right-hand grip, measured once in Blender
+	/// (<c>create_sword_anims.py</c> Grip). The cutting edge faces the knuckles.
+	/// </summary>
+	static readonly Vector3 HoldEdgeLocal = new Vector3( 0.705f, -0.709f, 0f ).Normal;
+
+	/// <summary>
+	/// One-handed sword: rigid on the right hand's grip bone. The blade runs along <c>hold_R</c> up, the
+	/// edge faces <see cref="HoldEdgeLocal"/>, and the handle point <see cref="MeleeDemoStickGripAlongLength"/>
+	/// up from the butt sits at the bone — so the sword turns and travels exactly with the fist.
+	/// </summary>
+	void TickOneHandedSwordTransform()
+	{
+		var body = ResolveBody();
+		if ( body is null || !body.IsValid() )
+			return;
+
+		if ( !TryGetFirstBoneTransform( body, DemoStickRightBoneCandidates, out var hold ) )
+			return;
+
+		var tipWorld = hold.Rotation.Up;
+		var edgeWorld = hold.Rotation * HoldEdgeLocal;
+		var frame = Rotation.LookAt( tipWorld, edgeWorld );
+		var along = Math.Clamp( MeleeDemoStickGripAlongLength, 0f, 1f );
+
+		if ( _demoStickIsHeldModel )
+		{
+			var modelRot = frame
+				* MeleeDemoStickLocalAngles.ToRotation()
+				* Rotation.LookAt( _demoStickFit.HeadDir, _demoStickFit.EdgeDir ).Inverse;
+			var gripLocal = _demoStickFit.ButtPoint + _demoStickFit.HeadDir * (_demoStickFit.Length * along);
+			_meleeDemoStick.WorldRotation = modelRot;
+			_meleeDemoStick.LocalScale = Vector3.One;
+			_meleeDemoStick.WorldPosition = hold.Position - modelRot * gripLocal + modelRot * MeleeDemoStickLocalOffset;
+			return;
+		}
+
+		var thickness = MathF.Max( 0.01f, MeleeDemoStickThicknessMeters );
+		var length = MathF.Max( 0.1f, MeleeDemoStickLengthMeters );
+		var worldRot = frame * MeleeDemoStickLocalAngles.ToRotation();
+		var halfBlade = _demoStickMeshHalfExtentX * length;
+		_meleeDemoStick.WorldRotation = worldRot;
+		_meleeDemoStick.LocalScale = new Vector3( length, thickness, thickness );
+		_meleeDemoStick.WorldPosition = hold.Position + tipWorld * (halfBlade * (1f - 2f * along)) + worldRot * MeleeDemoStickLocalOffset;
+		if ( _meleeDemoStickRenderer is not null && _meleeDemoStickRenderer.IsValid() )
+			_meleeDemoStickRenderer.Tint = MeleeDemoStickTint;
+	}
+
 	bool TryResolveDemoStickGrip( out Vector3 gripPos, out Vector3 tipDir )
 	{
 		gripPos = default;
@@ -1012,8 +1067,7 @@ public sealed partial class PlayerAnimation : Component
 			return false;
 
 		var hasRight = TryGetFirstBoneTransform( body, DemoStickRightBoneCandidates, out var rightTx );
-		var leftTx = default( global::Transform );
-		var hasLeft = !MeleeOneHandedGrip && TryGetFirstBoneTransform( body, DemoStickLeftBoneCandidates, out leftTx );
+		var hasLeft = TryGetFirstBoneTransform( body, DemoStickLeftBoneCandidates, out var leftTx );
 
 		if ( hasRight && hasLeft )
 		{
