@@ -623,22 +623,18 @@ public partial class PlayerCombat : Component
 		         || primaryChannelStarted) )
 		{
 			LockPreparedPrimaryAttackDirection();
-			// Only start the windup clip when the combat channel actually accepted the press.
+			// Only snap to the cocked frame when the combat channel actually accepted the press.
 			// Facing comes from TickCombatFacingLock (per-frame, from this same frame's _primary.Down).
 			if ( _primary.Down )
 			{
-				var windupType = ResolveAttackTypeFromCursorDir( _lockedPrimaryAttackSwingDir );
-				Components.Get<PlayerAnimation>()?.BeginMeleeAttackWindupHold( windupType );
+				var snapType = ResolveAttackTypeFromCursorDir( _lockedPrimaryAttackSwingDir );
+				Components.Get<PlayerAnimation>()?.BeginMeleeSwingSnap( snapType );
 			}
 		}
 		else if ( chainBusy && !_primary.Down && !primaryAttackHeld )
 		{
 			_hasLockedPrimaryAttackDir = false;
 		}
-
-		// The special charge holds the frozen windup pose the same way a held Attack1 does.
-		Components.Get<PlayerAnimation>()?.TickMeleeAttackWindupHold(
-			(primaryAttackHeld || IsSpecialAttackCharging) && !IsBlockPreventingAttack() );
 
 		_wasPrimaryAttackButtonDownLastFrame = primaryAttackHeld;
 		_wasPrimaryChannelDownLastFrame = _primary.Down;
@@ -1343,7 +1339,9 @@ public partial class PlayerCombat : Component
 
 		var releaseHold = Math.Max( 0f, snapshot.HoldDurationSeconds );
 		var releaseHeavy = IsHeavyAttackForHoldDuration( releaseHold );
-		Components.Get<PlayerAnimation>()?.ReleaseMeleeAttackWindupHold( intent.AttackType, releaseHeavy );
+		// Owner prediction of the host's remaining windup (base class windup − hold; initiative is host-only).
+		var predictedWindupLeft = Math.Max( 0f, GetMeleeWindupSeconds() - releaseHold );
+		Components.Get<PlayerAnimation>()?.ReleaseMeleeSwingSnap( intent.AttackType, releaseHeavy, predictedWindupLeft );
 
 		if ( LogAttackStaminaDebug )
 		{

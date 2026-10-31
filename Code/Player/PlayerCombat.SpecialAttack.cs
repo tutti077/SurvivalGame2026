@@ -75,8 +75,8 @@ public partial class PlayerCombat
 		_specialChargeLungeAtSandbox = now + Math.Max( 0f, charge - Math.Max( 0f, SpecialLungeLeadSeconds ) );
 		_specialChargeLungeDone = false;
 
-		// Frozen windup pose while charging — OnUpdate ticks the hold with IsSpecialAttackCharging.
-		Components.Get<PlayerAnimation>()?.BeginMeleeAttackWindupHold( MeleeAttackTypes.Stab );
+		// Snapped to the cocked frame while charging; the strike is scheduled when the stab fires.
+		Components.Get<PlayerAnimation>()?.BeginMeleeSwingSnap( MeleeAttackTypes.Stab );
 
 		LogCombatDiag( "CLIENT / OWNER", $"Special attack charge started — fires in {charge:0.###}s" );
 	}
@@ -122,19 +122,19 @@ public partial class PlayerCombat
 		     || IsActiveMainHandBroken()
 		     || !CanAffordSpecialAttack() )
 		{
-			Components.Get<PlayerAnimation>()?.CancelMeleeAttackWindupHold();
+			Components.Get<PlayerAnimation>()?.CancelMeleeSwingSnap();
 			LogCombatDiag( "CLIENT / OWNER", "Special attack charge aborted at fire — gates failed" );
 			return;
 		}
 
 		if ( !TryBuildSpecialAttackIntent( chargeHeld, out var intent ) )
 		{
-			Components.Get<PlayerAnimation>()?.CancelMeleeAttackWindupHold();
+			Components.Get<PlayerAnimation>()?.CancelMeleeSwingSnap();
 			return;
 		}
 
-		// Resume the frozen charge pose into the thrust clip.
-		Components.Get<PlayerAnimation>()?.ReleaseMeleeAttackWindupHold( MeleeAttackTypes.Stab, isHeavy: false );
+		// The charge was the windup: the thrust plays from the cocked frame right now.
+		Components.Get<PlayerAnimation>()?.ReleaseMeleeSwingSnap( MeleeAttackTypes.Stab, isHeavy: false, windupRemainingSeconds: 0f );
 
 		LogCombatDiag( "CLIENT / OWNER",
 			$"Special attack (stab) seq={intent.IntentSequence} charged={chargeHeld:0.###}s cost={GetSpecialAttackStaminaCost():0.#} — dispatch now" );
@@ -145,7 +145,7 @@ public partial class PlayerCombat
 	void AbortSpecialAttackCharge( string reason )
 	{
 		ClearSpecialAttackChargeState();
-		Components.Get<PlayerAnimation>()?.CancelMeleeAttackWindupHold();
+		Components.Get<PlayerAnimation>()?.CancelMeleeSwingSnap();
 		LogCombatDiag( "CLIENT / OWNER", $"Special attack charge aborted ({reason})" );
 	}
 

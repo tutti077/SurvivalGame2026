@@ -60,16 +60,16 @@ public sealed class CombatAuthority : Component
 	/// Called from <see cref="PlayerAnimation.FlushDeferredSwingAnimBroadcasts"/> after Rpc.Host unwinds.
 	/// Lives on CombatAuthority (scene NetworkManager) so delivery isn't tied to attacker ownership.
 	/// </summary>
-	public void HostBroadcastMeleeSwingAnim( Guid attackerRootId, byte attackType )
+	public void HostBroadcastMeleeSwingAnim( Guid attackerRootId, byte attackType, bool isHeavy, float windupRemainingSeconds )
 	{
 		if ( !Networking.IsHost || !GameObject.IsValid() )
 			return;
 
-		RpcBroadcastMeleeSwingAnim( attackerRootId, attackType );
+		RpcBroadcastMeleeSwingAnim( attackerRootId, attackType, isHeavy, windupRemainingSeconds );
 	}
 
 	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable | NetFlags.SendImmediate )]
-	void RpcBroadcastMeleeSwingAnim( Guid attackerRootId, byte attackType )
+	void RpcBroadcastMeleeSwingAnim( Guid attackerRootId, byte attackType, bool isHeavy, float windupRemainingSeconds )
 	{
 		if ( Networking.IsHost )
 			return;
@@ -85,7 +85,7 @@ public sealed class CombatAuthority : Component
 			if ( anim.GameObject.Id != attackerRootId )
 				continue;
 
-			anim.ApplyRemoteMeleeSwingAttack( attackType );
+			anim.ApplyRemoteMeleeSwingAttack( attackType, isHeavy, windupRemainingSeconds );
 			return;
 		}
 	}

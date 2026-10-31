@@ -66,7 +66,7 @@ public partial class PlayerCombat : Component, PlayerController.IEvents
 			return true;
 
 		var anim = Components.Get<PlayerAnimation>();
-		return anim is not null && anim.IsMeleeWindupHoldActive;
+		return anim is not null && anim.IsMeleeSwingSnapActive;
 	}
 
 	/// <summary>Host: begin/end the commitment lock for the authoritative melee action.</summary>

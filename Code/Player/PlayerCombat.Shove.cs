@@ -242,7 +242,7 @@ public partial class PlayerCombat
 	void CancelAttackIntentsForShoveRecovery()
 	{
 		ClearQueuedAttackPress();
-		Components.Get<PlayerAnimation>()?.CancelMeleeAttackWindupHold();
+		Components.Get<PlayerAnimation>()?.CancelMeleeSwingSnap();
 		LogShoveAnim( "cancel in-flight attack intents (kick recovery owns the window)" );
 	}
 

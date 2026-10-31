@@ -178,7 +178,7 @@ public partial class PlayerCombat
 		// Drop soft pistol / prior recovery so it cannot re-apply over the new swing anim next frame.
 		ServerClearCombatRecoveryForNewAttack();
 		var animation = Components.Get<PlayerAnimation>();
-		// Press/release already owns the clip — don't abort before Resume/Play.
+		// Press/release already snapped the clip — don't abort before the strike is scheduled.
 		if ( animation is null || !animation.HasActiveMeleeSwingPresentation )
 			animation?.AbortMeleeAttackAnimClip( "new swing" );
 		_serverMeleeAttack = new ServerMeleeAttackRuntime( this, intent, holdSeconds, isHeavy, swingLogNote );
@@ -190,7 +190,8 @@ public partial class PlayerCombat
 			$"remaining={_serverMeleeAttack.WindupRemainingSeconds:0.###}s (class windup {GetMeleeWindupSeconds():0.###}s − hold)" );
 
 		EmitSwingNoiseIfPlayer();
-		animation?.PlayMeleeSwingAttack( attackType, broadcastFromHost: true, isHeavy: isHeavy );
+		animation?.PlayMeleeSwingAttack( attackType, broadcastFromHost: true, isHeavy,
+			_serverMeleeAttack.WindupRemainingSeconds );
 
 		// Don't Broadcast inside Rpc.Host handling of the attacker pawn — nested HostOnly broadcasts on a
 		// host-owned object often never reach joining clients (host still runs it locally → host sees clients).

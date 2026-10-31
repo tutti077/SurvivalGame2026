@@ -68,9 +68,8 @@ public sealed partial class PlayerAnimation
 		if ( end > _hitReactionEndsAtSandbox )
 			_hitReactionEndsAtSandbox = end;
 
-		// The swing clip and any recovery pose lose to the hit — kill them before the pose goes on.
+		// The swing clip (snap or strike) and any recovery pose lose to the hit — kill them before the pose goes on.
 		AbortMeleeAttackAnimClip( "hit reaction" );
-		CancelMeleeAttackWindupHold();
 
 		// Null on pawns that carry no combat state at all — nothing to drop then.
 		ResolveCombat()?.OnHitReactionBegan();
