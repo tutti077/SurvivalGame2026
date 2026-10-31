@@ -18,6 +18,9 @@ public static class TerrainMeshBuilder
 		public int VerticesPerSide { get; init; }
 		/// <summary>Grid spacing in engine units.</summary>
 		public float StepUnits { get; init; }
+		/// <summary>Per-vertex splat weights / extras of the grid (<see cref="ChunkGeometry.Colors"/>, <see cref="ChunkGeometry.Splat"/>) — a voxel column seeds its ground style from them.</summary>
+		public Color[] Colors { get; init; }
+		public Vector4[] Splat { get; init; }
 	}
 
 	/// <summary>Everything a chunk mesh is made of, in chunk-local metres — shared by <see cref="BuildChunk"/> and the dev dump command.</summary>
@@ -31,7 +34,10 @@ public static class TerrainMeshBuilder
 		public float[] OffsetX { get; init; }
 		public float[] OffsetY { get; init; }
 		public TerrainPreviewSample[] Samples { get; init; }
+		/// <summary>Splat weights per vertex (<see cref="TerrainGroundSplat"/>): Clover / Redwood / Amber shares + Mountain.</summary>
 		public Color[] Colors { get; init; }
+		/// <summary>Splat extras per vertex: sand, wet, far canopy darkening (w unused).</summary>
+		public Vector4[] Splat { get; init; }
 		public int[] Indices { get; init; }
 		/// <summary>Heights as sampled, before border snapping and smoothing (edge normals are built from these).</summary>
 		public float[] RawHeights { get; init; }
@@ -53,14 +59,15 @@ public static class TerrainMeshBuilder
 		float maxTerrainHeightMeters,
 		int heightSmoothPasses = 1,
 		float heightSmoothStrength01 = 0.38f,
-		int borderLatticeVerticesPerSide = 0 )
+		int borderLatticeVerticesPerSide = 0,
+		int fineBorderSides = 0 )
 	{
 		chunkSizeMeters = Math.Max( 16f, chunkSizeMeters );
 		maxTerrainHeightMeters = Math.Max( 50f, maxTerrainHeightMeters );
 		var maxHeightMeters = Math.Max( 50f, settings.MaxTerrainHeightMeters );
 		maxTerrainHeightMeters = Math.Max( maxHeightMeters, maxTerrainHeightMeters );
 
-		var g = BuildChunkGeometry( settings, backend, coord, chunkSizeMeters, verticesPerSide, heightSmoothPasses, heightSmoothStrength01, borderLatticeVerticesPerSide );
+		var g = BuildChunkGeometry( settings, backend, coord, chunkSizeMeters, verticesPerSide, heightSmoothPasses, heightSmoothStrength01, borderLatticeVerticesPerSide, fineBorderSides );
 		return BuildModelFromGeometry( g, chunkSizeMeters, maxTerrainHeightMeters, withCollision: true, sinkMeters: 0f );
 	}
 
@@ -75,7 +82,9 @@ public static class TerrainMeshBuilder
 		float maxTerrainHeightMeters,
 		bool withCollision,
 		float sinkMeters,
-		Mesh extraMesh = null )
+		Mesh extraMesh = null,
+		bool farTier = false,
+		bool horizonTier = false )
 	{
 		chunkSizeMeters = Math.Max( 16f, chunkSizeMeters );
 		maxTerrainHeightMeters = Math.Max( 50f, maxTerrainHeightMeters );
@@ -86,17 +95,30 @@ public static class TerrainMeshBuilder
 		var offsetX = g.OffsetX;
 		var offsetY = g.OffsetY;
 		var colors = g.Colors;
+		var splat = g.Splat;
+		// TEXCOORD1.y: which tier this is (pixel_lit buries the horizon tier inside the far tier's circle)
+		var tier = horizonTier ? 2f : farTier ? 1f : 0f;
 
 		var indexCount = g.Indices.Length;
-		var material = GetTerrainMaterial();
+		var material = farTier ? GetFarTerrainMaterial() : GetTerrainMaterial();
 		var mesh = new Mesh( material, MeshPrimitiveType.Triangles );
-		mesh.CreateVertexBuffer<Vertex>( vertexCount );
-		mesh.CreateIndexBuffer( indexCount );
+		// Skirt: a strip hanging SkirtMeters down from every border edge (both windings). Where a detailed chunk meets a
+		// coarse one the shared edge is the same line, but the extra vertex on it leaves pixel-thin rasterisation gaps
+		// (T-junctions) — sky-coloured cracks along chunk borders (Mark 2026-10-22: "tearing and splitting"). The skirt
+		// fills them with ground. Render mesh only; collision keeps the plain grid.
+		var borderCount = 4 * (verticesPerSide - 1);
+		var skirtVertexCount = borderCount * 2;
+		var skirtIndexCount = borderCount * 12;
+		mesh.CreateVertexBuffer<Vertex>( vertexCount + skirtVertexCount );
+		mesh.CreateIndexBuffer( indexCount + skirtIndexCount );
 
 		var collisionPositions = new List<Vector3>( vertexCount );
 		var collisionIndices = new List<int>( g.Indices );
 		var heightsZ = new float[vertexCount];
 
+		var minZ = float.MaxValue;
+		var maxZ = float.MinValue;
+		var border = BorderVertexLoop( verticesPerSide );
 		mesh.LockVertexBuffer<Vertex>( vertices =>
 		{
 			for ( var i = 0; i < vertexCount; i++ )
@@ -110,14 +132,30 @@ public static class TerrainMeshBuilder
 
 				collisionPositions.Add( position );
 				heightsZ[i] = position.z;
+				minZ = Math.Min( minZ, position.z );
+				maxZ = Math.Max( maxZ, position.z );
 				vertices[i] = new Vertex
 				{
 					Position = position,
 					Normal = normal,
 					Tangent = ComputeTangent( normal ),
-					TexCoord0 = new Vector2( ix / (float)(verticesPerSide - 1), iy / (float)(verticesPerSide - 1) ),
+					// The terrain material tiles in world space, so the UVs carry the splat extras instead
+					TexCoord0 = new Vector2( splat[i].x, splat[i].y ),
+					TexCoord1 = new Vector2( splat[i].z, tier ),
 					Color = colors[i],
 				};
+			}
+
+			// Skirt: each border segment gets its own top pair (copies, so the skirt's flat normals do not touch the
+			// ground's) and bottom pair
+			var drop = TerrainWorldUnits.MetersToEngine( SkirtMeters );
+			for ( var k = 0; k < borderCount; k++ )
+			{
+				var top = vertices[border[k]];
+				var bottom = top;
+				bottom.Position = top.Position - new Vector3( 0f, 0f, drop );
+				vertices[vertexCount + (k * 2)] = top;
+				vertices[vertexCount + (k * 2) + 1] = bottom;
 			}
 		} );
 
@@ -125,11 +163,26 @@ public static class TerrainMeshBuilder
 		{
 			for ( var i = 0; i < indexCount; i++ )
 				indices[i] = collisionIndices[i];
+			var n = indexCount;
+			for ( var k = 0; k < borderCount; k++ )
+			{
+				var a = vertexCount + (k * 2);                       // top / bottom at this border vertex
+				var b = vertexCount + (((k + 1) % borderCount) * 2); // top / bottom at the next one
+				// both windings, so the strip shows from either side of the crack
+				indices[n++] = a; indices[n++] = b; indices[n++] = a + 1;
+				indices[n++] = b; indices[n++] = b + 1; indices[n++] = a + 1;
+				indices[n++] = a; indices[n++] = a + 1; indices[n++] = b;
+				indices[n++] = b; indices[n++] = a + 1; indices[n++] = b + 1;
+			}
 		} );
 
+		// The real vertical extent: lake beds and the ocean floor lie below z 0, and a box starting at 0 let the engine
+		// cull chunks whose visible ground was under it — whole squares missing (2026-10-22)
+		var skirtUnits = TerrainWorldUnits.MetersToEngine( SkirtMeters );
 		var bounds = new BBox(
-			Vector3.Zero,
-			TerrainWorldUnits.MetersToEngine( new Vector3( chunkSizeMeters, chunkSizeMeters, maxTerrainHeightMeters ) ) );
+			new Vector3( 0f, 0f, Math.Min( 0f, minZ - skirtUnits ) ),
+			new Vector3( TerrainWorldUnits.MetersToEngine( chunkSizeMeters ), TerrainWorldUnits.MetersToEngine( chunkSizeMeters ),
+				Math.Max( maxZ, TerrainWorldUnits.MetersToEngine( maxTerrainHeightMeters ) ) ) );
 		mesh.Bounds = bounds;
 
 		var builder = new ModelBuilder().AddMesh( mesh );
@@ -151,7 +204,24 @@ public static class TerrainMeshBuilder
 			HeightsZ = heightsZ,
 			VerticesPerSide = verticesPerSide,
 			StepUnits = TerrainWorldUnits.MetersToEngine( step ),
+			Colors = colors,
+			Splat = splat,
 		};
+	}
+
+	/// <summary>Depth of the crack-filling skirt along every chunk border (render mesh only).</summary>
+	const float SkirtMeters = 1.5f;
+
+	/// <summary>Grid indices of a chunk's border, walked once round (bottom row, right column, top row back, left column down).</summary>
+	static int[] BorderVertexLoop( int n )
+	{
+		var loop = new int[4 * (n - 1)];
+		var k = 0;
+		for ( var x = 0; x < n - 1; x++ ) loop[k++] = x;                              // bottom, left → right
+		for ( var y = 0; y < n - 1; y++ ) loop[k++] = (y * n) + (n - 1);              // right, bottom → top
+		for ( var x = n - 1; x > 0; x-- ) loop[k++] = ((n - 1) * n) + x;              // top, right → left
+		for ( var y = n - 1; y > 0; y-- ) loop[k++] = y * n;                          // left, top → bottom
+		return loop;
 	}
 
 	/// <summary>Samples the vertex grid, snaps ledge vertices, colours and triangulates — no engine objects created.</summary>
@@ -164,7 +234,7 @@ public static class TerrainMeshBuilder
 		int heightSmoothPasses,
 		float heightSmoothStrength01,
 		int borderLatticeVerticesPerSide,
-		bool riverBedAsGround = true )
+		int fineBorderSides = 0 )
 	{
 		backend ??= TerrainPreviewBackendRegistry.Active;
 		verticesPerSide = Math.Clamp( verticesPerSide, 4, 256 );
@@ -179,9 +249,7 @@ public static class TerrainMeshBuilder
 		var heights = new float[vertexCount];
 		var samples = new TerrainPreviewSample[vertexCount];
 		var colors = new Color[vertexCount];
-		var isWater = new bool[vertexCount];
-		var insideWorld = new bool[vertexCount];
-		var biomeMap = new TerrainPreviewBiomeId[vertexCount];
+		var splat = new Vector4[vertexCount];
 		var minHeight = float.MaxValue;
 		var maxHeightSample = float.MinValue;
 
@@ -197,7 +265,7 @@ public static class TerrainMeshBuilder
 
 				var heightMeters = sample.IsInsideWorld
 					? sample.HeightMeters
-					: settings.SeaLevelMeters;
+					: OutsideWorldFloorMeters( settings );
 				heights[idx] = heightMeters;
 				minHeight = Math.Min( minHeight, heightMeters );
 				maxHeightSample = Math.Max( maxHeightSample, heightMeters );
@@ -216,7 +284,7 @@ public static class TerrainMeshBuilder
 			edgeRing[(3 * verticesPerSide) + k] = RingHeight( settings, backend, chunkMinX + along, chunkMinY + span + step );
 		}
 
-		SnapBordersToCoarseLattice( heights, verticesPerSide, borderLatticeVerticesPerSide );
+		SnapBordersToCoarseLattice( heights, verticesPerSide, borderLatticeVerticesPerSide, fineBorderSides );
 
 		TerrainPreviewChunkHeightSmooth.ApplyInteriorGrid(
 			heights, verticesPerSide, heightSmoothPasses, heightSmoothStrength01 );
@@ -226,22 +294,7 @@ public static class TerrainMeshBuilder
 		// Ledge faces are plain heightfield rows now (face width >= height / tan(Face Slope)); the vertex snapping that
 		// made 1 m faces vertical is gone with it — it was the source of every fin and spike along a ledge (2026-10-07).
 
-		TerrainChunkBiomeDisplay.FillChunkVertexColors(
-			settings,
-			backend,
-			verticesPerSide,
-			verticesPerSide,
-			chunkMinX,
-			chunkMinY,
-			step,
-			insideWorld,
-			isWater,
-			biomeMap,
-			colors,
-			samples,
-			riverBedAsGround );
-
-		TerrainGroundTextureMask.Apply( settings, colors, biomeMap, verticesPerSide );
+		TerrainGroundSplat.Fill( settings, samples, chunkMinX, chunkMinY, step, verticesPerSide, colors, splat );
 
 		TerrainPreviewHeightDiagnostics.TryLogChunkVertexTrace(
 			settings,
@@ -267,8 +320,6 @@ public static class TerrainMeshBuilder
 				$"[TerrainMeshBuilder] Chunk {coord} sampled {minHeight:0.#}…{maxHeightSample:0.#} m → mesh {minHeightAfter:0.#}…{maxHeightAfter:0.#} m (Δ{maxHeightAfter - minHeightAfter:0.#} m / {chunkSizeMeters:0.#} m)." );
 		}
 
-		// Vertex alpha is the ground-texture mask written by TerrainGroundTextureMask above — never reset it
-		// (a leftover alpha=1 pass here painted every biome with the Clover grass texture, 2026-10-13).
 		var indices = new int[(verticesPerSide - 1) * (verticesPerSide - 1) * 6];
 		var w = 0;
 		for ( var iy = 0; iy < verticesPerSide - 1; iy++ )
@@ -302,6 +353,7 @@ public static class TerrainMeshBuilder
 			OffsetY = offsetY,
 			Samples = samples,
 			Colors = colors,
+			Splat = splat,
 			Indices = indices,
 			RawHeights = rawHeights,
 			EdgeRing = edgeRing,
@@ -311,12 +363,18 @@ public static class TerrainMeshBuilder
 	/// <summary>Dev switch (console <c>terrain_ledge_diagonals</c>) to A/B the ledge-aware triangulation.</summary>
 	public static bool LedgeAwareDiagonals { get; set; } = true;
 
+	/// <summary>Border sides (bit flags for <c>fineBorderSides</c>): the −Y row, +Y row, −X column, +X column.</summary>
+	public const int BorderMinY = 1, BorderMaxY = 2, BorderMinX = 4, BorderMaxX = 8;
+
 	/// <summary>
 	/// Snap border vertices that are not on the shared coarse lattice onto the straight line between
 	/// their coarse neighbours. Every chunk edge then carries identical geometry regardless of the
 	/// LOD mix on either side — full↔far seams become watertight with no neighbor tracking.
+	/// Sides in <paramref name="fineBorderSides"/> are left alone: both chunks there are full detail (water chunks and
+	/// their neighbours), so the raw samples already match — and snapping flattened a river channel crossing the border
+	/// into a ridge with the skirt showing under it (Mark 2026-10-25: "weird seams between the chunks").
 	/// </summary>
-	static void SnapBordersToCoarseLattice( float[] heights, int verticesPerSide, int latticeVerticesPerSide )
+	static void SnapBordersToCoarseLattice( float[] heights, int verticesPerSide, int latticeVerticesPerSide, int fineBorderSides )
 	{
 		if ( latticeVerticesPerSide <= 1 || latticeVerticesPerSide >= verticesPerSide )
 			return;
@@ -325,10 +383,14 @@ public static class TerrainMeshBuilder
 			return;
 
 		var ratio = (verticesPerSide - 1) / (latticeVerticesPerSide - 1);
-		SnapBorderLine( heights, verticesPerSide, ratio, startIndex: 0, stride: 1 );
-		SnapBorderLine( heights, verticesPerSide, ratio, startIndex: (verticesPerSide - 1) * verticesPerSide, stride: 1 );
-		SnapBorderLine( heights, verticesPerSide, ratio, startIndex: 0, stride: verticesPerSide );
-		SnapBorderLine( heights, verticesPerSide, ratio, startIndex: verticesPerSide - 1, stride: verticesPerSide );
+		if ( (fineBorderSides & BorderMinY) == 0 )
+			SnapBorderLine( heights, verticesPerSide, ratio, startIndex: 0, stride: 1 );
+		if ( (fineBorderSides & BorderMaxY) == 0 )
+			SnapBorderLine( heights, verticesPerSide, ratio, startIndex: (verticesPerSide - 1) * verticesPerSide, stride: 1 );
+		if ( (fineBorderSides & BorderMinX) == 0 )
+			SnapBorderLine( heights, verticesPerSide, ratio, startIndex: 0, stride: verticesPerSide );
+		if ( (fineBorderSides & BorderMaxX) == 0 )
+			SnapBorderLine( heights, verticesPerSide, ratio, startIndex: verticesPerSide - 1, stride: verticesPerSide );
 	}
 
 	static void SnapBorderLine( float[] heights, int count, int ratio, int startIndex, int stride )
@@ -394,8 +456,15 @@ public static class TerrainMeshBuilder
 	static float RingHeight( TerrainPreviewSettings settings, ITerrainPreviewBackend backend, float worldX, float worldY )
 	{
 		var sample = backend.Sample( settings, worldX, worldY );
-		return sample.IsInsideWorld ? sample.HeightMeters : settings.SeaLevelMeters;
+		return sample.IsInsideWorld ? sample.HeightMeters : OutsideWorldFloorMeters( settings );
 	}
+
+	/// <summary>
+	/// Ground past the world's edge: the open-ocean floor (Ocean Max Depth under the sea), not ground at sea level —
+	/// flat ground there poked through the sea surface's wave troughs as black specks on the horizon (2026-10-22).
+	/// </summary>
+	static float OutsideWorldFloorMeters( TerrainPreviewSettings settings )
+		=> settings.SeaLevelMeters - Math.Max( 0f, settings.OceanMaxDepthMeters );
 
 	/// <summary>Raw height at grid coords that may lie one step outside the chunk (the edge ring).</summary>
 	static float RawHeightAt( ChunkGeometry g, int ix, int iy )
@@ -415,9 +484,10 @@ public static class TerrainMeshBuilder
 		var ix = index % verticesPerSide;
 		var iy = index / verticesPerSide;
 
-		// Edge vertices: central differences from the raw samples on both sides of the border (shared with the
-		// neighbour chunk), so both chunks compute the same normal there.
-		if ( g.EdgeRing is not null && g.RawHeights is not null && (ix == 0 || iy == 0 || ix == verticesPerSide - 1 || iy == verticesPerSide - 1) )
+		// Every vertex: central differences from the raw samples (the edge ring past the border is shared with the
+		// neighbour chunk). Edge-only raw normals next to smoothed interior normals shaded a 2 m band along every chunk
+		// border differently — thin light lines across lake beds and fields (2026-10-22).
+		if ( g.EdgeRing is not null && g.RawHeights is not null )
 		{
 			var ex = new Vector3( 2f * step, 0f, RawHeightAt( g, ix + 1, iy ) - RawHeightAt( g, ix - 1, iy ) );
 			var ey = new Vector3( 0f, 2f * step, RawHeightAt( g, ix, iy + 1 ) - RawHeightAt( g, ix, iy - 1 ) );
@@ -461,12 +531,29 @@ public static class TerrainMeshBuilder
 		return new Vector4( tangent.Normal, 1f );
 	}
 
+	static Material _farTerrainMaterial;
+
+	/// <summary>
+	/// The far tier's ground: the same material with F_FAR_SINK — sunk on the GPU under the near chunks only, so the
+	/// far surface needs no CPU sink and there is no step where the near square ends.
+	/// </summary>
+	public static Material GetFarTerrainMaterial()
+	{
+		if ( _farTerrainMaterial is null || !_farTerrainMaterial.IsValid )
+		{
+			_farTerrainMaterial = Material.Load( "materials/terrain/terrain_ground_far.vmat" );
+			if ( !_farTerrainMaterial.IsValid )
+				_farTerrainMaterial = GetTerrainMaterial();
+		}
+		return _farTerrainMaterial;
+	}
+
 	public static Material GetTerrainMaterial()
 	{
 		if ( _terrainMaterial is null || !_terrainMaterial.IsValid )
 		{
-			// pixel_lit with F_VERTEX_PAINT: biome vertex colours, and the Clover ground texture (vertex alpha =
-			// TerrainGroundTextureMask) tiled on the world plane — the same ground as lightingTest.
+			// pixel_lit with F_TERRAIN_SPLAT: the per-pixel biome blend (TerrainGroundSplat writes what each vertex is),
+			// every ground layer tiled on the world plane — the grass is the same ground as lightingTest.
 			_terrainMaterial = Material.Load( "materials/terrain/terrain_ground.vmat" );
 			if ( !_terrainMaterial.IsValid )
 				_terrainMaterial = Material.FromShader( "shaders/pixel_lit.shader" );

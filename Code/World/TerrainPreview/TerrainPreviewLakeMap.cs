@@ -38,23 +38,42 @@ static class TerrainPreviewLakeMap
 		var octaves = Math.Clamp( settings.LakeMacroOctaves, 1, 5 );
 		var shoreDetail = Math.Clamp( settings.LakeShoreDetail01, 0f, 1f );
 
-		var warpAmp = 0.08f + shoreDetail * 0.1f;
-		var warpX = nx + (TerrainPreviewNoise.Fbm( seed + 880, nx * 1.6f, ny * 1.6f, 2 ) - 0.5f) * warpAmp;
-		var warpY = ny + (TerrainPreviewNoise.Fbm( seed + 881, nx * 1.6f + 19f, ny * 1.6f + 37f, 2 ) - 0.5f) * warpAmp;
-
-		var angle = (TerrainPreviewNoise.Fbm( seed + 882, nx * 0.35f, ny * 0.35f, 2 ) - 0.5f) * 0.65f;
-		var stretch = 1f + TerrainPreviewNoise.Fbm( seed + 883, nx * 0.3f, ny * 0.3f, 2 ) * 0.75f;
-		var cos = MathF.Cos( angle );
-		var sin = MathF.Sin( angle );
-		var rx = ((warpX - 0.5f) * cos) - ((warpY - 0.5f) * sin);
-		var ry = ((warpX - 0.5f) * sin) + ((warpY - 0.5f) * cos);
-		rx *= stretch;
-		warpX = rx + 0.5f;
-		warpY = ry + 0.5f;
+		// The domain warp scales with the basin, not the map: a fixed map-fraction warp (3–7 km on 40 km) with a
+		// global stretch tore 2 km basins into diagonal streaks once Macro Frequency went up for "water everywhere"
+		// (Mark 2026-10-29). At the old 10 km basins this is the same ~0.1 map-fraction warp as before.
+		var basinWavelengthN = 1f / Math.Max( 0.5f, macroFreq );
+		var warpAmp = basinWavelengthN * (0.35f + (shoreDetail * 0.45f));
+		var warpFreq = macroFreq * 0.7f;
+		var warpX = nx + (TerrainPreviewNoise.Fbm( seed + 880, nx * warpFreq, ny * warpFreq, 2 ) - 0.5f) * warpAmp;
+		var warpY = ny + (TerrainPreviewNoise.Fbm( seed + 881, (nx * warpFreq) + 19f, (ny * warpFreq) + 37f, 2 ) - 0.5f) * warpAmp;
 
 		var macro = TerrainPreviewNoise.Fbm( seed + 884, warpX * macroFreq, warpY * macroFreq, octaves );
+
+		// Oceans outward (Mark 2026-10-30: "water blobs are bigger the further out you go ... massive oceans
+		// instead of just lakes everywhere"). Past Ocean Zone Start the basin noise cross-fades to a field
+		// Ocean Basin Size times bigger and is lifted by Ocean Lift, so the outer land holds a few huge
+		// basins that run into the rim ring (and so count as ocean for the Azure Coast) while the inner
+		// map keeps its ponds. The fade is radial but the basins are not, so there is no ring to see.
+		var oceanMul = Math.Max( 1f, settings.LakeOceanBasinSizeMul );
+		var oceanLift = Math.Clamp( settings.LakeOceanLift01, 0f, 1f );
+		var zoneStart = Math.Clamp( settings.LakeOceanZoneStart01, 0f, 1f );
+		var zoneEnd = Math.Max( zoneStart + 0.05f, settings.LakeOceanZoneEnd01 );
+		var r01 = MathF.Sqrt( ((nx - 0.5f) * (nx - 0.5f)) + ((ny - 0.5f) * (ny - 0.5f)) ) * 2f;
+		var oceanT = SmoothStep01( (r01 - zoneStart) / (zoneEnd - zoneStart) );
+		if ( oceanT > 0f && (oceanMul > 1.001f || oceanLift > 0f) )
+		{
+			var oceanFreq = macroFreq / oceanMul;
+			var oceanWarpAmp = (1f / oceanFreq) * 0.3f;
+			var oceanWarpFreq = oceanFreq * 0.8f;
+			var owx = nx + (TerrainPreviewNoise.Fbm( seed + 882, nx * oceanWarpFreq, ny * oceanWarpFreq, 2 ) - 0.5f) * oceanWarpAmp;
+			var owy = ny + (TerrainPreviewNoise.Fbm( seed + 883, (nx * oceanWarpFreq) + 7f, (ny * oceanWarpFreq) + 11f, 2 ) - 0.5f) * oceanWarpAmp;
+			var ocean = TerrainPreviewNoise.Fbm( seed + 887, owx * oceanFreq, owy * oceanFreq, 2 );
+			macro = Lerp( macro, Math.Min( 1f, ocean + oceanLift ), oceanT );
+		}
+
 		var medium = TerrainPreviewNoise.Fbm( seed + 885, warpX * mediumFreq, warpY * mediumFreq, 3 );
-		var basin = macro * Lerp( 0.5f, 1f, medium );
+		// Medium noise only dents the basin (0.7–1): at 0.5–1 it split small lakes into ragged pieces.
+		var basin = macro * Lerp( 0.7f, 1f, medium );
 
 		basin = MathF.Pow( Math.Clamp( basin, 0f, 1f ), 0.82f );
 
@@ -68,4 +87,10 @@ static class TerrainPreviewLakeMap
 	}
 
 	static float Lerp( float a, float b, float t ) => a + ((b - a) * t );
+
+	static float SmoothStep01( float t )
+	{
+		t = Math.Clamp( t, 0f, 1f );
+		return t * t * (3f - (2f * t));
+	}
 }

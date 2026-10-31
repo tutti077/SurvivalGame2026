@@ -14,14 +14,13 @@ static class TerrainPreviewLandHeightDisplay
 		TerrainPreviewSettings settings,
 		float baseHeight01,
 		float lowlandShaped01,
-		float mountainBoost01,
+		in TerrainPreviewMountainHeight.Profile mountain,
 		float mountainInfluence01,
 		float maxTerrainHeightMeters )
 	{
 		maxTerrainHeightMeters = Math.Max( 50f, maxTerrainHeightMeters );
 		_ = baseHeight01; // already baked into lowlandShaped01 via ShapeBlend
 		lowlandShaped01 = Math.Clamp( lowlandShaped01, 0f, 1f );
-		mountainBoost01 = Math.Clamp( mountainBoost01, 0f, 1f );
 		mountainInfluence01 = Math.Clamp( mountainInfluence01, 0f, 1f );
 
 		var floor = settings.SeaLevelMeters + Math.Max( 0.05f, settings.InlandDryLandSeaMarginMeters );
@@ -31,15 +30,26 @@ static class TerrainPreviewLandHeightDisplay
 		if ( microHeadroom < 0.4f )
 			microHeadroom = 6f;
 		lowlandCeiling = Math.Min( maxTerrainHeightMeters, lowlandCeiling + microHeadroom );
-		var headroom = Math.Max( 0f, maxTerrainHeightMeters - lowlandCeiling );
 
 		// SoftCap(m) / max → meters (so BiomeCloverMaxHeightMeters can actually appear).
 		var lowlandMeters = Math.Clamp( lowlandShaped01 * maxTerrainHeightMeters, floor, lowlandCeiling );
 
-		var mountainMeters = Math.Min( lowlandMeters + (mountainBoost01 * headroom), maxTerrainHeightMeters );
-		var blendT = SmoothStep01( mountainInfluence01 );
+		// Massif: the ground rises from the lowland to the mountain's summit height over Rise01 (the dome, ridges and
+		// valleys are all in the rise); the whole thing blends in over the mountain height influence ramp.
+		var mountainMeters = lowlandMeters;
+		if ( mountain.Any )
+		{
+			var top = Math.Max( lowlandMeters, mountain.TopMeters );
+			mountainMeters = Lerp( lowlandMeters, top, Math.Clamp( mountain.Rise01, 0f, 1f ) );
+			mountainMeters = Math.Clamp( mountainMeters, lowlandMeters, maxTerrainHeightMeters );
+		}
+
+		var blendT = MountainBlend01( mountainInfluence01 );
 		return Lerp( lowlandMeters, mountainMeters, blendT );
 	}
+
+	/// <summary>How much of the mountain profile the ground takes at this height influence (the lowland → mountain lerp weight).</summary>
+	public static float MountainBlend01( float mountainInfluence01 ) => SmoothStep01( Math.Clamp( mountainInfluence01, 0f, 1f ) );
 
 	/// <summary>
 	/// Absolute elevation ceiling for non-mountain land — must reach every lowland biome max.

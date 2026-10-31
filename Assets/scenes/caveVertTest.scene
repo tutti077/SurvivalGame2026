@@ -132,7 +132,7 @@
           "__guid": "e5c8f2a4-6d13-4e9b-a7c5-3b1f8d2e6c48",
           "__enabled": true,
           "Flags": 0,
-          "FastMoveMultiplier": 3,
+          "FastMoveMultiplier": 5,
           "FollowTerrainHeight": false,
           "HeightAboveGroundMeters": 96,
           "InputLocked": false,

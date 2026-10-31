@@ -46,6 +46,13 @@ public sealed partial class TerrainWorldManager : Component
 		public float[] GrassHeightsZ;
 		public int GrassHeightsSide;
 		public float GrassStepUnits;
+		/// <summary>Per-vertex splat of the meshed grid (same layout as GrassHeightsZ): what the ground is made of, for a voxel column's seed.</summary>
+		public Color[] SplatWeights;
+		public Vector4[] SplatExtras;
+		/// <summary>Tree colliders are on (follows Collision Range, not the chunk collider — a voxel column keeps that one off).</summary>
+		public bool VegetationNear;
+		/// <summary>The voxel ground standing in for this chunk once dug (TerrainWorldManager.Voxel.cs); null = plain heightfield.</summary>
+		public VoxelColumn Voxel;
 		/// <summary>Large-tree positions (world meters) — sapling trunk clearance on promotion.</summary>
 		public readonly List<Vector2> Trunks = new();
 		/// <summary>Scatter planned for this chunk and not yet cloned (TerrainWorldManager.VegetationQueue.cs).</summary>
@@ -400,6 +407,8 @@ public sealed partial class TerrainWorldManager : Component
 	bool _hasLocalPlayerMinimapHost;
 	RealTimeSince _sinceMinimapHostScan;
 	TerrainPreviewSettings _loadSettings;
+	/// <summary>The settings the streamed world was generated with (null before the first load). Dev tools read this.</summary>
+	public TerrainPreviewSettings LoadSettings => _loadSettings;
 	Vector3 _loadStreamPos;
 	Rotation _loadViewRotation;
 	int _initialChunksTotal;
@@ -465,7 +474,12 @@ public sealed partial class TerrainWorldManager : Component
 		try
 		{
 			OnUpdateInner();
+			TickVoxelColumns();   // voxel columns: land meshes, swap in for their dug chunk
 			TickRiverSurface();   // merged river surface: rebuilds only after a chunk with river loaded / unloaded
+			PublishFarSinkAttributes();   // the far tier sinks under the near chunks only (pixel_lit F_FAR_SINK)
+			TickSeaSurface();     // ocean + lake surface: follows the camera, publishes the sea attributes
+			TickWaterRipples();   // the few pawns nearest the camera, for the water's rings and wakes
+			TickUnderwater();     // the camera below a water surface: blue, depth-dependent view
 		}
 		finally
 		{
@@ -1751,8 +1765,9 @@ public sealed partial class TerrainWorldManager : Component
 			// Horizontal for colliders/entities; 3D (altitude counts) for mesh LOD.
 			var distance = ChunkDistanceMeters( entry.Coord, streamPosMeters, worldRadius, chunkSize );
 			var lodDistance = ChunkLodDistanceMeters( entry.Coord, streamPosMeters, settings, chunkSize );
-			var desiredVerts = ResolveChunkVerticesPerSide( lodDistance, chunkSize, useStreamLod: true );
-			var wantVegetation = ShouldScatterVegetation( desiredVerts );
+			var desiredVerts = ResolveChunkVerticesPerSide( lodDistance, chunkSize, useStreamLod: true, entry.Coord );
+			// Vegetation keeps the distance rule (a water chunk's extra mesh detail must not pull trees in further out)
+			var wantVegetation = ShouldScatterVegetation( ResolveChunkVerticesPerSide( lodDistance, chunkSize, useStreamLod: true ) );
 
 			// Remesh in place — never destroy/respawn trees when LOD changes (that was the "2nd layer").
 			// Distance-based both ways, with hysteresis: promote inside the priority radius, demote
@@ -1834,7 +1849,7 @@ public sealed partial class TerrainWorldManager : Component
 			return;
 
 		var wasEnabled = entry.Collider.Enabled;
-		entry.Collider.Enabled = true;
+		entry.Collider.Enabled = entry.Voxel is not { Swapped: true };
 		if ( !wasEnabled )
 			SetVegetationNear( entry, true );
 		if ( wasEnabled || !entry.GameObject.IsValid() )
@@ -1863,7 +1878,8 @@ public sealed partial class TerrainWorldManager : Component
 			MaxTerrainHeightMeters,
 			smoothPasses,
 			ChunkHeightSmoothStrength01,
-			ResolveBorderLatticeVerticesPerSide( verticesPerSide ) );
+			ResolveBorderLatticeVerticesPerSide( verticesPerSide ),
+			ResolveFineBorderSides( entry.Coord, settings, Math.Max( 32f, ChunkSizeMeters ) ) );
 
 		ApplyChunkRemesh( entry, built, verticesPerSide, distance );
 	}
@@ -1875,7 +1891,7 @@ public sealed partial class TerrainWorldManager : Component
 			return;
 
 		Stats.Remeshes++;
-		var renderer = entry.GameObject.Components.Get<ModelRenderer>();
+		var renderer = entry.GameObject.Components.Get<ModelRenderer>( true );   // includeDisabled: a voxel column keeps the chunk's renderer off
 		if ( renderer is not null && renderer.IsValid() )
 		{
 			renderer.Model = built.Model;
@@ -1886,11 +1902,13 @@ public sealed partial class TerrainWorldManager : Component
 		{
 			entry.Collider.Model = built.Model;
 			entry.Collider.Static = true;
-			var enabled = ShouldKeepChunkColliderEnabled( entry, distance, ChunkSizeMeters );
-			if ( entry.Collider.Enabled != enabled )
-				SetVegetationNear( entry, enabled );
-			entry.Collider.Enabled = enabled;
+			var near = ShouldKeepChunkColliderEnabled( entry, distance, ChunkSizeMeters );
+			if ( entry.VegetationNear != near )
+				SetVegetationNear( entry, near );
+			entry.Collider.Enabled = near && entry.Voxel is not { Swapped: true };
 		}
+		entry.SplatWeights = built.Colors;
+		entry.SplatExtras = built.Splat;
 
 		entry.VerticesPerSide = verticesPerSide;
 		// A LOD remesh must NOT regenerate the grass tiles over this chunk: chunks promote at 128 m and demote
@@ -1933,7 +1951,8 @@ public sealed partial class TerrainWorldManager : Component
 
 			var center = TerrainChunkStreaming.GetChunkCenterWorld( entry.Coord, worldRadius, chunkSize );
 			var distance = new Vector3( center.x - streamPos.x, center.y - streamPos.y, 0f ).Length;
-			var wantEnabled = ShouldKeepChunkColliderEnabled( entry, distance, chunkSize );
+			var near = ShouldKeepChunkColliderEnabled( entry, distance, chunkSize );
+			var wantEnabled = near && entry.Voxel is not { Swapped: true };   // a voxel column's own chunks carry the collision
 			var wasEnabled = entry.Collider.Enabled;
 			if ( wantEnabled && !wasEnabled )
 			{
@@ -1946,8 +1965,8 @@ public sealed partial class TerrainWorldManager : Component
 					enabledThisPass++;
 			}
 			entry.Collider.Enabled = wantEnabled;
-			if ( wasEnabled != wantEnabled )
-				SetVegetationNear( entry, wantEnabled );
+			if ( entry.VegetationNear != (near && (wantEnabled || entry.Voxel is { Swapped: true })) )
+				SetVegetationNear( entry, near && (wantEnabled || entry.Voxel is { Swapped: true }) );
 
 			var wantShadows = IsChunkInShadowRange( distance, chunkSize );
 			if ( wantShadows != entry.ShadowsOn )
@@ -2011,7 +2030,7 @@ public sealed partial class TerrainWorldManager : Component
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
 		var worldRadius = settings.TotalWorldRadiusMeters;
 		var lodDistance = ChunkLodDistanceMeters( coord, streamPos, settings, chunkSize );
-		var verticesPerSide = ResolveChunkVerticesPerSide( lodDistance, chunkSize, useStreamLod );
+		var verticesPerSide = ResolveChunkVerticesPerSide( lodDistance, chunkSize, useStreamLod, coord );
 		var smoothPasses = useStreamLod && verticesPerSide < ChunkVerticesPerSide
 			? 0
 			: ChunkHeightSmoothPasses;
@@ -2025,7 +2044,8 @@ public sealed partial class TerrainWorldManager : Component
 			MaxTerrainHeightMeters,
 			smoothPasses,
 			ChunkHeightSmoothStrength01,
-			ResolveBorderLatticeVerticesPerSide( verticesPerSide ) );
+			ResolveBorderLatticeVerticesPerSide( verticesPerSide ),
+			ResolveFineBorderSides( coord, settings, Math.Max( 32f, ChunkSizeMeters ) ) );
 
 		FinishChunkLoad( coord, settings, streamPos, visible, verticesPerSide, built );
 	}
@@ -2072,6 +2092,7 @@ public sealed partial class TerrainWorldManager : Component
 		collider.Enabled = IsChunkInCollisionRange( distance, chunkSize );
 
 		TryBuildRiverWater( go, coord, settings, chunkMinX, chunkMinY, ChunkSizeMeters );
+		TryBuildSeaVolume( go, settings, built.HeightsZ, ChunkSizeMeters );
 
 		var entry = new LoadedChunk
 		{
@@ -2082,15 +2103,19 @@ public sealed partial class TerrainWorldManager : Component
 			GrassHeightsZ = built.HeightsZ,
 			GrassHeightsSide = built.VerticesPerSide,
 			GrassStepUnits = built.StepUnits,
+			SplatWeights = built.Colors,
+			SplatExtras = built.Splat,
+			VegetationNear = collider.Enabled,
 		};
 		_loaded[coord] = entry;
 		MarkPhase( ref Stats.FinishModelMs, finish );
 
-		if ( ShouldScatterVegetation( verticesPerSide ) )
+		if ( ShouldScatterVegetation( ResolveChunkVerticesPerSide( ChunkLodDistanceMeters( coord, streamPos, settings, chunkSize ), chunkSize, useStreamLod: true ) ) )
 			ScatterVegetationOnChunk( entry, settings, verticesPerSide );
 		MarkPhase( ref Stats.FinishScatterMs, finish );
 
 		NotifyGrassChunkChanged( entry );
+		TryRestoreVoxelColumn( entry );
 
 		// Nav + scavs only when collision is live — far render chunks must not schedule Recast.
 		if ( collider.Enabled )
@@ -2361,7 +2386,7 @@ public sealed partial class TerrainWorldManager : Component
 			}
 		}
 
-		SetVegetationNear( entry, entry.Collider is not null && entry.Collider.IsValid() && entry.Collider.Enabled );
+		SetVegetationNear( entry, entry.VegetationNear || (entry.Collider is not null && entry.Collider.IsValid() && entry.Collider.Enabled) );
 
 		var shadowsOn = false;
 		if ( _loadSettings is not null && TryGetStreamTransform( out var streamPosEngine, out _ ) )
@@ -2382,6 +2407,7 @@ public sealed partial class TerrainWorldManager : Component
 	/// </summary>
 	void SetVegetationNear( LoadedChunk entry, bool near )
 	{
+		entry.VegetationNear = near;
 		Stats.NearFlips++;
 		foreach ( var col in entry.VegetationColliders )
 		{
@@ -2407,6 +2433,9 @@ public sealed partial class TerrainWorldManager : Component
 				renderer.RenderType = shadows;
 		}
 	}
+
+	/// <summary>Dev: the vegetation options the scatter and far ring use (terrain_river_trees).</summary>
+	internal TerrainVegetationScatter.Options DevVegetationOptions => BuildVegetationOptions();
 
 	TerrainVegetationScatter.Options BuildVegetationOptions() =>
 		new()
@@ -2522,10 +2551,15 @@ public sealed partial class TerrainWorldManager : Component
 		return IsChunkInCollisionRange( distanceMeters, chunkSize );
 	}
 
-	int ResolveChunkVerticesPerSide( float distanceMeters, float chunkSize, bool useStreamLod )
+	int ResolveChunkVerticesPerSide( float distanceMeters, float chunkSize, bool useStreamLod, TerrainChunkCoord? waterCheck = null )
 	{
 		var fullDetail = Math.Clamp( ChunkVerticesPerSide, 4, 256 );
 		if ( !useStreamLod || !StreamMeshLodEnabled )
+			return fullDetail;
+		// Chunks with a shoreline or a river channel keep full detail at any distance: 4 m steps cannot hold a 15 m
+		// channel or a beach, and drew slabs of sand and steps of water at river mouths (Mark 2026-10-25). Their
+		// neighbours too, so the border between them can keep its full detail (ResolveFineBorderSides).
+		if ( waterCheck is { } wc && _loadSettings is not null && ChunkOrNeighbourTouchesWater( wc, _loadSettings, chunkSize ) )
 			return fullDetail;
 
 		var priorityRadius = chunkSize * Math.Clamp( StreamHighPriorityRadiusChunks, 1f, 4f );
@@ -2534,6 +2568,77 @@ public sealed partial class TerrainWorldManager : Component
 
 		var farDetail = Math.Clamp( StreamFarVerticesPerSide, 9, fullDetail );
 		return farDetail;
+	}
+
+	readonly Dictionary<TerrainChunkCoord, bool> _chunkTouchesWater = new();
+
+	/// <summary>
+	/// Whether a chunk holds a shoreline (lake or sea) or a river channel — cached per coord (cleared with the world).
+	/// A 5×5 lattice of lake-mask lookups plus the land edge, and the river network's nearest-segment distance at the
+	/// centre: no pipeline samples.
+	/// </summary>
+	bool ChunkTouchesWater( TerrainChunkCoord coord, TerrainPreviewSettings settings, float chunkSize )
+	{
+		if ( _chunkTouchesWater.TryGetValue( coord, out var cached ) )
+			return cached;
+		var radius = settings.TotalWorldRadiusMeters;
+		var minX = -radius + (coord.X * chunkSize);
+		var minY = -radius + (coord.Y * chunkSize);
+		var land = settings.LandRadiusMeters;
+		var threshold = TerrainPreviewLandDiskFields.GetOpenWaterThreshold01( settings );
+		var wet = false;
+		var dry = false;
+		for ( var j = 0; j <= 4; j++ )
+		{
+			for ( var i = 0; i <= 4; i++ )
+			{
+				var x = minX + (chunkSize * i / 4f);
+				var y = minY + (chunkSize * j / 4f);
+				var water = MathF.Sqrt( (x * x) + (y * y) ) >= land
+					|| (TerrainPreviewLandDiskFields.TrySampleLakeMask01AtWorld( settings, x, y, out var mask ) && mask >= threshold);
+				if ( water )
+					wet = true;
+				else
+					dry = true;
+			}
+		}
+		var touches = wet && dry;
+		if ( !touches && settings.EnableRivers )
+		{
+			var river = TerrainPreviewLandDiskFields.SampleRiver( settings, minX + (chunkSize * 0.5f), minY + (chunkSize * 0.5f) );
+			touches = river.Near && river.Distance <= river.HalfWidth + river.BankWidth + (chunkSize * 0.75f);
+		}
+		_chunkTouchesWater[coord] = touches;
+		return touches;
+	}
+
+	bool ChunkOrNeighbourTouchesWater( TerrainChunkCoord c, TerrainPreviewSettings settings, float chunkSize )
+		=> ChunkTouchesWater( c, settings, chunkSize )
+			|| ChunkTouchesWater( new TerrainChunkCoord( c.X - 1, c.Y ), settings, chunkSize )
+			|| ChunkTouchesWater( new TerrainChunkCoord( c.X + 1, c.Y ), settings, chunkSize )
+			|| ChunkTouchesWater( new TerrainChunkCoord( c.X, c.Y - 1 ), settings, chunkSize )
+			|| ChunkTouchesWater( new TerrainChunkCoord( c.X, c.Y + 1 ), settings, chunkSize );
+
+	/// <summary>
+	/// Borders that keep full detail instead of snapping to the coarse lattice: any side where this chunk or the one
+	/// across touches water — both are full detail then (<see cref="ChunkOrNeighbourTouchesWater"/>), so their raw border
+	/// samples match exactly.
+	/// </summary>
+	int ResolveFineBorderSides( TerrainChunkCoord c, TerrainPreviewSettings settings, float chunkSize )
+	{
+		if ( settings is null || !StreamMeshLodEnabled )
+			return 0;
+		var self = ChunkTouchesWater( c, settings, chunkSize );
+		var sides = 0;
+		if ( self || ChunkTouchesWater( new TerrainChunkCoord( c.X, c.Y - 1 ), settings, chunkSize ) )
+			sides |= TerrainMeshBuilder.BorderMinY;
+		if ( self || ChunkTouchesWater( new TerrainChunkCoord( c.X, c.Y + 1 ), settings, chunkSize ) )
+			sides |= TerrainMeshBuilder.BorderMaxY;
+		if ( self || ChunkTouchesWater( new TerrainChunkCoord( c.X - 1, c.Y ), settings, chunkSize ) )
+			sides |= TerrainMeshBuilder.BorderMinX;
+		if ( self || ChunkTouchesWater( new TerrainChunkCoord( c.X + 1, c.Y ), settings, chunkSize ) )
+			sides |= TerrainMeshBuilder.BorderMaxX;
+		return sides;
 	}
 
 	float ResolveLodDemoteDistanceMeters( float chunkSize )
@@ -2586,6 +2691,7 @@ public sealed partial class TerrainWorldManager : Component
 	{
 		var coord = entry.Coord;
 		Stats.Unloads++;
+		DestroyVoxelColumn( coord, restoreChunk: false );
 		entry.PendingSpawns.Clear();
 		if ( entry.GameObject is not null && entry.GameObject.IsValid() )
 			entry.GameObject.Destroy();
@@ -2627,6 +2733,7 @@ public sealed partial class TerrainWorldManager : Component
 
 	void UnloadAll()
 	{
+		_chunkTouchesWater.Clear();
 		UnloadFarTerrain();
 		CancelPendingChunkBuilds();
 		_spawnPending.Clear();
@@ -2636,11 +2743,14 @@ public sealed partial class TerrainWorldManager : Component
 		_unloadQueued.Clear();
 		_unloadingChunks.Clear();
 		_staleReloadPending = false;
+		DestroyAllVoxelColumns();
 		foreach ( var entry in _loaded.Values )
 			entry.GameObject.Destroy();
 
 		_loaded.Clear();
 		DestroyRiverSurface();
+		DestroySeaSurface();
+		DestroyUnderwater();
 		DestroyWorldGrass();
 		DestroyFarTreeCards();
 		_streamNeeded.Clear();

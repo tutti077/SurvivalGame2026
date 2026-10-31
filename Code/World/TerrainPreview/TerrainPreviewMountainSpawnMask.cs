@@ -1,25 +1,17 @@
 namespace Survival;
 
 /// <summary>
-/// Mountain biome spawn mask — ridged range chains inside spawn band; falloff is eligibility only.
-/// Peak placement: multi-peak chains along elongated ridges, small peak clusters on chunky blobs.
+/// Mountain biome spawn mask — scattered round blobs (Mark 2026-10-29: mountains "generally rounded in shape, kinda
+/// like Valheim, just little circles all over the place", no stripes). The map is cut into cells of
+/// <c>Mountain Mask - Mountain Spacing (m)</c>; each cell rolls a seeded presence chance, a centre jittered inside the
+/// cell and a radius between <c>Mountain Radius Min / Max (m)</c>. The field is the soft bump 1 − (d / r)² of the
+/// nearest present blob, with the outline wobbled by low-frequency noise (<c>Outline Wobble</c>) so the circles are
+/// not compass-drawn. The biome mask is the bump above <c>Biomes - Min Mountain Mask</c>; the height influence ramps
+/// on the same bump, so every blob is one rounded mountain with its summit cluster near the centre.
+/// The ridged range / belt / breaker / stretch field it replaces lives on as legacy JSON keys only.
 /// </summary>
 static class TerrainPreviewMountainSpawnMask
 {
-	readonly struct RidgeFrame
-	{
-		public float Nx { get; init; }
-		public float Ny { get; init; }
-		public float Wx { get; init; }
-		public float Wy { get; init; }
-		public float Cos { get; init; }
-		public float Sin { get; init; }
-		public float Stretch { get; init; }
-		public float AlongRidge01 { get; init; }
-		public float CrossRidge01 { get; init; }
-		public float RangeField01 { get; init; }
-	}
-
 	public static void AddSettingsFingerprint( ref HashCode hash, TerrainPreviewSettings settings )
 	{
 		hash.Add( settings.EnableMountainLayer );
@@ -28,38 +20,22 @@ static class TerrainPreviewMountainSpawnMask
 		hash.Add( settings.MountainInnerRadius01 );
 		hash.Add( settings.MountainOuterRadius01 );
 		hash.Add( settings.MountainBandFade01 );
-		hash.Add( settings.MountainSpawnMacroOctaves );
-		hash.Add( settings.MountainSpawnMediumOctaves );
-		hash.Add( settings.MountainSpawnMacroWavelengthMeters );
-		hash.Add( settings.MountainSpawnMediumWavelengthMeters );
-		hash.Add( settings.MountainSpawnRidgeSharpness );
-		hash.Add( settings.MountainSpawnFieldFloor01 );
-		hash.Add( settings.MountainSpawnMediumFrequencyScale );
-		hash.Add( settings.MountainSpawnMediumMix01 );
-		hash.Add( settings.MountainSpawnBreakerFrequencyScale );
-		hash.Add( settings.MountainSpawnBreakerMin01 );
-		hash.Add( settings.MountainSpawnBreakerSpan01 );
-		hash.Add( settings.MountainSpawnBreakerStrength01 );
-		hash.Add( settings.MountainSpawnBlobWavelengthMeters );
-		hash.Add( settings.MountainSpawnBlobThreshold01 );
-		hash.Add( settings.MountainSpawnWarpStrength01 );
-		hash.Add( settings.MountainSpawnRangeStretch01 );
-		hash.Add( settings.MountainSpawnRangePower01 );
+		hash.Add( settings.MountainBlobSpacingMeters );
+		hash.Add( settings.MountainBlobChance01 );
+		hash.Add( settings.MountainBlobRadiusMinMeters );
+		hash.Add( settings.MountainBlobRadiusMaxMeters );
+		hash.Add( settings.MountainBlobEdgeWobble01 );
+		hash.Add( settings.MountainBlobElongation01 );
 		hash.Add( settings.MountainSpawnSpeckFilterEnabled );
 		hash.Add( settings.MountainSpawnMinPatchDiameterMeters );
 		hash.Add( settings.MountainSpawnMinPatchSupport01 );
 		hash.Add( settings.MountainSpawnMinPatchGridSteps );
 		hash.Add( settings.MountainHeightInfluenceLow01 );
 		hash.Add( settings.MountainHeightInfluenceHigh01 );
-		hash.Add( settings.MountainPeakChainSpacingMeters );
-		hash.Add( settings.MountainPeakClusterSpacingMeters );
-		hash.Add( settings.MountainPeakShapeProbeMeters );
-		hash.Add( settings.MountainPeakShapeBlendStart01 );
-		hash.Add( settings.MountainPeakPlacementStrength01 );
 	}
 
 	/// <summary>
-	/// Wide soft ramp from mountain field — height/peaks only, no binary mask threshold.
+	/// Wide soft ramp from the blob field — height/peaks only, no binary mask threshold.
 	/// Keeps foothills continuous with neighboring biomes.
 	/// </summary>
 	public static float SampleMountainHeightInfluence01(
@@ -82,121 +58,6 @@ static class TerrainPreviewMountainSpawnMask
 		var t = SmoothStep01( (placement - rampLow) / Math.Max( 0.001f, rampHigh - rampLow ) );
 		t = SmoothStep01( t );
 		return t * Math.Clamp( settings.BiomeMountainPlacementStrength01, 0f, 1f );
-	}
-
-	/// <summary>
-	/// Where summits land: ridge chains on streaky ranges, tight peak groups on chunky blobs.
-	/// </summary>
-	public static float SamplePeakPlacement01(
-		TerrainPreviewSettings settings,
-		float nx,
-		float ny,
-		float worldDiameterMeters )
-	{
-		worldDiameterMeters = Math.Max( 500f, worldDiameterMeters );
-		var frame = BuildRidgeFrame( settings, nx, ny, worldDiameterMeters );
-		if ( frame.RangeField01 < 0.06f )
-			return 0f;
-
-		var elongation = SampleRidgeElongation01( settings, frame, worldDiameterMeters );
-		var chain = SampleRidgePeakChain01( settings, frame, worldDiameterMeters );
-		var cluster = SampleChunkyPeakCluster01( settings, nx, ny, worldDiameterMeters, frame );
-
-		var blendStart = Math.Clamp( settings.MountainPeakShapeBlendStart01, 0.2f, 0.7f );
-		var ridgeWeight = SmoothStep01( (elongation - blendStart) / Math.Max( 0.05f, 1f - blendStart ) );
-		var placement = Lerp( cluster, chain, ridgeWeight );
-		var strength = Math.Clamp( settings.MountainPeakPlacementStrength01, 0.35f, 1f );
-		return Math.Clamp( placement * strength, 0f, 1f );
-	}
-
-	static float SampleRidgeElongation01(
-		TerrainPreviewSettings settings,
-		RidgeFrame frame,
-		float worldDiameterMeters )
-	{
-		var probeMeters = Math.Max( 80f, settings.MountainPeakShapeProbeMeters );
-		var step = probeMeters / worldDiameterMeters;
-
-		var gx = (
-			SampleRangeField01( settings, frame.Nx + step, frame.Ny, worldDiameterMeters )
-			- SampleRangeField01( settings, frame.Nx - step, frame.Ny, worldDiameterMeters ) )
-			/ Math.Max( 0.0001f, step * 2f );
-		var gy = (
-			SampleRangeField01( settings, frame.Nx, frame.Ny + step, worldDiameterMeters )
-			- SampleRangeField01( settings, frame.Nx, frame.Ny - step, worldDiameterMeters ) )
-			/ Math.Max( 0.0001f, step * 2f );
-
-		var gradAlong = Math.Abs( (gx * frame.Cos) + (gy * frame.Sin) );
-		var gradCross = Math.Abs( (-gx * frame.Sin) + (gy * frame.Cos) );
-		var gradientAniso = gradCross / (gradAlong + gradCross + 0.02f );
-
-		var stretchBias = SmoothStep01( (frame.Stretch - 1f) / 3f );
-		return Math.Clamp( (gradientAniso * 0.62f) + (stretchBias * 0.38f), 0f, 1f );
-	}
-
-	static float SampleRidgePeakChain01(
-		TerrainPreviewSettings settings,
-		RidgeFrame frame,
-		float worldDiameterMeters )
-	{
-		var seed = settings.WorldSeed;
-		var spacing = Math.Max( 120f, settings.MountainPeakChainSpacingMeters );
-		var chainFreq = worldDiameterMeters / spacing;
-		var along = frame.AlongRidge01 * chainFreq;
-		var crossTight = Math.Clamp( settings.MountainPeakChainCrossTightness, 0.12f, 1.5f );
-		var chain = TerrainPreviewNoise.RidgedFbm(
-			seed + 700, along, frame.CrossRidge01 * crossTight, 4 );
-		chain = MathF.Pow( Math.Clamp( chain, 0f, 1f ), 1.35f );
-
-		var crossFalloff = Math.Clamp( settings.MountainPeakChainCrossFalloff, 0.8f, 3.5f );
-		var onSpine = SmoothStep01( 1f - (Math.Abs( frame.CrossRidge01 ) * crossFalloff) );
-		var gate = SmoothRange( frame.RangeField01, 0.22f, 0.58f );
-		return chain * onSpine * gate;
-	}
-
-	static float SampleChunkyPeakCluster01(
-		TerrainPreviewSettings settings,
-		float nx,
-		float ny,
-		float worldDiameterMeters,
-		RidgeFrame frame )
-	{
-		var seed = settings.WorldSeed;
-		var spacing = Math.Max( 160f, settings.MountainPeakClusterSpacingMeters );
-		var clusterFreq = worldDiameterMeters / spacing;
-
-		var macro = TerrainPreviewNoise.RidgedFbm(
-			seed + 720, nx * clusterFreq * 1.75f, ny * clusterFreq * 1.75f, 4 );
-		var detail = TerrainPreviewNoise.RidgedFbm(
-			seed + 721, nx * clusterFreq * 3.1f, ny * clusterFreq * 3.1f, 3 );
-		var combined = (macro * 0.7f) + (detail * 0.3f );
-
-		var rarity = MathF.Pow(
-			Math.Clamp( combined, 0f, 1f ),
-			Math.Max( 1.1f, settings.MountainPeakClusterRarityPower ) );
-
-		var crest = SampleLocalFieldCrest01( settings, nx, ny, worldDiameterMeters, spacing * 0.35f );
-		var gate = SmoothRange( frame.RangeField01, 0.26f, 0.64f );
-		return rarity * gate * Lerp( 0.42f, 1f, crest );
-	}
-
-	static float SampleLocalFieldCrest01(
-		TerrainPreviewSettings settings,
-		float nx,
-		float ny,
-		float worldDiameterMeters,
-		float blurMeters )
-	{
-		var field = SampleRangeField01( settings, nx, ny, worldDiameterMeters );
-		var step = Math.Max( 0.0008f, blurMeters / worldDiameterMeters );
-		var avg = (
-			field
-			+ SampleRangeField01( settings, nx + step, ny, worldDiameterMeters )
-			+ SampleRangeField01( settings, nx - step, ny, worldDiameterMeters )
-			+ SampleRangeField01( settings, nx, ny + step, worldDiameterMeters )
-			+ SampleRangeField01( settings, nx, ny - step, worldDiameterMeters ) ) / 5f;
-
-		return SmoothStep01( 0.5f + ((field - avg) * 3.2f) );
 	}
 
 	public static float SampleMask01(
@@ -284,142 +145,126 @@ static class TerrainPreviewMountainSpawnMask
 		return field * Math.Clamp( settings.BiomeMountainPlacementStrength01, 0f, 1f );
 	}
 
-	public static float SampleRangeField01( TerrainPreviewSettings settings, float nx, float ny, float worldDiameterMeters )
-		=> BuildRidgeFrame( settings, nx, ny, worldDiameterMeters ).RangeField01;
-
-	// One sample evaluates the same (nx, ny) frame up to eight times (placement, influence, resolver, peaks,
-	// crest centre …). A tiny per-thread memo keyed on the settings instance makes those free — the frame is a
-	// pure function of (settings, nx, ny), and editor Generate always runs on a fresh settings clone.
-	[ThreadStatic] static RidgeFrame[] _frameMemo;
-	[ThreadStatic] static TerrainPreviewSettings _frameMemoSettings;
-	[ThreadStatic] static int _frameMemoNext;
-	const int FrameMemoSlots = 4;
-
-	static RidgeFrame BuildRidgeFrame(
-		TerrainPreviewSettings settings,
-		float nx,
-		float ny,
-		float worldDiameterMeters )
+	/// <summary>The blob a point is in: its bump value, its radius as a fraction of Mountain Radius Max, and a per-blob hash.</summary>
+	public readonly struct Blob
 	{
-		if ( !ReferenceEquals( _frameMemoSettings, settings ) || _frameMemo is null )
-		{
-			_frameMemo = new RidgeFrame[FrameMemoSlots];
-			_frameMemoSettings = settings;
-			_frameMemoNext = 0;
-			for ( var i = 0; i < FrameMemoSlots; i++ )
-				_frameMemo[i] = new RidgeFrame { Nx = float.NaN, Ny = float.NaN };
-		}
+		/// <summary>0 outside every mountain, 1 at the blob centre (1 − (d / r)²).</summary>
+		public float Field01 { get; init; }
 
-		for ( var i = 0; i < FrameMemoSlots; i++ )
-		{
-			var f = _frameMemo[i];
-			if ( f.Nx == nx && f.Ny == ny )
-				return f;
-		}
+		/// <summary>Blob radius / Mountain Radius Max (0 when no blob).</summary>
+		public float Radius01 { get; init; }
 
-		var frame = BuildRidgeFrameUncached( settings, nx, ny, worldDiameterMeters );
-		_frameMemo[_frameMemoNext] = frame;
-		_frameMemoNext = (_frameMemoNext + 1) % FrameMemoSlots;
-		return frame;
+		/// <summary>Seeded 0–1 hash of the blob's cell — one value per mountain.</summary>
+		public float Hash01 { get; init; }
+
+		/// <summary>Distance from the blob centre over its (elongated, wobbled) radius: 0 at the centre, 1 at the edge.</summary>
+		public float Dist01 { get; init; }
+
+		/// <summary>Angle around the blob centre in the blob's own frame, radians.</summary>
+		public float Angle { get; init; }
+
+		/// <summary>The blob's base radius in metres (before elongation and wobble).</summary>
+		public float RadiusMeters { get; init; }
 	}
 
-	static RidgeFrame BuildRidgeFrameUncached(
-		TerrainPreviewSettings settings,
-		float nx,
-		float ny,
-		float worldDiameterMeters )
+	/// <summary>
+	/// The blob field, 0 outside every mountain and 1 at a blob centre. Pure function of (settings, nx, ny): nine
+	/// cell hashes and one FBM, cheap enough that the old per-thread frame memo is gone.
+	/// </summary>
+	public static float SampleRangeField01( TerrainPreviewSettings settings, float nx, float ny, float worldDiameterMeters )
+		=> SampleBlob( settings, nx, ny, worldDiameterMeters ).Field01;
+
+	/// <summary>The nearest present blob (highest bump) at a point, with its radius and per-mountain hash for the height profile.</summary>
+	public static Blob SampleBlob( TerrainPreviewSettings settings, float nx, float ny, float worldDiameterMeters )
 	{
 		var seed = settings.WorldSeed;
-		var warp = Math.Clamp( settings.MountainSpawnWarpStrength01, 0f, 0.65f );
-		var warpX = TerrainPreviewNoise.Fbm( seed + 640, nx * 1.05f, ny * 1.05f, 3 );
-		var warpY = TerrainPreviewNoise.Fbm( seed + 641, nx * 1.05f, ny * 1.05f, 3 );
-		var wx = nx + ((warpX - 0.5f) * warp);
-		var wy = ny + ((warpY - 0.5f) * warp);
+		var spacing = Math.Max( 500f, settings.MountainBlobSpacingMeters );
+		var radiusMin = Math.Max( 100f, settings.MountainBlobRadiusMinMeters );
+		var radiusMax = Math.Clamp( settings.MountainBlobRadiusMaxMeters, radiusMin, spacing );
+		var chance = Math.Clamp( settings.MountainBlobChance01, 0f, 1f );
+		if ( chance <= 0f )
+			return default;
 
-		var angle = TerrainPreviewNoise.Fbm( seed + 642, nx * 0.9f, ny * 0.9f, 2 ) * MathF.PI;
-		var cos = MathF.Cos( angle );
-		var sin = MathF.Sin( angle );
-		var stretch = Math.Clamp( settings.MountainSpawnRangeStretch01, 1f, 4f );
-		var rx = (wx * cos) + (wy * sin);
-		var ry = ((-wx * sin) + (wy * cos)) / stretch;
+		// Metres from the map corner (always positive, so the cell hash never sees a negative coordinate).
+		var wx = nx * worldDiameterMeters;
+		var wy = ny * worldDiameterMeters;
+		var cellX = (int)MathF.Floor( wx / spacing );
+		var cellY = (int)MathF.Floor( wy / spacing );
 
-		var macroOctaves = Math.Clamp( settings.MountainSpawnMacroOctaves, 1, 6 );
-		var mediumOctaves = Math.Clamp( settings.MountainSpawnMediumOctaves, 1, 5 );
-		var macroFreq = ResolveMacroFrequency( settings, worldDiameterMeters );
-		var macro = TerrainPreviewNoise.RidgedFbm( seed + 643, rx * macroFreq, ry * macroFreq, macroOctaves );
-
-		var ridgeSharp = Math.Clamp( settings.MountainSpawnRidgeSharpness, 1f, 4f );
-		var ridgePeak = MathF.Pow( Math.Clamp( macro, 0f, 1f ), ridgeSharp );
-
-		var mediumFreq = ResolveMediumFrequency( settings, worldDiameterMeters, macroFreq );
-		var medium = TerrainPreviewNoise.RidgedFbm( seed + 644, wx * mediumFreq, wy * mediumFreq, mediumOctaves );
-		var medMix = Math.Clamp( settings.MountainSpawnMediumMix01, 0f, 1f );
-		var ridgeBody = ridgePeak * Lerp( 0.78f, 0.58f + (medium * 0.48f), medMix );
-
-		var floor = Math.Clamp( settings.MountainSpawnFieldFloor01, 0f, 0.45f );
-		var shaped = Math.Max( 0f, ridgeBody - floor );
-
-		var breakerScale = Math.Clamp( settings.MountainSpawnBreakerFrequencyScale, 1.5f, 8f );
-		var breakerFreq = macroFreq * breakerScale;
-		var breaker = TerrainPreviewNoise.RidgedFbm( seed + 645, wx * breakerFreq, wy * breakerFreq, 2 );
-		var breakerMin = Math.Clamp( settings.MountainSpawnBreakerMin01, 0.2f, 0.85f );
-		var breakerSpan = Math.Max( 0.04f, settings.MountainSpawnBreakerSpan01 );
-		var breakerCut = SmoothStep01( (breaker - breakerMin) / breakerSpan );
-		var breakerStrength = Math.Clamp( settings.MountainSpawnBreakerStrength01, 0f, 0.9f );
-		shaped *= Lerp( 1f - breakerStrength, 1f, breakerCut );
-
-		// Range belt (Mark 2026-10-08: ranges should be bold stripes across the map, "not these whispy little
-		// things"): the ridged field is confined to a long-wavelength plain-FBM belt so each range has an extent,
-		// while the width comes from Ridge Sharpness 1 + a 6 km macro wavelength + 2 octaves (no sub-ridges).
-		var blobWavelength = Math.Max( 1000f, settings.MountainSpawnBlobWavelengthMeters );
-		var blobFreq = worldDiameterMeters / blobWavelength;
-		var blob = TerrainPreviewNoise.Fbm( seed + 646, wx * blobFreq, wy * blobFreq, 2 );
-		var blobThreshold = Math.Clamp( settings.MountainSpawnBlobThreshold01, 0.2f, 0.8f );
-		var blobGate = SmoothStep01( (blob - blobThreshold) / 0.10f );
-		shaped *= blobGate;
-
-		var power = Math.Clamp( settings.MountainSpawnRangePower01, 0.55f, 1.6f );
-		var rangeField = MathF.Pow( Math.Clamp( shaped, 0f, 1f ), power );
-
-		return new RidgeFrame
+		// One outline wobble for the whole map at about the blob scale plus finer notches: scales the radius seen
+		// from this point, so a circle reads as a knobbly irregular massif instead of a compass circle.
+		var wobbleAmp = Math.Clamp( settings.MountainBlobEdgeWobble01, 0f, 0.6f );
+		var wobbleScale = 1f;
+		if ( wobbleAmp > 0f )
 		{
-			Nx = nx,
-			Ny = ny,
-			Wx = wx,
-			Wy = wy,
-			Cos = cos,
-			Sin = sin,
-			Stretch = stretch,
-			AlongRidge01 = rx,
-			CrossRidge01 = ry,
-			RangeField01 = rangeField,
+			var wobbleWavelength = radiusMax * 0.55f;
+			var wobble = TerrainPreviewNoise.Fbm( seed + 647, wx / wobbleWavelength, wy / wobbleWavelength, 2 );
+			var notchWavelength = radiusMax * 0.18f;
+			var notch = TerrainPreviewNoise.Fbm( seed + 655, wx / notchWavelength, wy / notchWavelength, 2 );
+			wobbleScale = 1f + ((wobble - 0.5f) * 2f * wobbleAmp) + ((notch - 0.5f) * 2f * wobbleAmp * 0.35f);
+		}
+		var elongation = Math.Clamp( settings.MountainBlobElongation01, 0f, 1f );
+
+		var best = 0f;
+		var bestRadius = 0f;
+		var bestHash = 0f;
+		var bestDist = 0f;
+		var bestAngle = 0f;
+		var bestRadiusMeters = 0f;
+		for ( var oy = -1; oy <= 1; oy++ )
+		{
+			for ( var ox = -1; ox <= 1; ox++ )
+			{
+				var gx = cellX + ox;
+				var gy = cellY + oy;
+				if ( gx < 0 || gy < 0 )
+					continue;
+				if ( TerrainPreviewNoise.Hash01( seed + 648, gx, gy ) >= chance )
+					continue;   // this cell rolled no mountain
+
+				var jitterX = TerrainPreviewNoise.Hash01( seed + 649, gx, gy );
+				var jitterY = TerrainPreviewNoise.Hash01( seed + 650, gx, gy );
+				var centreX = (gx + 0.2f + (jitterX * 0.6f)) * spacing;
+				var centreY = (gy + 0.2f + (jitterY * 0.6f)) * spacing;
+				var radiusRoll = TerrainPreviewNoise.Hash01( seed + 651, gx, gy );
+				var baseRadius = radiusMin + ((radiusMax - radiusMin) * radiusRoll);
+				var radius = baseRadius * wobbleScale;
+				// Elongation: each massif is stretched along its own axis (real ranges are seldom round).
+				var axis = TerrainPreviewNoise.Hash01( seed + 653, gx, gy ) * MathF.PI;
+				var stretch = 1f + (elongation * TerrainPreviewNoise.Hash01( seed + 654, gx, gy ));
+				var dx = wx - centreX;
+				var dy = wy - centreY;
+				var cosA = MathF.Cos( axis );
+				var sinA = MathF.Sin( axis );
+				var u = ((dx * cosA) + (dy * sinA)) / stretch;
+				var v = (dy * cosA) - (dx * sinA);
+				var d2 = (u * u) + (v * v);
+				var r2 = radius * radius;
+				if ( d2 >= r2 )
+					continue;
+
+				var bump = 1f - (d2 / r2);
+				if ( bump <= best )
+					continue;
+
+				best = bump;
+				bestRadius = baseRadius / radiusMax;
+				bestHash = TerrainPreviewNoise.Hash01( seed + 652, gx, gy );
+				bestDist = MathF.Sqrt( d2 / r2 );
+				bestAngle = MathF.Atan2( v, u );
+				bestRadiusMeters = baseRadius;
+			}
+		}
+
+		return new Blob
+		{
+			Field01 = best,
+			Radius01 = bestRadius,
+			Hash01 = bestHash,
+			Dist01 = bestDist,
+			Angle = bestAngle,
+			RadiusMeters = bestRadiusMeters,
 		};
-	}
-
-	static float ResolveMacroFrequency( TerrainPreviewSettings settings, float worldDiameterMeters )
-	{
-		var wavelength = Math.Max( 350f, settings.MountainSpawnMacroWavelengthMeters );
-		return worldDiameterMeters / wavelength;
-	}
-
-	static float ResolveMediumFrequency(
-		TerrainPreviewSettings settings,
-		float worldDiameterMeters,
-		float macroFreq )
-	{
-		if ( settings.MountainSpawnMediumWavelengthMeters > 1f )
-			return worldDiameterMeters / Math.Max( 120f, settings.MountainSpawnMediumWavelengthMeters );
-
-		return macroFreq * Math.Clamp( settings.MountainSpawnMediumFrequencyScale, 1.2f, 8f );
-	}
-
-	static float SmoothRange( float value, float edge0, float edge1 )
-	{
-		if ( edge1 <= edge0 )
-			return value >= edge0 ? 1f : 0f;
-
-		var t = Math.Clamp( (value - edge0) / (edge1 - edge0), 0f, 1f );
-		return t * t * (3f - (2f * t));
 	}
 
 	static float SmoothStep01( float t )
@@ -428,5 +273,4 @@ static class TerrainPreviewMountainSpawnMask
 		return t * t * (3f - (2f * t));
 	}
 
-	static float Lerp( float a, float b, float t ) => a + ((b - a) * t );
 }

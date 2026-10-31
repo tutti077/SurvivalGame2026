@@ -4,9 +4,10 @@ namespace Survival;
 [Title( "Terrain Test Fly Camera" )]
 public sealed class TerrainTestFlyCamera : Component
 {
-	/// <summary>Engine units/sec (see <see cref="TerrainWorldUnits.UnitsPerMeter"/>). Default ≈ 55 m/s; shift ≈ 165 m/s (~10 km/min).</summary>
+	/// <summary>Engine units/sec (see <see cref="TerrainWorldUnits.UnitsPerMeter"/>). Default ≈ 55 m/s; shift ≈ 275 m/s (~16 km/min).</summary>
 	[Property] public float MoveSpeed { get; set; } = 2220f;
-	[Property] public float FastMoveMultiplier { get; set; } = 3f;
+	/// <summary>Speed factor while Run (shift) is held. 3 was "SO slow" for crossing the 40 km world (Mark 2026-10-30) → 5.</summary>
+	[Property] public float FastMoveMultiplier { get; set; } = 5f;
 	[Property] public float LookSensitivity { get; set; } = 0.075f;
 	[Property, Title( "Follow terrain height" ), Description( "When on: WASD stays horizontal; Jump/Duck adjust height above sampled ground. When off: free 3D flight." )]
 	public bool FollowTerrainHeight { get; set; }

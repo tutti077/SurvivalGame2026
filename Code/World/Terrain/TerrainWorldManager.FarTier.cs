@@ -15,7 +15,9 @@ namespace Survival;
 /// once-a-second 30-46 ms frame while flying (perf_watch phase timings, 2026-10-15: every other phase stayed
 /// under 12 ms) and is kept only as the fallback for a worker that returns empty samples. The
 /// far surface is sunk <see cref="FarSinkMeters"/> so it never pokes through the detailed near mesh where
-/// the two overlap at the edge of the near bubble, and a far chunk the near tier fully covers is hidden.
+/// the two overlap at the edge of the near bubble — on the GPU, under the near chunks' square only (pixel_lit
+/// F_FAR_SINK, 2026-10-22: a whole-tier CPU sink left a step round the near square) — and a far chunk the near tier
+/// fully covers is hidden.
 /// </summary>
 public sealed partial class TerrainWorldManager
 {
@@ -34,8 +36,8 @@ public sealed partial class TerrainWorldManager
 	[Property, Group( "Far Terrain" ), Title( "Canopy Tint (0-1)" ), Range( 0f, 1f ), Step( 0.05f ), Description( "Darken far-tier ground where the forest patches are, so a forest still reads as a forest past the impostor ring (2-8 km, Mark 2026-10-14)." )]
 	public float FarCanopyTint01 { get; set; } = 0.45f;
 
-	[Property, Group( "Far Terrain" ), Title( "Far Sink (m)" ), Range( 0f, 10f ), Step( 0.5f ), Description( "The far surface sits this far below the true ground so it never pokes through the near mesh at the bubble edge." )]
-	public float FarSinkMeters { get; set; } = 2.5f;
+	[Property, Group( "Far Terrain" ), Title( "Far Sink (m)" ), Range( 0f, 40f ), Step( 0.5f ), Description( "Under the near chunks the far surface sinks this far (on the GPU, easing in over 4 m from the square edge) so it never pokes through the detailed mesh; outside the near square it stands at true height — no step. Deeper than any river channel: the far tier's 16 m grid bridges a channel bank to bank, and at 2.5 m its flat triangles stood just under the river water (Mark 2026-10-25: the straight-edged patches at a confluence)." )]
+	public float FarSinkMeters { get; set; } = 12f;
 
 	[Property, Group( "Far Terrain" ), Title( "Far Build Budget (ms)" ), Range( 2f, 24f ), Step( 1f ), Description( "Main-thread time per frame spent finishing far chunks (model upload + GameObject; at least one per frame while any are ready)." )]
 	public float FarBuildBudgetMs { get; set; } = 6f;
@@ -108,6 +110,7 @@ public sealed partial class TerrainWorldManager
 
 		BuildQueuedFarChunks( settings, size, worldRadius );
 		UpdateFarVisibility( settings, size, worldRadius, streamPos );
+		TickHorizonTerrain( settings, streamPosEngine );
 		EnsureCameraReachesFarTier();
 		FarChunkCount = _far.Count;
 	}
@@ -122,7 +125,10 @@ public sealed partial class TerrainWorldManager
 		if ( cam is null || !cam.IsValid() )
 			return;
 
-		var needed = TerrainWorldUnits.MetersToEngine( Math.Max( 1000f, FarViewDistanceMeters ) + 1500f );
+		// …and past it the horizon tier, out to the far side of the world disc
+		var settings = _loadSettings;
+		var reach = Math.Max( Math.Max( 1000f, FarViewDistanceMeters ) + 1500f, settings is null ? 0f : settings.TotalWorldRadiusMeters * 2f );
+		var needed = TerrainWorldUnits.MetersToEngine( reach );
 		if ( cam.ZFar < needed )
 			cam.ZFar = needed;
 	}
@@ -266,11 +272,11 @@ public sealed partial class TerrainWorldManager
 		float impostorHeightMeters,
 		float nearChunkSize )
 	{
-		// riverBedAsGround false: the far tier has no water strip, so its river creases stay palette-blue.
-		var g = TerrainMeshBuilder.BuildChunkGeometry( settings, backend, coord, size, verts, 0, 0f, 0, riverBedAsGround: false );
+		var g = TerrainMeshBuilder.BuildChunkGeometry( settings, backend, coord, size, verts, 0, 0f, 0 );
 		if ( g is null )
 			return null;
 
+		LowerFarRiverVertices( g, settings );
 		ApplyFarCanopyTint( g, settings, options, tint );
 		var cards = impostors
 			? PlanFarCards( settings, backend, coord, size, nearChunkSize, options, impostorHeightMeters )
@@ -280,6 +286,49 @@ public sealed partial class TerrainWorldManager
 	}
 
 	/// <summary>
+	/// Rivers on the far tier: the 16 m grid bridges a 20–30 m channel bank to bank wherever no vertex happens to land in
+	/// it, so past the near chunks a river was a ragged strip of bed sand at bank height, and where the carved near
+	/// channel met it the channel ended in a wall along the chunk line (Mark 2026-10-30, "something going wrong with
+	/// rivers and terrain height"). Every far vertex within a channel's reach is pulled toward <see cref="FarRiverBedMeters"/>
+	/// under the river's water level — fully inside the channel, feathered out over the slide plus 1.5 grid steps, so the
+	/// 16 m grid draws a smooth V-trough some 60 m wide instead of a one-vertex gutter with sawtooth sides (Mark
+	/// 2026-10-30: "river lod from a distance looks like trash") — and its sides are painted sand by the same weight, so
+	/// the ribbon reads as banks from a kilometre instead of the hit-or-miss sand the 16 m sampling of a 4 m slide band
+	/// gave. The merged river surface already reaches far rivers, so the water sits in the trough. Render heights only;
+	/// the raw heights the normals come from stay.
+	/// </summary>
+	static void LowerFarRiverVertices( TerrainMeshBuilder.ChunkGeometry g, TerrainPreviewSettings settings )
+	{
+		if ( !settings.EnableRivers || g.Heights is null )
+			return;
+		var n = g.VerticesPerSide;
+		var slide = Math.Clamp( settings.RiverBankSlideWidthMeters, 0.5f, 30f );
+		var feather = slide + (g.Step * 1.5f);
+		var sea = settings.SeaLevelMeters;
+		for ( var i = 0; i < g.Heights.Length; i++ )
+		{
+			var sample = g.Samples[i];
+			if ( !sample.IsInsideWorld || !sample.IsOnLand )
+				continue;
+			var wx = g.ChunkMinX + ((i % n) * g.Step) + g.OffsetX[i];
+			var wy = g.ChunkMinY + ((i / n) * g.Step) + g.OffsetY[i];
+			var hit = TerrainPreviewLandDiskFields.SampleRiver( settings, wx, wy );
+			if ( !hit.Near || hit.Distance >= hit.HalfWidth + feather )
+				continue;
+			var t = Math.Clamp( (hit.Distance - hit.HalfWidth) / feather, 0f, 1f );
+			var w = 1f - (t * t * (3f - (2f * t)));   // 1 in the channel, 0 at the trough's outer edge
+			var bed = Math.Max( sea, hit.Level ) - FarRiverBedMeters;
+			var target = Math.Min( g.Heights[i], bed );
+			g.Heights[i] += (target - g.Heights[i]) * w;
+			if ( g.Splat is not null )
+				g.Splat[i].x = Math.Max( g.Splat[i].x, w );   // sand on the trough (TEXCOORD0.x, the beach / bed channel)
+		}
+	}
+
+	/// <summary>How far under its water level a far-tier river trough sits (a bed the water surface covers, never coplanar with it).</summary>
+	const float FarRiverBedMeters = 1.5f;
+
+	/// <summary>
 	/// Forest canopy as colour: where the real scatter's forest patches are, the far ground darkens toward a
 	/// canopy green, so the 2-8 km band shows forests without a single tree drawn. Same patch noise as the
 	/// tree planner (<see cref="TerrainVegetationScatter.SampleForestCover01"/>), evaluated at the far vertices.
@@ -287,12 +336,11 @@ public sealed partial class TerrainWorldManager
 	static void ApplyFarCanopyTint( TerrainMeshBuilder.ChunkGeometry g, TerrainPreviewSettings settings, TerrainVegetationScatter.Options options, float tint01 )
 	{
 		var tint = Math.Clamp( tint01, 0f, 1f );
-		if ( g.Colors is null || g.Samples is null )
+		if ( g.Splat is null || g.Samples is null || tint <= 0.001f )
 			return;
 
 		var n = g.VerticesPerSide;
-		var canopy = new Color( 0.09f, 0.22f, 0.07f );
-		for ( var i = 0; i < g.Colors.Length; i++ )
+		for ( var i = 0; i < g.Splat.Length; i++ )
 		{
 			var sample = g.Samples[i];
 			if ( !sample.IsInsideWorld || !sample.IsOnLand || sample.OceanHeight01 > 0.5f || !sample.HasLandWeights )
@@ -305,8 +353,8 @@ public sealed partial class TerrainWorldManager
 			if ( cover <= 0.01f )
 				continue;
 
-			if ( tint > 0.001f )
-				g.Colors[i] = Color.Lerp( g.Colors[i], canopy, cover * tint );
+			// The splat's canopy channel: pixel_lit darkens toward Splat Canopy Color by it
+			g.Splat[i].z = cover * tint;
 		}
 	}
 
@@ -332,7 +380,7 @@ public sealed partial class TerrainWorldManager
 
 		var cardMesh = BuildFarCardMesh( sampled.CardVertices, sampled.CardIndices, size, MaxTerrainHeightMeters );
 		var built = TerrainMeshBuilder.BuildModelFromGeometry(
-			g, size, MaxTerrainHeightMeters, withCollision: false, sinkMeters: Math.Max( 0f, FarSinkMeters ), extraMesh: cardMesh );
+			g, size, MaxTerrainHeightMeters, withCollision: false, sinkMeters: 0f, extraMesh: cardMesh, farTier: true );
 		if ( built.Model is null || !built.Model.IsValid )
 			return;
 
@@ -428,5 +476,6 @@ public sealed partial class TerrainWorldManager
 		_farLastCenter = new TerrainChunkCoord( int.MinValue, int.MinValue );
 		_farStatsLogged = false;
 		FarChunkCount = 0;
+		UnloadHorizonTerrain();
 	}
 }

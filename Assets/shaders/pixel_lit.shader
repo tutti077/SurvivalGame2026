@@ -19,7 +19,15 @@
 //
 // Used by the generated elm bark / end grain / leaf-card materials (Blender/scripts/create_elm_tree.py),
 // the build-kit wood, weapons, the buggy atlas and the streamed terrain (materials/terrain/terrain_ground.vmat:
-// F_VERTEX_PAINT + PixelWorldUvMeters — painted biome vertex colours, the Clover ground texture tiled in world space).
+// F_TERRAIN_SPLAT + PixelWorldUvMeters — the per-pixel biome blend, every ground layer tiled in world space).
+//
+// F_TERRAIN_SPLAT (Mark 2026-10-24: biome borders were stair-stepped or smeared — the colour lived on the vertices):
+// the vertex carries WHAT the ground is — COLOR0 = Clover / Redwood / Amber land shares + the Mountain weight (from
+// TerrainPreviewBiomeResolver), TEXCOORD0 = sand (beaches, beds) + wet, TEXCOORD1 = far-forest canopy darkening + the
+// tier (0 near, 1 far, 2 horizon) — and the pixel decides what it LOOKS like: five point-sampled ground layers, the
+// biome picked per pixel exactly as the resolver picks it (Mountain from 0.5, else the largest land share) with a
+// noise-broken edge a few metres wide, sand and wet on top. The same rule on every tier, so near, far and horizon
+// ground agree, and a border is an organic line at any vertex spacing — never the grid's stairs nor a 100 m smear.
 //
 // F_WIND ("Wind" feature, off by default) adds the tree sway in the vertex stage — trunk lean + limb
 // motion from the object-space position, driven by WindSystem like grass_blade.shader. Only the standing
@@ -47,6 +55,11 @@ FEATURES
 	// Vertex paint (terrain): vertex colour is the painted ground colour, vertex ALPHA is how much the texture
 	// shows instead of it (1 = pure texture, 0 = pure vertex colour). Off = texture only, vertex colour ignored.
 	Feature( F_VERTEX_PAINT, 0..1, "Rendering" );
+	// Far terrain tier: sunk under the near chunks only (TerrainWorldManager publishes their square), true height
+	// everywhere else — so there is no step where the near square ends (Mark 2026-10-22: "square chunks taken out").
+	Feature( F_FAR_SINK, 0..1, "Terrain" );
+	// The per-pixel biome blend (terrain ground). Supersedes F_VERTEX_PAINT on the terrain materials.
+	Feature( F_TERRAIN_SPLAT, 0..1, "Terrain" );
 }
 
 MODES
@@ -73,6 +86,8 @@ struct PixelInput
 	#include "common/pixelinput.hlsl"
 
 	float4 vColor : COLOR0;
+	// F_TERRAIN_SPLAT: x = sand, y = wet, z = canopy darkening, w = tier
+	float4 vSplat : TEXCOORD12;
 };
 
 VS
@@ -80,6 +95,9 @@ VS
 	#include "common/vertex.hlsl"
 
 	StaticCombo( S_WIND, F_WIND, Sys( ALL ) );
+	// Without this declaration "#if ( S_FAR_SINK )" below compiled to nothing: the far-tier sink and the horizon burial
+	// never ran (2026-10-24 — the unburied horizon covered rivers and drew sand halos and straight edges round lakes)
+	StaticCombo( S_FAR_SINK, F_FAR_SINK, Sys( ALL ) );
 
 	#if ( S_WIND )
 		// --- Tree wind (F_WIND) ---
@@ -142,10 +160,50 @@ VS
 		}
 	#endif
 
+	#if ( S_FAR_SINK )
+		// TerrainWorldManager.SeaWater: SeaClock.y = far sink (m); SeaNearRect = the near chunks' square (engine units)
+		float4 g_vFarSinkClock < Attribute( "SeaClock" ); Default4( 0.0, 2.5, 0.0, 0.0 ); >;
+		float4 g_vFarSinkNearRect < Attribute( "SeaNearRect" ); Default4( 0.0, 0.0, -1.0, -1.0 ); >;
+		// The horizon tier (TerrainWorldManager.Horizon, on Scene.RenderAttributes): xy = the far tier's centre, z = Far
+		// View Distance (engine units); z <= 0 = no horizon. Only vertices marked tier 2 (TEXCOORD1.y) are buried — a
+		// per-renderer attribute never reached this stage, and the unburied horizon bridged over every river channel near
+		// the camera (Mark 2026-10-24: a river with no water and dark rectangles on the ground).
+		float4 g_vHorizonSinkCircle < Attribute( "HorizonSinkCircle" ); Default4( 0.0, 0.0, -1.0, 0.0 ); >;
+	#endif
+
 	PixelInput MainVs( VertexInput i )
 	{
 		PixelInput o = ProcessVertex( i );
 		o.vColor = i.vColor;
+		o.vSplat = float4( i.vTexCoord.xy, i.vTexCoord2.xy );
+
+		#if ( S_FAR_SINK )
+		{
+			// Inside the near square the detailed chunks are the ground: the coarse far surface drops under them,
+			// easing in over the first 4 m so the two meet at true height on the square's edge
+			float2 xy = o.vPositionWs.xy;
+			float2 inside = min( xy - g_vFarSinkNearRect.xy, g_vFarSinkNearRect.zw - xy );
+			float flInside = min( inside.x, inside.y );
+			float flSink = g_vFarSinkClock.y * 40.0 * saturate( flInside / (4.0 * 40.0) );
+			// Inside the far tier the horizon tier is buried: 300 m down until ~770 m short of Far View Distance (well
+			// within the far chunks everywhere), then 15 m across the ring where the far chunks may or may not reach,
+			// back to its true height 400 m past it
+			if ( g_vHorizonSinkCircle.z > 0.0 && i.vTexCoord2.y > 1.5 )
+			{
+				float d = length( xy - g_vHorizonSinkCircle.xy );
+				float R = g_vHorizonSinkCircle.z;
+				float s1 = saturate( (d - (R - 768.0 * 40.0)) / (406.0 * 40.0) );
+				float s2 = saturate( (d - (R - 362.0 * 40.0)) / (762.0 * 40.0) );
+				float flCircle = d < R - 362.0 * 40.0 ? lerp( 300.0, 15.0, s1 ) : 15.0 * (1.0 - s2);
+				flSink = max( flSink, flCircle * 40.0 );
+			}
+			if ( flSink > 0.0 )
+			{
+				o.vPositionWs.z -= flSink;
+				o.vPositionPs.xyzw = Position3WsToPs( o.vPositionWs.xyz );
+			}
+		}
+		#endif
 
 		#if ( S_WIND )
 			float3x4 matObjectToWorld = GetTransformMatrix( i.nInstanceTransformID );
@@ -258,6 +316,7 @@ PS
 
 	StaticCombo( S_ALPHA_TEST, F_ALPHA_TEST, Sys( ALL ) );
 	StaticCombo( S_VERTEX_PAINT, F_VERTEX_PAINT, Sys( ALL ) );
+	StaticCombo( S_TERRAIN_SPLAT, F_TERRAIN_SPLAT, Sys( ALL ) );
 
 	RenderState( CullMode, F_RENDER_BACKFACES ? NONE : DEFAULT );
 
@@ -279,6 +338,161 @@ PS
 	Texture2D g_tRough < Channel( R, Box( TextureRoughness ), Linear ); OutputFormat( RGBA8888 ); SrgbRead( false ); >;
 
 	SamplerState g_sPointSampler < Filter( POINT ); AddressU( WRAP ); AddressV( WRAP ); >;
+
+	// --- Terrain splat (F_TERRAIN_SPLAT): TextureColor is the Clover grass; the other four ground layers tile the same
+	// way (PixelWorldUvMeters, same size), the noise breaks the biome / sand edges up (tiled every Splat Noise metres).
+	CreateInputTexture2D( TextureSplatRedwood, Srgb, 8, "", "_color", "Splat,40/10", Default3( 0.35, 0.16, 0.13 ) );
+	CreateInputTexture2D( TextureSplatAmber, Srgb, 8, "", "_color", "Splat,40/20", Default3( 0.73, 0.50, 0.25 ) );
+	CreateInputTexture2D( TextureSplatMountain, Srgb, 8, "", "_color", "Splat,40/30", Default3( 0.50, 0.49, 0.47 ) );
+	CreateInputTexture2D( TextureSplatSand, Srgb, 8, "", "_color", "Splat,40/40", Default3( 0.62, 0.57, 0.45 ) );
+	CreateInputTexture2D( TextureSplatNoise, Linear, 8, "", "", "Splat,40/50", Default3( 0.5, 0.5, 0.5 ) );
+	Texture2D g_tSplatRedwood < Channel( RGB, Box( TextureSplatRedwood ), Srgb ); OutputFormat( RGBA8888 ); SrgbRead( true ); >;
+	Texture2D g_tSplatAmber < Channel( RGB, Box( TextureSplatAmber ), Srgb ); OutputFormat( RGBA8888 ); SrgbRead( true ); >;
+	Texture2D g_tSplatMountain < Channel( RGB, Box( TextureSplatMountain ), Srgb ); OutputFormat( RGBA8888 ); SrgbRead( true ); >;
+	Texture2D g_tSplatSand < Channel( RGB, Box( TextureSplatSand ), Srgb ); OutputFormat( RGBA8888 ); SrgbRead( true ); >;
+	Texture2D g_tSplatNoise < Channel( RGBA, Box( TextureSplatNoise ), Linear ); OutputFormat( RGBA8888 ); SrgbRead( false ); >;
+	// Past a texel per pixel the point-sampled layers would shimmer: blend to their filtered (mipped) colour
+	SamplerState g_sSplatSmooth < Filter( ANISOTROPIC ); MaxAniso( 8 ); AddressU( WRAP ); AddressV( WRAP ); >;
+	SamplerState g_sSplatNoiseSampler < Filter( BILINEAR ); AddressU( WRAP ); AddressV( WRAP ); >;
+	// How far the noise pushes a border about (as a share of the biome weights: the borders' own ramps are ~100 m wide,
+	// so 0.35 wanders a border by roughly ±15 m) and how soft the final edge is (higher = crisper)
+	float SplatEdgeWander < Default( 0.35 ); Range( 0.0, 1.0 ); UiGroup( "Splat,40/60" ); >;
+	float SplatEdgeSharpness < Default( 30.0 ); Range( 2.0, 200.0 ); UiGroup( "Splat,40/70" ); >;
+	// Size of the edge noise (m per repeat of the noise texture)
+	float SplatNoiseMeters < Default( 40.0 ); Range( 2.0, 400.0 ); UiGroup( "Splat,40/80" ); >;
+	// How much darker wet ground is (beds, the band at the waterline)
+	float SplatWetDarken < Default( 0.3 ); Range( 0.0, 1.0 ); UiGroup( "Splat,40/90" ); >;
+	// Far-forest canopy colour (TerrainWorldManager.FarTier) and the large-scale brightness variation that keeps the
+	// tiles from reading as tiles at a distance
+	float3 SplatCanopyColor < UiType( Color ); Default3( 0.09, 0.22, 0.07 ); UiGroup( "Splat,40/100" ); >;
+	float SplatMacroVariation < Default( 0.22 ); Range( 0.0, 1.0 ); UiGroup( "Splat,40/110" ); >;
+
+	// One ground layer at this pixel: point-sampled up close, its filtered colour once a texel is under a pixel. No
+	// visible repeat: a second copy of the tile, turned and shifted, takes over in noise patches (pick 0..1) — a hard
+	// switch up close, so the texels stay crisp, a blend in the distance.
+	float3 SplatLayerOnce( Texture2D tex, float2 uv, float2 dUvX, float2 dUvY, float smooth )
+	{
+		float3 crisp = tex.SampleLevel( g_sPointSampler, uv, 0 ).rgb;
+		float3 soft = tex.SampleGrad( g_sSplatSmooth, uv, dUvX, dUvY ).rgb;
+		return lerp( crisp, soft, smooth );
+	}
+	float3 SplatLayer( Texture2D tex, float2 uv, float2 dUvX, float2 dUvY, float smooth, float pick )
+	{
+		static const float2x2 turn = float2x2( 0.766, -0.643, 0.643, 0.766 );   // 40°
+		float3 a = SplatLayerOnce( tex, uv, dUvX, dUvY, smooth );
+		float3 b = SplatLayerOnce( tex, mul( turn, uv ) + float2( 0.37, 0.61 ), mul( turn, dUvX ), mul( turn, dUvY ), smooth );
+		return lerp( a, b, pick );
+	}
+
+	// The ground's colour from the splat inputs (see the header). Uniform control flow: call before any branch.
+	// The sea's wet-sand memory (TerrainWorldManager.SeaFoamMemory): G = how recently water stood here. Read within its rect
+	// (engine units around the camera) and only on ground within ~1.5 m of sea level — the memory knows the laps, not the
+	// ground height, so the height gate keeps the wet off cliffs and dunes behind the beach.
+	Texture2D g_tSeaFoamMemory < Attribute( "SeaFoamMemory" ); SrgbRead( false ); >;
+	SamplerState g_sSeaFoamMemorySampler < Filter( BILINEAR ); AddressU( CLAMP ); AddressV( CLAMP ); >;
+	float4 g_vSeaFoamRect < Attribute( "SeaFoamRect" ); Default4( 0.0, 0.0, 1.0, 0.0 ); >;
+	// x = sea level (engine units)
+	float4 g_vSeaFoamInfo < Attribute( "SeaFoamInfo" ); Default4( 0.0, 0.0, 0.0, 0.0 ); >;
+
+	float SeaWetMemory( float3 vPositionWs )
+	{
+		if ( g_vSeaFoamRect.w < 0.5 )
+			return 0.0;
+		float2 fuv = (vPositionWs.xy - g_vSeaFoamRect.xy) / g_vSeaFoamRect.z;
+		if ( any( fuv < 0.0 ) || any( fuv > 1.0 ) )
+			return 0.0;
+		float above = (vPositionWs.z - g_vSeaFoamInfo.x) / 40.0;
+		float2 edge = min( fuv, 1.0 - fuv ) * g_vSeaFoamRect.z / 40.0;
+		float inside = smoothstep( 0.0, 40.0, min( edge.x, edge.y ) );
+		return g_tSeaFoamMemory.SampleLevel( g_sSeaFoamMemorySampler, fuv, 0 ).g * (1.0 - smoothstep( 0.8, 1.6, above )) * inside;
+	}
+
+	// The five ground tiles at one projection, added in with weight w. Every derivative is taken by the caller, outside
+	// any branch, so a projection that carries no weight can be skipped without undefined ddx / ddy.
+	void SplatProjection( float2 uv, float2 dUvX, float2 dUvY, float pick, float w,
+		inout float3 grass, inout float3 redwood, inout float3 amber, inout float3 rock, inout float3 sand )
+	{
+		float2 vSize;
+		g_tColor.GetDimensions( vSize.x, vSize.y );
+		float footprint = max( length( dUvX ), length( dUvY ) ) * vSize.x;
+		float smooth = smoothstep( 0.6, 2.0, footprint );
+		float p = smoothstep( 0.5 - 0.02 - 0.3 * smooth, 0.5 + 0.02 + 0.3 * smooth, pick );
+		grass += SplatLayer( g_tColor, uv, dUvX, dUvY, smooth, p ) * w;
+		redwood += SplatLayer( g_tSplatRedwood, uv, dUvX, dUvY, smooth, p ) * w;
+		amber += SplatLayer( g_tSplatAmber, uv, dUvX, dUvY, smooth, p ) * w;
+		rock += SplatLayer( g_tSplatMountain, uv, dUvX, dUvY, smooth, p ) * w;
+		sand += SplatLayer( g_tSplatSand, uv, dUvX, dUvY, smooth, p ) * w;
+	}
+
+	// Triplanar (Mark 2026-10-29, voxel pit walls: "the rendering issue with the vertical lines" — the tiles were projected
+	// from above only, so a steep dug wall stretched one texel row into vertical stripes). The tiles are projected along
+	// the face's dominant axes, top (xy) plus the x and y sides (yz / xz), weighted by the surface normal to the 8th
+	// power so level ground stays the single top projection it always was and only slopes past ~35° start mixing in a
+	// side. A side with no weight is skipped (uniform-safe: derivatives are taken first).
+	// The weights come from the INTERPOLATED vertex normal, never the triangle's own plane (ddx / ddy): on a steep smooth
+	// face the two triangles of every grid quad lean a little differently, so a per-triangle weight flipped the mix
+	// between the top and the side tile from one triangle to the next — horizontal sawtooth bands up every mountain
+	// face (Mark 2026-10-30, "when the terrain gets very sloped it gets all zigzaggy"). The vertex normal is continuous
+	// across the diagonal, so the blend is too.
+	float3 TerrainSplatAlbedo( float3 vPositionWs, float3 vNormalWs, float2 vUv, float4 vWeights, float4 vSplat )
+	{
+		float flTile = max( PixelWorldUvMeters, 0.01 ) * 40.0;
+		float2 vUvX = vPositionWs.yz / flTile;
+		float2 vUvY = vPositionWs.xz / flTile;
+		float2 dUvX = ddx( vUv );
+		float2 dUvY = ddy( vUv );
+		float2 dUvXx = ddx( vUvX );
+		float2 dUvXy = ddy( vUvX );
+		float2 dUvYx = ddx( vUvY );
+		float2 dUvYy = ddy( vUvY );
+		float3 vGeoN = abs( normalize( vNormalWs ) );
+		float3 vTri = pow( vGeoN, 8.0 );
+		vTri /= max( vTri.x + vTri.y + vTri.z, 1e-5 );
+
+		// Edge noise: three independent channels per biome, plus a slow one for the macro variation
+		float2 m = vPositionWs.xy / 40.0;
+		float2 nUv = m / SplatNoiseMeters;
+		float4 n1 = g_tSplatNoise.SampleLevel( g_sSplatNoiseSampler, nUv, 0 );
+		float4 n2 = g_tSplatNoise.SampleLevel( g_sSplatNoiseSampler, nUv * 0.37 + float2( 0.31, 0.67 ), 0 );
+		float4 n3 = g_tSplatNoise.SampleLevel( g_sSplatNoiseSampler, nUv * 0.11 + float2( 0.73, 0.19 ), 0 );
+		// (the noise texture carries two FBM channels, r and g; b / a are flat)
+		float3 jitter = float3( n1.r * 0.6 + n2.g * 0.4, n1.g * 0.6 + n2.r * 0.4, n1.r * 0.3 + n2.r * 0.3 + n1.g * 0.4 ) - 0.5;
+
+		// Land biome per pixel: the largest Clover / Redwood / Amber share, softly (a softmax), shares pushed about by the noise
+		float3 land = vWeights.rgb;
+		float landSum = land.r + land.g + land.b;
+		land /= max( landSum, 1e-4 );
+		float3 l = land + jitter * SplatEdgeWander;
+		float3 e = exp( (l - max( l.r, max( l.g, l.b ) )) * SplatEdgeSharpness );
+		e /= (e.r + e.g + e.b);
+
+		// Which copy of the tile shows here: patches a few metres across, hard-edged up close
+		float pickN = g_tSplatNoise.SampleLevel( g_sSplatNoiseSampler, m / 9.0 + float2( 0.11, 0.83 ), 0 ).g;
+
+		float3 grass = 0, redwood = 0, amber = 0, rock = 0, sand = 0;
+		if ( vTri.z > 0.002 )
+			SplatProjection( vUv, dUvX, dUvY, pickN, vTri.z, grass, redwood, amber, rock, sand );
+		if ( vTri.x > 0.002 )
+			SplatProjection( vUvX, dUvXx, dUvXy, pickN, vTri.x, grass, redwood, amber, rock, sand );
+		if ( vTri.y > 0.002 )
+			SplatProjection( vUvY, dUvYx, dUvYy, pickN, vTri.y, grass, redwood, amber, rock, sand );
+
+		float3 albedo = grass * e.r + redwood * e.g + amber * e.b;
+		// Mountain from 0.5 (TerrainPreviewBiomeResolver), the edge wandering like the others
+		float mountain = smoothstep( 0.47, 0.53, vWeights.a + (n2.r * 0.5 + n1.g * 0.5 - 0.5) * SplatEdgeWander * 0.6 );
+		albedo = lerp( albedo, rock, mountain );
+		// Beaches and beds: sand, the band's edge broken into patches
+		float sandAmt = smoothstep( 0.3, 0.7, vSplat.x + (n2.g * 0.6 + n1.r * 0.4 - 0.5) * 0.5 );
+		albedo = lerp( albedo, sand, sandAmt );
+		// Blackwater (no land weight at all): near-black
+		if ( landSum + vWeights.a < 0.02 && vSplat.x < 0.02 )
+			albedo = 0.012;
+		// Wet, far canopy, macro variation
+		albedo *= 1.0 - SplatWetDarken * max( saturate( vSplat.y ), SeaWetMemory( vPositionWs ) );
+		albedo = lerp( albedo, pow( SplatCanopyColor, 2.2 ), saturate( vSplat.z ) );
+		albedo *= 1.0 + (n3.r - 0.5) * SplatMacroVariation;
+		return albedo;
+	}
 
 	// Screen-door fade (Mark 2026-10-20: trees must fade in / out and cross-fade between LODs, never hard-pop).
 	// Set per renderer / per draw through RenderAttributes; the default leaves every other material untouched.
@@ -377,6 +591,9 @@ PS
 			? vPositionWs.xy / ( PixelWorldUvMeters * 40.0 )
 			: i.vTextureCoords.xy * PixelTexCoordScale;
 		float4 tex = g_tColor.Sample( g_sPointSampler, vUv );
+		#if ( S_TERRAIN_SPLAT )
+			float3 vSplatAlbedo = TerrainSplatAlbedo( vPositionWs, i.vNormalWs, vUv, i.vColor, i.vSplat );
+		#endif
 
 		#if ( S_ALPHA_TEST )
 			clip( tex.a - PixelAlphaCutoff );
@@ -427,6 +644,9 @@ PS
 			float3 vPaint = pow( max( i.vColor.rgb, 0.0 ), 2.2 );
 			m.Albedo = lerp( vPaint, tex.rgb, saturate( i.vColor.a ) );
 		#endif
+		#if ( S_TERRAIN_SPLAT )
+			m.Albedo = vSplatAlbedo;
+		#endif
 		if ( PixelFarCard > 0.5 )
 			m.Albedo *= pow( max( FarCardTint, 0.0 ), 2.2 );   // far impostor cards: gamma tint from far_card_calibrate
 		m.Metalness = 0.0;
@@ -442,7 +662,18 @@ PS
 
 		// ---- Per-texel direct lighting ----
 		// Everything derivative-based happens here, before any divergent branch.
-		float3 vShadePosWs = TexelCentreWs( m.WorldPosition, vUv );
+		// The texel centre is found by walking the top-projection texel; on a steep dug wall that texel is edge-on and the
+		// walk flies hundreds of pixels along the wall, so the shadow was read from the wrong spot — one stripe per texel
+		// column, speckled (Mark 2026-10-29, "the vertical lines"). With the splat triplanar, shade at the texel of the
+		// projection that faces the surface instead — picked by the vertex normal, like the triplanar weights, so the
+		// pick does not flip per triangle on a steep face (2026-10-30).
+		float2 vUvShade = vUv;
+		#if ( S_TERRAIN_SPLAT )
+			float3 vGeoA = abs( normalize( i.vNormalWs ) );
+			float flTileShade = max( PixelWorldUvMeters, 0.01 ) * 40.0;
+			vUvShade = vGeoA.z >= max( vGeoA.x, vGeoA.y ) ? vUv : ( vGeoA.x >= vGeoA.y ? vPositionWs.yz / flTileShade : vPositionWs.xz / flTileShade );
+		#endif
+		float3 vShadePosWs = TexelCentreWs( m.WorldPosition, vUvShade );
 		float3 vReceiverNormalWs = ComputeShadowReceiverNormal( m.WorldPosition );
 
 		Decals::Apply( m.WorldPosition, m );

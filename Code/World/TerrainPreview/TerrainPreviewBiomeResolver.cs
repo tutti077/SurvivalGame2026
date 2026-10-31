@@ -143,68 +143,46 @@ public static class TerrainPreviewBiomeResolver
 		var nx = (worldXMeters + radius) / diameter;
 		var ny = (worldYMeters + radius) / diameter;
 
-		var cloverW = 0f;
-		var redwoodW = 0f;
-		var amberW = 0f;
+		// Spawn rules live in the region layout (GetRegionLayout: the site under spawn is Clover, sites inside
+		// Amber Min Distance From Spawn are never Amber), so there is no distance band, ramp or boost here:
+		// the old 150 m band + 900 m boost drew a round clover lobe on the map (Mark 2026-10-30: "very clearly
+		// a circle"), and a hard-min ring for Amber would draw one too.
+		var influenceScale = Math.Clamp( settings.BiomeDistanceInfluenceScale01, 0f, 1f );
 
-		if ( settings.BiomeCloverGuaranteeSpawn
-			&& IsInsidePriorityBand(
-				distMeters,
-				settings.BiomeCloverPriorityStartMeters,
-				settings.BiomeCloverPriorityEndMeters ) )
-		{
-			cloverW = 1f;
-		}
-		else
-		{
-			var influenceScale = Math.Clamp( settings.BiomeDistanceInfluenceScale01, 0f, 1f );
-			var cloverRampStart = Math.Max( 0f, settings.BiomeCloverPriorityEndMeters );
+		var cloverW = ComputeLandWeight(
+			settings, distMeters, nx, ny, influenceScale,
+			appearEndMeters: settings.BiomeCloverAppearEndMeters,
+			settings.BiomeCloverDistanceInfluenceStartMeters,
+			settings.BiomeCloverDistanceInfluenceEndMeters,
+			settings.BiomeCloverWeight,
+			settings.BiomeCloverPriorityWeight,
+			530 );
 
-			cloverW = ComputeLandWeight(
-				settings, distMeters, nx, ny, influenceScale,
-				hardMinMeters: 0f,
-				rampStartMeters: cloverRampStart,
-				rampFullMeters: settings.BiomeCloverRampFullDistanceMeters,
-				appearEndMeters: settings.BiomeCloverAppearEndMeters,
-				skipHardZero: true,
-				settings.BiomeCloverDistanceInfluenceStartMeters,
-				settings.BiomeCloverDistanceInfluenceEndMeters,
-				settings.BiomeCloverWeight,
-				settings.BiomeCloverPriorityWeight,
-				530 );
+		var redwoodW = ComputeLandWeight(
+			settings, distMeters, nx, ny, influenceScale,
+			appearEndMeters: settings.BiomeRedwoodAppearEndMeters,
+			settings.BiomeRedwoodPriorityStartMeters,
+			settings.BiomeRedwoodPriorityEndMeters,
+			settings.BiomeRedwoodWeight,
+			settings.BiomeRedwoodPriorityWeight,
+			531 );
 
-			redwoodW = ComputeLandWeight(
-				settings, distMeters, nx, ny, influenceScale,
-				hardMinMeters: settings.BiomeRedwoodHardMinDistanceMeters,
-				rampStartMeters: settings.BiomeRedwoodHardMinDistanceMeters,
-				rampFullMeters: settings.BiomeRedwoodRampFullDistanceMeters,
-				appearEndMeters: settings.BiomeRedwoodAppearEndMeters,
-				skipHardZero: false,
-				settings.BiomeRedwoodPriorityStartMeters,
-				settings.BiomeRedwoodPriorityEndMeters,
-				settings.BiomeRedwoodWeight,
-				settings.BiomeRedwoodPriorityWeight,
-				531 );
-
-			amberW = ComputeLandWeight(
-				settings, distMeters, nx, ny, influenceScale,
-				hardMinMeters: settings.BiomeAmberHardMinDistanceMeters,
-				rampStartMeters: settings.BiomeAmberHardMinDistanceMeters,
-				rampFullMeters: settings.BiomeAmberRampFullDistanceMeters,
-				appearEndMeters: settings.BiomeAmberAppearEndMeters,
-				skipHardZero: false,
-				settings.BiomeAmberPriorityStartMeters,
-				settings.BiomeAmberPriorityEndMeters,
-				settings.BiomeAmberWeight,
-				settings.BiomeAmberPriorityWeight,
-				532 );
-
-			ApplySpawnBlend( settings, distMeters, ref cloverW, ref redwoodW, ref amberW );
-		}
+		var amberW = ComputeLandWeight(
+			settings, distMeters, nx, ny, influenceScale,
+			appearEndMeters: settings.BiomeAmberAppearEndMeters,
+			settings.BiomeAmberPriorityStartMeters,
+			settings.BiomeAmberPriorityEndMeters,
+			settings.BiomeAmberWeight,
+			settings.BiomeAmberPriorityWeight,
+			532 );
 
 		var mountainW = SampleMountainPlacementWeight(
 			settings, distMeters, nx, ny, baseHeight01, worldXMeters, worldYMeters );
-		var landScale = 1f - mountainW;
+		// Never scale the lowland weights to exactly zero: the shaper normalises by their total, so a trace keeps the
+		// neighbour biome's shape under the mountain. At zero it fell back to the raw base height, which is ~100 m
+		// lower than the shaped lowland, and that step drew a moat around every mountain foot (Mark 2026-10-30:
+		// "an indent at the start of the mountain ranges").
+		var landScale = Math.Max( 0.001f, 1f - mountainW );
 		cloverW *= landScale;
 		redwoodW *= landScale;
 		amberW *= landScale;
@@ -348,28 +326,14 @@ public static class TerrainPreviewBiomeResolver
 		float nx,
 		float ny,
 		float influenceScale,
-		float hardMinMeters,
-		float rampStartMeters,
-		float rampFullMeters,
 		float appearEndMeters,
-		bool skipHardZero,
 		float falloffStart,
 		float falloffEnd,
 		float scatterWeight,
 		float distanceInfluence,
 		int patchSeed )
 	{
-		var allow = BiomeZoneAllow01(
-			settings,
-			distMeters,
-			hardMinMeters,
-			rampStartMeters,
-			rampFullMeters,
-			appearEndMeters,
-			skipHardZero,
-			nx,
-			ny,
-			patchSeed + 17 );
+		var allow = BiomeAppearAllow01( settings, distMeters, appearEndMeters, nx, ny, patchSeed + 17 );
 		if ( allow <= 0.0001f )
 			return 0f;
 
@@ -382,41 +346,6 @@ public static class TerrainPreviewBiomeResolver
 		var maxFalloff = (scatter * 0.6f) + 0.06f;
 		falloff = Math.Min( falloff, maxFalloff );
 		return allow * (scatter + falloff);
-	}
-
-	/// <summary>
-	/// Soft transition after the guaranteed spawn band: clover stays common, other biomes ramp in gradually.
-	/// </summary>
-	static void ApplySpawnBlend(
-		TerrainPreviewSettings settings,
-		float distMeters,
-		ref float cloverW,
-		ref float redwoodW,
-		ref float amberW )
-	{
-		var blendStart = Math.Max( 0f, settings.BiomeCloverPriorityEndMeters );
-		var blendEnd = Math.Max( blendStart + 50f, settings.BiomeSpawnBlendEndMeters );
-		if ( distMeters <= blendStart )
-			return;
-
-		var blendOut = SpawnBlendOut01( distMeters, blendStart, blendEnd );
-		var otherScale = blendOut * blendOut;
-		var cloverBoost = 1f + ((1f - blendOut) * Math.Clamp( settings.BiomeSpawnCloverBlendBoost01, 0f, 1f ));
-
-		cloverW *= cloverBoost;
-		redwoodW *= otherScale;
-		amberW *= otherScale;
-	}
-
-	static float SpawnBlendOut01( float distMeters, float blendStart, float blendEnd )
-	{
-		if ( distMeters <= blendStart )
-			return 0f;
-		if ( distMeters >= blendEnd )
-			return 1f;
-
-		var t = (distMeters - blendStart) / (blendEnd - blendStart);
-		return Smoothstep01( t );
 	}
 
 	static float Smoothstep01( float t )
@@ -439,15 +368,7 @@ public static class TerrainPreviewBiomeResolver
 	{
 		var layout = GetRegionLayout( settings );
 		var diameter = Math.Max( 1f, settings.WorldDiameterMeters );
-		var seed = settings.WorldSeed;
-
-		var warpN = Math.Clamp( settings.BiomeRegionBorderWarpMeters, 0f, diameter * 0.25f ) / diameter;
-		var coarseX = (TerrainPreviewNoise.Fbm( seed + 611, nx * 5f, ny * 5f, 3 ) - 0.5f) * 2f * warpN;
-		var coarseY = (TerrainPreviewNoise.Fbm( seed + 612, nx * 5f, ny * 5f, 3 ) - 0.5f) * 2f * warpN;
-		var fineX = (TerrainPreviewNoise.Fbm( seed + 617, nx * 18f, ny * 18f, 2 ) - 0.5f) * 0.5f * warpN;
-		var fineY = (TerrainPreviewNoise.Fbm( seed + 618, nx * 18f, ny * 18f, 2 ) - 0.5f) * 0.5f * warpN;
-		var wx = nx + coarseX + fineX;
-		var wy = ny + coarseY + fineY;
+		WarpRegionPoint( settings, nx, ny, out var wx, out var wy );
 
 		var bestOwn = float.MaxValue;
 		var bestOther = float.MaxValue;
@@ -469,10 +390,32 @@ public static class TerrainPreviewBiomeResolver
 		return Smoothstep01( (t + 1f) * 0.5f );
 	}
 
+	static float RegionWarpN( TerrainPreviewSettings settings )
+	{
+		var diameter = Math.Max( 1f, settings.WorldDiameterMeters );
+		return Math.Clamp( settings.BiomeRegionBorderWarpMeters, 0f, diameter * 0.25f ) / diameter;
+	}
+
+	/// <summary>The two-layer domain warp every region lookup goes through (coarse swells + fine wobble).</summary>
+	static void WarpRegionPoint( TerrainPreviewSettings settings, float nx, float ny, out float wx, out float wy )
+	{
+		var seed = settings.WorldSeed;
+		var warpN = RegionWarpN( settings );
+		var coarseX = (TerrainPreviewNoise.Fbm( seed + 611, nx * 5f, ny * 5f, 3 ) - 0.5f) * 2f * warpN;
+		var coarseY = (TerrainPreviewNoise.Fbm( seed + 612, nx * 5f, ny * 5f, 3 ) - 0.5f) * 2f * warpN;
+		var fineX = (TerrainPreviewNoise.Fbm( seed + 617, nx * 18f, ny * 18f, 2 ) - 0.5f) * 0.5f * warpN;
+		var fineY = (TerrainPreviewNoise.Fbm( seed + 618, nx * 18f, ny * 18f, 2 ) - 0.5f) * 0.5f * warpN;
+		wx = nx + coarseX + fineX;
+		wy = ny + coarseY + fineY;
+	}
+
 	sealed class RegionLayout
 	{
 		public int Seed;
 		public int PerBiome;
+		public float WarpN;
+		public bool SpawnClover;
+		public float AmberMinMeters;
 		public float[] X = Array.Empty<float>();
 		public float[] Y = Array.Empty<float>();
 		public int[] Biome = Array.Empty<int>();
@@ -480,17 +423,36 @@ public static class TerrainPreviewBiomeResolver
 
 	static RegionLayout _regionLayout;
 
-	/// <summary>Site positions + biome assignment, built once per (seed, count); immutable so a stale read is still consistent.</summary>
+	/// <summary>
+	/// Site positions + biome assignment, built once per (seed, count, warp, guarantee); immutable so a stale
+	/// read is still consistent. <c>Guarantee Clover At Spawn</c>: the innermost spiral site is moved onto
+	/// the warped image of the world origin and handed Clover, so spawn sits in the middle of an ordinary
+	/// irregular Clover region instead of under a stamped disc (Mark 2026-10-30: the old band was "very
+	/// clearly a circle on the map"). The site is exactly where spawn lands in the warped frame, so spawn is
+	/// never closer to another site than to its own. <c>Amber Min Distance From Spawn (m)</c>: sites closer
+	/// than that to spawn are never Amber, so the pockets a new player walks through are Clover and Redwood
+	/// and the desert starts further out — with ordinary irregular borders, not a ring (Mark 2026-10-30:
+	/// "redwood forest is found before amber dunes").
+	/// </summary>
 	static RegionLayout GetRegionLayout( TerrainPreviewSettings settings )
 	{
-		var perBiome = Math.Clamp( settings.BiomeRegionsPerBiome, 1, 16 );
+		var perBiome = Math.Clamp( settings.BiomeRegionsPerBiome, 1, 24 );
+		var warpN = RegionWarpN( settings );
+		var spawnClover = settings.BiomeCloverGuaranteeSpawn;
+		var amberMin = Math.Max( 0f, settings.BiomeAmberHardMinDistanceMeters );
 		var cached = _regionLayout;
-		if ( cached is not null && cached.Seed == settings.WorldSeed && cached.PerBiome == perBiome )
+		if ( cached is not null && cached.Seed == settings.WorldSeed && cached.PerBiome == perBiome
+			&& cached.WarpN == warpN && cached.SpawnClover == spawnClover && cached.AmberMinMeters == amberMin )
 			return cached;
 
 		var seed = settings.WorldSeed;
+		var diameter = Math.Max( 1f, settings.WorldDiameterMeters );
 		var total = perBiome * 3;
-		var layout = new RegionLayout { Seed = seed, PerBiome = perBiome, X = new float[total], Y = new float[total], Biome = new int[total] };
+		var layout = new RegionLayout
+		{
+			Seed = seed, PerBiome = perBiome, WarpN = warpN, SpawnClover = spawnClover, AmberMinMeters = amberMin,
+			X = new float[total], Y = new float[total], Biome = new int[total],
+		};
 
 		var rotation = TerrainPreviewNoise.Hash01( seed + 613, 1, 1 ) * MathF.PI * 2f;
 		const float goldenAngle = 2.399963f;
@@ -507,15 +469,29 @@ public static class TerrainPreviewBiomeResolver
 		// Greedy spread: every site takes the biome (with quota left) whose already-placed sites are farthest.
 		var quota = new[] { perBiome, perBiome, perBiome };
 		var firstBiome = (int)(TerrainPreviewNoise.Hash01( seed + 614, 2, 2 ) * 3f) % 3;
-		for ( var i = 0; i < total; i++ )
+		var first = 0;
+		if ( spawnClover )
+		{
+			WarpRegionPoint( settings, 0.5f, 0.5f, out layout.X[0], out layout.Y[0] );
+			layout.Biome[0] = 0;   // Clover (patch seed 530 - 530)
+			quota[0]--;
+			first = 1;
+		}
+
+		for ( var i = first; i < total; i++ )
 		{
 			var bestBiome = -1;
 			var bestScore = float.MinValue;
+			var dxC = layout.X[i] - 0.5f;
+			var dyC = layout.Y[i] - 0.5f;
+			var nearSpawn = MathF.Sqrt( (dxC * dxC) + (dyC * dyC) ) * diameter < amberMin;
 			for ( var step = 0; step < 3; step++ )
 			{
 				var b = (firstBiome + step) % 3;
 				if ( quota[b] <= 0 )
 					continue;
+				if ( b == 2 && nearSpawn )
+					continue;   // Amber (patch seed 532 - 530) stays outside Amber Min Distance From Spawn
 
 				var nearest = float.MaxValue;
 				for ( var j = 0; j < i; j++ )
@@ -553,76 +529,23 @@ public static class TerrainPreviewBiomeResolver
 		return MathF.Exp( -(d * d) / (2f * sigma * sigma) );
 	}
 
-	static bool IsInsidePriorityBand( float distMeters, float priorityStart, float priorityEnd )
-	{
-		priorityStart = Math.Max( 0f, priorityStart );
-		priorityEnd = Math.Max( priorityStart, priorityEnd );
-		return distMeters >= priorityStart && distMeters < priorityEnd;
-	}
-
-	/// <summary>
-	/// Hard zero inside <paramref name="hardMinMeters"/> (unless skipped), soft ramp to
-	/// <paramref name="rampFullMeters"/>, optional outer fade at <paramref name="appearEndMeters"/>.
-	/// </summary>
-	static float BiomeZoneAllow01(
+	/// <summary>Outer fade at <paramref name="appearEndMeters"/> (the Map Edge Fade End knobs), warped ±400 m so it is not a ring.</summary>
+	static float BiomeAppearAllow01(
 		TerrainPreviewSettings settings,
 		float distMeters,
-		float hardMinMeters,
-		float rampStartMeters,
-		float rampFullMeters,
 		float appearEndMeters,
-		bool skipHardZero,
 		float nx,
 		float ny,
 		int warpSeed )
 	{
-		hardMinMeters = Math.Max( 0f, hardMinMeters );
-		rampStartMeters = Math.Max( 0f, rampStartMeters );
-		rampFullMeters = Math.Max( rampStartMeters + 1f, rampFullMeters );
-		appearEndMeters = Math.Max( rampFullMeters + 1f, appearEndMeters );
-
-		var zoneActive = !skipHardZero && hardMinMeters > 0.5f
-			|| rampFullMeters > rampStartMeters + 1f;
-		if ( zoneActive )
-		{
-			var warpScale = Math.Max( hardMinMeters, rampFullMeters - rampStartMeters );
-			var warpMeters = Math.Max( 200f, warpScale * 0.2f );
-			var warp = TerrainPreviewNoise.Fbm( settings.WorldSeed + warpSeed, nx * 5.5f, ny * 5.5f, 2 );
-			distMeters = Math.Max( 0f, distMeters + ((warp - 0.5f) * 2f * warpMeters) );
-		}
-
+		appearEndMeters = Math.Max( 1f, appearEndMeters );
+		var warp = TerrainPreviewNoise.Fbm( settings.WorldSeed + warpSeed, nx * 5.5f, ny * 5.5f, 2 );
+		distMeters = Math.Max( 0f, distMeters + ((warp - 0.5f) * 2f * 400f) );
 		if ( distMeters > appearEndMeters )
 			return 0f;
 
-		if ( !skipHardZero && hardMinMeters > 0.5f && distMeters < hardMinMeters )
-			return 0f;
-
-		var rampStart = skipHardZero ? rampStartMeters : hardMinMeters;
-		float innerAllow;
-		if ( distMeters >= rampFullMeters )
-		{
-			innerAllow = 1f;
-		}
-		else if ( distMeters <= rampStart + 0.001f )
-		{
-			innerAllow = 0f;
-		}
-		else
-		{
-			var t = (distMeters - rampStart) / (rampFullMeters - rampStart);
-			var ramp = Smoothstep01( t );
-			var power = Math.Clamp( settings.BiomeAppearInnerRampPower, 1f, 4f );
-			innerAllow = MathF.Pow( ramp, power );
-		}
-
 		const float edgeFadeMeters = 75f;
-		var span = appearEndMeters - rampFullMeters;
-		var fade = Math.Min( edgeFadeMeters, span * 0.1f );
-		if ( fade <= 1f )
-			return innerAllow;
-
-		var endFade = Math.Clamp( (appearEndMeters - distMeters) / fade, 0f, 1f );
-		return innerAllow * endFade;
+		return Math.Clamp( (appearEndMeters - distMeters) / edgeFadeMeters, 0f, 1f );
 	}
 
 	static float ShadeFromHeight( float height01 )

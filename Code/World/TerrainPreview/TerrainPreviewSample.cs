@@ -23,4 +23,10 @@ public readonly struct TerrainPreviewSample
 
 	/// <summary>Inside a river channel: the height is the sloped water surface, not ground.</summary>
 	public bool RiverWater { get; init; }
+
+	/// <summary>Just above any water (river slide wall, lake and sea shores): 1 at the water's edge fading to 0 at Wet Line Height (m) — the wet band the ground paint darkens.</summary>
+	public float Wet01 { get; init; }
+
+	/// <summary>Beach: 1 at the waterline (lake / sea shore, river slide wall) fading to 0 at Beach Width (m) inland — the ground paint blends to sand.</summary>
+	public float Beach01 { get; init; }
 }

@@ -37,6 +37,12 @@ public static class TerrainPreviewLandDiskFields
 	static float[] _lakeMaskGrid = Array.Empty<float>();
 	static bool[] _displayLakeWater = Array.Empty<bool>();
 	static float[] _distanceToDisplayLakeMeters = Array.Empty<float>();
+	static bool[] _oceanWater = Array.Empty<bool>();   // open water joined to the rim ring (flood fill)
+	static float[] _distanceToOceanMeters = Array.Empty<float>();
+	static float[] _waterLevelMeters = Array.Empty<float>();     // nearest water's level per cell (TerrainPreviewMountainLakes)
+	static float[] _waterSurfaceMeters = Array.Empty<float>();   // the sheet the sea shader lifts to: tarns + ring, sea elsewhere
+	static bool[] _footLakeNear = Array.Empty<bool>();           // within ~1.2 km of a mountain-foot lake: the apron gate (TerrainPreviewCoastalSmoothing)
+	static TerrainPreviewMountainLakes.Stats _mountainLakes;
 	static readonly object _buildLock = new();
 
 	static int RasterCellCount( int res ) => Math.Max( 0, res ) * Math.Max( 0, res );
@@ -69,6 +75,11 @@ public static class TerrainPreviewLandDiskFields
 		_lakeMaskGrid = Array.Empty<float>();
 		_displayLakeWater = Array.Empty<bool>();
 		_distanceToDisplayLakeMeters = Array.Empty<float>();
+		_oceanWater = Array.Empty<bool>();
+		_waterLevelMeters = Array.Empty<float>();
+		_waterSurfaceMeters = Array.Empty<float>();
+		_footLakeNear = Array.Empty<bool>();
+		_distanceToOceanMeters = Array.Empty<float>();
 		_rawLandBiomes = Array.Empty<TerrainPreviewBiomeId>();
 		_placementWeights = Array.Empty<TerrainPreviewBiomeResolver.LandBiomeWeights>();
 		_speckOriginal = Array.Empty<TerrainPreviewBiomeId>();
@@ -91,6 +102,11 @@ public static class TerrainPreviewLandDiskFields
 		_lakeMaskGrid = Array.Empty<float>();
 		_displayLakeWater = Array.Empty<bool>();
 		_distanceToDisplayLakeMeters = Array.Empty<float>();
+		_oceanWater = Array.Empty<bool>();
+		_waterLevelMeters = Array.Empty<float>();
+		_waterSurfaceMeters = Array.Empty<float>();
+		_footLakeNear = Array.Empty<bool>();
+		_distanceToOceanMeters = Array.Empty<float>();
 	}
 
 	/// <summary>Drop biome placement — e.g. when World Seed changes during spawn solve.</summary>
@@ -170,6 +186,43 @@ public static class TerrainPreviewLandDiskFields
 		var coverage = _lakeCoverageOnLand01;
 		var archipelago = lakePatches.PatchCount / MathF.Max( 0.01f, coverage * 100f );
 
+		// Sea cliffs: the share of ocean-shore land cells (the rim, or beside rim-joined water) under a cliff stretch —
+		// and Azure Coast: the share of those shore cells that are teal, and the share of all land that is
+		var shoreCells = 0;
+		var cliffCells = 0;
+		var azureShoreCells = 0;
+		var azureLandCells = 0;
+		if ( _oceanWater.Length == _landDisk.Length && _distanceToOceanMeters.Length == _landDisk.Length )
+		{
+			var radius = settings.WorldRadiusMeters;
+			var diameter = settings.WorldDiameterMeters;
+			var azureReach = Math.Max( 50f, settings.AzureCoastMaxInlandMeters ) + metersPerPixel;
+			for ( var i = 0; i < _landDisk.Length; i++ )
+			{
+				if ( !_landDisk[i] || _openWater[i] )
+					continue;
+				var px = i % res;
+				var py = i / res;
+				var nearOcean = _distanceToOceanMeters[i] <= azureReach || px == 0 || py == 0 || px == res - 1 || py == res - 1;
+				if ( !nearOcean )
+					continue;
+				TerrainBiomeMapCoordinates.RasterPixelToWorldMeters( px, py, res, radius, diameter, out var wx, out var wy );
+				var azure = settings.EnableAzureCoastBiome && TerrainPreviewAzureCoast.SampleCoverage01( settings, wx, wy ) > 0.5f;
+				if ( azure )
+					azureLandCells++;
+				var shore = px == 0 || py == 0 || px == res - 1 || py == res - 1
+					|| !_landDisk[i - 1] || !_landDisk[i + 1] || !_landDisk[i - res] || !_landDisk[i + res]
+					|| _oceanWater[i - 1] || _oceanWater[i + 1] || _oceanWater[i - res] || _oceanWater[i + res];
+				if ( !shore )
+					continue;
+				shoreCells++;
+				if ( azure )
+					azureShoreCells++;
+				if ( TerrainPreviewSeaCliffs.Gate01( settings, wx, wy ) > 0.5f )
+					cliffCells++;
+			}
+		}
+
 		return new TerrainPreviewGenerationMetrics
 		{
 			LakePatchCount = lakePatches.PatchCount,
@@ -178,8 +231,88 @@ public static class TerrainPreviewLandDiskFields
 			LakeArchipelagoScore = archipelago,
 			MountainLandFraction01 = landCount > 0 ? mountainLand / (float)landCount : 0f,
 			WaterOnLandFraction01 = coverage,
+			MountainLakeCount = _mountainLakes.Tarns + _mountainLakes.Filled + _mountainLakes.Trimmed,
+			TarnCount = _mountainLakes.Tarns,
+			FilledLakeCount = _mountainLakes.Filled,
+			TrimmedLakeCount = _mountainLakes.Trimmed,
+			HighestTarnMeters = _mountainLakes.HighestTarnMeters,
+			WaterfallRiverCount = _rivers?.WaterfallRivers ?? 0,
+			MountainFootLakeCount = _mountainLakes.FootLakes,
+			FootLakeRiverCount = _rivers?.FootLakeRivers ?? 0,
+			FootLakeWaterfallCount = _rivers?.FootLakeWaterfalls ?? 0,
+			SeaCliffShoreFraction01 = shoreCells > 0 ? cliffCells / (float)shoreCells : 0f,
+			AzureShoreFraction01 = shoreCells > 0 ? azureShoreCells / (float)shoreCells : 0f,
+			AzureLandFraction01 = landCount > 0 ? azureLandCells / (float)landCount : 0f,
 		};
 	}
+
+	/// <summary>
+	/// Level (m, absolute) of the water this point's shore belongs to: sea level, or a tarn's level where the nearest lake
+	/// sits on a mountain top (TerrainPreviewMountainLakes). Nearest raster cell; sea level until the water raster is built.
+	/// </summary>
+	public static float SampleWaterLevelMeters( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
+	{
+		if ( !settings.EnableInteriorWaterLayer )
+			return settings.SeaLevelMeters;
+		if ( !_isBuilding )
+			EnsureBuilt( settings );
+		var field = _waterLevelMeters;
+		if ( field.Length != RasterCellCount( _fieldResolution ) || !TryWorldToIndex( settings, worldXMeters, worldYMeters, out var idx ) || idx >= field.Length )
+			return settings.SeaLevelMeters;
+		return field[idx];
+	}
+
+	/// <summary>The water surface the sea sheet is drawn at (m, absolute): a tarn's level on the tarn and its ring, sea level everywhere else.</summary>
+	public static float SampleWaterSurfaceMeters( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
+	{
+		if ( !settings.EnableInteriorWaterLayer )
+			return settings.SeaLevelMeters;
+		if ( !_isBuilding )
+			EnsureBuilt( settings );
+		var field = _waterSurfaceMeters;
+		if ( field.Length != RasterCellCount( _fieldResolution ) || !TryWorldToIndex( settings, worldXMeters, worldYMeters, out var idx ) || idx >= field.Length )
+			return settings.SeaLevelMeters;
+		return field[idx];
+	}
+
+	/// <summary>
+	/// True within ~1.2 km of a mountain-foot lake (TerrainPreviewMountainLakes): where the apron that trims the mountain's
+	/// foot down to a beach may act. Nearest raster cell; false until the water raster is built (so the lake classification
+	/// itself never sees an apron).
+	/// </summary>
+	public static bool IsNearMountainFootLake( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
+	{
+		var field = _footLakeNear;
+		if ( field.Length != RasterCellCount( _fieldResolution ) || !TryWorldToIndex( settings, worldXMeters, worldYMeters, out var idx ) || idx >= field.Length )
+			return false;
+		return field[idx];
+	}
+
+	/// <summary>The water-surface raster (res², x mirrored like the lake mask, metres above sea level) for the sea shader; false until built.</summary>
+	public static bool TryGetWaterSurfaceLiftRaster( TerrainPreviewSettings settings, out float[] lift, out int resolution )
+	{
+		lift = null;
+		resolution = _fieldResolution;
+		var field = _waterSurfaceMeters;
+		if ( field.Length != RasterCellCount( resolution ) || resolution < 2 )
+			return false;
+		lift = new float[field.Length];
+		var sea = settings.SeaLevelMeters;
+		for ( var i = 0; i < field.Length; i++ )
+			lift[i] = field[i] - sea;
+		return true;
+	}
+
+	/// <summary>The nearest-water level raster (res², field layout, metres) for the river router; false until built.</summary>
+	public static bool TryGetWaterLevelRaster( out float[] level, out int resolution )
+	{
+		level = _waterLevelMeters;
+		resolution = _fieldResolution;
+		return level.Length == RasterCellCount( resolution );
+	}
+
+	/// <summary>What TerrainPreviewMountainLakes did to this world's lakes (zeros until the water raster is built).</summary>
+	public static TerrainPreviewMountainLakes.Stats MountainLakeStats => _mountainLakes;
 
 	public static float GetOpenWaterThreshold01( TerrainPreviewSettings settings )
 	{
@@ -227,68 +360,6 @@ public static class TerrainPreviewLandDiskFields
 		return idx < _distanceToOpenWaterMeters.Length
 			? _distanceToOpenWaterMeters[idx]
 			: float.MaxValue;
-	}
-
-	/// <summary>Bilinear distance-to-water — smooth in world meters (avoids ~78 m raster steps on the land disk).</summary>
-	public static float SampleDistanceToOpenWaterMetersSmooth(
-		TerrainPreviewSettings settings,
-		float worldXMeters,
-		float worldYMeters )
-	{
-		if ( !settings.EnableInteriorWaterLayer )
-			return float.MaxValue;
-
-		if ( _isBuilding && !WaterRasterReady( _fieldResolution ) )
-			return float.MaxValue;
-
-		EnsureBuilt( settings );
-
-		if ( IsOpenWater( settings, worldXMeters, worldYMeters ) )
-			return 0f;
-
-		var res = _fieldResolution;
-		var radius = settings.WorldRadiusMeters;
-		var diameter = settings.WorldDiameterMeters;
-		if ( diameter <= 0f || res <= 1 )
-			return float.MaxValue;
-
-		var distFromCenter = MathF.Sqrt( (worldXMeters * worldXMeters) + (worldYMeters * worldYMeters) );
-		if ( distFromCenter > settings.LandRadiusMeters )
-			return float.MaxValue;
-
-		var pxMirrorF = ( ((worldXMeters + radius) / diameter) * res ) - 0.5f;
-		var fy = ( ((worldYMeters + radius) / diameter) * res ) - 0.5f;
-		var fx = (res - 1) - pxMirrorF;
-
-		var x0 = (int)MathF.Floor( fx );
-		var y0 = (int)MathF.Floor( fy );
-		var tx = fx - x0;
-		var ty = fy - y0;
-
-		var d00 = SampleDistanceAtRaster( settings, x0, y0 );
-		var d10 = SampleDistanceAtRaster( settings, x0 + 1, y0 );
-		var d01 = SampleDistanceAtRaster( settings, x0, y0 + 1 );
-		var d11 = SampleDistanceAtRaster( settings, x0 + 1, y0 + 1 );
-
-		var d0 = LerpFinite( d00, d10, tx );
-		var d1 = LerpFinite( d01, d11, tx );
-		return LerpFinite( d0, d1, ty );
-	}
-
-	static float SampleDistanceAtRaster( TerrainPreviewSettings settings, int px, int py )
-	{
-		var res = _fieldResolution;
-		if ( px < 0 || py < 0 || px >= res || py >= res )
-			return float.MaxValue;
-
-		var idx = (py * res) + px;
-		if ( idx >= _landDisk.Length || idx >= _openWater.Length || idx >= _distanceToOpenWaterMeters.Length )
-			return float.MaxValue;
-
-		if ( !_landDisk[idx] || _openWater[idx] )
-			return 0f;
-
-		return _distanceToOpenWaterMeters[idx];
 	}
 
 	static float LerpFinite( float a, float b, float t )
@@ -602,6 +673,9 @@ public static class TerrainPreviewLandDiskFields
 		var res = _fieldResolution;
 		var metersPerPixel = settings.WorldDiameterMeters / Math.Max( 1, res );
 
+		// The last world's apron gate must not shape the ground this world's lakes are classified on
+		_footLakeNear = Array.Empty<bool>();
+
 		TerrainPreviewGenerateProgress.SetStage( "Lake mask — sample" );
 		var lakeMaskGrid = TerrainPreviewLakeThresholdSolver.SampleLakeMaskGrid( settings, _landDisk, res );
 		if ( TerrainPreviewGenerateProgress.ShouldAbort() )
@@ -624,7 +698,29 @@ public static class TerrainPreviewLandDiskFields
 			out _openWater,
 			out _lakeCoverageOnLand01 );
 
+		// Lakes on mountains (Mark 2026-10-30): tarns keep their own level, the rest the mountain fills in. Edits the
+		// mask and the open-water raster, so everything below (distances, the ocean flood, the shoreline) sees the result.
+		TerrainPreviewGenerateProgress.SetStage( "Mountain lakes" );
+		_mountainLakes = TerrainPreviewMountainLakes.Build(
+			settings, _landDisk, _openWater, lakeMaskGrid, res, _openWaterThreshold01, out _waterLevelMeters, out _waterSurfaceMeters, out _footLakeNear );
+		if ( TerrainPreviewGenerateProgress.ShouldAbort() )
+			return;
+		var wet = 0;
+		var land = 0;
+		for ( var i = 0; i < _openWater.Length; i++ )
+		{
+			if ( !_landDisk[i] )
+				continue;
+			land++;
+			if ( _openWater[i] )
+				wet++;
+		}
+		_lakeCoverageOnLand01 = land > 0 ? wet / (float)land : 0f;
+
 		EnsureWaterDistanceFields( settings, res, metersPerPixel, lakeMaskGrid );
+
+		TerrainPreviewGenerateProgress.SetStage( "Lake shore distance" );
+		TerrainPreviewLakeShoreDistance.Build( lakeMaskGrid, _openWater, res, settings.WorldRadiusMeters, settings.WorldDiameterMeters, _openWaterThreshold01 );
 
 		_lakeMaskGrid = lakeMaskGrid;
 		_waterFingerprint = fingerprint;
@@ -661,6 +757,7 @@ public static class TerrainPreviewLandDiskFields
 		var count = RasterCellCount( res );
 		if ( _distanceToOpenWaterMeters.Length == count
 			&& _distanceToDisplayLakeMeters.Length == count
+			&& _distanceToOceanMeters.Length == count
 			&& _waterFingerprint != int.MinValue )
 			return;
 
@@ -689,6 +786,84 @@ public static class TerrainPreviewLandDiskFields
 			res,
 			metersPerPixel,
 			_distanceToDisplayLakeMeters );
+
+		// Ocean = open water joined to the rim ring (Azure Coast is ocean-only, Mark 2026-10-29): flood from the
+		// open-water cells that touch the outside of the land disc, then a chamfer distance to that water.
+		_oceanWater = new bool[count];
+		var oceanQueue = new Queue<int>();
+		for ( var i = 0; i < count; i++ )
+		{
+			if ( !_landDisk[i] || !_openWater[i] )
+				continue;
+
+			var px = i % res;
+			var py = i / res;
+			var touchesRim = px == 0 || py == 0 || px == res - 1 || py == res - 1
+				|| !_landDisk[i - 1] || !_landDisk[i + 1] || !_landDisk[i - res] || !_landDisk[i + res];
+			if ( !touchesRim )
+				continue;
+
+			_oceanWater[i] = true;
+			oceanQueue.Enqueue( i );
+		}
+
+		while ( oceanQueue.Count > 0 )
+		{
+			var i = oceanQueue.Dequeue();
+			var px = i % res;
+			var py = i / res;
+			TryFloodOcean( px > 0 ? i - 1 : -1, oceanQueue );
+			TryFloodOcean( px < res - 1 ? i + 1 : -1, oceanQueue );
+			TryFloodOcean( py > 0 ? i - res : -1, oceanQueue );
+			TryFloodOcean( py < res - 1 ? i + res : -1, oceanQueue );
+		}
+
+		_distanceToOceanMeters = new float[count];
+		TerrainPreviewOpenWaterDistance.BuildDistanceMeters(
+			_landDisk,
+			_oceanWater,
+			res,
+			metersPerPixel,
+			_distanceToOceanMeters );
+	}
+
+	static void TryFloodOcean( int idx, Queue<int> queue )
+	{
+		if ( idx < 0 || idx >= _oceanWater.Length || _oceanWater[idx] || !_landDisk[idx] || !_openWater[idx] )
+			return;
+
+		_oceanWater[idx] = true;
+		queue.Enqueue( idx );
+	}
+
+	/// <summary>
+	/// True when rim-joined open water (the ocean, never an inland lake) lies within the given distance of the point,
+	/// judged on the coarse raster with two and a half cells of slack for the mask-contour vs speck-raster difference.
+	/// </summary>
+	public static bool IsOceanWaterWithinMeters( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters, float withinMeters )
+	{
+		if ( _isBuilding && !WaterRasterReady( _fieldResolution ) )
+			return false;
+
+		EnsureBuilt( settings );
+
+		var res = _fieldResolution;
+		var diameter = settings.WorldDiameterMeters;
+		if ( res <= 1 || diameter <= 0f || _distanceToOceanMeters.Length != RasterCellCount( res ) || _oceanWater.Length != RasterCellCount( res ) )
+			return false;
+
+		WorldMetersToRasterFloat( worldXMeters, worldYMeters, settings.WorldRadiusMeters, diameter, res, out var fx, out var fy );
+		var px = (int)MathF.Round( fx );
+		var py = (int)MathF.Round( fy );
+		if ( px < 0 || py < 0 || px >= res || py >= res )
+			return false;
+
+		var idx = (py * res) + px;
+		if ( _oceanWater[idx] )
+			return true;
+
+		var slack = (diameter / res) * 2.5f;
+		return _distanceToOceanMeters[idx] <= withinMeters + slack;
 	}
 
 	static bool LakeMaskGridReady( int res )
@@ -713,6 +888,17 @@ public static class TerrainPreviewLandDiskFields
 
 		mask01 = SampleLakeMaskGridBilinear( settings, worldXMeters, worldYMeters );
 		return true;
+	}
+
+	/// <summary>
+	/// The built lake mask raster (resolution × resolution, x mirrored — see WorldMetersToRasterFloat) for the sea
+	/// surface, which recomputes the lake depth on the GPU exactly as <see cref="TrySampleLakeMask01AtWorld"/> does.
+	/// </summary>
+	public static bool TryGetLakeMaskRaster( out float[] grid, out int resolution )
+	{
+		grid = _lakeMaskGrid;
+		resolution = _fieldResolution;
+		return !_isBuilding && LakeMaskGridReady( resolution );
 	}
 
 	/// <summary>Display lake tint — cached mask vs threshold, not per-sample FBM.</summary>
@@ -1027,11 +1213,19 @@ public static class TerrainPreviewLandDiskFields
 		return _rivers is null ? default : TerrainPreviewRivers.Sample( _rivers, settings, worldXMeters, worldYMeters );
 	}
 
-	/// <summary>True inside a river channel (the water surface).</summary>
+	/// <summary>The other river at a confluence near <paramref name="primary"/> (default = none) — see TerrainPreviewRivers.SamplePartner.</summary>
+	public static TerrainPreviewRivers.Hit SampleRiverPartner( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters, TerrainPreviewRivers.Hit primary )
+		=> _rivers is null || !settings.EnableRivers ? default : TerrainPreviewRivers.SamplePartner( _rivers, settings, worldXMeters, worldYMeters, primary );
+
+	/// <summary>True inside a river channel (the water surface) — either river at a confluence (the nearest one alone left
+	/// part of the main channel painted as rock under the water, straight-edged blue blocks, 2026-10-25).</summary>
 	public static bool IsRiverWaterAtWorld( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
 	{
 		var hit = SampleRiver( settings, worldXMeters, worldYMeters );
-		return hit.Near && hit.Distance <= hit.HalfWidth;
+		if ( hit.Near && hit.Distance <= hit.HalfWidth )
+			return true;
+		var partner = SampleRiverPartner( settings, worldXMeters, worldYMeters, hit );
+		return partner.Near && partner.Distance <= partner.HalfWidth;
 	}
 
 	static void EnsureRivers( TerrainPreviewSettings settings )
@@ -1057,6 +1251,8 @@ public static class TerrainPreviewLandDiskFields
 		hash.Add( settings.RiverBankMaxSlopeDegrees );
 		hash.Add( settings.RiverBedDepthMeters );
 		hash.Add( settings.RiverBankSlideWidthMeters );   // part of every segment's raster reach
+		hash.Add( settings.RiverMountainSourceChance01 );
+		hash.Add( settings.RiverLakeWaterfallChance01 );
 		hash.Add( _biomePlacementFingerprint );   // the Amber Dunes veto follows biome placement
 		var fingerprint = hash.ToHashCode();
 		if ( fingerprint == _riverFingerprint && _rivers is not null )
@@ -1069,10 +1265,14 @@ public static class TerrainPreviewLandDiskFields
 		for ( var i = 0; i < desert.Length; i++ )
 			desert[i] = TerrainPreviewBiomeResolver.PickDominantPlacementBiome( _placementWeights[i] ) == TerrainPreviewBiomeId.AmberDunes;
 		_rivers = TerrainPreviewRivers.Build(
-			settings, _landDisk, _openWater, desert, _fieldResolution,
+			settings, _landDisk, _openWater, desert, _waterLevelMeters, _mountainLakes.FootLakeCells, _fieldResolution,
 			( x, y ) => TerrainPreviewPipeline.SampleDryLandHeightMetersNoRivers( settings, x, y ) );
 		_riverFingerprint = fingerprint;
-		Log.Info( $"[Rivers] {_rivers.RiverCount} rivers from {_rivers.Attempted} sources ({_rivers.Failed} dropped), {_rivers.TotalLengthMeters / 1000f:0.0} km total, {watch.ElapsedMilliseconds} ms" );
+		Log.Info( $"[Rivers] {_rivers.RiverCount} rivers from {_rivers.Attempted} sources ({_rivers.Failed} dropped), {_rivers.TotalLengthMeters / 1000f:0.0} km total, {_rivers.WaterfallRivers} with a waterfall ({_rivers.WaterfallSegments} fall segments), {watch.ElapsedMilliseconds} ms" );
+		if ( _mountainLakes.FootLakes > 0 )
+			Log.Info( $"[Rivers] {_mountainLakes.FootLakes} mountain-foot lakes: {_rivers.FootLakeRivers} reached by a river of their own, {_rivers.FootLakeWaterfalls} with a waterfall" );
+		foreach ( var note in _rivers.FootLakeNotes )
+			Log.Info( $"[Rivers]   {note}" );
 		if ( _rivers.DesertDropped > 0 )
 			Log.Info( $"[Rivers] {_rivers.DesertDropped} routes dropped at the Amber Dunes edge (no rivers in the desert)." );
 	}
@@ -1125,6 +1325,7 @@ public static class TerrainPreviewLandDiskFields
 		hash.Add( settings.BiomeRegionBorderWarpMeters );
 		hash.Add( settings.BiomeRegionEdgeBlendMeters );
 		hash.Add( settings.BiomeCloverGuaranteeSpawn );
+		hash.Add( settings.BiomeAmberHardMinDistanceMeters );
 		hash.Add( settings.BiomeMinPatchDiameterMeters );
 		hash.Add( settings.BiomeAmberWeight );
 		hash.Add( settings.BiomeCloverWeight );
@@ -1149,7 +1350,16 @@ public static class TerrainPreviewLandDiskFields
 		hash.Add( settings.LakeMediumFrequency );
 		hash.Add( settings.LakeMacroOctaves );
 		hash.Add( settings.LakeShoreDetail01 );
+		hash.Add( settings.LakeOceanZoneStart01 );
+		hash.Add( settings.LakeOceanZoneEnd01 );
+		hash.Add( settings.LakeOceanBasinSizeMul );
+		hash.Add( settings.LakeOceanLift01 );
 		hash.Add( settings.SpeckMinPatchDiameterMeters );
+		// Lakes on mountains: the mountain shape decides which lakes it fills and where tarns sit
+		TerrainPreviewMountainSpawnMask.AddSettingsFingerprint( ref hash, settings );
+		TerrainPreviewMountainHeight.AddSettingsFingerprint( ref hash, settings );
+		TerrainPreviewSeaCliffs.AddSettingsFingerprint( ref hash, settings );   // a tarn level near the coast reads the headland
+		hash.Add( settings.MountainLakeApronMeters );   // the apron reshapes the ground the rivers route on
 		return hash.ToHashCode();
 	}
 }

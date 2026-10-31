@@ -180,4 +180,89 @@ public sealed partial class TerrainPreviewSettings
 	public float BiomeDistanceWarpMeters { get; set; } = 0f;
 	public float BiomeWeightNoiseStrength01 { get; set; } = 0f;
 	public int BiomePickerOctaves { get; set; } = 3;
+
+	/// <summary>Legacy (2026-10-22): the lake floor ramped over a fraction of the mask excess; now Lake Shelf Width (m).</summary>
+	public float LakeDepthRamp01 { get; set; } = 0.25f;
+
+	/// <summary>Legacy (2026-10-24): Clover ground texture vs vertex paint; the terrain is a per-pixel biome blend now (pixel_lit F_TERRAIN_SPLAT).</summary>
+	public float BiomeCloverGroundTextureStrength01;
+
+	// Ridged mountain range field (2026-10-29: replaced by the round blob scatter, Mountain Mask - Mountain Spacing / Chance / Radius) - still in saved recipes.
+	public bool AzureCoastIncludeRimOcean { get; set; }   // 2026-10-29: Azure Coast is ocean-only now, the rim always counts
+	public int MountainSpawnMacroOctaves { get; set; } = 2;
+	public int MountainSpawnMediumOctaves { get; set; } = 3;
+	public float MountainSpawnMacroWavelengthMeters { get; set; } = 5000f;
+	public float MountainSpawnMediumWavelengthMeters { get; set; } = 780f;
+	public float MountainSpawnRidgeSharpness { get; set; } = 2f;
+	public float MountainSpawnFieldFloor01 { get; set; } = 0.08f;
+	public float MountainSpawnMediumFrequencyScale { get; set; } = 3.4f;
+	public float MountainSpawnMediumMix01 { get; set; } = 0.25f;
+	public float MountainSpawnBreakerFrequencyScale { get; set; } = 2.8f;
+	public float MountainSpawnBreakerMin01 { get; set; } = 0.42f;
+	public float MountainSpawnBreakerSpan01 { get; set; } = 0.1f;
+	public float MountainSpawnBreakerStrength01 { get; set; } = 0.1f;
+	public float MountainSpawnBlobWavelengthMeters { get; set; } = 20000f;
+	public float MountainSpawnBlobThreshold01 { get; set; } = 0.36f;
+	public float MountainSpawnWarpStrength01 { get; set; } = 0.22f;
+	public float MountainSpawnRangeStretch01 { get; set; } = 3.5f;
+	public float MountainSpawnRangePower01 { get; set; } = 1.18f;
+	public float MountainPeakChainSpacingMeters { get; set; } = 420f;
+	public float MountainPeakChainCrossTightness { get; set; } = 0.42f;
+	public float MountainPeakChainCrossFalloff { get; set; } = 1.8f;
+	public float MountainPeakShapeProbeMeters { get; set; } = 220f;
+	public float MountainPeakShapeBlendStart01 { get; set; } = 0.40f;
+
+	// Spawn clover disc (2026-10-30: the guarantee is the region site under spawn now - still in saved recipes).
+	public float BiomeSpawnBlendEndMeters { get; set; } = 900f;
+	public float BiomeSpawnCloverBlendBoost01 { get; set; } = 0.8f;
+	public float BiomeCloverRampFullDistanceMeters { get; set; } = 900f;
+	public float BiomeCloverPriorityStartMeters { get; set; }
+	public float BiomeCloverPriorityEndMeters { get; set; } = 150f;
+	public float BiomeAppearInnerRampPower { get; set; } = 2.5f;
+	public float BiomeRedwoodHardMinDistanceMeters { get; set; } = 400f;
+	public float BiomeRedwoodRampFullDistanceMeters { get; set; } = 900f;
+	public float BiomeAmberRampFullDistanceMeters { get; set; } = 2800f;
+
+	// Spiky peak lift (2026-10-30: replaced by the plateau profile - Mountains - Plateau Height / Summit Height / Slope Start / Plateau Start / Roughness).
+	public float MountainThreshold { get; set; } = 0.55f;
+	public float MountainPeakBoost { get; set; } = 0.62f;
+	public float MountainMinPeakHeight01 { get; set; } = 0.42f;
+	public float MountainPeakVariationFrequency { get; set; } = 14f;
+	public float MountainPeakRarityPower { get; set; } = 2.2f;
+	public float MountainSummitMacroFrequency { get; set; } = 0.22f;
+	public float MountainSummitMacroThreshold01 { get; set; } = 0.82f;
+	public float MountainPeakBandWidth01 { get; set; } = 0.22f;
+	public float MountainPeakSharpnessPower { get; set; } = 1.85f;
+	public float MountainSummitExtraLift01 { get; set; } = 0.28f;
+	public float MountainFoothillSpread { get; set; } = 0.10f;
+	public float MountainFoothillBoost { get; set; } = 0.38f;
+	public float MountainPeakLiftToSculpt01 { get; set; } = 0.28f;
+	public float MountainPlateauRoughnessMeters { get; set; } = 40f;   // 2026-10-30: replaced by Top Relief (m) the same day
+
+	// Chunky summit cluster on the plateau (2026-10-30: gone with the plateau model).
+	public float MountainPeakClusterSpacingMeters { get; set; } = 380f;
+	public float MountainPeakClusterRarityPower { get; set; } = 1.75f;
+	public float MountainPeakPlacementStrength01 { get; set; } = 0.92f;
+
+	// Plateau massif: climb wall -> crest-field top (+ benches, gullies, foot apron) (2026-10-30, Mark: "the plateau is SO clearly
+	// artificial" - replaced by the ridged dome, Mountains - Summit Height / Ridge Spacing / Ridge Depth / Profile Variation / Cliff Chance).
+	public float MountainPlateauHeightMeters { get; set; } = 720f;
+	public float MountainSlopeStartField01 { get; set; } = 0.35f;
+	public float MountainPlateauStartField01 { get; set; } = 0.6f;
+	public float MountainBenchChance01 { get; set; } = 0.4f;
+	public float MountainTopReliefMeters { get; set; } = 90f;
+	public float MountainTopUndulationMeters { get; set; } = 90f;
+	public float MountainSlopeGullyMeters { get; set; } = 60f;
+	public float MountainFaceVariation01 { get; set; } = 0.6f;
+	public float MountainFootApronMeters { get; set; } = 40f;
+
+	// Coastal "cliff personality" (2026-10-30: a narrower drain band was not a cliff - replaced by Coast - Sea Cliff Chance / Stretch / Height / Band).
+	public float CoastalCliffBlendBandMeters { get; set; } = 180f;
+	public float CoastalCliffThreshold01 { get; set; } = 0.92f;
+	public float CoastalPersonalityFrequency { get; set; } = 2f;
+
+	// Azure Coast shore band (2026-10-30: replaced by the coastal blob scatter, Biomes - Azure Blob Spacing / Chance / Radius / Max Inland).
+	public float AzureCoastWidthMeters { get; set; } = 200f;
+	public float AzureCoastShoreChance01 { get; set; } = 0.6f;
+	public float AzureCoastStretchMeters { get; set; } = 3000f;
 }

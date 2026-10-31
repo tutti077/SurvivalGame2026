@@ -220,6 +220,8 @@ public sealed partial class TerrainWorldManager
 		var entry = FindLoadedChunkAt( wx, wy );
 		if ( entry is null || entry.GrassHeightsZ is null || entry.GrassHeightsSide < 2 || entry.GameObject is null || !entry.GameObject.IsValid() )
 			return null;
+		if ( entry.Voxel is { Swapped: true } )
+			return null;   // dug ground: no clumps floating over the pits (TerrainWorldManager.Voxel.cs)
 
 		var heights = entry.GrassHeightsZ;
 		var side = entry.GrassHeightsSide;

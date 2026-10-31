@@ -145,7 +145,7 @@ public static partial class TerrainDevCommands
 			for ( var i = 0; i < net.RiverCount; i++ )
 			{
 				TerrainPreviewRivers.TryGetRiverMidpoint( net, i, out var p, out _, out var lvl );
-				Log.Info( $"[TerrainDev] river {i}: {net.RiverSegmentCount[i]} segments, mid {p.x:0},{p.y:0} m at {lvl:0.#} m" );
+				Log.Info( $"[TerrainDev] river {i}: {net.RiverSegmentCount[i]} segments, mid {p.x:0},{p.y:0} m at {lvl:0.#} m{(i < net.RiverJoins.Length && net.RiverJoins[i] >= 0 ? $", flows into river {net.RiverJoins[i]}" : "")}" );
 			}
 			return;
 		}
@@ -241,10 +241,117 @@ public static partial class TerrainDevCommands
 				rimMax = Math.Max( rimMax, Math.Max( rimL, rimR ) );
 			}
 			Log.Info( $"[TerrainDev] river {r}: {count} segments, water above ground at {above}, worst +{worstAbove:0.00} m at {worstX:0},{worstY:0}, deepest cut {-worstBelow:0.0} m, bed up to {bedMax:0.0} m deep, rim {rimMin:+0.0;-0.0}..{rimMax:+0.0;-0.0} m above the water" );
+
+			// Segments the river surface drops as open water (SeaWaves depth > 0 at their start) where the ground there
+			// is dry — the surface stops but no lake is there to take over (a gap in the river)
+			var tuning = manager.SeaTuning;
+			var dryDrops = 0;
+			var dryX = 0f;
+			var dryY = 0f;
+			var dryH = 0f;
+			for ( var s = first; s < first + count; s++ )
+			{
+				var seg = net.Segments[s];
+				if ( SeaWaves.DepthMeters( settings, tuning, seg.Ax, seg.Ay, out _ ) <= 0f )
+					continue;
+				var h = TerrainPreviewPipeline.Sample( settings, seg.Ax, seg.Ay ).HeightMeters;
+				if ( h <= settings.SeaLevelMeters )
+					continue;
+				if ( dryDrops++ == 0 )
+				{
+					dryX = seg.Ax;
+					dryY = seg.Ay;
+					dryH = h;
+				}
+			}
+			if ( dryDrops > 0 )
+				Log.Info( $"[TerrainDev] river {r}: {dryDrops} segments dropped as open water over DRY ground, first at {dryX:0},{dryY:0} (ground {dryH:0.0} m)" );
+
+			// Gaps in the carve: points on the centre line the pipeline does not see as river water (nor a lake / sea) —
+			// the channel turns back into plain ground there while the water strip runs on either side
+			var gaps = 0;
+			var gapX = 0f;
+			var gapY = 0f;
+			for ( var s = first; s < first + count; s++ )
+			{
+				var seg = net.Segments[s];
+				for ( var k = 0; k < 4; k++ )
+				{
+					var t = (k + 0.5f) / 4f;
+					var px = seg.Ax + ((seg.Bx - seg.Ax) * t);
+					var py = seg.Ay + ((seg.By - seg.Ay) * t);
+					var sample = TerrainPreviewPipeline.Sample( settings, px, py );
+					if ( sample.RiverWater || sample.HeightMeters <= settings.SeaLevelMeters )
+						continue;
+					if ( gaps++ == 0 )
+					{
+						gapX = px;
+						gapY = py;
+					}
+				}
+			}
+			if ( gaps > 0 )
+				Log.Info( $"[TerrainDev] river {r}: {gaps} centre-line points with NO river carve, first at {gapX:0},{gapY:0}" );
+
+			// Steepest stretch (where the rapids are)
+			var steep = 0f;
+			var steepX = 0f;
+			var steepY = 0f;
+			for ( var s = first; s < first + count; s++ )
+			{
+				var seg = net.Segments[s];
+				var len = seg.ArcB - seg.ArcA;
+				if ( len < 0.5f )
+					continue;
+				var grade = (seg.LevelA - seg.LevelB) / len;
+				if ( grade > steep )
+				{
+					steep = grade;
+					steepX = (seg.Ax + seg.Bx) * 0.5f;
+					steepY = (seg.Ay + seg.By) * 0.5f;
+				}
+			}
+			Log.Info( $"[TerrainDev] river {r}: steepest {steep * 100f:0.0} % at {steepX:0},{steepY:0}" );
+
+			// Water hidden: the carved ground at a segment's centre line stands at or above its own water level (another
+			// river's channel, a crossing or a pond carve won there) — the strip lies under the ground or a few cm deep
+			var hidden = 0;
+			var hidX = 0f;
+			var hidY = 0f;
+			var hidD = 0f;
+			for ( var s = first; s < first + count; s++ )
+			{
+				var seg = net.Segments[s];
+				var mx = (seg.Ax + seg.Bx) * 0.5f;
+				var my = (seg.Ay + seg.By) * 0.5f;
+				var level = (seg.LevelA + seg.LevelB) * 0.5f;
+				var depth = level - TerrainPreviewPipeline.Sample( settings, mx, my ).HeightMeters;
+				if ( depth > 0.15f || SeaWaves.DepthMeters( settings, tuning, mx, my, out _ ) > 0f )
+					continue;
+				if ( hidden++ == 0 || depth < hidD )
+				{
+					hidX = mx;
+					hidY = my;
+					hidD = depth;
+				}
+			}
+			if ( hidden > 0 )
+				Log.Info( $"[TerrainDev] river {r}: {hidden} segments whose water is under / at the ground (≤ 0.15 m deep), worst {hidD:0.00} m at {hidX:0},{hidY:0}" );
 		}
 	}
 
 	/// <summary>Usage: <c>terrain_probe &lt;x&gt; &lt;y&gt; [halfSpan] [step]</c> — prints pipeline heights on a cross through the point at fine spacing (default ±6 m every 0.5 m) to see how wide a bump or spike really is.</summary>
+	/// <summary>Usage: <c>terrain_seams [minGapMeters]</c> — compare every loaded chunk's meshed border with its neighbours' and log the steps of at least minGapMeters (default 0.5) with each side's LOD, water flag and fine-border sides (TerrainWorldManager.SeamCheck.cs).</summary>
+	[ConCmd( "terrain_seams" )]
+	public static void ConCmdSeams( float minGapMeters = 0.5f )
+	{
+		var scene = global::Sandbox.Game.ActiveScene;
+		var manager = scene.IsValid() ? scene.GetAllComponents<TerrainWorldManager>().FirstOrDefault() : null;
+		if ( manager is null || !manager.IsValid() )
+			return;
+		manager.LogBorderSeams( Math.Max( 0.05f, minGapMeters ) );
+	}
+
 	[ConCmd( "terrain_probe" )]
 	public static void ConCmdProbe( float xMeters = 0f, float yMeters = 0f, float halfSpan = 6f, float step = 0.5f )
 	{

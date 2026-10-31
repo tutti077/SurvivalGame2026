@@ -62,6 +62,8 @@ static class TerrainPreviewHeightDiagnostics
 				settings, worldXMeters, worldYMeters );
 
 		var lowlandWeights = TerrainPreviewBiomeResolver.LandWeightsWithoutMountain( placementWeights );
+		var mountainInfluence = TerrainPreviewMountainSpawnMask.SampleMountainHeightInfluence01(
+			settings, worldXMeters, worldYMeters );
 		var lowlandShaped01 = TerrainPreviewBiomeTerrainShaper.ApplyBlendedShape01(
 			settings,
 			baseLayers.AfterCurve01,
@@ -70,32 +72,27 @@ static class TerrainPreviewHeightDiagnostics
 			ny,
 			seed,
 			maxHeight,
+			mountainInfluence,
 			out _ );
-
-		var mountainInfluence = TerrainPreviewMountainSpawnMask.SampleMountainHeightInfluence01(
-			settings, worldXMeters, worldYMeters );
-		var rawLakeMask = TerrainPreviewLakeMap.SampleMaskAtWorldMeters(
-			settings, worldXMeters, worldYMeters, seed );
-		var mountainBoost01 = TerrainPreviewBiomeMountainPeaks.SampleBoost01(
+		var mountainProfile = TerrainPreviewBiomeMountainPeaks.SampleProfile(
 			settings,
 			mountainInfluence,
-			rawLakeMask,
 			dist,
 			nx,
 			ny,
-			seed,
-			out _ );
+			seed );
 
 		var afterLandDisplay = TerrainPreviewLandHeightDisplay.ApplyDryLandMeters(
 			settings,
 			baseLayers.AfterCurve01,
 			lowlandShaped01,
-			mountainBoost01,
+			mountainProfile,
 			mountainInfluence,
 			maxHeight );
 
 		var afterCoast = TerrainPreviewCoastalSmoothing.ApplyMeters(
-			settings, afterLandDisplay, worldXMeters, worldYMeters, dist, nx, ny, seed );
+			settings, afterLandDisplay, worldXMeters, worldYMeters, dist, nx, ny, seed,
+			TerrainPreviewLandHeightDisplay.MountainBlend01( mountainInfluence ), includeLakeDrain: true );
 
 		var finalMeters = TerrainPreviewLakeCombine.Apply(
 			settings, afterCoast, isFilteredOpenWater: false ).HeightMeters;
@@ -103,7 +100,7 @@ static class TerrainPreviewHeightDiagnostics
 		var sample = TerrainPreviewPipeline.Sample( settings, worldXMeters, worldYMeters );
 
 		Log.Info(
-			$"[TerrainHeight] base01={baseLayers.AfterCurve01:F3} · lowlandSculpt01={lowlandShaped01:F3} · boost01={mountainBoost01:F3} · influence={mountainInfluence:F3} · landDisplay={afterLandDisplay:F1} m · coast={afterCoast:F1} m · final={finalMeters:F1} m · pipeline.HeightMeters={sample.HeightMeters:F1} m · onLand={sample.IsOnLand}" );
+			$"[TerrainHeight] base01={baseLayers.AfterCurve01:F3} · lowlandSculpt01={lowlandShaped01:F3} · rise01={mountainProfile.Rise01:F3} · summit={mountainProfile.TopMeters:F0} m · influence={mountainInfluence:F3} · landDisplay={afterLandDisplay:F1} m · coast={afterCoast:F1} m · final={finalMeters:F1} m · pipeline.HeightMeters={sample.HeightMeters:F1} m · onLand={sample.IsOnLand}" );
 	}
 
 	public static void TryLogChunkVertexTrace(

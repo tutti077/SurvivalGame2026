@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace Editor;
 
 /// <summary>Writes incrementing preview PNG bundles under Assets/terrain/preview/.</summary>
-static class TerrainPreviewAssetExporter
+public static class TerrainPreviewAssetExporter
 {
 	const string IterationFileName = ".preview_iteration";
 	const string ProjectFileName = "survivalgamebasics.sbproj";
@@ -92,6 +92,18 @@ static class TerrainPreviewAssetExporter
 			meanLakeDiameterMeters = metrics.MeanLakeDiameterMeters,
 			lakeArchipelagoScore = metrics.LakeArchipelagoScore,
 			mountainLandFraction = metrics.MountainLandFraction01,
+			mountainLakeCount = metrics.MountainLakeCount,
+			tarnCount = metrics.TarnCount,
+			filledLakeCount = metrics.FilledLakeCount,
+			trimmedLakeCount = metrics.TrimmedLakeCount,
+			highestTarnMeters = metrics.HighestTarnMeters,
+			waterfallRiverCount = metrics.WaterfallRiverCount,
+			mountainFootLakeCount = metrics.MountainFootLakeCount,
+			footLakeRiverCount = metrics.FootLakeRiverCount,
+			footLakeWaterfallCount = metrics.FootLakeWaterfallCount,
+			seaCliffShoreFraction = metrics.SeaCliffShoreFraction01,
+			azureShoreFraction = metrics.AzureShoreFraction01,
+			azureLandFraction = metrics.AzureLandFraction01,
 			nearestShowcaseWaterMeters = TerrainPreviewSpawnLandCheck.MeasureNearestOpenWaterMeters(
 				settings, settings.LakeSpawnShowcaseWaterRadiusMeters ),
 			showcaseWaterRadiusMeters = settings.LakeSpawnShowcaseWaterRadiusMeters,

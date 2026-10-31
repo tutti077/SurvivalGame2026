@@ -81,15 +81,16 @@ public sealed partial class TerrainWorldManager
 
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
 		var lodDistance = ChunkLodDistanceMeters( coord, streamPos, settings, chunkSize );
-		var verticesPerSide = ResolveChunkVerticesPerSide( lodDistance, chunkSize, useStreamLod: true );
+		var verticesPerSide = ResolveChunkVerticesPerSide( lodDistance, chunkSize, useStreamLod: true, coord );
 		var smoothPasses = verticesPerSide < ChunkVerticesPerSide ? 0 : ChunkHeightSmoothPasses;
 		var smoothStrength = ChunkHeightSmoothStrength01;
 		var border = ResolveBorderLatticeVerticesPerSide( verticesPerSide );
+		var fineSides = ResolveFineBorderSides( coord, settings, chunkSize );
 		var backend = _backend;
 		var chunkSizeMeters = ChunkSizeMeters;
 
 		var task = GameTask.RunInThreadAsync( () => TerrainMeshBuilder.BuildChunkGeometry(
-			settings, backend, coord, chunkSizeMeters, verticesPerSide, smoothPasses, smoothStrength, border ) );
+			settings, backend, coord, chunkSizeMeters, verticesPerSide, smoothPasses, smoothStrength, border, fineSides ) );
 
 		_pendingBuilds[coord] = new PendingChunkBuild
 		{
@@ -113,11 +114,12 @@ public sealed partial class TerrainWorldManager
 		var smoothPasses = verticesPerSide < ChunkVerticesPerSide ? 0 : ChunkHeightSmoothPasses;
 		var smoothStrength = ChunkHeightSmoothStrength01;
 		var border = ResolveBorderLatticeVerticesPerSide( verticesPerSide );
+		var fineSides = ResolveFineBorderSides( coord, settings, Math.Max( 32f, ChunkSizeMeters ) );
 		var backend = _backend;
 		var chunkSizeMeters = ChunkSizeMeters;
 
 		var task = GameTask.RunInThreadAsync( () => TerrainMeshBuilder.BuildChunkGeometry(
-			settings, backend, coord, chunkSizeMeters, verticesPerSide, smoothPasses, smoothStrength, border ) );
+			settings, backend, coord, chunkSizeMeters, verticesPerSide, smoothPasses, smoothStrength, border, fineSides ) );
 
 		_pendingBuilds[coord] = new PendingChunkBuild
 		{

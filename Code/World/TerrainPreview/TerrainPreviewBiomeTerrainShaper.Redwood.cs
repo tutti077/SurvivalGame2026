@@ -20,6 +20,7 @@ static partial class TerrainPreviewBiomeTerrainShaper
 		float ny,
 		int seed,
 		float maxTerrainHeightMeters,
+		float ledgeScale01,
 		out TerrainBiomeLedgeInfo ledgeInfo )
 	{
 		var diameter = Math.Max( 1f, settings.WorldDiameterMeters );
@@ -40,7 +41,7 @@ static partial class TerrainPreviewBiomeTerrainShaper
 		// the hillside alone then runs across ground that falls the other way, so the step raised the low side
 		// (Mark 2026-10-06: "a ledge facing the wrong way up a hill"). The ravines are left out because their
 		// V creases kink every contour at each gully ("very zig-zaggy"); a gully now simply cuts across a bench.
-		var ledge = SampleRedwoodLedgeMeters( settings, seed, worldX, worldY, nx, ny, maxH, maxTerrainHeightMeters, out _, out _, out ledgeInfo );
+		var ledge = SampleRedwoodLedgeMeters( settings, seed, worldX, worldY, nx, ny, maxH, maxTerrainHeightMeters, ledgeScale01, out _, out _, out ledgeInfo );
 
 		var microAmp = Math.Clamp( settings.BiomeRedwoodMicroAmplitudeMeters, 0f, 3f );
 		var grit = microAmp < 0.25f ? 0f : SampleSurfaceGritMeters( seed + 730, worldX, worldY, 20f, microAmp );
@@ -66,8 +67,10 @@ static partial class TerrainPreviewBiomeTerrainShaper
 		var offsetK = TerrainPreviewNoise.Hash01( seed + 710, 1, 1 ) * interval;
 		var f = (field + offsetK) / interval;
 		var u = f - MathF.Floor( f );
-		var ledge = SampleRedwoodLedgeMeters( settings, seed, worldX, worldY, nx, ny, maxH, settings.MaxTerrainHeightMeters, out var passable, out var d, out var info );
-		return $"field={field:0.000} gx={hx - field:0.0000} gy={hy - field:0.0000} u={u:0.0000} d={d:0.00} ledge={ledge:0.00} pass={passable:0.00} half={info.HalfFaceWidthMeters:0.00}";
+		var mountain = TerrainPreviewMountainSpawnMask.SampleMountainHeightInfluence01( settings, worldX, worldY );
+		var scale = 1f - SmoothStep01( Math.Clamp( (mountain - 0.1f) / 0.3f, 0f, 1f ) );
+		var ledge = SampleRedwoodLedgeMeters( settings, seed, worldX, worldY, nx, ny, maxH, settings.MaxTerrainHeightMeters, scale, out var passable, out var d, out var info );
+		return $"field={field:0.000} gx={hx - field:0.0000} gy={hy - field:0.0000} u={u:0.0000} d={d:0.00} ledge={ledge:0.00} pass={passable:0.00} half={info.HalfFaceWidthMeters:0.00} mountain={mountain:0.00} scale={scale:0.00}";
 	}
 
 	static float SampleRedwoodHillsideMeters( TerrainPreviewSettings settings, int seed, float worldX, float worldY )
@@ -144,6 +147,10 @@ static partial class TerrainPreviewBiomeTerrainShaper
 	/// streets it is stretched into a local LedgeRampGrade notch, and inside blend stretches the drop
 	/// height fades to zero over ~50 m so the ground returns to plain hillside. Costs two extra
 	/// hillside samples for the gradient — chunk build only, never per frame.
+	/// <paramref name="ledgeScale01"/> scales the drop (0 = no ledge, and no ledge info for the mesh builder): the
+	/// mountain gate from <see cref="ApplyBlendedShape01"/>. On top of it the drop fades out where the pre-ledge
+	/// ground itself is steeper than ~28° (gone by ~38°): a terrace every 35 m of climb on a 35° slope is a staircase
+	/// 50 m apart, and the 2–4 m grid draws its lip as a zig-zag (2026-10-30).
 	/// </summary>
 	static float SampleRedwoodLedgeMeters(
 		TerrainPreviewSettings settings,
@@ -154,6 +161,7 @@ static partial class TerrainPreviewBiomeTerrainShaper
 		float ny,
 		float maxH,
 		float maxTerrainHeightMeters,
+		float ledgeScale01,
 		out float passable01,
 		out float signedDistanceMeters,
 		out TerrainBiomeLedgeInfo info )
@@ -163,7 +171,7 @@ static partial class TerrainPreviewBiomeTerrainShaper
 		info = TerrainBiomeLedgeInfo.None;
 
 		var interval = Math.Clamp( settings.BiomeRedwoodLedgeRiseIntervalMeters, 8f, 200f );
-		if ( settings.BiomeRedwoodLedgeHeightMaxMeters < 0.25f )
+		if ( settings.BiomeRedwoodLedgeHeightMaxMeters < 0.25f || ledgeScale01 <= 0.001f )
 			return 0f;
 
 		// Contour field and its gradient on the real pre-ledge ground (see SampleRedwoodLedgeFieldMeters).
@@ -187,6 +195,9 @@ static partial class TerrainPreviewBiomeTerrainShaper
 
 		// Height never exceeds 85 % of the rise interval, or the ground between ledges would tilt back downhill.
 		var height = Math.Min( SampleRedwoodLedgeHeightMeters( settings, seed, worldX, worldY ), interval * 0.85f );
+		// Hillsides only: the mountain gate, and no terraces on ground already steeper than ~28° (tan 28° ≈ 0.53, 38° ≈ 0.78)
+		var steep01 = SmoothStep01( Math.Clamp( (grade - 0.53f) / 0.25f, 0f, 1f ) );
+		height *= Math.Clamp( ledgeScale01, 0f, 1f ) * (1f - steep01);
 		if ( height < 0.25f )
 			return 0f;
 

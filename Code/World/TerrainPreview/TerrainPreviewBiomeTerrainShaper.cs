@@ -13,13 +13,19 @@ static partial class TerrainPreviewBiomeTerrainShaper
 		float ny,
 		int seed,
 		float maxTerrainHeightMeters,
+		float mountainInfluence01,
 		out TerrainBiomeLedgeInfo ledge )
-
 	{
 		ledge = TerrainBiomeLedgeInfo.None;
 		var total = weights.Total;
 		if ( total <= 0.0001f )
 			return baseHeight01;
+
+		// Redwood ledges are a hillside feature. The lowland shape is lerped toward the mountain profile by the mountain
+		// influence, so with no gate the terraces rode up every mountain face inside redwood land at 20–80 % height —
+		// horizontal sawtooth bands up the whole face (Mark 2026-10-30: "when the terrain gets very sloped it gets all
+		// zigzaggy"). Gone by influence 0.4, before the face gets steep.
+		var ledgeScale01 = 1f - SmoothStep01( Math.Clamp( (mountainInfluence01 - 0.1f) / 0.3f, 0f, 1f ) );
 
 		var sum = 0f;
 
@@ -31,7 +37,7 @@ static partial class TerrainPreviewBiomeTerrainShaper
 
 		if ( weights.Redwood > 0.0001f )
 		{
-			var shaped = ShapeRedwoodForest( settings, baseHeight01, nx, ny, seed, maxTerrainHeightMeters, out var redwoodLedge );
+			var shaped = ShapeRedwoodForest( settings, baseHeight01, nx, ny, seed, maxTerrainHeightMeters, ledgeScale01, out var redwoodLedge );
 			sum += weights.Redwood * shaped;
 			if ( weights.Redwood >= 0.9f * total )
 				ledge = redwoodLedge;
