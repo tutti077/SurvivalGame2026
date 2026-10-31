@@ -427,6 +427,13 @@ public partial class PlayerCombat : Component
 
 	/// <summary>Live L/R/U from mouse evidence — block preview uses screen-aligned cardinals; attack stores mirrored L/R for combat.</summary>
 	byte _primaryLiveSwingDir = SwingDirs.Up;
+
+	/// <summary>
+	/// Attack type the next Attack1 press would start (locked direction while aiming, else the live cursor
+	/// solve) — the animation rests the sword on that side's shoulder.
+	/// </summary>
+	public byte LivePrimaryAttackType =>
+		ResolveAttackTypeFromCursorDir( _hasLockedPrimaryAttackDir ? _lockedPrimaryAttackSwingDir : _primaryLiveSwingDir );
 	byte _blockLiveSwingDir = SwingDirs.Up;
 
 	/// <summary>Time-decayed signed pixel evidence (screen-space; y positive = mouse moved down) — framerate-independent input to the classifier.</summary>
@@ -483,7 +490,7 @@ public partial class PlayerCombat : Component
 	bool _lastBroadcastWindupTelegraphHeavy;
 	bool _lastBroadcastWindupTelegraphValid;
 
-	bool IsLocalCombatDriver()
+	internal bool IsLocalCombatDriver()
 	{
 		if ( GameObject.IsProxy )
 			return false;

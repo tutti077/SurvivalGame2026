@@ -62,12 +62,12 @@ public sealed partial class PlayerAnimation : Component
 	float _lookUpHideFade01;
 	bool _lookUpHideApplied;
 
-	/// <summary>Playback multiplier on the body during left/right swings (&lt;1 = slower).</summary>
-	[Property, Group( "Animation" ), Title( "Lateral swing playback rate" ), Range( 0.5f, 1f ), Step( 0.05f )]
-	public float MeleeLateralSwingPlaybackRate { get; set; } = 0.85f;
-
 	[Property, Group( "Melee demo stick" ), Title( "Show demo stick" )]
 	public bool ShowMeleeDemoStick { get; set; } = true;
+
+	/// <summary>The sword sits in the right hand only: grip and tip direction come from <c>hold_R</c> (its up axis is the blade).</summary>
+	[Property, Group( "Melee demo stick" ), Title( "One-handed grip (right hand)" )]
+	public bool MeleeOneHandedGrip { get; set; } = true;
 
 	[Property, Group( "Melee demo stick" ), Title( "Length (m)" ), Range( 0.4f, 2.5f ), Step( 0.01f )]
 	public float MeleeDemoStickLengthMeters { get; set; } = 1.26f;
@@ -127,10 +127,10 @@ public sealed partial class PlayerAnimation : Component
 	float _deferredSwingAnimWindupRemaining;
 	bool _deferSwingAnimBroadcast;
 
-	/// <summary>The swing clip saved the body's playback rate and owns it until it ends.</summary>
+	/// <summary>A heavy strike saved the body's playback rate and owns it until the clip ends.</summary>
 	bool _lateralSwingPlaybackSlowed;
 	float _playbackRateSaved = 1f;
-	/// <summary>Sandbox time until the melee attack clip presentation (strike + return) is finished.</summary>
+	/// <summary>Sandbox time until the strike clip (cocked → strike → rest) is finished.</summary>
 	double _meleeAttackAnimBusyUntilSandbox;
 
 	const string DemoStickObjectName = "melee_demo_stick";
@@ -169,7 +169,7 @@ public sealed partial class PlayerAnimation : Component
 		TickDodgeRollPose();
 		TickHoldPose();
 		TickSeatedPose();
-		TickMeleeSwingClip();
+		TickMeleeSwing();
 		TickWornClothing();
 		TickLookUpBodyHide();
 		TickCombatFacingPresentation( advance: true );
@@ -422,7 +422,7 @@ public sealed partial class PlayerAnimation : Component
 
 		// Owning client already presenting this swing from its own press / release.
 		if ( !GameObject.IsProxy
-		     && (_swingClipActive || GetMeleeAttackAnimBusyRemainingSeconds() > 0.05f) )
+		     && (_swordCocked || _swordStrikeScheduled || GetMeleeAttackAnimBusyRemainingSeconds() > 0.05f) )
 			return true;
 
 		return false;
@@ -488,8 +488,8 @@ public sealed partial class PlayerAnimation : Component
 			return;
 		}
 
-		// Combat recovery / shove sequences and the swing clip own the graph; still refresh melee hold for sword visibility.
-		if ( _combatSequenceActive || _swingClipActive )
+		// Combat recovery / shove sequences own the graph; still refresh melee hold for sword visibility.
+		if ( _combatSequenceActive )
 		{
 			if ( ResolvePresentationHoldPose() == HoldPose.MeleeTwoHand )
 				ApplyMeleeTwoHandHold();
@@ -533,10 +533,12 @@ public sealed partial class PlayerAnimation : Component
 	/// </param>
 	void ApplyMeleeTwoHandHold( bool includeDemoStick )
 	{
+		// One-handed sword: melee_weapons holdtype with right-hand handedness (the graph's Handedness
+		// selector drops the two-hand left-arm IK, so the free arm follows the authored clips).
 		if ( _animHelper is not null && _animHelper.IsValid() )
 		{
 			_animHelper.HoldType = CitizenAnimationHelper.HoldTypes.Swing;
-			_animHelper.Handedness = CitizenAnimationHelper.Hand.Both;
+			_animHelper.Handedness = CitizenAnimationHelper.Hand.Right;
 			_animHelper.IsWeaponLowered = false;
 		}
 
@@ -545,8 +547,8 @@ public sealed partial class PlayerAnimation : Component
 			return;
 
 		body.Set( "holdtype", (int)CitizenAnimationHelper.HoldTypes.Swing );
-		body.Set( "holdtype_handedness", (int)CitizenAnimationHelper.Hand.Both );
-		body.Set( "holdtype_pose", 0f );
+		body.Set( "holdtype_handedness", (int)CitizenAnimationHelper.Hand.Right );
+		// holdtype_pose is the sword pose blend (rest / cocked) — TickMeleeSwing owns it.
 		body.Set( "b_weapon_lower", false );
 
 		if ( includeDemoStick )
@@ -644,7 +646,7 @@ public sealed partial class PlayerAnimation : Component
 
 		if ( !_combatSequenceActive )
 		{
-			// A swing clip (snap or strike) loses to a recovery / shove sequence.
+			// A cocked pose / pending strike loses to a recovery / shove sequence.
 			AbortMeleeAttackAnimClip( "enter sequence" );
 			_combatSequenceActive = true;
 		}
@@ -706,16 +708,6 @@ public sealed partial class PlayerAnimation : Component
 		if ( !string.IsNullOrEmpty( stopped ) )
 			Components.Get<PlayerCombat>()?.LogMeleeAnimStopIfAny( $"cleared sequence {stopped}" );
 
-		// The swing clip owns the body (press snap or strike): only the recovery flags are dropped —
-		// wiping the sequence here left the sweep drawing arcs with no animation. Entering a sequence
-		// still aborts the swing explicitly (see PlayCombatSequencePose).
-		if ( _swingClipActive )
-		{
-			Components.Get<PlayerCombat>()?.LogMeleeAnimStart( "keep swing clip after sequence clear",
-				"swing sequence owns the body" );
-			return;
-		}
-
 		var body = ResolveBody();
 		if ( body is not null && body.IsValid() )
 		{
@@ -732,8 +724,12 @@ public sealed partial class PlayerAnimation : Component
 				"seqClearedBeforeGraphOn UseAnimGraph=true" );
 		}
 
-		RestoreLateralSwingPlaybackRate();
-		_meleeAttackAnimBusyUntilSandbox = 0;
+		// A strike in flight keeps its clip window and (heavy) rate — the graph plays it under the pose.
+		if ( !IsMeleeSwingAnimBusy )
+		{
+			RestoreLateralSwingPlaybackRate();
+			_meleeAttackAnimBusyUntilSandbox = 0;
+		}
 	}
 
 	/// <summary>Hard reset to citizen locomotion — call when a pose ends even if flags desynced.</summary>
@@ -741,10 +737,6 @@ public sealed partial class PlayerAnimation : Component
 	{
 		_combatSequenceActive = false;
 		_activeCombatSequenceName = null;
-
-		// The swing clip is a sequence too — it hands the graph back itself when its return frames end.
-		if ( _swingClipActive )
-			return;
 
 		var body = ResolveBody();
 		if ( body is null || !body.IsValid() )
@@ -766,15 +758,8 @@ public sealed partial class PlayerAnimation : Component
 	/// </summary>
 	public void ExitCombatSequenceToLocomotion()
 	{
-		// The swing clip owns the body and the playback rate. Clearing a recovery sequence must never
-		// reset it to idle: that killed the animation while the sweep kept drawing arcs.
-		if ( _swingClipActive )
-		{
-			_combatSequenceActive = false;
-			_activeCombatSequenceName = null;
-			return;
-		}
-
+		// A strike in flight keeps its (heavy) playback rate: the graph plays it on under locomotion.
+		var strikeBusy = IsMeleeSwingAnimBusy;
 		ClearCombatSequencePose();
 		ForceRestoreLocomotionGraph();
 
@@ -788,7 +773,8 @@ public sealed partial class PlayerAnimation : Component
 			body.Sequence.Time = 0f;
 			body.Sequence.Looping = false;
 			body.UseAnimGraph = true;
-			body.PlaybackRate = 1f;
+			if ( !strikeBusy )
+				body.PlaybackRate = 1f;
 			ResetMeleeAttackAnimGraphToIdle( body );
 
 			body.Set( "b_grounded", true );
@@ -811,8 +797,11 @@ public sealed partial class PlayerAnimation : Component
 			_animHelper.WithWishVelocity( Vector3.Zero );
 		}
 
-		_lateralSwingPlaybackSlowed = false;
-		_playbackRateSaved = 1f;
+		if ( !strikeBusy )
+		{
+			_lateralSwingPlaybackSlowed = false;
+			_playbackRateSaved = 1f;
+		}
 
 		if ( ResolvePresentationHoldPose() == HoldPose.MeleeTwoHand )
 			ApplyMeleeTwoHandHold();
@@ -828,11 +817,11 @@ public sealed partial class PlayerAnimation : Component
 	}
 
 	/// <summary>
-	/// Stop the melee swing clip (snap or strike) and clear the busy window so recovery/idle can take over cleanly.
+	/// Drop the cocked pose / strike window so recovery or idle can take over cleanly (the graph clip itself runs out on its own).
 	/// </summary>
 	public void AbortMeleeAttackAnimClip( string reason )
 	{
-		EndMeleeSwingClip( reason );
+		EndMeleeSwing( reason );
 	}
 
 	/// <summary>
@@ -1023,7 +1012,8 @@ public sealed partial class PlayerAnimation : Component
 			return false;
 
 		var hasRight = TryGetFirstBoneTransform( body, DemoStickRightBoneCandidates, out var rightTx );
-		var hasLeft = TryGetFirstBoneTransform( body, DemoStickLeftBoneCandidates, out var leftTx );
+		var leftTx = default( global::Transform );
+		var hasLeft = !MeleeOneHandedGrip && TryGetFirstBoneTransform( body, DemoStickLeftBoneCandidates, out leftTx );
 
 		if ( hasRight && hasLeft )
 		{

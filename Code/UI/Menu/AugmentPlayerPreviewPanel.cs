@@ -11,7 +11,7 @@ namespace Survival;
 /// </summary>
 public sealed class AugmentPlayerPreviewPanel : ScenePanel
 {
-	const string HumanModelPath = "models/citizen_human/citizen_human_male.vmdl";
+	const string HumanModelPath = "models/player/human_male_sword.vmdl";
 
 	const float DefaultYaw = -12f;
 

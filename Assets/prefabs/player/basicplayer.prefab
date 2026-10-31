@@ -313,7 +313,6 @@
         "MeleeDemoStickThicknessMeters": 0.045,
         "MeleeDemoStickTint": "0.72,0.72,0.78,1",
         "MeleeHeavySwingPlaybackRate": 0.55,
-        "MeleeLateralSwingPlaybackRate": 0.85,
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
@@ -760,7 +759,7 @@
             "MaterialGroup": "default",
             "MaterialOverride": null,
             "Materials": null,
-            "Model": "models/citizen_human/citizen_human_male.vmdl",
+            "Model": "models/player/human_male_sword.vmdl",
             "Morphs": {
               "openjawL": 0,
               "openjawR": 0
