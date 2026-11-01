@@ -109,6 +109,10 @@ public sealed class PlayerSpawnSeparation : Component
 			if ( go.Components.Get<PlayerController>() is null )
 				continue;
 
+			// Scripted test pawns (anim_test) are deliberately local-only.
+			if ( go.Tags.Has( "test_pawn" ) )
+				continue;
+
 			var net = go.Network;
 
 			// Local leftover: cloned without NetworkSpawn. Only that peer sees it; stays undressed.

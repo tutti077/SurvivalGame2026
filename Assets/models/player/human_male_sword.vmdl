@@ -748,6 +748,52 @@
 							},
 							{
 								_class = "AnimFile"
+								name = "Sword_Swap_Mid"
+								activity_name = ""
+								activity_weight = 1
+								weight_list_name = ""
+								fade_in_time = 0.15
+								fade_out_time = 0.15
+								looping = true
+								delta = false
+								worldSpace = false
+								hidden = false
+								anim_markup_ordered = false
+								disable_compression = true
+								disable_interpolation = false
+								enable_scale = false
+								source_filename = "models/player/animations/human@sword_swap_mid.fbx"
+								start_frame = -1
+								end_frame = -1
+								framerate = -1.0
+								take = 0
+								reverse = false
+							},
+							{
+								_class = "AnimFile"
+								name = "Sword_Rest_Up"
+								activity_name = ""
+								activity_weight = 1
+								weight_list_name = ""
+								fade_in_time = 0.15
+								fade_out_time = 0.15
+								looping = true
+								delta = false
+								worldSpace = false
+								hidden = false
+								anim_markup_ordered = false
+								disable_compression = true
+								disable_interpolation = false
+								enable_scale = false
+								source_filename = "models/player/animations/human@sword_rest_up.fbx"
+								start_frame = -1
+								end_frame = -1
+								framerate = -1.0
+								take = 0
+								reverse = false
+							},
+							{
+								_class = "AnimFile"
 								name = "Sword_Attack_R"
 								activity_name = ""
 								activity_weight = 1

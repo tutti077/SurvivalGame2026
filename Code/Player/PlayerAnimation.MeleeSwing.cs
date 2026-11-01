@@ -20,7 +20,7 @@ public sealed partial class PlayerAnimation
 	public float MeleeHeavySwingPlaybackRate { get; set; } = 0.7f;
 
 	[Property, Group( "Animation" ), Title( "Strike clip length (s)" ), Description( "Wall-clock length of the authored strike clips at rate 1 (Sword_Attack_*: cocked → strike → settle → rest). Chain-busy and soft recovery wait for this." ), Range( 0.2f, 1.5f ), Step( 0.01f )]
-	public float MeleeStrikeClipSeconds { get; set; } = 0.55f;
+	public float MeleeStrikeClipSeconds { get; set; } = 0.30f;
 
 	/// <summary>Graph <c>sword_pose</c> values: children of the pose selector in holdtype_melee_sword.vsubgrph.</summary>
 	static class SwordPose
@@ -31,7 +31,31 @@ public sealed partial class PlayerAnimation
 		public const int CockedR = 3;
 		public const int CockedOver = 4;
 		public const int CockedStab = 5;
+		public const int SwapMid = 6;
+		public const int RestUp = 7;
 	}
+
+	/// <summary>Rest stances (<see cref="NetworkedSwordRestSide"/>): sword on the right shoulder, on the left, or raised (aiming up).</summary>
+	const byte StanceRight = 0, StanceLeft = 1, StanceUp = 2;
+
+	static int RestPoseFor( byte stance ) => stance switch
+	{
+		StanceLeft => SwordPose.RestL,
+		StanceUp => SwordPose.RestUp,
+		_ => SwordPose.RestR
+	};
+
+	[Property, Group( "Animation" ), Title( "Shoulder swap hold (s)" ), Description( "How long the sword stays up in front (Sword_Swap_Mid) when changing shoulders before it lays onto the other one. The graph cross-fades 0.12 s into and out of it." ), Range( 0.05f, 0.4f ), Step( 0.01f )]
+	public float SwordSwapMidSeconds { get; set; } = 0.14f;
+
+	/// <summary>Shoulder the sword is shown on right now (0 right, 1 left) — changes only through the swap pose or a strike that ends on the other side.</summary>
+	byte _shownRestSide;
+	bool _swapInProgress;
+	byte _swapTarget;
+	double _swapMidUntil;
+	/// <summary>A press whose wind-up is on the other side of the face from the shown shoulder goes up in front first.</summary>
+	bool _cockViaMid;
+	double _cockMidUntil;
 
 	/// <summary>Graph <c>sword_attack</c> values: children of the strike selector.</summary>
 	static class SwordAttack
@@ -42,7 +66,7 @@ public sealed partial class PlayerAnimation
 		public const int Stab = 3;
 	}
 
-	/// <summary>Rest side the owner is aiming from: 0 = right shoulder, 1 = left shoulder. Host-synced for remotes.</summary>
+	/// <summary>Rest stance the owner is aiming from: 0 = right shoulder, 1 = left shoulder, 2 = raised (aiming up). Host-synced for remotes.</summary>
 	[Sync( SyncFlags.FromHost )]
 	public byte NetworkedSwordRestSide { get; set; }
 
@@ -89,8 +113,13 @@ public sealed partial class PlayerAnimation
 		_ => SwordAttack.R
 	};
 
-	/// <summary>A left attack is cocked over the left shoulder; everything else rests on the right.</summary>
-	static byte RestSideFor( byte attackType ) => attackType == MeleeAttackTypes.Left ? (byte)1 : (byte)0;
+	/// <summary>Left attacks rest on the left shoulder, aiming up raises the sword (blade tipped back, ready to slam down), everything else rests on the right.</summary>
+	static byte RestSideFor( byte attackType ) => attackType switch
+	{
+		MeleeAttackTypes.Left => StanceLeft,
+		MeleeAttackTypes.Forward => StanceUp,
+		_ => StanceRight
+	};
 
 	float StrikePlaybackRate( bool isHeavy ) => isHeavy ? Math.Clamp( MeleeHeavySwingPlaybackRate, 0.35f, 1f ) : 1f;
 
@@ -221,6 +250,9 @@ public sealed partial class PlayerAnimation
 		{
 			_swordStrikeStarted = true;
 			_swordCocked = false;
+			// The strike clip ends on its own rest side; the pose under it follows so the graph lands there.
+			_shownRestSide = _swordAttackType == MeleeAttackTypes.Left ? StanceLeft : StanceRight;
+			_swapInProgress = false;
 			if ( meleeHold )
 			{
 				SetSwordAttackParam( body, StrikeFor( _swordAttackType ) );
@@ -245,14 +277,68 @@ public sealed partial class PlayerAnimation
 		if ( !meleeHold )
 			return;
 
-		// Pose: cocked while a press / pending strike holds it, else the rest side the player aims from.
-		int pose;
-		if ( _swordCocked )
-			pose = CockedPoseFor( _swordAttackType );
-		else
-			pose = ResolveRestSide() == 1 ? SwordPose.RestL : SwordPose.RestR;
+		SetSwordPoseParam( body, ResolveSwordPose( now ) );
+	}
 
-		SetSwordPoseParam( body, pose );
+	/// <summary>
+	/// Cocked while a press / pending strike holds it. Otherwise the shown rest side, which follows the aim side
+	/// only through the swap pose: rest → Sword_Swap_Mid (sword up in front) → other rest. A straight cross-fade
+	/// between the two shoulders swept the blade through the head.
+	/// </summary>
+	int ResolveSwordPose( double now )
+	{
+		var target = ResolveRestSide();
+		if ( _swordCocked )
+		{
+			// Left shoulder <-> any right-side / overhead / stab wind-up crosses the face: brief stop in front first.
+			var cockSide = RestSideFor( _swordAttackType );
+			var crosses = (cockSide == StanceLeft) != (_shownRestSide == StanceLeft);
+			if ( crosses && !_cockViaMid )
+			{
+				_cockViaMid = true;
+				_cockMidUntil = now + Math.Max( 0.04f, SwordSwapMidSeconds * 0.6f );
+			}
+
+			_swapInProgress = false;
+			if ( _cockViaMid && now < _cockMidUntil )
+				return SwordPose.SwapMid;
+
+			_cockViaMid = false;
+			_shownRestSide = cockSide;
+			return CockedPoseFor( _swordAttackType );
+		}
+
+		_cockViaMid = false;
+
+		if ( _swordStrikeStarted )
+			return RestPoseFor( _shownRestSide );
+
+		if ( _swapInProgress )
+		{
+			_swapTarget = target;
+			if ( now < _swapMidUntil )
+				return SwordPose.SwapMid;
+
+			_swapInProgress = false;
+			_shownRestSide = _swapTarget;
+		}
+		else if ( target != _shownRestSide )
+		{
+			// Right <-> raised is one short blend on the same side of the body; anything to or from the left
+			// shoulder crosses in front of the face, so it goes through the swap pose.
+			if ( target != StanceLeft && _shownRestSide != StanceLeft )
+			{
+				_shownRestSide = target;
+				return RestPoseFor( _shownRestSide );
+			}
+
+			_swapInProgress = true;
+			_swapTarget = target;
+			_swapMidUntil = now + Math.Max( 0.05f, SwordSwapMidSeconds );
+			return SwordPose.SwapMid;
+		}
+
+		return RestPoseFor( _shownRestSide );
 	}
 
 	/// <summary>Owner follows the live aim side and reports changes to the host; remotes read the Sync.</summary>

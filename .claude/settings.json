@@ -8,6 +8,11 @@
             "type": "command",
             "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/combat_test_gate.py\" post",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/anim_test_gate.py\" post",
+            "timeout": 15
           }
         ]
       }
@@ -18,6 +23,11 @@
           {
             "type": "command",
             "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/combat_test_gate.py\" stop",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/anim_test_gate.py\" stop",
             "timeout": 15
           }
         ]

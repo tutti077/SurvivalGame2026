@@ -428,6 +428,16 @@ public partial class PlayerCombat : Component
 	/// <summary>Live L/R/U from mouse evidence — block preview uses screen-aligned cardinals; attack stores mirrored L/R for combat.</summary>
 	byte _primaryLiveSwingDir = SwingDirs.Up;
 
+	/// <summary>anim_test: the pawn keeps PlayerCombat running (the stance reads it) but reads no input.</summary>
+	internal bool InputSuppressedForTests { get; set; }
+
+	/// <summary>anim_test: set the live aim side as mouse movement would (no input is read on the test pawn).</summary>
+	internal void TestSetLiveSwingDir( byte dir )
+	{
+		_primaryLiveSwingDir = dir;
+		_hasLockedPrimaryAttackDir = false;
+	}
+
 	/// <summary>
 	/// Attack type the next Attack1 press would start (locked direction while aiming, else the live cursor
 	/// solve) — the animation rests the sword on that side's shoulder.
@@ -552,6 +562,10 @@ public partial class PlayerCombat : Component
 			TickAuthoritativeMeleeBlockState();
 
 		if ( !IsLocalCombatDriver() )
+			return;
+
+		// anim_test pawn: everything else runs as for a player, but it never reads the editor's input.
+		if ( InputSuppressedForTests )
 			return;
 
 		// Dev: console `swing` holds the attack action for a few frames (GameHacks) — same path as a real press.

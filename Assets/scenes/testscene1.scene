@@ -60,11 +60,54 @@
           "__guid": "d3659344-a90d-48fa-927a-095f70fe041f",
           "__enabled": true,
           "Flags": 0,
+          "__version": 1,
+          "AnimationCurve": [
+            {
+              "x": 0,
+              "y": 0,
+              "in": 0,
+              "out": 0,
+              "mode": "Mirrored"
+            },
+            {
+              "x": 0.5,
+              "y": 1,
+              "in": 0,
+              "out": 0,
+              "mode": "Mirrored"
+            },
+            {
+              "x": 1,
+              "y": 0,
+              "in": 0,
+              "out": 0,
+              "mode": "Mirrored"
+            }
+          ],
+          "AnimationDuration": 2,
+          "AnimationEnabled": false,
+          "AnimationGradient": {
+            "blend": "Linear",
+            "color": [
+              {
+                "t": 0.5,
+                "c": "1,1,1,1"
+              }
+            ],
+            "alpha": []
+          },
+          "AnimationPattern": "Flicker",
+          "AnimationSpeed": 1,
+          "AnimationTimeOffset": 0,
+          "BakeLightIndex": -1,
           "ContactShadows": true,
           "Contribution": "Diffuse, Specular, Transmissive",
           "FogMode": "Disabled",
           "FogStrength": 0,
+          "IncludeStaticShadowCasters": false,
+          "Intensity": 1,
           "LightColor": "3.2,2.95,2.6,1",
+          "MixedShadows": false,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
@@ -77,6 +120,7 @@
           "ShadowHardness": 0,
           "Shadows": true,
           "SkyColor": "0.18,0.23,0.33,1",
+          "Temperature": 6500,
           "Visualizer": {}
         },
         {
@@ -148,8 +192,8 @@
               "ChargeSeconds": 0.2,
               "ActiveSeconds": 0.1,
               "HeavyActiveSeconds": 0.1,
-              "RecoveryMissSeconds": 0.3,
-              "RecoveryHitSeconds": 0.2,
+              "RecoveryMissSeconds": 0.15,
+              "RecoveryHitSeconds": 0.1,
               "RecoveryBlockedSeconds": 0.2,
               "RecoveryParriedSeconds": 0.4,
               "SpecialWindupSeconds": 0.3,
@@ -177,8 +221,8 @@
               "ChargeSeconds": 0.55,
               "ActiveSeconds": 0.14,
               "HeavyActiveSeconds": 0.2,
-              "RecoveryMissSeconds": 0.45,
-              "RecoveryHitSeconds": 0.3,
+              "RecoveryMissSeconds": 0.225,
+              "RecoveryHitSeconds": 0.15,
               "RecoveryBlockedSeconds": 0.3,
               "RecoveryParriedSeconds": 0.6,
               "SpecialWindupSeconds": 0.42,
@@ -206,8 +250,8 @@
               "ChargeSeconds": 0.5,
               "ActiveSeconds": 0.12,
               "HeavyActiveSeconds": 0.16,
-              "RecoveryMissSeconds": 0.35,
-              "RecoveryHitSeconds": 0.25,
+              "RecoveryMissSeconds": 0.175,
+              "RecoveryHitSeconds": 0.125,
               "RecoveryBlockedSeconds": 0.25,
               "RecoveryParriedSeconds": 0.5,
               "SpecialWindupSeconds": 0.36,
@@ -235,8 +279,8 @@
               "ChargeSeconds": 0.35,
               "ActiveSeconds": 0.07,
               "HeavyActiveSeconds": 0.1,
-              "RecoveryMissSeconds": 0.15,
-              "RecoveryHitSeconds": 0.1,
+              "RecoveryMissSeconds": 0.075,
+              "RecoveryHitSeconds": 0.05,
               "RecoveryBlockedSeconds": 0.1,
               "RecoveryParriedSeconds": 0.25,
               "SpecialWindupSeconds": 0.22,
@@ -407,6 +451,22 @@
             },
             "Property": "Position",
             "Value": "0,-160,64"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "970732c0-a058-4701-8a40-c9b9df0da80b"
+            },
+            "Property": "MeleeOneHandedGrip",
+            "Value": true
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "970732c0-a058-4701-8a40-c9b9df0da80b"
+            },
+            "Property": "MeleeStrikeClipSeconds",
+            "Value": 0.3
           }
         ],
         "MovedObjects": []
@@ -451,14 +511,6 @@
         "13b5a6bf-7962-8375-99b1-4790290e5448": "dd5a2d30-69e9-4921-bc78-d134de33dbe5",
         "18ee3cca-7999-85c9-8512-f7d092d15954": "d4386acc-12ea-483d-89dd-8ee5e7ee75c2",
         "22adeaa4-3eff-455e-b0ad-8186e47120c5": "1cc7cf11-08d3-4569-98cf-52316ffbbb1b",
-        "06640ac9-a851-43bf-b35b-42e2be0fdca6": "7e988176-381c-4b28-b795-d818842de280",
-        "db2ec2d8-edd9-4812-b3b7-ad8ddf316d21": "cd38e861-d279-4605-99df-47c63924dcd6",
-        "e1a0945b-44d2-4cc6-a897-c7931851924d": "1b4cf466-c41f-4e3f-a1a0-18a2c70ea241",
-        "ded41f18-ffe7-4185-ab1c-9616122dc6f0": "96cb0a87-b94a-4b98-b34b-4017f9ea80a4",
-        "bce430cc-f569-4381-9ec0-f2d872648efc": "0947ad9a-edf6-4943-bf63-b3d427bce97c",
-        "563539eb-c977-45a3-92f0-e25aa1211547": "1ee801f0-056c-4dda-b169-f264805a30e1",
-        "25dd5bed-58eb-4648-bd3b-0de6ea746503": "816a668c-dbd3-4b5d-8fd1-93df9942de55",
-        "970732c0-a058-4701-8a40-c9b9df0da80b": "d4cc24b2-8f27-8669-b5d3-2f36467941cb",
         "a334750f-a7f9-4e36-9c2d-563b96bda182": "d6048634-cc6b-4786-9aed-34eccb77e7e7",
         "52c95d95-b997-44f4-ba0e-3d83d5b458c7": "bc4f4bd6-d8dd-4fc5-9d7d-5f0d278fde70",
         "4785e803-a655-4137-8dc0-d456a8086f19": "379167ef-6c81-402c-9d8b-9b69adc562ee",
@@ -489,7 +541,15 @@
         "889301a1-d209-8049-af16-4c5fc30470a9": "12c04bd3-e3c0-401d-8148-57311f0eaf70",
         "034bfdf3-add2-827a-a294-72c15e831b6a": "708ddab2-18e6-477a-bb5b-8392df85ac9f",
         "f334590a-a6d7-44af-98bd-14ec93294ec7": "1cc4950f-f097-4d98-85c2-2494123e82e8",
-        "4d8ed045-4f00-411d-9d8e-42b4f855dc9b": "296eb224-d396-4cdb-879a-de5a8b87e8df"
+        "4d8ed045-4f00-411d-9d8e-42b4f855dc9b": "296eb224-d396-4cdb-879a-de5a8b87e8df",
+        "06640ac9-a851-43bf-b35b-42e2be0fdca6": "7e988176-381c-4b28-b795-d818842de280",
+        "db2ec2d8-edd9-4812-b3b7-ad8ddf316d21": "cd38e861-d279-4605-99df-47c63924dcd6",
+        "e1a0945b-44d2-4cc6-a897-c7931851924d": "1b4cf466-c41f-4e3f-a1a0-18a2c70ea241",
+        "ded41f18-ffe7-4185-ab1c-9616122dc6f0": "96cb0a87-b94a-4b98-b34b-4017f9ea80a4",
+        "bce430cc-f569-4381-9ec0-f2d872648efc": "0947ad9a-edf6-4943-bf63-b3d427bce97c",
+        "563539eb-c977-45a3-92f0-e25aa1211547": "1ee801f0-056c-4dda-b169-f264805a30e1",
+        "25dd5bed-58eb-4648-bd3b-0de6ea746503": "816a668c-dbd3-4b5d-8fd1-93df9942de55",
+        "970732c0-a058-4701-8a40-c9b9df0da80b": "d4cc24b2-8f27-8669-b5d3-2f36467941cb"
       }
     },
     {
@@ -1399,7 +1459,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "dd5a0a56-c4be-45cc-81df-84ca8ddbcea5",
-        "Path": "prefabs/environment/cloverHills/rocks/rock.prefab"
+        "Path": "prefabs/environment/cloverhills/rocks/rock.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -1429,7 +1489,7 @@
             "Property": "Model",
             "Value": {
               "Id": "94c09378-b0a7-4b17-aeb4-348cc0d7d43c",
-              "Path": "models/environment/cloverHills/rocks/lowpolyrock.vmdl"
+              "Path": "models/environment/cloverhills/rocks/lowpolyrock.vmdl"
             }
           }
         ],
@@ -2057,7 +2117,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "dc5c31e4-c596-4057-ad67-42bcf1d786d6",
-        "Path": "prefabs/environment/cloverHills/resources/stick.prefab"
+        "Path": "prefabs/environment/cloverhills/resources/stick.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -2124,7 +2184,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "4d03e29c-e159-4b34-91fc-3bc99a15be5a",
-        "Path": "prefabs/environment/cloverHills/resources/feathers.prefab"
+        "Path": "prefabs/environment/cloverhills/resources/feathers.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [
@@ -2233,7 +2293,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "2eb54e6f-e392-49e6-af68-5cc8bc30643c",
-        "Path": "prefabs/environment/cloverHills/resources/sampleBush.prefab"
+        "Path": "prefabs/environment/cloverhills/resources/samplebush.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -2297,7 +2357,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "1e8a3e4b-c4b5-497b-9385-12fe58d2195a",
-        "Path": "prefabs/environment/cloverHills/resources/femur.prefab"
+        "Path": "prefabs/environment/cloverhills/resources/femur.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -149888,7 +149948,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "d13e94f4-2349-8c5b-8248-8d3cd8d33151"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "84620552-a76d-817d-84fd-2ec7c610a36b"
           }
         },
         {
@@ -149930,7 +149990,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "1056ada8-1fdb-80ee-8cf4-f749f023f365"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "8ddc012f-a5f7-8272-9b7e-ba3b7e82ea3a"
           }
         },
         {
@@ -149972,7 +150032,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "7eba4432-1f57-898b-8772-ec3472d74099"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "a55fc0cc-ce4b-8857-aeef-817e2deba880"
           }
         },
         {
@@ -150014,7 +150074,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "98198c77-0084-830b-a125-503aa4488a4d"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "a64b4a98-91ff-8d82-b706-4f5bd647ea31"
           }
         },
         {
@@ -150056,7 +150116,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "cca74ad3-419c-80d2-8c0c-602c1489a413"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "bb8de80c-954b-81b7-a707-20acf3415011"
           }
         },
         {
@@ -150106,7 +150166,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "5d5ea1f5-68b5-8ec7-9850-1de1fb1cfd6d"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "d396b154-c3f4-8429-bcd3-6b92e5efc726"
           }
         },
         {
@@ -150156,7 +150216,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "4ccd5c5c-8264-8f38-b520-03ed77ac6116"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "a38bc3f7-c426-8bce-9f94-6d298946459c"
           }
         },
         {
@@ -150206,7 +150266,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "e1faccf9-cefa-86d6-a87a-e365e32c471d"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "e09500af-e539-8e4d-9f92-b32a97ddbaad"
           }
         },
         {
@@ -150256,7 +150316,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "3ae985cf-ed65-8287-9860-1da098c23d35"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "1ff29db6-20a7-8cb4-b385-83a80c25d576"
           }
         },
         {
@@ -150306,7 +150366,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "06e46f1d-32c8-8b9d-9848-04a6cbe7bc00"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "afa9c829-f0a9-88a4-a2d1-ec60c4eef308"
           }
         },
         {
@@ -150356,7 +150416,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "e9f56e41-2300-84f5-95c7-9efe441d6d36"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "27a6d80c-698b-89fb-825b-1bf42166874e"
           }
         },
         {
@@ -150406,7 +150466,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "1a804627-0303-89d0-b9be-2b3ca2111462"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "71299375-2ece-898c-832f-c74a17c76cd1"
           }
         },
         {
@@ -150448,7 +150508,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "79b27abb-8a5c-8d2c-ace7-834f774eb3fe"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "d4fae378-782a-89e9-b02e-74d59c5df352"
           }
         },
         {
@@ -150498,7 +150558,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "6889925a-46d2-8613-afef-527fdfa154a0"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "0c1964ad-5261-833c-be6c-3e78c8a1358c"
           }
         },
         {
@@ -150548,7 +150608,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "761d73de-15a8-85a2-8ebe-2d93c158abd1"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "54cdd14e-a64d-8c60-99a4-5df8f4b86ef9"
           }
         },
         {
@@ -150598,7 +150658,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "82cc6273-668c-8748-a5e6-430cdf346d04"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "aae5bdd8-fd9d-8f6f-a90f-69c5a0754571"
           }
         },
         {
@@ -150648,7 +150708,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "4a1862ef-791a-8217-b966-eefea01fb4f2"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "8f77410e-5ebf-862c-83ad-71ce24a73534"
           }
         },
         {
@@ -150698,7 +150758,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "e750f599-fad5-8958-b203-c936dfc47f72"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "997cc5b7-8df8-8324-a403-7ffb44d0d18b"
           }
         },
         {
@@ -150748,7 +150808,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "96ba9b73-ed09-85e8-b6b7-836e9a456d0a"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "99859ec5-b2a7-890b-84be-1e36a47f226d"
           }
         },
         {
@@ -150798,7 +150858,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "3e67e4d4-530d-879c-b2ad-59079b9d2c93"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "9902915e-4811-82d4-a040-ef1529ed0eaa"
           }
         },
         {
@@ -150848,7 +150908,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "50e99550-2ea9-84fc-8464-6adcb1f4faa6"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "79035596-7670-81a3-beb0-2032d4d7247c"
           }
         },
         {
@@ -150898,7 +150958,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "7cae9e00-9fc8-80bd-9e3e-36a3692200bb"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "fbece2fe-1409-8907-9c17-d1aae3db5582"
           }
         },
         {
@@ -150948,7 +151008,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "ae603127-78bb-8b26-900d-b38937286f13"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "3750df76-a3f9-8feb-8574-b8cad6044fb7"
           }
         },
         {
@@ -150998,7 +151058,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "cb06af78-d043-8b32-9c70-5d8cb07ec531"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "d0f3d10a-bc58-830c-b9f5-8facab39873b"
           }
         },
         {
@@ -151048,7 +151108,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "871eea12-4cf9-8ca8-8151-a427b84c1324"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "d6bd1265-a8dc-81e4-9cb1-070c88c51d95"
           }
         },
         {
@@ -151098,7 +151158,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "0937d2fe-762e-8590-a5ef-63cd0eefbedb"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "ae579810-2737-85dd-b68c-f3ba269a7fbd"
           }
         },
         {
@@ -151148,7 +151208,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "46960412-08ae-8eb9-ab4a-2645452eb335"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "e06b1c4a-1646-8261-9261-dff857508993"
           }
         },
         {
@@ -151198,7 +151258,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "3f3e3d1f-7bf3-8eaf-82cc-0ec750d62928"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "e3e078a4-6afa-8a32-a731-fcce88e43a66"
           }
         },
         {
@@ -151248,7 +151308,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "269c225a-9f7a-8e3c-a49e-fbb4981f0a7e"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "edffc9a8-99b4-8bc5-b6b0-557b372f1f2d"
           }
         },
         {
@@ -151298,7 +151358,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "b5b9e581-71ec-872f-a104-aa7d2084102c"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "b923af15-b3f6-8a18-9796-043256816ed1"
           }
         },
         {
@@ -151348,7 +151408,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "69ff80ec-f8d3-8e30-8d0d-fef2158af0b6"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "545dd6ce-0a19-8da2-8cb7-849602015e79"
           }
         },
         {
@@ -151398,7 +151458,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "c99cb223-975f-81b1-bd0a-ffc135739d02"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "a8681790-8831-81cc-b4c8-10ab9437c405"
           }
         },
         {
@@ -151448,7 +151508,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "9beecd49-0ce4-803c-8811-71b7877152bd"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "43283ec9-2aec-8913-8924-359e8b57016c"
           }
         },
         {
@@ -151498,7 +151558,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "85eb4eba-6748-4df0-a559-ee27f3da2b21": "30153436-506a-8368-8b23-6e8d3dfba8b7"
+            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "3ab0d34e-0982-88af-87c0-b3090f16b5f3"
           }
         }
       ]
@@ -159169,19 +159229,19 @@
           "ClumpModels": [
             {
               "Id": "25bd536b-37ed-44db-a7f9-6d575a1e07c4",
-              "Path": "models/environment/cloverHills/groundFoliage/grass/grass_clump1.vmdl"
+              "Path": "models/environment/cloverhills/groundfoliage/grass/grass_clump1.vmdl"
             },
             {
               "Id": "7042c5e6-3e06-4c8b-a6f5-4edf5fd9574d",
-              "Path": "models/environment/cloverHills/groundFoliage/grass/grass_clump2.vmdl"
+              "Path": "models/environment/cloverhills/groundfoliage/grass/grass_clump2.vmdl"
             },
             {
               "Id": "d333d867-7a48-4254-9108-e7ad4e3e9d77",
-              "Path": "models/environment/cloverHills/groundFoliage/grass/grass_clump3.vmdl"
+              "Path": "models/environment/cloverhills/groundfoliage/grass/grass_clump3.vmdl"
             },
             {
               "Id": "4ddb150e-0e33-4dea-b310-524f25143158",
-              "Path": "models/environment/cloverHills/groundFoliage/grass/grass_clump4.vmdl"
+              "Path": "models/environment/cloverhills/groundfoliage/grass/grass_clump4.vmdl"
             }
           ],
           "ClumpsPerSquareMeter": 3,
@@ -159263,7 +159323,7 @@
           "WindMaterials": [
             {
               "Id": "a8ecc01e-bb11-40d5-95e5-8d5d09633bc6",
-              "Path": "materials/environment/cloverHills/groundFoliage/grass_blade.vmat"
+              "Path": "materials/environment/cloverhills/groundfoliage/grass_blade.vmat"
             }
           ],
           "YawDegrees": 35
@@ -159965,7 +160025,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "7d051ddd-72b8-455b-a857-7a519b217fc0",
-        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elmsapling1_v15.prefab"
+        "Path": "prefabs/environment/cloverhills/trees/elm/environment_elmsapling1_v15.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160236,11 +160296,54 @@
           "__guid": "651b34d7-a927-45a4-86ab-f24537fd19e4",
           "__enabled": true,
           "Flags": 0,
+          "__version": 1,
+          "AnimationCurve": [
+            {
+              "x": 0,
+              "y": 0,
+              "in": 0,
+              "out": 0,
+              "mode": "Mirrored"
+            },
+            {
+              "x": 0.5,
+              "y": 1,
+              "in": 0,
+              "out": 0,
+              "mode": "Mirrored"
+            },
+            {
+              "x": 1,
+              "y": 0,
+              "in": 0,
+              "out": 0,
+              "mode": "Mirrored"
+            }
+          ],
+          "AnimationDuration": 2,
+          "AnimationEnabled": false,
+          "AnimationGradient": {
+            "blend": "Linear",
+            "color": [
+              {
+                "t": 0.5,
+                "c": "1,1,1,1"
+              }
+            ],
+            "alpha": []
+          },
+          "AnimationPattern": "Flicker",
+          "AnimationSpeed": 1,
+          "AnimationTimeOffset": 0,
+          "BakeLightIndex": -1,
           "ContactShadows": false,
           "Contribution": "Diffuse, Specular, Transmissive",
           "FogMode": "Disabled",
           "FogStrength": 0,
+          "IncludeStaticShadowCasters": false,
+          "Intensity": 1,
           "LightColor": "0.55,0.65,0.95,1",
+          "MixedShadows": false,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
@@ -160253,6 +160356,7 @@
           "ShadowHardness": 0,
           "Shadows": true,
           "SkyColor": "0.22,0.28,0.42,1",
+          "Temperature": 6500,
           "Visualizer": {}
         }
       ],
@@ -160413,6 +160517,7 @@
             "component_type": "DirectionalLight"
           },
           "NightAmbientBrightness": 0.06,
+          "NightMaxExposure": 1,
           "NightSeconds": 240,
           "NightSkyAmbient": "0.22,0.28,0.42,1",
           "OnComponentDestroy": null,
@@ -160523,7 +160628,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "d75bc15e-90fd-4ceb-92b6-43b79374aa11",
-        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elm1_v76.prefab"
+        "Path": "prefabs/environment/cloverhills/trees/elm/environment_elm1_v76.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160553,7 +160658,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "53fdff20-d665-4695-9842-e9c2029df1ba",
-        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elm2_v76.prefab"
+        "Path": "prefabs/environment/cloverhills/trees/elm/environment_elm2_v76.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160583,7 +160688,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "c09b6bcb-6849-44df-b842-4557f27e245d",
-        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elm3_v76.prefab"
+        "Path": "prefabs/environment/cloverhills/trees/elm/environment_elm3_v76.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160613,7 +160718,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "7ebb0659-a742-4687-ac8c-3c8614f992ad",
-        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elm4_v76.prefab"
+        "Path": "prefabs/environment/cloverhills/trees/elm/environment_elm4_v76.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160643,7 +160748,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "53891615-d216-4cb1-a770-a7a53f28cd3c",
-        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elm5_v76.prefab"
+        "Path": "prefabs/environment/cloverhills/trees/elm/environment_elm5_v76.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160673,7 +160778,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "1de79b55-6760-4370-b2af-26afc9a4a0d1",
-        "Path": "prefabs/environment/cloverHills/trees/elm/environment_elm6_v76.prefab"
+        "Path": "prefabs/environment/cloverhills/trees/elm/environment_elm6_v76.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160801,7 +160906,7 @@
       "__version": 2,
       "__Prefab": {
         "Id": "66b6f861-ed6c-44d6-8da9-0c9981fd7bc1",
-        "Path": "prefabs/environment/cloverHills/trees/clovertree_chop.prefab"
+        "Path": "prefabs/environment/cloverhills/trees/clovertree_chop.prefab"
       },
       "__PrefabInstancePatch": {
         "AddedObjects": [],
@@ -160839,7 +160944,7 @@
             "Property": "Model",
             "Value": {
               "Id": "224884ee-8557-4f25-a83f-73d74625d58e",
-              "Path": "models/environment/cloverHills/trees/cloverTree/whole128.vmdl"
+              "Path": "models/environment/cloverhills/trees/clovertree/whole128.vmdl"
             }
           },
           {
@@ -160850,7 +160955,7 @@
             "Property": "Model",
             "Value": {
               "Id": "224884ee-8557-4f25-a83f-73d74625d58e",
-              "Path": "models/environment/cloverHills/trees/cloverTree/whole128.vmdl"
+              "Path": "models/environment/cloverhills/trees/clovertree/whole128.vmdl"
             }
           }
         ],

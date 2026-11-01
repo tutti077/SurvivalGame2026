@@ -136,6 +136,10 @@ public sealed partial class PlayerAnimation : Component
 	const string DemoStickObjectName = "melee_demo_stick";
 
 	GameObject _meleeDemoStick;
+
+	/// <summary>anim_test: the held sword object and the human body renderer it measures.</summary>
+	internal GameObject MeleeHeldPropForTests => _meleeDemoStick;
+	internal SkinnedModelRenderer BodyRendererForTests => ResolveBody();
 	ModelRenderer _meleeDemoStickRenderer;
 	float _demoStickMeshHalfExtentX = 0.5f;
 	/// <summary>Model the current stick was built from (profile <c>heldModel</c> or the dev box), so an item swap rebuilds it.</summary>
@@ -173,6 +177,7 @@ public sealed partial class PlayerAnimation : Component
 		TickWornClothing();
 		TickLookUpBodyHide();
 		TickCombatFacingPresentation( advance: true );
+		TickLookAimLimits( advance: true );
 	}
 
 	bool _combatFacingApplied;
@@ -331,6 +336,7 @@ public sealed partial class PlayerAnimation : Component
 		TickWornClothing();
 		// Facing before the stick transform so the held prop follows the rotated body this frame.
 		TickCombatFacingPresentation( advance: false );
+		TickLookAimLimits( advance: false );
 		TickMeleeDemoStickTransform();
 		TickHeldLightProp();
 	}
@@ -1009,11 +1015,11 @@ public sealed partial class PlayerAnimation : Component
 	}
 
 	/// <summary>
-	/// Blade edge direction in the <c>hold_R</c> bone frame (x forward, y left, z up = blade tip): the
-	/// forearm direction of the rig's own right-hand grip, measured once in Blender
-	/// (<c>create_sword_anims.py</c> Grip). The cutting edge faces the knuckles.
+	/// Blade edge direction in the <c>hold_R</c> bone frame. The sword clips pose <c>hold_R</c> inside the
+	/// closed fist with local +Z along the handle (blade tip) and local +X toward the knuckles
+	/// (<c>create_sword_anims.py</c> make_fist), so the cutting edge is local +X.
 	/// </summary>
-	static readonly Vector3 HoldEdgeLocal = new Vector3( 0.705f, -0.709f, 0f ).Normal;
+	static readonly Vector3 HoldEdgeLocal = Vector3.Forward;
 
 	/// <summary>
 	/// One-handed sword: rigid on the right hand's grip bone. The blade runs along <c>hold_R</c> up, the

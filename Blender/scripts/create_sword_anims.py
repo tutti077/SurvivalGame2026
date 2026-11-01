@@ -25,9 +25,15 @@ Usage (from the repo root):
   blender -b --python Blender/scripts/create_sword_anims.py -- render  <outDir> [POSE ...] [--views a,b]
   blender -b --python Blender/scripts/create_sword_anims.py -- sheet   <outDir> <clip> [--views a,b] [--step n]
   blender -b --python Blender/scripts/create_sword_anims.py -- export  [clip ...]
+  blender -b --python Blender/scripts/create_sword_anims.py -- check   [report.txt]   anatomy checks: every pose,
+                                     every strike-clip frame and every graph blend; exit 1 on any failure
+  blender -b --python Blender/scripts/create_sword_anims.py -- tune    [POSE ...]     search small fist / blade
+                                     corrections that clear the limits; writes sword_pose_tuning.json
 """
+import json
 import math
 import os
+import random
 import sys
 
 import bpy
@@ -37,10 +43,19 @@ ROOT = r"M:/s&box/Projects/SurvivalGame2026"
 SBOX = r"M:/SteamLibrary/steamapps/common/sbox/addons/citizen/Assets/models/citizen_human"
 REF = SBOX + "/citizen_human_male_REF.fbx"
 BASE_CLIP = SBOX + "/animations/retargeted/weapons/human@holditem_rh_pose_standing_01.fbx"
+FIST_CLIP = SBOX + "/animations/retargeted/weapons/human@melee_punch_pose_standing_01.fbx"
+# Sword grip inside the closed right fist (hand_R-local centimetres / directions, measured from the punch pose):
+# the tunnel between palm and curled fingers, the handle running along the knuckle line (pinky -> index), the
+# cutting edge toward the knuckles. hold_R is posed onto this frame in every clip, so the engine (which hangs the
+# sword on hold_R: blade = local +Z, edge = local +X) puts the handle through the fist.
+FIST_CURL = 0.85                       # punch-pose finger curl blended over the item pose (1 = tight punch fist)
+GRIP_ORIGIN = (10.0, 0.0, -1.9)
+GRIP_AXIS = (0.17, 0.92, 0.35)
 OUT_DIR = ROOT + "/Assets/models/player/animations"
 FPS = 30
 WORLD_AXES = {"x": Vector((1, 0, 0)), "y": Vector((0, 1, 0)), "z": Vector((0, 0, 1))}
 VERBOSE = os.environ.get("SWORD_VERBOSE") == "1"
+LAST_GRIP = {}
 
 # Wrist budgets for the grip search (degrees beyond the item pose's own wrist).
 PRONATION_FREE = 45.0      # forearm twist that costs nothing
@@ -257,6 +272,7 @@ def solve_grip(rig, grip, fist_world, blade_world, elbow_hint_world):
             if best is None or score < best[0]:
                 best = (score, F, Rh, E, H, n, tw, sw, reach, dd, roll)
     score, F, Rh, E, H, n, tw, sw, reach, dd, roll = best
+    LAST_GRIP.update(reach_cm=reach, pronation=tw, wrist=sw, roll=roll)
     # Rigid lengths: put the elbow on the upper-arm sphere, the wrist one forearm further along F.
     E2 = S + (E - S).normalized() * grip.l1
     H2 = E2 + F * grip.l2
@@ -344,9 +360,33 @@ def apply_pose(rig, base, grip, base_head, ops):
     sync_ik_targets(rig)
 
 
+def make_fist(rig, base):
+    """Close the right hand around the sword: finger bones from the punch pose (blended FIST_CURL over the item
+    pose) and hold_R moved into the fist tunnel. Edits `base` in place and re-applies it."""
+    fist = import_base_pose(rig, FIST_CLIP)
+    for name, m in fist.items():
+        if name.startswith("finger_") and name.endswith("_R"):
+            qa, qb = base[name].to_quaternion(), m.to_quaternion()
+            base[name] = qa.slerp(qb, FIST_CURL).to_matrix().to_4x4()
+    apply_base(rig, base)
+    pb = rig.pose.bones
+    Rh = pb["hand_R"].matrix
+    R3 = Rh.to_3x3().normalized()
+    blade = (R3 @ Vector(GRIP_AXIS)).normalized()
+    knuckles = R3 @ Vector((1.0, 0.0, 0.0))
+    edge = (knuckles - blade * knuckles.dot(blade)).normalized()
+    frame = Matrix((edge, blade.cross(edge), blade)).transposed().to_4x4()   # columns X = edge, Y, Z = blade
+    frame.translation = Rh @ Vector(GRIP_ORIGIN)
+    pb["hold_R"].matrix = frame
+    bpy.context.view_layer.update()
+    base["hold_R"] = pb["hold_R"].matrix_basis.copy()
+    apply_base(rig, base)
+
+
 def setup():
     rig = import_rig()
     base = import_base_pose(rig, BASE_CLIP)
+    make_fist(rig, base)
     grip = Grip(rig)
     base_head = {n: rot3(rig.pose.bones[n]).copy() for n in ("neck_0", "head")}
     if VERBOSE:
@@ -362,33 +402,54 @@ def key_pose(rig, frame):
         pb.keyframe_insert("location", frame=frame)
 
 
+def segment_ease(index, count, t):
+    """Timing inside one key-to-key segment. Strikes: accelerate into contact (segment 0), decelerate through the
+    follow-through (segment 1), smooth after. Two-key clips: smooth. The path is always the per-bone slerp the
+    checker validates; only the timing along it changes."""
+    if count >= 3 and index == 0:
+        return t ** 1.5
+    if count >= 3 and index == 1:
+        return 1.0 - (1.0 - t) ** 2
+    return t * t * (3.0 - 2.0 * t)
+
+
 def build_clip(ctx, name, keys):
+    """Bake the clip frame by frame: each key pose is solved once, frames in between are per-bone slerps between
+    the neighbouring keys (exactly what -- check and the tuner validate), keyed with linear interpolation."""
     rig, base, grip, base_head = ctx
     for a in list(bpy.data.actions):
         bpy.data.actions.remove(a)
     rig.animation_data_create()
+    rig.animation_data.action = None
+    poses = []
+    for seconds, pose_name in keys:
+        LAST_GRIP.clear()
+        apply_pose(rig, base, grip, base_head, tuned_ops(pose_name))
+        poses.append((1 + int(round(seconds * FPS)), capture_basis(rig)))
     action = bpy.data.actions.new(name)
     rig.animation_data.action = action
     slot = action.slots.new(id_type="OBJECT", name=rig.name)
     rig.animation_data.action_slot = slot
-    last = 1
-    for seconds, ops in keys:
-        frame = 1 + int(round(seconds * FPS))
-        bpy.context.scene.frame_set(frame)          # frame_set first, it re-evaluates the action
-        apply_pose(rig, base, grip, base_head, ops)
-        key_pose(rig, frame)
-        last = max(last, frame)
-    if last == 1:
-        bpy.context.scene.frame_set(2)
-        key_pose(rig, 2)
-        last = 2
+    last = poses[-1][0] if len(poses) > 1 else 2
+    nseg = len(poses) - 1
+    for f in range(1, last + 1):
+        bpy.context.scene.frame_set(f)
+        if nseg <= 0:
+            apply_base(rig, poses[0][1])
+        else:
+            i = max(j for j in range(nseg) if poses[j][0] <= f) if f >= poses[0][0] else 0
+            i = min(i, nseg - 1)
+            f0, a = poses[i]
+            f1, b = poses[i + 1]
+            t = 0.0 if f1 == f0 else min(1.0, max(0.0, (f - f0) / (f1 - f0)))
+            blend_poses(rig, a, b, segment_ease(i, nseg, t))
+        key_pose(rig, f)
     bpy.context.scene.frame_start = 1
     bpy.context.scene.frame_end = last
     cb = action.layers[0].strips[0].channelbag(slot)
     for fc in cb.fcurves:
         for kp in fc.keyframe_points:
-            kp.interpolation = "BEZIER"
-            kp.handle_left_type = kp.handle_right_type = "AUTO_CLAMPED"
+            kp.interpolation = "LINEAR"
         fc.update()
     return action
 
@@ -411,17 +472,27 @@ def export_clip(rig, fbx_name):
 # ------------------------------------------------------------------------------------------ the sword set
 # World metres: facing -Y, right -X, up Z. Right shoulder joint ~(-0.19, -0.03, 1.37); arm reach to the
 # fist ~0.6 m. Fist = the hold_R point inside the closed hand.
-LEFT_GUARD = ["left", [0.23, -0.08, 0.97], [0.45, 0.45, 1.15]]      # relaxed at the side, slightly forward
+LEFT_GUARD = ["left", [0.22, -0.10, 0.90], [0.40, 0.40, 1.20]]      # relaxed, hanging a little forward
 LEFT_BALANCE = ["left", [0.20, -0.30, 1.08], [0.55, 0.05, 0.80]]    # forward for balance during a cut
 
-REST_R = [  # sword resting back over the right shoulder
+REST_R = [  # shoulder carry: fist in front of the right shoulder, blade back over it
     ["lean", 3],
-    ["grip", [-0.19, -0.16, 1.28], [-0.06, 0.75, 0.66], [-0.15, 0.1, -1.0]],
+    ["grip", [-0.18, -0.30, 1.22], [-0.10, 0.60, 0.79], [-0.3, 0.1, -1.0]],
+    LEFT_GUARD,
+]
+REST_UP = [  # aiming up: arm lifted above the shoulder, blade tipped back over the head, ready to slam down
+    ["twist", -8], ["lean", -3],
+    ["grip", [-0.20, -0.10, 1.58], [-0.05, 0.80, 0.60], [-1.0, 0.1, 0.0]],
+    LEFT_BALANCE,
+]
+SWAP_MID = [  # changing shoulders: sword brought up in front, point up, well clear of the face
+    ["twist", 4], ["lean", 4],
+    ["grip", [-0.04, -0.46, 1.24], [0.10, -0.25, 0.96], [-0.6, 0.1, -0.8]],
     LEFT_GUARD,
 ]
 REST_L = [  # sword crossed to rest back over the left shoulder
     ["twist", 8], ["lean", 3],
-    ["grip", [0.04, -0.25, 1.18], [0.28, 0.66, 0.70], [-0.35, -0.35, -1.0]],
+    ["grip", [0.06, -0.26, 1.18], [0.38, 0.62, 0.69], [-0.35, -0.35, -1.0]],
     ["left", [0.24, -0.06, 0.97], [0.45, 0.45, 1.15]],
 ]
 COCKED_R = [  # wound up over the right shoulder, shoulders turned right
@@ -460,15 +531,15 @@ SWING_L_END = [  # follow-through low on the right
     ["grip", [-0.42, -0.24, 1.02], [-0.80, 0.30, -0.52], [-0.3, 0.6, -0.8]],
     LEFT_BALANCE,
 ]
-SWING_L_SETTLE = [
-    ["twist", -8], ["lean", 6],
-    ["grip", [-0.04, -0.30, 1.14], [0.25, 0.40, 0.88], [-0.4, -0.1, -1.0]],
+SWING_L_SETTLE = [  # recovery comes up in front (like the shoulder swap) before laying onto the left shoulder
+    ["twist", -2], ["lean", 5],
+    ["grip", [-0.06, -0.45, 1.22], [0.08, -0.25, 0.96], [-0.6, 0.1, -0.8]],
     LEFT_GUARD,
 ]
 
-COCKED_OVER = [  # sword raised over the head, blade back
-    ["twist", -12], ["lean", -6],
-    ["grip", [-0.16, -0.02, 1.64], [0.0, 0.70, 0.70], [-1.0, 0.0, 0.2]],
+COCKED_OVER = [  # fully loaded overhead: fist above the head, blade tipped well back behind it
+    ["twist", -12], ["lean", -7],
+    ["grip", [-0.14, 0.00, 1.66], [0.0, 0.90, 0.42], [-1.0, 0.0, 0.2]],
     LEFT_BALANCE,
 ]
 CHOP_MID = [
@@ -478,12 +549,12 @@ CHOP_MID = [
 ]
 CHOP_END = [
     ["twist", 6], ["lean", 22],
-    ["grip", [-0.12, -0.46, 0.98], [0.02, -0.55, -0.83], [-0.4, 0.4, -0.9]],
+    ["grip", [-0.21, -0.52, 1.02], [-0.05, -0.80, -0.60], [-0.6, 0.3, -0.8]],
     ["left", [0.20, -0.18, 0.98], [0.60, 0.20, 0.85]],
 ]
 CHOP_SETTLE = [
     ["twist", 0], ["lean", 8],
-    ["grip", [-0.16, -0.30, 1.14], [-0.12, 0.40, 0.91], [-0.4, 0.1, -1.0]],
+    ["grip", [-0.25, -0.42, 1.18], [-0.12, 0.30, 0.95], [-0.5, 0.1, -1.0]],
     LEFT_GUARD,
 ]
 
@@ -503,27 +574,339 @@ STAB_SETTLE = [
     LEFT_GUARD,
 ]
 
-# Strike timing (0.55 s): cocked 0 -> contact 0.07 -> follow-through 0.15 -> settle 0.30 -> rest 0.55.
+# Strike timing (0.30 s): cocked 0 -> contact 0.05 -> follow-through 0.11 -> settle 0.19 -> rest 0.30.
 # The host's active window opens at strike start and lasts ~0.1 s, so contact lands inside it.
 CLIPS = {
-    "Sword_Rest_R": ("human@sword_rest_r.fbx", [(0.0, REST_R)]),
-    "Sword_Rest_L": ("human@sword_rest_l.fbx", [(0.0, REST_L)]),
-    "Sword_Cocked_R": ("human@sword_cocked_r.fbx", [(0.0, COCKED_R)]),
-    "Sword_Cocked_L": ("human@sword_cocked_l.fbx", [(0.0, COCKED_L)]),
-    "Sword_Cocked_Over": ("human@sword_cocked_over.fbx", [(0.0, COCKED_OVER)]),
-    "Sword_Cocked_Stab": ("human@sword_cocked_stab.fbx", [(0.0, COCKED_STAB)]),
+    "Sword_Rest_R": ("human@sword_rest_r.fbx", [(0.0, "REST_R")]),
+    "Sword_Rest_L": ("human@sword_rest_l.fbx", [(0.0, "REST_L")]),
+    "Sword_Swap_Mid": ("human@sword_swap_mid.fbx", [(0.0, "SWAP_MID")]),
+    "Sword_Rest_Up": ("human@sword_rest_up.fbx", [(0.0, "REST_UP")]),
+    "Sword_Cocked_R": ("human@sword_cocked_r.fbx", [(0.0, "COCKED_R")]),
+    "Sword_Cocked_L": ("human@sword_cocked_l.fbx", [(0.0, "COCKED_L")]),
+    "Sword_Cocked_Over": ("human@sword_cocked_over.fbx", [(0.0, "COCKED_OVER")]),
+    "Sword_Cocked_Stab": ("human@sword_cocked_stab.fbx", [(0.0, "COCKED_STAB")]),
     "Sword_Attack_R": ("human@sword_attack_r.fbx",
-                       [(0.0, COCKED_R), (0.07, SWING_R_MID), (0.15, SWING_R_END), (0.30, SWING_R_SETTLE), (0.55, REST_R)]),
+                       [(0.0, "COCKED_R"), (0.05, "SWING_R_MID"), (0.11, "SWING_R_END"), (0.19, "SWING_R_SETTLE"), (0.30, "REST_R")]),
     "Sword_Attack_L": ("human@sword_attack_l.fbx",
-                       [(0.0, COCKED_L), (0.07, SWING_L_MID), (0.15, SWING_L_END), (0.30, SWING_L_SETTLE), (0.55, REST_L)]),
+                       [(0.0, "COCKED_L"), (0.05, "SWING_L_MID"), (0.11, "SWING_L_END"), (0.19, "SWING_L_SETTLE"), (0.30, "REST_L")]),
     "Sword_Attack_Over": ("human@sword_attack_over.fbx",
-                          [(0.0, COCKED_OVER), (0.07, CHOP_MID), (0.15, CHOP_END), (0.30, CHOP_SETTLE), (0.55, REST_R)]),
+                          [(0.0, "COCKED_OVER"), (0.05, "CHOP_MID"), (0.11, "CHOP_END"), (0.19, "CHOP_SETTLE"), (0.30, "REST_R")]),
     "Sword_Attack_Stab": ("human@sword_attack_stab.fbx",
-                          [(0.0, COCKED_STAB), (0.10, STAB_END), (0.28, STAB_SETTLE), (0.55, REST_R)]),
+                          [(0.0, "COCKED_STAB"), (0.07, "STAB_END"), (0.16, "STAB_SETTLE"), (0.30, "REST_R")]),
 }
 POSES = {k: v for k, v in dict(globals()).items()
-         if k.isupper() and isinstance(v, list) and v and isinstance(v[0], list)}
+         if k.isupper() and isinstance(v, list) and v and isinstance(v[0], list) and isinstance(v[0][0], str)}
 
+# Blends the engine graph performs between static poses (selector cross-fades): every one is checked
+# frame by frame like a clip. The shoulder swap is two short blends through SWAP_MID, never R <-> L direct.
+GRAPH_BLENDS = [
+    ("REST_R", "SWAP_MID"), ("SWAP_MID", "REST_L"),
+    ("REST_R", "COCKED_R"), ("REST_L", "COCKED_L"),
+    ("REST_R", "COCKED_OVER"), ("REST_L", "COCKED_OVER"),
+    ("REST_R", "COCKED_STAB"), ("REST_L", "COCKED_STAB"),
+    # a press during a swap / right after an aim flip cocks from wherever the pose is
+    ("SWAP_MID", "COCKED_R"), ("SWAP_MID", "COCKED_L"), ("SWAP_MID", "COCKED_OVER"), ("SWAP_MID", "COCKED_STAB"),
+    ("REST_R", "COCKED_L"), ("REST_L", "COCKED_R"),
+    # aiming up: raised stance <-> right shoulder directly, <-> left shoulder through SWAP_MID; any press from it
+    ("REST_R", "REST_UP"), ("REST_UP", "SWAP_MID"),
+    ("REST_UP", "COCKED_OVER"), ("REST_UP", "COCKED_R"), ("REST_UP", "COCKED_L"), ("REST_UP", "COCKED_STAB"),
+]
+
+TUNE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sword_pose_tuning.json")
+
+
+def load_tuning():
+    if os.path.exists(TUNE_PATH):
+        with open(TUNE_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
+TUNING = load_tuning()
+
+
+def rotate_dir(v, ax_deg, az_deg):
+    """Tilt a direction by two small angles: about world X (forward/back) and world Z (around the body)."""
+    q = Quaternion(Vector((1, 0, 0)), math.radians(ax_deg)) @ Quaternion(Vector((0, 0, 1)), math.radians(az_deg))
+    return list(q @ Vector(v).normalized())
+
+
+def tuned_ops(name, override=None):
+    """The pose's ops with its tuning (fist offset metres, blade tilt degrees) applied to the grip op."""
+    t = override if override is not None else TUNING.get(name)
+    ops = []
+    for op in POSES[name]:
+        if op[0] == "grip" and t:
+            d = t.get("fist", [0, 0, 0])
+            fist = [op[1][i] + d[i] for i in range(3)]
+            blade = rotate_dir(op[2], *t.get("blade", [0, 0]))
+            ops.append(["grip", fist, blade, op[3]])
+        else:
+            ops.append(op)
+    return ops
+
+
+
+# ------------------------------------------------------------------------------------------ anatomy checks
+# Thresholds (metres / degrees). The same numbers are mirrored in the engine anim_test.
+LIMITS = {
+    "blade_head": 0.04,      # blade (guard..tip) clear of the head sphere
+    "blade_neck": 0.03,
+    "blade_torso": 0.02,     # blade clear of the torso capsule (resting ON the shoulder is outside it)
+    "blade_pelvis": 0.02,
+    "arm_torso": 0.0,        # right forearm / upper arm / left hand not inside the body
+    "elbow_min": 35.0,       # interior elbow angle: never folded tighter than this ...
+    "elbow_max": 178.0,      # ... nor bent backwards
+    "reach_cm": 1.5,         # grip solver: fist actually reaches the asked point
+    "pronation": 95.0,       # forearm twist beyond the item pose
+    "wrist": 50.0,           # wrist flex / deviation
+    "roll": 95.0,            # upper-arm roll
+}
+TORSO_R, HEAD_R, NECK_R, PELVIS_R, ARM_R, HAND_R = 0.12, 0.11, 0.06, 0.15, 0.035, 0.04
+
+
+def seg_seg(p1, q1, p2, q2):
+    d1, d2, r = q1 - p1, q2 - p2, p1 - p2
+    a, e, f = d1.dot(d1), d2.dot(d2), d2.dot(r)
+    if a <= 1e-9 and e <= 1e-9:
+        return (p1 - p2).length
+    if a <= 1e-9:
+        s_, t_ = 0.0, max(0.0, min(1.0, f / e))
+    else:
+        c = d1.dot(r)
+        if e <= 1e-9:
+            t_, s_ = 0.0, max(0.0, min(1.0, -c / a))
+        else:
+            b = d1.dot(d2)
+            den = a * e - b * b
+            s_ = max(0.0, min(1.0, (b * f - c * e) / den)) if den > 1e-9 else 0.0
+            t_ = (b * s_ + f) / e
+            if t_ < 0.0:
+                t_, s_ = 0.0, max(0.0, min(1.0, -c / a))
+            elif t_ > 1.0:
+                t_, s_ = 1.0, max(0.0, min(1.0, (b - c) / a))
+    return ((p1 + d1 * s_) - (p2 + d2 * t_)).length
+
+
+def body_proxies(rig):
+    W = lambda n: bone_world(rig, n)
+    neck, head = W("neck_0"), W("head")
+    up = (head - neck).normalized()
+    hold_m = rig.matrix_world @ rig.pose.bones["hold_R"].matrix
+    blade_dir = (hold_m.to_3x3().normalized() @ Vector((0, 0, 1))).normalized()
+    g = hold_m.translation
+    return {
+        "head": head + up * 0.09, "neck": (neck, head),
+        "torso": (W("spine_0"), neck - up * 0.06), "pelvis": W("pelvis"),
+        "blade": (g + blade_dir * 0.07, g + blade_dir * 0.92),
+        "armR": (W("arm_upper_R"), W("arm_lower_R"), W("hand_R")),
+        "armL": (W("arm_upper_L"), W("arm_lower_L"), W("hand_L")),
+    }
+
+
+def elbow_angle(S, E, H):
+    return math.degrees((S - E).angle(H - E))
+
+
+def pose_metrics(rig, with_grip=True):
+    b = body_proxies(rig)
+    bl0, bl1 = b["blade"]
+    t0, t1 = b["torso"]
+    n0, n1 = b["neck"]
+    S, E, H = b["armR"]
+    SL, EL, HL = b["armL"]
+    m = {
+        "blade_head": seg_seg(bl0, bl1, b["head"], b["head"]) - HEAD_R,
+        "blade_neck": seg_seg(bl0, bl1, n0, n1) - NECK_R,
+        "blade_torso": seg_seg(bl0, bl1, t0, t1) - TORSO_R,
+        "blade_pelvis": seg_seg(bl0, bl1, b["pelvis"], b["pelvis"]) - PELVIS_R,
+        "arm_torso": min(seg_seg(E, H, t0, t1) - TORSO_R - ARM_R,
+                         seg_seg(HL, HL, t0, t1) - TORSO_R - HAND_R,
+                         seg_seg(HL, HL, b["pelvis"], b["pelvis"]) - PELVIS_R - HAND_R),
+        "elbowR": elbow_angle(S, E, H),
+        "elbowL": elbow_angle(SL, EL, HL),
+    }
+    if with_grip and LAST_GRIP:
+        m.update(reach_cm=LAST_GRIP["reach_cm"], pronation=abs(LAST_GRIP["pronation"]),
+                 wrist=LAST_GRIP["wrist"], roll=abs(LAST_GRIP["roll"]))
+    return m
+
+
+def violations(m, margin=0.0):
+    """List of (name, amount) where the metric is outside its limit; amount in the limit's units. `margin` (0..1)
+    tightens every limit (1 cm clearance, 3 degrees, 0.3 cm reach per unit) — the tuner aims inside the limits
+    so the checked result passes with room to spare."""
+    out = []
+    for k in ("blade_head", "blade_neck", "blade_torso", "blade_pelvis", "arm_torso"):
+        lim = LIMITS[k] + 0.01 * margin
+        if m[k] < lim:
+            out.append((k, lim - m[k]))
+    for k in ("elbowR", "elbowL"):
+        if m[k] < LIMITS["elbow_min"] + 3 * margin:
+            out.append((k + "_fold", LIMITS["elbow_min"] + 3 * margin - m[k]))
+        if m[k] > LIMITS["elbow_max"] - 3 * margin:
+            out.append((k + "_hyper", m[k] - LIMITS["elbow_max"] + 3 * margin))
+    for k, step in (("reach_cm", 0.3), ("pronation", 3.0), ("wrist", 3.0), ("roll", 3.0)):
+        lim = LIMITS[k] - step * margin
+        if k in m and m[k] > lim:
+            out.append((k, m[k] - lim))
+    return out
+
+
+def penalty(m, margin=1.0):
+    w = {"blade_head": 400, "blade_neck": 400, "blade_torso": 300, "blade_pelvis": 200, "arm_torso": 300,
+         "elbowR_fold": 2, "elbowR_hyper": 2, "elbowL_fold": 2, "elbowL_hyper": 2,
+         "reach_cm": 3, "pronation": 0.4, "wrist": 0.4, "roll": 0.3}
+    return sum(w[k] * a for k, a in violations(m, margin))
+
+
+def blend_poses(rig, basis_a, basis_b, t):
+    """Engine-style cross-fade: per-bone local rotation slerp, location lerp."""
+    for pb in rig.pose.bones:
+        a, b = basis_a[pb.name], basis_b[pb.name]
+        qa, qb = a.to_quaternion(), b.to_quaternion()
+        m = qa.slerp(qb, t).to_matrix().to_4x4()
+        m.translation = a.translation.lerp(b.translation, t)
+        pb.matrix_basis = m
+    bpy.context.view_layer.update()
+
+
+def capture_basis(rig):
+    return {pb.name: pb.matrix_basis.copy() for pb in rig.pose.bones}
+
+
+def fmt(m):
+    keys = ("blade_head", "blade_neck", "blade_torso", "arm_torso", "elbowR", "elbowL", "reach_cm", "pronation", "wrist", "roll")
+    return " ".join(f"{k}={m[k]:.2f}" if isinstance(m.get(k), float) and k.startswith(("blade", "arm", "reach"))
+                    else f"{k}={m[k]:.0f}" for k in keys if k in m)
+
+
+def check_all(ctx, report_path=None):
+    """Every static pose, every strike-clip frame and every graph blend must pass. Returns failure count."""
+    rig, base, grip, base_head = ctx
+    lines, failures = [], 0
+    bases = {}
+    for name in POSES:
+        LAST_GRIP.clear()
+        apply_pose(rig, base, grip, base_head, tuned_ops(name))
+        m = pose_metrics(rig)
+        bases[name] = capture_basis(rig)
+        v = violations(m)
+        failures += bool(v)
+        lines.append(f"{'FAIL' if v else 'PASS'} pose {name}: {fmt(m)}" + (f"  !! {v}" if v else ""))
+    for a, b in transition_pairs():
+        if (a, b) in GRAPH_BLENDS:
+            continue
+        bad = []
+        for i in range(1, 10):
+            blend_poses(rig, bases[a], bases[b], i / 10)
+            v = violations(pose_metrics(rig, with_grip=False))
+            if v:
+                bad.append((i / 10, v))
+        if bad:
+            lines.append(f"info key-pair {a}->{b}: {bad[:2]}")
+    for a, b in GRAPH_BLENDS:
+        worst = None
+        for i in range(11):
+            blend_poses(rig, bases[a], bases[b], i / 10)
+            v = violations(pose_metrics(rig, with_grip=False))
+            if v and worst is None:
+                worst = (i / 10, v)
+        failures += worst is not None
+        lines.append(f"{'FAIL' if worst else 'PASS'} blend {a}->{b}" + (f"  !! t={worst[0]} {worst[1]}" if worst else ""))
+    for clip, (fbx, keys) in CLIPS.items():
+        if len(keys) < 2:
+            continue
+        build_clip(ctx, clip, keys)
+        bad = []
+        for f in range(1, bpy.context.scene.frame_end + 1):
+            bpy.context.scene.frame_set(f)
+            v = violations(pose_metrics(rig, with_grip=False))
+            if v:
+                bad.append((f, v))
+        rig.animation_data.action = None
+        failures += bool(bad)
+        lines.append(f"{'FAIL' if bad else 'PASS'} clip {clip}" + (f"  !! {bad[:3]}" if bad else ""))
+    lines.append(f"RESULT {failures} failing items")
+    text = "\n".join(lines)
+    print(text)
+    if report_path:
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(text + "\n")
+    return failures
+
+
+def transition_pairs():
+    """Every pose pair the character ever moves between: graph blends plus consecutive clip keys."""
+    pairs = set(GRAPH_BLENDS)
+    for fbx, keys in CLIPS.values():
+        for (_, a), (_, b) in zip(keys, keys[1:]):
+            pairs.add((a, b))
+    return sorted(pairs)
+
+
+def tune_pose(ctx, name, bases, rounds=70, seed=1):
+    """Search a small fist offset (<= 10 cm) and blade tilt (<= 20 deg) that clears every anatomy limit, in the
+    pose itself AND along every transition into or out of it (sampled cross-fades against the neighbours' current
+    poses), while staying as close as possible to the authored intent."""
+    rig, base, grip, base_head = ctx
+    rnd = random.Random(seed)
+    partners = [b if a == name else a for a, b in transition_pairs() if name in (a, b) and a != b]
+
+    def evaluate(t):
+        LAST_GRIP.clear()
+        apply_pose(rig, base, grip, base_head, tuned_ops(name, t))
+        m = pose_metrics(rig)
+        mine = capture_basis(rig)
+        trans = 0.0
+        for other in partners:
+            for k in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9):
+                blend_poses(rig, mine, bases[other], k)
+                trans += penalty(pose_metrics(rig, with_grip=False))
+        reg = sum(x * x for x in t["fist"]) / 0.05 ** 2 + sum(x * x for x in t["blade"]) / 12.0 ** 2
+        return penalty(m) + trans + reg * 0.5, m
+
+    best_t = TUNING.get(name, {"fist": [0.0, 0.0, 0.0], "blade": [0.0, 0.0]})
+    best_s, best_m = evaluate(best_t)
+    zero = {"fist": [0.0, 0.0, 0.0], "blade": [0.0, 0.0]}
+    s0, m0 = evaluate(zero)
+    if s0 < best_s:
+        best_t, best_s, best_m = zero, s0, m0
+    step_f, step_b = 0.04, 8.0
+    for i in range(rounds):
+        cand = {"fist": [max(-0.10, min(0.10, x + rnd.gauss(0, step_f))) for x in best_t["fist"]],
+                "blade": [max(-20.0, min(20.0, x + rnd.gauss(0, step_b))) for x in best_t["blade"]]}
+        sc, m = evaluate(cand)
+        if sc < best_s:
+            best_t, best_s, best_m = cand, sc, m
+        if i % 20 == 19:
+            step_f, step_b = step_f * 0.6, step_b * 0.6
+    print(f"tuned {name}: score {best_s:.2f} fist {[round(x, 3) for x in best_t['fist']]} "
+          f"blade {[round(x, 1) for x in best_t['blade']]}  {fmt(best_m)}  viol {violations(best_m)}")
+    return best_t
+
+
+def all_bases(ctx):
+    rig, base, grip, base_head = ctx
+    out = {}
+    for name in POSES:
+        apply_pose(rig, base, grip, base_head, tuned_ops(name))
+        out[name] = capture_basis(rig)
+    return out
+
+
+def tune_all(ctx, names, passes=int(os.environ.get("SWORD_TUNE_PASSES", "2"))):
+    """Coordinate passes: each pose is re-tuned against its neighbours' latest poses."""
+    for p in range(passes):
+        bases = all_bases(ctx)
+        for name in names:
+            if any(op[0] == "grip" for op in POSES[name]):
+                TUNING[name] = tune_pose(ctx, name, bases, rounds=int(os.environ.get("SWORD_TUNE_ROUNDS", "70")), seed=1 + p)
+                LAST_GRIP.clear()
+                apply_pose(ctx[0], ctx[1], ctx[2], ctx[3], tuned_ops(name))
+                bases[name] = capture_basis(ctx[0])
+                with open(TUNE_PATH, "w", encoding="utf-8") as f:
+                    json.dump(TUNING, f, indent=1, sort_keys=True)
 
 # ------------------------------------------------------------------------------------------ preview
 VIEWS = {
@@ -580,6 +963,14 @@ def parse_flag(argv, flag, default):
     return default
 
 
+def look_at_hold(rig, dist=0.38, yaw_deg=-60.0, up=0.10):
+    scene = bpy.context.scene
+    g = bone_world(rig, "hold_R")
+    d = Vector((math.sin(math.radians(yaw_deg)), -math.cos(math.radians(yaw_deg)), 0.0))
+    scene.camera.location = g + d * dist + Vector((0, 0, up))
+    scene.camera.rotation_euler = (g - scene.camera.location).to_track_quat("-Z", "Y").to_euler()
+
+
 def render_poses(out_dir, names, views):
     ctx = setup()
     rig, base, grip, base_head = ctx
@@ -588,9 +979,13 @@ def render_poses(out_dir, names, views):
     for name in names:
         if VERBOSE:
             print("pose", name)
-        apply_pose(rig, base, grip, base_head, POSES[name])
+        apply_pose(rig, base, grip, base_head, tuned_ops(name))
         for view in views:
-            setup_render(os.path.join(out_dir, f"{name}__{view}.png"), view)
+            if view.startswith("hand"):
+                setup_render(os.path.join(out_dir, f"{name}__{view}.png"), "front")
+                look_at_hold(rig, yaw_deg=float(view[4:] or -60))
+            else:
+                setup_render(os.path.join(out_dir, f"{name}__{view}.png"), view)
             bpy.ops.render.render(write_still=True)
 
 
@@ -626,5 +1021,9 @@ if __name__ == "__main__":
         sheet_clip(argv[1], argv[2], views, step)
     elif argv and argv[0] == "export":
         export_clips(argv[1:] or list(CLIPS))
+    elif argv and argv[0] == "check":
+        sys.exit(1 if check_all(setup(), argv[1] if len(argv) > 1 else None) else 0)
+    elif argv and argv[0] == "tune":
+        tune_all(setup(), argv[1:] or list(POSES))
     else:
         print(__doc__)

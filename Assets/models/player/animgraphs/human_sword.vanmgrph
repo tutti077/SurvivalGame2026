@@ -2588,7 +2588,7 @@
 				m_bAutoReset = false
 				m_defaultValue = 0
 				m_minValue = 0
-				m_maxValue = 5
+				m_maxValue = 7
 			},
 			{
 				_class = "CIntAnimParameter"
