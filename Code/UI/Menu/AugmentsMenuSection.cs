@@ -110,14 +110,14 @@ public sealed class AugmentsMenuSection : IPlayerMenuSection
 			_bindSlotPanels.Add( slotPanel );
 			_bindUi.Add( AugmentPaperdollView.CreateSlotUi( slotPanel ) );
 
-			var key = new Label { Parent = host, Text = (i + 1).ToString() };
+			var key = new Label { Parent = host, Text = i < PlayerAugments.BindKeyLabels.Length ? PlayerAugments.BindKeyLabels[i] : (i + 1).ToString() };
 			key.Style.FontColor = AugmentPaperdollView.LabelColor;
 			key.Style.FontSize = Length.Pixels( AugmentPaperdollView.SmallFont );
 			key.Style.Set( "pointer-events", "none" );
 			_bindKeyLabels.Add( key );
 		}
 
-		_hint = new Label { Parent = _sectionRoot, Text = "Wheel augments are picked by holding C. Visit an augment station to enhance, install or remove augments." };
+		_hint = new Label { Parent = _sectionRoot, Text = "Wheel augments are picked by holding Tab (a tap opens this menu). Visit an augment station to enhance, install or remove augments." };
 		_hint.Style.FontColor = AugmentPaperdollView.MutedColor;
 		_hint.Style.FontSize = Length.Pixels( AugmentPaperdollView.SmallFont + 1f );
 		_hint.Style.Set( "flex-shrink", "0" );

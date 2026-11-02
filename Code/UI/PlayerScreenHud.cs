@@ -43,6 +43,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	InventoryMenuInputOverlay _menuInputOverlay;
 	MenuPageNavigator _pageNavigator;
 	BuildMenuHud _buildMenuHud;
+	HoeMenuHud _hoeMenuHud;
 	WireCableMenuHud _wireCableMenuHud;
 	BuildSnapReadoutHud _buildSnapReadout;
 	BuildSupportReadoutHud _buildSupportReadout;
@@ -226,6 +227,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		using ( Prof( "pickups" ) ) _pickupNotifications?.Tick();
 		using ( Prof( "augmentWheel" ) ) _augmentWheelHud?.Tick();
 		using ( Prof( "buildMenu" ) ) _buildMenuHud?.Tick();
+		using ( Prof( "hoeMenu" ) ) _hoeMenuHud?.Tick();
 		using ( Prof( "wireMenu" ) ) _wireCableMenuHud?.Tick();
 		using ( Prof( "snapReadout" ) ) _buildSnapReadout?.Tick();
 		using ( Prof( "supportReadout" ) ) _buildSupportReadout?.Tick();
@@ -343,6 +345,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_vehicleHud?.Dispose();
 		_vehicleHud = null;
 		_buildMenuHud = null;
+		_hoeMenuHud = null;
 		_wireCableMenuHud = null;
 		_buildSnapReadout = null;
 		RestoreGrapplePromptCapture();
@@ -1009,6 +1012,9 @@ public sealed class PlayerScreenHud : PanelComponent
 		_buildMenuHud = new BuildMenuHud( _equipment );
 		_buildMenuHud.Build( root );
 
+		_hoeMenuHud = new HoeMenuHud( _equipment );
+		_hoeMenuHud.Build( root );
+
 		_wireCableMenuHud = new WireCableMenuHud( _equipment );
 		_wireCableMenuHud.Build( root );
 
@@ -1578,6 +1584,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		if ( _menuController is null || !_menuController.IsMenuOpen )
 		{
+			_hotbarHud.SetShowBothBanks( false );
 			_hotbarHud.SetVisible( true );
 			_augmentBindsHud?.SetVisible( true );
 			return;
@@ -1588,6 +1595,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		                        || (panels & MenuPanelFlags.Settings) != 0
 		                        || (panels & MenuPanelFlags.AugmentStation) != 0
 		                        || (panels & MenuPanelFlags.Augments) != 0;
+		// Inventory / equipment pages show both hotbar banks stacked (Mark 2026-11-02).
+		_hotbarHud.SetShowBothBanks( !hideForFullscreen && (panels & MenuPanelFlags.Inventory) != 0 );
 		_hotbarHud.SetVisible( !hideForFullscreen );
 		_augmentBindsHud?.SetVisible( !hideForFullscreen );
 	}

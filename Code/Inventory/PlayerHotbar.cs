@@ -7,12 +7,30 @@ namespace Survival;
 [Title( "Player Hotbar" )]
 public sealed class PlayerHotbar : Component
 {
-	public const int SlotCount = 10;
+	/// <summary>Slots per bank (the number row 1-0). Two banks: Alt swaps which one the HUD shows.</summary>
+	public const int BankSize = 10;
+	public const int BankCount = 2;
+	public const int SlotCount = BankSize * BankCount;
 
 	public event Action HotbarChanged;
 	public event Action<int> ActiveSlotChanged;
+	public event Action<int> ActiveBankChanged;
 
+	/// <summary>The last selected slot (seeds / food "selected on the hotbar"). May sit in the hidden bank; -1 after a toggle-off.</summary>
 	[Sync] public int ActiveSlotIndex { get; private set; }
+
+	/// <summary>Bank the HUD shows (0 or 1). Alt toggles it; selection keys address this bank.</summary>
+	[Sync] public int ActiveBank { get; private set; }
+
+	/// <summary>
+	/// Slot that feeds MainHand: the last selected slot that was NOT an offhand item (an empty or non-weapon
+	/// slot clears the weapon, as a single selection always did). -1 = toggled off (bare hand). The HUD draws
+	/// the gold square on this slot and on <see cref="OffHandSlotIndex"/>.
+	/// </summary>
+	[Sync] public int PrimarySlotIndex { get; private set; }
+
+	/// <summary>Slot that feeds OffHand: the last selected slot holding a shield. -1 = no shield selected.</summary>
+	[Sync] public int OffHandSlotIndex { get; private set; } = -1;
 
 	readonly InventorySlot[] _slots = new InventorySlot[SlotCount];
 	string[] _bindings = PlayerHotbarBindingsStore.CreateEmpty();
@@ -96,20 +114,105 @@ public sealed class PlayerHotbar : Component
 	public void SetActiveSlot( int index )
 	{
 		index = WrapSlotIndex( index );
+		var handChanged = ClassifySelection( index );
 		if ( ActiveSlotIndex == index )
+		{
+			if ( handChanged )
+				ActiveSlotChanged?.Invoke( index );
 			return;
+		}
 
 		ActiveSlotIndex = index;
 		ActiveSlotChanged?.Invoke( index );
 	}
 
+	/// <summary>
+	/// Key / click on a slot: selecting a slot that is already the primary or the offhand selection UNEQUIPS it
+	/// (Mark 2026-11-02: press the slot's button again and the gold square goes away); anything else selects.
+	/// </summary>
+	public void SelectOrToggleSlot( int index )
+	{
+		index = WrapSlotIndex( index );
+		var offhand = IsOffHandSlot( index );
+		var selected = offhand ? OffHandSlotIndex == index : PrimarySlotIndex == index;
+		if ( !selected )
+		{
+			SetActiveSlot( index );
+			return;
+		}
+
+		if ( offhand )
+			OffHandSlotIndex = -1;
+		else
+			PrimarySlotIndex = -1;
+
+		if ( ActiveSlotIndex == index )
+			ActiveSlotIndex = -1;
+
+		ActiveSlotChanged?.Invoke( ActiveSlotIndex );
+	}
+
+	bool IsOffHandSlot( int index )
+	{
+		var slot = GetSlot( index );
+		return !slot.IsEmpty && EquipmentCatalog.IsHotbarOffHandResource( slot.ResourceId );
+	}
+
+	/// <summary>
+	/// A selected shield goes to the offhand and leaves the primary alone; anything else (weapon, tool, seed,
+	/// empty) becomes the primary selection. Returns true when either hand index moved.
+	/// </summary>
+	bool ClassifySelection( int index )
+	{
+		if ( IsOffHandSlot( index ) )
+		{
+			if ( OffHandSlotIndex == index )
+				return false;
+
+			OffHandSlotIndex = index;
+			return true;
+		}
+
+		if ( PrimarySlotIndex == index )
+			return false;
+
+		PrimarySlotIndex = index;
+		return true;
+	}
+
+	/// <summary>Wheel / mouse4-5: step within the bank on screen. A selection sitting in the other bank enters this one from the edge.</summary>
 	public void StepActiveSlot( int delta )
 	{
 		if ( delta == 0 )
 			return;
 
-		SetActiveSlot( ActiveSlotIndex + delta );
+		var bank = ActiveBank;
+		var inBank = ActiveSlotIndex >= 0 && BankOf( ActiveSlotIndex ) == bank
+			? IndexInBank( ActiveSlotIndex ) + delta
+			: (delta > 0 ? 0 : BankSize - 1);
+		inBank = ((inBank % BankSize) + BankSize) % BankSize;
+		SetActiveSlot( bank * BankSize + inBank );
 	}
+
+	/// <summary>Number row: slot <paramref name="indexInBank"/> (0-9) of the bank on screen.</summary>
+	public void SelectBankSlot( int indexInBank )
+	{
+		if ( indexInBank < 0 || indexInBank >= BankSize )
+			return;
+
+		SetActiveSlot( ActiveBank * BankSize + indexInBank );
+	}
+
+	/// <summary>Alt: show the other bank. Selection and equipped hands are untouched.</summary>
+	public void ToggleBank()
+	{
+		ActiveBank = (ActiveBank + 1) % BankCount;
+		ActiveBankChanged?.Invoke( ActiveBank );
+	}
+
+	public static int BankOf( int slotIndex ) => WrapSlotIndex( slotIndex ) / BankSize;
+
+	public static int IndexInBank( int slotIndex ) => WrapSlotIndex( slotIndex ) % BankSize;
 
 	public static int WrapSlotIndex( int index )
 	{
@@ -925,11 +1028,11 @@ public sealed class PlayerHotbar : Component
 			crafters[i] = _slots[i].CrafterName ?? string.Empty;
 		}
 
-		RpcOwnerHotbarSync( ids, counts, wears, crafters, ActiveSlotIndex );
+		RpcOwnerHotbarSync( ids, counts, wears, crafters, ActiveSlotIndex, PrimarySlotIndex, OffHandSlotIndex );
 	}
 
 	[Rpc.Owner]
-	void RpcOwnerHotbarSync( string[] resourceIds, int[] counts, int[] wears, string[] crafters, int activeSlot )
+	void RpcOwnerHotbarSync( string[] resourceIds, int[] counts, int[] wears, string[] crafters, int activeSlot, int primarySlot, int offHandSlot )
 	{
 		if ( resourceIds is null || counts is null )
 			return;
@@ -946,7 +1049,9 @@ public sealed class PlayerHotbar : Component
 				: new InventorySlot { ResourceId = id, Count = c, Wear = w, CrafterName = maker };
 		}
 
-		ActiveSlotIndex = WrapSlotIndex( activeSlot );
+		ActiveSlotIndex = activeSlot < 0 ? -1 : WrapSlotIndex( activeSlot );
+		PrimarySlotIndex = primarySlot < 0 ? -1 : WrapSlotIndex( primarySlot );
+		OffHandSlotIndex = offHandSlot < 0 ? -1 : WrapSlotIndex( offHandSlot );
 		HotbarChanged?.Invoke();
 	}
 

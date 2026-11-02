@@ -5,7 +5,7 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Dev supply (<see cref="GameHacks.DevSupply"/>): key X (or console <c>devSupplyOpen</c>) opens a
+/// Dev supply (<see cref="GameHacks.DevSupply"/>): key B (or console <c>devSupplyOpen</c>) opens a
 /// take-only grid beside the bag holding one full stack of every <c>resource_*</c> item and every
 /// crafting-recipe ingredient. Takes refill at once (<see cref="ContainerInventory.InfiniteSupply"/>).
 /// The grid is a client-local, never-networked <see cref="ContainerInventory"/> shown through the

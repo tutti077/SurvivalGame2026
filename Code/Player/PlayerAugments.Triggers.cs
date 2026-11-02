@@ -18,9 +18,19 @@ public sealed partial class PlayerAugments
 {
 	public const int BindCount = 6;
 	/// <summary>Number row 1–6 — the hotbar no longer listens to these.</summary>
-	static readonly string[] BindActions = { "Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6" };
+	/// <summary>Trigger bind keys Z X C V G T (Mark 2026-11-02: the number row went back to the hotbar).</summary>
+	static readonly string[] BindActions = { "Augment1", "Augment2", "Augment3", "Augment4", "Augment5", "Augment6" };
 
-	/// <summary>Hold to open the radial (C). Its own action — F stays the shove.</summary>
+	/// <summary>Key caps shown on the binds HUD and the Augments page, in bind order.</summary>
+	public static readonly string[] BindKeyLabels = { "Z", "X", "C", "V", "G", "T" };
+
+	/// <summary>
+	/// Tab is shared: a tap (released before this) toggles the inventory menu, a hold opens the radial.
+	/// <see cref="PlayerGameMenuController"/> reads the same constant for the tap side.
+	/// </summary>
+	public const float WheelHoldSeconds = 0.22f;
+
+	/// <summary>Hold to open the radial (Tab, held past <see cref="WheelHoldSeconds"/>). Its own action — F stays the shove.</summary>
 	public const string WheelAction = "AugmentWheel";
 	const float WheelDeadZonePixels = 36f;
 
@@ -268,16 +278,41 @@ public sealed partial class PlayerAugments
 		}
 	}
 
-	// ── Wheel (hold C, release to pick) ─────────────────────────────────────────────────────
+	// ── Wheel (hold Tab, release to pick) ───────────────────────────────────────────────────
+
+	double _wheelPressedAtReal;
+	bool _wheelPressTracking;
 
 	void TickWheel( bool menuOpen )
 	{
 		if ( !IsWheelOpen )
 		{
-			if ( menuOpen || !Input.Pressed( WheelAction ) )
+			if ( menuOpen )
+			{
+				_wheelPressTracking = false;
 				return;
+			}
 
-			OpenWheel();
+			if ( Input.Pressed( WheelAction ) )
+			{
+				_wheelPressedAtReal = RealTime.GlobalNow;
+				_wheelPressTracking = true;
+				return;
+			}
+
+			if ( !Input.Down( WheelAction ) )
+			{
+				_wheelPressTracking = false;
+				return;
+			}
+
+			// Held past the tap window: this press is the radial, not the menu.
+			if ( _wheelPressTracking && RealTime.GlobalNow - _wheelPressedAtReal >= WheelHoldSeconds )
+			{
+				_wheelPressTracking = false;
+				OpenWheel();
+			}
+
 			return;
 		}
 

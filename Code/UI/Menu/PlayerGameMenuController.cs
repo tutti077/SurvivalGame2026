@@ -253,7 +253,7 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 			return;
 		}
 
-		if ( WasActionPressed( InventoryMenuAction ) )
+		if ( WasInventoryTapReleased() )
 			HandlePageHotkey( MenuPageIds.Inventory );
 
 		if ( !IsMenuOpen )
@@ -458,6 +458,31 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 	}
 
 
+
+	double _inventoryKeyDownAtReal;
+
+	/// <summary>
+	/// Tab is shared with the augment wheel: a tap (released before <see cref="PlayerAugments.WheelHoldSeconds"/>)
+	/// toggles the inventory menu, a longer hold is the radial and does nothing here. The Score fallback stays a plain press.
+	/// </summary>
+	bool WasInventoryTapReleased()
+	{
+		if ( !string.IsNullOrWhiteSpace( InventoryMenuAction ) )
+		{
+			if ( Input.Pressed( InventoryMenuAction ) )
+				_inventoryKeyDownAtReal = RealTime.GlobalNow;
+
+			if ( Input.Released( InventoryMenuAction ) )
+			{
+				var tap = _inventoryKeyDownAtReal > 0d && RealTime.GlobalNow - _inventoryKeyDownAtReal < PlayerAugments.WheelHoldSeconds;
+				_inventoryKeyDownAtReal = 0d;
+				if ( tap )
+					return true;
+			}
+		}
+
+		return !string.Equals( InventoryMenuAction, "Score", StringComparison.OrdinalIgnoreCase ) && Input.Pressed( "Score" );
+	}
 
 	bool WasActionPressed( string actionName )
 

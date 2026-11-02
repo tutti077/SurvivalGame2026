@@ -73,7 +73,7 @@ public static class AugmentInfo
 		return $"{school} · {category}";
 	}
 
-	/// <summary>"Trigger — key bind 1–6 · one-shot · 10 s cooldown", "Wheel — hold C · toggle · 20 s battery", "Passive".</summary>
+	/// <summary>"Trigger — key bind Z X C V G T · one-shot · 10 s cooldown", "Wheel — hold Tab · toggle · 20 s battery", "Passive".</summary>
 	public static string DescribeActivation( AugmentDefinition def )
 	{
 		if ( def is null )
@@ -86,7 +86,7 @@ public static class AugmentInfo
 				sb.Append( "Trigger — assign to a key 1–6 on the Augments page" );
 				break;
 			case AugmentActivation.Wheel:
-				sb.Append( "Wheel — hold C and pick it" );
+				sb.Append( "Wheel — hold Tab and pick it" );
 				break;
 			default:
 				sb.Append( "Passive" );

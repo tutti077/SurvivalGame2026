@@ -84,7 +84,7 @@ public sealed class AugmentBindsHud
 			battery.Style.Set( "width", "0%" );
 			battery.Style.BackgroundColor = BatteryColor;
 
-			var key = new Label { Parent = slot, Text = (i + 1).ToString() };
+			var key = new Label { Parent = slot, Text = i < PlayerAugments.BindKeyLabels.Length ? PlayerAugments.BindKeyLabels[i] : (i + 1).ToString() };
 			key.Style.Set( "position", "absolute" );
 			key.Style.Set( "right", "3px" );
 			key.Style.Set( "top", "1px" );
