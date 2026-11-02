@@ -4,10 +4,11 @@ Engine: **s&box** (C#, `Component` / `GameObject` / prefab model, Source-2 units
 Assembly: `survivalgamebasics` (`Code/`), editor tools in `Editor/`.
 Namespace: `Survival` (a few `Game` / `Sandbox` roots).
 
-This file is the Claude Code equivalent of the Cursor setup. It ports **`AGENTS.md`** plus the
-eight `.cursor/rules/*.mdc` rules, which Claude does **not** load automatically. `AGENTS.md`
-remains the long-form reference for melee/AI mechanics — read it before touching player pawn
-gameplay, movement, pools, or combat.
+This file holds the rules, Mark's guidelines and the paths Claude needs to build things inside the
+project's boundaries and art style. How a system works lives in **`AGENTS.md`** (read it before
+touching player pawn gameplay, movement, pools or combat) and in subsystem docs:
+`Code/Environment/docs/ENVIRONMENT.md` (wind, grass, sky, lighting, terrain look),
+`Code/World/TerrainPreview/docs/TERRAIN_PREVIEW.md`, `Code/World/Voxel/docs/VOXEL.md`.
 
 ---
 
@@ -46,7 +47,7 @@ When you replace or remove behavior, **delete the old path in the same change**.
 - Remove settings properties, editor tab entries and `CloneForGenerate` copies that no longer
   affect output.
 - Remove call sites that existed only for the old path.
-- Update `AGENTS.md` and subsystem docs (e.g. `Code/World/TerrainPreview/docs/TERRAIN_PREVIEW.md`).
+- Update `AGENTS.md` and subsystem docs.
 
 Old preview JSON may still carry removed keys — keep those as **plain fields** (no `[Property]`)
 in `Code/World/TerrainPreview/TerrainPreviewSettings.Legacy.cs`. Never keep a designer toggle
@@ -55,7 +56,23 @@ that no longer runs code.
 Before closing: can you grep the old type name and get zero runtime callers? Does every remaining
 setting change something visible in `Sample()` or the editor preview?
 
-### 4. Meters are the design language; convert once, at the read site
+### 4. No `Ensure*` bandage components
+
+When a prefab or scene object is missing what it needs, **fix the asset**.
+
+Forbidden: components named `Ensure*` / `AutoWire*` / `Bootstrap*` whose job is to create missing
+gameplay components on other objects at start; folder scripts that walk children and
+`Components.Create<T>()`; "it works in play mode" while the prefab still lacks the components.
+
+Required instead: author the real components on the prefab (`ChopableTree` + `DamageReceiver` on
+tree prefabs, etc.); for non-prefab scene instances add them in the scene; repair bad prefab
+instance patches (`RemovedObjects`) rather than compensating in code.
+
+Allowed (not this commandment): catalog `EnsureLoaded()` for JSON caches; private helpers that
+build transient UI / preview / physics for an object that already owns the feature; one-time
+migrations the user explicitly asked for.
+
+### 5. Meters are the design language; convert once, at the read site
 
 **Designer-facing values are written in meters.** A property named `…Meters` holds exactly the
 number the user said: 100 m → **100**. Never pre-scale that number in the property, in JSON, or in
@@ -77,32 +94,17 @@ place.
 Open item: build's 50 u/m is the odd one out. Unifying it to 40 moves every snap point in the kit,
 so it stays until that migration is done deliberately.
 
-### 5. No `Ensure*` bandage components
-
-When a prefab or scene object is missing what it needs, **fix the asset**.
-
-Forbidden: components named `Ensure*` / `AutoWire*` / `Bootstrap*` whose job is to create missing
-gameplay components on other objects at start; folder scripts that walk children and
-`Components.Create<T>()`; "it works in play mode" while the prefab still lacks the components.
-
-Required instead: author the real components on the prefab (`ChopableTree` + `DamageReceiver` on
-tree prefabs, etc.); for non-prefab scene instances add them in the scene; repair bad prefab
-instance patches (`RemovedObjects`) rather than compensating in code.
-
-Allowed (not this commandment): catalog `EnsureLoaded()` for JSON caches; private helpers that
-build transient UI / preview / physics for an object that already owns the feature; one-time
-migrations the user explicitly asked for.
-
 ---
 
-## Also enforced (rules, not numbered commandments)
+## Working rules
 
 ### Ask before assuming
 
 Ask when requirements, naming, data shape or ownership are not explicitly stated. Do not guess at
 item stats, slot layouts, component hierarchy or migration strategy. Summarise your understanding
 and list open questions when a request spans multiple systems. Exception: follow patterns already
-established in the same subsystem.
+established in the same subsystem. When Mark reports something "doesn't work", fix the exact thing
+he named; when he proposes a mechanism ("it's like X"), test that against the code first.
 
 ### Infrequent validation
 
@@ -123,22 +125,24 @@ RPC sends intent; the host re-validates once.
 
 If you cannot say what cheat or boundary failure a check stops, it does not belong in a hot path.
 
-### Human verification log
+### Live editor (sbox MCP) and finishing work
 
-**`VERIFY.md`** at the repo root holds only what Mark explicitly asks to have added ("add this to the
-verify list"). Claude never adds rows on its own initiative — things it could not check by eye go in
-that reply's **What's needed from you** as plain text. When Mark asks for a row: ID, date, build,
-area, what to check, how to reproduce in under a minute, status; cite it in the footer
-(`VERIFY V-003`). Only Mark closes or clears rows. (Mark, 2026-10-05: no running list of things he
-has already verified.) The *Fable review queue* section is separate and still filled per Mark's
-standing request.
+- After any C# edit, confirm the editor compiled it (`LastCompileSucceeded`) before measuring or
+  claiming a result.
+- Inspect every case Mark named in the editor before calling visual work done; list what still
+  looks wrong.
+- **Always use the sbox MCP — autonomously** (Mark 2026-10-27: "DO ATTEMPT to use it, that's what
+  makes it awesome"). Compile-check, open scenes, play and screenshot without asking. If it is not
+  answering, try to get it back yourself: the `sbox-cli --call` bridge, and launching `sbox-dev.exe`
+  on the project if no editor is running (check `sbox-cli --list` first so you never open a second one).
+- **Only if that still fails, pause and tell Mark what is blocked.** Never branch the work off or land
+  it untested. Work that needs no editor (docs, JSON, Blender) can continue meanwhile.
 
-### Cool ideas list
+### Shared main, several sessions
 
-When Mark says "remember this idea for later" (or similar), append it to **`IDEAS.md`** at the repo
-root in his own words: sequential `I-NNN`, date, the idea, one optional context line. Record, don't
-design: no plan, estimate or counter-proposal. Only Mark reorders, merges or removes ideas; when one
-is picked up he moves it to *Picked up*. Mention the new ID in **What's needed from you** (`IDEAS I-003`).
+Mark runs several sessions on `main` at once (2026-10-27). Keep the work on `main` — no extra
+branches or worktrees unless he asks. Stage and commit **only the files your session changed**;
+never sweep another session's edits into your commit.
 
 ### Commit messages
 
@@ -149,18 +153,59 @@ summary: `[terrain] river trough carve, flowing clear water …`. No untagged su
   ground foliage, grass, wind, sky, day/night, environment asset moves — anything under
   `Code/Environment/`, `Code/World/Environment/` or `Assets/*/environment/`.
 - Other tags in use: `[terrain]` `[building]` `[vehicles]` `[weapons]` `[items]` `[ui]` `[player]`
-  `[ai]` `[lighting]` `[assets]` `[hacks]` `[extras]` (build label bumps and small misc). Reuse one of
-  these before inventing a new tag.
+  `[ai]` `[lighting]` `[assets]` `[hacks]` `[extras]` (small misc). Reuse one of these before
+  inventing a new tag.
 
 ### Patch bump
 
-Every user prompt bumps the semver **patch** of `GameBuildLabel.Display` **once**, at the end of
-the reply — code, asset / Blender work and chat-only answers alike (Mark, 2026-09-28: the label
-counts prompts; asset iterations are iterations too).
+Every user prompt bumps the semver **patch** of `GameBuildLabel.Display` (`Code/GameBuildLabel.cs`)
+**once**, at the end of the reply — code, asset / Blender work and chat-only answers alike (Mark,
+2026-09-28: the label counts prompts). **Never commit a label bump on its own** (Mark 2026-10-27):
+the bumped file rides along in the next real commit.
 
-> Note: `bump-patch-on-code-edit.mdc` also says to mirror the string into a `<Version>` element in
-> `Code/survivalgamebasics.csproj`. **That element does not exist** — either add it or drop that
-> half of the rule.
+### Human verification log
+
+**`VERIFY.md`** at the repo root holds only what Mark explicitly asks to have added ("add this to the
+verify list"). Claude never adds V-rows on its own initiative — things it could not check by eye go in
+that reply's **What's needed from you** as plain text. When Mark asks for a row: ID, date, build,
+area, what to check, how to reproduce in under a minute, status; cite it in the footer
+(`VERIFY V-003`). Only Mark closes or clears rows. The *Fable review queue* section is separate:
+work by Opus gets an `F-NNN` row there for Fable to re-check, cited in the footer.
+
+### Cool ideas list
+
+When Mark says "remember this idea for later" (or similar), append it to **`IDEAS.md`** at the repo
+root in his own words: sequential `I-NNN`, date, the idea, one optional context line. Record, don't
+design: no plan, estimate or counter-proposal. Only Mark reorders, merges or removes ideas; when one
+is picked up he moves it to *Picked up*. Mention the new ID in **What's needed from you** (`IDEAS I-003`).
+
+### Automated tests
+
+A **test** is a regression guard that runs by itself whenever its system is touched — unlike a
+routine (below), nobody asks for it. Each suite is a play-mode console command that fights / drives
+real prefabs through the host path, reads its expected numbers from the live tuning (so retuning
+never fails it, broken behaviour does), and logs `[Tag] PASS|FAIL <case>` then one `RESULT` line.
+
+| Suite | Command | Code | Gate scope (edits that make it owed) |
+|-------|---------|------|--------------------------------------|
+| Combat | `combat_test` | `Code/Combat/Tests/CombatTest.cs` | `Code/Combat/**`, `PlayerCombat*.cs`, `Melee*.cs`, combat types, `PlayerAnimation.HitReaction.cs`, `VitalsAuthority` / `ArmorMitigation`, `melee_weapon_classes.json`, `melee_block_stagger.json`, `combat_timings.csv` |
+| Sword animation | `anim_test` + offline `create_sword_anims.py -- check` | `Code/Player/Tests/AnimTest.cs`, `Blender/scripts/create_sword_anims.py` | `PlayerAnimation*.cs`, `Code/Player/Tests/AnimTest.cs`, `Assets/models/player/{animations,animgraphs}/**`, `human_male_sword.vmdl`, `create_sword_anims.py`, `sword_pose_tuning.json`, `make_human_sword_assets.py` (gate `.claude/hooks/anim_test_gate.py`) |
+
+The gate is `.claude/hooks/combat_test_gate.py`, wired in `.claude/settings.json`: an edit in scope
+marks the test owed for that session (and runs the offline `combat_timings.csv` ↔ JSON mirror check);
+the Stop hook blocks the end of the reply (once — a second stop goes through so a dead editor can't
+trap the session; then say so in the footer) until the suite printed **ALL PASS** and the marker was
+cleared (`python .claude/hooks/combat_test_gate.py clear <session id>` — the hook message carries the id).
+Run it in whatever scene is playing — the suite brings a temporary `CombatAuthority` if the scene has
+none and fights 300 m up — so never stop a play session someone else is using. A FAIL is either a real
+regression (fix it) or a rule Mark deliberately changed (update the case, say so in the reply). Quote the
+`RESULT` line in the reply. A new suite gets a row here, its own `*_test_gate.py` scope list, and a
+`ConsoleHelp` row under *Tests*.
+
+### Console commands
+
+Every new `[ConCmd]` gets a row in `Code/Hacks/ConsoleHelp.cs` (`help [filter]`) in the same change.
+Dev hacks are console toggles on the static `GameHacks` class.
 
 ### Terrain preview tuning
 
@@ -178,180 +223,138 @@ Targets: `lakePatchCount` ≤ 24 · `medianLakeDiameterMeters` ≥ 600 · `lakeA
 
 ---
 
-### Routines (hand-off jobs)
+## Mark's guidelines
 
-Named, well-defined jobs Mark can start and walk away from. They live in `.claude/skills/*/SKILL.md`
-and are indexed, with the shared contract and a template for new ones, in `.claude/ROUTINES.md`.
-Invoke by slash command or by saying the phrase:
+### Art style
 
-- **art routine** (`/art-routine`) — redesign one model / texture / material against stated
-  objectives, from real-life source material; 256×256 textures; verified in lightTestScene.
-- **code qc routine** (`/code-qc-routine`) — audit a code scope for bloat and per-frame hazards;
-  safe fixes applied, the rest proposed.
-- **bug test routine** (`/bug-test-routine`) — reproduce a defect in the live editor through the
-  sbox MCP, instrument, fix, pass three consecutive runs. Full scene / play-mode access granted.
-- **fps routine** — FIRST `perf_suite` (Mark 2026-10-20: "when I say FPS is bad run the same tests every time"): fly camera, caps lifted
-  (`fps_max 0`, `fps_max_inactive 0`), hands off — hover 3 m above the terrain, 2 m off the terrain at 55 m/s turning, 2 m at 5 m/s,
-  500 m up at 55 m/s, 500 m straight down, the pawn standing; every row must PASS 5.0 ms (200 fps) on the RTX 4090; `perf_scenario N` holds one row for
-  perf_cpu / perf_gpu / perf_bisect, `hud_profile 1` splits the pawn HUD. Then console `perf_bisect` (Code/World/Terrain/TerrainPerfBench.Bisect.cs): 3 s baseline, every
-  switch off in turn for 3 s (pawn FOV 60, HUD, body, animgraph, crosshair, aim assist, AI, sun shadows, scatter,
-  grass, wind), table sorted by saving. Claude runs it through the sbox MCP as the pawn and as the fly camera and
-  compares; the pawn and the fly camera should land at about the same frame time (Mark 2026-10-13).
+- **Lighting is the Valheim recipe** (2026-10-02): the pixel look is asset-side — low-res textures
+  (256×256 for routine work, 64 px ground tiles), point filtering, faceted normals baked in the mesh
+  or `PixelFlatShading` on `pixel_lit.shader` — then the engine's normal sun, shadows, SSAO, fog,
+  bloom and tonemap. **Never** a screen-space pixelation, dither or cel / toon filter (all tried and
+  rejected). Local lights (fires, torches, lanterns) are steppy (`PixelLightSteps`); the sun stays
+  smooth. Detail: `Code/Environment/docs/ENVIRONMENT.md`.
+- **Low-poly models:** varied face sizes, no primitive-readable silhouettes, foliage = layered alpha
+  leaf cards. Elm bark that was accepted: a sparse connected crack net, varied line weight, 3–4
+  low-contrast grey-brown tones — hue shifts, moss, dither and speckle read as creepy.
+- **Scatter / foliage** (plants, mushrooms, ferns, weeds, rocks …) is always **one standalone object
+  per model**, never a baked cluster; clusters come from several instances with varied height / tilt /
+  yaw. Small plants are 2.5–5× life size so they read at distance.
+- **Water:** no invented water colour, no pattern lines, no mirrored objects — the bed shows through,
+  the sky comes in by Fresnel, silhouettes mask the sky.
+- **Generated models:** LODs switch at 100 / 200 / 300 m (vmdl `switch_threshold` 400 / 800 / 1200).
+  Each iteration gets new versioned names (`…_v2`) and the previous version's files are deleted.
+  Inspect every variant's render yourself before sending, then send one individual render per model.
+- **Trees:** type 1 (elm) fells into a log that splits; type 2 (Rumple's clover tree) drops its crown
+  as one body that splits on landing — never an explosion. Both on `ChopableTree`.
 
-## Layout
+### Gameplay and UI
+
+- Combat code never writes the pawn root rotation, `EyeAngles` or the camera — model facing goes
+  through the Body renderer child only.
+- Melee damage never comes from weapon colliders — only from the phased server attack on
+  `PlayerCombat` (windup → charge → active → recovery, `AGENTS.md`). Timings live in
+  `Assets/data/melee_weapon_classes.json`; every timing edit also updates `combat_timings.csv` at the
+  repo root.
+- Hit reaction lives on `PlayerAnimation` and ticks from both `OnUpdate` and `OnPreRender`.
+- Tools and weapons lose durability only when the action actually did something.
+- Traps and similar placeables are build-hammer pieces in `build_pieces.json`, never inventory items.
+- World-event systems (time trials, arena, future stations) are wired entirely onto their
+  interactable button / sign object.
+- Player data (crews, quests, map, character state) is player-scoped and scene-independent, saved
+  under `2Tgames/players/<steamid>/` in `FileSystem.Data` and written through on change.
+- Host authority: `CombatAuthority` (melee), `VitalsAuthority` (pools), `BuildAuthority` (placement).
+  Clients send intent; the host validates and broadcasts.
+- **Menus:** clicks are screen-rect hit tests through the soft-cursor overlay (no real mouse
+  events), one click never hold-to-confirm, nothing scrolled out of view is hittable, panels never
+  reflow when content changes, body text ≈ 17 px, headers ≈ 20 px, icon buttons ≈ 52 px.
+
+### Performance
+
+The target is **5.0 ms (200 fps) on Mark's RTX 4090** in every `perf_suite` row. When Mark says
+"FPS is bad", run the **fps routine** below — the same tests every time.
+
+---
+
+## Routines (hand-off jobs)
+
+A routine is a job Claude runs and works inside — playing, rendering, measuring — to see how the game
+has to change to meet Mark's specs (Mark 2026-10-27). Mark starts one and walks away; it is not a
+pass/fail check (those are *Automated tests* above). They live in `.claude/skills/*/SKILL.md` and are
+indexed, with the shared contract and a template, in `.claude/ROUTINES.md`:
+
+- **art routine** (`/art-routine`) — redesign one model / texture / material from real-life source
+  material; 256×256 textures; verified in lightingTest.
+- **code qc routine** (`/code-qc-routine`) — audit a code scope for bloat and per-frame hazards.
+- **bug test routine** (`/bug-test-routine`) — reproduce, instrument, fix, pass three runs in the live editor.
+- **fps routine** — caps lifted (`fps_max 0`, `fps_max_inactive 0`), run `perf_suite` (six fly-camera
+  rows: hover 3 m, 2 m at 55 m/s turning, 2 m at 5 m/s, 500 m up at 55 m/s, 500 m straight down, pawn
+  standing), then `perf_bisect` (`Code/World/Terrain/TerrainPerfBench.Bisect.cs`) as the pawn and as
+  the fly camera; the two should land at about the same frame time. `perf_scenario N` holds one row,
+  `hud_profile 1` splits the pawn HUD.
+
+---
+
+## Paths
 
 ```
 Code/
-  Player/       PlayerMovement · PlayerVitals (+ Comfort / StatusEffects partials) · PlayerCombat · PlayerAnimation · PlayerAugments
-                (+ their partials), melee path/sweep/block helpers, equipment, hand harvest,
-                inventory interaction, build hammer
-  Combat/       CombatAuthority (host melee validation), ArrowProjectile, StuckArrow (arrow rides its victim, drops with physics on death)
-  Crew/         CrewRegistry (host static registry — player data, survives scene loads) + PlayerCrew (per-pawn sync on the player prefab)
-  Arena/        ArenaSession (crew-vs-crew battles, queue + matchmaking), ArenaMenuButton
-  Vitals/       VitalsAuthority (host pools), regen gates, StatusEffectCatalog (Assets/data/status_effects.json)
-  Entity/       EntityBrain (+ Breach partial: entities tear down build pieces) · EntityLocomotion · EntityCombat · perception, nav
-  Building/     Build piece catalog, snap layout/placement/compatibility, piece health, nav sync (+ BuildNavBakeSystem),
-                ShelterProbe (global roof-above / walled-in checks; comfort + workbench gate),
-                BuildBed (claimable respawn point, raid target; E claim in PlayerInventoryInteraction.Bed.cs),
-                BuildDoor (swinging leaf on the door prefab: mesh-collided frame, keyframed leaf, opens away from the user)
-  Inventory/    PlayerInventory · PlayerHotbar · containers · resource + equipment catalogs
-                · armor: worn-piece aggregate on Player/PlayerEquipment.Armor.cs, formula in Vitals/ArmorMitigation.cs,
-                  weight → speed on PlayerMovement, clothing visuals on PlayerAnimation.WornClothing.cs (see AGENTS.md "Armor")
-  Crafting/ Food/ Quests/ Skills/ Augments/   JSON-backed catalogs (Assets/data/*.json)
-  Farming/      FarmingRules (dirt tag, tile size, spacing) · TilledSoil · FarmPlant (host-timed growth stages) · FarmingAuthority (host till / sow)
-                · seed rows live in resources.json ("seed" block); ToolHoe + PlayerFarming live in Player/
-  Camps/        EnemyCampCatalog (Assets/data/enemy_camps.json — piece + entity layouts + camp-centered wander / max-travel rings, build-kit meters)
-                · EnemyCampSpawner (host stamp, sets EntityBrain camp leash, creates the EnemyCamp root) · EnemyCamp (camp root; `campRings` debug rings) · EnemyCampSpawnButton (I)
-  Boss/         BossCatalog (Assets/data/bosses.json — health, second-form flags, bar range) · BossSpawner (host stamp through
-                EntityEnemySetup) · BossEntity ([Sync] pool mirror + second-form refill via EntityVitals.LethalHitInterceptor)
-                · BossSpawnButton (H); screen-top bar is Code/UI/BossHealthBarHud.cs
-  Raids/        BaseRaidCatalog (Assets/data/raids.json — counts, waves, ring + aggro meters, enemy mix) · BaseRaidSession (L: host waves,
-                win/lose, ground ring; on the BaseRaid object) · raiders run EnemyAiState.Raiding (EntityBrain.Raid.cs); banner is Code/UI/BaseRaidHud.cs
-  Dungeon/      BoxDungeonGenerator (scene component: host picks a seed, every peer builds the same tinted dev-box dungeon locally;
-                host places dead-end chests through BuildAuthority) · DungeonLayout (pure seeded tree: 1×1…3×3-cell rect + round rooms,
-                corridor-cell runs, hub rooms with 3–6 doors, stairs + landings, dead-end pruning)
-                · DungeonGeometry (plates / multi-door walls / round rings / pillars / stair runs / stairwell holes, one child per floor)
-                · DungeonMapModel (rooms / halls / doors / stairs in world meters) + DungeonExploration (client-local visited rooms + current floor)
-                  → TerrainWorldMapFace draws only the current floor's discovered rooms (UP / DOWN / IN badges); readout line in MapMenuSection
-                · DungeonSignPanel (static ENTRANCE plate); scene Assets/scenes/dungeonBoxTest.scene; console dungeon_regen / dungeon_floors / dungeon_info
-                · CaveDungeonGenerator (caveVertTest scene: a 3 km-deep CHAIN of drops, steep chutes, chimneys and caverns swept as one
-                  wandering tube — no central axis, mainly one path, flat ground only at rare landings / one junction / the chamber — CaveLayout (+ .Trunk, .Passages, .Route partials) is the pure seeded layout: archetype
-                  trunk plan, swept tubes with parallel-transported frames, mouths cut into the trunk, dead-end rooms and loops off the
-                  junctions and drops, ledge route with descend / climb steppers; CaveGeometry (+ .Dressing) builds one runtime rock model with
-                  mesh collision (no grapple tag) — tubes, holes zipped to branches, platform collar, pond bowls — plus dev-box ledges tagged
-                  "grapple", oases, waterfall, host-placed chests; verified by a standalone .NET harness; console cave_regen / cave_info / cave_tp
-  Hacks/        GameHacks — console-toggled dev flags (allCrafting, devSupply = X opens an infinite grid of every resource + ingredient,
-                PlayerInventoryInteraction.DevSupply.cs), mirrored onto pawns via [Sync] for host checks
-                · ConsoleHelp — `help [filter]` / `commands`: the hand-kept table of every project ConCmd (args, what, example).
-                  RULE: every new [ConCmd] gets a row there in the same change.
-  Vehicles/     Vehicle (+ .Physics raycast springs / .Seats first-in-drives + ownership handoff / .Fuel restricted tank slot / .Health wreck + drops)
-                · VehicleSeat · VehicleDevCommands (vehicle_spawn / enter / exit / fuel / test / damage); hammer-placed via "vehicle": true in
-                build_pieces.json, prefab Assets/prefabs/build/vehicle_dune_buggy.prefab; pawn side = PlayerMovement.Vehicle.cs,
-                PlayerInventoryInteraction.Vehicle.cs, PlayerAnimation.Vehicle.cs; HUD UI/VehicleHud.cs; model Blender/scripts/create_dune_buggy.py
-                → Assets/models/vehicles/ (body + separate wheel, axle on Y) (see AGENTS.md "Vehicles")
-                · Hover platform = the same Vehicle with DriveModel Hover (Vehicle.Hover.cs): 6 × 4 m buildable deck, standing driver at the
-                front console, A / D turn (spin in place with W / S up), Space / Ctrl height 1–30 m, ice drift, power cells (crafted_power_cell, 120 s each), live map pin; pieces built on
-                the deck are parented under it (BuildAuthority.HostPlacePiece); prefab Assets/prefabs/build/vehicle_hover_platform.prefab,
-                model Blender/scripts/create_hover_platform.py (see AGENTS.md "Vehicles — hover platform")
-  Map/          Player map markup: MapPinCatalog (12 pin icons, Assets/ui/map) · LocalMapMarkup (client-local pins + pen strokes in world
-                meters, write-through to 2Tgames/players/<steamid>/map/<world>.json via MapMarkupSaveStore) · MapPingFeed (MMB pings,
-                crew-scoped RPC on Crew/PlayerCrew.MapPing.cs); drawn by UI/TerrainWorldMapFace, driven by UI/Menu/MapMenuSection (see AGENTS.md "Map")
-  Circuits/     CircuitNode (sphere + [Sync] powered/output/wires on every circuit-enabled prefab) · CircuitRegistry (host OR-solve, event-driven)
-                · CircuitLever / CircuitLight devices · CircuitWireOverlay (stripper spheres + wire lines); tool is Player/ToolWireStripper.cs,
-                cable menu Code/UI/Circuits/, pieces need "circuitEnabled": true in build_pieces.json (see AGENTS.md "Circuits")
-  Environment/  WindSystem (scene wind: host owns heading + base strength via [Sync], every client simulates gusts; publishes
-                WindDirection / WindStrength / WindGust to all shaders through Scene.RenderAttributes once per frame)
-                · GrassPatch + GrassScatterer (grass through the engine Sandbox.Clutter system — GPU instanced/culled/LOD;
-                shader Assets/shaders/grass_blade.shader, models grass_clump1–4 from Blender/scripts/create_grass_clump.py)
-                · World grass = TerrainWorldManager.Grass.cs: ONE ClutterComponent in INFINITE streaming mode (a ring of tiles the engine
-                keeps around the camera — ALWAYS 12 tiles, so Grass — Range (m), default 150, picks the tile size) planted on the loaded chunks' meshed height grids (BuildResult.HeightsZ,
-                bilinear — no physics, no collider, nothing else can be hit); a chunk arriving / remeshing invalidates its tiles; ONE density,
-                grass_blade.shader thins clumps by camera distance (Thin Full / Far / Keep / Cull on grass_blade.vmat); console grass_toggle;
-                Clover Hills only via an 8×8 biome mask cached per chunk
-                · Wind arrow: TerrainMinimapHud draws "wind" + an arrow under the zoom buttons (map orientation, points the way the
-                wind blows, brightens with gusts; hidden without a WindSystem)
-                · Tree wind = pixel_lit.shader's F_WIND feature (vertex stage, same WindDirection / WindStrength / WindGust inputs
-                as grass_blade): trunk lean + slow rock from object-space height, limb bob / flap from radius off the trunk axis,
-                optional leaf-card rustle — no vertex colours, weights are continuous in position so faceted meshes never tear.
-                Only the STANDING elm gets it: elm_bark_v76_wind.vmat + elm_leaves_v76.vmat (written by create_elm_tree.py); stump,
-                log and halves keep the static bark. Rumple's clover tree (cloverhills/bark.vmat) is deliberately left alone (Mark 2026-10-13).
-                Knobs are metres on the vmat ("Wind" group: Tree Height, Crown Radius, Trunk Sway, Limb Bob, Fade Start / End …).
-                The shader's strength / gust DEFAULTS are 0 and every term is proportional to them (ONE bend per tree, a ROTATION about the root with the angle growing up the trunk — never a stretch — swinging from past
-                upright to 1.4x the lean; limbs rotate about the trunk axis so downwind limbs dip, upwind lift, both compress;
-                WindGust is one scene-wide value so every tree leans together; leaf cards wiggle in their own random direction / rate / phase hashed
-                from the card's face normal, so nothing tears and no two cards jiggle alike; grass gusts are a drifting value-noise
-                field in grass_blade.shader, not sine bands), so trees only move while a
-                WindSystem is publishing (play mode, scene has one — testscene1 + terrainTest do; WindSystem "Wind Enabled" /
-                console wind_toggle switches it off live; windtest [1-5] = wind perpendicular to the camera
-                (toward its right) + a forced gust of that strength HELD until a plain windtest; 3+ exceeds the normal
-                gust ceiling, 5 = hurricane ×2.5, the usable max — the shader does not cap the gust); the editor viewport is still (Mark 2026-10-12). Sway fades out
-                Fade Start → Fade End metres from the camera (300 → 360 on the elm). Shadow passes must sway identically to the main pass (a cheaper
-                shadow sway self-shadowed the displaced crowns blue) and the vertex stage skips the math past it.
-                · ChopableTree — two tree types on one component. Type 1 felling (elm): tree → its stump + one universal pointy
-                  log that tips over → log splits into two halves → halves / stump drop wood. Type 2 crown fall (clovertree_chop: a disabled
-                  "chop_crown" child = one rigidbody whose colliders are Rumple's butt / fork / top "chop_piece" children): tree → stump,
-                  the crown tips over away from the chopper (ChopFallingCrown), on landing it splits into the pieces (local ChopDebris,
-                  gone after Piece Lifetime) and the host drops the wood there. Stages broadcast via
-                  WorldScatterIdentity. Models Assets/models/environment/cloverHills/trees/cloverTree/, bark shared from materials/environment/cloverHills/trees/cloverTree), harvest yields, teleport pads
-                · SunShadowDistance (on the scene Sun: multiplies the engine's cascade shadow reach so the shadow ring is not at the player's feet)
-                · BearTrap (hammer-placed trap_small / trap_large: holds players 5 s, animals + enemies 10 s by TrapSize band;
-                  hold lives on PlayerMovement.TrapLocked / EntityLocomotion.IsTrapped) · DamageOverTimeTrap (scene hazard volume)
-  World/Environment/  EnvironmentDayNightCycle (sun / moon arc, day counter) feeds SkyDome (camera-centred sphere, shaders/environment/sky_dome.shader:
-                gradient + sun glow + two wind-scrolled cloud layers from sky_clouds.png, Blender/scripts/create_sky_clouds.py) from
-                SkyPresetCatalog (Assets/data/sky_presets.json — per-weather night / dawn / day / noon / dusk keyframes); stars are a procedural layer in sky_dome.shader (StarVisibility from the cycle)
-                · sky dome + cycle live in lightingTest (3-minute loop, drives the GradientFog colour), testscene1 (5 min day /
-                4 min night, no fog) and terrainTest (the lightingTest 3-minute group copied as one "DayNightCycle" object — ENABLED by default since
-                2026-10-21 (Mark: "it should be running the short daylight cycle") — cycle + sky dome + disks + moon, driving the
-                scene Sun; console cycle_toggle switches it on / off);
-                **Y** = jump to noon, **U** = midnight (CycleDay / CycleNight actions; console cycle_day / cycle_night)
-  (lighting)    No screen-space pixelation. The look is asset-side (Valheim recipe, Mark 2026-10-02): low-res textures + point filtering +
-                faceted normals baked in the mesh (create_elm_tree.py shade_flat; PixelFlatShading on pixel_lit.shader for meshes that
-                are not), optional point-sampled TextureNormal / TextureRoughness + PixelTexCoordScale on pixel_lit.shader (elm bark
-                v76: colour, normal and roughness all from one height field), then the engine's normal sun/shadows, SSAO, fog, bloom,
-                tonemap. **Per-texel lighting** (pixel_lit `PixelTexelLighting`, default on, Valheim sconce reference 2026-10-05):
-                direct light + shadows are evaluated at the texel centre so each texel is one lit block; `PixelLightSteps`
-                (local lights, default 6 bands — Mark 2026-10-05: torch fall-off must be steppy, not a glow), `PixelLightCutoff`
-                and `PixelSunSteps` (default 0, the sun stays smooth — banding is for fires, torches and lanterns only; a 5-step sun was tried and rejected 2026-10-13) posterise on top. Indirect stays the engine's.
-                Firelight wanders through `Environment/FireLightFlicker` (authored on the campfire prefab's FireLight child, created on
-                the held torch / lantern lamp; wind gusts widen it) — never on the sun. Playground: Assets/scenes/lightingTest.scene (100 m uniformly scaled dev box — non-uniform scale breaks
-                vertex normals — clovertree/whole + fly cam + standard post stack on the camera)
-  World/Terrain/        Streaming, chunk mesh, biome population, world save IO. The load screen stays up through "Generating
-                        map…" (the 512 px minimap raster runs behind it at 40 ms/frame) and then "Settling…" until 90 consecutive
-                        frames are under 16.7 ms or 30 s pass — never a lagging first look (Mark 2026-10-13). terrainTest: L toggles
-                        pawn ↔ fly camera.
-                        Ground = materials/terrain/terrain_ground.vmat
-                        (pixel_lit F_VERTEX_PAINT: painted biome vertex colours; Clover Hills vertices carry alpha = "Clover Ground
-                        Texture Blend" so the lightingTest ground_grass.png tiles there in world space, 3.2 m per repeat —
-                        TerrainGroundTextureMask writes the alpha)
-  World/TerrainPreview/ Offline world generation pipeline + settings
-  UI/           PlayerScreenHud, HUDs, Menu/ sections
-  Networking/   Host spawn, synced UI content, connection identity
-Editor/         Terrain Noise Preview tool, world manager widget
-Assets/data/    Catalog JSON (resources, recipes, build pieces, food, skills, quests, …)
-Assets/prefabs/ player/basicplayer · entity/scavT1 · build/* · environment/*
+  Player/          the five umbrella owners + partials, equipment (+ .Armor), tools (ToolBuildHammer, ToolHoe + HoeMode menu,
+                   ToolPickaxe, ToolWireStripper), PlayerTerraform (pickaxe chip / hoe grade + paint intent to the host), PlayerInventoryInteraction (+ .Bed / .Vehicle / .DevSupply / .TimeTrial), PlayerFarming
+  Combat/          CombatAuthority, ArrowProjectile, StuckArrow, Tests/CombatTest (combat_test)
+  Vitals/          VitalsAuthority, regen gates, ArmorMitigation, StatusEffectCatalog
+  Entity/          EntityBrain (+ .Breach / .Raid / .Dormancy), EntityLocomotion, EntityCombat, EntityEnemySetup, Animals/
+  Building/        catalog, snap layout / placement (BuildSnapPlacement, BuildColliderSnap, BuildModuleDimensions),
+                   BuildAuthority, piece health, BuildStructuralIntegrity, ShelterProbe, BuildBed, BuildDoor, nav bake
+  Inventory/       PlayerInventory, PlayerHotbar, containers, resource + equipment catalogs
+  Crafting/ Food/ Quests/ Skills/ Augments/   JSON-backed catalogs
+  Crew/ Arena/ Camps/ Boss/ Raids/ Farming/ Circuits/ Map/ TimeTrial/   one system each (see AGENTS.md)
+  Dungeon/         BoxDungeonGenerator + DungeonLayout / Geometry / MapModel; CaveDungeonGenerator + CaveLayout / CaveGeometry
+  Vehicles/        Vehicle (+ .Physics / .Seats / .Fuel / .Health / .Hover), VehicleSeat, VehicleDevCommands
+  Environment/     WindSystem, grass, ChopableTree, FireLightFlicker, BearTrap, traps   (docs/ENVIRONMENT.md)
+  World/Environment/  EnvironmentDayNightCycle, SkyDome, SkyPresetCatalog, SunShadowDistance
+  World/Terrain/   streaming, chunk mesh, biome population, sea, rivers, grass, world save IO, TerrainPerfBench
+  World/TerrainPreview/  offline world generation pipeline + settings   (docs/TERRAIN_PREVIEW.md)
+  World/Voxel/     voxel digging: field, mesher, chunk set, edit log; prototype scene + live-world columns (TerrainWorldManager.Voxel.cs)   (docs/VOXEL.md)
+  Hacks/           GameHacks, ConsoleHelp
+  UI/              PlayerScreenHud, HUDs, Menu/ sections, Circuits/
+  Networking/      host spawn, synced UI content, connection identity
+  GameBuildLabel.cs
+Editor/            Terrain Noise Preview tool, world manager widget
+Assets/
+  data/            catalog JSON (*Catalog.EnsureLoaded) — adding content is usually a JSON edit
+  prefabs/         player/basicplayer · entity/scavT1 · build/* (incl. vehicle_*) · environment/*
+  models/player/   human_male_sword.vmdl (pawn body: engine human + sword clips + animgraphs/human_sword.vanmgrph),
+                   animations/human@sword_*.fbx (Blender/scripts/create_sword_anims.py)
+  {models,materials,prefabs}/environment/<biome>/<category>/
+                   biomes cloverHills · redwoodForest · amberDunes · mountain;
+                   categories trees · rocks · groundFoliage · resources (+ tests, blenderFiles for models);
+                   shared materials in materials/environment/shared/, sky / sun / moon in materials/environment/sky/;
+                   a Tripo FBX keeps its textures/ folder beside the model
+  materials/terrain/   terrain_ground.vmat (+ _far), ground_*.png tiles
+  shaders/         pixel_lit (F_WIND, F_TERRAIN_SPLAT), grass_blade, sea_waves.hlsl, riverwater, environment/sky_dome
+  scenes/          terrainTest · testscene1 · lightingTest (look playground) · dungeonBoxTest · caveVertTest · voxelTest
+  terrain/preview/ Generate Preview bundles + .latest_preview.json
+Tools/             make_human_sword_assets.py (regenerates the sword model + graph from the engine's citizen_human sources)
+Blender/scripts/   create_* / split_* generators; create_sword_anims.py (human-rig sword clips); import_artist_pack.py for Rumple's Tripo packs
+                   (Blender X → engine Y, weapons origin at the butt, build pieces bbox-centred + SizesMeters row)
+                   Blender 5.1: "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe" -b --python <script>
+combat_timings.csv · VERIFY.md · IDEAS.md · AGENTS.md · .claude/ROUTINES.md · .claude/skills/
+.claude/settings.json + .claude/hooks/   automated-test gates (combat_test_gate.py)
 ```
 
-## Working notes
+---
 
-- Data lives in `Assets/data/*.json` and is loaded by `*Catalog.EnsureLoaded()`. Adding content is
-  usually a JSON edit, not a code edit.
-- Artist models (Rumple's Tripo `.blend` packs) go through `Blender/scripts/import_artist_pack.py`
-  — one command writes fbx + vmdl + baked png + vmat in the right frame for `weapons` / `building` /
-  `environment`; see AGENTS.md "Artist model import" for the rules (origin at the butt for weapons,
-  bbox-centred + `SizesMeters` row for build pieces, Blender X lands on engine Y).
-- Scatter / foliage models (plants, mushrooms, ferns, weeds, rocks …) are always **one standalone object per
-  model** — never a baked cluster or patch (Mark 2026-10-21). Clusters come from spawning several instances with
-  varied height / tilt / yaw. Generator: `Blender/scripts/create_ground_plants.py` → `Assets/models/environment/<biome>/groundFoliage/`
-  (per-model uniform scale in `MODELS` — small plants are 2.5–5× life size so they read at distance).
-- Environment asset layout (Mark 2026-10-21): `Assets/{models,materials,prefabs}/environment/<biome>/<category>/` —
-  biomes `cloverHills`, `redwoodForest`, `amberDunes`, `mountain` (camelCase); categories `trees`, `rocks`,
-  `groundFoliage`, `resources`, plus `tests` and `blenderFiles` (models only). Materials used by every biome live in
-  `materials/environment/shared/`, sky / sun / moon in `materials/environment/sky/`. A Tripo FBX finds its texture by
-  material name, so its `textures/` folder stays beside the model. New environment assets go in this tree.
-- Host authority: `CombatAuthority` (melee), `VitalsAuthority` (pools), `BuildAuthority` (placement).
-  Clients send intent; the host validates and broadcasts.
-- Melee damage never comes from weapon colliders — only from the phased server attack on
-  `PlayerCombat`. See `AGENTS.md` for the full windup → charge → active → recovery contract;
-  per-class timings live in `Assets/data/melee_weapon_classes.json`.
-- Hit reaction lives on `PlayerAnimation`, not `PlayerCombat`, and must tick from both `OnUpdate`
-  and `OnPreRender` so proxies expire it.
+## Removed from this file (2026-10-27 slim-down)
+
+- **Layout mechanics for wind, grass, tree wind, chopping stages, sky / day-night, lighting shader
+  knobs, terrain sea / load screen / fly camera / ground splat** → moved word for word to
+  `Code/Environment/docs/ENVIRONMENT.md`.
+- **Layout mechanics for dungeon, cave, vehicles, hover platform, map, circuits, camps, bosses, raids,
+  farming, armor, doors, beds** → dropped here; `AGENTS.md` already has a section for each.
+- **Voxel prototype detail** → already in `Code/World/Voxel/docs/VOXEL.md`.
+- **Dated design quotes** inside the layout (e.g. "Mark 2026-10-13: …") → kept only where they are
+  still a rule, now under *Mark's guidelines*.
+- **Long fps routine paragraph** → shortened; the measured history stays in `AGENTS.md`.
+- **The Cursor setup intro and the csproj `<Version>` note** → Cursor rules deleted, project is Claude-only.
+- **`[extras]` as the tag for build label bump commits** → label bumps are no longer committed alone.
+- **"Working notes" section** → its rules moved under *Mark's guidelines* and *Paths*.

@@ -1,0 +1,45 @@
+1. When water would spawn inside a mountain i dont think we should slope the terrain toward the water I think the water should sit on top of the mountain, like a frozen lake above the world! 
+2. Can you make the mountains bigger and less frequent? Theyre pretty small at the moment. Maybe like 50% bigger at most. 
+3. I want the mountains to not be as perfectly flat as youve currently made them, maybe theres like false-peaks and then it dips lower again etc.
+4. In some cases I want the mountain to be not perfectly sloped 
+5. I want there to be the possibility of some waterfalls flowing off of cliffs of the mountains etc, can you somehow add that into the game?
+6. in some cases I think the biomes shouldn't perfectly slope right into the water, we should be able to make it look like the cliffs of moher in Ireland. 
+7. the chance for azure coast seems too low, its a required biome, the last of the normal biomes, so it should be a little more present. Can you maybe make it not follow the coastline perfectly? Like make it be a kinda blob but it needs to be connected to an ocean coast. 
+8. when players dig near the water I want the water to flow into the hole theyve created. Maybe it fills up over time but then if they block the water off again it should slowly dissipate. Thats because the water that flows like that isn't a "water source". Just like enshrouded. They later introduced water source blocks players can play with so the water flows down slopes and they create waterfalls etc. 
+9. logic sphere connectors should ignore scene light and always appear at max brightness. Need an effect for when theyre connecting, like leaves a colored line connecting the 2.
+10. Make default player inventory size to 24
+11. I want to add our stone spires to the game, I'm not sure if they work with the pickaxe though yet. Like the spire should be split into 6 or so chunks so that when the player starts destroying the rock it doesn't just explode on a few hits. Each section will have to be destroyed manually. The rock cannot remain floating without connecting to bottom pieces so if theyre gone the top should just explode into stone bits and rain onto the ground.
+12. We should also start adding some stone models to the game, we'll need a few different kinds:
+	a. Stone model when we throw stone on the ground
+	b. Stone model for just a single small stone we pick up off the ground
+	c. Stone model that when we hit it busts into raw stone, type a.
+	d. Stone model that when we hit it busts into individual chunks, like the stone spires. 
+I want different variations to all these models, show them to me. Should be low poly models with a nice texture. 128pixels per meter is the density of the textures you should aim for. 
+13. Can you add some Scav camp models to the game? I want them to be large enough that 3-10 scavs can be there at a time. Should be a kinda crappy falling apart fence, held together with half assed rope. They should also have some tiny Thatch huts that they hide in. 
+14. Can you check the torch implementation? I think the light should go further out into the world and be a little brighter. They also should not work under water, or while the player is "wet". Which maybe is a part of playerVitals. 
+15. Can you add the bola mechanic? When the player pulls out the bola they should just be kinda 3 rocks on a flaccid rope. When the player holds right click they stop walking fast(slow fast walk, same as block walk), and the bolas start spinning faster and faster in their hand. When the player releases it takes that speed into account for how far itll travel. they should travel in a kinda arc forward and down. If they hit the feet of any "small" entity then they are stuck where they stand for 5 seconds. Player must charge up the bola for at least 1 seconds before it will actually fly out when released, if let go sooner than 1s it just stops spinning.
+16. We need to add a spear attack pattern to the game. Can you add the Flint spear Weapon and make it so theres left right and up spear actions? the up action is really just a forward stab and the left and right would kinda swoop the spear in from the left or right. This weapon also works with a shield. 1 handed.
+17. Can you disable the blocking and attacking debug view lines and only make it so that when an attack is blocked a couple white lines emit from the shield, and when the player attacks a white semicircle follows the sword? should be like a pretty sword animation really. like a "white sword slash line" on google images. 
+18. Can you add taming to the game? taming methods are:
+	a. hold certain food in your hand, crouch down to reduce your noise area, and wait until the animal comes up and eats from your hand. 1 and tame.
+	b. Trap the animal in a small trap and feed it its favorite food
+	c. Trap the animal in a big trap and beat it up a little
+	d. Trap the animal in a big trap and feed it its favorite food
+	e. catch with a net, we can add this later.
+
+First animal we can add is the fox. Make it so if the player has a piece of raw deer meat in their hands and does a type a tame the fox will walk up and eat it, emit some hearts and be tamed.
+Tamed creatures can be pet by hitting e, named by holding E to open the menu. Other things can be added to the menu later. Name of animal will be above its head instead of waht kinda animal it is. We may have some taming stuff already in place, see what you can do to slot this in nicely. Make sure this feature works with the entity architecture that currently stands.  
+19. Can you start a sub-session of this chat of an opus model to create a deer model, run through a bunch of iterations until it fits the style of our game, like the fox! Once that looks good i want it to animate it so it can walk around the scene. It should also animate our fox for the different modes that it has, wandering, stalking etc. Deer too. FAble should then write the AI for the Deer. Its alert range should be far wider than the fox, like its really skittish. It should also run like 5 meters then turn and run a different direction within like 45 degrees of where it was going, as long as its still generally away from the player. This will prevent archers from always killing them first try and making them flee more realistic, like theyre panicking.
+20. Can you have opus make a beehive model? I want fable to then randomly scatter them throughout the clover hills biome. they should be connected to trees and sit on a low tree limb and dangle kinda so it can catch players attention. Opus makes the model and you figure out the math on how many and how frequently they should spawn. I want players to find them in like one in every 50 trees lets say. 
+21. Can you have opus make a blue jay model with flapping wings animation and sitting still animation? you can then have them scattered throughout clover hills, they randomly land on rocks and stuff and then the player can kill them as long as they dont scare them away! when they get scared away they fly up into the air and go away. 
+22. For the next few tasks you should follow the same setup, opus makes the model, and you (fable) figure out the math on how often these should spawn, their random frequency if you will
+	Add some random patches of Wheat seeds to Cloverhills
+	Add some random patches of Night Crawlers to Cloverhills
+	Add some random amounts of Daisy to Cloverhills
+	Add some random patches of Hobbit's Leaf to Cloverhills
+	Add some random amounts Blueberry bush to Cloverhills
+	Add some random Mushrooms to Cloverhills
+
+The daisies, hobbits leafs and mushrooms should have a chance to spawn and then a chance to spawn 2 or 3 mushrooms with it.
+
+

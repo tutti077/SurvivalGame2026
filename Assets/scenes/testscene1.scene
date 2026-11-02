@@ -451,22 +451,6 @@
             },
             "Property": "Position",
             "Value": "0,-160,64"
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "970732c0-a058-4701-8a40-c9b9df0da80b"
-            },
-            "Property": "MeleeOneHandedGrip",
-            "Value": true
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "970732c0-a058-4701-8a40-c9b9df0da80b"
-            },
-            "Property": "MeleeStrikeClipSeconds",
-            "Value": 0.3
           }
         ],
         "MovedObjects": []
@@ -511,14 +495,6 @@
         "13b5a6bf-7962-8375-99b1-4790290e5448": "dd5a2d30-69e9-4921-bc78-d134de33dbe5",
         "18ee3cca-7999-85c9-8512-f7d092d15954": "d4386acc-12ea-483d-89dd-8ee5e7ee75c2",
         "22adeaa4-3eff-455e-b0ad-8186e47120c5": "1cc7cf11-08d3-4569-98cf-52316ffbbb1b",
-        "a334750f-a7f9-4e36-9c2d-563b96bda182": "d6048634-cc6b-4786-9aed-34eccb77e7e7",
-        "52c95d95-b997-44f4-ba0e-3d83d5b458c7": "bc4f4bd6-d8dd-4fc5-9d7d-5f0d278fde70",
-        "4785e803-a655-4137-8dc0-d456a8086f19": "379167ef-6c81-402c-9d8b-9b69adc562ee",
-        "f4c3d2e1-b0a9-8c7d-6e5f-4a3b2c1d0e9f": "071af74b-ec61-407f-a0b8-73fbb4582d98",
-        "c8b5a3d1-3afe-4693-9f5e-57b86c57b6a2": "64c810b2-1b49-4984-9ffd-237657ff590f",
-        "e7a91c42-5d8b-4f36-9a02-3c6b1d84f705": "d2581e37-6230-8c01-bd0d-653d18267032",
-        "d4e5f6a7-b8c9-0123-def4-567890abcdef": "98effff2-8809-4634-8c2d-ded76eecb00f",
-        "a1b2c3d4-e5f6-7890-abcd-ef1234567890": "05da9e1a-4e4f-4f76-83fc-bf4e31445c78",
         "c4d5e6f7-a8b9-4012-9c3d-e5f60718293a": "c3e465e7-025b-870e-be46-533fe86ddb75",
         "f1e2d3c4-b5a6-7890-fedc-ba9876543210": "188f4b24-98e9-466d-a3d8-9c23579b82f2",
         "a9b8c7d6-e5f4-3210-abcd-ef0123456789": "b2fe8faa-64e5-4b08-9ec4-f366da4be740",
@@ -532,6 +508,7 @@
         "f8b2c3d4-e5f6-7890-abcd-ef012345678a": "309489ce-b65c-4572-8b65-52ab3bbd8edd",
         "c2d3e4f5-a6b7-8901-cdef-123456789def": "ee5b907e-9991-4b67-8b49-5150bd7fe77c",
         "a7b8c9d0-e1f2-3456-7890-abcdef012345": "04eb0936-39d7-87ec-94d5-738ae9f56baf",
+        "4b8d2e7a-9c31-4f65-a2d8-6e1f3b5c7a90": "55dbefe3-a545-834e-98f9-b10c41533bce",
         "7c9e4f21-8a3b-4d56-b1e0-2f6a9c8d3e14": "df8817e4-630e-8ff2-826f-53994214f1fc",
         "3b7f2a91-6c44-4e0d-9a12-58f0cbd7e2a1": "c9fb65d7-f664-80fe-a29c-bd062722f5b3",
         "48bb4076-d3c6-455e-99c1-98e9ff82c2c4": "34c148af-c70d-474d-bdc9-21eef62ba70f",
@@ -541,7 +518,6 @@
         "889301a1-d209-8049-af16-4c5fc30470a9": "12c04bd3-e3c0-401d-8148-57311f0eaf70",
         "034bfdf3-add2-827a-a294-72c15e831b6a": "708ddab2-18e6-477a-bb5b-8392df85ac9f",
         "f334590a-a6d7-44af-98bd-14ec93294ec7": "1cc4950f-f097-4d98-85c2-2494123e82e8",
-        "4d8ed045-4f00-411d-9d8e-42b4f855dc9b": "296eb224-d396-4cdb-879a-de5a8b87e8df",
         "06640ac9-a851-43bf-b35b-42e2be0fdca6": "7e988176-381c-4b28-b795-d818842de280",
         "db2ec2d8-edd9-4812-b3b7-ad8ddf316d21": "cd38e861-d279-4605-99df-47c63924dcd6",
         "e1a0945b-44d2-4cc6-a897-c7931851924d": "1b4cf466-c41f-4e3f-a1a0-18a2c70ea241",
@@ -549,7 +525,16 @@
         "bce430cc-f569-4381-9ec0-f2d872648efc": "0947ad9a-edf6-4943-bf63-b3d427bce97c",
         "563539eb-c977-45a3-92f0-e25aa1211547": "1ee801f0-056c-4dda-b169-f264805a30e1",
         "25dd5bed-58eb-4648-bd3b-0de6ea746503": "816a668c-dbd3-4b5d-8fd1-93df9942de55",
-        "970732c0-a058-4701-8a40-c9b9df0da80b": "d4cc24b2-8f27-8669-b5d3-2f36467941cb"
+        "970732c0-a058-4701-8a40-c9b9df0da80b": "d4cc24b2-8f27-8669-b5d3-2f36467941cb",
+        "4d8ed045-4f00-411d-9d8e-42b4f855dc9b": "296eb224-d396-4cdb-879a-de5a8b87e8df",
+        "a334750f-a7f9-4e36-9c2d-563b96bda182": "d6048634-cc6b-4786-9aed-34eccb77e7e7",
+        "52c95d95-b997-44f4-ba0e-3d83d5b458c7": "bc4f4bd6-d8dd-4fc5-9d7d-5f0d278fde70",
+        "4785e803-a655-4137-8dc0-d456a8086f19": "379167ef-6c81-402c-9d8b-9b69adc562ee",
+        "f4c3d2e1-b0a9-8c7d-6e5f-4a3b2c1d0e9f": "071af74b-ec61-407f-a0b8-73fbb4582d98",
+        "c8b5a3d1-3afe-4693-9f5e-57b86c57b6a2": "64c810b2-1b49-4984-9ffd-237657ff590f",
+        "e7a91c42-5d8b-4f36-9a02-3c6b1d84f705": "d2581e37-6230-8c01-bd0d-653d18267032",
+        "d4e5f6a7-b8c9-0123-def4-567890abcdef": "98effff2-8809-4634-8c2d-ded76eecb00f",
+        "a1b2c3d4-e5f6-7890-abcd-ef1234567890": "05da9e1a-4e4f-4f76-83fc-bf4e31445c78"
       }
     },
     {
@@ -149948,7 +149933,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "84620552-a76d-817d-84fd-2ec7c610a36b"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "6e307783-4567-8959-bc50-999968cb6279"
           }
         },
         {
@@ -149990,7 +149975,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "8ddc012f-a5f7-8272-9b7e-ba3b7e82ea3a"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "11101d88-5873-82e0-bc3d-5f440c1e3e4e"
           }
         },
         {
@@ -150032,7 +150017,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "a55fc0cc-ce4b-8857-aeef-817e2deba880"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "10d56fda-5ede-80ed-9c37-ed57f2664732"
           }
         },
         {
@@ -150074,7 +150059,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "a64b4a98-91ff-8d82-b706-4f5bd647ea31"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "e282694c-5cde-8748-8742-87e9be6fa5b7"
           }
         },
         {
@@ -150116,7 +150101,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "bb8de80c-954b-81b7-a707-20acf3415011"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "33e1fe1c-8558-83a7-9668-06a1c8aafe48"
           }
         },
         {
@@ -150166,7 +150151,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "d396b154-c3f4-8429-bcd3-6b92e5efc726"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "ed90d604-76d9-8f11-8a5d-8d6e1e38129f"
           }
         },
         {
@@ -150216,7 +150201,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "a38bc3f7-c426-8bce-9f94-6d298946459c"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "edd32a89-8189-8885-840e-efdae237fa07"
           }
         },
         {
@@ -150266,7 +150251,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "e09500af-e539-8e4d-9f92-b32a97ddbaad"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "ecfe6ecf-bc33-8ddd-b400-187a0aa1f3c4"
           }
         },
         {
@@ -150316,7 +150301,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "1ff29db6-20a7-8cb4-b385-83a80c25d576"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "ef6a69fe-57ad-8363-afef-ed712f83e15a"
           }
         },
         {
@@ -150366,7 +150351,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "afa9c829-f0a9-88a4-a2d1-ec60c4eef308"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "5079fbcb-82b1-8e21-86b8-d0837fc5a969"
           }
         },
         {
@@ -150416,7 +150401,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "27a6d80c-698b-89fb-825b-1bf42166874e"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "6df18224-cfe3-891c-890e-b311713fe326"
           }
         },
         {
@@ -150466,7 +150451,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "71299375-2ece-898c-832f-c74a17c76cd1"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "fcb7a82d-3df5-849f-9136-8157974a9f79"
           }
         },
         {
@@ -150508,7 +150493,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "d4fae378-782a-89e9-b02e-74d59c5df352"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "b942945e-4db4-829a-86ea-ab00dc3bc7c2"
           }
         },
         {
@@ -150558,7 +150543,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "0c1964ad-5261-833c-be6c-3e78c8a1358c"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "9aa2aecd-677c-8ebf-85cf-2fac0dee170a"
           }
         },
         {
@@ -150608,7 +150593,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "54cdd14e-a64d-8c60-99a4-5df8f4b86ef9"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "a3e41293-d477-813e-a63f-de09b3cbc390"
           }
         },
         {
@@ -150658,7 +150643,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "aae5bdd8-fd9d-8f6f-a90f-69c5a0754571"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "2cd62750-fbeb-8f01-b51d-3e81114f039d"
           }
         },
         {
@@ -150708,7 +150693,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "8f77410e-5ebf-862c-83ad-71ce24a73534"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "8b05f360-60f9-86bc-9ce6-26250f0110b5"
           }
         },
         {
@@ -150758,7 +150743,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "997cc5b7-8df8-8324-a403-7ffb44d0d18b"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "aba85421-306f-88d8-83d6-3580dbfb750f"
           }
         },
         {
@@ -150808,7 +150793,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "99859ec5-b2a7-890b-84be-1e36a47f226d"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "48dbaeb0-fca0-8655-a6c7-b7028701c370"
           }
         },
         {
@@ -150858,7 +150843,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "9902915e-4811-82d4-a040-ef1529ed0eaa"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "6cb62e5b-88f0-8add-a694-89cd113ee605"
           }
         },
         {
@@ -150908,7 +150893,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "79035596-7670-81a3-beb0-2032d4d7247c"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "f6eb1b1f-dd9a-8748-8379-f90865ed8545"
           }
         },
         {
@@ -150958,7 +150943,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "fbece2fe-1409-8907-9c17-d1aae3db5582"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "dfcd8479-f03f-8c41-a353-0b76e2d88823"
           }
         },
         {
@@ -151008,7 +150993,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "3750df76-a3f9-8feb-8574-b8cad6044fb7"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "64fb5d16-c460-8b3e-82e5-00ecb850ac32"
           }
         },
         {
@@ -151058,7 +151043,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "d0f3d10a-bc58-830c-b9f5-8facab39873b"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "e13cabba-344c-8d90-97c3-5e1c14d01485"
           }
         },
         {
@@ -151108,7 +151093,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "d6bd1265-a8dc-81e4-9cb1-070c88c51d95"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "bcf815b3-b680-8485-92ab-caf44f01298f"
           }
         },
         {
@@ -151158,7 +151143,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "ae579810-2737-85dd-b68c-f3ba269a7fbd"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "1c08bfe5-65ef-8ea1-851b-ec18cc46516e"
           }
         },
         {
@@ -151208,7 +151193,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "e06b1c4a-1646-8261-9261-dff857508993"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "420bc5a2-e3d8-82de-a139-1470c3529fca"
           }
         },
         {
@@ -151258,7 +151243,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "e3e078a4-6afa-8a32-a731-fcce88e43a66"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "03ee4d1d-9287-815a-9d68-d17a5ec0acb5"
           }
         },
         {
@@ -151308,7 +151293,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "edffc9a8-99b4-8bc5-b6b0-557b372f1f2d"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "ea3b740b-0782-87f4-a936-3de7e89ce16a"
           }
         },
         {
@@ -151358,7 +151343,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "b923af15-b3f6-8a18-9796-043256816ed1"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "80c11837-72d5-8995-80a7-0c07efdca3e4"
           }
         },
         {
@@ -151408,7 +151393,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "545dd6ce-0a19-8da2-8cb7-849602015e79"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "43124ad9-fbea-8788-901e-d91912b5a822"
           }
         },
         {
@@ -151458,7 +151443,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "a8681790-8831-81cc-b4c8-10ab9437c405"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "19948c2f-db02-8b35-ab35-72fece7443d9"
           }
         },
         {
@@ -151508,7 +151493,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "43283ec9-2aec-8913-8924-359e8b57016c"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "f93eecfd-8f11-8d25-8bae-0a653029efe1"
           }
         },
         {
@@ -151558,7 +151543,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "0a05e90d-8f23-4a26-9b7e-580831b7a716": "3ab0d34e-0982-88af-87c0-b3090f16b5f3"
+            "740d5c75-78d5-4214-9984-95d9697dc7d4": "27a163ee-951e-83ab-9087-4f693affe17b"
           }
         }
       ]
