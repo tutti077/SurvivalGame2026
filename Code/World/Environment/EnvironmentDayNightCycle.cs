@@ -240,6 +240,16 @@ public sealed class EnvironmentDayNightCycle : Component
 		Log.Info( "[EnvironmentDayNight] noon." );
 	}
 
+	/// <summary>Usage: <c>cycle_pause</c> — freeze / resume the cycle where it is (the sun and sky stay lit; cycle_toggle switches the whole cycle off).</summary>
+	[ConCmd( "cycle_pause" )]
+	public static void ConCmdPause()
+	{
+		var cycle = FindActive();
+		if ( cycle is null ) { Log.Warning( "[EnvironmentDayNight] no cycle in the active scene." ); return; }
+		cycle.Paused = !cycle.Paused;
+		Log.Info( $"[EnvironmentDayNight] {(cycle.Paused ? "paused" : "running")}." );
+	}
+
 	[ConCmd( "cycle_night" )]
 	public static void ConCmdNight()
 	{

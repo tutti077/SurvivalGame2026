@@ -207,6 +207,21 @@ public sealed class WindSystem : Component
 	}
 
 	/// <summary>Dev: flip the scene wind on / off (the same as the Wind Enabled checkbox).</summary>
+	/// <summary>Usage: <c>wind_base &lt;0–1&gt;</c> — host: set the steady wind (the weather — 0 calm, 0.25 default, 1 storm; the sea's swell follows it).</summary>
+	[ConCmd( "wind_base" )]
+	static void WindBaseCommand( float strength01 = -1f )
+	{
+		if ( !Current.IsValid() )
+		{
+			Log.Info( "[Wind] no WindSystem in the active scene" );
+			return;
+		}
+
+		if ( strength01 >= 0f && (!Networking.IsActive || Networking.IsHost) )
+			Current.BaseStrength01 = Current.CurrentBaseStrength01 = Math.Clamp( strength01, 0f, 1f );
+		Log.Info( $"[Wind] base strength {Current.CurrentBaseStrength01:0.00}" );
+	}
+
 	[ConCmd( "wind_toggle" )]
 	static void WindToggleCommand()
 	{

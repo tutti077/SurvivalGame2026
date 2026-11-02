@@ -177,7 +177,7 @@ public sealed partial class PlayerAnimation
 			_heldLight.GameObject.WorldPosition = tip + Vector3.Up * (flame * 0.5f);
 	}
 
-	/// <summary>Pawn distances: Citizen BodyHeight 72 ≈ 1.8 m (commandment #4).</summary>
+	/// <summary>Pawn distances: Citizen BodyHeight 72 ≈ 1.8 m (commandment #5).</summary>
 	float ResolvePawnUnitsPerMeter()
 	{
 		var controller = Components.Get<PlayerController>();
