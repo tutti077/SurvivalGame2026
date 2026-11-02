@@ -13,7 +13,7 @@ public static class AnimalSetup
 		root.NetworkMode = NetworkMode.Object;
 		root.Enabled = true;
 
-		// Every component below is authored on the animal prefab (Commandment #5) — this only tunes them.
+		// Every component below is authored on the animal prefab (Commandment #4) — this only tunes them.
 		var vitals = Require<EntityVitals>( root );
 		var agent = Require<NavMeshAgent>( root );
 		var locomotion = Require<EntityLocomotion>( root );

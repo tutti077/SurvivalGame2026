@@ -63,7 +63,7 @@ public sealed class EnemySpawnButton : Component
 		instance.WorldPosition = position;
 		instance.WorldRotation = rotation;
 
-		EntityEnemySetup.Configure( instance, enemyType, tier, healthOverride );
+		EntityEnemySetup.Configure( instance, enemyType, tier, healthOverride, prefabPath );
 
 		// Clone alone is host-local — remotes never see the enemy without NetworkSpawn.
 		if ( Networking.IsActive && !HostNetworkSpawn.TrySpawn( instance ) )

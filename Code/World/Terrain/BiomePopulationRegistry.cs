@@ -13,6 +13,8 @@ public static class BiomePopulationRegistry
 	sealed class SlotState
 	{
 		public bool PermanentDead;
+		/// <summary>Despawned into <see cref="EntityChunkMemory"/> — the slot is occupied until the memory restores it (or it dies).</summary>
+		public bool Remembered;
 		public double RespawnAt;
 		public bool WaitingRespawn;
 		public WeakReference<GameObject> Living;
@@ -30,7 +32,7 @@ public static class BiomePopulationRegistry
 		if ( !Slots.TryGetValue( slotKey, out var state ) || state is null )
 			return true;
 
-		if ( state.PermanentDead )
+		if ( state.PermanentDead || state.Remembered )
 			return false;
 
 		if ( state.Living is not null
@@ -58,6 +60,7 @@ public static class BiomePopulationRegistry
 		}
 
 		state.PermanentDead = false;
+		state.Remembered = false;
 		state.WaitingRespawn = false;
 		state.RespawnAt = 0d;
 		state.Living = new WeakReference<GameObject>( living );
@@ -75,6 +78,7 @@ public static class BiomePopulationRegistry
 		}
 
 		state.Living = null;
+		state.Remembered = false;
 
 		if ( !respawn )
 		{
@@ -86,6 +90,22 @@ public static class BiomePopulationRegistry
 		state.PermanentDead = false;
 		state.WaitingRespawn = true;
 		state.RespawnAt = Time.NowDouble + Math.Max( 0f, respawnDelaySeconds );
+	}
+
+	/// <summary>The slot's entity left the world into <see cref="EntityChunkMemory"/>: a chunk reload must not spawn a fresh one at the slot's origin.</summary>
+	public static void NotifyRemembered( string slotKey )
+	{
+		if ( string.IsNullOrWhiteSpace( slotKey ) )
+			return;
+
+		if ( !Slots.TryGetValue( slotKey, out var state ) || state is null )
+		{
+			state = new SlotState();
+			Slots[slotKey] = state;
+		}
+
+		state.Living = null;
+		state.Remembered = true;
 	}
 
 	public static void NotifyUnloaded( string slotKey )

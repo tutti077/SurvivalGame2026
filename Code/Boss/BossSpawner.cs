@@ -41,7 +41,7 @@ public static class BossSpawner
 			return false;
 		}
 
-		EntityEnemySetup.Configure( instance, boss.ResolveEnemyType(), boss.Tier, boss.Health );
+		EntityEnemySetup.Configure( instance, boss.ResolveEnemyType(), boss.Tier, boss.Health, boss.Prefab );
 		bossEntity.HostConfigure( boss, instance.WorldPosition );
 		instance.Name = $"boss_{boss.Id}";
 

@@ -22,6 +22,20 @@ public sealed partial class PlayerVitals : Component
 	/// </summary>
 	[Property, Group( "Stamina" )] public float StaminaRegenDelayOverrideSeconds { get; set; } = -1f;
 
+	// Tool work costs stamina (Mark 2026-11-02: "the hoe and the pickaxe take stamina when used"); the tools ask here, the host spends through PlayerTerraform.
+	[Property, Group( "Stamina" ), Title( "Pickaxe Swing Stamina Cost" )] public float PickaxeSwingStaminaCost { get; set; } = 4f;
+	[Property, Group( "Stamina" ), Title( "Hoe Paint Stamina Cost" ), Description( "Per grass / bare / tilled stroke - held painting repeats a few times a second." )] public float HoePaintStaminaCost { get; set; } = 1f;
+	[Property, Group( "Stamina" ), Title( "Hoe Grade Stamina Cost" )] public float HoeGradeStaminaCost { get; set; } = 3f;
+	[Property, Group( "Stamina" ), Title( "Hoe Raise Stamina Cost" )] public float HoeRaiseStaminaCost { get; set; } = 3f;
+
+	/// <summary>What one hoe stroke of this kind costs (grade, raise, or a paint).</summary>
+	public float HoeStrokeStaminaCost( VoxelBrushMode mode ) => mode switch
+	{
+		VoxelBrushMode.Flatten or VoxelBrushMode.Slope => HoeGradeStaminaCost,
+		VoxelBrushMode.Raise => HoeRaiseStaminaCost,
+		_ => HoePaintStaminaCost,
+	};
+
 	PlayerEquipment _equipment;
 
 	/// <summary>Armor points from worn equipment (<see cref="PlayerEquipment.TotalArmor"/>). Host truth for damage; the owner mirror feeds UI.</summary>

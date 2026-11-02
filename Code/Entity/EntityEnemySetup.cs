@@ -6,7 +6,8 @@ namespace Survival;
 /// <summary>Configures an entity prefab (scav and friends) into a host-simulated enemy.</summary>
 public static class EntityEnemySetup
 {
-	public static void Configure( GameObject root, EnemyType enemyType, int tier, float healthOverride = 0f )
+	/// <param name="prefabPath">Prefab the root was cloned from — lets <see cref="EntityChunkMemory"/> clone it back after a far despawn; null = the entity only ever sleeps.</param>
+	public static void Configure( GameObject root, EnemyType enemyType, int tier, float healthOverride = 0f, string prefabPath = null )
 	{
 		if ( root is null || !root.IsValid() )
 			return;
@@ -14,7 +15,7 @@ public static class EntityEnemySetup
 		root.NetworkMode = NetworkMode.Object;
 		root.Enabled = true;
 
-		// Every component below is authored on the entity prefab (Commandment #5) — this only tunes them.
+		// Every component below is authored on the entity prefab (Commandment #4) — this only tunes them.
 		var vitals = Require<EntityVitals>( root );
 		var agent = Require<NavMeshAgent>( root );
 		var combat = Require<PlayerCombat>( root );
@@ -59,6 +60,7 @@ public static class EntityEnemySetup
 		brain.Agent ??= agent;
 		brain.Locomotion ??= locomotion;
 		brain.Enabled = true;
+		brain.SourcePrefabPath = string.IsNullOrWhiteSpace( prefabPath ) ? null : prefabPath.Trim();
 
 		// Wander needs nav — wait for bake if snap failed this frame.
 		if ( onNav )

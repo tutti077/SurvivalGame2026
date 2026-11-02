@@ -54,6 +54,7 @@ public sealed class EntityVitals : Component
 
 	protected override void OnStart()
 	{
+		_started = true;
 		if ( GameObject.IsProxy )
 			return;
 
@@ -63,8 +64,29 @@ public sealed class EntityVitals : Component
 	public void ResetToFull()
 	{
 		CurrentHealthMax = Math.Max( 1f, MaxHealth );
-		CurrentHealth = CurrentHealthMax;
+		CurrentHealth = _restoreHealth > 0f ? Math.Min( _restoreHealth, CurrentHealthMax ) : CurrentHealthMax;
+		_restoreHealth = -1f;
 		OnVitalsChanged?.Invoke();
+	}
+
+	bool _started;
+	float _restoreHealth = -1f;
+
+	/// <summary>
+	/// Host: put the pool at <paramref name="current"/> (an entity coming back from <see cref="EntityChunkMemory"/>). Also
+	/// survives a <see cref="ResetToFull"/> that has not run yet — a freshly cloned object's OnStart may land a frame later.
+	/// </summary>
+	public void RestoreHealth( float current )
+	{
+		var clamped = Math.Clamp( current, 0.001f, Math.Max( 1f, MaxHealth ) );
+		if ( CurrentHealthMax > 1e-4f )
+		{
+			CurrentHealth = Math.Min( clamped, CurrentHealthMax );
+			OnVitalsChanged?.Invoke();
+		}
+
+		// Only a ResetToFull still to come (OnStart not run yet) may re-apply it; never a later one.
+		_restoreHealth = _started ? -1f : clamped;
 	}
 
 	public float ApplyDamage( float amount, Component attacker )

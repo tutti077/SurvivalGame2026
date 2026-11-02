@@ -82,7 +82,7 @@ public static class EnemyCampSpawner
 		instance.WorldPosition = position;
 		instance.WorldRotation = rotation;
 
-		EntityEnemySetup.Configure( instance, enemyType, entity.Tier, entity.Health );
+		EntityEnemySetup.Configure( instance, enemyType, entity.Tier, entity.Health, prefabPath );
 
 		// Camp leash: both rings are centered on the camp origin and shared by every guard.
 		// Entity values override the camp defaults but keep the same center.

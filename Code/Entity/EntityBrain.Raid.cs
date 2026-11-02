@@ -45,6 +45,8 @@ public sealed partial class EntityBrain
 	const float RaidLoiterRepickSeconds = 6f;
 
 	BaseRaidSession _raid;
+	/// <summary>Ever joined a raid: survivors stay the raid session's stragglers (despawned out of sight), never chunk-memory entities.</summary>
+	bool _wasRaider;
 	double _nextRaidAggroCheckAt;
 	GameObject _raidAggroCandidate;
 	double _raidAggroSince = -1d;
@@ -110,6 +112,7 @@ public sealed partial class EntityBrain
 	public void JoinRaid( BaseRaidSession raid )
 	{
 		_raid = raid;
+		_wasRaider = true;
 		LeashWanderDistance = 0f;
 		LeashMaxTravelDistance = 0f;
 		// Stagger first plans so a wave arriving together does not path-query in one frame.

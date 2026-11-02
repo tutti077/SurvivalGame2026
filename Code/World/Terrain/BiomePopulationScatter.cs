@@ -135,7 +135,7 @@ public static class BiomePopulationScatter
 		instance.LocalPosition = TerrainWorldUnits.MetersToEngine( localMeters );
 		instance.Name = $"pop_{entry.EntityId}_{slotKey.GetHashCode():x}";
 
-		EntityEnemySetup.Configure( instance, entry.EnemyType, entry.Tier );
+		EntityEnemySetup.Configure( instance, entry.EnemyType, entry.Tier, 0f, entry.PrefabPath );
 
 		var slot = instance.Components.Get<BiomePopulationSlot>() ?? instance.Components.Create<BiomePopulationSlot>();
 		slot.Configure( slotKey, entry );
@@ -190,7 +190,7 @@ public static class BiomePopulationScatter
 		instance.WorldPosition = worldPosition;
 		instance.Name = $"pop_{entry.EntityId}_{slotKey.GetHashCode():x}";
 
-		EntityEnemySetup.Configure( instance, entry.EnemyType, entry.Tier );
+		EntityEnemySetup.Configure( instance, entry.EnemyType, entry.Tier, 0f, entry.PrefabPath );
 
 		var slot = instance.Components.Get<BiomePopulationSlot>() ?? instance.Components.Create<BiomePopulationSlot>();
 		slot.Configure( slotKey, entry );
@@ -229,7 +229,8 @@ public static class BiomePopulationScatter
 		return (wx * wx) + (wy * wy) <= r * r;
 	}
 
-	static GameObject ClonePrefab( string path )
+	/// <summary>Clone an entity prefab by path (template cache first, then the resource library). Shared with <see cref="EntityChunkMemory"/>.</summary>
+	public static GameObject ClonePrefab( string path )
 	{
 		path = (path ?? string.Empty).Trim().Replace( '\\', '/' );
 		var template = BuildPrefabUtility.GetTemplate( path );

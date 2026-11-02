@@ -402,7 +402,7 @@ public sealed class BaseRaidSession : Component
 		instance.WorldPosition = position;
 		instance.WorldRotation = Rotation.LookAt( (RaidCenter - position).WithZ( 0f ), Vector3.Up );
 
-		EntityEnemySetup.Configure( instance, enemyType, enemy.Tier, enemy.Health );
+		EntityEnemySetup.Configure( instance, enemyType, enemy.Tier, enemy.Health, enemy.Prefab );
 		instance.Components.Get<EntityBrain>()?.JoinRaid( this );
 
 		// Clone alone is host-local — remotes never see the entity without NetworkSpawn.
