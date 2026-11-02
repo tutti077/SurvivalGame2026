@@ -213,27 +213,38 @@ def simple_bow(rng):
 
 @item("bone_sword", "weapons", surface="default")
 def bone_sword(rng):
-	cells = [P.bone(meters=0.15), P.wood_handle(meters=0.12), P.leather_dark(meters=0.06), P.bone_dirty(meters=0.1)]
-	# blade: a flat bone slab, wide in Z, thin in Y, tapering to a point at +X
+	cells = [P.bone(meters=0.15), P.bone_dirty(meters=0.1), P.leather_dark(meters=0.06), P.rope(meters=0.04)]
+	# a sword carved from one long bone: flat blade, with the vertebra spines left on the back edge
 	rows = []
-	n = 7
+	n = 9
 	for i, t in enumerate(np.linspace(0, 1, n)):
-		x = 0.24 + t * 0.62
-		w = 0.034 * (1 - t ** 3.5) + 0.002 * (1 - t)
-		th = 0.012 * (1 - 0.8 * t)
+		x = 0.22 + t * 0.6
+		w = 0.03 * (1 - t ** 3.5) + 0.002 * (1 - t)
+		th = 0.013 * (1 - 0.75 * t)
 		rows.append([(x, -th / 2, -w), (x, -th, 0), (x, -th / 2, w), (x, th / 2, w), (x, th, 0), (x, th / 2, -w)])
 	g = np.array(rows)
 	g = g + (rng.random(g.shape) - 0.5) * 0.004
 	blade = from_quads_grid(g, closed_v=True, mat=0)
-	blade.add(fan(g[0][::-1], mat=3))
+	blade.add(fan(g[0][::-1], mat=1))
 	blade.add(fan(g[-1], mat=0))
 	m = blade
-	guard = box(size=(0.03, 0.03, 0.15), center=(0.225, 0, 0), mat=1, jitter=0.06, rng=rng)
+	# jagged spine along the back edge (+Z): a row of swept-back bony teeth, shrinking toward the tip
+	for i in range(9):
+		t = i / 9
+		x = 0.26 + t * 0.5
+		h = 0.034 * (1 - 0.6 * t) + 0.004 * ((i % 2) * 2 - 1)
+		tooth = prism([(-0.014, 0), (0.016, 0), (-0.028, h)], 0.009, mat=1, side_mat=1, rng=rng, jitter=0.003)
+		tooth.rotate("x", 90).translate(x, 0.0045, 0.03 * (1 - t ** 3.5) - 0.004)
+		m.add(tooth)
+	# guard: a knobbly bone cross piece, grip wrapped in leather and twine, bone knob pommel
+	guard = blob(rng, 0.03, subdiv=1, jitter=0.3, noise=0.2, scale=(0.9, 0.9, 2.6), mat=1).translate(0.215, 0, 0)
 	m.add(guard)
-	grip = lathe([(0.016, 0), (0.019, 0.03), (0.017, 0.09), (0.02, 0.15), (0.017, 0.2)], segs=7, mat=2, rng=rng, jitter=0.1)
+	grip = lathe([(0.015, 0), (0.018, 0.03), (0.016, 0.09), (0.019, 0.15), (0.016, 0.2)], segs=7, mat=2, rng=rng, jitter=0.1)
 	m.add(grip.rotate("y", 90).translate(0.02, 0, 0))
-	pommel = blob(rng, 0.028, subdiv=1, jitter=0.25, noise=0.15, mat=3)
-	m.add(pommel.translate(0.02, 0, 0))
+	m.add(lashing(rng, 0.07, 0.016, width=0.03, mat=3, turns=4))
+	m.add(lashing(rng, 0.14, 0.016, width=0.03, mat=3, turns=4))
+	pommel = blob(rng, 0.028, subdiv=1, jitter=0.25, noise=0.15, scale=(0.9, 1.2, 1.2), mat=1).translate(0.02, 0, 0)
+	m.add(pommel)
 	return butt_at_origin(m), cells
 
 

@@ -2,7 +2,7 @@ Layer0
 {
 	shader "shaders/pixel_lit.shader"
 
-	PixelRoughness "0.350"
+	PixelRoughness "0.300"
 	PixelSpecular "1.000"
 	PixelFlatShading "1.000"
 	TextureColor "models/food/honey/honey.png"

@@ -13,7 +13,7 @@ Assets/models/<category>/<name>/<name>.vmat   pixel_lit, point sampled, PixelFla
 Run from the repo root:
 
 ```
-python Tools/item_models/generate_item_models.py                 # all 53
+python Tools/item_models/generate_item_models.py                 # all 51
 python Tools/item_models/generate_item_models.py stone rope      # named items
 python Tools/item_models/generate_item_models.py --category trophies
 ```
@@ -28,10 +28,10 @@ sheet per category (`sheet_<category>.png`), so a change can be checked by eye w
 | `resources` | wood_log, stone, dirt, resin, plant_fiber, flint, bone, animal_fat, fox_meat, whitetail_meat, fox_pelt, deer_hide, jay_feather, rope, bone_glue, leather | centred on X/Y, standing on z = 0 |
 | `tools` | torch, stone_axe, build_hammer, hoe, grapple | handle along +X, butt at the origin |
 | `weapons` | wooden_club, flint_spear, bola, simple_bow, bone_sword, wood_arrow, fire_arrow, flint_arrow | handle along +X, butt at the origin (`HeldModelFit`: head wide along Z, thin along Y) |
-| `armor` | cowl, headdress, leather_cap, leather_chest, leather_pants, bandana, hand_wraps | standing on z = 0 |
-| `food` | night_crawlers, daisy, hobbits_leaf, blueberry, honey, wheat | standing on z = 0 |
-| `seeds` | elm_seed, ash_seed, wheat_seed (pouches), daisy_seed, blueberry_seed | standing on z = 0 |
-| `trophies` | scav_trophy, boneback_trophy, fox_trophy, jay_trophy, feral_chieftain_trophy, scav_figurine | plaque in the XZ plane, head toward -Y, standing on z = 0 |
+| `armor` | cowl, headdress, leather_cap, leather_chest, leather_pants, bandana, hand_wraps (clothes folded flat, wraps rolled) | standing on z = 0 |
+| `food` | night_crawlers, blueberry, honey (honeycomb), wheat | standing on z = 0 |
+| `seeds` | elm_seed, ash_seed, wheat_seed, daisy_seed, blueberry_seed (all pouches with a logo) | standing on z = 0 |
+| `trophies` | scav_trophy, boneback_trophy, fox_trophy, jay_trophy, feral_chieftain_trophy (human-shaped heads from `human_head`), scav_figurine | plaque in the XZ plane, head toward -Y, standing on z = 0 |
 
 Not generated: the wooden shield (`Assets/models/weapons/shield_wood` already exists from
 `Blender/scripts/create_shield_wood.py`).

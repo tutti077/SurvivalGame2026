@@ -29,26 +29,78 @@ def feather_card(rng, length, width, mat, tip_mat=None, bend=0.25):
 	return f
 
 
+
+def folded_garment(rng, w, d, h, mat, side_mat, flap_mat=None, flap=0.45, crease=True):
+	"""A garment folded into a soft rectangular stack: rounded jittered slab, a flap folded over the
+	top from one side (slightly thicker edge) and a crease groove down the middle."""
+	def outline(ww, dd):
+		return [(-ww / 2, -dd / 2), (-ww / 2 + 0.02, -dd / 2 - 0.006), (ww / 2 - 0.02, -dd / 2), (ww / 2, -dd / 2 + 0.03),
+				(ww / 2, dd / 2 - 0.025), (ww / 2 - 0.03, dd / 2), (-ww / 2 + 0.03, dd / 2 + 0.004), (-ww / 2, dd / 2 - 0.03)]
+	m = prism(outline(w, d), h * 0.6, mat=mat, side_mat=side_mat, rng=rng, jitter=0.008)
+	top = prism(outline(w * flap, d * 0.96), h * 0.4, z0=h * 0.6, mat=flap_mat if flap_mat is not None else mat,
+				side_mat=side_mat, rng=rng, jitter=0.008)
+	top.translate(-w / 2 + w * flap / 2 + 0.01, 0, 0)
+	m.add(top)
+	if crease:
+		m.add(box(size=(0.012, d * 0.9, 0.01), center=(-w / 2 + w * flap + 0.008, 0, h * 0.6 + 0.002), mat=side_mat))
+	weld_displace(m, rng, 0.004, cells=4.0)
+	return m
+
+
+def human_head(rng, skin, eye_mat, mouth_mat, y=-0.1, z=0.25, r=0.1, teeth_mat=None, brow=True):
+	"""A human-shaped head facing -Y: skull, brow ridge, cheekbones, nose wedge, jaw, ears, neck stump."""
+	m = blob(rng, r, subdiv=2, jitter=0.25, noise=0.1, noise_cells=2.0, scale=(0.9, 1.0, 1.15), mat=skin)
+	pts = m.tris.reshape(-1, 3)
+	# flatten the face plane a little and narrow the jaw
+	front = pts[:, 1] < -0.3 * r
+	pts[front, 1] = pts[front, 1] * 0.8 - 0.06 * r
+	low = pts[:, 2] < -0.3 * r
+	pts[low, 0] *= 1 - 0.3 * np.clip((-pts[low, 2] / r - 0.3) / 0.9, 0, 1)
+	m.tris = pts.reshape(-1, 3, 3)
+	if brow:
+		b = blob(rng, r * 0.42, subdiv=1, jitter=0.25, noise=0.12, scale=(1.7, 0.5, 0.35), mat=skin).translate(0, -r * 0.84, r * 0.3)
+		m.add(b)
+	for sx in (-1, 1):
+		cheek = blob(rng, r * 0.3, subdiv=1, jitter=0.25, noise=0.12, scale=(1.0, 0.7, 0.8), mat=skin).translate(sx * r * 0.62, -r * 0.7, r * 0.02)
+		m.add(cheek)
+		ear = blob(rng, r * 0.22, subdiv=1, jitter=0.25, noise=0.12, scale=(0.35, 1.0, 1.3), mat=skin).translate(sx * r * 0.9, 0.0, r * 0.08)
+		m.add(ear)
+		eye = blob(rng, r * 0.13, subdiv=1, jitter=0.2, noise=0.1, scale=(1.1, 0.5, 0.8), mat=eye_mat).translate(sx * r * 0.36, -r * 0.97, r * 0.2)
+		m.add(eye)
+	nose = prism([(-r * 0.14, 0), (r * 0.14, 0), (0, r * 0.4)], r * 0.22, mat=skin, side_mat=skin, rng=rng, jitter=r * 0.02)
+	nose.rotate("x", 90).rotate("x", 180).translate(0, -r * 0.9, r * 0.12)  # wedge pointing out of the face, tip low
+	m.add(nose)
+	jaw = blob(rng, r * 0.5, subdiv=1, jitter=0.25, noise=0.12, scale=(1.25, 0.9, 0.7), mat=skin).translate(0, -r * 0.45, -r * 0.6)
+	m.add(jaw)
+	mouth = box(size=(r * 0.5, r * 0.12, r * 0.08), center=(0, -r * 0.95, -r * 0.35), mat=mouth_mat)
+	m.add(mouth)
+	if teeth_mat is not None:
+		for i in range(5):
+			m.add(box(size=(r * 0.07, r * 0.08, r * 0.09), center=(-r * 0.18 + i * r * 0.09, -r * 0.98, -r * 0.35), mat=teeth_mat))
+	neck = tube(rng, length=r * 0.5, radius=r * 0.45, segs=8, rings=1, jitter=0.1, mat=skin).rotate("x", -90).translate(0, 0, -r * 0.5)
+	m.add(neck)
+	weld_displace(m, rng, r * 0.03, cells=4.0)
+	return m.translate(0, y, z)
+
+
 # ---------------------------------------------------------------- armor
 
 
 @item("cowl", "armor")
 def cowl(rng):
-	cells = [P.leather(), P.black(), P.yellow(meters=0.05), P.leather_dark()]
-	# a hood: bell lathe, open at the bottom, with the front faces cut as the dark face opening
-	prof = [(0.17, 0.0), (0.175, 0.06), (0.165, 0.16), (0.14, 0.24), (0.1, 0.3), (0.05, 0.33), (0.0, 0.335)]
-	m = lathe(prof, segs=11, mat=0, rng=rng, jitter=0.1, closed_bottom=False, closed_top=True)
+	cells = [P.leather(), P.black(), P.leather_dark()]
+	# the hood folded flat: a rounded slab with the dark face opening showing on top, the point of
+	# the hood folded over one corner
+	outline = [(-0.16, -0.14), (0.16, -0.14), (0.17, 0.02), (0.13, 0.12), (0.04, 0.17), (-0.06, 0.17), (-0.14, 0.11), (-0.17, 0.0)]
+	m = prism(outline, 0.045, mat=0, side_mat=2, rng=rng, jitter=0.008)
+	top = m.normals()[:, 2] > 0.5
 	c = m.centroids()
-	n = m.normals()
-	face = (n[:, 1] < -0.55) & (c[:, 2] > 0.06) & (c[:, 2] < 0.26)
+	face = top & (np.abs(c[:, 0]) < 0.085) & (c[:, 1] < 0.02) & (c[:, 1] > -0.1)
 	m.mat[face] = 1
-	# push the face triangles inward a touch so the opening reads as a recess
-	m.tris[face] = m.tris[face] + np.array([0, 0.03, 0])
-	for dx in (-0.045, 0.045):
-		eye = blob(rng, 0.018, subdiv=1, jitter=0.2, noise=0.1, scale=(1, 0.6, 1), mat=2).translate(dx, -0.12, 0.17)
-		m.add(eye)
-	# a seam strip down the back
-	seam = box(size=(0.012, 0.01, 0.2), center=(0, 0.17, 0.14), mat=3)
+	m.tris[face] = m.tris[face] - np.array([0, 0, 0.01])
+	peak = prism([(-0.1, 0.08), (0.08, 0.14), (-0.02, 0.2)], 0.02, z0=0.045, mat=0, side_mat=2, rng=rng, jitter=0.006)
+	m.add(peak)
+	seam = box(size=(0.012, 0.22, 0.008), center=(0.12, -0.02, 0.047), mat=2)
 	m.add(seam)
 	weld_displace(m, rng, 0.004, cells=4.0)
 	return ground(m), cells
@@ -95,44 +147,21 @@ def leather_cap(rng):
 @item("leather_chest", "armor")
 def leather_chest(rng):
 	cells = [P.leather_red(), P.leather_dark(), P.rope(meters=0.06)]
-	# a sleeveless tunic silhouette in the XZ plane, extruded through Y
-	outline = [(-0.18, 0.0), (0.18, 0.0), (0.2, 0.2), (0.25, 0.3), (0.26, 0.41), (0.15, 0.42), (0.12, 0.34), (0.07, 0.36),
-			   (-0.07, 0.36), (-0.12, 0.34), (-0.15, 0.42), (-0.26, 0.41), (-0.25, 0.3), (-0.2, 0.2)]
-	m = prism(outline, 0.2, z0=-0.1, mat=0, side_mat=1, rng=rng, jitter=0.01)
-	m.rotate("x", 90)
-	# round the chest: bulge the front/back faces out in the middle
-	pts = m.tris.reshape(-1, 3)
-	r = np.clip(1 - (np.abs(pts[:, 0]) / 0.2) ** 2, 0, 1) * np.clip(1 - ((pts[:, 2] - 0.2) / 0.25) ** 2, 0, 1)
-	pts[:, 1] *= (1 + 0.35 * r)
-	m.tris = pts.reshape(-1, 3, 3)
-	# lacing down the front
-	for z in np.linspace(0.08, 0.36, 5):
-		lace = box(size=(0.08, 0.012, 0.012), center=(0, -0.15, z), mat=2)
-		m.add(lace)
-	weld_displace(m, rng, 0.004, cells=3.0)
+	m = folded_garment(rng, 0.32, 0.26, 0.09, mat=0, side_mat=1, flap=0.5)
+	# the lacing shows on the folded-over flap
+	for y in np.linspace(-0.08, 0.08, 4):
+		m.add(box(size=(0.06, 0.012, 0.012), center=(-0.08, y, 0.09), mat=2))
 	return ground(m), cells
 
 
 @item("leather_pants", "armor")
 def leather_pants(rng):
 	cells = [P.leather_red(), P.leather_dark(), P.rope(meters=0.06)]
-	m = Mesh()
-	waist = lathe([(0.17, 0.42), (0.18, 0.45), (0.175, 0.5)], segs=10, mat=1, rng=rng, jitter=0.08, closed_bottom=False)
-	pts = waist.tris.reshape(-1, 3)
-	pts[:, 1] *= 0.7
-	waist.tris = pts.reshape(-1, 3, 3)
-	m.add(waist)
-	for side in (-1, 1):
-		leg = tube(rng, length=0.44, radius=0.08, segs=8, rings=5, jitter=0.06, wobble=0.1,
-				   profile=lambda t: 0.85 + 0.3 * t, mat=0, cap_mat=1, cap_start=True, cap_end=False)
-		leg.scale(1.0, 0.8, 1.0)
-		leg.rotate("y", side * 6).translate(side * 0.09, 0, 0.0)
-		m.add(leg)
-	crotch = blob(rng, 0.09, subdiv=1, jitter=0.2, noise=0.1, scale=(1.3, 0.75, 0.7), mat=0).translate(0, 0, 0.42)
-	m.add(crotch)
-	belt = box(size=(0.07, 0.012, 0.012), center=(0, -0.13, 0.46), mat=2)
-	m.add(belt)
-	weld_displace(m, rng, 0.004, cells=3.0)
+	# trousers folded in half: the two legs lie side by side as a stack, waistband at the near edge
+	m = folded_garment(rng, 0.3, 0.24, 0.08, mat=0, side_mat=1, flap=0.5, crease=False)
+	m.add(box(size=(0.3, 0.012, 0.03), center=(0, -0.125, 0.045), mat=1))      # groove between the legs
+	m.add(box(size=(0.006, 0.22, 0.082), center=(0.0, 0.0, 0.041), mat=1))      # seam between the two legs
+	m.add(box(size=(0.05, 0.012, 0.012), center=(0.07, -0.12, 0.081), mat=2))   # belt tie
 	return ground(m), cells
 
 
@@ -157,73 +186,42 @@ def bandana(rng):
 @item("hand_wraps", "armor")
 def hand_wraps(rng):
 	cells = [P.cloth_cream(), P.leather(meters=0.12)]
+	# the wraps rolled into two bandage rolls lying side by side, a leather tie around each
 	m = Mesh()
 	for side in (-1, 1):
-		hand = blob(rng, 0.075, subdiv=1, jitter=0.25, noise=0.14, scale=(0.75, 1.3, 0.45), mat=0, flatten_bottom=0.5)
-		hand.translate(side * 0.095, 0, 0.0)
-		# wrap bands: brightness stripes come from the cloth cell; add a leather strap across the wrist
-		strap = lathe([(0.04, -0.012), (0.044, -0.006), (0.044, 0.008), (0.04, 0.012)], segs=8, mat=1, rng=rng, jitter=0.1)
-		pts = strap.tris.reshape(-1, 3)
-		pts[:, 2] *= 0.6
-		strap.tris = pts.reshape(-1, 3, 3)
-		strap.rotate("x", 90).translate(side * 0.095, -0.085, 0.022)
-		hand.add(strap)
-		# thumb
-		th = blob(rng, 0.025, subdiv=1, jitter=0.2, noise=0.1, scale=(0.8, 1.5, 0.7), mat=0).translate(side * 0.155, 0.03, 0.02)
-		hand.add(th)
-		m.add(hand)
+		roll = lathe([(0.03, 0), (0.038, 0.01), (0.04, 0.05), (0.04, 0.09), (0.038, 0.13), (0.03, 0.14)], segs=9, mat=0, rng=rng, jitter=0.1)
+		roll.rotate("x", 90).rotate("z", side * 8).translate(side * 0.05, 0, 0.04)
+		tie = lathe([(0.041, 0.05), (0.047, 0.056), (0.047, 0.074), (0.041, 0.08)], segs=9, mat=1, rng=rng, jitter=0.1, closed_bottom=False, closed_top=False)
+		tie.rotate("x", 90).rotate("z", side * 8).translate(side * 0.05, 0, 0.04)
+		roll.add(tie)
+		# the loose end of the strip trailing off the roll
+		tail = leaf(rng, 0.09, 0.05, mat=0, bend=0.05, segments=3, taper_tip=False).rotate("z", 180 + side * 20).translate(side * 0.05, 0.06, 0.004)
+		roll.add(tail)
+		m.add(roll)
+	weld_displace(m, rng, 0.003, cells=4.0)
 	return ground(m), cells
-
-
-# ---------------------------------------------------------------- plants, bait, food
 
 
 @item("night_crawlers", "food")
 def night_crawlers(rng):
-	cells = [P.dirt(), P.Cell((214, 128, 128), noise=0.08, tones=[(196, 110, 112), (214, 128, 128), (226, 146, 146)], streak="x",
-							  stripes=(180, 96, 100), stripe_period=4, stripe_amt=0.5, meters=0.08)]
-	m = blob(rng, 0.16, subdiv=2, jitter=0.4, noise=0.25, noise_cells=2.5, scale=(1.3, 1.0, 0.4), mat=0, flatten_bottom=0.5)
-	for k in range(3):
-		x0 = -0.08 + 0.07 * k
-		path = [(x0 + 0.03 * t * 4 * (0.6 if k == 1 else 1), -0.08 + 0.2 * t + 0.03 * math.sin(t * 9 + k),
-				 0.045 + 0.03 * abs(math.sin(t * 6 + k * 2))) for t in np.linspace(0, 1, 11)]
-		m.add(path_tube(rng, np.array(path), radius=0.013, segs=5, jitter=0.1, radius_fn=lambda t: 0.8 + 0.3 * math.sin(math.pi * t), mat=1))
-	return ground(m), cells
-
-
-def _flower(rng, cells, stem_h=0.32, petals=13, petal_len=0.075, petal_w=0.038, center_r=0.028):
-	m = tube(rng, length=stem_h, radius=0.008, segs=5, rings=4, jitter=0.1, wobble=0.6, profile=lambda t: 1.0, mat=0)
-	for i, (h, a) in enumerate(((0.12, 40), (0.2, 220))):
-		lf = leaf(rng, 0.09, 0.035, mat=1, bend=0.4, segments=3).rotate("x", 35).rotate("z", a).translate(0, 0, h)
-		m.add(lf)
-	centre = blob(rng, center_r, subdiv=1, jitter=0.2, noise=0.12, scale=(1, 1, 0.55), mat=3).translate(0, 0, stem_h + 0.01)
-	m.add(centre)
-	for i in range(petals):
-		a = 360 * i / petals + (rng.random() - 0.5) * 12
-		p = leaf(rng, petal_len, petal_w, mat=2, bend=-0.1, segments=2, double=True).rotate("x", 6 + rng.random() * 8)
-		p.rotate("z", a).translate(center_r * 0.7 * math.cos(math.radians(a + 90)), center_r * 0.7 * math.sin(math.radians(a + 90)), stem_h + 0.008)
-		m.add(p)
-	return m
-
-
-@item("daisy", "food")
-def daisy(rng):
-	cells = [P.stem_green(), P.leaf_green(meters=0.1), P.petal_white(), P.yellow()]
-	# a cut daisy (big enough to read at distance: ~2.5x life size)
-	m = _flower(rng, cells)
-	return ground(m), cells
-
-
-@item("hobbits_leaf", "food")
-def hobbits_leaf(rng):
-	cells = [P.leaf_green(), P.leaf_dark(), P.stone(meters=0.1), P.stem_green()]
-	m = tube(rng, length=0.05, radius=0.008, segs=5, rings=1, jitter=0.1, mat=3)
-	for i in range(3):
-		lf = leaf(rng, 0.3, 0.14, mat=i % 2, bend=0.1, segments=5).rotate("x", 70 + i * 4).rotate("z", -20 + 20 * i)
-		lf.translate(0, 0, 0.04)
-		m.add(lf)
-	bud = blob(rng, 0.028, subdiv=1, jitter=0.2, noise=0.15, mat=2).translate(0.0, 0.0, 0.33)
-	m.add(bud)
+	worm = P.Cell((120, 124, 170), noise=0.08, tones=[(104, 108, 156), (120, 124, 170), (138, 142, 186)], streak="y",
+				  stripes=(90, 92, 134), stripe_period=5, stripe_amt=0.55, meters=0.1)
+	cells = [P.dirt(), worm, P.Cell((160, 150, 180), noise=0.06, meters=0.1)]
+	m = blob(rng, 0.15, subdiv=2, jitter=0.4, noise=0.25, noise_cells=2.5, scale=(1.3, 1.0, 0.35), mat=0, flatten_bottom=0.5)
+	# one big night crawler looping over the mound
+	path = []
+	for t in np.linspace(0, 1, 26):
+		# a fat S-curve draped over the mound, head lifting off the dirt at the end
+		x = -0.17 + 0.34 * t
+		y = 0.07 * math.sin(t * math.pi * 2.0) + 0.02 * math.sin(t * 11)
+		z = 0.04 + 0.025 * math.sin(t * math.pi) + 0.03 * max(0.0, t - 0.8) * 5
+		path.append((x, y, z))
+	w = path_tube(rng, np.array(path), radius=0.03, segs=7, jitter=0.1,
+				  radius_fn=lambda t: 0.5 + 0.55 * math.sin(math.pi * (0.1 + 0.9 * t)) ** 0.5, mat=1)
+	c = w.centroids()
+	# the clitellum: a paler band a third of the way along
+	w.mat[(np.arange(len(w.tris)) // 14 >= 15) & (np.arange(len(w.tris)) // 14 <= 17)] = 2
+	m.add(w)
 	return ground(m), cells
 
 
@@ -244,17 +242,36 @@ def blueberry(rng):
 	return ground(m), cells
 
 
-@item("honey", "food", roughness=0.35)
+@item("honey", "food", roughness=0.3)
 def honey(rng):
-	cells = [P.honey(), P.wood_pale(meters=0.1), P.Cell((196, 128, 24), noise=0.06, meters=0.1), P.cloth_cream(meters=0.08)]
-	prof = [(0.055, 0.0), (0.068, 0.012), (0.072, 0.1), (0.07, 0.16), (0.058, 0.18), (0.05, 0.19)]
-	m = lathe(prof, segs=10, mat=0, rng=rng, jitter=0.05)
-	c = m.centroids()
-	m.mat[(c[:, 2] > 0.06) & (c[:, 2] < 0.1) & (np.linalg.norm(c[:, :2], axis=1) > 0.05)] = 2
-	lid = lathe([(0.052, 0.19), (0.062, 0.2), (0.062, 0.23), (0.05, 0.24)], segs=10, mat=1, rng=rng, jitter=0.06)
-	m.add(lid)
-	cloth = lathe([(0.062, 0.215), (0.07, 0.218), (0.064, 0.232), (0.0, 0.245)], segs=10, mat=3, rng=rng, jitter=0.1, closed_bottom=False)
-	m.add(cloth)
+	cells = [P.honey(), P.Cell((198, 132, 30), noise=0.06, meters=0.1), P.Cell((236, 176, 60), noise=0.06, meters=0.1)]
+	# a broken chunk of honeycomb: a flat hex slab with raised wax walls on top and honey drips
+	R = 0.15
+	outline = [((R + (rng.random() - 0.5) * 0.04) * math.cos(a), (R + (rng.random() - 0.5) * 0.04) * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 9, endpoint=False)]
+	m = prism(outline, 0.045, mat=0, side_mat=1, rng=rng, jitter=0.01)
+	cell_r = 0.028
+	dx = cell_r * math.sqrt(3)
+	dy = cell_r * 1.5
+	for j in range(-4, 5):
+		for i in range(-4, 5):
+			cx = (i + 0.5 * (j % 2)) * dx
+			cy = j * dy
+			if math.hypot(cx, cy) > R - 0.03:
+				continue
+			for k in range(6):
+				a0 = math.pi / 6 + k * math.pi / 3
+				a1 = a0 + math.pi / 3
+				p0 = np.array([cx + cell_r * math.cos(a0), cy + cell_r * math.sin(a0), 0.045])
+				p1 = np.array([cx + cell_r * math.cos(a1), cy + cell_r * math.sin(a1), 0.045])
+				mid = (p0 + p1) / 2
+				L = np.linalg.norm(p1 - p0)
+				wall = box(size=(L, 0.006, 0.012), center=(0, 0, 0.006), mat=2)
+				ang = math.degrees(math.atan2(p1[1] - p0[1], p1[0] - p0[0]))
+				wall.rotate("z", ang).translate(mid[0], mid[1], mid[2])
+				m.add(wall)
+	for a, r in ((0.4, 0.02), (2.6, 0.016), (4.4, 0.018)):
+		drip = blob(rng, r, subdiv=1, jitter=0.2, noise=0.1, scale=(1, 1, 1.6), mat=0).translate(R * 0.95 * math.cos(a), R * 0.95 * math.sin(a), 0.01)
+		m.add(drip)
 	return ground(m), cells
 
 
@@ -339,29 +356,26 @@ def wheat_seed(rng):
 
 @item("daisy_seed", "seeds")
 def daisy_seed(rng):
-	cells = [P.seed_brown(meters=0.15), P.bark_dark(meters=0.1)]
-	m = blob(rng, 0.055, subdiv=1, jitter=0.25, noise=0.12, scale=(2.4, 1.0, 0.7), mat=0, flatten_bottom=0.7)
-	pts = m.tris.reshape(-1, 3)
-	f = np.abs(pts[:, 0]) / 0.13
-	pts[:, 1:] *= (1 - 0.7 * np.clip(f, 0, 1) ** 1.8)[:, None]
-	m.tris = pts.reshape(-1, 3, 3)
-	crease = box(size=(0.13, 0.006, 0.006), center=(0, 0, 0.036), mat=1)
-	m.add(crease)
-	m.rotate("z", 30)
-	return ground(m), cells
+	def logo(rng):
+		m = blob(rng, 0.012, subdiv=1, jitter=0.2, noise=0.1, scale=(1, 0.5, 1), mat=6).translate(0, -0.072, 0.08)
+		for i in range(8):
+			a = 360 * i / 8
+			p = leaf(rng, 0.03, 0.014, mat=5, bend=0.0, segments=2).rotate("x", 90).rotate("y", a).translate(0, -0.072, 0.08)
+			m.add(p)
+		return m
+	m, cells = _pouch(rng, logo)
+	return m, cells + [P.petal_white(meters=0.06), P.yellow(meters=0.05)]
 
 
 @item("blueberry_seed", "seeds")
 def blueberry_seed(rng):
-	cells = [P.seed_brown(meters=0.08), P.blue_berry(meters=0.05)]
-	m = Mesh()
-	for k in range(6):
-		s = blob(rng, 0.02, subdiv=1, jitter=0.3, noise=0.15, scale=(1.5, 1, 0.8), mat=0 if k % 3 else 1, flatten_bottom=0.6)
-		a = 2 * math.pi * k / 6 + rng.random()
-		r = 0.0 if k == 0 else 0.055 + rng.random() * 0.02
-		s.rotate("z", rng.random() * 360).translate(r * math.cos(a), r * math.sin(a), 0)
-		m.add(s)
-	return ground(m), cells
+	def logo(rng):
+		m = Mesh()
+		for dx, dz in ((-0.018, 0.075), (0.018, 0.075), (0.0, 0.1)):
+			m.add(blob(rng, 0.015, subdiv=1, jitter=0.2, noise=0.1, scale=(1, 0.5, 1), mat=5).translate(dx, -0.072, dz))
+		return m
+	m, cells = _pouch(rng, logo)
+	return m, cells + [P.blue_berry(meters=0.05)]
 
 
 # ---------------------------------------------------------------- trophies and figurine
@@ -372,7 +386,6 @@ def _plaque(rng, mat=0):
 	outline = [(-0.2, 0.42), (0.2, 0.42), (0.21, 0.3), (0.15, 0.1), (0.0, 0.0), (-0.15, 0.1), (-0.21, 0.3)]
 	p = prism(outline, 0.035, z0=0, mat=mat, side_mat=mat, rng=rng, jitter=0.008)
 	p.rotate("x", 90)  # extrusion along -Y: front face at y = -0.035
-	# bevel: a slightly smaller raised panel on the front
 	inner = prism([(x * 0.85, 0.03 + y * 0.85) for x, y in outline], 0.012, z0=0, mat=mat, side_mat=mat, rng=rng, jitter=0.004)
 	inner.rotate("x", 90).translate(0, -0.035, 0)
 	p.add(inner)
@@ -390,14 +403,7 @@ def _eyes(rng, mat, y, z, dx=0.05, r=0.014):
 def scav_trophy(rng):
 	cells = [P.plaque(), P.skin_grey(), P.red_glow(), P.bone(meters=0.08), P.black(meters=0.1)]
 	m = _plaque(rng, 0)
-	head = blob(rng, 0.11, subdiv=2, jitter=0.3, noise=0.14, scale=(0.95, 0.8, 1.15), mat=1).translate(0, -0.11, 0.25)
-	m.add(head)
-	m.add(_eyes(rng, 2, -0.2, 0.28))
-	# a row of teeth in a dark mouth
-	mouth = box(size=(0.1, 0.02, 0.03), center=(0, -0.2, 0.17), mat=4)
-	m.add(mouth)
-	for i in range(6):
-		m.add(box(size=(0.011, 0.012, 0.024), center=(-0.04 + i * 0.016, -0.21, 0.17), mat=3))
+	m.add(human_head(rng, skin=1, eye_mat=2, mouth_mat=4, teeth_mat=3, y=-0.09, z=0.25, r=0.1))
 	return ground(m), cells
 
 
@@ -405,17 +411,13 @@ def scav_trophy(rng):
 def boneback_trophy(rng):
 	cells = [P.plaque(), P.fur_grey(), P.red_glow(), P.bone(meters=0.08), P.black(meters=0.1)]
 	m = _plaque(rng, 0)
-	head = blob(rng, 0.11, subdiv=2, jitter=0.3, noise=0.14, scale=(1.0, 0.8, 1.05), mat=1).translate(0, -0.11, 0.25)
-	m.add(head)
-	m.add(_eyes(rng, 2, -0.2, 0.27))
-	mouth = box(size=(0.08, 0.015, 0.012), center=(0, -0.2, 0.18), mat=4)
-	m.add(mouth)
-	# a crest of bone spikes over the brow
+	m.add(human_head(rng, skin=1, eye_mat=2, mouth_mat=4, y=-0.09, z=0.25, r=0.1))
+	# a crest of bone spikes from the brow back over the crown
 	for i in range(6):
-		x = -0.07 + i * 0.028
-		spike = tube(rng, length=0.09 + 0.02 * math.sin(i * 1.5), radius=0.012, segs=5, rings=2, jitter=0.1,
-					 profile=lambda t: 1.0 - 0.85 * t, mat=3)
-		spike.rotate("x", -15).translate(x, -0.15, 0.33)
+		z = 0.33 + 0.01 * i - 0.004 * i * i
+		y = -0.16 + i * 0.035
+		spike = tube(rng, length=0.1 - 0.008 * abs(i - 2), radius=0.012, segs=5, rings=2, jitter=0.1, profile=lambda t: 1.0 - 0.85 * t, mat=3)
+		spike.rotate("x", -25 + i * 8).translate(0, y, z)
 		m.add(spike)
 	return ground(m), cells
 
@@ -461,22 +463,20 @@ def feral_chieftain_trophy(rng):
 	cells = [P.plaque(), P.skin_tan(), P.red_glow(), P.cloth_red(meters=0.1), P.feather_white(meters=0.1), P.blue_dark(meters=0.1),
 			 P.black(meters=0.1)]
 	m = _plaque(rng, 0)
-	head = blob(rng, 0.105, subdiv=2, jitter=0.3, noise=0.12, scale=(0.95, 0.8, 1.15), mat=1).translate(0, -0.11, 0.25)
-	# war paint: a red band across the eyes
+	head = human_head(rng, skin=1, eye_mat=2, mouth_mat=6, y=-0.09, z=0.25, r=0.1)
+	# war paint: a red band across the cheeks under the eyes
 	c = head.centroids()
-	head.mat[(c[:, 2] > 0.265) & (c[:, 2] < 0.3) & (c[:, 1] < -0.13)] = 3
+	n = head.normals()
+	head.mat[(head.mat == 1) & (c[:, 2] > 0.255) & (c[:, 2] < 0.28) & (c[:, 1] < -0.15) & (n[:, 1] < -0.2)] = 3
 	m.add(head)
-	m.add(_eyes(rng, 2, -0.2, 0.28))
-	mouth = box(size=(0.07, 0.015, 0.01), center=(0, -0.2, 0.18), mat=6)
-	m.add(mouth)
-	# headband and feathers
-	band = lathe([(0.108, 0.285), (0.113, 0.295), (0.113, 0.318), (0.108, 0.328)], segs=10, mat=3, rng=rng, jitter=0.06)
+	band = lathe([(0.1, 0.3), (0.105, 0.31), (0.105, 0.33), (0.1, 0.34)], segs=10, mat=3, rng=rng, jitter=0.06)
 	pts = band.tris.reshape(-1, 3)
-	pts[:, 1] = pts[:, 1] * 0.85 - 0.11
+	pts[:, 0] *= 0.95
+	pts[:, 1] = pts[:, 1] * 1.0 - 0.09
 	band.tris = pts.reshape(-1, 3, 3)
 	m.add(band)
 	for i, (a, mat) in enumerate(((-28, 4), (0, 5), (28, 4))):
-		f = feather_card(rng, 0.17, 0.05, mat, bend=0.12).rotate("x", 84).rotate("z", a).translate(a * 0.002, -0.09, 0.35)
+		f = feather_card(rng, 0.17, 0.05, mat, bend=0.12).rotate("x", 84).rotate("z", a).translate(a * 0.002, -0.07, 0.35)
 		m.add(f)
 	return ground(m), cells
 
