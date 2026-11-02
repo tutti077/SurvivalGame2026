@@ -357,6 +357,25 @@
                 ]
               },
               {
+                "id": "shield_wood",
+                "displayName": "Wooden Shield",
+                "icon": "ui/items/shield_wood.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "inventory", "workbench" ],
+                "ingredients": [
+                    { "resourceId": "resource_woodBasic", "amount": 1 }
+                  //{ "resourceId": "resource_woodBasic", "amount": 6 },
+                  //{ "resourceId": "resource_plantFiber", "amount": 4 },
+                  //{ "resourceId": "resource_resin", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Planks banded with iron. Straps to the left forearm; right-click raises it." },
+                  { "label": "Type", "value": "Shield (offhand)" }
+                ]
+              },
+              {
                 "id": "basic_bow",
                 "displayName": "Simple Bow",
                 "icon": "ui/items/basic_bow.png",

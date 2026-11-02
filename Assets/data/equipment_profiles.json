@@ -101,6 +101,66 @@
       "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
     },
     {
+      "resourceId": "pickaxe_scrap",
+      "displayName": "Scrap Pickaxe",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": ["Mine"],
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "toolPrefab": "prefabs/tools/pickaxe_tool.prefab",
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "pickaxe_reforged",
+      "displayName": "Reforged Pickaxe",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": ["Mine"],
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "toolPrefab": "prefabs/tools/pickaxe_tool.prefab",
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "pickaxe_iron",
+      "displayName": "Iron Pickaxe",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": ["Mine"],
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "toolPrefab": "prefabs/tools/pickaxe_tool.prefab",
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "pickaxe_steel",
+      "displayName": "Arcsteel Pickaxe",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": ["Mine"],
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "toolPrefab": "prefabs/tools/pickaxe_tool.prefab",
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "pickaxe_titanium",
+      "displayName": "Titanium Pickaxe",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": ["Mine"],
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "toolPrefab": "prefabs/tools/pickaxe_tool.prefab",
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
+    },
+    {
       "resourceId": "tool_wireStripper",
       "displayName": "Wire Stripper",
       "slot": "mainHand",
@@ -165,6 +225,70 @@
       "armorSet": "leather",
       "clothing": "models/citizen_clothes/jacket/Brown_Leather_Jacket/brown_leather_jacket.clothing",
       "statModifiers": { "armor": 3, "damage": 0, "speed": 0 }
+    },
+    // Shields: HOTBAR items (like weapons) that equip into the OffHand slot - selecting one on the hotbar puts it
+    // on the left forearm (PlayerAnimation.Shield.cs) and keeps the primary weapon; right-click raises it. heldModel convention: +Z = outward face, +X = up the forearm,
+    // origin on the forearm centre line (Blender/scripts/create_shield_wood.py). Only the wooden shield has
+    // its own model so far - the other four reuse it as a stand-in.
+    {
+      "resourceId": "shield_wood",
+      "displayName": "Wooden Shield",
+      "slot": "offHand",
+      "allowedSlots": ["offHand"],
+      "actions": ["Block"],
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "heldModel": "models/weapons/shield_wood.vmdl",
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "shield_scrap",
+      "displayName": "Scrap Shield",
+      "slot": "offHand",
+      "allowedSlots": ["offHand"],
+      "actions": ["Block"],
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "heldModel": "models/weapons/shield_wood.vmdl",
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "shield_tower",
+      "displayName": "Tower Shield",
+      "slot": "offHand",
+      "allowedSlots": ["offHand"],
+      "actions": ["Block"],
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "heldModel": "models/weapons/shield_wood.vmdl",
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "shield_reforged",
+      "displayName": "Reforged Shield",
+      "slot": "offHand",
+      "allowedSlots": ["offHand"],
+      "actions": ["Block"],
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "heldModel": "models/weapons/shield_wood.vmdl",
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "buckler_reforged",
+      "displayName": "Reforged Buckler",
+      "slot": "offHand",
+      "allowedSlots": ["offHand"],
+      "actions": ["Block"],
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "heldModel": "models/weapons/shield_wood.vmdl",
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
     },
     {
       "resourceId": "armor_leather_legs",

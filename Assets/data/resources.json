@@ -8,6 +8,14 @@
       "fallbackColor": "0.58,0.5,0.42,1"
     },
     {
+      "id": "resource_dirt",
+      "displayName": "Dirt",
+      "description": "A spadeful of ground, loosened by the pickaxe. The hoe's Raise lays it back down as a thin layer.",
+      "icon": "ui/items/resource_dirt.png",
+      "maxStack": 50,
+      "fallbackColor": "0.42,0.30,0.18,1"
+    },
+    {
       "id": "resource_plantFiber",
       "displayName": "Plant Fiber",
       "icon": "ui/items/resource_plantFiber.png",
@@ -1323,6 +1331,35 @@
       "icon": "ui/items/shield_wood.png",
       "maxStack": 1,
       "fallbackColor": "0.55,0.41,0.29,1"
+    },
+    {
+      // Shields (offhand, PlayerAnimation.Shield.cs). Only shield_wood has its own model yet; the rest show it as a placeholder.
+      "id": "shield_scrap",
+      "displayName": "Scrap Shield",
+      "icon": "ui/items/shield_scrap.png",
+      "maxStack": 1,
+      "fallbackColor": "0.46,0.44,0.40,1"
+    },
+    {
+      "id": "shield_tower",
+      "displayName": "Tower Shield",
+      "icon": "ui/items/shield_tower.png",
+      "maxStack": 1,
+      "fallbackColor": "0.40,0.36,0.30,1"
+    },
+    {
+      "id": "shield_reforged",
+      "displayName": "Reforged Shield",
+      "icon": "ui/items/shield_reforged.png",
+      "maxStack": 1,
+      "fallbackColor": "0.58,0.52,0.42,1"
+    },
+    {
+      "id": "buckler_reforged",
+      "displayName": "Reforged Buckler",
+      "icon": "ui/items/buckler_reforged.png",
+      "maxStack": 1,
+      "fallbackColor": "0.62,0.56,0.44,1"
     },
     {
       "id": "arrow_fire",
