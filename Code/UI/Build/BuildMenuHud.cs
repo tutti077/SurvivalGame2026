@@ -80,6 +80,8 @@ public sealed class BuildMenuHud
 
 		_overlay = new BuildMenuInputOverlay { Parent = hudRoot };
 		_overlay.Bind( _equipment );
+		_overlay.EscapeRequested = () => ResolveBuildHammer()?.SetBuildMenuOpen( false );
+		_overlay.DismissRequested = () => ResolveBuildHammer()?.CloseBuildMenuAndPutAway();
 		_overlay.ButtonInput = PanelInputType.UI;
 		_overlay.Style.Set( "position", "absolute" );
 		_overlay.Style.Set( "left", "0" );

@@ -134,6 +134,7 @@ public sealed class TerrainTestPlayerSpawn : Component
 		ConfigurePlayablePawn( instance );
 		instance.Enabled = true;
 		_playablePlayer = instance;
+		_activePlayable = instance;
 
 		TakeControlFromFlyCamera( view );
 
@@ -143,6 +144,11 @@ public sealed class TerrainTestPlayerSpawn : Component
 	}
 
 	bool IsPlayableActive() => _playablePlayer is not null && _playablePlayer.IsValid();
+
+	static GameObject _activePlayable;
+
+	/// <summary>A playable pawn spawned by L / pawn_toggle is alive in the scene - the pawn's own tools own digging then, not the scene's VoxelDigger.</summary>
+	public static bool PlayableActive => _activePlayable is not null && _activePlayable.IsValid();
 
 	void DestroyPlayableIfAny()
 	{

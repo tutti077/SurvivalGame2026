@@ -9,7 +9,7 @@ namespace Survival;
 /// </summary>
 public static class FarmingRules
 {
-	/// <summary>Surfaces that can be tilled carry this tag (the testscene1 ground plane today; terrain materials later).</summary>
+	/// <summary>Surfaces that can be tilled carry this tag (the testscene1 ground plane); the world's ground (heightfield and voxel chunks, tag <c>terrain</c>) tills too since the hoe menu (2026-11-02).</summary>
 	public const string DirtTag = "dirt";
 
 	public const string TilledSoilPrefab = "prefabs/farming/tilled_soil.prefab";
@@ -46,7 +46,7 @@ public static class FarmingRules
 			.Run();
 	}
 
-	/// <summary>Is this hit a flat, dirt-tagged surface with no tilled soil in its grid cell yet?</summary>
+	/// <summary>Is this hit a flat dirt or world-ground surface with no tilled soil in its grid cell yet?</summary>
 	public static bool CanTillAt( in SceneTraceResult tr, out Vector3 tileCenter, out string reason )
 	{
 		tileCenter = default;
@@ -60,9 +60,9 @@ public static class FarmingRules
 			return false;
 		}
 
-		if ( !HasDirtTag( tr.GameObject ) )
+		if ( !HasDirtTag( tr.GameObject ) && !ToolPickaxe.IsGround( tr.GameObject ) )
 		{
-			reason = "not dirt";
+			reason = "not ground";
 			return false;
 		}
 
@@ -87,11 +87,15 @@ public static class FarmingRules
 		return false;
 	}
 
-	/// <summary>Sow rule shared by the ghost and the host: inside a tile and clear of every other plant.</summary>
+	/// <summary>Painted tilled soil on the world's voxel ground under a point (the hoe's Tilled soil stroke, <see cref="VoxelBrushMode.PaintTilled"/>), half covered or more.</summary>
+	public static bool IsTilledGroundAt( Vector3 point )
+		=> VoxelBrushTargets.Find( Sandbox.Game.ActiveScene ) is { IsReady: true } target && target.TilledAt( point ) >= 0.5f;
+
+	/// <summary>Sow rule shared by the ghost and the host: inside a tilled tile or on painted tilled ground (<paramref name="tile"/> null then), and clear of every other plant.</summary>
 	public static bool CanSowAt( Vector3 point, out TilledSoil tile, out string reason )
 	{
 		reason = "not tilled soil";
-		if ( !TilledSoil.TryFindAt( point, out tile ) )
+		if ( !TilledSoil.TryFindAt( point, out tile ) && !IsTilledGroundAt( point ) )
 			return false;
 
 		var spacing = TerrainWorldUnits.MetersToEngine( MinPlantSpacingMeters );

@@ -181,6 +181,8 @@ public sealed class PlayerFarming : Component
 			_aimPoint = new Vector3( _aimPoint.x, _aimPoint.y, tile.SurfaceZ );
 			valid = FarmingRules.CanSowAt( _aimPoint, out _, out _ );
 		}
+		else if ( tr.Hit && ToolPickaxe.IsGround( tr.GameObject ) && FarmingRules.IsTilledGroundAt( tr.HitPosition ) )
+			valid = FarmingRules.CanSowAt( _aimPoint, out _, out _ );   // the hoe's painted tilled soil
 
 		FocusedPlant = hitPlant;
 
@@ -244,7 +246,7 @@ public sealed class PlayerFarming : Component
 		}
 
 		FocusedPlant = null;
-		if ( !TilledSoil.TryFindOnHierarchy( tr.GameObject, out _ ) )
+		if ( !TilledSoil.TryFindOnHierarchy( tr.GameObject, out _ ) && !(ToolPickaxe.IsGround( tr.GameObject ) && FarmingRules.IsTilledGroundAt( tr.HitPosition )) )
 		{
 			SetPrompt( string.Empty );
 			return;

@@ -365,6 +365,9 @@ PS
 	// Far-forest canopy colour (TerrainWorldManager.FarTier) and the large-scale brightness variation that keeps the
 	// tiles from reading as tiles at a distance
 	float3 SplatCanopyColor < UiType( Color ); Default3( 0.09, 0.22, 0.07 ); UiGroup( "Splat,40/100" ); >;
+	// The hoe's tilled soil (voxel ground, TerrainWorldManager.Voxel / VoxelMesher): the same darkening channel as the far
+	// canopy, but over sand it darkens to this earth brown instead (Mark 2026-11-02: "Tilled ground ... just be dark brown")
+	float3 SplatTilledColor < UiType( Color ); Default3( 0.26, 0.16, 0.08 ); UiGroup( "Splat,40/105" ); >;
 	float SplatMacroVariation < Default( 0.22 ); Range( 0.0, 1.0 ); UiGroup( "Splat,40/110" ); >;
 
 	// One ground layer at this pixel: point-sampled up close, its filtered colour once a texel is under a pixel. No
@@ -489,7 +492,9 @@ PS
 			albedo = 0.012;
 		// Wet, far canopy, macro variation
 		albedo *= 1.0 - SplatWetDarken * max( saturate( vSplat.y ), SeaWetMemory( vPositionWs ) );
-		albedo = lerp( albedo, pow( SplatCanopyColor, 2.2 ), saturate( vSplat.z ) );
+		// z darkens: toward the far canopy colour on land, toward the tilled earth where the ground is sand under it
+		float3 darkTarget = lerp( pow( SplatCanopyColor, 2.2 ), pow( SplatTilledColor, 2.2 ), step( 0.5, vSplat.x ) );
+		albedo = lerp( albedo, darkTarget, saturate( vSplat.z ) );
 		albedo *= 1.0 + (n3.r - 0.5) * SplatMacroVariation;
 		return albedo;
 	}

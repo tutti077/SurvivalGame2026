@@ -163,46 +163,60 @@ public sealed partial class TerrainWorldManager : IVoxelBrushTarget
 
 	// ---- edits
 
-	public void RequestBrush( Vector3 centerEngine, float radiusMeters, VoxelBrushMode mode )
+	public bool RequestBrush( Vector3 centerEngine, float radiusMeters, VoxelBrushMode mode, bool square = false, float depth = 0f )
+		=> Request( VoxelEdit.Brush( TerrainWorldUnits.EngineToMeters( centerEngine ), radiusMeters, mode, square, depth ) );
+
+	public float TilledAt( Vector3 pointEngine )
 	{
-		var c = TerrainWorldUnits.EngineToMeters( centerEngine );
+		if ( !VoxelReady || _loadSettings is null )
+			return 0f;
+		var m = TerrainWorldUnits.EngineToMeters( pointEngine );
+		return _voxelColumns.TryGetValue( VoxelCoordAt( m.x, m.y ), out var column ) ? column.Set.Field.TilledAt( m.x, m.y ) : 0f;
+	}
+
+	public bool RequestChip( Vector3 centerEngine, Vector3 normal, float radiusMeters, float depthMeters )
+		=> Request( VoxelEdit.Chip( TerrainWorldUnits.EngineToMeters( centerEngine ), normal, radiusMeters, depthMeters ) );
+
+	bool Request( VoxelEdit request )
+	{
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
-		{
-			HostVoxelBrush( c, radiusMeters, mode );
-			return;
-		}
-		RpcRequestVoxelBrush( c, radiusMeters, (int)mode );
+			return HostVoxelBrush( request );
+		RpcRequestVoxelBrush( request.CenterMeters, request.R, request.Mode, request.Normal, request.D, request.Sq );
+		return true;
 	}
 
 	[Rpc.Host]
-	void RpcRequestVoxelBrush( Vector3 centerMeters, float radiusMeters, int mode )
+	void RpcRequestVoxelBrush( Vector3 centerMeters, float radiusMeters, int mode, Vector3 normal, float depth, bool square )
 	{
 		if ( !Networking.IsHost )
 			return;
-		HostVoxelBrush( centerMeters, radiusMeters, (VoxelBrushMode)Math.Clamp( mode, 0, 3 ) );
+		HostVoxelBrush( VoxelEdit.FromWire( centerMeters, radiusMeters, mode, normal, depth, square ) );
 	}
 
-	/// <summary>Host rules, once per edit: digging on, a loaded chunk under the brush, a sane radius; a rake stroke is planned here once so every peer lays the same plane. Then everyone applies it.</summary>
-	void HostVoxelBrush( Vector3 centerMeters, float radiusMeters, VoxelBrushMode mode )
+	/// <summary>Host rules, once per edit: digging on, a loaded chunk under the brush, a sane radius (and chip depth); a rake stroke is planned here once so every peer lays the same plane. Then everyone applies it. True when the stroke was made.</summary>
+	bool HostVoxelBrush( VoxelEdit request )
 	{
 		if ( !VoxelReady || !VoxelDigging )
-			return;
-		var r = Math.Clamp( radiusMeters, 0.25f, VoxelMaxBrushRadiusMeters );
+			return false;
+		var centerMeters = request.CenterMeters;
+		var r = Math.Clamp( request.R, 0.25f, VoxelMaxBrushRadiusMeters );
 		if ( !_loaded.ContainsKey( VoxelCoordAt( centerMeters.x, centerMeters.y ) ) )
-			return;
+			return false;
 		VoxelEdit edit;
-		if ( mode is VoxelBrushMode.Flatten or VoxelBrushMode.Slope )
+		if ( request.IsRake )
 		{
 			var window = VoxelRake.WindowMeters( r );
-			if ( !VoxelRake.Plan( ( x, y ) => WorldSurfaceZMeters( x, y, centerMeters.z - window, centerMeters.z + window ), centerMeters, r, mode == VoxelBrushMode.Slope, out var plane ) )
-				return;
-			edit = VoxelEdit.Rake( centerMeters, r, mode, plane );
+			if ( !VoxelRake.Plan( ( x, y ) => WorldSurfaceZMeters( x, y, centerMeters.z - window, centerMeters.z + window ), centerMeters, r, request.BrushMode == VoxelBrushMode.Slope, out var plane ) )
+				return false;
+			edit = VoxelEdit.Rake( centerMeters, r, request.BrushMode, plane );
 		}
+		else if ( request.IsChip )
+			edit = VoxelEdit.Chip( centerMeters, request.Normal, r, Math.Clamp( request.D, 0.05f, r ) );
 		else
-			edit = VoxelEdit.Brush( centerMeters, r, mode );
+			edit = VoxelEdit.Brush( centerMeters, r, request.BrushMode, request.Sq, Math.Clamp( request.D, 0.05f, 1f ) );
 		EnsureVoxelEditsLoaded();
 		if ( GameObject.Network is { Active: true } )
-			RpcApplyVoxelEdit( centerMeters, r, (int)mode, edit.HasPlane, edit.PlaneZ, edit.PlaneGx, edit.PlaneGy );
+			RpcApplyVoxelEdit( centerMeters, r, edit.Mode, edit.HasPlane, edit.PlaneZ, edit.PlaneGx, edit.PlaneGy, edit.Normal, edit.D, edit.Sq );
 		else
 			ApplyVoxelEditLocal( edit );
 		if ( VoxelSaveEdits )
@@ -210,12 +224,13 @@ public sealed partial class TerrainWorldManager : IVoxelBrushTarget
 			_voxelEdits.Add( edit );
 			VoxelEditLog.Save( WorldName, _voxelEdits );
 		}
+		return true;
 	}
 
 	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable )]
-	void RpcApplyVoxelEdit( Vector3 centerMeters, float radiusMeters, int mode, bool hasPlane, float planeZ, float planeGx, float planeGy )
+	void RpcApplyVoxelEdit( Vector3 centerMeters, float radiusMeters, int mode, bool hasPlane, float planeZ, float planeGx, float planeGy, Vector3 normal, float depth, bool square )
 	{
-		var edit = VoxelEdit.Brush( centerMeters, radiusMeters, (VoxelBrushMode)Math.Clamp( mode, 0, 3 ) );
+		var edit = VoxelEdit.FromWire( centerMeters, radiusMeters, mode, normal, depth, square );
 		edit.HasPlane = hasPlane;
 		edit.PlaneZ = planeZ;
 		edit.PlaneGx = planeGx;
@@ -269,17 +284,9 @@ public sealed partial class TerrainWorldManager : IVoxelBrushTarget
 
 	void ApplyEditToColumn( VoxelColumn column, VoxelEdit edit )
 	{
-		var field = column.Set.Field;
-		HashSet<(int X, int Y, int Z)> dirty;
-		if ( edit.IsRake )
-		{
-			if ( !edit.HasPlane )
-				return;   // a rake row from before planes were logged: nothing deterministic to lay
-			dirty = field.ApplyPlane( edit.CenterMeters, edit.R, edit.Plane );
-		}
-		else
-			dirty = field.ApplyBrush( edit.CenterMeters, edit.R, edit.BrushMode, VoxelBrushFlatness );
-		column.Set.MarkDirty( dirty );
+		column.Set.MarkDirty( VoxelReplay.Apply( column.Set.Field, edit, VoxelBrushFlatness ) );
+		if ( edit.IsPaint && column.Swapped )
+			NotifyGrassChunkChanged( column.Chunk );   // the clutter over the painted circle follows the paint (bare = none)
 	}
 
 	// ---- columns

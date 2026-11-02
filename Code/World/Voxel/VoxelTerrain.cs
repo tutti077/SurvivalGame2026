@@ -104,19 +104,11 @@ public sealed class VoxelTerrain : Component, IVoxelBrushTarget
 		var (field, seedMs) = result;
 		VoxelEditLog.Load( WorldName, _edits );
 		foreach ( var e in _edits )
-			Replay( field, e );
+			VoxelReplay.Apply( field, e, BrushFlatness );
 		_set = new VoxelChunkSet( field, GameObject, _material, "voxel", "voxel", TerrainWorldManager.TerrainTag );
 		_set.CreateAllChunks();
 		_seeded = true;
 		Log.Info( $"[Voxel] field {field.SamplesX}×{field.SamplesY}×{field.SamplesZ} samples ({field.CellMeters} m cells, {field.ChunksX}×{field.ChunksY}×{field.ChunksZ} chunks) seeded in {seedMs} ms from {Seed}; {_edits.Count} saved edits replayed; origin {field.OriginMeters.x:0},{field.OriginMeters.y:0},{field.OriginMeters.z:0} m" );
-	}
-
-	/// <summary>One logged stroke onto a field: a rake stroke lays its saved plane (older rake rows without one plan again).</summary>
-	HashSet<(int X, int Y, int Z)> Replay( VoxelField field, VoxelEdit e )
-	{
-		if ( e.IsRake && e.HasPlane )
-			return field.ApplyPlane( e.CenterMeters, e.R, e.Plane );
-		return field.ApplyBrush( e.CenterMeters, e.R, e.BrushMode, BrushFlatness );
 	}
 
 	/// <summary>The height function the field is seeded from (worker thread).</summary>
@@ -170,46 +162,60 @@ public sealed class VoxelTerrain : Component, IVoxelBrushTarget
 		return IsReady && _set.Field.TryPlanFlatten( TerrainWorldUnits.EngineToMeters( centerEngine ), radiusMeters, slope, out plane );
 	}
 
-	public void RequestBrush( Vector3 centerEngine, float radiusMeters, VoxelBrushMode mode )
+	public bool RequestBrush( Vector3 centerEngine, float radiusMeters, VoxelBrushMode mode, bool square = false, float depth = 0f )
+		=> Request( VoxelEdit.Brush( TerrainWorldUnits.EngineToMeters( centerEngine ), radiusMeters, mode, square, depth ) );
+
+	public float TilledAt( Vector3 pointEngine )
 	{
-		var c = TerrainWorldUnits.EngineToMeters( centerEngine );
+		if ( !IsReady )
+			return 0f;
+		var m = TerrainWorldUnits.EngineToMeters( pointEngine );
+		return _set.Field.TilledAt( m.x, m.y );
+	}
+
+	public bool RequestChip( Vector3 centerEngine, Vector3 normal, float radiusMeters, float depthMeters )
+		=> Request( VoxelEdit.Chip( TerrainWorldUnits.EngineToMeters( centerEngine ), normal, radiusMeters, depthMeters ) );
+
+	bool Request( VoxelEdit request )
+	{
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
-		{
-			HostBrush( c, radiusMeters, mode );
-			return;
-		}
-		RpcRequestBrush( c, radiusMeters, (int)mode );
+			return HostBrush( request );
+		RpcRequestBrush( request.CenterMeters, request.R, request.Mode, request.Normal, request.D, request.Sq );
+		return true;
 	}
 
 	[Rpc.Host]
-	void RpcRequestBrush( Vector3 centerMeters, float radiusMeters, int mode )
+	void RpcRequestBrush( Vector3 centerMeters, float radiusMeters, int mode, Vector3 normal, float depth, bool square )
 	{
 		if ( !Networking.IsHost )
 			return;
-		HostBrush( centerMeters, radiusMeters, (VoxelBrushMode)Math.Clamp( mode, 0, 3 ) );
+		HostBrush( VoxelEdit.FromWire( centerMeters, radiusMeters, mode, normal, depth, square ) );
 	}
 
-	/// <summary>Host rules, once per edit: a live field, a sane radius, inside the field; a rake stroke is planned here once so every peer lays the same plane. Then everyone applies it.</summary>
-	void HostBrush( Vector3 centerMeters, float radiusMeters, VoxelBrushMode mode )
+	/// <summary>Host rules, once per edit: a live field, a sane radius (and depth), inside the field; a rake stroke is planned here once so every peer lays the same plane. Then everyone applies it. True when the stroke was made.</summary>
+	bool HostBrush( VoxelEdit request )
 	{
 		if ( !IsReady )
-			return;
-		var r = Math.Clamp( radiusMeters, 0.25f, MaxBrushRadiusMeters );
+			return false;
+		var centerMeters = request.CenterMeters;
+		var r = Math.Clamp( request.R, 0.25f, MaxBrushRadiusMeters );
 		var b = _set.Field.BoundsMeters;
 		if ( centerMeters.x < b.Mins.x - r || centerMeters.y < b.Mins.y - r || centerMeters.z < b.Mins.z - r
 			|| centerMeters.x > b.Maxs.x + r || centerMeters.y > b.Maxs.y + r || centerMeters.z > b.Maxs.z + r )
-			return;
+			return false;
 		VoxelEdit edit;
-		if ( mode is VoxelBrushMode.Flatten or VoxelBrushMode.Slope )
+		if ( request.IsRake )
 		{
-			if ( !_set.Field.TryPlanFlatten( centerMeters, r, mode == VoxelBrushMode.Slope, out var plane ) )
-				return;
-			edit = VoxelEdit.Rake( centerMeters, r, mode, plane );
+			if ( !_set.Field.TryPlanFlatten( centerMeters, r, request.BrushMode == VoxelBrushMode.Slope, out var plane ) )
+				return false;
+			edit = VoxelEdit.Rake( centerMeters, r, request.BrushMode, plane );
 		}
+		else if ( request.IsChip )
+			edit = VoxelEdit.Chip( centerMeters, request.Normal, r, Math.Clamp( request.D, 0.05f, r ) );
 		else
-			edit = VoxelEdit.Brush( centerMeters, r, mode );
+			edit = VoxelEdit.Brush( centerMeters, r, request.BrushMode, request.Sq, Math.Clamp( request.D, 0.05f, 1f ) );
 		if ( GameObject.Network is { Active: true } )
-			RpcApplyEdit( centerMeters, r, (int)mode, edit.HasPlane, edit.PlaneZ, edit.PlaneGx, edit.PlaneGy );
+			RpcApplyEdit( centerMeters, r, edit.Mode, edit.HasPlane, edit.PlaneZ, edit.PlaneGx, edit.PlaneGy, edit.Normal, edit.D, edit.Sq );
 		else
 			ApplyEditLocal( edit );
 		if ( SaveEdits )
@@ -217,12 +223,13 @@ public sealed class VoxelTerrain : Component, IVoxelBrushTarget
 			_edits.Add( edit );
 			VoxelEditLog.Save( WorldName, _edits );
 		}
+		return true;
 	}
 
 	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable )]
-	void RpcApplyEdit( Vector3 centerMeters, float radiusMeters, int mode, bool hasPlane, float planeZ, float planeGx, float planeGy )
+	void RpcApplyEdit( Vector3 centerMeters, float radiusMeters, int mode, bool hasPlane, float planeZ, float planeGx, float planeGy, Vector3 normal, float depth, bool square )
 	{
-		var edit = VoxelEdit.Brush( centerMeters, radiusMeters, (VoxelBrushMode)Math.Clamp( mode, 0, 3 ) );
+		var edit = VoxelEdit.FromWire( centerMeters, radiusMeters, mode, normal, depth, square );
 		edit.HasPlane = hasPlane;
 		edit.PlaneZ = planeZ;
 		edit.PlaneGx = planeGx;
@@ -234,7 +241,7 @@ public sealed class VoxelTerrain : Component, IVoxelBrushTarget
 	{
 		if ( !IsReady )
 			return;
-		var dirty = Replay( _set.Field, edit );
+		var dirty = VoxelReplay.Apply( _set.Field, edit, BrushFlatness );
 		_set.MarkDirty( dirty );
 		if ( LogEdits )
 			Log.Info( $"[Voxel] {edit.BrushMode} r {edit.R:0.00} m at {edit.X:0.0},{edit.Y:0.0},{edit.Z:0.0}: {dirty.Count} chunks" );
@@ -256,6 +263,7 @@ public sealed class VoxelTerrain : Component, IVoxelBrushTarget
 		_edits.Clear();
 		VoxelEditLog.Save( WorldName, _edits );
 		_set.Field.SeedFromHeights( ResolveHeightFunction( Seed, WorldName ) );
+		_set.Field.ClearPaint();
 		_set.MarkAllDirty();
 		Log.Info( "[Voxel] reset: edits cleared, field reseeded, every chunk remeshing" );
 	}

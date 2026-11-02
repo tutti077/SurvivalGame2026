@@ -20,4 +20,6 @@ public enum EquippedItemActions
 	Till = 1 << 7,
 	/// <summary>Wire stripper: link circuit-enabled objects (<see cref="ToolWireStripper"/>). No melee or ranged paths.</summary>
 	Wire = 1 << 8,
+	/// <summary>Pickaxe: chip discs off the voxel ground (<see cref="ToolPickaxe"/>). No melee or ranged paths.</summary>
+	Mine = 1 << 9,
 }

@@ -51,6 +51,14 @@ public partial class PlayerCombat
 		if ( IsMeleeAttackChainBusy() )
 			return false;
 
+		// Mark 2026-11-02: F belongs to the hoe while it is out (its mode swap), and a punch at thin air is nothing -
+		// the shove only fires with someone to punch ahead.
+		var equipment = Components.Get<PlayerEquipment>();
+		if ( equipment is not null && equipment.MainHandHasAction( EquippedItemActions.Till ) )
+			return false;
+		if ( !HasShoveTargetAhead() )
+			return false;
+
 		var cost = Math.Max( 0f, ShoveStaminaCost );
 		if ( cost > 1e-4f )
 		{
@@ -62,6 +70,31 @@ public partial class PlayerCombat
 		BeginShoveFacingLock();
 		OwnerRequestShove();
 		return true;
+	}
+
+	/// <summary>Owner: is there a pawn or enemy (anything with a PlayerAnimation or PlayerCombat) within the shove's reach ahead, as the host's hit trace will see it after the dash?</summary>
+	bool HasShoveTargetAhead()
+	{
+		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+		if ( !scene.IsValid() )
+			return false;
+		var forward = GetViewDirectionForIntent();
+		if ( forward.LengthSquared < 1e-4f )
+			forward = GameObject.WorldRotation.Forward;
+		forward = forward.Normal;
+		var eye = GameObject.WorldPosition + Vector3.Up * Math.Max( 32f, ServerEyeHeight * 0.5f );
+		var range = Math.Max( 10f, ShoveRangeMeters ) + TerrainWorldUnits.MetersToEngine( Math.Max( 0f, ShoveDashMeters ) );
+		var tr = scene.Trace.Ray( eye, eye + forward * range )
+			.Radius( Math.Max( 4f, ShoveHitRadiusMeters ) )
+			.IgnoreGameObjectHierarchy( GameObject )
+			.Run();
+		if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() )
+			return false;
+		var root = tr.GameObject.Root ?? tr.GameObject;
+		if ( root == GameObject.Root )
+			return false;
+		return root.Components.Get<PlayerAnimation>( FindMode.EverythingInSelfAndDescendants ) is not null
+		       || root.Components.Get<PlayerCombat>( FindMode.EverythingInSelfAndDescendants ) is not null;
 	}
 
 	bool IsLocalPlayerGroundedForShove()

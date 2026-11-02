@@ -52,9 +52,17 @@ public static class FarmingAuthority
 			return false;
 		}
 
+		var vitals = pawn.Components.Get<PlayerVitals>();
+		if ( vitals is not null && !vitals.CanAffordStamina( vitals.HoePaintStaminaCost ) )
+		{
+			reason = "too tired";
+			return false;
+		}
+
 		var tile = prefab.Clone( new Transform( new Vector3( snapped.x, snapped.y, tr.HitPosition.z ), Rotation.Identity ) );
 		tile.Name = "tilled_soil";
 		HostNetworkSpawn.TrySpawn( tile );
+		vitals?.TrySpendStamina( vitals.HoePaintStaminaCost );
 
 		// Real effect only — a rejected till costs nothing.
 		ToolDurability.HostAddWearToActiveTool( pawn );
@@ -109,7 +117,7 @@ public static class FarmingAuthority
 			return false;
 		}
 
-		var spawnAt = new Vector3( point.x, point.y, tile.SurfaceZ );
+		var spawnAt = new Vector3( point.x, point.y, tile is not null ? tile.SurfaceZ : point.z );   // painted tilled ground: the aim point sits on the surface
 		var plantGo = prefab.Clone( new Transform( spawnAt, Rotation.Identity ) );
 		plantGo.Name = $"plant_{seedId}";
 
@@ -233,6 +241,13 @@ public static class FarmingAuthority
 			return false;
 		}
 
+		var vitals = pawn.Components.Get<PlayerVitals>();
+		if ( vitals is not null && !vitals.CanAffordStamina( vitals.HoePaintStaminaCost ) )
+		{
+			reason = "too tired";
+			return false;
+		}
+
 		var seedId = plant.SeedId;
 		var seeds = FarmingRules.UprootSeedAmount;
 		if ( seeds > 0 && !string.IsNullOrWhiteSpace( seedId ) )
@@ -248,6 +263,7 @@ public static class FarmingAuthority
 
 		plant.GameObject.Destroy();
 		ToolDurability.HostAddWearToActiveTool( pawn );
+		vitals?.TrySpendStamina( vitals.HoePaintStaminaCost );
 		return true;
 	}
 

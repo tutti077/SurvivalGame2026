@@ -4,13 +4,18 @@ using Sandbox.UI;
 
 namespace Survival;
 
-/// <summary>Mouse capture layer while the build piece picker is open.</summary>
+/// <summary>Mouse capture layer while a centre-screen tool picker is open (the build menu, the hoe menu). The owner says what Escape and a dismissing click do.</summary>
 public sealed class BuildMenuInputOverlay : Panel
 {
 	PlayerEquipment _equipment;
 	PlayerController _controller;
 	bool _isOpen;
 	bool _savedUseLookControls = true;
+
+	/// <summary>Escape with the picker open (the build menu closes it and keeps the held piece).</summary>
+	public Action EscapeRequested;
+	/// <summary>Right-click, or a left click beside the panel on the dim layer (the build menu closes and puts the piece away).</summary>
+	public Action DismissRequested;
 
 	public void Bind( PlayerEquipment equipment ) => _equipment = equipment;
 
@@ -72,8 +77,6 @@ public sealed class BuildMenuInputOverlay : Panel
 
 	GameObject ResolvePawn() => _equipment?.GameObject;
 
-	ToolBuildHammer ResolveBuildHammer() => _equipment?.GetActiveTool<ToolBuildHammer>();
-
 	public override void Tick()
 	{
 		base.Tick();
@@ -100,7 +103,7 @@ public sealed class BuildMenuInputOverlay : Panel
 			return;
 
 		Input.EscapePressed = false;
-		ResolveBuildHammer()?.SetBuildMenuOpen( false );
+		EscapeRequested?.Invoke();
 	}
 
 	protected override void OnRightClick( MousePanelEvent e )
@@ -110,10 +113,10 @@ public sealed class BuildMenuInputOverlay : Panel
 			return;
 
 		e.StopPropagation();
-		ResolveBuildHammer()?.CloseBuildMenuAndPutAway();
+		DismissRequested?.Invoke();
 	}
 
-	/// <summary>Left click beside the picker panel (on the dim layer itself) — close it and put the piece away.</summary>
+	/// <summary>Left click beside the picker panel (on the dim layer itself): dismiss.</summary>
 	protected override void OnClick( MousePanelEvent e )
 	{
 		base.OnClick( e );
@@ -121,6 +124,6 @@ public sealed class BuildMenuInputOverlay : Panel
 			return;
 
 		e.StopPropagation();
-		ResolveBuildHammer()?.CloseBuildMenuAndPutAway();
+		DismissRequested?.Invoke();
 	}
 }

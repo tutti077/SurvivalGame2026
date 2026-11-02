@@ -44,7 +44,7 @@ public static class VoxelCommands
 	[ConCmd( "voxel_slope" )]
 	public static void Slope( float radius = 2.5f, float x = float.NaN, float y = float.NaN, float z = float.NaN ) => Brush( radius, x, y, z, VoxelBrushMode.Slope );
 
-	static void Brush( float radius, float x, float y, float z, VoxelBrushMode mode )
+	static void Brush( float radius, float x, float y, float z, VoxelBrushMode mode, bool square = false, float depth = 0f )
 	{
 		var t = Find();
 		if ( t is null )
@@ -63,9 +63,49 @@ public static class VoxelCommands
 		}
 		else
 			center = TerrainWorldUnits.MetersToEngine( new Vector3( x, y, z ) );
-		t.RequestBrush( center, radius, mode );
+		t.RequestBrush( center, radius, mode, square, depth );
 		var m = TerrainWorldUnits.EngineToMeters( center );
 		Log.Info( $"[Voxel] {mode} r {radius:0.00} m at {m.x:0.0},{m.y:0.0},{m.z:0.0} m" );
+	}
+
+	/// <summary>Usage: <c>voxel_chip [r] [depth]</c> - the pickaxe's stroke where the camera looks: a disc of radius r (m, default 0.6) lying on the surface, cut depth m (default 0.3) into it.</summary>
+	[ConCmd( "voxel_chip" )]
+	public static void Chip( float radius = 0.6f, float depth = 0.3f )
+	{
+		var t = Find();
+		if ( t is null )
+			return;
+		var scene = global::Sandbox.Game.ActiveScene;
+		var cam = scene.IsValid() ? scene.Camera : null;
+		if ( cam is null || !cam.IsValid() )
+			return;
+		var tr = scene.Trace.Ray( cam.WorldPosition, cam.WorldPosition + (cam.WorldRotation.Forward * 4000f) ).WithoutTags( "player", "water" ).Run();
+		if ( !tr.Hit )
+		{
+			Log.Warning( "[Voxel] nothing under the camera's aim" );
+			return;
+		}
+		t.RequestChip( tr.HitPosition, tr.Normal, radius, depth );
+		var m = TerrainWorldUnits.EngineToMeters( tr.HitPosition );
+		Log.Info( $"[Voxel] Chip r {radius:0.00} m, {depth:0.00} m deep at {m.x:0.0},{m.y:0.0},{m.z:0.0} m, normal {tr.Normal.x:0.00},{tr.Normal.y:0.00},{tr.Normal.z:0.00}" );
+	}
+
+	/// <summary>Usage: <c>voxel_paint &lt;grass|bare|tilled|cobble&gt; [r] [circle|square] [x y z]</c> - the hoe's paint: the ground inside radius r (m, default 1.5; a square of side 2 r with square) becomes the biome's grass or bare soil, at world metres x y z or where the camera looks.</summary>
+	[ConCmd( "voxel_paint" )]
+	public static void Paint( string kind = "grass", float radius = 1.5f, string shape = "circle", float x = float.NaN, float y = float.NaN, float z = float.NaN )
+	{
+		var k = (kind ?? string.Empty).Trim().ToLowerInvariant();
+		var mode = k == "bare" ? VoxelBrushMode.PaintBare : k == "tilled" ? VoxelBrushMode.PaintTilled : k == "cobble" ? VoxelBrushMode.PaintCobble : VoxelBrushMode.PaintGrass;
+		var square = string.Equals( shape?.Trim(), "square", StringComparison.OrdinalIgnoreCase );
+		Brush( radius, x, y, z, mode, square );
+	}
+
+	/// <summary>Usage: <c>voxel_raise [r] [h] [circle|square]</c> - the hoe's raise where the camera looks: the ground inside radius r (m, default 1.5) comes up by one layer h m thick (default 0.25).</summary>
+	[ConCmd( "voxel_raise" )]
+	public static void Raise( float radius = 1.5f, float height = 0.25f, string shape = "circle" )
+	{
+		var square = string.Equals( shape?.Trim(), "square", StringComparison.OrdinalIgnoreCase );
+		Brush( radius, float.NaN, float.NaN, float.NaN, VoxelBrushMode.Raise, square, height );
 	}
 
 	/// <summary>Usage: <c>voxel_brush &lt;r&gt;</c> — set the digger's brush radius (m).</summary>

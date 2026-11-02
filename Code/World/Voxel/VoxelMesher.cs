@@ -32,6 +32,7 @@ public static class VoxelMesher
 		public Vector3[] Normals;
 		public Color[] Colors;        // splat weights, a = mountain / rock
 		public Vector2[] Extras;      // x = sand, y = wet
+		public float[] Tilled;        // the hoe's tilled coverage: TexCoord1.x, the splat's darkening channel (brown over sand)
 		public int[] Indices;
 		public int VertexCount => Positions.Length;
 	}
@@ -74,6 +75,7 @@ public static class VoxelMesher
 		var normals = new List<Vector3>();
 		var colors = new List<Color>();
 		var extras = new List<Vector2>();
+		var tilledOut = new List<float>();
 		var corner = new float[8];
 		var cornerPos = new Vector3[8];
 
@@ -120,7 +122,7 @@ public static class VoxelMesher
 						count++;
 					}
 					var p = sum / Math.Max( count, 1 );   // in sample units
-					var normal = -Gradient( field, p ).Normal;
+					var normal = -field.GradientAt( p ).Normal;
 					var worldMeters = field.OriginMeters + (p * cell);
 					var under = field.GroundZ( Math.Clamp( (int)MathF.Round( p.x ), 0, field.SamplesX - 1 ), Math.Clamp( (int)MathF.Round( p.y ), 0, field.SamplesY - 1 ) ) - worldMeters.z;
 					var sandDug = Math.Clamp( under / 1.5f, 0f, 1f );
@@ -128,6 +130,18 @@ public static class VoxelMesher
 					var weights = new Color( 1f, 0f, 0f, 0f );
 					var splat = Vector2.Zero;
 					style?.Invoke( worldMeters.x, worldMeters.y, out weights, out splat );
+					// The hoe's paint blends over the seed style and the depth rule by its coverage at this vertex (bilinear between
+					// columns, so a circle's rim reads round): grass = the biome ground, clean; bare = the soil tile
+					field.PaintAt( p.x, p.y, out var bare, out var grass, out var tilled, out var cobble );
+					var cover = MathF.Max( bare, tilled );   // soil of either kind; tilled is the same soil darkened to earth brown
+					var sandHere = MathF.Max( splat.x, sandDug );
+					var rockHere = MathF.Max( weights.a, rock );
+					sandHere = ((sandHere * (1f - grass) * (1f - cover)) + cover) * (1f - cobble);
+					rockHere = (rockHere * (1f - grass) * (1f - cover) * (1f - cobble)) + cobble;   // cobblestone = the rock tile
+					splat = new Vector2( sandHere, splat.y );
+					weights = new Color( weights.r, weights.g, weights.b, rockHere );
+					sandDug = 0f;
+					rock = 0f;
 					var li = (((k + 1) * span) + (j + 1)) * span + (i + 1);
 					vmap[li] = raw.Count;
 					outside[li] = (byte)((gxi < clip.MinX ? OutXLo : 0) | (gxi >= clip.MaxX ? OutXHi : 0) | (gy < clip.MinY ? OutYLo : 0) | (gy >= clip.MaxY ? OutYHi : 0));
@@ -135,6 +149,7 @@ public static class VoxelMesher
 					normals.Add( normal );
 					colors.Add( new Color( weights.r, weights.g, weights.b, Math.Max( weights.a, rock ) ) );
 					extras.Add( new Vector2( Math.Max( splat.x, sandDug ), splat.y ) );
+					tilledOut.Add( tilled );
 				}
 			}
 		}
@@ -210,6 +225,7 @@ public static class VoxelMesher
 			Normals = normals.ToArray(),
 			Colors = colors.ToArray(),
 			Extras = extras.ToArray(),
+			Tilled = tilledOut.ToArray(),
 			Indices = indices.ToArray(),
 		};
 	}
@@ -266,22 +282,5 @@ public static class VoxelMesher
 			indices.Add( a ); indices.Add( b ); indices.Add( c );
 			indices.Add( a ); indices.Add( c ); indices.Add( d );
 		}
-	}
-
-	/// <summary>Central-difference gradient of f at a point in sample units (points into the ground).</summary>
-	static Vector3 Gradient( VoxelField field, Vector3 p )
-	{
-		float S( float x, float y, float z )
-		{
-			var xi = Math.Clamp( (int)MathF.Round( x ), 0, field.SamplesX - 1 );
-			var yi = Math.Clamp( (int)MathF.Round( y ), 0, field.SamplesY - 1 );
-			var zi = Math.Clamp( (int)MathF.Round( z ), 0, field.SamplesZ - 1 );
-			return field.Get( xi, yi, zi );
-		}
-		var g = new Vector3(
-			S( p.x + 1f, p.y, p.z ) - S( p.x - 1f, p.y, p.z ),
-			S( p.x, p.y + 1f, p.z ) - S( p.x, p.y - 1f, p.z ),
-			S( p.x, p.y, p.z + 1f ) - S( p.x, p.y, p.z - 1f ) );
-		return g.LengthSquared > 1e-8f ? g : Vector3.Down;
 	}
 }

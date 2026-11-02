@@ -15,8 +15,82 @@ brushes started standalone in `Assets/scenes/voxelTest.scene`; since 2026-10-29 
 | `VoxelEditLog.cs` | `VoxelEdit` (one stroke: centre, radius, mode, and for a rake stroke the plane it laid), the `voxel_edits.json` reader / writer, `IVoxelBrushTarget` (what the digger and the console brush: the prototype or the world) and `VoxelBrushTargets.Find`. |
 | `VoxelTerrain.cs` | The standalone prototype component (voxelTest): seeds one square field on a worker thread, owns a `VoxelChunkSet`, host-authoritative brushes (`RequestBrush` → `[Rpc.Host]` check → `[Rpc.Broadcast]` apply), the edit log for World Name. |
 | `VoxelCommands.cs` | The `voxel_*` console commands, on whichever target the active scene has. |
-| `VoxelDigger.cs` | Input: Attack1 digs, Attack2 fills, Reload (R) rakes where the scene camera looks (fly camera or pawn), within Reach; F swaps the rake flat / slope; a ring shows the circle the rake will level. On the VoxelWorld object in voxelTest and the TerrainWorld object in terrainTest. |
+| `VoxelDigger.cs` | Fly-camera input: Attack1 digs, Attack2 fills, Reload (R) rakes where the scene camera looks, within Reach; F swaps the rake flat / slope; a ring shows the circle the rake will level. On the VoxelWorld object in voxelTest and the TerrainWorld object in terrainTest. Stands down while a playable pawn is up (`TerrainTestPlayerSpawn.PlayableActive`): then the pawn's tools dig (*Tools*, below). |
+| `VoxelBrushRings.cs` | The debug-overlay circles: the rake's ring on the plane it will lay (blue flat / orange slope / red nothing to level) and a disc outline lying on a surface (the pickaxe's chip, the hoe's paint). Digger and tools share it. |
+| `../../Player/PlayerTerraform.cs`, `ToolPickaxe.cs`, `ToolHoe.cs`, `../../UI/Build/HoeMenuHud.cs` | The pawn side: tools aim and preview on the client, `PlayerTerraform` carries the stroke to the host (reach + tool check, one durability tick when the ground changed) and into the scene's `IVoxelBrushTarget`. |
 | `../Terrain/TerrainWorldManager.Voxel.cs` | The live world's side: voxel columns per touched chunk, the swap, the world-wide rake plan, RPCs, the edit log and restore on chunk load. |
+
+## Tools (2026-11-02)
+
+Mark: "I want the pickaxe tool to work like the tool we used in the voxeltest scene, where it removes just a little bit at a
+time in a circle projected onto the surface of where youre looking. not a sphere! Thats how pickaxes work. Hoes should open
+up a menu like the build menu and one of them is for creating grass for that biome, bare ground for that biome, tilled
+soil, or the grading tool which flattens the surface which we worked on previously."
+
+- **Pickaxe** (`ToolPickaxe`, equipment action `Mine`; `equipment_profiles.json` rows for `pickaxe_scrap / reforged / iron /
+  steel / titanium`, all on `prefabs/tools/pickaxe_tool.prefab`). Aim at the ground within **Reach (m)** 4: a yellow ring
+  shows the circle the pick will take, drawn ON the surface (flat on a floor, upright on a cliff). Attack1 chips it:
+  `VoxelBrushMode.Chip` = the dig puck with its axis along the hit normal (`VoxelField.ApplyChip`: the offset is expressed
+  in the frame (tangent, bitangent, normal) and fed to the same `PuckDistance`), **Chip Radius (m)** 0.6 wide and **Chip
+  Depth (m)** 0.3 deep under the surface, reaching max( 2 depth, r ) out on the air side so ground rising above the disc
+  inside the circle is cut too (no lip - the same lesson as the dig puck). Holding the button swings again every **Swing
+  Interval (s)** 0.5. Only the world's ground takes a chip (`ToolPickaxe.IsGround`: tags `terrain` / `voxel`), never a
+  build piece or a rock prop. The edit row carries the normal (`Nx Ny Nz`) and depth (`D`) so the replay and every peer cut
+  the same disc; the host clamps the radius to Max Brush Radius and the depth to (0.05 m .. r).
+- **Hoe menu** (`HoeMenuHud`, Attack2, the build menu's overlay and tile styling; `hoe_menu` / `hoe_mode <till|grass|bare|grade>`
+  from the console): four `HoeMode`s, click to pick and close, right-click / Escape / a click beside the panel closes.
+  - **Grass** / **Bare ground**: a green / brown ring of **Paint Radius (m)** 1.5 on the ground; Attack1 (hold to keep
+    painting, every **Paint Interval (s)** 0.25) paints the circle. **F** swaps the patch for an axis-aligned **square** of
+    side 2 r whose centre snaps to the 0.5 m voxel grid, so its edges land exactly on sample columns (Mark 2026-11-02:
+    "should be like a circle for the most part but i want players to be able to make a perfect square patch"); the menu has
+    the same toggle as a checkbox, and the edit row carries it (`Sq`). `VoxelField.ApplyPaint` keeps two **coverage** floats
+    per xy column (`_bare`, `_grass`, beside `_groundZ`): a circle's rim gets fractional coverage over one cell (an
+    anti-aliased edge), a square's edge is hard; bare raises bare and lowers grass, grass the opposite, so the strokes undo
+    each other. The mesher samples both bilinearly at the vertex (`PaintAt`) and blends over the seed style and the depth
+    rule, so the outline reads round instead of the 0.5 m stair-steps the first per-column byte gave (Mark: "adds dirt to
+    the ground in squares"): **Grass** fades sand and rock out (a pit floor can be grassed); **Bare** fades sand in (the
+    soil tile dug walls already show). "For that biome" is the seeded biome mix at that spot; there is one soil tile for
+    every biome today (an art decision for later).
+    Grass clutter: `SampleGrassGround` now stands clumps on a swapped column's voxel surface (`VoxelField.TrySurface`, the
+    field gradient for the normal) and returns none where the paint is Bare; the biome mask (Clover only) still decides
+    where clutter grows at all, so Grass in a redwood chunk is texture only. A paint stroke makes a column like a dig does
+    (the seed is the chunk's own mesh, so the swap is invisible) and invalidates the grass tiles over it.
+  - **Tilled soil** (Mark 2026-11-02: "Tilled ground should work the same as the bare ground just be dark brown, also
+    have no grass there"): on the world's voxel ground a third paint, `PaintTilled` / `VoxelPaint.Tilled` (`_tilled`
+    coverage), the same circle / square stroke as bare; the mesher writes it to TexCoord1.x (the splat's darkening channel,
+    which `pixel_lit` now lerps toward **SplatTilledColor** earth brown where the ground is sand under it, and toward the
+    far canopy colour elsewhere as before), no grass clutter on it, and seeds sow
+    on it: `FarmingRules.IsTilledGroundAt` asks `IVoxelBrushTarget.TilledAt` (0.5 coverage or more), `CanSowAt` accepts it
+    with no `TilledSoil` tile, the plant spawns at the aim point. On a `dirt`-tagged plane (testscene1) the hoe still lays
+    the old 1 m `TilledSoil` tile. Uproot on plants is unchanged.
+  - **Grade**: the rake from the digger, on the pawn: **Grade Radius (m)** 2.5, the ring on the planned plane, Attack1 lays
+    it (`Flatten` / `Slope`), **F** (`Flashlight`) swaps flat / slope.
+  - **Raise ground** (Mark 2026-11-02: "a way to build upward a little bit ... make it cost some dirt ... only like a thin
+    layer of it gets increased per action"): `VoxelBrushMode.Raise`, `VoxelField.ApplyRaise`: every column inside the paint
+    circle / square comes up by **Raise Layer (m)** 0.25 (the edit row's `D`), following the ground it sits on; a circle's
+    rim fades the layer out over half a metre, a square is a hard step. Fill only (never cuts), through the same
+    `LayColumn` the rake uses (the two samples bracketing the new surface take its exact signed height, air below fills
+    down to existing ground). One layer per press. Costs **Raise Dirt Cost** 1 `resource_dirt` (a new resource) and the
+    pickaxe's chip hands back **Chip Dirt Yield** 1 dirt per stroke that changed the ground - both on `PlayerTerraform`.
+    **Free while everything else is** (Mark 2026-11-02): `PlayerTerraform.MaterialsAreFree` = the prefab flag **Free
+    Materials** (on, like the hammer's Free Build Enabled) OR the owner's `allCrafting` hack (the console command that
+    already makes crafting and augments free, read through `PlayerCrafting.AllCraftingHack` so the host honours it).
+  - **Cobblestone** (Mark 2026-11-02: "add a cobblestone setting in the hoe? should require 1 rock per action"):
+    `PaintCobble` / `VoxelPaint.Cobble` (`_cobble` coverage), the same circle / square footprint, one press per patch; the
+    mesher drives the mountain weight to 1 (the rock tile) and sand to 0 under it, no grass clutter. Costs **Cobble Stone
+    Cost** 1 `resource_stone`, waived while materials are free.
+  - **Stamina** (Mark 2026-11-02: "the hoe and the pickaxe take stamina when used"): tuning on `PlayerVitals` (the vitals
+    owner) - **Pickaxe Swing Stamina Cost** 4, **Hoe Paint Stamina Cost** 1 (per grass / bare / tilled stroke; a held
+    paint repeats 4 a second), **Hoe Grade Stamina Cost** 3, **Hoe Raise Stamina Cost** 3; the old tile till and the uproot
+    take the paint cost. The tool checks `PlayerTerraform.CanAffordStroke` for the preview (the ring turns red when too
+    tired or short of dirt) and the host spends only when the ground actually changed.
+  - **F to punch**: the shove no longer fires at thin air - `PlayerCombat.Shove.HasShoveTargetAhead` needs a pawn or enemy
+    within its reach ahead - and never while the hoe is out (its F is the mode swap).
+- **Host path**: `PlayerTerraform` on `basicplayer.prefab` (the farming pattern: owner intent -> `[Rpc.Host]` -> caller is
+  the owner -> target ready, tool not broken, point within reach + 1.5 m slack -> `IVoxelBrushTarget.RequestChip` /
+  `RequestBrush`, which now return whether the stroke landed -> `ToolDurability.HostAddWearToActiveTool` only then).
+  Both targets build the stroke as a `VoxelEdit` (`VoxelEdit.FromWire`), validate once in `HostBrush` / `HostVoxelBrush`,
+  broadcast the row's fields (`mode, plane, normal, depth`) and apply through the one `VoxelReplay.Apply`.
 
 Units: the field is in **metres** (the design language); positions become engine units (× 40) only when the mesh
 and the chunk objects are made — one conversion, at the read site.
@@ -83,13 +157,12 @@ and the chunk objects are made — one conversion, at the read site.
 
 ## Console
 
-`voxel_dig [r] [x y z]`, `voxel_fill [r] [x y z]`, `voxel_flatten [r] [x y z]`, `voxel_slope [r] [x y z]` (the rake; metres; without x y z: where the camera looks), `voxel_brush <r>`,
+`voxel_dig [r] [x y z]`, `voxel_fill [r] [x y z]`, `voxel_flatten [r] [x y z]`, `voxel_slope [r] [x y z]` (the rake; metres; without x y z: where the camera looks), `voxel_chip [r] [depth]` (the pickaxe's disc where the camera looks), `voxel_paint <grass|bare> [r] [x y z]` (the hoe's paint), `voxel_brush <r>`,
 `voxel_info` (the prototype's field, or the world's columns: chunks, vertices, queue, last worker build ms), `voxel_reset`
 (the prototype reseeds; the world drops every column and puts the heightfield chunks back), `voxel_probe <x> <y> [axis]`
 (trace straight down either side of a line and log the hit object, z and normal — for checking a seam). They work in
 voxelTest and terrainTest alike (`VoxelBrushTargets.Find`). In both scenes **L** spawns the playable pawn
-(TerrainTestPlayerSpawn) — Attack1 / Attack2 dig and fill from its camera too (in terrainTest that still swings the
-pawn's melee attack as well; a shovel item is an open question below).
+(TerrainTestPlayerSpawn); with a pawn up the digger stands down and the pawn's pickaxe / hoe do the digging (*Tools*).
 
 ## In the live world: voxel columns (2026-10-29, Mark: "implement the voxel terrain in our terrain test")
 
@@ -158,4 +231,5 @@ rebake still missing). Next, in order:
 - Cell size: 0.5 m (default) or 0.25 m near the player for finer sculpting (4× the memory)?
 - Should digging yield resources (dirt / stone items) and should filling cost them? (Inventory hook in `HostBrush`.)
 - Max dig depth per world (the field's Depth Below Ground) — bedrock at −24 m under the lowest ground for now.
-- Tool: a shovel / pickaxe item with durability (the hoe pattern), or digging with any tool at different speeds?
+- Tool: the pickaxe chips (2026-11-02, durability through `PlayerTerraform`). Still open: a shovel (the big dig / fill puck as an item?), and whether tiers change radius / depth / swing rate.
+- Bare ground per biome: one soil tile today (the sand channel); does each biome want its own bare tile?

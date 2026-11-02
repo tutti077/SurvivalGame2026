@@ -690,6 +690,25 @@
         "OnComponentUpdate": null
       },
       {
+        "__type": "Survival.PlayerTerraform",
+        "__guid": "4b8d2e7a-9c31-4f65-a2d8-6e1f3b5c7a90",
+        "__enabled": true,
+        "ChipDirtYield": 1,
+        "CobbleStoneCost": 1,
+        "DirtResourceId": "resource_dirt",
+        "Flags": 0,
+        "FreeMaterials": true,
+        "LogTerraform": false,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "RaiseDirtCost": 1,
+        "StoneResourceId": "resource_stone"
+      },
+      {
         "__type": "Survival.PlayerFarming",
         "__guid": "7c9e4f21-8a3b-4d56-b1e0-2f6a9c8d3e14",
         "__enabled": true,

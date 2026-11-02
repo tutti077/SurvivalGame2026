@@ -220,8 +220,18 @@ public sealed partial class TerrainWorldManager
 		var entry = FindLoadedChunkAt( wx, wy );
 		if ( entry is null || entry.GrassHeightsZ is null || entry.GrassHeightsSide < 2 || entry.GameObject is null || !entry.GameObject.IsValid() )
 			return null;
-		if ( entry.Voxel is { Swapped: true } )
-			return null;   // dug ground: no clumps floating over the pits (TerrainWorldManager.Voxel.cs)
+		if ( entry.Voxel is { Swapped: true } voxel )
+		{
+			// Dug ground: the clumps stand on the voxel surface (no clumps floating over a pit), and none where the hoe painted it bare
+			var field = voxel.Set.Field;
+			var xm = TerrainWorldUnits.EngineToMeters( wx );
+			var ym = TerrainWorldUnits.EngineToMeters( wy );
+			if ( field.GroundCoverAt( xm, ym ) >= 0.5f )
+				return null;   // painted bare or tilled: no clumps
+			if ( !field.TrySurface( xm, ym, field.OriginMeters.z, field.BoundsMeters.Maxs.z, out var zm, out var n ) )
+				return null;
+			return (TerrainWorldUnits.MetersToEngine( zm ), n);
+		}
 
 		var heights = entry.GrassHeightsZ;
 		var side = entry.GrassHeightsSide;

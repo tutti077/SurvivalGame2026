@@ -199,7 +199,7 @@ public sealed class VoxelChunkSet
 					Tangent = Tangent( n ),
 					// terrain_ground.vmat (pixel_lit F_TERRAIN_SPLAT): the same vertex contract as the heightfield chunks
 					TexCoord0 = data.Extras[i],
-					TexCoord1 = new Vector2( 0f, 0f ),
+					TexCoord1 = new Vector2( data.Tilled[i], 0f ),   // x: the hoe's tilled soil (the shader's darkening channel, brown over sand)
 					Color = data.Colors[i],
 				};
 			}

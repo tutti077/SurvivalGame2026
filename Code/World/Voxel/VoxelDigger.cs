@@ -1,13 +1,15 @@
 namespace Survival;
 
 /// <summary>
-/// The dig / fill / rake input for the voxel prototype: wherever the scene camera (the fly camera or the pawn's) is looking,
-/// Attack1 digs a flat round puck out of the ground, Attack2 fills one in, and Reload (R) is the rake (Mark 2026-10-29: "EXACTLY
-/// like Enshrouded"): a ring on the ground shows the circle it will level, and the stroke brings that circle to the
-/// surrounding surface — a hole fills, a lump is cut. Flashlight (F) swaps the rake between flat (a horizontal plane,
-/// blue ring) and slope (the surrounding grade, 45° at most, orange ring). Everything goes to the scene's
-/// <see cref="IVoxelBrushTarget"/> (the prototype in voxelTest, the live world in terrainTest), which the host validates and
-/// broadcasts. The pawn's own tools are not involved yet (see docs/VOXEL.md for the plan).
+/// The dig / fill / rake input for the voxel scenes when nobody is driving a pawn: wherever the scene camera (the fly
+/// camera) is looking, Attack1 digs a flat round puck out of the ground, Attack2 fills one in, and Reload (R) is the rake
+/// (Mark 2026-10-29: "EXACTLY like Enshrouded"): a ring on the ground shows the circle it will level, and the stroke brings
+/// that circle to the surrounding surface - a hole fills, a lump is cut. Flashlight (F) swaps the rake between flat (a
+/// horizontal plane, blue ring) and slope (the surrounding grade, 45 degrees at most, orange ring). Everything goes to the
+/// scene's <see cref="IVoxelBrushTarget"/> (the prototype in voxelTest, the live world in terrainTest), which the host
+/// validates and broadcasts. While a playable pawn is up (L / pawn_toggle) this stands down: the pawn's own tools dig -
+/// the pickaxe chips (<see cref="ToolPickaxe"/>), the hoe grades and paints (<see cref="ToolHoe"/>), through
+/// <see cref="PlayerTerraform"/>.
 /// </summary>
 [Title( "Voxel Digger" )]
 public sealed class VoxelDigger : Component
@@ -30,6 +32,8 @@ public sealed class VoxelDigger : Component
 	{
 		if ( GameObject.Network is { Active: true } && GameObject.Network.IsProxy )
 			return;
+		if ( TerrainTestPlayerSpawn.PlayableActive )
+			return;   // the pawn's tools own digging while a pawn is driving
 		if ( Input.Pressed( RakeModeAction ) )
 		{
 			SlopeMode = !SlopeMode;
@@ -53,7 +57,7 @@ public sealed class VoxelDigger : Component
 		if ( !tr.Hit )
 			return;
 		if ( ShowRakeRing )
-			DrawRakeRing( tr.HitPosition );
+			VoxelBrushRings.DrawRakeRing( Scene, _target, tr.HitPosition, RakeRadiusMeters, SlopeMode );
 		if ( rake )
 		{
 			_target.RequestBrush( tr.HitPosition, RakeRadiusMeters, SlopeMode ? VoxelBrushMode.Slope : VoxelBrushMode.Flatten );
@@ -65,30 +69,5 @@ public sealed class VoxelDigger : Component
 		var r = TerrainWorldUnits.MetersToEngine( BrushRadiusMeters );
 		var center = dig ? tr.HitPosition + (dir * (r * 0.35f)) : tr.HitPosition - (dir * (r * 0.35f));
 		_target.RequestBrush( center, BrushRadiusMeters, dig ? VoxelBrushMode.Dig : VoxelBrushMode.Fill );
-	}
-
-	/// <summary>The circle the rake will level, drawn on the plane it will lay: blue = flat, orange = slope, red = nothing to level here.</summary>
-	void DrawRakeRing( Vector3 hitEngine )
-	{
-		const int segments = 48;
-		var planned = _target.TryPlanFlatten( hitEngine, RakeRadiusMeters, SlopeMode, out var plane );
-		var color = !planned ? Color.Red : SlopeMode ? Color.Orange : new Color( 0.3f, 0.7f, 1f );
-		var hitM = TerrainWorldUnits.EngineToMeters( hitEngine );
-		var rM = RakeRadiusMeters;
-		Vector3 Point( int k )
-		{
-			var a = k * (MathF.PI * 2f / segments);
-			var x = hitM.x + (MathF.Cos( a ) * rM);
-			var y = hitM.y + (MathF.Sin( a ) * rM);
-			var z = planned ? plane.ZAt( x, y ) : hitM.z;
-			return TerrainWorldUnits.MetersToEngine( new Vector3( x, y, z + 0.05f ) );
-		}
-		var prev = Point( 0 );
-		for ( var k = 1; k <= segments; k++ )
-		{
-			var next = Point( k );
-			DebugOverlay.Line( prev, next, color, 0f );
-			prev = next;
-		}
 	}
 }

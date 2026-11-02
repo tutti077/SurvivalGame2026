@@ -2764,6 +2764,7 @@ public sealed partial class TerrainWorldManager : Component
 		_chunkGroundZMeters.Clear();
 		BiomePopulationRegistry.Clear();
 		BiomePopulationRespawnQueue.Clear();
+		EntityChunkMemory.Get( Scene )?.Clear();
 		InvalidateMinimapHostCache();
 	}
 
