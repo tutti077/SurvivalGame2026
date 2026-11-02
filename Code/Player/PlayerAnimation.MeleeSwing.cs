@@ -288,6 +288,11 @@ public sealed partial class PlayerAnimation
 	int ResolveSwordPose( double now )
 	{
 		var target = ResolveRestSide();
+		// Guard up: the sword shows on the left shoulder as the blocking stance (Mark 2026-11-02: "the sword
+		// should go to the cursor-left position, just in animation"). Presentation only - ResolveRestSide still
+		// reports the real aim side, and neither the block guard direction nor the attack cursor move.
+		if ( IsGuardStanceShown() )
+			target = StanceLeft;
 		if ( _swordCocked )
 		{
 			// Left shoulder <-> any right-side / overhead / stab wind-up crosses the face: brief stop in front first.
@@ -340,6 +345,10 @@ public sealed partial class PlayerAnimation
 
 		return RestPoseFor( _shownRestSide );
 	}
+
+	/// <summary>The guard is up on this peer (owner's held block or the host-confirmed block): sword rests left, shield raised.</summary>
+	bool IsGuardStanceShown() =>
+		ResolveCombat() is { IsValid: true, Enabled: true } combat && combat.IsGuardShown;
 
 	/// <summary>Owner follows the live aim side and reports changes to the host; remotes read the Sync.</summary>
 	byte ResolveRestSide()

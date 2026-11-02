@@ -27,6 +27,13 @@ public sealed partial class PlayerEquipment : Component
 	[Sync( SyncFlags.FromHost )]
 	public string NetworkedMainHandResourceId { get; set; } = string.Empty;
 
+	/// <summary>
+	/// Host→all peers OffHand presentation id (the shield on the left forearm, <c>PlayerAnimation.Shield.cs</c>).
+	/// Same rule as the main hand: paperdoll slots stay owner-private, remotes read this alone.
+	/// </summary>
+	[Sync( SyncFlags.FromHost )]
+	public string NetworkedOffHandResourceId { get; set; } = string.Empty;
+
 	string _lastAppliedNetworkedMainHand = string.Empty;
 
 	PlayerHotbar _hotbar;
@@ -39,6 +46,13 @@ public sealed partial class PlayerEquipment : Component
 
 	public bool MainHandHasAction( EquippedItemActions action ) =>
 		action != EquippedItemActions.None && ( MainHandActions & action ) == action;
+
+	/// <summary>Actions of the OffHand paperdoll item (a shield carries <see cref="EquippedItemActions.Block"/>).</summary>
+	public EquippedItemActions OffHandActions =>
+		EquipmentCatalog.GetActions( GetSlotResourceId( EquipmentSlot.OffHand ) );
+
+	public bool OffHandHasAction( EquippedItemActions action ) =>
+		action != EquippedItemActions.None && ( OffHandActions & action ) == action;
 
 	protected override void OnStart()
 	{
@@ -106,40 +120,54 @@ public sealed partial class PlayerEquipment : Component
 		return _activeToolInstance.Components.Get<T>();
 	}
 
-	/// <summary>Re-equip from the active hotbar slot (keys, scroll, click).</summary>
+	/// <summary>
+	/// Re-equip both hands from the hotbar (keys, scroll, click, contents changed): MainHand mirrors
+	/// <see cref="PlayerHotbar.PrimarySlotIndex"/>, OffHand mirrors <see cref="PlayerHotbar.OffHandSlotIndex"/>
+	/// (a shield). Neither hand is an independent equip destination.
+	/// </summary>
 	public void SyncEquipFromActiveHotbar()
 	{
 		if ( _hotbar is null || !CanSyncFromHotbar() )
 			return;
 
-		EquipFromHotbarSlot( _hotbar.ActiveSlotIndex );
+		EquipHandFromHotbar( EquipmentSlot.MainHand, _hotbar.PrimarySlotIndex );
+		EquipHandFromHotbar( EquipmentSlot.OffHand, _hotbar.OffHandSlotIndex );
 	}
 
 	/// <summary>Scroll hotbar: equip active hotbar stack to MainHand only.</summary>
 	public void EquipMainHandFromActiveHotbar() => SyncEquipFromActiveHotbar();
 
-	/// <summary>Number key: equip hotbar stack to its profile primary slot.</summary>
-	public void EquipFromHotbarSlot( int hotbarIndex )
+	/// <summary>Tests / hacks: equip one hotbar stack straight into MainHand.</summary>
+	public void EquipFromHotbarSlot( int hotbarIndex ) => EquipHandFromHotbar( EquipmentSlot.MainHand, hotbarIndex );
+
+	void EquipHandFromHotbar( EquipmentSlot hand, int hotbarIndex )
 	{
 		if ( _hotbar is null )
 			return;
 
-		if ( !TryResolveHotbarEquipResourceId( hotbarIndex, out var resourceId ) )
+		if ( hotbarIndex < 0 || !TryResolveHotbarEquipResourceId( hotbarIndex, out var resourceId ) )
 		{
-			OwnerSetSlot( EquipmentSlot.MainHand, InventorySlot.Empty );
+			OwnerSetSlot( hand, InventorySlot.Empty );
 			return;
 		}
 
-		if ( !EquipmentCatalog.TryGet( resourceId, out var profile ) || !EquipmentCatalog.IsHotbarMainHandItem( profile ) )
+		var fits = EquipmentCatalog.TryGet( resourceId, out var profile )
+		           && (hand == EquipmentSlot.OffHand
+			           ? EquipmentCatalog.IsHotbarOffHandItem( profile )
+			           : EquipmentCatalog.IsHotbarMainHandItem( profile ));
+		if ( !fits )
 		{
-			OwnerSetSlot( EquipmentSlot.MainHand, InventorySlot.Empty );
+			OwnerSetSlot( hand, InventorySlot.Empty );
 			return;
 		}
 
-		// MainHand mirrors the selected hotbar slot — not an independent equip destination.
 		var hotbarStack = _hotbar.GetSlot( hotbarIndex );
-		OwnerSetSlot( EquipmentSlot.MainHand, CreateEquippedStack( resourceId, hotbarStack.Wear, hotbarStack.CrafterName ) );
+		OwnerSetSlot( hand, CreateEquippedStack( resourceId, hotbarStack.Wear, hotbarStack.CrafterName ) );
 	}
+
+	/// <summary>MainHand and OffHand mirror the hotbar — never paperdoll storage.</summary>
+	static bool IsHotbarDrivenSlot( EquipmentSlot slot ) =>
+		slot is EquipmentSlot.MainHand or EquipmentSlot.OffHand;
 
 	bool TryResolveHotbarEquipResourceId( int hotbarIndex, out string resourceId )
 	{
@@ -181,8 +209,8 @@ public sealed partial class PlayerEquipment : Component
 		if ( !IsLocalManagingClient() )
 			return false;
 
-		// MainHand is hotbar-driven display only — never inventory storage.
-		if ( slot == EquipmentSlot.MainHand )
+		// MainHand / OffHand are hotbar-driven display only — never inventory storage.
+		if ( IsHotbarDrivenSlot( slot ) )
 			return false;
 
 		var current = GetSlot( slot );
@@ -199,14 +227,14 @@ public sealed partial class PlayerEquipment : Component
 		if ( held.IsEmpty || !IsLocalManagingClient() )
 			return false;
 
-		if ( slot == EquipmentSlot.MainHand )
+		if ( IsHotbarDrivenSlot( slot ) )
 			return false;
 
 		if ( !EquipmentCatalog.TryGet( held.ResourceId, out var profile ) )
 			return false;
 
-		// Hotbar MainHand weapons/tools are not paperdoll storage (hook/armor still are).
-		if ( EquipmentCatalog.IsHotbarMainHandItem( profile ) )
+		// Hotbar hand items (weapons, tools, shields) are not paperdoll storage (hook/armor still are).
+		if ( EquipmentCatalog.IsHotbarHandItem( profile ) )
 			return false;
 
 		if ( !EquipmentCatalog.IsSlotAllowed( profile, slot ) )
@@ -239,7 +267,7 @@ public sealed partial class PlayerEquipment : Component
 		if ( sourceSlot == targetSlot )
 			return false;
 
-		if ( sourceSlot == EquipmentSlot.MainHand || targetSlot == EquipmentSlot.MainHand )
+		if ( IsHotbarDrivenSlot( sourceSlot ) || IsHotbarDrivenSlot( targetSlot ) )
 			return false;
 
 		var sourceStack = GetSlot( sourceSlot );
@@ -252,7 +280,7 @@ public sealed partial class PlayerEquipment : Component
 		if ( !EquipmentCatalog.TryGet( sourceStack.ResourceId, out var profile ) )
 			return false;
 
-		if ( EquipmentCatalog.IsHotbarMainHandItem( profile ) )
+		if ( EquipmentCatalog.IsHotbarHandItem( profile ) )
 			return false;
 
 		if ( !EquipmentCatalog.IsSlotAllowed( profile, targetSlot ) )
@@ -273,14 +301,14 @@ public sealed partial class PlayerEquipment : Component
 		if ( !EquipmentCatalog.TryGet( resourceId, out var profile ) )
 			return false;
 
-		// Weapons/tools belong on the hotbar, not paperdoll storage.
-		if ( EquipmentCatalog.IsHotbarMainHandItem( profile ) )
+		// Weapons / tools / shields belong on the hotbar, not paperdoll storage.
+		if ( EquipmentCatalog.IsHotbarHandItem( profile ) )
 			return false;
 
 		for ( var i = 0; i < SlotCount; i++ )
 		{
 			var slot = (EquipmentSlot)i;
-			if ( slot == fromSlot || slot == EquipmentSlot.MainHand )
+			if ( slot == fromSlot || IsHotbarDrivenSlot( slot ) )
 				continue;
 
 			if ( !EquipmentCatalog.IsSlotAllowed( profile, slot ) )
@@ -322,15 +350,16 @@ public sealed partial class PlayerEquipment : Component
 		var previous = _slots[index];
 		_slots[index] = stack;
 
-		if ( slot == EquipmentSlot.MainHand && !stack.IsEmpty
-		     && EquipmentCatalog.TryGet( stack.ResourceId, out var profile ) && profile.TwoHanded )
-			_slots[(int)EquipmentSlot.OffHand] = InventorySlot.Empty;
+		// A two-handed main hand (bow) no longer empties the OffHand slot - the shield stays equipped and
+		// PlayerAnimation.Shield.cs just hides it while both hands are busy.
 
 		if ( previous.ResourceId == stack.ResourceId && previous.Count == stack.Count )
 			return;
 
 		if ( HasHostAuthority && slot == EquipmentSlot.MainHand )
 			NetworkedMainHandResourceId = stack.IsEmpty ? string.Empty : (stack.ResourceId ?? string.Empty);
+		if ( HasHostAuthority && slot == EquipmentSlot.OffHand )
+			NetworkedOffHandResourceId = stack.IsEmpty ? string.Empty : (stack.ResourceId ?? string.Empty);
 
 		RefreshDerivedState();
 		EquipmentChanged?.Invoke();
@@ -519,7 +548,10 @@ public sealed partial class PlayerEquipment : Component
 	void RefreshDerivedState()
 	{
 		if ( HasHostAuthority )
+		{
 			NetworkedMainHandResourceId = GetSlotResourceId( EquipmentSlot.MainHand ) ?? string.Empty;
+			NetworkedOffHandResourceId = GetSlotResourceId( EquipmentSlot.OffHand ) ?? string.Empty;
+		}
 
 		RefreshActiveTool();
 		RefreshArmorState();
@@ -570,6 +602,8 @@ public sealed partial class PlayerEquipment : Component
 				hammer.BindPawn( GameObject );
 			else if ( bindable is ToolHoe hoe )
 				hoe.BindPawn( GameObject );
+			else if ( bindable is ToolPickaxe pickaxe )
+				pickaxe.BindPawn( GameObject );
 			else if ( bindable is ToolWireStripper stripper )
 				stripper.BindPawn( GameObject );
 		}

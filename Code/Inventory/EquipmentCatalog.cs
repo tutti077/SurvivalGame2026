@@ -191,6 +191,18 @@ public static class EquipmentCatalog
 	public static bool IsHotbarMainHandItem( EquipmentProfileData profile ) =>
 		profile is not null && IsSlotAllowed( profile, EquipmentSlot.MainHand );
 
+	/// <summary>Shields: hotbar items that mirror into OffHand (allowed there, not in the main hand).</summary>
+	public static bool IsHotbarOffHandItem( EquipmentProfileData profile ) =>
+		profile is not null && IsSlotAllowed( profile, EquipmentSlot.OffHand ) && !IsSlotAllowed( profile, EquipmentSlot.MainHand );
+
+	/// <summary>Anything the hotbar equips into a hand (main or off) — never paperdoll storage.</summary>
+	public static bool IsHotbarHandItem( EquipmentProfileData profile ) =>
+		IsHotbarMainHandItem( profile ) || IsHotbarOffHandItem( profile );
+
+	/// <summary>True when the resource is a hotbar offhand item (shield); false for empty / unknown ids.</summary>
+	public static bool IsHotbarOffHandResource( string resourceId ) =>
+		TryGet( resourceId, out var profile ) && IsHotbarOffHandItem( profile );
+
 	public static EquipmentSlot GetPrimarySlot( EquipmentProfileData profile )
 	{
 		if ( profile is null )
@@ -289,8 +301,8 @@ public static class EquipmentCatalog
 			entry.ResourceId = ResourceCatalog.NormalizeResourceId( entry.ResourceId );
 			ByResourceId[entry.ResourceId] = entry;
 
-			// MainHand tools must stay selectable from the hotbar even if JSON omitted the flag.
-			if ( IsSlotAllowed( entry, EquipmentSlot.MainHand ) )
+			// Hand items (MainHand tools, OffHand shields) must stay selectable from the hotbar even if JSON omitted the flag.
+			if ( IsSlotAllowed( entry, EquipmentSlot.MainHand ) || IsSlotAllowed( entry, EquipmentSlot.OffHand ) )
 				entry.HotbarEquipable = true;
 			else if ( GetPrimarySlot( entry ) == EquipmentSlot.Grapple
 			          || GetPrimarySlot( entry ) == EquipmentSlot.Wingsuit )

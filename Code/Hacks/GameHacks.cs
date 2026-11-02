@@ -16,7 +16,8 @@ public static class GameHacks
 {
 	/// <summary>
 	/// Personal crafting menu lists every recipe (locked, workbench-only, station-gated) and crafting
-	/// consumes nothing. Defaults on while the crafting content is being built out.
+	/// consumes nothing; the hoe's Raise costs no dirt and its Cobblestone no stone either (<see cref="PlayerTerraform.MaterialsAreFree"/>). Defaults on
+	/// while the crafting content is being built out.
 	/// </summary>
 	public static bool AllCrafting { get; private set; } = true;
 
@@ -260,9 +261,9 @@ public static class GameHacks
 	}
 
 	/// <summary>
-	/// Usage: <c>equip &lt;resourceId&gt;</c> — host gives one of the item into hotbar slot 1, selects
-	/// that slot and equips it (<c>equip club_wood</c> shows the held sword model). Hotbar main-hand
-	/// items only.
+	/// Usage: <c>equip &lt;resourceId&gt;</c> — host gives one of the item into hotbar slot 1 (slot 2 for a
+	/// shield, so both hands can be filled), selects that slot and equips it (<c>equip club_wood</c> shows the
+	/// held sword model, <c>equip shield_wood</c> the shield on the left forearm). Hotbar hand items only.
 	/// </summary>
 	[ConCmd( "equip" )]
 	public static void ConCmdEquip( string resourceId )
@@ -283,28 +284,38 @@ public static class GameHacks
 		}
 
 		var id = ResourceCatalog.NormalizeResourceId( resourceId ?? string.Empty );
-		if ( !EquipmentCatalog.TryGet( id, out var profile ) || !EquipmentCatalog.IsHotbarMainHandItem( profile ) )
+		if ( !EquipmentCatalog.TryGet( id, out var profile ) || !EquipmentCatalog.IsHotbarHandItem( profile ) )
 		{
-			Log.Warning( $"[Hacks] equip: '{id}' is not a hotbar main-hand item." );
+			Log.Warning( $"[Hacks] equip: '{id}' is not a hotbar hand item (weapon, tool or shield)." );
 			return;
 		}
 
-		// A binding ghost on slot 0 makes the pickup land there; PlayerEquipment re-syncs on the
+		// A binding ghost on the slot makes the pickup land there; PlayerEquipment re-syncs on the
 		// hotbar change and on the active-slot change, so the item is in hand right after.
-		hotbar.SetBinding( 0, id );
+		var slotIndex = hotbar.ActiveBank * PlayerHotbar.BankSize + (EquipmentCatalog.IsHotbarOffHandItem( profile ) ? 1 : 0);
+		hotbar.SetBinding( slotIndex, id );
 		if ( !inventory.HostTryAddResource( id, 1 ) )
 		{
-			Log.Warning( $"[Hacks] equip {id} failed (hotbar slot 1 occupied or inventory full)." );
+			Log.Warning( $"[Hacks] equip {id} failed (hotbar slot {PlayerHotbar.IndexInBank( slotIndex ) + 1} occupied or inventory full)." );
 			return;
 		}
 
-		hotbar.SetActiveSlot( 0 );
-		Log.Info( $"[Hacks] equipped {id} in hotbar slot 1." );
+		hotbar.SetActiveSlot( slotIndex );
+		Log.Info( $"[Hacks] equipped {id} in hotbar slot {PlayerHotbar.IndexInBank( slotIndex ) + 1}." );
 	}
 
 	// --- Simulated attack press (swing) -------------------------------------------------------
 
 	static double _simulatedAttackUntilGlobal;
+	static double _simulatedBlockUntilGlobal;
+
+	/// <summary>Usage: <c>block [holdSeconds]</c> — holds the block action (Attack2) like a mouse would, for shield / guard checks.</summary>
+	[ConCmd( "block" )]
+	public static void ConCmdBlock( float holdSeconds = 1f )
+	{
+		_simulatedBlockUntilGlobal = RealTime.GlobalNow + Math.Clamp( holdSeconds, 0.02f, 10f );
+		Log.Info( $"[Hacks] block: holding guard for {holdSeconds:0.##}s." );
+	}
 
 	/// <summary>
 	/// Usage: <c>swing [holdSeconds]</c> — holds the primary attack action for <c>holdSeconds</c>
@@ -321,8 +332,11 @@ public static class GameHacks
 	}
 
 	/// <summary>Owner input tick hook: keeps the simulated attack action down until its time is up.</summary>
-	public static void ApplySimulatedInput( string primaryAttackAction )
+	public static void ApplySimulatedInput( string primaryAttackAction, string blockAction = null )
 	{
+		if ( RealTime.GlobalNow < _simulatedBlockUntilGlobal && !string.IsNullOrWhiteSpace( blockAction ) )
+			Input.SetAction( blockAction, true );
+
 		if ( RealTime.GlobalNow >= _simulatedAttackUntilGlobal || string.IsNullOrWhiteSpace( primaryAttackAction ) )
 			return;
 

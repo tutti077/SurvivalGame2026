@@ -101,6 +101,9 @@ public sealed class PlayerCrosshair : Component
 
 		var grappleMode = _movement?.IsAimHudActive == true;
 		var weaponOut = _equipment?.MainHandHasAction( EquippedItemActions.PrimaryMelee ) == true;
+		// Shield alone: the teardrop shows only while the guard is actually up (it is the block direction then).
+		var shieldGuardUp = !weaponOut && _combat is not null && _combat.IsGuardShown
+		                    && _equipment?.OffHandHasAction( EquippedItemActions.Block ) == true;
 		var bowDrawing = _combat is not null && _combat.IsBowCharging;
 
 		// Base: thin hollow white donut while grappling (hole shows the yellow lock helper); thin white ring otherwise.
@@ -127,7 +130,7 @@ public sealed class PlayerCrosshair : Component
 			_lock.Apply( false, 0f, 0f, default, null );
 
 		// The attack teardrop is a filled triangle — still overlay lines, only while a melee weapon is out.
-		if ( weaponOut && _combat is not null )
+		if ( (weaponOut || shieldGuardUp) && _combat is not null )
 		{
 			var cam = BuildViewCamera.Resolve( GameObject );
 			if ( cam.IsValid() )

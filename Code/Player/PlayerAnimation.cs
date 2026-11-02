@@ -339,6 +339,7 @@ public sealed partial class PlayerAnimation : Component
 		TickLookAimLimits( advance: false );
 		TickMeleeDemoStickTransform();
 		TickHeldLightProp();
+		TickOffhandShield();
 	}
 
 	protected override void OnDestroy()
@@ -346,6 +347,7 @@ public sealed partial class PlayerAnimation : Component
 		RestoreLateralSwingPlaybackRate();
 		DestroyMeleeDemoStick();
 		DestroyHeldLightProp();
+		DestroyOffhandShield();
 		ClearStuckNegativeBodyScale();
 		base.OnDestroy();
 	}

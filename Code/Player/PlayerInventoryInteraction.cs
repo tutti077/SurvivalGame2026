@@ -463,7 +463,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		if ( _hotbar is null || slotIndex < 0 || slotIndex >= PlayerHotbar.SlotCount )
 			return;
 
-		_hotbar.SetActiveSlot( slotIndex );
+		_hotbar.SelectOrToggleSlot( slotIndex );
 	}
 
 	bool CanBeginDragFromHotbarSlot( InventorySlotPanel slot )
@@ -1146,7 +1146,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		}
 
 		var hotbarEquipable = EquipmentCatalog.TryGet( source.ResourceId, out var profile )
-			&& EquipmentCatalog.IsHotbarMainHandItem( profile );
+			&& EquipmentCatalog.IsHotbarHandItem( profile );
 
 		if ( hotbarEquipable )
 		{

@@ -28,15 +28,18 @@ public static class ConsoleHelp
 		// ---- hacks
 		new( "Hacks", "hacks", "", "Print every hack flag and its value.", "hacks" ),
 		new( "Hacks", "give", "<resourceId> [amount]", "Host puts an item straight into your hotbar / inventory.", "give resource_woodBasic 20" ),
-		new( "Hacks", "equip", "<resourceId>", "Give one of the item into hotbar slot 1, select and equip it (main-hand items).", "equip club_wood" ),
+		new( "Hacks", "equip", "<resourceId>", "Give one of the item into hotbar slot 1 (slot 2 for a shield), select and equip it.", "equip shield_wood" ),
+		new( "Hacks", "hoe_mode", "<till|grass|bare|grade>", "Set the equipped hoe's ground mode without opening its menu (Attack2 in play).", "hoe_mode grade" ),
+		new( "Hacks", "hoe_menu", "", "Open / close the equipped hoe's mode menu (dev screenshots; Attack2 does it in play).", "hoe_menu" ),
 		new( "Hacks", "swing", "[holdSeconds]", "Press and release the primary attack as a mouse would (0.15 = light, longer = heavy).", "swing 0.5" ),
+		new( "Hacks", "block", "[holdSeconds]", "Hold the block action (Attack2) as a mouse would — shield raise / guard checks.", "block 2" ),
 		new( "Hacks", "status", "<effectId> <seconds>", "Apply a buff / debuff from status_effects.json to your pawn; 0 removes it; 'status clear' drops all. (Engine owns a 'status' command — if nothing happens, this one lost the name.)", "status poisoned 10" ),
 		new( "Hacks", "spawnPatrolBot", "", "Host drops a patrol bot 3 m in front of your pawn (Medusa Eye / Hackd testing).", "spawnPatrolBot" ),
 		new( "Hacks", "thermalView", "true|false", "Force the Thermal Eye post-process on / off.", "thermalView true" ),
 		new( "Hacks", "freeAugments", "true|false", "Enhance / Augment cost nothing. No argument prints the state.", "freeAugments true" ),
 		new( "Hacks", "devSupply", "true|false", "Unlock the dev supply: a full, never-emptying stack of every resource and crafting ingredient. No argument prints the state.", "devSupply true" ),
-		new( "Hacks", "devSupplyOpen", "", "Open / close the dev supply next to your bag (key X does the same). Needs devSupply true.", "devSupplyOpen" ),
-		new( "Hacks", "allCrafting", "true|false", "Every recipe craftable anywhere. No argument prints the state.", "allCrafting true" ),
+		new( "Hacks", "devSupplyOpen", "", "Open / close the dev supply next to your bag (key B does the same; X is an augment key now). Needs devSupply true.", "devSupplyOpen" ),
+		new( "Hacks", "allCrafting", "true|false", "Every recipe craftable anywhere and free, and the hoe's Raise costs no dirt and Cobblestone no stone (the prefab flag Free Materials on PlayerTerraform does the same before runtime). No argument prints the state.", "allCrafting true" ),
 
 		// ---- terrain
 		new( "Terrain", "terrain_cam", "<x> <y> <z> [pitch] [yaw]", "Park the fly camera at world metres looking along pitch / yaw (pitch + = down).", "terrain_cam 0 0 300 10 0" ),
@@ -70,6 +73,9 @@ public static class ConsoleHelp
 		new( "Voxel", "voxel_fill", "[r] [x y z]", "voxelTest / terrainTest: fill a puck of ground of radius r m at x y z, or where the camera looks.", "voxel_fill 1" ),
 		new( "Voxel", "voxel_flatten", "[r] [x y z]", "voxelTest / terrainTest: the rake, flat — level the ground within r m (default 2.5) to the surrounding surface height: a hole fills, a lump is cut (Reload / R in play; F swaps flat / slope).", "voxel_flatten 3" ),
 		new( "Voxel", "voxel_slope", "[r] [x y z]", "voxelTest / terrainTest: the rake, slanted — lay the ground within r m on the surrounding slope, 45 degrees at most.", "voxel_slope 3" ),
+		new( "Voxel", "voxel_chip", "[r] [depth]", "voxelTest / terrainTest: the pickaxe's stroke where the camera looks - a disc of radius r m (default 0.6) lying on the surface, cut depth m (default 0.3) into it. In play the equipped pickaxe does this on Attack1.", "voxel_chip 0.6 0.3" ),
+		new( "Voxel", "voxel_paint", "<grass|bare|tilled|cobble> [r] [circle|square] [x y z]", "voxelTest / terrainTest: the hoe's paint - the ground inside r m (default 1.5; a square of side 2 r with square) becomes the biome's grass, bare soil, dark tilled soil (seeds sow on it) or cobblestone (the rock tile); no clutter on any of the three, at world metres x y z or where the camera looks. In play the hoe menu (Attack2) picks it, F swaps circle / square; Cobblestone costs 1 stone there.", "voxel_paint cobble 2 square" ),
+		new( "Voxel", "voxel_raise", "[r] [h] [circle|square]", "voxelTest / terrainTest: the hoe's raise where the camera looks - the ground inside r m (default 1.5) comes up by one layer h m thick (default 0.25), following the slope. In play the hoe menu's Raise costs dirt.", "voxel_raise 1.5 0.25 square" ),
 		new( "Voxel", "voxel_brush", "<r>", "voxelTest / terrainTest: set the digger's brush radius (m) for Attack1 dig / Attack2 fill.", "voxel_brush 2.5" ),
 		new( "Voxel", "voxel_info", "", "voxelTest: the field; terrainTest: the voxel columns — chunks drawn, vertices, saved edits, build queue and the last build times.", "voxel_info" ),
 		new( "Voxel", "voxel_probe", "<x> <y> [axis]", "Trace straight down either side of a line through world metres x y (default along y = const; axis x: along x = const) and log the hit object, ground z and normal — for checking a seam between voxel columns.", "voxel_probe 38 28" ),
@@ -111,6 +117,7 @@ public static class ConsoleHelp
 		new( "Nav", "nav_mode", "full|tiles|request", "How a structure change rebuilds nav.", "nav_mode tiles" ),
 		new( "Nav", "nav_probe", "", "Probe nav at the player's position and print what it finds.", "nav_probe" ),
 		new( "Nav", "campRings", "[1|0]", "Draw the enemy camp wander / max-travel rings.", "campRings 1" ),
+		new( "Nav", "entity_memory", "", "Dump the host's chunk memory: entities that despawned far from every player (position, health, slot), restored when a player comes back.", "entity_memory" ),
 
 		// ---- dungeon / cave
 		new( "Dungeon", "dungeon_regen", "[seed]", "Rebuild the box dungeon (random seed when omitted).", "dungeon_regen 42" ),

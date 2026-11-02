@@ -568,8 +568,8 @@ public partial class PlayerCombat : Component
 		if ( InputSuppressedForTests )
 			return;
 
-		// Dev: console `swing` holds the attack action for a few frames (GameHacks) — same path as a real press.
-		GameHacks.ApplySimulatedInput( PrimaryAttackAction );
+		// Dev: console `swing` / `block` hold the attack / block action for a few frames (GameHacks) — same path as a real press.
+		GameHacks.ApplySimulatedInput( PrimaryAttackAction, BlockAction );
 
 		var menuController = Components.Get<PlayerGameMenuController>();
 		if ( menuController is not null && menuController.IsMenuOpen )
@@ -595,30 +595,37 @@ public partial class PlayerCombat : Component
 		// Bow / ranged hold-to-charge — separate from melee; classic crosshair (no teardrop).
 		TickOwnerRangedInput();
 
-		// Everything past here is the sword: swing input, block, telegraphs.
+		// Everything past here is the sword and the shield: swing input, block, telegraphs. A melee weapon in
+		// the main hand opens both; a shield in the offhand (`Block` action) opens the guard on its own
+		// (Mark 2026-11-02: "shield blocks alone"), so the swing paths below stay behind `hasMeleeWeapon`.
 		var equipped = Components.Get<PlayerEquippedItem>();
-		if ( equipped is not null && !equipped.HasAction( EquippedItemActions.PrimaryMelee ) )
+		var hasMeleeWeapon = equipped is null || equipped.HasAction( EquippedItemActions.PrimaryMelee );
+		if ( !hasMeleeWeapon && !HasOffhandBlockItem() )
 			return;
 
 		_combatNetDiag = $"netActive={GameObject.Network is { Active: true }} isHost={Networking.IsHost}";
 
-		// Q special attack (stab) — requires the melee item gate above; Q is the grapple detract key
-		// while attached, so the input tick refuses it mid-grapple.
-		TickOwnerSpecialAttackInput();
-
-		// A press while the swing / sweep / recovery is still running queues exactly one follow-up
-		// light attack; it fires below the moment the chain frees (or expires if it gets stale).
-		if ( Input.Pressed( PrimaryAttackAction ) && IsMeleeAttackChainBusy() )
+		if ( hasMeleeWeapon )
 		{
-			QueueAttackPress();
-			LogCombatDiag( "CLIENT / OWNER", $"Attack press queued — {FormatMeleePhaseBusyReason()}" );
+			// Q special attack (stab) — requires the melee item gate above; Q is the grapple detract key
+			// while attached, so the input tick refuses it mid-grapple.
+			TickOwnerSpecialAttackInput();
+
+			// A press while the swing / sweep / recovery is still running queues exactly one follow-up
+			// light attack; it fires below the moment the chain frees (or expires if it gets stale).
+			if ( Input.Pressed( PrimaryAttackAction ) && IsMeleeAttackChainBusy() )
+			{
+				QueueAttackPress();
+				LogCombatDiag( "CLIENT / OWNER", $"Attack press queued — {FormatMeleePhaseBusyReason()}" );
+			}
+
+			MaybeFireQueuedAttackPress();
+
+			// Held starts allowed on both channels: holding through recovery/cooldown begins the next
+			// attack windup / block guard the first frame the timings permit.
+			_primary.Step( PrimaryAttackAction, CanStartPrimaryAttack, CanContinuePrimaryAttack, GetViewDirectionForIntent, GetCameraPositionForIntent, GetPrimaryAttackRules(), OnOwnerValidPrimaryAttackRelease, allowHeldStart: true );
 		}
 
-		MaybeFireQueuedAttackPress();
-
-		// Held starts allowed on both channels: holding through recovery/cooldown begins the next
-		// attack windup / block guard the first frame the timings permit.
-		_primary.Step( PrimaryAttackAction, CanStartPrimaryAttack, CanContinuePrimaryAttack, GetViewDirectionForIntent, GetCameraPositionForIntent, GetPrimaryAttackRules(), OnOwnerValidPrimaryAttackRelease, allowHeldStart: true );
 		_block.Step( BlockAction, CanStartBlock, CanContinueBlock, GetViewDirectionForIntent, GetCameraPositionForIntent, GetBlockRules(), OnOwnerValidBlockRelease, allowHeldStart: true );
 
 		var blockStartedThisFrame = _block.Down && !_wasBlockButtonDownLastFrame;
@@ -634,10 +641,11 @@ public partial class PlayerCombat : Component
 		// Lock attack direction on press / first held frame / channel held-start (holding through
 		// recovery begins a fresh windup the frame it unlocks). Skip lock while chain-busy —
 		// otherwise clients show a fake black telegraph with no _primary channel and never fire.
-		var primaryAttackHeld = Input.Down( PrimaryAttackAction );
+		var primaryAttackHeld = hasMeleeWeapon && Input.Down( PrimaryAttackAction );
 		var chainBusy = IsMeleeAttackChainBusy();
 		var primaryChannelStarted = _primary.Down && !_wasPrimaryChannelDownLastFrame;
-		if ( !IsBlockPreventingAttack()
+		if ( hasMeleeWeapon
+		     && !IsBlockPreventingAttack()
 		     && !chainBusy
 		     && (Input.Pressed( PrimaryAttackAction )
 		         || (primaryAttackHeld && !_wasPrimaryAttackButtonDownLastFrame)
@@ -852,9 +860,16 @@ public partial class PlayerCombat : Component
 		return vitals.CanAffordStamina( GetPrimaryAttackStaminaCostForHoldDuration( hold ) );
 	}
 
+	/// <summary>A shield (or any OffHand item with the <see cref="EquippedItemActions.Block"/> action) opens the guard without a melee weapon out.</summary>
+	bool HasOffhandBlockItem() =>
+		Components.Get<PlayerEquipment>() is { } equipment && equipment.OffHandHasAction( EquippedItemActions.Block );
+
 	/// <summary>Block and attack are mutually exclusive — holding guard rejects new/ongoing primary attack intents.</summary>
 	bool IsBlockPreventingAttack() =>
 		LocalBlockInputActive() || IsAuthoritativeMeleeBlocking;
+
+	/// <summary>The guard is up as this peer sees it: the owner's held block, or the host-confirmed block on other peers. Drives the shield raise (<c>PlayerAnimation.Shield.cs</c>).</summary>
+	public bool IsGuardShown => IsBlockPreventingAttack();
 
 	// Consumed-awaiting-release stays a hard gate: a broken/eaten block requires an actual release
 	// before re-guarding — held-start must not bypass that, only the cooldown/recovery wait.
