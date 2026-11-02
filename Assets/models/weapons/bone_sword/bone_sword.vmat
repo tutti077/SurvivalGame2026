@@ -1,0 +1,9 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.900"
+	PixelSpecular "1.000"
+	PixelFlatShading "1.000"
+	TextureColor "models/weapons/bone_sword/bone_sword.png"
+}

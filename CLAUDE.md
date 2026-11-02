@@ -335,6 +335,8 @@ Assets/
   scenes/          terrainTest · testscene1 · lightingTest (look playground) · dungeonBoxTest · caveVertTest · voxelTest
   terrain/preview/ Generate Preview bundles + .latest_preview.json
 Tools/             make_human_sword_assets.py (regenerates the sword model + graph from the engine's citizen_human sources)
+                   item_models/ (generate_item_models.py: the 53 inventory item models - resources, tools, weapons, armor, food, seeds, trophies -
+                   built from faceted primitives in plain Python, OBJ + vmdl + 256 px texture per item under Assets/models/<category>/<name>/; README there)
 Blender/scripts/   create_* / split_* generators; create_sword_anims.py (human-rig sword clips); import_artist_pack.py for Rumple's Tripo packs
                    (Blender X → engine Y, weapons origin at the butt, build pieces bbox-centred + SizesMeters row)
                    Blender 5.1: "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe" -b --python <script>
