@@ -6,7 +6,7 @@ faceted primitives in plain Python (numpy + Pillow) and writes each one as
 ```
 Assets/models/<category>/<name>/<name>.obj    metres, Y-up (Blender OBJ export convention)
 Assets/models/<category>/<name>/<name>.vmdl   import_scale 40 (40 u/m), single hull collision
-Assets/models/<category>/<name>/<name>.png    256 x 256, 4 x 4 grid of 64 px material cells
+Assets/models/<category>/<name>/<name>.png    256 x 256, 4 x 4 grid of 64 px material cells, 256 texels per metre
 Assets/models/<category>/<name>/<name>.vmat   pixel_lit, point sampled, PixelFlatShading 1
 ```
 

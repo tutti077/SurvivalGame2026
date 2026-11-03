@@ -49,7 +49,7 @@ def stone(rng):
 
 @item("dirt")
 def dirt(rng):
-	cells = [P.dirt(), P.stone(meters=0.15)]
+	cells = [P.dirt(), P.stone()]
 	m = blob(rng, 0.19, subdiv=2, jitter=0.5, noise=0.3, noise_cells=3.0, scale=(1.2, 1.05, 0.55), mat=0, flatten_bottom=0.6)
 	for _ in range(5):
 		pb = blob(rng, 0.02 + rng.random() * 0.015, subdiv=1, jitter=0.3, noise=0.3, mat=1 if rng.random() < 0.5 else 0)
@@ -81,7 +81,7 @@ def resin(rng):
 
 @item("plant_fiber")
 def plant_fiber(rng):
-	cells = [P.leaf_green(), P.leaf_dark(), P.rope(meters=0.08)]
+	cells = [P.leaf_green(), P.leaf_dark(), P.rope()]
 	m = Mesh()
 	n = 16
 	for i in range(n):
@@ -99,7 +99,7 @@ def plant_fiber(rng):
 
 @item("flint", surface="rock")
 def flint(rng):
-	cells = [P.flint(), P.stone(meters=0.2)]
+	cells = [P.flint(), P.stone()]
 	m = blob(rng, 0.11, subdiv=1, jitter=0.9, noise=0.35, noise_cells=2.0, scale=(1.25, 0.8, 0.5), mat=0)
 	# chip facets: pull a few vertices outward hard to get sharp, knapped-looking spikes
 	pts = m.tris.reshape(-1, 3)
@@ -189,7 +189,7 @@ def _pelt_outline(rng, w, l, leg, wiggle=0.01):
 
 @item("fox_pelt")
 def fox_pelt(rng):
-	cells = [P.fur_orange(), P.fur_cream(), P.leather_dark(meters=0.3)]
+	cells = [P.fur_orange(), P.fur_cream(), P.leather_dark()]
 	outline = _pelt_outline(rng, 0.28, 0.5, 0.06)
 	m = prism(outline, 0.025, mat=2, side_mat=2)
 	top = m.normals()[:, 2] > 0.5
@@ -203,7 +203,7 @@ def fox_pelt(rng):
 
 @item("deer_hide")
 def deer_hide(rng):
-	cells = [P.hide_brown(), P.leather_dark(meters=0.3)]
+	cells = [P.hide_brown(), P.leather_dark()]
 	outline = _pelt_outline(rng, 0.42, 0.62, 0.07, wiggle=0.02)
 	m = prism(outline, 0.02, mat=1, side_mat=1)
 	m.mat[m.normals()[:, 2] > 0.5] = 0
@@ -213,7 +213,7 @@ def deer_hide(rng):
 
 @item("jay_feather")
 def jay_feather(rng):
-	cells = [P.feather_blue(), P.feather_white(), P.black(meters=0.2), P.bone(meters=0.1)]
+	cells = [P.feather_blue(), P.feather_white(), P.black(), P.bone()]
 	L = 0.22
 	m = Mesh()
 	# quill: thin tube along +x with a slight upward bow
@@ -271,7 +271,7 @@ def rope(rng):
 
 @item("bone_glue", roughness=0.5)
 def bone_glue(rng):
-	cells = [P.white(), P.Cell((240, 120, 40), noise=0.06), P.blue_dark(), P.bone(meters=0.1)]
+	cells = [P.white(), P.Cell((240, 120, 40), noise=0.06), P.blue_dark(), P.bone()]
 	prof = [(0.045, 0.0), (0.056, 0.012), (0.06, 0.05), (0.058, 0.13), (0.05, 0.16), (0.036, 0.175), (0.036, 0.2)]
 	body = lathe(prof, segs=10, mat=0, rng=rng, jitter=0.08)
 	# label band: triangles in the lower-middle height band
@@ -284,7 +284,7 @@ def bone_glue(rng):
 
 @item("leather")
 def leather(rng):
-	cells = [P.leather(), P.leather_dark(), P.leather(meters=0.2)]
+	cells = [P.leather(), P.leather_dark(), P.leather()]
 	m = Mesh()
 	# a folded stack: three slabs, each offset and slightly rotated, with rounded jittered corners
 	for i, (w, d, h) in enumerate(((0.3, 0.2, 0.04), (0.29, 0.19, 0.035), (0.27, 0.18, 0.03))):

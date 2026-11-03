@@ -11,16 +11,18 @@ from PIL import Image
 TEX = 256
 CELL = 64
 GRID = TEX // CELL
+TEXELS_PER_METER = 256.0   # every item: one 64 px cell spans 0.25 m on the model
+CELL_METERS = CELL / TEXELS_PER_METER
 
 
 class Cell:
 	def __init__(self, color, noise=0.08, tones=None, streak=None, streak_amt=0.0, speckle=None,
-				 speckle_density=0.0, stripes=None, stripe_period=0, stripe_amt=0.0, cells=4, meters=0.25,
+				 speckle_density=0.0, stripes=None, stripe_period=0, stripe_amt=0.0, cells=4,
 				 rings=None, ring_amt=0.0, blotch=None, blotch_amt=0.0):
 		"""color: base rgb 0-255. noise: +/- fraction of value noise. tones: list of rgb picked by
 		noise bands (replaces single color). streak: 'x'|'y' grain direction with streak_amt.
 		speckle: rgb dots at speckle_density (0..1). stripes: rgb at stripe_period px along streak.
-		meters: how many metres one 64 px cell spans when projected (texel density)."""
+		Texel density is global (TEXELS_PER_METER), not per cell."""
 		self.color = np.array(color, float)
 		self.noise = noise
 		self.tones = [np.array(t, float) for t in tones] if tones else None
@@ -32,7 +34,6 @@ class Cell:
 		self.stripe_period = stripe_period
 		self.stripe_amt = stripe_amt
 		self.cells = cells
-		self.meters = meters
 		self.rings = np.array(rings, float) if rings is not None else None
 		self.ring_amt = ring_amt
 		self.blotch = np.array(blotch, float) if blotch is not None else None
@@ -105,13 +106,13 @@ def render_texture(rng, cells):
 
 
 def assign_uvs(mesh, cells, rng):
-	"""Per-triangle planar projection into the triangle's material cell. Image row 0 = v 1 (OBJ v is
-	up), so the cell at grid row r spans v in [1 - (r+1)/GRID, 1 - r/GRID]."""
+	"""Per-triangle planar projection into the triangle's material cell at TEXELS_PER_METER. Image row
+	0 = v 1 (OBJ v is up), so the cell at grid row r spans v in [1 - (r+1)/GRID, 1 - r/GRID]. A facet
+	wider than one cell (0.25 m) is scaled down to fit, so big flat faces get a coarser grain."""
 	n = mesh.normals()
 	pad = 1.5 / TEX
 	uv = np.zeros((len(mesh.tris), 3, 2))
 	for i in range(len(mesh.tris)):
-		cell = cells[mesh.mat[i] % len(cells)]
 		r, c = divmod(int(mesh.mat[i]) % (GRID * GRID), GRID)
 		u0, u1 = c / GRID + pad, (c + 1) / GRID - pad
 		v0, v1 = 1 - (r + 1) / GRID + pad, 1 - r / GRID - pad
@@ -125,7 +126,7 @@ def assign_uvs(mesh, cells, rng):
 			e1, e2 = np.array([0, 1.0, 0]), np.array([0, 0, 1.0])
 		p = mesh.tris[i]
 		cen = p.mean(0)
-		q = np.column_stack([(p - cen) @ e1, (p - cen) @ e2]) / cell.meters / GRID  # fraction of the texture
+		q = np.column_stack([(p - cen) @ e1, (p - cen) @ e2]) / CELL_METERS / GRID  # fraction of the texture
 		# shrink if the facet is larger than the cell
 		ext = max(np.abs(q).max() * 2, 1e-9)
 		room = (u1 - u0) * 0.96

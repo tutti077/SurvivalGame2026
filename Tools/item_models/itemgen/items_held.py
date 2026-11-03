@@ -42,7 +42,7 @@ def lashing(rng, x, radius, width=0.04, mat=0, turns=5):
 
 @item("torch", "tools", surface="wood", roughness=0.85)
 def torch(rng):
-	cells = [P.wood_handle(), P.cloth_cream(meters=0.12), P.fire(meters=0.12), P.ember(meters=0.12), P.rope(meters=0.08)]
+	cells = [P.wood_handle(), P.cloth_cream(), P.fire(), P.ember(), P.rope()]
 	m = handle(rng, 0.62, 0.018, mat=0)
 	# cloth head wrapped around the top 14 cm, charred at the very end
 	wrap = lathe([(0.02, 0), (0.034, 0.015), (0.036, 0.06), (0.034, 0.11), (0.028, 0.135)], segs=8, mat=1, rng=rng, jitter=0.12)
@@ -64,7 +64,7 @@ def torch(rng):
 
 @item("stone_axe", "tools", surface="wood")
 def stone_axe(rng):
-	cells = [P.wood_handle(), P.stone(meters=0.15), P.rope(meters=0.06), P.wood_end(meters=0.1)]
+	cells = [P.wood_handle(), P.stone(), P.rope(), P.wood_end()]
 	m = handle(rng, 0.72, 0.022, mat=0, cap_mat=3, profile=lambda t: 1.0 + 0.25 * t + 0.08 * math.sin(t * 11))
 	# head: a knapped wedge in the XZ plane - fat at the haft, flaring to an edge at +Z, thin in Y
 	outline = [(-0.05, -0.05), (0.05, -0.05), (0.07, 0.0), (0.085, 0.08), (0.06, 0.15), (0.0, 0.17), (-0.06, 0.15),
@@ -84,7 +84,7 @@ def stone_axe(rng):
 
 @item("build_hammer", "tools", surface="wood")
 def build_hammer(rng):
-	cells = [P.wood_handle(), P.bark_dark(meters=0.2), P.wood_end(meters=0.15), P.rope(meters=0.06)]
+	cells = [P.wood_handle(), P.bark_dark(), P.wood_end(), P.rope()]
 	m = handle(rng, 0.78, 0.024, mat=0, cap_mat=2)
 	head = box(size=(0.11, 0.1, 0.34), center=(0.73, 0, 0), mat=1, jitter=0.06, rng=rng)
 	# end grain on the two striking faces (+/-Z)
@@ -97,7 +97,7 @@ def build_hammer(rng):
 
 @item("hoe", "tools", surface="wood")
 def hoe(rng):
-	cells = [P.wood_handle(), P.metal(meters=0.15), P.rope(meters=0.06)]
+	cells = [P.wood_handle(), P.metal(), P.rope()]
 	m = handle(rng, 1.15, 0.018, mat=0, rings=7)
 	# blade: a flat plate hanging off the end, swept forward (toward +Z) and angled back toward the user
 	plate = box(size=(0.012, 0.2, 0.17), center=(0, 0, 0.11), mat=1, jitter=0.05, rng=rng)
@@ -111,7 +111,7 @@ def hoe(rng):
 
 @item("grapple", "tools", surface="metal", roughness=0.7)
 def grapple(rng):
-	cells = [P.metal(meters=0.12), P.rope(meters=0.06), P.metal(meters=0.08)]
+	cells = [P.metal(), P.rope(), P.metal()]
 	# shaft with an eye ring at the butt, three hooked prongs curving back from the head
 	m = tube(rng, length=0.22, radius=0.014, segs=6, rings=3, jitter=0.08, mat=0, axis="x").translate(0.1, 0, 0)
 	for k in range(3):
@@ -140,7 +140,7 @@ def grapple(rng):
 
 @item("wooden_club", "weapons", surface="wood")
 def wooden_club(rng):
-	cells = [P.wood_handle(), P.stem_green(meters=0.08), P.flint(meters=0.08), P.wood_end(meters=0.1)]
+	cells = [P.wood_handle(), P.stem_green(), P.flint(), P.wood_end()]
 	prof = [(0.022, 0.0), (0.024, 0.1), (0.022, 0.2), (0.03, 0.32), (0.045, 0.45), (0.055, 0.56), (0.05, 0.64), (0.03, 0.68)]
 	m = lathe(prof, segs=8, mat=0, rng=rng, jitter=0.1, cap_mat=3)
 	m.rotate("y", 90)
@@ -159,7 +159,7 @@ def wooden_club(rng):
 
 @item("flint_spear", "weapons", surface="wood")
 def flint_spear(rng):
-	cells = [P.wood_handle(), P.flint(meters=0.1), P.rope(meters=0.05)]
+	cells = [P.wood_handle(), P.flint(), P.rope()]
 	m = handle(rng, 1.45, 0.016, mat=0, rings=8, profile=lambda t: 1.0 + 0.05 * math.sin(t * 13))
 	# flint point: a knapped leaf shape, wide in Z, thin in Y
 	pt = blob(rng, 0.07, subdiv=1, jitter=0.5, noise=0.25, scale=(1.9, 0.3, 0.7), mat=1)
@@ -175,7 +175,7 @@ def flint_spear(rng):
 
 @item("bola", "weapons", surface="rock")
 def bola(rng):
-	cells = [P.rope(meters=0.06), P.stone(meters=0.12), P.leather_dark(meters=0.08)]
+	cells = [P.rope(), P.stone(), P.leather_dark()]
 	m = Mesh()
 	knot = blob(rng, 0.03, subdiv=1, jitter=0.3, noise=0.2, mat=2)
 	m.add(knot)
@@ -193,7 +193,7 @@ def bola(rng):
 
 @item("simple_bow", "weapons", surface="wood")
 def simple_bow(rng):
-	cells = [P.wood_handle(), P.leather(meters=0.1), P.rope(meters=0.04)]
+	cells = [P.wood_handle(), P.leather(), P.rope()]
 	L = 1.25
 	path = []
 	for t in np.linspace(0, 1, 17):
@@ -213,7 +213,7 @@ def simple_bow(rng):
 
 @item("bone_sword", "weapons", surface="default")
 def bone_sword(rng):
-	cells = [P.bone(meters=0.15), P.bone_dirty(meters=0.1), P.leather_dark(meters=0.06), P.rope(meters=0.04)]
+	cells = [P.bone(), P.bone_dirty(), P.leather_dark(), P.rope()]
 	# a sword carved from one long bone: flat blade, with the vertebra spines left on the back edge
 	rows = []
 	n = 9
@@ -249,7 +249,7 @@ def bone_sword(rng):
 
 
 def _arrow(rng, head_cells, head_fn, length=0.78):
-	cells = [P.wood_pale(meters=0.1), P.feather_white(meters=0.05), P.cloth_red(meters=0.05)] + head_cells
+	cells = [P.wood_pale(), P.feather_white(), P.cloth_red()] + head_cells
 	m = tube(rng, length=length, radius=0.0065, segs=5, rings=3, jitter=0.06, wobble=0.05, profile=lambda t: 1.0, mat=0, axis="x")
 	# nock: a small notch block at the butt
 	nock = box(size=(0.02, 0.012, 0.014), center=(0.01, 0, 0), mat=0)
@@ -286,7 +286,7 @@ def fire_arrow(rng):
 		h.add(flame)
 		h.add(blob(rng, 0.018, subdiv=1, jitter=0.35, noise=0.3, scale=(1.4, 0.8, 1.0), mat=3).translate(L + 0.02, 0.01, 0.045))
 		return h
-	return _arrow(rng, [P.fire(meters=0.08), P.ember(meters=0.08)], head)
+	return _arrow(rng, [P.fire(), P.ember()], head)
 
 
 @item("flint_arrow", "weapons", surface="wood")
@@ -300,4 +300,4 @@ def flint_arrow(rng):
 		pt.translate(L + 0.02, 0, 0)
 		pt.add(lashing(rng, L - 0.03, 0.007, width=0.03, mat=4, turns=5))
 		return pt
-	return _arrow(rng, [P.flint(meters=0.06), P.rope(meters=0.03)], head)
+	return _arrow(rng, [P.flint(), P.rope()], head)
