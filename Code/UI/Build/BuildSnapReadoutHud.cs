@@ -34,16 +34,13 @@ public sealed class BuildSnapReadoutHud
 		_root.Style.Set( "display", "none" );
 
 		_label = new Label { Parent = _root };
-		_label.Style.FontSize = Length.Pixels( LabelFontSize );
-		_label.Style.Set( "font-weight", "bold" );
-		_label.Style.Set( "color", "rgba(255,236,180,0.95)" );
-		_label.Style.Set( "text-shadow", "0px 1px 3px rgba(0,0,0,0.9)" );
+		UiStyle.Text( _label, UiText.Hud, LabelFontSize );
+		_label.Style.FontColor = UiTheme.Colors.AccentBrightColor;
 
 		_hint = new Label { Parent = _root };
 		_hint.Text = "Q / E  cycle snap";
-		_hint.Style.FontSize = Length.Pixels( HintFontSize );
-		_hint.Style.Set( "color", "rgba(255,255,255,0.55)" );
-		_hint.Style.Set( "text-shadow", "0px 1px 3px rgba(0,0,0,0.9)" );
+		UiStyle.Text( _hint, UiText.Hud, HintFontSize );
+		_hint.Style.FontColor = UiTheme.Colors.TextSecondaryColor;
 	}
 
 	bool? _shown;

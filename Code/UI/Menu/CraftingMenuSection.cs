@@ -19,11 +19,13 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	public const float DetailIconSize = 80f * WidthScale;
 	public const float MinSectionHeight = 420f * LengthScale;
 	/// <summary>
-	/// The section takes this much of the viewport height (vh) so a taller window shows more recipe
-	/// rows instead of the same fixed box; <see cref="MinSectionHeight"/> is the floor on short windows.
-	/// Column padding + border must still fit under 100vh.
+	/// The section fills the menu side anchor: the viewport minus the bottom HUD strip the vitals keep
+	/// (<see cref="PlayerScreenHud.MenuColumnBottomInset"/>) and the column's own padding + border, as a
+	/// vh value so a window resize re-lays it out; <see cref="MinSectionHeight"/> is the floor on short windows.
 	/// </summary>
-	public const float SectionViewHeightPercent = 84f;
+	public static float SectionViewHeightPercent
+		=> (PlayerScreenHud.DesignScreenHeight - PlayerScreenHud.MenuColumnTopInset - PlayerScreenHud.MenuColumnBottomInset - PlayerScreenHud.MenuColumnChromeHeight)
+		   / PlayerScreenHud.DesignScreenHeight * 100f;
 	/// <summary>Shortest the recipe list gets; it grows with the section on taller windows.</summary>
 	public const float RecipeListMinHeight = 220f * LengthScale;
 	public const float DetailAreaMaxHeight = MinSectionHeight - RecipeListMinHeight - 80f * LayoutScale;
@@ -76,11 +78,8 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	Label _repairButtonLabel;
 	bool _repairAvailable;
 	double _nextRepairStateRefreshAt;
-
-	static readonly Color CraftButtonColor = new( 0.22f, 0.45f, 0.28f, 0.95f );
-	static readonly Color CraftButtonPressedColor = new( 0.14f, 0.32f, 0.18f, 0.98f );
-	static readonly Color RepairButtonColor = new( 0.52f, 0.40f, 0.18f, 0.95f );
-	static readonly Color RepairButtonPressedColor = new( 0.38f, 0.29f, 0.12f, 0.98f );
+	/// <summary>Last "can craft / upgrade" state shown on the action button, so a press keeps its disabled look.</summary>
+	bool _craftButtonEnabled;
 
 	/// <summary>True when the crafting page is open and this panel is shown — recipe list owns mouse wheel.</summary>
 	public bool IsScrollTargetActive => _menuOpen && _panelVisible;
@@ -118,8 +117,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		header.Style.Set( "gap", $"{8f * LayoutScale}px" );
 
 		var title = new Label { Parent = header, Text = "Crafting" };
-		title.Style.FontColor = Color.White;
-		title.Style.FontSize = Length.Pixels( CraftingTitleFontSize );
+		UiStyle.Text( title, UiText.Title, CraftingTitleFontSize );
 		title.Style.Set( "flex-shrink", "0" );
 		title.Style.Set( "white-space", "nowrap" );
 		_titleLabel = title;
@@ -130,19 +128,13 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_repairButton.Style.Set( "padding-right", $"{10f * LayoutScale}px" );
 		_repairButton.Style.Set( "padding-top", $"{6f * LayoutScale}px" );
 		_repairButton.Style.Set( "padding-bottom", $"{6f * LayoutScale}px" );
-		_repairButton.Style.BackgroundColor = RepairButtonColor;
-		_repairButton.Style.Set( "border-radius", "4px" );
-		_repairButton.Style.Set( "border-width", "1px" );
-		_repairButton.Style.Set( "border-color", "#8f7a3e" );
+		UiStyle.Button( _repairButton, UiButton.Default );
 		_repairButton.Style.Set( "pointer-events", "auto" );
-		_repairButton.Style.Set( "cursor", "pointer" );
 		_repairButton.Style.Set( "flex-shrink", "0" );
 		_repairButton.Style.Set( "display", "none" );
 
 		_repairButtonLabel = new Label { Parent = _repairButton, Text = "Repair Tool" };
-		_repairButtonLabel.Style.FontColor = Color.White;
-		_repairButtonLabel.Style.FontSize = Length.Pixels( 15f * TextScale );
-		_repairButtonLabel.Style.Set( "pointer-events", "none" );
+		UiStyle.ButtonLabel( _repairButtonLabel, UiButton.Default, 15f * TextScale );
 		_repairButtonLabel.Style.Set( "white-space", "nowrap" );
 
 		var craftWrap = new Panel { Parent = header };
@@ -157,18 +149,13 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_craftButton.Style.Set( "padding-right", $"{12f * LayoutScale}px" );
 		_craftButton.Style.Set( "padding-top", $"{6f * LayoutScale}px" );
 		_craftButton.Style.Set( "padding-bottom", $"{6f * LayoutScale}px" );
-		_craftButton.Style.BackgroundColor = CraftButtonColor;
-		_craftButton.Style.Set( "border-radius", "4px" );
-		_craftButton.Style.Set( "border-width", "1px" );
-		_craftButton.Style.Set( "border-color", "#5a8f62" );
+		// The one primary action on the page (Craft / Upgrade).
+		UiStyle.Button( _craftButton, UiButton.Primary );
 		_craftButton.Style.Set( "pointer-events", "auto" );
 		_craftButton.Style.Set( "z-index", "4" );
-		_craftButton.Style.Set( "cursor", "pointer" );
 
 		_craftButtonLabel = new Label { Parent = _craftButton, Text = "Craft" };
-		_craftButtonLabel.Style.FontColor = Color.White;
-		_craftButtonLabel.Style.FontSize = Length.Pixels( 15f * TextScale );
-		_craftButtonLabel.Style.Set( "pointer-events", "none" );
+		UiStyle.ButtonLabel( _craftButtonLabel, UiButton.Primary, 15f * TextScale );
 		_craftButtonLabel.Style.Set( "position", "relative" );
 		_craftButtonLabel.Style.Set( "z-index", "2" );
 		_craftButtonLabel.Style.Set( "white-space", "nowrap" );
@@ -179,8 +166,10 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		detail.Style.Set( "width", "100%" );
 		detail.Style.PaddingTop = Length.Pixels( 4f * LayoutScale );
 		detail.Style.PaddingBottom = Length.Pixels( 8f * LayoutScale );
-		detail.Style.Set( "border-bottom-width", "1px" );
-		detail.Style.Set( "border-bottom-color", "#383d47" );
+		detail.Style.PaddingLeft = Length.Pixels( 8f * LayoutScale );
+		detail.Style.PaddingRight = Length.Pixels( 8f * LayoutScale );
+		UiStyle.Surface( detail, UiSurface.Raised );
+		detail.Style.Set( "box-sizing", "border-box" );
 		// Fixed height (not max-height): selecting a recipe must never resize the detail area or move the list.
 		detail.Style.Height = Length.Pixels( DetailAreaMaxHeight );
 		detail.Style.MinHeight = Length.Pixels( DetailAreaMaxHeight );
@@ -198,10 +187,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_detailIcon.Style.Width = Length.Pixels( DetailIconSize );
 		_detailIcon.Style.Height = Length.Pixels( DetailIconSize );
 		_detailIcon.Style.Set( "flex-shrink", "0" );
-		_detailIcon.Style.BackgroundColor = new Color( 0.12f, 0.13f, 0.15f, 0.92f );
-		_detailIcon.Style.Set( "border-width", "1px" );
-		_detailIcon.Style.Set( "border-color", "#474d57" );
-		_detailIcon.Style.Set( "border-radius", "4px" );
+		UiStyle.Slot( _detailIcon );
 		_detailIcon.Style.Set( "background-size", "contain" );
 		_detailIcon.Style.Set( "background-repeat", "no-repeat" );
 		_detailIcon.Style.Set( "background-position", "center" );
@@ -213,14 +199,18 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		detailText.Style.Set( "flex-grow", "1" );
 		detailText.Style.Set( "min-width", "0" );
 
-		_detailName = new Label { Parent = detailText, Text = "Select a recipe" };
-		_detailName.Style.FontColor = Color.White;
-		_detailName.Style.FontSize = Length.Pixels( ItemNameFontSize );
+		var nameRow = new Panel { Parent = detailText };
+		nameRow.Style.Set( "flex-direction", "row" );
+		nameRow.Style.Set( "align-items", "baseline" );
+		nameRow.Style.Set( "gap", $"{8f * LayoutScale}px" );
+		nameRow.Style.Set( "width", "100%" );
+
+		_detailName = new Label { Parent = nameRow, Text = "Select a recipe" };
+		UiStyle.Text( _detailName, UiText.Value, ItemNameFontSize );
 		_detailName.Style.Set( "white-space", "normal" );
 
 		_detailDescription = new Label { Parent = detailText, Text = "" };
-		_detailDescription.Style.FontColor = new Color( 0.72f, 0.74f, 0.78f );
-		_detailDescription.Style.FontSize = Length.Pixels( ItemDescriptionFontSize );
+		UiStyle.Text( _detailDescription, UiText.Secondary, ItemDescriptionFontSize );
 		_detailDescription.Style.Set( "white-space", "normal" );
 		_detailDescription.Style.Set( "display", "none" );
 
@@ -254,6 +244,15 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		CraftingRecipeCatalog.EnsureLoaded();
 		ResourceDefinitionCatalog.EnsureLoaded();
 
+		_detailName.Style.Set( "flex-shrink", "1" );
+		_detailName.Style.Set( "min-width", "0" );
+
+		// Upgrade tab: the selected item's current tier as a roman numeral.
+		_detailTier = new Label { Parent = nameRow, Text = "I" };
+		UiStyle.Text( _detailTier, UiText.Accent, ItemNameFontSize );
+		_detailTier.Style.Set( "white-space", "nowrap" );
+		_detailTier.Style.Set( "flex-shrink", "0" );
+		_detailTier.Style.Set( "display", "none" );
 		rowParent.DeleteChildren();
 		_rows.Clear();
 		var nearCampfire = IsNearCampfire();
@@ -288,54 +287,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 			}
 			// allCrafting hack: personal menu lists every recipe regardless of unlock / station.
 
-			var row = new CraftingRecipeRowPanel
-			{
-				Parent = rowParent,
-				Section = this,
-				RecipeId = recipe.Id
-			};
-			row.Style.Set( "flex-direction", "row" );
-			row.Style.Set( "align-items", "center" );
-			row.Style.Set( "justify-content", "flex-start" );
-			row.Style.Set( "gap", $"{8f * LayoutScale * RecipeListItemScale}px" );
-			row.Style.Set( "width", "100%" );
-			row.Style.Height = Length.Pixels( RecipeRowHeight );
-			row.Style.MinHeight = Length.Pixels( RecipeRowHeight );
-			row.Style.MaxHeight = Length.Pixels( RecipeRowHeight );
-			row.Style.Set( "flex-shrink", "0" );
-			row.Style.Set( "flex-grow", "0" );
-			row.Style.PaddingTop = Length.Pixels( 0f );
-			row.Style.PaddingBottom = Length.Pixels( 0f );
-			row.Style.PaddingLeft = Length.Pixels( 8f );
-			row.Style.PaddingRight = Length.Pixels( 8f );
-			row.Style.MarginTop = Length.Pixels( 0f );
-			row.Style.MarginBottom = Length.Pixels( RecipeRowGap );
-			row.Style.BackgroundColor = new Color( 0.10f, 0.11f, 0.13f, 0.9f );
-			row.Style.Set( "border-width", $"{RecipeRowBorder}px" );
-			row.Style.Set( "border-color", "#383d47" );
-			row.Style.Set( "border-radius", "3px" );
-			row.Style.Set( "pointer-events", "all" );
-			row.Style.Set( "overflow", "hidden" );
-			row.Style.Set( "box-sizing", "border-box" );
-			row.ButtonInput = PanelInputType.UI;
-
-			var icon = new Panel { Parent = row };
-			icon.Style.Width = Length.Pixels( RowIconSize );
-			icon.Style.Height = Length.Pixels( RowIconSize );
-			icon.Style.Set( "flex-shrink", "0" );
-			icon.Style.Set( "pointer-events", "none" );
-			icon.Style.Set( "background-size", "contain" );
-			icon.Style.Set( "background-repeat", "no-repeat" );
-			icon.Style.Set( "background-position", "center" );
-			MenuUiTextures.ApplyBackground( icon, CraftingRecipeCatalog.ResolveIconPath( recipe ) );
-
-			var name = new Label { Parent = row, Text = recipe.DisplayName };
-			name.Style.FontColor = Color.White;
-			name.Style.FontSize = Length.Pixels( RecipeListRowFontSize );
-			name.Style.Set( "pointer-events", "none" );
-			name.Style.Set( "white-space", "nowrap" );
-
-			_rows.Add( new RowUi( row, icon, recipe.Id ) );
+			AddListRow( rowParent, recipe.Id, CraftingRecipeCatalog.ResolveIconPath( recipe ), recipe.DisplayName, null );
 		}
 
 		if ( _rows.Count > 0 )
@@ -362,10 +314,98 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		CraftingRecipeCatalog.EnsureLoaded();
 		ResourceDefinitionCatalog.EnsureLoaded();
 
-		var nearCampfire = IsNearCampfire();
-		var version = BuildRecipeListVersion( nearCampfire );
-		if ( version == _builtRecipeContentVersion && nearCampfire == _builtNearCampfire
-		     && IsWorkbenchOpen == _builtWorkbenchOpen )
+		rowParent.DeleteChildren();
+		_rows.Clear();
+		CollectUpgradeEntries( _upgradeEntries );
+		_builtUpgradeSignature = ComputeUpgradeSignature( _upgradeEntries );
+		_builtWorkbenchOpen = IsWorkbenchOpen;
+
+		for ( var i = 0; i < _upgradeEntries.Count; i++ )
+		{
+			var entry = _upgradeEntries[i];
+			var id = entry.Stack.ResourceId;
+			AddListRow( rowParent, entry.Key, ResourceCatalog.GetIconPath( id ), ResourceCatalog.Resolve( id ).DisplayName,
+				EquipmentUpgrade.ToRoman( entry.Stack.Tier ) );
+		}
+
+		FinishRowList();
+
+		var keepSelection = !string.IsNullOrWhiteSpace( _selectedUpgradeKey ) && FindUpgradeEntry( _selectedUpgradeKey ) is not null;
+		if ( keepSelection )
+			SelectUpgrade( _selectedUpgradeKey );
+		else if ( _rows.Count > 0 )
+			SelectUpgrade( _rows[0].Key );
+		else
+		{
+			_selectedUpgradeKey = null;
+			RefreshSelectedDetail();
+		}
+	}
+
+	void AddListRow( Panel rowParent, string key, string iconPath, string displayName, string tierNumeral )
+	{
+		var row = new CraftingRecipeRowPanel
+		{
+			Parent = rowParent,
+			Section = this,
+			RowKey = key
+		};
+		row.Style.Set( "flex-direction", "row" );
+		row.Style.Set( "align-items", "center" );
+		row.Style.Set( "justify-content", "flex-start" );
+		row.Style.Set( "gap", $"{8f * LayoutScale * RecipeListItemScale}px" );
+		row.Style.Set( "width", "100%" );
+		row.Style.Height = Length.Pixels( RecipeRowHeight );
+		row.Style.MinHeight = Length.Pixels( RecipeRowHeight );
+		row.Style.MaxHeight = Length.Pixels( RecipeRowHeight );
+		row.Style.Set( "flex-shrink", "0" );
+		row.Style.Set( "flex-grow", "0" );
+		row.Style.PaddingTop = Length.Pixels( 0f );
+		row.Style.PaddingBottom = Length.Pixels( 0f );
+		row.Style.PaddingLeft = Length.Pixels( 8f );
+		row.Style.PaddingRight = Length.Pixels( 8f );
+		row.Style.MarginTop = Length.Pixels( 0f );
+		row.Style.MarginBottom = Length.Pixels( RecipeRowGap );
+		// Row chrome: the border width is part of the row-height contract (border-box), so it stays the const.
+		row.Style.Set( "border-width", $"{RecipeRowBorder}px" );
+		row.Style.Set( "border-radius", UiStyle.Px( UiTheme.Metrics.RadiusSmall ) );
+		StyleRow( row, selected: false );
+		row.Style.Set( "pointer-events", "all" );
+		row.Style.Set( "overflow", "hidden" );
+		row.Style.Set( "box-sizing", "border-box" );
+		row.ButtonInput = PanelInputType.UI;
+
+		var icon = new Panel { Parent = row };
+		icon.Style.Width = Length.Pixels( RowIconSize );
+		icon.Style.Height = Length.Pixels( RowIconSize );
+		icon.Style.Set( "flex-shrink", "0" );
+		icon.Style.Set( "pointer-events", "none" );
+		UiStyle.Slot( icon );
+		icon.Style.Set( "background-size", "contain" );
+		icon.Style.Set( "background-repeat", "no-repeat" );
+		icon.Style.Set( "background-position", "center" );
+		MenuUiTextures.ApplyBackground( icon, iconPath );
+
+		var name = new Label { Parent = row, Text = displayName };
+		UiStyle.Text( name, UiText.Body, RecipeListRowFontSize );
+		name.Style.Set( "pointer-events", "none" );
+		name.Style.Set( "white-space", "nowrap" );
+
+		if ( !string.IsNullOrWhiteSpace( tierNumeral ) )
+		{
+			var tier = new Label { Parent = row, Text = tierNumeral };
+			UiStyle.Text( tier, UiText.Accent, RecipeListRowFontSize );
+			tier.Style.Set( "pointer-events", "none" );
+			tier.Style.Set( "white-space", "nowrap" );
+		}
+
+		_rows.Add( new RowUi( row, icon, name, key ) );
+	}
+
+	/// <summary>List row fill + border: selected = tab-selected fill with the accent border, idle = raised + subtle.</summary>
+	static void StyleRow( Panel row, bool selected )
+	{
+		if ( row is null || !row.IsValid() )
 			return;
 
 		var content = _recipeListPanel?.Content;
@@ -414,6 +454,26 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 		return false;
 	}
+		var c = UiTheme.Colors;
+		row.Style.BackgroundColor = selected ? c.TabSelectedColor : c.PanelRaisedColor;
+		row.Style.Set( "border-color", UiStyle.Css( selected ? c.AccentColor : c.BorderSubtleColor ) );
+	}
+
+	void FinishRowList()
+	{
+		if ( _rows.Count > 0 )
+			_rows[^1].Root.Style.MarginBottom = Length.Pixels( 0f );
+
+		_recipeListPanel?.SetRowCount( _rows.Count );
+	}
+
+	/// <summary>
+	/// Rebuild the list when its content changed: recipe catalog sync / station state on the Craft
+	/// tab, the player's upgradable stacks (ids, slots, tiers) on the Upgrade tab — checked a few
+	/// times a second, never per frame.
+	/// </summary>
+	void RebuildRecipeRowsIfNeeded()
+	{
 
 	public bool TryCraftPointerAtScreen( Vector2 screenPos, bool pressed )
 	{
@@ -593,7 +653,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( _repairButton is not null && IsWorkbenchOpen && Time.NowDouble >= _nextRepairStateRefreshAt )
 		{
 			_nextRepairStateRefreshAt = Time.NowDouble + 0.25;
-			_repairButton.Style.BackgroundColor = RepairButtonColor;
+			// RefreshWorkbenchHeader re-applies the rest state (clears a pressed look from a repair click).
 			RefreshWorkbenchHeader();
 		}
 	}
@@ -652,7 +712,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 			return;
 
 		_repairAvailable = _crafting is not null && _crafting.HasDamagedTool();
-		_repairButton.Style.Set( "opacity", _repairAvailable ? "1" : "0.45" );
+		UiStyle.SetButtonState( _repairButton, UiButton.Default, hovered: false, pressed: false, disabled: !_repairAvailable );
 		_repairButton.Style.Set( "cursor", _repairAvailable ? "pointer" : "default" );
 		if ( _repairButtonLabel is not null )
 			_repairButtonLabel.Text = _repairAvailable ? "Repair Tool" : "No damaged tools";
@@ -672,7 +732,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( !_repairAvailable || _crafting is null )
 			return true;
 
-		_repairButton.Style.BackgroundColor = RepairButtonPressedColor;
+		UiStyle.SetButtonState( _repairButton, UiButton.Default, hovered: false, pressed: true, disabled: false );
 		_crafting.OwnerTryRepairDamagedTool();
 		_nextRepairStateRefreshAt = 0;
 		return true;
@@ -709,8 +769,12 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( _craftButton is null || _craftButtonLabel is null )
 			return;
 
-		_craftButton.Style.Set( "opacity", canCraft ? "1" : "0.45" );
-		if ( canCraft )
+		_craftButtonEnabled = canCraft;
+		if ( IsUpgradeTab )
+		{
+			_craftButtonLabel.Text = canCraft ? "Upgrade (LMB)" : DescribeUpgradeBlocker();
+		}
+		else if ( canCraft )
 		{
 			_craftButtonLabel.Text = "Craft (LMB)";
 		}
@@ -725,8 +789,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 				_craftButtonLabel.Text = "Need materials / space";
 		}
 
-		if ( !_craftButtonPressedVisual )
-			_craftButton.Style.BackgroundColor = CraftButtonColor;
+		UiStyle.SetButtonState( _craftButton, UiButton.Primary, hovered: false, pressed: _craftButtonPressedVisual, disabled: !canCraft );
 	}
 
 	void SetButtonPressedVisual( bool pressed )
@@ -735,7 +798,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( _craftButton is null || !_craftButton.IsValid() )
 			return;
 
-		_craftButton.Style.BackgroundColor = pressed ? CraftButtonPressedColor : CraftButtonColor;
+		UiStyle.SetButtonState( _craftButton, UiButton.Primary, hovered: false, pressed: pressed, disabled: !_craftButtonEnabled );
 		_craftButton.Style.Set( "transform", pressed ? "scale(0.96)" : "scale(1)" );
 	}
 
@@ -763,11 +826,14 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 			if ( row is null || !row.IsValid() )
 				continue;
 
-			var selected = string.Equals( _rows[i].RecipeId, _selectedRecipeId, StringComparison.OrdinalIgnoreCase );
-			row.Style.Set( "border-color", selected ? "#8ab4f8" : "#383d47" );
-			row.Style.BackgroundColor = selected
-				? new Color( 0.16f, 0.22f, 0.32f, 0.95f )
-				: new Color( 0.10f, 0.11f, 0.13f, 0.9f );
+			var selectedKey = IsUpgradeTab ? _selectedUpgradeKey : _selectedRecipeId;
+			var selected = string.Equals( _rows[i].Key, selectedKey, StringComparison.OrdinalIgnoreCase );
+			StyleRow( row, selected );
+
+			// Rows the player cannot afford / upgrade read muted (re-evaluated on select + refresh, never per frame).
+			var name = _rows[i].NameLabel;
+			if ( name is not null && name.IsValid() )
+				name.Style.FontColor = IsRowAffordable( _rows[i].Key ) ? UiTheme.Colors.TextPrimaryColor : UiTheme.Colors.TextMutedColor;
 		}
 	}
 
@@ -779,8 +845,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		block.Style.Set( "width", "100%" );
 
 		var heading = new Label { Parent = block, Text = headingText };
-		heading.Style.FontColor = Color.White;
-		heading.Style.FontSize = Length.Pixels( SectionHeaderFontSize );
+		UiStyle.Text( heading, UiText.Header, SectionHeaderFontSize );
 
 		entriesHost = new Panel { Parent = block };
 		entriesHost.Style.Set( "flex-direction", "column" );
@@ -811,8 +876,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	static void AddEntryLabel( Panel host, string text )
 	{
 		var label = new Label { Parent = host, Text = text };
-		label.Style.FontColor = new Color( 0.82f, 0.84f, 0.88f );
-		label.Style.FontSize = Length.Pixels( SectionEntryFontSize );
+		UiStyle.Text( label, UiText.Secondary, SectionEntryFontSize );
 		label.Style.Set( "white-space", "normal" );
 	}
 
@@ -932,3 +996,287 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		}
 	}
 }
+	// ------------------------------------------------------------------ Upgrade tab
+
+	bool IsUpgradeTab => _activeTab == WorkbenchTab.Upgrade && IsWorkbenchOpen;
+
+	/// <summary>One upgradable stack the player carries: <c>grid:slot</c> key plus a snapshot of the stack.</summary>
+	readonly struct UpgradeEntry
+	{
+		public string Key { get; init; }
+		public string GridId { get; init; }
+		public int SlotIndex { get; init; }
+		public InventorySlot Stack { get; init; }
+	}
+
+	Panel CreateTabButton( Panel parent, string text )
+	{
+		var button = new Panel { Parent = parent };
+		button.Style.Set( "padding-left", $"{14f * LayoutScale}px" );
+		button.Style.Set( "padding-right", $"{14f * LayoutScale}px" );
+		button.Style.Set( "padding-top", $"{5f * LayoutScale}px" );
+		button.Style.Set( "padding-bottom", $"{5f * LayoutScale}px" );
+		UiStyle.Tab( button, false );
+		button.Style.Set( "pointer-events", "auto" );
+		button.Style.Set( "cursor", "pointer" );
+		button.Style.Set( "flex-shrink", "0" );
+
+		var label = new Label { Parent = button, Text = text };
+		UiStyle.Text( label, UiText.Value, 15f * TextScale );
+		label.Style.Set( "pointer-events", "none" );
+		label.Style.Set( "white-space", "nowrap" );
+		return button;
+	}
+
+	void UpdateTabVisual()
+	{
+		StyleTab( _craftTabButton, _activeTab == WorkbenchTab.Craft );
+		StyleTab( _upgradeTabButton, _activeTab == WorkbenchTab.Upgrade );
+	}
+
+	static void StyleTab( Panel button, bool active )
+	{
+		if ( button is null || !button.IsValid() )
+			return;
+
+		UiStyle.Tab( button, active );
+		button.Style.Set( "opacity", active ? "1" : "0.8" );
+	}
+
+	void SetActiveTab( WorkbenchTab tab )
+	{
+		var changed = _activeTab != tab;
+		_activeTab = tab;
+		UpdateTabVisual();
+		if ( !changed )
+			return;
+
+		SetButtonPressedVisual( false );
+		var content = _recipeListPanel?.Content;
+		if ( content is not null && content.IsValid() )
+			PopulateRows( content );
+		else
+			RefreshSelectedDetail();
+	}
+
+	/// <summary>Soft-cursor Attack1 on the Craft / Upgrade tab buttons (workbench only).</summary>
+	bool TryTabPointerAtScreen( Vector2 screenPos, bool pressed )
+	{
+		if ( !IsWorkbenchOpen || _tabRow is null || !_tabRow.IsValid() )
+			return false;
+
+		var overCraft = IsScreenPosInsidePanel( _craftTabButton, screenPos );
+		var overUpgrade = !overCraft && IsScreenPosInsidePanel( _upgradeTabButton, screenPos );
+		if ( !overCraft && !overUpgrade )
+			return false;
+
+		if ( pressed )
+			SetActiveTab( overCraft ? WorkbenchTab.Craft : WorkbenchTab.Upgrade );
+
+		return true;
+	}
+
+	void CollectUpgradeEntries( List<UpgradeEntry> into )
+	{
+		into.Clear();
+
+		var hotbar = _inventory?.Components.Get<PlayerHotbar>();
+		if ( hotbar is not null )
+		{
+			for ( var i = 0; i < PlayerHotbar.SlotCount; i++ )
+			{
+				var slot = hotbar.GetSlot( i );
+				if ( EquipmentUpgrade.IsUpgradable( slot ) )
+					into.Add( new UpgradeEntry { Key = $"{EquipmentUpgrade.HotbarGridId}:{i}", GridId = EquipmentUpgrade.HotbarGridId, SlotIndex = i, Stack = slot } );
+			}
+		}
+
+		if ( _inventory is null )
+			return;
+
+		for ( var i = 0; i < _inventory.SlotCount; i++ )
+		{
+			var slot = _inventory.GetSlot( i );
+			if ( EquipmentUpgrade.IsUpgradable( slot ) )
+				into.Add( new UpgradeEntry { Key = $"{EquipmentUpgrade.BagGridId}:{i}", GridId = EquipmentUpgrade.BagGridId, SlotIndex = i, Stack = slot } );
+		}
+	}
+
+	static int ComputeUpgradeSignature( List<UpgradeEntry> entries )
+	{
+		var hash = new HashCode();
+		hash.Add( entries.Count );
+		for ( var i = 0; i < entries.Count; i++ )
+		{
+			hash.Add( entries[i].Key, StringComparer.Ordinal );
+			hash.Add( entries[i].Stack.ResourceId ?? string.Empty, StringComparer.OrdinalIgnoreCase );
+			hash.Add( EquipmentUpgrade.NormalizeTier( entries[i].Stack.Tier ) );
+		}
+
+		return hash.ToHashCode();
+	}
+
+	UpgradeEntry? FindUpgradeEntry( string key )
+	{
+		if ( string.IsNullOrWhiteSpace( key ) )
+			return null;
+
+		for ( var i = 0; i < _upgradeEntries.Count; i++ )
+		{
+			if ( string.Equals( _upgradeEntries[i].Key, key, StringComparison.OrdinalIgnoreCase ) )
+				return _upgradeEntries[i];
+		}
+
+		return null;
+	}
+
+	/// <summary>Swap the detail area between the craft blocks and the upgrade blocks (same fixed box).</summary>
+	void SetDetailMode( bool upgrade )
+	{
+		_craftRequirementsBlock?.Style.Set( "display", upgrade ? "none" : "flex" );
+		_craftStatsBlock?.Style.Set( "display", upgrade ? "none" : "flex" );
+		_upgradeStatsBlock?.Style.Set( "display", upgrade ? "flex" : "none" );
+		_upgradeCostBlock?.Style.Set( "display", upgrade ? "flex" : "none" );
+		if ( !upgrade )
+			_detailTier?.Style.Set( "display", "none" );
+	}
+
+	void RefreshUpgradeDetail()
+	{
+		SetDetailMode( upgrade: true );
+		SetDetailDescription( null );
+
+		var found = FindUpgradeEntry( _selectedUpgradeKey );
+		if ( found is null || !EquipmentCatalog.TryGet( found.Value.Stack.ResourceId, out var profile ) || profile is null )
+		{
+			_detailName.Text = _upgradeEntries.Count == 0 ? "Nothing to upgrade" : "Select an item";
+			_detailTier.Style.Set( "display", "none" );
+			_upgradeStatsEntries?.DeleteChildren();
+			AddEntryLabel( _upgradeStatsEntries, "—" );
+			PopulateEntryList( _upgradeCostEntries, Array.Empty<string>() );
+			ApplyDetailIcon( null );
+			UpdateCraftButton( false );
+			return;
+		}
+
+		var entry = found.Value;
+		var stack = entry.Stack;
+		var tier = EquipmentUpgrade.NormalizeTier( stack.Tier );
+		var atMax = tier >= EquipmentUpgrade.MaxTier;
+		var nextTier = atMax ? tier : tier + 1;
+
+		_detailName.Text = ResourceCatalog.Resolve( stack.ResourceId ).DisplayName;
+		_detailTier.Text = EquipmentUpgrade.ToRoman( tier );
+		_detailTier.Style.Set( "display", "flex" );
+		ApplyDetailIcon( ResourceCatalog.GetIconPath( stack.ResourceId ) );
+
+		// Stats: current value, >> and the next tier's value in green. Armor never shows damage.
+		_upgradeStatsEntries.DeleteChildren();
+		var any = false;
+		any |= AddUpgradeStatRow( "Damage", EquipmentUpgrade.GetDamage( profile, tier ), EquipmentUpgrade.GetDamage( profile, nextTier ), atMax );
+		any |= AddUpgradeStatRow( "Armor", EquipmentUpgrade.GetArmor( profile, tier ), EquipmentUpgrade.GetArmor( profile, nextTier ), atMax );
+		any |= AddUpgradeStatRow( "Durability", EquipmentUpgrade.GetDurabilityMax( profile, tier ), EquipmentUpgrade.GetDurabilityMax( profile, nextTier ), atMax );
+		if ( !any )
+			AddEntryLabel( _upgradeStatsEntries, "—" );
+		if ( atMax )
+			AddEntryLabel( _upgradeStatsEntries, $"Tier {EquipmentUpgrade.ToRoman( tier )} is the highest tier." );
+
+		PopulateEntryList( _upgradeCostEntries, atMax ? Array.Empty<string>() : BuildUpgradeCostLines( stack.ResourceId ) );
+		UpdateCraftButton( CanUpgradeEntry( entry ) );
+	}
+
+	/// <summary>One "Label  current >> next" row; skipped (false) when the stat is 0 at every tier.</summary>
+	bool AddUpgradeStatRow( string label, float current, float next, bool atMax )
+	{
+		if ( current <= 0f && next <= 0f )
+			return false;
+
+		var row = new Panel { Parent = _upgradeStatsEntries };
+		row.Style.Set( "flex-direction", "row" );
+		row.Style.Set( "align-items", "baseline" );
+		row.Style.Set( "gap", $"{6f * LayoutScale}px" );
+		row.Style.Set( "width", "100%" );
+
+		AddInlineLabel( row, $"{label}:", UiText.Secondary );
+		AddInlineLabel( row, $"{current:0.#}", UiText.Value );
+		if ( atMax )
+			return true;
+
+		AddInlineLabel( row, ">>", UiText.Muted );
+		// Next tier's value: value weight in the theme's positive colour.
+		AddInlineLabel( row, $"{next:0.#}", UiText.Value, UiTheme.Colors.PositiveColor );
+		return true;
+	}
+
+	static void AddInlineLabel( Panel row, string text, UiText kind, Color? colorOverride = null )
+	{
+		var label = new Label { Parent = row, Text = text };
+		UiStyle.Text( label, kind, SectionEntryFontSize );
+		if ( colorOverride is { } color )
+			label.Style.FontColor = color;
+		label.Style.Set( "white-space", "nowrap" );
+	}
+
+	List<string> BuildUpgradeCostLines( string resourceId )
+	{
+		var lines = new List<string>();
+		var cost = EquipmentUpgrade.BuildCost( resourceId );
+		if ( cost is null )
+		{
+			lines.Add( "No recipe — cannot upgrade" );
+			return lines;
+		}
+
+		var free = GameHacks.AllCrafting;
+		for ( var i = 0; i < cost.Count; i++ )
+		{
+			var ing = cost[i];
+			var def = ResourceCatalog.Resolve( ing.ResourceId );
+			var have = _inventory?.CountResource( ing.ResourceId ) ?? 0;
+			var need = free ? 0 : Math.Max( 1, ing.Amount );
+			lines.Add( $"{have}/{need} {def.DisplayName}" );
+		}
+
+		return lines;
+	}
+
+	bool CanUpgradeEntry( in UpgradeEntry entry )
+	{
+		if ( _inventory is null || !EquipmentUpgrade.CanUpgradeFurther( entry.Stack ) )
+			return false;
+
+		var cost = EquipmentUpgrade.BuildCost( entry.Stack.ResourceId );
+		if ( cost is null )
+			return false;
+
+		return GameHacks.AllCrafting || cost.Count == 0 || _inventory.HasResources( cost );
+	}
+
+	string DescribeUpgradeBlocker()
+	{
+		var found = FindUpgradeEntry( _selectedUpgradeKey );
+		if ( found is null )
+			return _upgradeEntries.Count == 0 ? "Nothing to upgrade" : "Select an item";
+
+		if ( !EquipmentUpgrade.CanUpgradeFurther( found.Value.Stack ) )
+			return "Max tier";
+
+		return EquipmentUpgrade.BuildCost( found.Value.Stack.ResourceId ) is null ? "No recipe" : "Need materials";
+	}
+
+	void UpgradeSelectedOnClick()
+	{
+		var found = FindUpgradeEntry( _selectedUpgradeKey );
+		if ( found is null || _crafting is null || !CanUpgradeEntry( found.Value ) )
+			return;
+
+		var entry = found.Value;
+		var sent = _crafting.OwnerTryUpgradeEquipment( entry.GridId, entry.SlotIndex, entry.Stack.ResourceId );
+		if ( _crafting.LogCrafting )
+			Log.Info( $"[CraftingMenu] Upgrade request {(sent ? "sent/applied" : "failed")} for {entry.Key} ({entry.Stack.ResourceId})." );
+
+		// Host sync lands shortly: re-list (tier numeral) and re-read materials on the next tick.
+		_nextUpgradeListCheckAt = 0;
+		_nextRepairStateRefreshAt = 0;
+	}
+

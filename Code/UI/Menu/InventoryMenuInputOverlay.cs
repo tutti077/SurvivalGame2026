@@ -204,12 +204,10 @@ public sealed class InventoryMenuInputOverlay : Panel
 		_softCursor.Style.Set( "position", "absolute" );
 		_softCursor.Style.Width = Length.Pixels( 14f );
 		_softCursor.Style.Height = Length.Pixels( 14f );
-		_softCursor.Style.BackgroundColor = new Color( 1f, 1f, 1f, 0.95f );
 		_softCursor.Style.Set( "border-radius", "7px" );
 		_softCursor.Style.Set( "pointer-events", "none" );
 		_softCursor.Style.Set( "z-index", "10000" );
-		_softCursor.Style.Set( "border-width", "2px" );
-		_softCursor.Style.Set( "border-color", "#111111" );
+		UiStyle.SoftCursor( _softCursor );
 	}
 
 	void ApplySoftCursorVisual()

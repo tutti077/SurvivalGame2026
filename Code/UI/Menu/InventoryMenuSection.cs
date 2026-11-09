@@ -43,11 +43,7 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 		_sectionRoot.Style.Set( "gap", $"{8f * Scale}px" );
 		_sectionRoot.Style.Width = Length.Percent( 100 );
 
-		var title = new Label { Parent = _sectionRoot, Text = "Inventory" };
-		title.Style.FontColor = Color.White;
-		title.Style.FontSize = Length.Pixels( TitleFontSize );
-		title.Style.Set( "width", "100%" );
-		title.Style.Set( "text-align", "center" );
+		UiStyle.AddTitle( _sectionRoot, "Inventory", TitleFontSize );
 
 		_grid = new Panel { Parent = _sectionRoot };
 		_grid.Style.Set( "flex-direction", "column" );
@@ -67,17 +63,16 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 		dropZone.Style.Set( "align-self", "center" );
 		dropZone.Style.Set( "justify-content", "center" );
 		dropZone.Style.Set( "align-items", "center" );
-		dropZone.Style.Set( "border-width", "2px" );
+		dropZone.Style.Set( "border-width", UiStyle.Px( UiTheme.Metrics.BorderWidthStrong ) );
 		dropZone.Style.Set( "border-style", "dashed" );
-		dropZone.Style.Set( "border-radius", "6px" );
+		dropZone.Style.Set( "border-radius", UiStyle.Px( UiTheme.Metrics.Radius ) );
 		dropZone.Style.Set( "pointer-events", "auto" );
 		dropZone.Style.Set( "display", "none" );
 		dropZone.SetHighlighted( false );
 
 		var dropLabel = new Label { Parent = dropZone, Text = "Drop item" };
-		dropLabel.Style.FontColor = new Color( 0.82f, 0.76f, 0.64f );
-		dropLabel.Style.FontSize = Length.Pixels( 14f * Scale );
-		dropLabel.Style.Set( "text-shadow", "1px 1px 2px rgba(0,0,0,0.85)" );
+		UiStyle.Text( dropLabel, UiText.Secondary, 14f * Scale );
+		dropLabel.Style.Set( "text-shadow", UiStyle.TextShadowCss );
 		dropLabel.Style.Set( "pointer-events", "none" );
 
 		_interaction?.RegisterPlayerDropZone( dropZone );
@@ -102,12 +97,7 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 				slotPanel.Style.Set( "flex-shrink", "0" );
 				slotPanel.Style.Set( "flex-grow", "0" );
 				slotPanel.Style.Set( "position", "relative" );
-				slotPanel.Style.Set( "box-sizing", "border-box" );
-				slotPanel.Style.BackgroundColor = new Color( 0.12f, 0.13f, 0.15f, 0.92f );
-				slotPanel.Style.Set( "border-width", "1px" );
-				slotPanel.Style.Set( "border-color", "#474d57" );
-				slotPanel.Style.Set( "border-radius", "4px" );
-				slotPanel.Style.Set( "overflow", "hidden" );
+				UiStyle.Slot( slotPanel );
 				slotPanel.Style.Set( "pointer-events", "auto" );
 				slotPanel.Style.Set( "z-index", "10" );
 
@@ -181,15 +171,7 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 		count.Style.Set( "position", "absolute" );
 		count.Style.Set( "right", "3px" );
 		count.Style.Set( "bottom", "1px" );
-		count.Style.Set( "padding-left", "3px" );
-		count.Style.Set( "padding-right", "3px" );
-		count.Style.Set( "padding-top", "1px" );
-		count.Style.Set( "padding-bottom", "1px" );
-		count.Style.Set( "background-color", "rgba(0,0,0,0.65)" );
-		count.Style.Set( "border-radius", "3px" );
-		count.Style.FontColor = Color.White;
-		count.Style.FontSize = Length.Pixels( CountFontSize );
-		count.Style.Set( "text-shadow", "1px 1px 2px black" );
+		UiStyle.CountBadge( count, CountFontSize );
 		count.Style.Set( "display", "none" );
 		count.Style.Set( "pointer-events", "none" );
 
@@ -216,9 +198,7 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 		ui.LastPreferred = preferred;
 		ui.LastWear = wear;
 		ResourceCatalog.ApplyStackVisual( ui.IconPanel, ui.CountLabel, slot );
-		ui.Root.Style.BackgroundColor = preferred
-			? new Color( 0.42f, 0.42f, 0.45f, 0.95f )
-			: new Color( 0.12f, 0.13f, 0.15f, 0.92f );
+		UiStyle.SetSlotState( ui.Root, preferred ? UiSlotState.Preferred : UiSlotState.Idle );
 	}
 
 	bool IsPreferredAmmoStack( string resourceId )

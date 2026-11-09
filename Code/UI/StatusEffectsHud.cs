@@ -21,14 +21,6 @@ public sealed class StatusEffectsHud
 	public const float RowBottomGap = 8f;
 	const float TooltipMaxWidth = 300f;
 
-	const string BuffBorderHex = "#73cc73";
-	const string DebuffBorderHex = "#e6594d";
-	static readonly Color TooltipTitleColor = Color.White;
-	static readonly Color TooltipDescriptionColor = new( 0.78f, 0.8f, 0.84f );
-	static readonly Color TooltipBuffColor = new( 0.55f, 0.85f, 0.55f );
-	static readonly Color TooltipDebuffColor = new( 0.95f, 0.55f, 0.5f );
-	static readonly Color TooltipComfortColor = new( 0.87f, 0.76f, 0.38f );
-
 	sealed class Slot
 	{
 		public string Id;
@@ -81,10 +73,7 @@ public sealed class StatusEffectsHud
 		_tooltip.Style.Set( "padding-top", "9px" );
 		_tooltip.Style.Set( "padding-bottom", "9px" );
 		_tooltip.Style.Set( "max-width", $"{TooltipMaxWidth}px" );
-		_tooltip.Style.BackgroundColor = new Color( 0.05f, 0.06f, 0.08f, 0.96f );
-		_tooltip.Style.Set( "border-radius", "6px" );
-		_tooltip.Style.Set( "border-width", "1px" );
-		_tooltip.Style.Set( "border-color", "#4a5160" );
+		UiStyle.Surface( _tooltip, UiSurface.Tooltip );
 		_tooltip.Style.Set( "pointer-events", "none" );
 		_tooltip.Style.Set( "z-index", "10" );
 		_tooltip.Style.Set( "display", "none" );
@@ -173,11 +162,10 @@ public sealed class StatusEffectsHud
 			var root = new Panel { Parent = _row };
 			root.Style.Width = Length.Pixels( IconSize );
 			root.Style.Height = Length.Pixels( IconSize );
+			UiStyle.Slot( root );
+			// The effect's own tint shows through the slot; buff / debuff framing comes from the theme.
 			root.Style.BackgroundColor = StatusEffectCatalog.ResolveFallbackColor( effect ).WithAlpha( 0.55f );
-			root.Style.Set( "border-width", "1px" );
-			root.Style.Set( "border-color", effect.IsBuff ? BuffBorderHex : DebuffBorderHex );
-			root.Style.Set( "border-radius", "4px" );
-			root.Style.Set( "overflow", "hidden" );
+			root.Style.Set( "border-color", UiStyle.Css( UiStyle.StatusColor( effect.IsBuff ) ) );
 			root.Style.Set( "flex-shrink", "0" );
 			root.Style.Set( "pointer-events", "none" );
 
@@ -200,9 +188,7 @@ public sealed class StatusEffectsHud
 			timer.Style.Set( "bottom", "0" );
 			timer.Style.Set( "align-items", "center" );
 			timer.Style.Set( "justify-content", "center" );
-			timer.Style.FontColor = Color.White;
-			timer.Style.FontSize = Length.Pixels( 10f );
-			timer.Style.Set( "text-shadow", "1px 1px 2px black" );
+			UiStyle.Text( timer, UiText.Hud, 10f );
 			timer.Style.Set( "pointer-events", "none" );
 
 			_slots.Add( new Slot { Id = effect.Id, Root = root, Timer = timer } );
@@ -270,18 +256,19 @@ public sealed class StatusEffectsHud
 	{
 		_tooltip.DeleteChildren();
 
+		var colors = UiTheme.Colors;
 		var name = string.IsNullOrWhiteSpace( effect.DisplayName ) ? effect.Id : effect.DisplayName;
-		AddLine( $"{name.ToUpperInvariant()} · {timer}", TooltipTitleColor, 18f );
+		AddLine( $"{name.ToUpperInvariant()} · {timer}", UiText.Value, 18f );
 
 		if ( !string.IsNullOrWhiteSpace( effect.Description ) )
-			AddLine( effect.Description, TooltipDescriptionColor, 14f );
+			AddLine( effect.Description, UiText.Secondary, 14f );
 
-		var modifierColor = effect.IsBuff ? TooltipBuffColor : TooltipDebuffColor;
+		var modifierColor = effect.IsBuff ? colors.PositiveColor : colors.NegativeColor;
 		foreach ( var line in effect.DescribeModifiers() )
-			AddLine( line, modifierColor, 15f );
+			AddLine( line, UiText.Body, 15f, modifierColor );
 
 		if ( string.Equals( effect.Id, StatusEffectCatalog.RestedId, StringComparison.OrdinalIgnoreCase ) )
-			AddLine( DescribeComfort(), TooltipComfortColor, 14f );
+			AddLine( DescribeComfort(), UiText.Body, 14f, colors.WarningColor );
 	}
 
 	string DescribeComfort()
@@ -303,14 +290,15 @@ public sealed class StatusEffectsHud
 		return $"Comfort {level}{detail} — timer held";
 	}
 
-	void AddLine( string text, Color color, float fontSize )
+	void AddLine( string text, UiText kind, float fontSize, Color? color = null )
 	{
 		if ( string.IsNullOrWhiteSpace( text ) )
 			return;
 
 		var label = new Label { Parent = _tooltip, Text = text };
-		label.Style.FontColor = color;
-		label.Style.FontSize = Length.Pixels( fontSize );
+		UiStyle.Text( label, kind, fontSize );
+		if ( color is { } tint )
+			label.Style.FontColor = tint;
 		label.Style.Set( "white-space", "normal" );
 		label.Style.Set( "pointer-events", "none" );
 	}

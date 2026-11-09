@@ -36,8 +36,9 @@ public sealed class InventoryPlayerDropZonePanel : Panel
 			return;
 
 		_highlighted = highlighted;
-		Style.Set( "border-color", highlighted ? "#c9a227" : "#5a4a32" );
-		Style.Set( "background-color", highlighted ? "rgba(42,32,18,0.92)" : "rgba(24,20,14,0.88)" );
+		var colors = UiTheme.Colors;
+		Style.Set( "border-color", UiStyle.Css( highlighted ? colors.AccentColor : colors.BorderStrongColor ) );
+		Style.Set( "background-color", UiStyle.Css( colors.PanelSunkenColor ) );
 	}
 
 	public override void Tick()

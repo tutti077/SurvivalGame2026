@@ -17,8 +17,6 @@ public sealed class AugmentsMenuSection : IPlayerMenuSection
 
 	public string SectionId => "augments";
 
-	static readonly Color PanelBg = new( 0.07f, 0.08f, 0.10f, 0.92f );
-
 	readonly PlayerAugments _augments;
 	readonly PlayerInventoryInteraction _interaction;
 	readonly PlayerAugmentInstalledGridHost _viewHost;
@@ -31,7 +29,9 @@ public sealed class AugmentsMenuSection : IPlayerMenuSection
 
 	// Column fit: bind title + slots + key labels + hint scale with the doll; page title, gaps and padding do not.
 	const float ExtraScalableNominal = (AugmentPaperdollView.SmallFont + 1f) + AugmentPaperdollView.SlotSize + 2f + AugmentPaperdollView.SmallFont + (AugmentPaperdollView.SmallFont + 1f);
-	const float FixedColumnHeight = HeaderFont + 8f + 4f * 8f + 20f;
+	/// <summary>The accent rule <see cref="UiStyle.AddTitle"/> draws under the title: 1 px plus its 4 px margins.</summary>
+	const float TitleRuleHeight = 1f + 2f * 4f;
+	const float FixedColumnHeight = HeaderFont + TitleRuleHeight + 8f + 4f * 8f + 20f;
 	Label _bindTitle;
 	Label _hint;
 
@@ -72,8 +72,7 @@ public sealed class AugmentsMenuSection : IPlayerMenuSection
 		_sectionRoot.Style.Set( "gap", "8px" );
 		_sectionRoot.Style.Set( "padding", "10px" );
 		_sectionRoot.Style.Set( "overflow", "hidden" );
-		_sectionRoot.Style.BackgroundColor = PanelBg;
-		_sectionRoot.Style.Set( "border-radius", "6px" );
+		UiStyle.Surface( _sectionRoot, UiSurface.Frame );
 		_sectionRoot.Style.Set( "pointer-events", "auto" );
 		_sectionRoot.Style.Set( "display", "none" );
 
@@ -84,7 +83,7 @@ public sealed class AugmentsMenuSection : IPlayerMenuSection
 
 		// Key binds 1–6.
 		_bindTitle = new Label { Parent = _sectionRoot, Text = "Key binds — drag a trigger augment from the doll onto a key" };
-		_bindTitle.Style.FontColor = AugmentPaperdollView.LabelColor;
+		_bindTitle.Style.FontColor = UiTheme.Colors.TextSecondaryColor;
 		_bindTitle.Style.FontSize = Length.Pixels( AugmentPaperdollView.SmallFont + 1f );
 		_bindTitle.Style.Set( "flex-shrink", "0" );
 		_bindTitle.Style.Set( "pointer-events", "none" );
@@ -111,14 +110,14 @@ public sealed class AugmentsMenuSection : IPlayerMenuSection
 			_bindUi.Add( AugmentPaperdollView.CreateSlotUi( slotPanel ) );
 
 			var key = new Label { Parent = host, Text = i < PlayerAugments.BindKeyLabels.Length ? PlayerAugments.BindKeyLabels[i] : (i + 1).ToString() };
-			key.Style.FontColor = AugmentPaperdollView.LabelColor;
+			key.Style.FontColor = UiTheme.Colors.TextSecondaryColor;
 			key.Style.FontSize = Length.Pixels( AugmentPaperdollView.SmallFont );
 			key.Style.Set( "pointer-events", "none" );
 			_bindKeyLabels.Add( key );
 		}
 
 		_hint = new Label { Parent = _sectionRoot, Text = "Wheel augments are picked by holding Tab (a tap opens this menu). Visit an augment station to enhance, install or remove augments." };
-		_hint.Style.FontColor = AugmentPaperdollView.MutedColor;
+		_hint.Style.FontColor = UiTheme.Colors.TextMutedColor;
 		_hint.Style.FontSize = Length.Pixels( AugmentPaperdollView.SmallFont + 1f );
 		_hint.Style.Set( "flex-shrink", "0" );
 		_hint.Style.Set( "pointer-events", "none" );
@@ -127,14 +126,10 @@ public sealed class AugmentsMenuSection : IPlayerMenuSection
 		UpdateVisibility();
 	}
 
+	/// <summary>Page title + accent rule; <see cref="FixedColumnHeight"/> counts both.</summary>
 	void AddTitle( string text )
 	{
-		var title = new Label { Parent = _sectionRoot, Text = text };
-		title.Style.FontColor = AugmentPaperdollView.TitleColor;
-		title.Style.FontSize = Length.Pixels( HeaderFont );
-		title.Style.Set( "width", "100%" );
-		title.Style.Set( "text-align", "center" );
-		title.Style.Set( "flex-shrink", "0" );
+		var title = UiStyle.AddTitle( _sectionRoot, text, HeaderFont );
 		title.Style.Set( "pointer-events", "none" );
 	}
 

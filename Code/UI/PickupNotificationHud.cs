@@ -121,10 +121,7 @@ public sealed class PickupNotificationHud
 		row.Style.PaddingBottom = Length.Pixels( 6f );
 		row.Style.PaddingLeft = Length.Pixels( 8f );
 		row.Style.PaddingRight = Length.Pixels( 12f );
-		row.Style.BackgroundColor = new Color( 0.06f, 0.07f, 0.09f, 0.88f );
-		row.Style.Set( "border-width", "1px" );
-		row.Style.Set( "border-color", "#3a4250" );
-		row.Style.Set( "border-radius", "6px" );
+		UiStyle.Surface( row, UiSurface.Pill );
 		row.Style.Set( "pointer-events", "none" );
 
 		var icon = new Panel { Parent = row };
@@ -134,16 +131,14 @@ public sealed class PickupNotificationHud
 		icon.Style.Set( "background-size", "contain" );
 		icon.Style.Set( "background-repeat", "no-repeat" );
 		icon.Style.Set( "background-position", "center" );
-		icon.Style.Set( "border-radius", "4px" );
+		icon.Style.Set( "border-radius", UiStyle.Px( UiTheme.Metrics.RadiusSmall ) );
 		icon.Style.BackgroundColor = def.FallbackColor.WithAlpha( 0.85f );
 
 		if ( !MenuUiTextures.ApplyBackground( icon, iconPath ) && def.Icon is not null )
 			icon.Style.SetBackgroundImage( def.Icon );
 
 		var qty = new Label { Parent = row, Text = $"+{notice.Amount}" };
-		qty.Style.FontColor = Color.White;
-		qty.Style.FontSize = Length.Pixels( 18f );
-		qty.Style.Set( "font-weight", "bold" );
+		UiStyle.Text( qty, UiText.Hud, 18f );
 
 		return new PickupToastEntry
 		{

@@ -15,12 +15,6 @@ public sealed class AugmentBindsHud
 	const float SlotGap = 6f;
 	const float KeyFont = 12f;
 
-	static readonly Color SlotBg = new( 0.08f, 0.09f, 0.11f, 0.85f );
-	static readonly Color CooldownShade = new( 0f, 0f, 0f, 0.7f );
-	static readonly Color BatteryColor = new( 0.4f, 0.75f, 1f, 0.95f );
-	const string BorderIdle = "#2a3140";
-	const string BorderOn = "#e0b84a";
-
 	readonly SlotUi[] _slots = new SlotUi[PlayerAugments.BindCount];
 
 	Panel _host;
@@ -49,12 +43,7 @@ public sealed class AugmentBindsHud
 			slot.Style.Width = Length.Pixels( SlotSize );
 			slot.Style.Height = Length.Pixels( SlotSize );
 			slot.Style.Set( "position", "relative" );
-			slot.Style.Set( "box-sizing", "border-box" );
-			slot.Style.BackgroundColor = SlotBg;
-			slot.Style.Set( "border-width", "1px" );
-			slot.Style.Set( "border-color", BorderIdle );
-			slot.Style.Set( "border-radius", "5px" );
-			slot.Style.Set( "overflow", "hidden" );
+			UiStyle.Slot( slot );
 			slot.Style.Set( "pointer-events", "none" );
 
 			var icon = new Panel { Parent = slot };
@@ -74,7 +63,7 @@ public sealed class AugmentBindsHud
 			cooldown.Style.Set( "right", "0" );
 			cooldown.Style.Set( "bottom", "0" );
 			cooldown.Style.Set( "height", "0%" );
-			cooldown.Style.BackgroundColor = CooldownShade;
+			cooldown.Style.BackgroundColor = UiTheme.Colors.ShadowColor.WithAlpha( 0.7f );
 
 			var battery = new Panel { Parent = slot };
 			battery.Style.Set( "position", "absolute" );
@@ -82,15 +71,14 @@ public sealed class AugmentBindsHud
 			battery.Style.Set( "bottom", "0" );
 			battery.Style.Set( "height", "3px" );
 			battery.Style.Set( "width", "0%" );
-			battery.Style.BackgroundColor = BatteryColor;
+			battery.Style.BackgroundColor = UiTheme.Colors.InfoColor;
 
 			var key = new Label { Parent = slot, Text = i < PlayerAugments.BindKeyLabels.Length ? PlayerAugments.BindKeyLabels[i] : (i + 1).ToString() };
 			key.Style.Set( "position", "absolute" );
 			key.Style.Set( "right", "3px" );
 			key.Style.Set( "top", "1px" );
-			key.Style.FontColor = new Color( 0.75f, 0.78f, 0.82f, 0.9f );
-			key.Style.FontSize = Length.Pixels( KeyFont );
-			key.Style.Set( "text-shadow", "1px 1px 2px rgba(0,0,0,0.85)" );
+			UiStyle.Text( key, UiText.Hud, KeyFont );
+			key.Style.FontColor = UiTheme.Colors.TextSecondaryColor;
 
 			_slots[i] = new SlotUi( slot, icon, cooldown, battery );
 		}
@@ -136,7 +124,7 @@ public sealed class AugmentBindsHud
 			if ( string.IsNullOrWhiteSpace( id ) )
 			{
 				ui.SetIcon( null );
-				ui.Apply( 0, 0, BorderIdle );
+				ui.Apply( 0, 0, UiSlotState.Idle );
 				continue;
 			}
 
@@ -145,7 +133,7 @@ public sealed class AugmentBindsHud
 			_augments.TryGetTriggerState( id, out var remaining, out var total, out var on, out var battery01 );
 			var fill = total > 0.01f ? Math.Clamp( remaining / total, 0f, 1f ) : 0f;
 			var batteryPct = AugmentCatalog.TryGet( id, out var def ) && def.HasBattery ? (int)MathF.Round( battery01 * 100f ) : 0;
-			ui.Apply( (int)MathF.Round( fill * 100f ), batteryPct, on ? BorderOn : BorderIdle );
+			ui.Apply( (int)MathF.Round( fill * 100f ), batteryPct, on ? UiSlotState.Active : UiSlotState.Idle );
 		}
 	}
 
@@ -166,9 +154,9 @@ public sealed class AugmentBindsHud
 		// (Style.Set every frame dirtied the HUD's styles and layout each frame).
 		int _cooldownPct = -1;
 		int _batteryPct = -1;
-		string _border;
+		UiSlotState? _state;
 
-		public void Apply( int cooldownPct, int batteryPct, string border )
+		public void Apply( int cooldownPct, int batteryPct, UiSlotState state )
 		{
 			if ( cooldownPct != _cooldownPct )
 			{
@@ -182,10 +170,10 @@ public sealed class AugmentBindsHud
 				Battery.Style.Set( "width", $"{batteryPct}%" );
 			}
 
-			if ( !string.Equals( border, _border, StringComparison.Ordinal ) )
+			if ( _state != state )
 			{
-				_border = border;
-				Root.Style.Set( "border-color", border );
+				_state = state;
+				UiStyle.SetSlotState( Root, state );
 			}
 		}
 

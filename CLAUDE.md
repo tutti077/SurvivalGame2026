@@ -8,7 +8,8 @@ This file holds the rules, Mark's guidelines and the paths Claude needs to build
 project's boundaries and art style. How a system works lives in **`AGENTS.md`** (read it before
 touching player pawn gameplay, movement, pools or combat) and in subsystem docs:
 `Code/Environment/docs/ENVIRONMENT.md` (wind, grass, sky, lighting, terrain look),
-`Code/World/TerrainPreview/docs/TERRAIN_PREVIEW.md`, `Code/World/Voxel/docs/VOXEL.md`.
+`Code/World/TerrainPreview/docs/TERRAIN_PREVIEW.md`, `Code/World/Voxel/docs/VOXEL.md`,
+`Code/UI/docs/UI_THEME.md` (the UI theme: every colour / font / radius comes from it).
 
 ---
 
@@ -316,7 +317,8 @@ Code/
   World/TerrainPreview/  offline world generation pipeline + settings   (docs/TERRAIN_PREVIEW.md)
   World/Voxel/     voxel digging: field, mesher, chunk set, edit log; prototype scene + live-world columns (TerrainWorldManager.Voxel.cs)   (docs/VOXEL.md)
   Hacks/           GameHacks, ConsoleHelp
-  UI/              PlayerScreenHud, HUDs, Menu/ sections, Circuits/
+  Playtest/        PlaytestLog (playtest_log / playtest_mark host telemetry → data/2Tgames/playtest/*.jsonl; Tools/playtest_report.py reads it)
+  UI/              PlayerScreenHud, HUDs, Menu/ sections, Circuits/, Theme/ (UiTheme + UiStyle + UiThemeStyleSheet; themes in data/ui_themes.json; docs/UI_THEME.md)
   Networking/      host spawn, synced UI content, connection identity
   GameBuildLabel.cs
 Editor/            Terrain Noise Preview tool, world manager widget

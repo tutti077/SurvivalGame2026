@@ -33,9 +33,7 @@ public sealed class BuildSupportReadoutHud
 		_root.Style.Set( "display", "none" );
 
 		_label = new Label { Parent = _root };
-		_label.Style.FontSize = Length.Pixels( LabelFontSize );
-		_label.Style.Set( "font-weight", "bold" );
-		_label.Style.Set( "text-shadow", "0px 1px 3px rgba(0,0,0,0.9)" );
+		UiStyle.Text( _label, UiText.Hud, LabelFontSize );
 	}
 
 	bool? _shown;
@@ -64,9 +62,7 @@ public sealed class BuildSupportReadoutHud
 
 		_lastText = text;
 		_label.Text = text;
-		var color = hammer.HoverSupportColor;
-		_label.Style.Set(
-			"color",
-			$"rgba({(int)(color.r * 255)},{(int)(color.g * 255)},{(int)(color.b * 255)},0.95)" );
+		// The support gradient is data (the same tint the piece gets), not theme chrome.
+		_label.Style.FontColor = hammer.HoverSupportColor.WithAlpha( 0.95f );
 	}
 }

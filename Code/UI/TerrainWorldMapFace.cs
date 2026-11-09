@@ -115,10 +115,7 @@ public sealed class TerrainWorldMapFace
 
 		_host.Style.Set( "overflow", "hidden" );
 		_host.Style.Set( "pointer-events", "none" );
-		_host.Style.Set( "border-radius", fillParent ? "6px" : "8px" );
-		_host.Style.Set( "border-width", "1px" );
-		_host.Style.Set( "border-color", "#3a4250" );
-		_host.Style.BackgroundColor = new Color( 0.06f, 0.08f, 0.10f, 0.92f );
+		UiStyle.Surface( _host, UiSurface.Sunken, fillParent ? UiTheme.Metrics.Radius : UiTheme.Metrics.RadiusLarge );
 
 		_zoomStage = new Panel { Parent = _host };
 		_zoomStage.Style.Set( "position", "absolute" );
@@ -159,8 +156,7 @@ public sealed class TerrainWorldMapFace
 		FillAbsolute( _placeholder );
 		_placeholder.Style.Set( "align-items", "center" );
 		_placeholder.Style.Set( "justify-content", "center" );
-		_placeholder.Style.FontColor = new Color( 0.75f, 0.78f, 0.82f, 0.55f );
-		_placeholder.Style.FontSize = Length.Pixels( fillParent ? 22f : 12f );
+		UiStyle.Text( _placeholder, UiText.Muted, fillParent ? 22f : 12f );
 		_placeholder.Style.Set( "pointer-events", "none" );
 		_placeholder.Style.Set( "z-index", "2" );
 
@@ -985,18 +981,17 @@ public sealed class TerrainWorldMapFace
 		root.Style.Height = Length.Pixels( DungeonBadgePixels );
 		root.Style.Set( "margin-left", $"{-width * 0.5f:0.##}px" );
 		root.Style.Set( "margin-top", $"{-DungeonBadgePixels * 0.5f:0.##}px" );
-		root.Style.Set( "border-radius", "6px" );
-		root.Style.BorderWidth = Length.Pixels( 2f );
+		root.Style.Set( "border-radius", UiStyle.Px( UiTheme.Metrics.Radius ) );
+		root.Style.BorderWidth = Length.Pixels( UiTheme.Metrics.BorderWidthStrong );
 		root.Style.BorderColor = color;
-		root.Style.BackgroundColor = new Color( 0.05f, 0.05f, 0.07f, 0.92f );
+		root.Style.BackgroundColor = UiTheme.Colors.TooltipColor;
 		root.Style.Set( "align-items", "center" );
 		root.Style.Set( "justify-content", "center" );
 		root.Style.Set( "pointer-events", "none" );
 
 		var label = new Label { Parent = root, Text = text };
+		UiStyle.Text( label, UiText.Value, UiTheme.Metrics.FontMicro );
 		label.Style.FontColor = color;
-		label.Style.FontSize = Length.Pixels( 11f );
-		label.Style.Set( "font-weight", "bold" );
 		label.Style.Set( "white-space", "nowrap" );
 		label.Style.Set( "pointer-events", "none" );
 	}
@@ -1101,9 +1096,8 @@ public sealed class TerrainWorldMapFace
 		label.Style.Width = Length.Pixels( PinLabelWidth );
 		label.Style.Set( "justify-content", "center" );
 		label.Style.Set( "text-align", "center" );
+		UiStyle.Text( label, UiText.Hud, 14f );
 		label.Style.FontColor = color;
-		label.Style.FontSize = Length.Pixels( 14f );
-		label.Style.Set( "text-shadow", "0 0 3px #000, 1px 1px 0 #000" );
 		label.Style.Set( "white-space", "nowrap" );
 		label.Style.Set( "pointer-events", "none" );
 	}

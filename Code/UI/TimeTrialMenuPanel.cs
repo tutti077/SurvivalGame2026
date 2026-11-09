@@ -39,7 +39,7 @@ public sealed class TimeTrialMenuPanel : Panel
 		Style.Set( "justify-content", "center" );
 		Style.Set( "pointer-events", "all" );
 		Style.Set( "display", "none" );
-		Style.BackgroundColor = new Color( 0f, 0f, 0f, 0.45f );
+		UiStyle.Backdrop( this );
 		AcceptsFocus = false;
 	}
 
@@ -123,29 +123,22 @@ public sealed class TimeTrialMenuPanel : Panel
 		_card.Style.PaddingRight = Length.Pixels( 16f );
 		_card.Style.PaddingTop = Length.Pixels( 14f );
 		_card.Style.PaddingBottom = Length.Pixels( 14f );
-		_card.Style.BackgroundColor = new Color( 0.08f, 0.09f, 0.11f, 0.94f );
-		_card.Style.Set( "border-radius", "8px" );
-		_card.Style.Set( "border", "1px solid #3a3f4a" );
+		UiStyle.Surface( _card, UiSurface.Frame );
 
-		var title = new Label { Parent = _card, Text = "Time Trial" };
-		title.Style.FontColor = Color.White;
-		title.Style.FontSize = Length.Pixels( 22f );
+		UiStyle.AddTitle( _card, "Time Trial", 22f );
 
 		_status = new Label { Parent = _card, Text = "" };
-		_status.Style.FontColor = new Color( 0.75f, 0.8f, 0.85f );
-		_status.Style.FontSize = Length.Pixels( 13f );
+		UiStyle.Text( _status, UiText.Secondary );
 
 		var modeHeader = new Label { Parent = _card, Text = "Mode" };
-		modeHeader.Style.FontColor = new Color( 0.7f, 0.72f, 0.76f );
-		modeHeader.Style.FontSize = Length.Pixels( 12f );
+		UiStyle.Text( modeHeader, UiText.Header, 13f );
 
 		_modeRow = new Panel { Parent = _card };
 		_modeRow.Style.Set( "flex-direction", "row" );
 		_modeRow.Style.Set( "gap", "8px" );
 
 		var varHeader = new Label { Parent = _card, Text = "Race" };
-		varHeader.Style.FontColor = new Color( 0.7f, 0.72f, 0.76f );
-		varHeader.Style.FontSize = Length.Pixels( 12f );
+		UiStyle.Text( varHeader, UiText.Header, 13f );
 
 		_variationList = new Panel { Parent = _card };
 		_variationList.Style.Set( "flex-direction", "column" );
@@ -158,24 +151,24 @@ public sealed class TimeTrialMenuPanel : Panel
 		footer.Style.Set( "justify-content", "flex-end" );
 		footer.Style.MarginTop = Length.Pixels( 6f );
 
-		_leaveBtn = MakeButton( footer, "Leave Queue", () =>
+		_leaveBtn = MakeButton( footer, "Leave Queue", UiButton.Danger, () =>
 		{
 			_interaction?.OwnerMenuLeave();
 			Refresh( forceRebuild: true );
 		} );
-		_primaryBtn = MakeButton( footer, "Start", OnPrimary, out _primaryLabel );
+		_primaryBtn = MakeButton( footer, "Start", UiButton.Primary, OnPrimary, out _primaryLabel );
 
 		var backRow = new Panel { Parent = _card };
 		backRow.Style.Set( "flex-direction", "row" );
 		backRow.Style.Set( "justify-content", "flex-start" );
 		backRow.Style.MarginTop = Length.Pixels( 4f );
-		MakeButton( backRow, "Back", () => _interaction?.SetTimeTrialMenuOpen( false ) );
+		MakeButton( backRow, "Back", UiButton.Default, () => _interaction?.SetTimeTrialMenuOpen( false ) );
 	}
 
-	Panel MakeButton( Panel parent, string text, Action onClick ) =>
-		MakeButton( parent, text, onClick, out _ );
+	Panel MakeButton( Panel parent, string text, UiButton kind, Action onClick ) =>
+		MakeButton( parent, text, kind, onClick, out _ );
 
-	Panel MakeButton( Panel parent, string text, Action onClick, out Label label )
+	Panel MakeButton( Panel parent, string text, UiButton kind, Action onClick, out Label label )
 	{
 		var btn = new TimeTrialClickPanel { Parent = parent };
 		btn.Clicked = onClick;
@@ -183,14 +176,10 @@ public sealed class TimeTrialMenuPanel : Panel
 		btn.Style.PaddingRight = Length.Pixels( 12f );
 		btn.Style.PaddingTop = Length.Pixels( 8f );
 		btn.Style.PaddingBottom = Length.Pixels( 8f );
-		btn.Style.BackgroundColor = new Color( 0.2f, 0.45f, 0.85f );
-		btn.Style.Set( "border-radius", "4px" );
-		btn.Style.Set( "cursor", "pointer" );
+		btn.SetLook( kind, selected: false, disabled: false );
 
 		label = new Label { Parent = btn, Text = text };
-		label.Style.FontColor = Color.White;
-		label.Style.FontSize = Length.Pixels( 14f );
-		label.Style.Set( "pointer-events", "none" );
+		UiStyle.ButtonLabel( label, kind, 14f );
 		return btn;
 	}
 
@@ -227,22 +216,10 @@ public sealed class TimeTrialMenuPanel : Panel
 		chip.Style.PaddingRight = Length.Pixels( 10f );
 		chip.Style.PaddingTop = Length.Pixels( 6f );
 		chip.Style.PaddingBottom = Length.Pixels( 6f );
-		chip.Style.Set( "border-radius", "4px" );
 		var selected = _selectedMode == mode;
-		chip.Style.BackgroundColor = selected
-			? new Color( 0.25f, 0.5f, 0.9f )
-			: new Color( 0.16f, 0.17f, 0.2f );
-		if ( !enabled )
-			chip.Style.Opacity = 0.45f;
-
-		var text = new Label { Parent = chip, Text = label };
-		text.Style.FontColor = Color.White;
-		text.Style.FontSize = Length.Pixels( 13f );
-		text.Style.Set( "pointer-events", "none" );
 
 		if ( enabled )
 		{
-			chip.Style.Set( "cursor", "pointer" );
 			chip.Clicked = () =>
 			{
 				if ( _selectedMode == mode )
@@ -251,6 +228,11 @@ public sealed class TimeTrialMenuPanel : Panel
 				Refresh( forceRebuild: true );
 			};
 		}
+
+		chip.SetLook( UiButton.Default, selected, disabled: !enabled );
+
+		var text = new Label { Parent = chip, Text = label };
+		UiStyle.ButtonLabel( text, UiButton.Default, 13f );
 	}
 
 	void RebuildVariationList()
@@ -267,20 +249,10 @@ public sealed class TimeTrialMenuPanel : Panel
 			row.Style.PaddingRight = Length.Pixels( 8f );
 			row.Style.PaddingTop = Length.Pixels( 6f );
 			row.Style.PaddingBottom = Length.Pixels( 6f );
-			row.Style.Set( "border-radius", "4px" );
 			var selected = string.Equals( _selectedVariationId, v.Id, StringComparison.OrdinalIgnoreCase );
-			row.Style.BackgroundColor = selected
-				? new Color( 0.22f, 0.28f, 0.38f )
-				: new Color( 0.12f, 0.13f, 0.15f );
-
-			var text = new Label { Parent = row, Text = v.DisplayName };
-			text.Style.FontColor = Color.White;
-			text.Style.FontSize = Length.Pixels( 13f );
-			text.Style.Set( "pointer-events", "none" );
 
 			if ( canPick )
 			{
-				row.Style.Set( "cursor", "pointer" );
 				var id = v.Id;
 				row.Clicked = () =>
 				{
@@ -290,10 +262,12 @@ public sealed class TimeTrialMenuPanel : Panel
 					Refresh( forceRebuild: true );
 				};
 			}
-			else
-			{
-				row.Style.Opacity = selected ? 1f : 0.5f;
-			}
+
+			// Locked list (someone else picked): the active race stays readable, the rest dim.
+			row.SetLook( UiButton.Default, selected, disabled: !canPick && !selected );
+
+			var text = new Label { Parent = row, Text = v.DisplayName };
+			UiStyle.ButtonLabel( text, UiButton.Default, 13f );
 		}
 	}
 
@@ -354,15 +328,51 @@ public sealed class TimeTrialMenuPanel : Panel
 /// <summary>
 /// Clickable row/chip with a depress visual: mouse-down squashes the button, the action fires on
 /// mouse-UP. Firing on release also catches a first click whose DOWN got swallowed while the
-/// menu was still taking over the cursor (the "have to click twice" complaint).
+/// menu was still taking over the cursor (the "have to click twice" complaint). The look comes
+/// from the theme (<see cref="SetLook"/>); hover restyles through the real mouse events this
+/// panel already receives.
 /// </summary>
 sealed class TimeTrialClickPanel : Panel
 {
 	public Action Clicked;
 
+	UiButton _kind = UiButton.Default;
+	bool _selected;
+	bool _disabled;
+
 	public override bool WantsMouseInput() => true;
 
 	static bool IsClickButton( string button ) => button is "mouseleft" or "mouse1" or "Attack1";
+
+	/// <summary>Theme button surface for this kind; a selected chip reads as pressed with the accent border.</summary>
+	public void SetLook( UiButton kind, bool selected, bool disabled )
+	{
+		_kind = kind;
+		_selected = selected;
+		_disabled = disabled;
+		UiStyle.Button( this, kind );
+		ApplyState( hovered: false );
+	}
+
+	void ApplyState( bool hovered )
+	{
+		var canHover = hovered && !_disabled && Clicked is not null;
+		UiStyle.SetButtonState( this, _kind, canHover, _selected, _disabled );
+		if ( _selected )
+			Style.Set( "border-color", UiStyle.Css( UiTheme.Colors.AccentColor ) );
+	}
+
+	protected override void OnMouseOver( MousePanelEvent e )
+	{
+		base.OnMouseOver( e );
+		ApplyState( hovered: true );
+	}
+
+	protected override void OnMouseOut( MousePanelEvent e )
+	{
+		base.OnMouseOut( e );
+		ApplyState( hovered: false );
+	}
 
 	protected override void OnMouseDown( MousePanelEvent e )
 	{

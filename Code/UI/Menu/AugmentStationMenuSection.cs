@@ -16,7 +16,10 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 {
 	public const float SlotSize = AugmentPaperdollView.SlotSize;
 	public const float SlotGap = AugmentPaperdollView.SlotGap;
-	const float HeaderFont = 20f;
+	/// <summary>Page title size — the theme's title default, kept as a const so the column-fit arithmetic stays compile-time.</summary>
+	const float TitleFont = 28f;
+	/// <summary>The accent rule <see cref="UiStyle.AddTitle"/> draws under the title: 1 px plus its 4 px margins.</summary>
+	const float TitleRuleHeight = 1f + 2f * 4f;
 	const float BodyFont = AugmentPaperdollView.BodyFont;
 	const float SmallFont = AugmentPaperdollView.SmallFont;
 	const float RowHeight = 44f;
@@ -29,18 +32,6 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 	const float MinThumbHeight = 28f;
 
 	public string SectionId => "augment_station";
-
-	static readonly Color PanelBg = new( 0.07f, 0.08f, 0.10f, 0.92f );
-	static readonly Color BoxBg = AugmentPaperdollView.BoxBg;
-	static readonly Color TitleColor = AugmentPaperdollView.TitleColor;
-	static readonly Color MutedColor = AugmentPaperdollView.MutedColor;
-	static readonly Color LabelColor = AugmentPaperdollView.LabelColor;
-	static readonly Color CostColor = AugmentPaperdollView.CostColor;
-	static readonly Color SlotLineColor = new( 0.62f, 0.75f, 0.95f );
-	static readonly Color ButtonOn = new( 0.22f, 0.45f, 0.28f, 0.95f );
-	static readonly Color ButtonOff = AugmentPaperdollView.ButtonOff;
-	const string BorderIdle = AugmentPaperdollView.BorderIdle;
-	const string BorderSelected = "#6aa0ff";
 
 	readonly PlayerAugments _augments;
 	readonly PlayerInventory _inventory;
@@ -61,7 +52,8 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 	const float BankTitleFont = BodyFont;
 	const float CommitButtonWidth = 220f;
 	const float ExtraScalableNominal = ButtonHeight + BankTitleFont + 6f + BankRowCount * SlotSize + (BankRowCount - 1f) * SlotGap;
-	const float FixedColumnHeight = HeaderFont + 8f + 5f * 8f + 20f;
+	// Title + its rule (one more column child, so one more 8 px gap), gaps and padding.
+	const float FixedColumnHeight = TitleFont + TitleRuleHeight + 8f + 6f * 8f + 20f;
 
 	Panel _stationColumn;
 	Label _bankTitle;
@@ -153,14 +145,10 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		info.Style.Set( "overflow", "hidden" );
 		info.Style.Set( "gap", "4px" );
 		info.Style.Set( "padding", "10px" );
-		info.Style.BackgroundColor = BoxBg;
-		info.Style.Set( "border-radius", "4px" );
-		info.Style.Set( "border-width", "1px" );
-		info.Style.Set( "border-color", BorderIdle );
+		UiStyle.Surface( info, UiSurface.Raised );
 
 		_detailName = new Label { Parent = info, Text = "Select an augment" };
-		_detailName.Style.FontColor = TitleColor;
-		_detailName.Style.FontSize = Length.Pixels( BodyFont + 2f );
+		UiStyle.Text( _detailName, UiText.Header, BodyFont + 2f );
 		_detailName.Style.Set( "pointer-events", "none" );
 
 		_detailLines = new Panel { Parent = info };
@@ -177,18 +165,16 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		_detailCostRow.Style.Set( "gap", "8px" );
 		_detailCostRow.Style.Set( "flex-shrink", "0" );
 		_detailCostRow.Style.Height = Length.Pixels( 26f );
-		_detailCostRow.Style.Set( "border-top-width", "1px" );
-		_detailCostRow.Style.Set( "border-color", "#3a404a" );
+		_detailCostRow.Style.Set( "border-top-width", UiStyle.Px( UiTheme.Metrics.BorderWidth ) );
+		_detailCostRow.Style.Set( "border-color", UiStyle.Css( UiTheme.Colors.BorderSubtleColor ) );
 		_detailCostRow.Style.Set( "pointer-events", "none" );
 
 		var costTitle = new Label { Parent = _detailCostRow, Text = "Augment cost" };
-		costTitle.Style.FontColor = LabelColor;
-		costTitle.Style.FontSize = Length.Pixels( BodyFont - 2f );
+		UiStyle.Text( costTitle, UiText.Secondary, BodyFont - 2f );
 		costTitle.Style.Set( "pointer-events", "none" );
 
 		_detailCostLabel = new Label { Parent = _detailCostRow, Text = "" };
-		_detailCostLabel.Style.FontColor = CostColor;
-		_detailCostLabel.Style.FontSize = Length.Pixels( BodyFont );
+		UiStyle.Text( _detailCostLabel, UiText.Accent, BodyFont );
 		_detailCostLabel.Style.Set( "margin-left", "auto" );
 		_detailCostLabel.Style.Set( "pointer-events", "none" );
 
@@ -205,10 +191,7 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		listFrame.Style.Set( "min-height", "0" );
 		listFrame.Style.Set( "overflow", "hidden" );
 		listFrame.Style.Set( "position", "relative" );
-		listFrame.Style.BackgroundColor = BoxBg;
-		listFrame.Style.Set( "border-radius", "4px" );
-		listFrame.Style.Set( "border-width", "1px" );
-		listFrame.Style.Set( "border-color", BorderIdle );
+		UiStyle.Surface( listFrame, UiSurface.Sunken );
 		_listViewport = listFrame;
 
 		_listContent = new Panel { Parent = listFrame };
@@ -227,8 +210,6 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		_scrollTrack.Style.Set( "bottom", "0" );
 		_scrollTrack.Style.Set( "right", "0" );
 		_scrollTrack.Style.Width = Length.Pixels( ScrollBarWidth );
-		_scrollTrack.Style.BackgroundColor = new Color( 0.08f, 0.09f, 0.11f, 0.95f );
-		_scrollTrack.Style.Set( "border-radius", "4px" );
 		_scrollTrack.Style.Set( "pointer-events", "none" );
 
 		_scrollThumb = new Panel { Parent = _scrollTrack };
@@ -237,9 +218,8 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		_scrollThumb.Style.Set( "right", "2px" );
 		_scrollThumb.Style.Set( "top", "0px" );
 		_scrollThumb.Style.Height = Length.Pixels( MinThumbHeight );
-		_scrollThumb.Style.BackgroundColor = new Color( 0.55f, 0.60f, 0.68f, 0.95f );
-		_scrollThumb.Style.Set( "border-radius", "3px" );
 		_scrollThumb.Style.Set( "pointer-events", "none" );
+		UiStyle.ScrollBar( _scrollTrack, _scrollThumb );
 
 		PopulateRows();
 	}
@@ -290,13 +270,12 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 	void AddGroupHeader( string text )
 	{
 		var header = new Label { Parent = _listContent, Text = text };
-		header.Style.FontColor = TitleColor;
-		header.Style.FontSize = Length.Pixels( BodyFont );
+		UiStyle.Text( header, UiText.Header, BodyFont );
 		header.Style.Height = Length.Pixels( GroupHeaderHeight );
 		header.Style.Set( "width", "100%" );
 		header.Style.Set( "flex-shrink", "0" );
-		header.Style.Set( "border-bottom-width", "1px" );
-		header.Style.Set( "border-color", "#5a6170" );
+		header.Style.Set( "border-bottom-width", UiStyle.Px( UiTheme.Metrics.BorderWidth ) );
+		header.Style.Set( "border-color", UiStyle.Css( UiTheme.Colors.BorderColor ) );
 		header.Style.Set( "pointer-events", "none" );
 		_contentHeight += GroupHeaderHeight + RowGap;
 	}
@@ -311,10 +290,9 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		row.Style.Set( "width", "100%" );
 		row.Style.Set( "flex-shrink", "0" );
 		row.Style.Set( "box-sizing", "border-box" );
-		row.Style.BackgroundColor = new Color( 0.13f, 0.14f, 0.17f, 0.9f );
-		row.Style.Set( "border-radius", "3px" );
-		row.Style.Set( "border-width", "1px" );
-		row.Style.Set( "border-color", "transparent" );
+		row.Style.Set( "border-radius", UiStyle.Px( UiTheme.Metrics.RadiusSmall ) );
+		row.Style.Set( "border-width", UiStyle.Px( UiTheme.Metrics.BorderWidth ) );
+		StyleRow( row, selected: false );
 		row.Style.PaddingLeft = Length.Pixels( 6f );
 		row.Style.Set( "pointer-events", "all" );
 
@@ -326,12 +304,21 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		MenuUiTextures.ApplyBackground( icon, def.Icon );
 
 		var name = new Label { Parent = row, Text = def.DisplayName };
-		name.Style.FontColor = TitleColor;
-		name.Style.FontSize = Length.Pixels( BodyFont );
+		UiStyle.Text( name, UiText.Body, BodyFont );
 		name.Style.Set( "pointer-events", "none" );
 
 		_rows.Add( new RowUi( row, def.Id ) );
 		_contentHeight += RowHeight + RowGap;
+	}
+
+	/// <summary>Recipe row fill + border: raised card at rest, the selected-tab tone with the accent border when picked.</summary>
+	static void StyleRow( Panel row, bool selected )
+	{
+		if ( row is null || !row.IsValid() )
+			return;
+
+		row.Style.BackgroundColor = selected ? UiTheme.Colors.TabSelectedColor : UiTheme.Colors.PanelRaisedColor;
+		row.Style.Set( "border-color", UiStyle.Css( selected ? UiTheme.Colors.AccentColor : UiTheme.Colors.BorderSubtleColor ) );
 	}
 
 	public void SelectRecipe( string id )
@@ -340,7 +327,7 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		for ( var i = 0; i < _rows.Count; i++ )
 		{
 			var selected = string.Equals( _rows[i].Id, id, StringComparison.OrdinalIgnoreCase );
-			_rows[i].Root.Style.Set( "border-color", selected ? BorderSelected : "transparent" );
+			StyleRow( _rows[i].Root, selected );
 		}
 
 		RefreshDetail();
@@ -357,7 +344,7 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 			_detailName.Text = "Select an augment";
 			_detailCostLabel.Text = "";
 			_detailCostRow.Style.Set( "display", "none" );
-			SetButtonState( _craftButton, _craftLabel, false, ButtonOn );
+			SetButtonEnabled( _craftButton, _craftLabel, false );
 			return;
 		}
 
@@ -371,20 +358,20 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 				continue;
 
 			var line = new Label { Parent = _detailLines, Text = text };
+			UiStyle.Text( line, UiText.Secondary, kind == AugmentInfoLineKind.Description ? BodyFont - 2f : BodyFont - 3f );
 			line.Style.FontColor = kind switch
 			{
-				AugmentInfoLineKind.Slot or AugmentInfoLineKind.Activation => SlotLineColor,
-				AugmentInfoLineKind.Cost => CostColor,
-				AugmentInfoLineKind.Stat => LabelColor,
-				AugmentInfoLineKind.Warning => new Color( 0.95f, 0.45f, 0.4f ),
-				_ => MutedColor,
+				AugmentInfoLineKind.Slot or AugmentInfoLineKind.Activation => UiTheme.Colors.InfoColor,
+				AugmentInfoLineKind.Cost => UiTheme.Colors.AccentBrightColor,
+				AugmentInfoLineKind.Stat or AugmentInfoLineKind.Description => UiTheme.Colors.TextSecondaryColor,
+				AugmentInfoLineKind.Warning => UiTheme.Colors.NegativeColor,
+				_ => UiTheme.Colors.TextMutedColor,
 			};
-			line.Style.FontSize = Length.Pixels( kind == AugmentInfoLineKind.Description ? BodyFont - 2f : BodyFont - 3f );
 			line.Style.Set( "white-space", "normal" );
 			line.Style.Set( "pointer-events", "none" );
 		}
 
-		SetButtonState( _craftButton, _craftLabel, _augments?.CanCraft( def.Id ) ?? false, ButtonOn );
+		SetButtonEnabled( _craftButton, _craftLabel, _augments?.CanCraft( def.Id ) ?? false );
 	}
 
 	/// <summary>Wheel over the station: scroll the augment list.</summary>
@@ -550,16 +537,14 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		_augmentButton.Style.Width = Length.Pixels( 220f );
 
 		_augmentCostLabel = new Label { Parent = commitRow, Text = "" };
-		_augmentCostLabel.Style.FontColor = CostColor;
-		_augmentCostLabel.Style.FontSize = Length.Pixels( BodyFont );
+		UiStyle.Text( _augmentCostLabel, UiText.Accent, BodyFont );
 		_augmentCostLabel.Style.Set( "pointer-events", "none" );
 
 		_augmentCostIcon = AugmentPaperdollView.MakeCostIcon( commitRow, "ui/items/currency_goldCoins.png" );
 
 		// Bank: fixed 2 × 8 rows (no wrap — a wrapped grid left a stray pair eating the column), scaled with the doll.
 		_bankTitle = new Label { Parent = col, Text = "Augment Bank" };
-		_bankTitle.Style.FontColor = TitleColor;
-		_bankTitle.Style.FontSize = Length.Pixels( BankTitleFont );
+		UiStyle.Text( _bankTitle, UiText.Header, BankTitleFont );
 		_bankTitle.Style.Set( "flex-shrink", "0" );
 		_bankTitle.Style.Set( "pointer-events", "none" );
 
@@ -738,7 +723,7 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		var cost = _augments.ComputePendingGoldCost();
 		_augmentCostLabel.Text = pending ? cost.ToString() : "";
 		_augmentCostIcon.Style.Set( "display", pending ? "flex" : "none" );
-		SetButtonState( _augmentButton, _augmentLabel, _augments.CanCommitAugments(), ButtonOn );
+		SetButtonEnabled( _augmentButton, _augmentLabel, _augments.CanCommitAugments() );
 	}
 
 	static void RefreshSlotList( List<AugmentPaperdollView.SlotUi> list, Func<int, InventorySlot> getter )
@@ -801,48 +786,39 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		col.Style.Set( "gap", "8px" );
 		col.Style.Set( "overflow", "hidden" );
 		col.Style.Set( "padding", "10px" );
-		col.Style.BackgroundColor = PanelBg;
-		col.Style.Set( "border-radius", "6px" );
+		UiStyle.Surface( col, UiSurface.Frame );
 		return col;
 	}
 
+	/// <summary>Column title + accent rule; <see cref="FixedColumnHeight"/> counts both.</summary>
 	static void AddTitle( Panel parent, string text )
 	{
-		var title = new Label { Parent = parent, Text = text };
-		title.Style.FontColor = TitleColor;
-		title.Style.FontSize = Length.Pixels( HeaderFont );
-		title.Style.Set( "width", "100%" );
-		title.Style.Set( "text-align", "center" );
-		title.Style.Set( "flex-shrink", "0" );
+		var title = UiStyle.AddTitle( parent, text, TitleFont );
 		title.Style.Set( "pointer-events", "none" );
 	}
 
+	/// <summary>Craft / Augment: the page's commit buttons, both primary.</summary>
 	static Panel MakeButton( Panel parent, string text, out Label label )
 	{
 		var button = new Panel { Parent = parent };
 		button.Style.Height = Length.Pixels( ButtonHeight );
-		button.Style.BackgroundColor = ButtonOn;
-		button.Style.Set( "border-radius", "4px" );
-		button.Style.Set( "justify-content", "center" );
-		button.Style.Set( "align-items", "center" );
+		UiStyle.Button( button, UiButton.Primary );
 		button.Style.Set( "flex-shrink", "0" );
 		button.Style.Set( "pointer-events", "all" );
 
 		label = new Label { Parent = button, Text = text };
-		label.Style.FontColor = Color.White;
-		label.Style.FontSize = Length.Pixels( BodyFont );
-		label.Style.Set( "pointer-events", "none" );
+		UiStyle.ButtonLabel( label, UiButton.Primary, BodyFont );
 		return button;
 	}
 
-	static void SetButtonState( Panel button, Label label, bool enabled, Color onColor )
+	static void SetButtonEnabled( Panel button, Label label, bool enabled )
 	{
 		if ( button is null || !button.IsValid() )
 			return;
 
-		button.Style.BackgroundColor = enabled ? onColor : ButtonOff;
+		UiStyle.SetButtonState( button, UiButton.Primary, hovered: false, pressed: false, disabled: !enabled );
 		if ( label is not null )
-			label.Style.FontColor = enabled ? Color.White : MutedColor;
+			label.Style.FontColor = enabled ? UiTheme.Colors.TextPrimaryColor : UiTheme.Colors.TextMutedColor;
 	}
 
 	readonly struct RowUi

@@ -54,10 +54,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		_sectionRoot.Style.PaddingBottom = Length.Pixels( 10f );
 		_sectionRoot.Style.PaddingLeft = Length.Pixels( 12f );
 		_sectionRoot.Style.PaddingRight = Length.Pixels( 12f );
-		_sectionRoot.Style.BackgroundColor = new Color( 0.03f, 0.04f, 0.06f, 0.92f );
-		_sectionRoot.Style.Set( "border-radius", "10px" );
-		_sectionRoot.Style.Set( "border-width", "1px" );
-		_sectionRoot.Style.Set( "border-color", "#3a4250" );
+		UiStyle.Surface( _sectionRoot, UiSurface.Frame );
 
 		_rootHeader = new Panel { Parent = _sectionRoot };
 		_rootHeader.Style.Set( "flex-direction", "row" );
@@ -68,8 +65,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		_rootHeader.Style.Set( "flex-shrink", "0" );
 
 		var rootTitle = new Label { Parent = _rootHeader, Text = "Settings" };
-		rootTitle.Style.FontColor = Color.White;
-		rootTitle.Style.FontSize = Length.Pixels( CraftingMenuSection.CraftingTitleFontSize );
+		UiStyle.Text( rootTitle, UiText.Title, CraftingMenuSection.CraftingTitleFontSize );
 
 		_subHeader = new Panel { Parent = _sectionRoot };
 		_subHeader.Style.Set( "position", "relative" );
@@ -91,8 +87,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		subTitleWrap.Style.Set( "pointer-events", "none" );
 
 		_subHeaderTitle = new Label { Parent = subTitleWrap, Text = "" };
-		_subHeaderTitle.Style.FontColor = Color.White;
-		_subHeaderTitle.Style.FontSize = Length.Pixels( CraftingMenuSection.CraftingTitleFontSize );
+		UiStyle.Text( _subHeaderTitle, UiText.Title, CraftingMenuSection.CraftingTitleFontSize );
 		_subHeaderTitle.Style.Set( "text-align", "center" );
 
 		var subBack = new SettingsMenuBackButtonPanel { Parent = _subHeader, Section = this };
@@ -108,15 +103,11 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		subBack.Style.PaddingBottom = Length.Pixels( 6f );
 		subBack.Style.PaddingLeft = Length.Pixels( 12f );
 		subBack.Style.PaddingRight = Length.Pixels( 12f );
-		subBack.Style.BackgroundColor = new Color( 0.12f, 0.14f, 0.17f, 0.95f );
-		subBack.Style.Set( "border-width", "1px" );
-		subBack.Style.Set( "border-color", "#454c58" );
-		subBack.Style.Set( "border-radius", "6px" );
+		UiStyle.Button( subBack, UiButton.Default );
+		subBack.Style.Set( "pointer-events", "none" );
 
 		var subBackLabel = new Label { Parent = subBack, Text = "Back" };
-		subBackLabel.Style.FontColor = Color.White;
-		subBackLabel.Style.FontSize = Length.Pixels( CraftingMenuSection.SectionEntryFontSize );
-		subBackLabel.Style.Set( "pointer-events", "none" );
+		UiStyle.ButtonLabel( subBackLabel, UiButton.Default, CraftingMenuSection.SectionEntryFontSize );
 
 		_contentHost = new Panel { Parent = _sectionRoot };
 		_contentHost.Style.Set( "position", "relative" );
@@ -172,8 +163,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		footer.Style.PaddingTop = Length.Pixels( 12f );
 
 		_buildLabel = new Label { Parent = footer, Text = $"Build {GameBuildLabel.Display}" };
-		_buildLabel.Style.FontColor = new Color( 0.55f, 0.58f, 0.64f );
-		_buildLabel.Style.FontSize = Length.Pixels( CraftingMenuSection.SectionEntryFontSize );
+		UiStyle.Text( _buildLabel, UiText.Muted, CraftingMenuSection.SectionEntryFontSize );
 
 		NavigateToRoot();
 		UpdateVisibility();
@@ -208,8 +198,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 				Parent = body,
 				Text = "Grapple winch — Pro is E retract / Q detract. Training Wheels is Space retract / Ctrl detract.",
 			};
-			intro.Style.FontColor = new Color( 0.72f, 0.74f, 0.78f );
-			intro.Style.FontSize = Length.Pixels( CraftingMenuSection.SectionEntryFontSize );
+			UiStyle.Text( intro, UiText.Secondary, CraftingMenuSection.SectionEntryFontSize );
 			intro.Style.Set( "text-align", "center" );
 			intro.Style.Set( "white-space", "normal" );
 			intro.Style.Set( "margin-bottom", "14px" );
@@ -220,8 +209,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		else
 		{
 			var placeholder = new Label { Parent = body, Text = $"{titleText} options coming soon." };
-			placeholder.Style.FontColor = new Color( 0.72f, 0.74f, 0.78f );
-			placeholder.Style.FontSize = Length.Pixels( CraftingMenuSection.SectionEntryFontSize );
+			UiStyle.Text( placeholder, UiText.Secondary, CraftingMenuSection.SectionEntryFontSize );
 			placeholder.Style.Set( "text-align", "center" );
 			placeholder.Style.Set( "white-space", "normal" );
 		}
@@ -237,13 +225,38 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 			Section = this,
 			ActionId = actionId
 		};
-		StyleMenuButton( row );
+		StyleMenuButton( row, UiButton.Default );
 		_rootButtons.Add( row );
 
 		var label = new Label { Parent = row, Text = labelText };
-		label.Style.FontColor = Color.White;
-		label.Style.FontSize = Length.Pixels( CraftingMenuSection.ItemNameFontSize );
-		label.Style.Set( "pointer-events", "none" );
+		UiStyle.ButtonLabel( label, UiButton.Default, CraftingMenuSection.ItemNameFontSize );
+	}
+
+	static Label AddDevToolHint( Panel parent, string text )
+	{
+		var hint = new Label { Parent = parent, Text = text };
+		UiStyle.Text( hint, UiText.Secondary, CraftingMenuSection.SectionEntryFontSize );
+		hint.Style.Set( "text-align", "center" );
+		hint.Style.Set( "white-space", "normal" );
+		hint.Style.Set( "margin-bottom", "4px" );
+		return hint;
+	}
+
+	Label AddDevToolButton( Panel parent, string actionId, out SettingsMenuButtonPanel button )
+	{
+		var row = new SettingsMenuButtonPanel
+		{
+			Parent = parent,
+			Section = this,
+			ActionId = actionId
+		};
+		StyleMenuButton( row, UiButton.Default );
+		_devToolButtons.Add( row );
+		button = row;
+
+		var label = new Label { Parent = row, Text = "" };
+		UiStyle.ButtonLabel( label, UiButton.Default, CraftingMenuSection.ItemNameFontSize );
+		return label;
 	}
 
 	void AddControlSchemeButton( Panel parent, string actionId, string labelText )
@@ -254,16 +267,45 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 			Section = this,
 			ActionId = actionId
 		};
-		StyleMenuButton( row );
+		var kind = ButtonKindFor( actionId );
+		StyleMenuButton( row, kind );
 		_controlSchemeButtons.Add( row );
 
 		var label = new Label { Parent = row, Text = labelText };
-		label.Style.FontColor = Color.White;
-		label.Style.FontSize = Length.Pixels( CraftingMenuSection.ItemNameFontSize );
-		label.Style.Set( "pointer-events", "none" );
+		UiStyle.ButtonLabel( label, kind, CraftingMenuSection.ItemNameFontSize );
 	}
 
-	static void StyleMenuButton( Panel row )
+	/// <summary>Quit actions are destructive; everything else is a plain menu button.</summary>
+	static UiButton ButtonKindFor( string actionId ) =>
+		actionId is "quit_menu" or "quit_desktop" ? UiButton.Danger : UiButton.Default;
+
+	/// <summary>Button labels read the live state (host-wide ones arrive by sync, so this also runs while the page is open).</summary>
+	void RefreshDevToolLabels()
+	{
+		SetLabel( _staticComboLabel, $"Static 3-hit combo: {OnOff( DevToolsSettings.StaticMeleeCombo )}" );
+		SetLabel( _allCraftingLabel, GameHacks.AllCrafting ? "Recipes: all in pocket, free" : "Recipes: stations only" );
+
+		// Clients see the host-wide state greyed out; only the host's click changes it.
+		var host = DevToolsSettings.CanChangeHostSettings;
+		var suffix = host ? "" : "  (host only)";
+		SetLabel( _staminaLabel, $"Stamina drain: {OnOff( !DevToolsSettings.InfiniteStamina )}{suffix}" );
+		SetLabel( _dayLockLabel, $"Lock daytime: {OnOff( DevToolsSettings.DayLocked )}{suffix}" );
+		var tint = host ? UiTheme.Colors.TextPrimaryColor : UiTheme.Colors.TextMutedColor;
+		if ( _staminaLabel is not null && _staminaLabel.IsValid() )
+			_staminaLabel.Style.FontColor = tint;
+		if ( _dayLockLabel is not null && _dayLockLabel.IsValid() )
+			_dayLockLabel.Style.FontColor = tint;
+	}
+
+	static string OnOff( bool on ) => on ? "ON" : "OFF";
+
+	static void SetLabel( Label label, string text )
+	{
+		if ( label is not null && label.IsValid() && label.Text != text )
+			label.Text = text;
+	}
+
+	static void StyleMenuButton( Panel row, UiButton kind )
 	{
 		row.Style.Set( "flex-direction", "row" );
 		row.Style.Set( "align-items", "center" );
@@ -273,10 +315,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		row.Style.PaddingBottom = Length.Pixels( 10f );
 		row.Style.PaddingLeft = Length.Pixels( 14f );
 		row.Style.PaddingRight = Length.Pixels( 14f );
-		row.Style.BackgroundColor = new Color( 0.12f, 0.14f, 0.17f, 0.95f );
-		row.Style.Set( "border-width", "1px" );
-		row.Style.Set( "border-color", "#454c58" );
-		row.Style.Set( "border-radius", "6px" );
+		UiStyle.Button( row, kind );
 		row.Style.Set( "pointer-events", "none" );
 	}
 
@@ -306,6 +345,65 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 
 					if ( !InventoryScreenPointer.PanelBoxContainsScreen( button, screenPos ) )
 						continue;
+	// ---- Soft-cursor hover (polled from TickMenu; the overlay never sends real mouse events) ----
+
+	Panel _hoveredButton;
+
+	/// <summary>The buttons the current page can click: root list, or Back + the open sub-page's list.</summary>
+	void PollHover()
+	{
+		var pos = InventoryScreenPointer.GetMenuOrMousePosition();
+		Panel hit = null;
+
+		if ( string.IsNullOrEmpty( _activeSubPageId ) )
+		{
+			hit = FindButtonAt( _rootButtons, pos );
+		}
+		else
+		{
+			if ( _backButton is not null && _backButton.IsValid() && InventoryScreenPointer.PanelBoxContainsScreen( _backButton, pos ) )
+				hit = _backButton;
+			else if ( string.Equals( _activeSubPageId, "controls", StringComparison.OrdinalIgnoreCase ) )
+				hit = FindButtonAt( _controlSchemeButtons, pos );
+			else if ( string.Equals( _activeSubPageId, "dev_tools", StringComparison.OrdinalIgnoreCase ) )
+				hit = FindButtonAt( _devToolButtons, pos );
+		}
+
+		SetHoveredButton( hit );
+	}
+
+	static Panel FindButtonAt( List<SettingsMenuButtonPanel> buttons, Vector2 screenPos )
+	{
+		for ( var i = 0; i < buttons.Count; i++ )
+		{
+			var button = buttons[i];
+			if ( button is null || !button.IsValid() )
+				continue;
+
+			if ( InventoryScreenPointer.PanelBoxContainsScreen( button, screenPos ) )
+				return button;
+		}
+
+		return null;
+	}
+
+	void SetHoveredButton( Panel hit )
+	{
+		if ( ReferenceEquals( hit, _hoveredButton ) )
+			return;
+
+		if ( _hoveredButton is not null && _hoveredButton.IsValid() )
+			UiStyle.SetButtonState( _hoveredButton, KindOf( _hoveredButton ), hovered: false, pressed: false, disabled: false );
+
+		_hoveredButton = hit;
+
+		if ( _hoveredButton is not null && _hoveredButton.IsValid() )
+			UiStyle.SetButtonState( _hoveredButton, KindOf( _hoveredButton ), hovered: true, pressed: false, disabled: false );
+	}
+
+	static UiButton KindOf( Panel button ) =>
+		button is SettingsMenuButtonPanel menuButton ? ButtonKindFor( menuButton.ActionId ) : UiButton.Default;
+
 
 					InvokeAction( button.ActionId );
 					return true;
@@ -433,7 +531,19 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		UpdateVisibility();
 	}
 
-	public void TickMenu( bool menuOpen ) { }
+	public void TickMenu( bool menuOpen )
+	{
+		if ( !menuOpen || !_panelVisible )
+		{
+			SetHoveredButton( null );
+			return;
+		}
+
+		PollHover();
+
+		if ( string.Equals( _activeSubPageId, "dev_tools", StringComparison.OrdinalIgnoreCase ) )
+			RefreshDevToolLabels();
+	}
 
 	public void OnMenuGlobalMouseUp() { }
 

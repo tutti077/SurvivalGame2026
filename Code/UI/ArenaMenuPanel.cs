@@ -37,7 +37,7 @@ public sealed class ArenaMenuPanel : Panel
 		Style.Set( "justify-content", "center" );
 		Style.Set( "pointer-events", "all" );
 		Style.Set( "display", "none" );
-		Style.BackgroundColor = new Color( 0f, 0f, 0f, 0.45f );
+		UiStyle.Backdrop( this );
 		AcceptsFocus = false;
 	}
 
@@ -88,17 +88,12 @@ public sealed class ArenaMenuPanel : Panel
 		_card.Style.PaddingRight = Length.Pixels( 16f );
 		_card.Style.PaddingTop = Length.Pixels( 14f );
 		_card.Style.PaddingBottom = Length.Pixels( 14f );
-		_card.Style.BackgroundColor = new Color( 0.08f, 0.09f, 0.11f, 0.94f );
-		_card.Style.Set( "border-radius", "8px" );
-		_card.Style.Set( "border", "1px solid #3a3f4a" );
+		UiStyle.Surface( _card, UiSurface.Frame );
 
-		var title = new Label { Parent = _card, Text = "Arena" };
-		title.Style.FontColor = Color.White;
-		title.Style.FontSize = Length.Pixels( 22f );
+		UiStyle.AddTitle( _card, "Arena", 22f );
 
 		_status = new Label { Parent = _card, Text = "" };
-		_status.Style.FontColor = new Color( 0.75f, 0.8f, 0.85f );
-		_status.Style.FontSize = Length.Pixels( 13f );
+		UiStyle.Text( _status, UiText.Secondary );
 
 		_modeGrid = new Panel { Parent = _card };
 		_modeGrid.Style.Set( "flex-direction", "row" );
@@ -146,14 +141,14 @@ public sealed class ArenaMenuPanel : Panel
 			_status.Text = $"Waiting on more players… {current}/{needed} ({ArenaModeInfo.Display( queuedModeValue )})";
 			if ( isLeader )
 			{
-				MakeButton( _footer, "Cancel Queue", new Color( 0.65f, 0.25f, 0.22f ), () =>
+				MakeButton( _footer, "Cancel Queue", UiButton.Danger, () =>
 				{
 					_interaction?.OwnerArenaCancelQueue();
 					_nextPollAt = 0;
 				} );
 			}
 
-			MakeButton( _footer, "Close", new Color( 0.2f, 0.22f, 0.26f ), () => _interaction?.SetArenaMenuOpen( false ) );
+			MakeButton( _footer, "Close", UiButton.Default, () => _interaction?.SetArenaMenuOpen( false ) );
 			return;
 		}
 
@@ -170,8 +165,7 @@ public sealed class ArenaMenuPanel : Panel
 		{
 			var fits = crewSize <= ArenaModeInfo.TeamSize( mode );
 			var enabled = fits && isLeader;
-			var chip = MakeButton( _modeGrid, ArenaModeInfo.Display( mode ),
-				enabled ? new Color( 0.2f, 0.45f, 0.85f ) : new Color( 0.16f, 0.17f, 0.2f ),
+			MakeButton( _modeGrid, ArenaModeInfo.Display( mode ), UiButton.Default,
 				enabled
 					? () =>
 					{
@@ -179,15 +173,14 @@ public sealed class ArenaMenuPanel : Panel
 						// Queued — close so the player can run around while waiting.
 						_interaction?.SetArenaMenuOpen( false );
 					}
-					: null );
-			if ( !enabled )
-				chip.Style.Opacity = 0.4f;
+					: null,
+				disabled: !enabled );
 		}
 
-		MakeButton( _footer, "Close", new Color( 0.2f, 0.22f, 0.26f ), () => _interaction?.SetArenaMenuOpen( false ) );
+		MakeButton( _footer, "Close", UiButton.Default, () => _interaction?.SetArenaMenuOpen( false ) );
 	}
 
-	static Panel MakeButton( Panel parent, string text, Color background, Action onClick )
+	static Panel MakeButton( Panel parent, string text, UiButton kind, Action onClick, bool disabled = false )
 	{
 		var btn = new TimeTrialClickPanel { Parent = parent };
 		btn.Clicked = onClick;
@@ -195,15 +188,10 @@ public sealed class ArenaMenuPanel : Panel
 		btn.Style.PaddingRight = Length.Pixels( 12f );
 		btn.Style.PaddingTop = Length.Pixels( 8f );
 		btn.Style.PaddingBottom = Length.Pixels( 8f );
-		btn.Style.BackgroundColor = background;
-		btn.Style.Set( "border-radius", "4px" );
-		if ( onClick is not null )
-			btn.Style.Set( "cursor", "pointer" );
+		btn.SetLook( kind, selected: false, disabled: disabled );
 
 		var label = new Label { Parent = btn, Text = text };
-		label.Style.FontColor = Color.White;
-		label.Style.FontSize = Length.Pixels( 14f );
-		label.Style.Set( "pointer-events", "none" );
+		UiStyle.ButtonLabel( label, kind, 14f );
 		return btn;
 	}
 }

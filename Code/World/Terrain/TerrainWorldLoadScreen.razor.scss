@@ -1,3 +1,5 @@
+// Layout only. Colours, fonts, borders and radii come from the active UI theme
+// (UiThemeStyleSheet classes: ui-backdrop, ui-frame, ui-title, ui-bar-track …) attached in code.
 TerrainWorldLoadScreen
 {
 	position: absolute;
@@ -26,44 +28,55 @@ TerrainWorldLoadScreen
 		top: 0;
 		width: 100%;
 		height: 100%;
-		background-color: #000000;
 		align-items: center;
 		justify-content: center;
 	}
 
+	.vignette
+	{
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+	}
+
 	.card
 	{
-		width: 560px;
-		max-width: 92%;
-		padding: 28px 32px;
+		position: relative;
+		width: 40%;
+		min-width: 520px;
+		max-width: 680px;
+		padding: 30px 36px 26px 36px;
 		flex-direction: column;
-		gap: 14px;
+		gap: 12px;
 	}
 
 	.title
 	{
-		font-size: 30px;
-		font-weight: bold;
-		color: #f5f5f5;
+		width: 100%;
+		justify-content: center;
 		text-align: center;
+	}
+
+	.rule
+	{
+		margin-bottom: 6px;
 	}
 
 	.status
 	{
-		font-size: 16px;
-		color: #b0b0b0;
+		width: 100%;
+		justify-content: center;
 		text-align: center;
 		white-space: normal;
+		min-height: 20px;
 	}
 
 	.bar-track
 	{
 		width: 100%;
-		height: 24px;
-		background-color: #1a1a1a;
-		border: 1px solid #333333;
-		border-radius: 4px;
-		overflow: hidden;
+		height: 22px;
 		position: relative;
 	}
 
@@ -74,13 +87,13 @@ TerrainWorldLoadScreen
 		top: 0;
 		height: 100%;
 		min-width: 2px;
-		background-color: #e0e0e0;
+		transition: width 0.15s linear;
 	}
 
 	.percent
 	{
-		font-size: 14px;
-		color: #888888;
+		width: 100%;
+		justify-content: center;
 		text-align: center;
 	}
 }

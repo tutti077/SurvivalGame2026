@@ -64,7 +64,7 @@
       "id": "guard_stance",
       "displayName": "Guard Stance",
       "description": "Blocking recovers stamina sooner after a successful block (future tuning hook).",
-      "icon": "ui/menu/tab_blank.png",
+      "icon": "ui/menu/SkillsTab.png",
       "x": 0.62,
       "y": 0.76,
       "parents": [ "inventory_tidy" ],

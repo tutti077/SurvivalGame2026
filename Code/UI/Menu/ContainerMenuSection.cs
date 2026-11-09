@@ -42,11 +42,7 @@ public sealed class ContainerMenuSection : IPlayerMenuSection
 		_sectionRoot.Style.Set( "gap", $"{8f * InventoryMenuSection.Scale}px" );
 		_sectionRoot.Style.Width = Length.Percent( 100 );
 
-		_title = new Label { Parent = _sectionRoot, Text = "Chest" };
-		_title.Style.FontColor = Color.White;
-		_title.Style.FontSize = Length.Pixels( InventoryMenuSection.TitleFontSize );
-		_title.Style.Set( "width", "100%" );
-		_title.Style.Set( "text-align", "center" );
+		_title = UiStyle.AddTitle( _sectionRoot, "Chest", InventoryMenuSection.TitleFontSize );
 
 		_grid = new Panel { Parent = _sectionRoot };
 		_grid.Style.Set( "flex-direction", "column" );
@@ -115,29 +111,21 @@ public sealed class ContainerMenuSection : IPlayerMenuSection
 				slotPanel.Style.Set( "flex-shrink", "0" );
 				slotPanel.Style.Set( "flex-grow", "0" );
 				slotPanel.Style.Set( "position", "relative" );
-				slotPanel.Style.Set( "box-sizing", "border-box" );
-				slotPanel.Style.BackgroundColor = new Color( 0.13f, 0.11f, 0.09f, 0.92f );
-				slotPanel.Style.Set( "border-width", "1px" );
-				slotPanel.Style.Set( "border-color", "#5a5040" );
-				slotPanel.Style.Set( "border-radius", "4px" );
-				slotPanel.Style.Set( "overflow", "hidden" );
+				UiStyle.Slot( slotPanel );
 				slotPanel.Style.Set( "pointer-events", "auto" );
 				slotPanel.Style.Set( "z-index", "10" );
 
 				if ( _boundContainer.IsSlotRestricted( slotIndex ) )
 				{
-					// Fuel tank / furnace input: amber frame and a label so it reads as "only this goes here".
-					slotPanel.Style.Set( "border-color", "#c8902a" );
-					slotPanel.Style.BackgroundColor = new Color( 0.16f, 0.12f, 0.06f, 0.92f );
+					// Fuel tank / furnace input: amber (pending) frame and a label so it reads as "only this goes here".
+					UiStyle.SetSlotState( slotPanel, UiSlotState.Pending );
 					var tag = new Label { Parent = slotPanel, Text = _boundContainer.RestrictedSlotLabel ?? string.Empty };
 					tag.Style.Set( "position", "absolute" );
 					tag.Style.Set( "left", "0" );
 					tag.Style.Set( "right", "0" );
 					tag.Style.Set( "top", "2px" );
 					tag.Style.Set( "text-align", "center" );
-					tag.Style.FontColor = new Color( 0.95f, 0.75f, 0.35f, 0.9f );
-					tag.Style.FontSize = Length.Pixels( InventoryMenuSection.CountFontSize );
-					tag.Style.Set( "font-weight", "bold" );
+					UiStyle.Text( tag, UiText.Accent, InventoryMenuSection.CountFontSize );
 					tag.Style.Set( "pointer-events", "none" );
 				}
 
@@ -211,15 +199,7 @@ public sealed class ContainerMenuSection : IPlayerMenuSection
 		count.Style.Set( "position", "absolute" );
 		count.Style.Set( "right", "3px" );
 		count.Style.Set( "bottom", "1px" );
-		count.Style.Set( "padding-left", "3px" );
-		count.Style.Set( "padding-right", "3px" );
-		count.Style.Set( "padding-top", "1px" );
-		count.Style.Set( "padding-bottom", "1px" );
-		count.Style.Set( "background-color", "rgba(0,0,0,0.65)" );
-		count.Style.Set( "border-radius", "3px" );
-		count.Style.FontColor = Color.White;
-		count.Style.FontSize = Length.Pixels( InventoryMenuSection.CountFontSize );
-		count.Style.Set( "text-shadow", "1px 1px 2px black" );
+		UiStyle.CountBadge( count, InventoryMenuSection.CountFontSize );
 		count.Style.Set( "display", "none" );
 		count.Style.Set( "pointer-events", "none" );
 

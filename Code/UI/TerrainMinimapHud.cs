@@ -41,10 +41,7 @@ public sealed class TerrainMinimapHud
 		_frame.Style.PaddingBottom = Length.Pixels( 3f );
 		_frame.Style.PaddingLeft = Length.Pixels( 3f );
 		_frame.Style.PaddingRight = Length.Pixels( 3f );
-		_frame.Style.BackgroundColor = new Color( 0.04f, 0.05f, 0.07f, 0.82f );
-		_frame.Style.Set( "border-radius", "10px" );
-		_frame.Style.Set( "border-width", "1px" );
-		_frame.Style.Set( "border-color", "#3a4250" );
+		UiStyle.Surface( _frame, UiSurface.Panel );
 
 		_face.Build( _frame, TerrainWorldMapFace.DefaultMinimapSize, fillParent: false );
 
@@ -81,8 +78,7 @@ public sealed class TerrainMinimapHud
 		_windRow.Style.Set( "pointer-events", "none" );
 
 		var label = new Label { Parent = _windRow, Text = "wind" };
-		label.Style.FontColor = new Color( 0.75f, 0.8f, 0.88f, 0.9f );
-		label.Style.FontSize = Length.Pixels( 11f );
+		UiStyle.Text( label, UiText.Muted, UiTheme.Metrics.FontMicro );
 
 		_windArrow = new Panel { Parent = _windRow };
 		_windArrow.Style.Width = Length.Pixels( 22f );
@@ -96,7 +92,7 @@ public sealed class TerrainMinimapHud
 		shaft.Style.Set( "top", "4px" );
 		shaft.Style.Width = Length.Pixels( 2f );
 		shaft.Style.Height = Length.Pixels( 16f );
-		shaft.Style.BackgroundColor = new Color( 0.2f, 0.95f, 1f, 0.95f );
+		shaft.Style.BackgroundColor = UiTheme.Colors.InfoColor;
 
 		// Two borders of a small square, turned 45°, make the arrow head.
 		var head = new Panel { Parent = _windArrow };
@@ -107,7 +103,7 @@ public sealed class TerrainMinimapHud
 		head.Style.Height = Length.Pixels( 8f );
 		head.Style.Set( "border-top-width", "2px" );
 		head.Style.Set( "border-left-width", "2px" );
-		head.Style.Set( "border-color", "#33f2ff" );
+		head.Style.Set( "border-color", UiStyle.Css( UiTheme.Colors.InfoColor ) );
 		head.Style.Set( "transform", "rotate(45deg)" );
 	}
 
@@ -171,18 +167,11 @@ public sealed class TerrainMinimapHud
 
 		button.Style.Width = Length.Pixels( ZoomButtonSize );
 		button.Style.Height = Length.Pixels( ZoomButtonSize );
-		button.Style.Set( "align-items", "center" );
-		button.Style.Set( "justify-content", "center" );
-		button.Style.Set( "border-radius", "5px" );
-		button.Style.Set( "border-width", "1px" );
-		button.Style.Set( "border-color", "#4a5568" );
+		UiStyle.Button( button, UiButton.Ghost );
 		button.Style.Set( "pointer-events", "auto" );
-		button.Style.Set( "cursor", "pointer" );
 
 		var text = new Label { Parent = button, Text = label };
-		text.Style.FontColor = Color.White;
-		text.Style.FontSize = Length.Pixels( 16f );
-		text.Style.Set( "pointer-events", "none" );
+		UiStyle.ButtonLabel( text, UiButton.Ghost, 16f );
 
 		return button;
 	}
@@ -213,10 +202,8 @@ public sealed class TerrainMinimapHud
 		if ( button is null || !button.IsValid() )
 			return;
 
-		button.Style.BackgroundColor = canPress
-			? new Color( 0.16f, 0.18f, 0.22f, 0.95f )
-			: new Color( 0.10f, 0.11f, 0.13f, 0.7f );
-		button.Style.Set( "opacity", canPress ? "1" : "0.45" );
+		// The minimap buttons have no hover poll of their own: enabled / disabled is the whole state.
+		UiStyle.SetButtonState( button, UiButton.Ghost, hovered: false, pressed: false, disabled: !canPress );
 	}
 
 	public void Tick()

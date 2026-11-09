@@ -1,3 +1,5 @@
+// Layout only. Every colour, font, border, radius and shadow comes from the active UI theme
+// (UiThemeStyleSheet classes: ui-backdrop, ui-frame, ui-title, ui-button …) attached in code.
 GameMainMenu
 {
 	position: absolute;
@@ -15,36 +17,70 @@ GameMainMenu
 		top: 0;
 		width: 100%;
 		height: 100%;
-		background-color: transparent;
 		align-items: center;
 		justify-content: center;
 	}
 
+	.art
+	{
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		background-size: cover;
+		background-repeat: no-repeat;
+		background-position: center;
+	}
+
+	.vignette
+	{
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+	}
+
 	.card
 	{
-		width: 640px;
-		max-width: 92%;
-		padding: 32px 36px;
+		position: relative;
+		width: 44%;
+		min-width: 560px;
+		max-width: 760px;
+		max-height: 88%;
+		padding: 36px 40px 30px 40px;
 		flex-direction: column;
-		gap: 16px;
-		background-color: rgba( 10, 15, 20, 0.78 );
-		border-radius: 8px;
+		gap: 14px;
 	}
 
 	.title
 	{
-		font-size: 36px;
-		font-weight: bold;
-		color: #f2f2f2;
+		width: 100%;
+		justify-content: center;
 		text-align: center;
+		margin-bottom: 2px;
+	}
+
+	.subtitle
+	{
+		width: 100%;
+		justify-content: center;
+		text-align: center;
+		margin-bottom: 6px;
+	}
+
+	.rule
+	{
 		margin-bottom: 8px;
 	}
 
 	.hint
 	{
-		font-size: 15px;
-		color: #9aa3ad;
+		width: 100%;
+		justify-content: center;
 		text-align: center;
+		white-space: normal;
 	}
 
 	.button-row
@@ -56,91 +92,33 @@ GameMainMenu
 	.menu-button
 	{
 		padding: 14px 18px;
-		font-size: 18px;
-		font-weight: 600;
-		color: #101010;
-		background-color: #e6e6e6;
-		border-radius: 6px;
-		text-align: center;
-		cursor: pointer;
-
-		&:hover
-		{
-			background-color: #ffffff;
-		}
-
-		&.secondary
-		{
-			color: #d8d8d8;
-			background-color: #2a323c;
-
-			&:hover
-			{
-				background-color: #36404d;
-			}
-		}
 	}
 
 	.save-list
 	{
 		flex-direction: column;
-		gap: 10px;
-		max-height: 360px;
+		gap: 8px;
+		max-height: 40vh;
 		overflow: scroll;
 	}
 
 	.save-row
 	{
 		padding: 12px 14px;
-		background-color: #151b22;
-		border: 1px solid #2d3742;
-		border-radius: 6px;
 		flex-direction: column;
-		gap: 4px;
-		cursor: pointer;
-
-		&:hover
-		{
-			background-color: #1c2430;
-			border-color: #4a5a6b;
-		}
-
-		&.selected
-		{
-			background-color: #243044;
-			border-color: #6a9fd4;
-		}
+		gap: 3px;
 	}
 
 	.save-name
 	{
-		font-size: 18px;
-		font-weight: 600;
-		color: #f0f0f0;
-	}
-
-	.save-meta
-	{
-		font-size: 13px;
-		color: #9aa3ad;
-	}
-
-	.field-label
-	{
-		font-size: 14px;
-		color: #b8c0c8;
+		margin-bottom: 2px;
 	}
 
 	.text-field
 	{
 		width: 100%;
-		min-height: 36px;
-		padding: 8px 10px;
-		font-size: 16px;
-		color: #f0f0f0;
-		background-color: #151b22;
-		border: 1px solid #2d3742;
-		border-radius: 4px;
+		min-height: 40px;
+		padding: 8px 12px;
 	}
 
 	.load-actions
@@ -158,21 +136,13 @@ GameMainMenu
 
 	.menu-button.load-primary
 	{
-		font-size: 20px;
 		padding: 16px 18px;
 	}
 
 	.menu-button.action-small
 	{
 		flex: 1;
-		font-size: 15px;
 		padding: 10px 12px;
-	}
-
-	.menu-button.disabled
-	{
-		opacity: 0.45;
-		pointer-events: none;
 	}
 
 	.prompt-panel
@@ -180,9 +150,6 @@ GameMainMenu
 		flex-direction: column;
 		gap: 10px;
 		padding: 12px 14px;
-		background-color: #121820;
-		border: 1px solid #36404d;
-		border-radius: 6px;
 	}
 
 	.prompt-actions
@@ -194,5 +161,12 @@ GameMainMenu
 		{
 			flex: 1;
 		}
+	}
+
+	.footer
+	{
+		flex-direction: row;
+		justify-content: space-between;
+		margin-top: 6px;
 	}
 }

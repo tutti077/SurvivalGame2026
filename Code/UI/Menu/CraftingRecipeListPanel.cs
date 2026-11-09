@@ -51,6 +51,7 @@ public sealed class CraftingRecipeListPanel : Panel
 		_viewport.Style.Set( "top", "0" );
 		_viewport.Style.Set( "bottom", "0" );
 		_viewport.Style.Set( "right", $"{ScrollBarWidth}px" );
+		UiStyle.Surface( _viewport, UiSurface.Sunken );
 		_viewport.Style.Set( "overflow", "hidden" );
 		_viewport.Style.Set( "pointer-events", "all" );
 
@@ -73,8 +74,6 @@ public sealed class CraftingRecipeListPanel : Panel
 		_scrollTrack.Style.Set( "right", "0" );
 		_scrollTrack.Style.Width = Length.Pixels( ScrollBarWidth );
 		_scrollTrack.Style.Set( "z-index", "30" );
-		_scrollTrack.Style.BackgroundColor = new Color( 0.08f, 0.09f, 0.11f, 0.95f );
-		_scrollTrack.Style.Set( "border-radius", "4px" );
 		_scrollTrack.Style.Set( "pointer-events", "all" );
 		_scrollTrack.Style.Set( "cursor", "pointer" );
 
@@ -85,10 +84,10 @@ public sealed class CraftingRecipeListPanel : Panel
 		_scrollThumb.Style.Set( "top", "0px" );
 		_scrollThumb.Style.Height = Length.Pixels( MinThumbHeight );
 		_scrollThumb.Style.Set( "z-index", "31" );
-		_scrollThumb.Style.BackgroundColor = new Color( 0.55f, 0.60f, 0.68f, 0.95f );
-		_scrollThumb.Style.Set( "border-radius", "3px" );
 		_scrollThumb.Style.Set( "pointer-events", "all" );
 		_scrollThumb.Style.Set( "cursor", "grab" );
+
+		UiStyle.ScrollBar( _scrollTrack, _scrollThumb );
 	}
 
 	public void SetRowCount( int rowCount )

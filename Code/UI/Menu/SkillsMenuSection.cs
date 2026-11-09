@@ -49,16 +49,9 @@ public sealed class SkillsMenuSection : IPlayerMenuSection
 		_webRoot.Style.PaddingBottom = Length.Pixels( 12f );
 		_webRoot.Style.PaddingLeft = Length.Pixels( 14f );
 		_webRoot.Style.PaddingRight = Length.Pixels( 14f );
-		_webRoot.Style.BackgroundColor = new Color( 0.04f, 0.05f, 0.07f, 0.9f );
-		_webRoot.Style.Set( "border-radius", "10px" );
-		_webRoot.Style.Set( "border-width", "1px" );
-		_webRoot.Style.Set( "border-color", "#3a4250" );
+		UiStyle.Surface( _webRoot, UiSurface.Frame );
 
-		var title = new Label { Parent = _webRoot, Text = "Skills" };
-		title.Style.FontColor = Color.White;
-		title.Style.FontSize = Length.Pixels( CraftingMenuSection.CraftingTitleFontSize );
-		title.Style.Set( "margin-bottom", "8px" );
-		title.Style.Set( "text-align", "center" );
+		UiStyle.AddTitle( _webRoot, "Skills" );
 
 		_webCanvas = new Panel { Parent = _webRoot };
 		_webCanvas.Style.Set( "position", "relative" );
@@ -89,24 +82,18 @@ public sealed class SkillsMenuSection : IPlayerMenuSection
 		_detailRoot.Style.PaddingBottom = Length.Pixels( 16f );
 		_detailRoot.Style.PaddingLeft = Length.Pixels( 16f );
 		_detailRoot.Style.PaddingRight = Length.Pixels( 16f );
-		_detailRoot.Style.BackgroundColor = new Color( 0.05f, 0.06f, 0.08f, 0.9f );
-		_detailRoot.Style.Set( "border-radius", "10px" );
-		_detailRoot.Style.Set( "border-width", "1px" );
-		_detailRoot.Style.Set( "border-color", "#3a4250" );
+		UiStyle.Surface( _detailRoot, UiSurface.Frame );
 
 		_detailTitle = new Label { Parent = _detailRoot, Text = "Select a skill" };
-		_detailTitle.Style.FontColor = Color.White;
-		_detailTitle.Style.FontSize = Length.Pixels( DetailTitleFontSize );
+		UiStyle.Text( _detailTitle, UiText.Header, DetailTitleFontSize );
 		_detailTitle.Style.Set( "white-space", "normal" );
 
 		_detailBody = new Label { Parent = _detailRoot, Text = "Click a node in the web to read its description." };
-		_detailBody.Style.FontColor = new Color( 0.82f, 0.84f, 0.88f );
-		_detailBody.Style.FontSize = Length.Pixels( DetailBodyFontSize );
+		UiStyle.Text( _detailBody, UiText.Body, DetailBodyFontSize );
 		_detailBody.Style.Set( "white-space", "normal" );
 
 		_detailHint = new Label { Parent = _detailRoot, Text = "Progression hooks coming soon." };
-		_detailHint.Style.FontColor = new Color( 0.55f, 0.58f, 0.64f );
-		_detailHint.Style.FontSize = Length.Pixels( 13f );
+		UiStyle.Text( _detailHint, UiText.Muted );
 		_detailHint.Style.Set( "white-space", "normal" );
 	}
 
@@ -157,7 +144,8 @@ public sealed class SkillsMenuSection : IPlayerMenuSection
 		line.Style.Height = Length.Pixels( 2f );
 		line.Style.Set( "transform-origin", "center center" );
 		line.Style.Set( "transform", $"translate(-50%, -50%) rotate({angleDeg:0.##}deg)" );
-		line.Style.BackgroundColor = new Color( 0.45f, 0.52f, 0.62f, 0.55f );
+		// Skill unlock state is not tracked yet, so every connector is the dim border tone.
+		line.Style.BackgroundColor = UiTheme.Colors.BorderStrongColor;
 		line.Style.Set( "pointer-events", "none" );
 		line.Style.Set( "z-index", "1" );
 		_connectors.Add( line );
@@ -178,12 +166,8 @@ public sealed class SkillsMenuSection : IPlayerMenuSection
 		node.Style.Set( "top", $"{skill.Y * 100f}%" );
 		node.Style.Set( "z-index", "4" );
 		node.Style.Set( "pointer-events", "none" );
-		node.Style.Set( "box-sizing", "border-box" );
-		node.Style.BackgroundColor = new Color( 0.14f, 0.16f, 0.20f, 0.95f );
-		node.Style.Set( "border-width", "2px" );
-		node.Style.Set( "border-color", "#5a6478" );
-		node.Style.Set( "border-radius", "8px" );
-		node.Style.Set( "overflow", "hidden" );
+		// Rounded-square node (the web never used circles); the theme's standard radius keeps that shape.
+		UiStyle.Slot( node, UiTheme.Metrics.Radius );
 
 		var icon = new Panel { Parent = node };
 		icon.Style.Set( "position", "absolute" );
@@ -279,11 +263,7 @@ public sealed class SkillsMenuSection : IPlayerMenuSection
 				continue;
 
 			var selected = string.Equals( pair.Key, _selectedSkillId, StringComparison.OrdinalIgnoreCase );
-			node.Style.Set( "border-color", selected ? "#9ec5ff" : "#5a6478" );
-			node.Style.Set( "border-width", selected ? "3px" : "2px" );
-			node.Style.BackgroundColor = selected
-				? new Color( 0.22f, 0.28f, 0.36f, 0.98f )
-				: new Color( 0.14f, 0.16f, 0.20f, 0.95f );
+			UiStyle.SetSlotState( node, selected ? UiSlotState.Selected : UiSlotState.Idle );
 		}
 	}
 

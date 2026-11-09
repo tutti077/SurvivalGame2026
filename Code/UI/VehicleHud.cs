@@ -37,27 +37,25 @@ public sealed class VehicleHud
 		_root.Style.Set( "align-items", "center" );
 		_root.Style.Set( "gap", "18px" );
 		_root.Style.Set( "padding", "6px 16px" );
-		_root.Style.BackgroundColor = new Color( 0.05f, 0.06f, 0.08f, 0.78f );
-		_root.Style.Set( "border-radius", "6px" );
-		_root.Style.Set( "border-width", "1px" );
-		_root.Style.Set( "border-color", "#6a6a6a" );
+		UiStyle.Surface( _root, UiSurface.Pill );
 		_root.Style.Set( "pointer-events", "none" );
 		_root.Style.Set( "display", "none" );
 
-		_speed = MakeLabel( _root, 22f, Color.White );
-		_height = MakeLabel( _root, 18f, new Color( 0.55f, 0.85f, 1f ) );
+		var colors = UiTheme.Colors;
+		_speed = MakeLabel( _root, 22f, null );
+		_height = MakeLabel( _root, 18f, colors.InfoColor );
 		_height.Style.Set( "display", "none" );
-		_fuel = MakeLabel( _root, 18f, new Color( 1f, 0.8f, 0.35f ) );
-		_hint = MakeLabel( _root, 14f, new Color( 0.75f, 0.78f, 0.82f ) );
+		_fuel = MakeLabel( _root, 18f, colors.WarningColor );
+		_hint = MakeLabel( _root, 14f, colors.TextSecondaryColor );
 	}
 
-	static Label MakeLabel( Panel parent, float size, Color color )
+	/// <summary>HUD text at <paramref name="size"/>; <paramref name="color"/> null keeps the theme's primary text colour.</summary>
+	static Label MakeLabel( Panel parent, float size, Color? color )
 	{
 		var label = new Label { Parent = parent, Text = "" };
-		label.Style.FontColor = color;
-		label.Style.FontSize = Length.Pixels( size );
-		label.Style.Set( "font-weight", "bold" );
-		label.Style.Set( "text-shadow", "1px 1px 2px black" );
+		UiStyle.Text( label, UiText.Hud, size );
+		if ( color is { } tint )
+			label.Style.FontColor = tint;
 		return label;
 	}
 
@@ -105,7 +103,7 @@ public sealed class VehicleHud
 		{
 			_appliedFuel = fuel;
 			_fuel.Text = fuel;
-			_fuel.Style.FontColor = vehicle.HasFuel ? new Color( 1f, 0.8f, 0.35f ) : new Color( 1f, 0.4f, 0.35f );
+			_fuel.Style.FontColor = vehicle.HasFuel ? UiTheme.Colors.WarningColor : UiTheme.Colors.NegativeColor;
 		}
 
 		var hint = movement.IsSeatedDriver

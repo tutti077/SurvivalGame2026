@@ -21,10 +21,6 @@ public sealed class HotbarHud
 	public const float CountFontSize = 13f * Scale;
 	const float DotSize = 9f * Scale;
 
-	static readonly Color SlotBackground = new( 0.08f, 0.09f, 0.11f, 0.94f );
-	const string BorderIdle = "#2a3140";
-	const string BorderActive = "#c9a227";
-
 	readonly List<SlotUi> _slots = new();
 	readonly Panel[] _bankRows = new Panel[PlayerHotbar.BankCount];
 	readonly Panel[] _bankDots = new Panel[PlayerHotbar.BankCount];
@@ -74,7 +70,7 @@ public sealed class HotbarHud
 			dot.Style.Width = Length.Pixels( DotSize );
 			dot.Style.Height = Length.Pixels( DotSize );
 			dot.Style.Set( "border-radius", "50%" );
-			dot.Style.Set( "border-width", "2px" );
+			dot.Style.Set( "border-width", UiStyle.Px( UiTheme.Metrics.BorderWidthStrong ) );
 			dot.Style.Set( "pointer-events", "none" );
 			_bankDots[bank] = dot;
 		}
@@ -185,9 +181,10 @@ public sealed class HotbarHud
 			if ( dot is null || !dot.IsValid() )
 				continue;
 
-			dot.Style.Set( "background-color", bank == active ? BorderActive : "rgba(255,255,255,0.08)" );
-			dot.Style.Set( "border-color", bank == active ? BorderActive : BorderIdle );
-			dot.Style.Set( "box-shadow", bank == active ? "0 0 8px rgba(201,162,39,0.5)" : "none" );
+			var colors = UiTheme.Colors;
+			dot.Style.Set( "background-color", UiStyle.Css( bank == active ? colors.AccentColor : colors.SlotColor ) );
+			dot.Style.Set( "border-color", UiStyle.Css( bank == active ? colors.AccentColor : colors.SlotBorderColor ) );
+			dot.Style.Set( "box-shadow", bank == active ? $"0px 0px 8px {UiStyle.Css( colors.AccentGlowColor )}" : "none" );
 		}
 	}
 
@@ -201,25 +198,31 @@ public sealed class HotbarHud
 		var offhand = _hotbar.OffHandSlotIndex;
 
 		if ( _lastPrimarySlot >= 0 && _lastPrimarySlot < _slots.Count && _lastPrimarySlot != primary && _lastPrimarySlot != offhand )
-			SetSlotHighlighted( _slots[_lastPrimarySlot].Root, false );
+			SetSlotHighlighted( _slots[_lastPrimarySlot], false );
 		if ( _lastOffHandSlot >= 0 && _lastOffHandSlot < _slots.Count && _lastOffHandSlot != primary && _lastOffHandSlot != offhand )
-			SetSlotHighlighted( _slots[_lastOffHandSlot].Root, false );
+			SetSlotHighlighted( _slots[_lastOffHandSlot], false );
 
 		_lastPrimarySlot = primary;
 		_lastOffHandSlot = offhand;
 		if ( primary >= 0 && primary < _slots.Count )
-			SetSlotHighlighted( _slots[primary].Root, true );
+			SetSlotHighlighted( _slots[primary], true );
 		if ( offhand >= 0 && offhand < _slots.Count )
-			SetSlotHighlighted( _slots[offhand].Root, true );
+			SetSlotHighlighted( _slots[offhand], true );
 	}
 
-	static void SetSlotHighlighted( Panel slotRoot, bool active )
+	bool IsSelectedSlot( int slotIndex ) =>
+		_hotbar is not null && (slotIndex == _hotbar.PrimarySlotIndex || slotIndex == _hotbar.OffHandSlotIndex);
+
+	/// <summary>Theme slot state: the gold selection square wins, else the preferred-ammo fill, else idle.</summary>
+	static void SetSlotHighlighted( SlotUi ui, bool active )
 	{
+		var slotRoot = ui?.Root;
 		if ( slotRoot is null || !slotRoot.IsValid() )
 			return;
 
-		slotRoot.Style.Set( "border-color", active ? BorderActive : BorderIdle );
-		slotRoot.Style.Set( "box-shadow", active ? "0 0 10px rgba(201,162,39,0.45)" : "none" );
+		UiStyle.SetSlotState( slotRoot, active ? UiSlotState.Selected : ui.LastPreferred ? UiSlotState.Preferred : UiSlotState.Idle );
+		if ( active && ui.LastPreferred )
+			slotRoot.Style.BackgroundColor = UiTheme.Colors.SlotPreferredColor;
 	}
 
 	static void StyleSlot( Panel slotPanel )
@@ -228,12 +231,7 @@ public sealed class HotbarHud
 		slotPanel.Style.Height = Length.Pixels( SlotSize );
 		slotPanel.Style.Set( "flex-shrink", "0" );
 		slotPanel.Style.Set( "position", "relative" );
-		slotPanel.Style.Set( "box-sizing", "border-box" );
-		slotPanel.Style.BackgroundColor = SlotBackground;
-		slotPanel.Style.Set( "border-width", "2px" );
-		slotPanel.Style.Set( "border-color", BorderIdle );
-		slotPanel.Style.Set( "border-radius", "5px" );
-		slotPanel.Style.Set( "overflow", "hidden" );
+		UiStyle.Slot( slotPanel );
 	}
 
 	static SlotUi CreateSlotUi( Panel parent )
@@ -255,15 +253,7 @@ public sealed class HotbarHud
 		count.Style.Set( "position", "absolute" );
 		count.Style.Set( "right", "3px" );
 		count.Style.Set( "bottom", "1px" );
-		count.Style.Set( "padding-left", "3px" );
-		count.Style.Set( "padding-right", "3px" );
-		count.Style.Set( "padding-top", "1px" );
-		count.Style.Set( "padding-bottom", "1px" );
-		count.Style.Set( "background-color", "rgba(0,0,0,0.65)" );
-		count.Style.Set( "border-radius", "3px" );
-		count.Style.FontColor = Color.White;
-		count.Style.FontSize = Length.Pixels( CountFontSize );
-		count.Style.Set( "text-shadow", "1px 1px 2px black" );
+		UiStyle.CountBadge( count, CountFontSize );
 		count.Style.Set( "display", "none" );
 		count.Style.Set( "pointer-events", "none" );
 
@@ -282,8 +272,9 @@ public sealed class HotbarHud
 		var preferred = !showGhost && IsPreferredAmmoStack( resourceId );
 
 		var wear = slot.IsEmpty ? 0 : slot.Wear;
+		var tier = slot.IsEmpty ? 0 : slot.Tier;
 		if ( ui.LastResourceId == resourceId && ui.LastCount == count && ui.LastIconPath == iconPath + ghostKey
-		     && ui.LastPreferred == preferred && ui.LastWear == wear )
+		     && ui.LastPreferred == preferred && ui.LastWear == wear && ui.LastTier == tier )
 			return;
 
 		ui.LastResourceId = resourceId;
@@ -291,10 +282,9 @@ public sealed class HotbarHud
 		ui.LastIconPath = iconPath + ghostKey;
 		ui.LastPreferred = preferred;
 		ui.LastWear = wear;
+		ui.LastTier = tier;
 
-		ui.Root.Style.BackgroundColor = preferred
-			? new Color( 0.42f, 0.42f, 0.45f, 0.95f )
-			: SlotBackground;
+		SetSlotHighlighted( ui, IsSelectedSlot( slotIndex ) );
 
 		if ( showGhost )
 		{
@@ -325,6 +315,7 @@ public sealed class HotbarHud
 		public int LastCount { get; set; } = -1;
 		public bool LastPreferred { get; set; }
 		public int LastWear { get; set; } = -1;
+		public int LastTier { get; set; } = -1;
 
 		public SlotUi( Panel root, Panel iconPanel, Label countLabel )
 		{

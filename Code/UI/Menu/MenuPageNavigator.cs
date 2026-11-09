@@ -12,6 +12,8 @@ public sealed class MenuPageNavigator
 
 	readonly PlayerGameMenuController _menuController;
 	readonly MenuPageTabPanel[] _tabs = new MenuPageTabPanel[MenuPageRegistry.Pages.Length];
+	/// <summary>Per-tab icon panel; null where the icon is a coloured picture that must not be tinted.</summary>
+	readonly Panel[] _tintedIcons = new Panel[MenuPageRegistry.Pages.Length];
 
 	Panel _root;
 	Panel _chip;
@@ -44,10 +46,7 @@ public sealed class MenuPageNavigator
 		_chip.Style.Set( "justify-content", "center" );
 		_chip.Style.Set( "pointer-events", "none" );
 		_chip.Style.Set( "padding", "10px 14px" );
-		_chip.Style.Set( "border-radius", "8px" );
-		_chip.Style.BackgroundColor = new Color( 0.24f, 0.26f, 0.30f, 0.92f );
-		_chip.Style.Set( "border-width", "1px" );
-		_chip.Style.Set( "border-color", "#5c6470" );
+		UiStyle.Surface( _chip, UiSurface.Panel );
 
 		for ( var i = 0; i < MenuPageRegistry.Pages.Length; i++ )
 		{
@@ -58,10 +57,7 @@ public sealed class MenuPageNavigator
 			tab.Style.Set( "flex-shrink", "0" );
 			tab.Style.Set( "position", "relative" );
 			tab.Style.Set( "box-sizing", "border-box" );
-			tab.Style.BackgroundColor = new Color( 0.34f, 0.36f, 0.40f, 0.96f );
-			tab.Style.Set( "border-width", "1px" );
-			tab.Style.Set( "border-color", "#6a7280" );
-			tab.Style.Set( "border-radius", "4px" );
+			UiStyle.Tab( tab, false );
 			tab.Style.Set( "overflow", "hidden" );
 			tab.Style.Set( "pointer-events", "none" );
 
@@ -80,6 +76,14 @@ public sealed class MenuPageNavigator
 			icon.Style.Set( "background-position", "center" );
 			icon.Style.Set( "pointer-events", "none" );
 			MenuUiTextures.ApplyBackground( icon, page.TabIconPath );
+
+			// Tab icons are white line-art on alpha and take the theme tint; the Augments tab shows
+			// the augment-core item picture, which keeps its own colours.
+			if ( !string.Equals( page.PageId, MenuPageIds.Augments, StringComparison.OrdinalIgnoreCase ) )
+			{
+				icon.Style.Set( "background-tint", UiStyle.Css( UiTheme.Colors.TextSecondaryColor ) );
+				_tintedIcons[i] = icon;
+			}
 
 			_tabs[i] = tab;
 		}
@@ -110,11 +114,11 @@ public sealed class MenuPageNavigator
 				continue;
 
 			var selected = string.Equals( tab.PageId, active, StringComparison.OrdinalIgnoreCase );
-			tab.Style.Set( "border-color", selected ? "#9ec5ff" : "#6a7280" );
-			tab.Style.Set( "border-width", selected ? "2px" : "1px" );
-			tab.Style.BackgroundColor = selected
-				? new Color( 0.42f, 0.46f, 0.52f, 0.98f )
-				: new Color( 0.34f, 0.36f, 0.40f, 0.96f );
+			UiStyle.Tab( tab, selected );
+
+			var icon = _tintedIcons[i];
+			if ( icon is not null && icon.IsValid() )
+				icon.Style.Set( "background-tint", UiStyle.Css( selected ? UiTheme.Colors.AccentBrightColor : UiTheme.Colors.TextSecondaryColor ) );
 		}
 	}
 

@@ -9,7 +9,7 @@ namespace Survival;
 /// The C radial: installed wheel augments laid out on a ring around screen centre while
 /// <see cref="PlayerAugments.IsWheelOpen"/>. Segment 0 sits at the top, the rest clockwise — the same
 /// convention the pawn uses to turn mouse travel into a pick. The highlighted entry shows its name
-/// in the middle; a toggle that is on carries a yellow ring.
+/// in the middle; a toggle that is on carries the theme's active (green) ring.
 /// </summary>
 public sealed class AugmentWheelHud
 {
@@ -18,20 +18,6 @@ public sealed class AugmentWheelHud
 	const float IconSize = 48f;
 	const float NameFont = 13f;
 	const float CenterFont = 18f;
-
-	static readonly Color EntryBg = new( 0.07f, 0.08f, 0.10f, 0.9f );
-	static readonly Color EntryBgSelected = new( 0.2f, 0.3f, 0.45f, 0.96f );
-	// Fill behind the icon: yellow = battery left while on (drains from the top), red = recharge cooldown left.
-	static readonly Color FillOn = new( 0.98f, 0.88f, 0.50f, 0.92f );
-	static readonly Color FillPartial = new( 0.98f, 0.88f, 0.50f, 0.45f );
-	static readonly Color FillCooldown = new( 0.85f, 0.18f, 0.12f, 0.92f );
-	static readonly Color EntryBgEmpty = new( 0.05f, 0.06f, 0.08f, 0.55f );
-	static readonly Color EntryBgSelectedEmpty = new( 0.12f, 0.16f, 0.24f, 0.7f );
-	const string BorderEmpty = "#262b35";
-	const string BorderIdle = "#3a4150";
-	const string BorderSelected = "#8fbaff";
-	/// <summary>Yellow ring: this toggle is currently on. Blue stays the "about to pick" highlight.</summary>
-	const string BorderOn = "#e0b84a";
 
 	readonly List<EntryUi> _entries = new();
 
@@ -70,9 +56,7 @@ public sealed class AugmentWheelHud
 		_center.Style.Set( "right", "0" );
 		_center.Style.Set( "top", $"{RingRadius + EntrySize - CenterFont}px" );
 		_center.Style.Set( "text-align", "center" );
-		_center.Style.FontColor = Color.White;
-		_center.Style.FontSize = Length.Pixels( CenterFont );
-		_center.Style.Set( "text-shadow", "1px 1px 3px rgba(0,0,0,0.9)" );
+		UiStyle.Text( _center, UiText.Hud, CenterFont );
 		_center.Style.Set( "pointer-events", "none" );
 	}
 
@@ -102,17 +86,14 @@ public sealed class AugmentWheelHud
 			if ( string.IsNullOrWhiteSpace( ui.Id ) )
 			{
 				// Empty segment: hovering it just means "pick nothing".
-				ui.Root.Style.BackgroundColor = isSelected ? EntryBgSelectedEmpty : EntryBgEmpty;
-				ui.Root.Style.Set( "border-color", isSelected ? BorderSelected : BorderEmpty );
-				ui.Root.Style.Set( "border-width", "2px" );
+				ui.ApplyState( isSelected ? UiSlotState.Selected : UiSlotState.Locked, glow: false );
 				continue;
 			}
 
 			_augments.TryGetTriggerState( ui.Id, out var cooldownLeft, out var cooldownTotal, out var on, out var battery01 );
-			ui.Root.Style.BackgroundColor = isSelected ? EntryBgSelected : EntryBg;
 			ApplyFill( ui.Fill, cooldownLeft, cooldownTotal, on, battery01 );
-			ui.Root.Style.Set( "border-color", on ? BorderOn : isSelected ? BorderSelected : BorderIdle );
-			ui.Root.Style.Set( "border-width", on ? "4px" : "2px" );
+			// A toggle that is on keeps its green ring; the "about to pick" glow is added on top of it.
+			ui.ApplyState( on ? UiSlotState.Active : isSelected ? UiSlotState.Selected : UiSlotState.Idle, glow: on && isSelected );
 		}
 
 		_center.Text = selected >= 0 && selected < entries.Count
@@ -150,11 +131,7 @@ public sealed class AugmentWheelHud
 			entry.Style.Set( "align-items", "center" );
 			entry.Style.Set( "justify-content", "center" );
 			entry.Style.Set( "gap", "4px" );
-			entry.Style.Set( "box-sizing", "border-box" );
-			entry.Style.BackgroundColor = EntryBg;
-			entry.Style.Set( "border-width", "2px" );
-			entry.Style.Set( "border-color", BorderIdle );
-			entry.Style.Set( "border-radius", "10px" );
+			UiStyle.Slot( entry, UiTheme.Metrics.RadiusLarge );
 			entry.Style.Set( "pointer-events", "none" );
 
 			// Fill sits under the icon and name; height is the fraction left, so it drains from the top down.
@@ -164,7 +141,7 @@ public sealed class AugmentWheelHud
 			fill.Style.Set( "right", "0" );
 			fill.Style.Set( "bottom", "0" );
 			fill.Style.Set( "height", "0%" );
-			fill.Style.Set( "border-radius", "8px" );
+			fill.Style.Set( "border-radius", UiStyle.Px( Math.Max( 0f, UiTheme.Metrics.RadiusLarge - UiTheme.Metrics.BorderWidthStrong ) ) );
 			fill.Style.Set( "pointer-events", "none" );
 
 			var icon = new Panel { Parent = entry };
@@ -182,14 +159,9 @@ public sealed class AugmentWheelHud
 
 			var name = new Label { Parent = entry, Text = def?.DisplayName ?? "empty" };
 			name.Style.Set( "z-index", "1" );
-			name.Style.Set( "text-shadow", "1px 1px 2px rgba(0,0,0,0.9)" );
-			name.Style.FontColor = Color.White;
-			name.Style.FontSize = Length.Pixels( NameFont );
+			UiStyle.Text( name, def is null ? UiText.Muted : UiText.Hud, NameFont );
 			name.Style.Set( "text-align", "center" );
 			name.Style.Set( "white-space", "normal" );
-
-			if ( def is null )
-				name.Style.FontColor = new Color( 0.45f, 0.48f, 0.55f );
 
 			_entries.Add( new EntryUi( entry, fill, def?.Id ) );
 		}
@@ -205,22 +177,24 @@ public sealed class AugmentWheelHud
 		if ( fill is null || !fill.IsValid() )
 			return;
 
+		// Fill behind the icon: warning yellow = battery left while on (drains from the top), negative red = recharge cooldown left.
+		var colors = UiTheme.Colors;
 		float fraction;
 		Color color;
 		if ( cooldownLeft > 0.01f && cooldownTotal > 0.01f )
 		{
 			fraction = Math.Clamp( cooldownLeft / cooldownTotal, 0f, 1f );
-			color = FillCooldown;
+			color = colors.NegativeColor.WithAlpha( 0.92f );
 		}
 		else if ( on )
 		{
 			fraction = Math.Clamp( battery01, 0f, 1f );
-			color = FillOn;
+			color = colors.WarningColor.WithAlpha( 0.92f );
 		}
 		else if ( battery01 < 0.995f )
 		{
 			fraction = Math.Clamp( battery01, 0f, 1f );
-			color = FillPartial;
+			color = colors.WarningColor.WithAlpha( 0.45f );
 		}
 		else
 		{
@@ -238,16 +212,32 @@ public sealed class AugmentWheelHud
 		_host = null;
 	}
 
-	readonly struct EntryUi
+	sealed class EntryUi
 	{
 		public Panel Root { get; }
 		public Panel Fill { get; }
 		public string Id { get; }
+		// Last applied look: the theme slot state writes several style properties, so only re-apply on change.
+		UiSlotState? _state;
+		bool _glow;
+
 		public EntryUi( Panel root, Panel fill, string id )
 		{
 			Root = root;
 			Fill = fill;
 			Id = id;
+		}
+
+		public void ApplyState( UiSlotState state, bool glow )
+		{
+			if ( Root is null || !Root.IsValid() || (_state == state && _glow == glow) )
+				return;
+
+			_state = state;
+			_glow = glow;
+			UiStyle.SetSlotState( Root, state );
+			if ( glow )
+				Root.Style.Set( "box-shadow", $"0px 0px 10px {UiStyle.Css( UiTheme.Colors.AccentGlowColor )}" );
 		}
 	}
 }

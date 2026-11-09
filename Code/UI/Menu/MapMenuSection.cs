@@ -19,6 +19,10 @@ public sealed class MapMenuSection : IPlayerMenuSection
 
 	const float ToolIconSize = 52f;
 	const float ToolIconGap = 10f;
+	/// <summary>Icon inset inside a pin / tool tile.</summary>
+	const float ToolIconInset = 4f;
+	/// <summary>A tile's outer width: the theme border sits outside the ToolIconSize box.</summary>
+	static float ToolTileOuterSize => ToolIconSize + 2f * UiTheme.Metrics.BorderWidth;
 	const float StripButtonSize = 30f;
 	const float ToolColumnWidth = 300f;
 	const float HeaderFontSize = 20f;
@@ -96,10 +100,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		_sectionRoot.Style.PaddingBottom = Length.Pixels( 10f );
 		_sectionRoot.Style.PaddingLeft = Length.Pixels( 12f );
 		_sectionRoot.Style.PaddingRight = Length.Pixels( 12f );
-		_sectionRoot.Style.BackgroundColor = new Color( 0.03f, 0.04f, 0.06f, 0.92f );
-		_sectionRoot.Style.Set( "border-radius", "10px" );
-		_sectionRoot.Style.Set( "border-width", "1px" );
-		_sectionRoot.Style.Set( "border-color", "#3a4250" );
+		UiStyle.Surface( _sectionRoot, UiSurface.Frame );
 
 		var header = new Panel { Parent = _sectionRoot };
 		header.Style.Set( "flex-direction", "row" );
@@ -110,12 +111,10 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		header.Style.Set( "flex-shrink", "0" );
 
 		var title = new Label { Parent = header, Text = "Map" };
-		title.Style.FontColor = Color.White;
-		title.Style.FontSize = Length.Pixels( CraftingMenuSection.CraftingTitleFontSize );
+		UiStyle.Text( title, UiText.Title );
 
 		var hint = new Label { Parent = header, Text = "Wheel zooms · double-click places a pin" };
-		hint.Style.FontColor = new Color( 0.55f, 0.58f, 0.64f );
-		hint.Style.FontSize = Length.Pixels( 15f );
+		UiStyle.Text( hint, UiText.Muted, 15f );
 
 		var content = new Panel { Parent = _sectionRoot };
 		content.Style.Set( "flex-direction", "row" );
@@ -184,20 +183,13 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		btn.Style.Set( "flex-shrink", "0" );
 		btn.Style.Width = Length.Pixels( StripButtonSize );
 		btn.Style.Height = Length.Pixels( StripButtonSize );
-		btn.Style.Set( "align-items", "center" );
-		btn.Style.Set( "justify-content", "center" );
-		btn.Style.Set( "border-radius", "5px" );
-		btn.Style.Set( "border-width", "1px" );
-		btn.Style.Set( "border-color", "#4a5568" );
-		btn.Style.BackgroundColor = new Color( 0.16f, 0.18f, 0.22f, 0.95f );
+		UiStyle.Button( btn, UiButton.Ghost );
 		btn.Style.Set( "pointer-events", "none" );
 
 		if ( glyph is not null )
 		{
 			var label = new Label { Parent = btn, Text = glyph };
-			label.Style.FontColor = Color.White;
-			label.Style.FontSize = Length.Pixels( 20f );
-			label.Style.Set( "pointer-events", "none" );
+			UiStyle.ButtonLabel( label, UiButton.Ghost, HeaderFontSize );
 		}
 
 		return btn;
@@ -221,7 +213,15 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		grid.Style.Set( "flex-wrap", "wrap" );
 		grid.Style.Set( "justify-content", "center" );
 		grid.Style.Set( "gap", $"{ToolIconGap:0}px" );
-		grid.Style.Width = Length.Pixels( ToolIconSize * 3f + ToolIconGap * 2f + 2f );
+		// Three pins a row up to nine icons, four beyond that: the column has a fixed height budget and
+		// every extra row of pins is a row the controls text below would have to give up.
+		var pinColumns = MapPinCatalog.Icons.Count > 9 ? 4 : 3;
+		grid.Style.Width = Length.Pixels( ToolTileOuterSize * pinColumns + ToolIconGap * (pinColumns - 1) + 2f );
+		// Explicit height: a wrapped flex row does not grow for its extra rows here, so without this
+		// the Markup header draws over the last row of pins.
+		var pinRows = (int)Math.Ceiling( MapPinCatalog.Icons.Count / (float)pinColumns );
+		grid.Style.Height = Length.Pixels( pinRows * ToolTileOuterSize + Math.Max( 0, pinRows - 1 ) * ToolIconGap );
+		grid.Style.Set( "flex-shrink", "0" );
 		grid.Style.MarginTop = Length.Pixels( 8f );
 		grid.Style.Set( "pointer-events", "none" );
 
@@ -246,6 +246,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		markupRow.Style.Set( "justify-content", "center" );
 		markupRow.Style.Set( "gap", $"{ToolIconGap:0}px" );
 		markupRow.Style.MarginTop = Length.Pixels( 8f );
+		markupRow.Style.Set( "flex-shrink", "0" );
 		markupRow.Style.Set( "pointer-events", "none" );
 
 		_penButton = MakeIconButton( markupRow, "ui/map/tool_pen.png" );
@@ -268,6 +269,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		var controls = new Panel { Parent = column };
 		controls.Style.Set( "flex-direction", "column" );
 		controls.Style.Set( "align-items", "flex-start" );
+		controls.Style.Set( "flex-shrink", "0" );
 		controls.Style.MarginTop = Length.Pixels( 6f );
 		controls.Style.Set( "pointer-events", "none" );
 
@@ -281,8 +283,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 
 		// Dungeon readout: which floor layer the map is showing and how much of the dungeon has been found.
 		_dungeonLine = new Label { Parent = controls, Text = "Dungeon: —" };
-		_dungeonLine.Style.FontColor = new Color( 0.95f, 0.85f, 0.45f );
-		_dungeonLine.Style.FontSize = Length.Pixels( BodyFontSize );
+		UiStyle.Text( _dungeonLine, UiText.Accent, BodyFontSize );
 		_dungeonLine.Style.MarginTop = Length.Pixels( 10f );
 		_dungeonLine.Style.Set( "white-space", "nowrap" );
 		_dungeonLine.Style.Set( "pointer-events", "none" );
@@ -293,6 +294,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 
 		var shareRow = MakeRadioRow( column, "Show location to crew", out _shareLocationRadio );
 		shareRow.Style.MarginTop = Length.Pixels( 6f );
+		UiStyle.Surface( shareRow, UiSurface.Sunken );
 		_shareTargets.Add( (shareRow, () =>
 		{
 			LocalMapMarkup.SetShareLocation( !LocalMapMarkup.ShareLocation );
@@ -302,15 +304,19 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		var crewPinsHeader = AddSectionHeader( column, "Crew Pins" );
 		crewPinsHeader.Style.MarginTop = Length.Pixels( 18f );
 
-		// Fixed-height box: rows never move the column around when the crew changes.
+		// Fixed-height box: rows never move the column around when the crew changes. It is the one
+		// block allowed to shrink (down to two rows) on a short window, so the controls text above
+		// never collapses into itself.
 		_crewPinsBox = new Panel { Parent = column };
 		_crewPinsBox.Style.Set( "flex-direction", "column" );
-		_crewPinsBox.Style.Set( "flex-shrink", "0" );
+		_crewPinsBox.Style.Set( "flex-shrink", "1" );
 		_crewPinsBox.Style.Width = Length.Percent( 100 );
 		_crewPinsBox.Style.Height = Length.Pixels( CrewPinRows * ShareRowHeight + 6f );
+		_crewPinsBox.Style.MinHeight = Length.Pixels( 2f * ShareRowHeight + 6f );
 		_crewPinsBox.Style.MarginTop = Length.Pixels( 6f );
 		_crewPinsBox.Style.Set( "overflow", "hidden" );
 		_crewPinsBox.Style.Set( "pointer-events", "none" );
+		UiStyle.Surface( _crewPinsBox, UiSurface.Sunken );
 		RefreshCrewPinRows( force: true );
 	}
 
@@ -341,9 +347,9 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		radio.Outer.Style.Width = Length.Pixels( RadioSize );
 		radio.Outer.Style.Height = Length.Pixels( RadioSize );
 		radio.Outer.Style.Set( "border-radius", "50%" );
-		radio.Outer.Style.Set( "border-width", "2px" );
-		radio.Outer.Style.Set( "border-color", "#cfd3da" );
-		radio.Outer.Style.BackgroundColor = new Color( 0.1f, 0.11f, 0.14f, 0.95f );
+		radio.Outer.Style.Set( "border-width", UiStyle.Px( UiTheme.Metrics.BorderWidthStrong ) );
+		radio.Outer.Style.Set( "border-color", UiStyle.Css( UiTheme.Colors.BorderStrongColor ) );
+		radio.Outer.Style.BackgroundColor = UiTheme.Colors.PanelSunkenColor;
 		radio.Outer.Style.Set( "align-items", "center" );
 		radio.Outer.Style.Set( "justify-content", "center" );
 		radio.Outer.Style.Set( "overflow", "visible" );
@@ -353,7 +359,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		radio.Inner.Style.Width = Length.Pixels( RadioSize * 0.5f );
 		radio.Inner.Style.Height = Length.Pixels( RadioSize * 0.5f );
 		radio.Inner.Style.Set( "border-radius", "50%" );
-		radio.Inner.Style.BackgroundColor = new Color( 1f, 0.82f, 0.23f );
+		radio.Inner.Style.BackgroundColor = UiTheme.Colors.AccentColor;
 		radio.Inner.Style.Set( "pointer-events", "none" );
 
 		radio.Cross = new Panel { Parent = radio.Outer };
@@ -366,8 +372,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		MenuUiTextures.ApplyBackground( radio.Cross, MapPinCatalog.CrossOffTexturePath );
 
 		var label = new Label { Parent = row, Text = text };
-		label.Style.FontColor = new Color( 0.85f, 0.87f, 0.9f );
-		label.Style.FontSize = Length.Pixels( BodyFontSize );
+		UiStyle.Text( label, UiText.Body, BodyFontSize );
 		label.Style.Set( "white-space", "nowrap" );
 		label.Style.Set( "overflow", "hidden" );
 		label.Style.Set( "pointer-events", "none" );
@@ -381,7 +386,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 
 		radio.Inner.Style.Set( "display", on ? "flex" : "none" );
 		radio.Cross.Style.Set( "display", !on && crossWhenOff ? "flex" : "none" );
-		radio.Outer.Style.Set( "border-color", on ? "#ffd23a" : "#cfd3da" );
+		radio.Outer.Style.Set( "border-color", UiStyle.Css( on ? UiTheme.Colors.AccentColor : UiTheme.Colors.BorderStrongColor ) );
 	}
 
 	/// <summary>One radio per crew mate; rebuilt only when the crew's membership changes (hit rects stay put).</summary>
@@ -412,8 +417,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		if ( _crewMates.Count == 0 )
 		{
 			var none = new Label { Parent = _crewPinsBox, Text = "No crew mates online" };
-			none.Style.FontColor = new Color( 0.55f, 0.58f, 0.64f );
-			none.Style.FontSize = Length.Pixels( BodyFontSize );
+			UiStyle.Text( none, UiText.Muted, BodyFontSize );
 			none.Style.PaddingLeft = Length.Pixels( 8f );
 			none.Style.Set( "pointer-events", "none" );
 			return;
@@ -446,24 +450,20 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		block.Style.Set( "pointer-events", "none" );
 
 		var label = new Label { Parent = block, Text = text };
-		label.Style.FontColor = new Color( 0.85f, 0.87f, 0.9f );
-		label.Style.FontSize = Length.Pixels( HeaderFontSize );
+		UiStyle.Text( label, UiText.Header, HeaderFontSize );
 		label.Style.Set( "pointer-events", "none" );
 
-		var rule = new Panel { Parent = block };
-		rule.Style.Width = Length.Percent( 100 );
-		rule.Style.Height = Length.Pixels( 1f );
-		rule.Style.MarginTop = Length.Pixels( 3f );
-		rule.Style.BackgroundColor = new Color( 0.5f, 0.54f, 0.6f, 0.7f );
-		rule.Style.Set( "pointer-events", "none" );
+		// Same 3 px gap under the header as before — the divider's bottom margin is dropped.
+		var rule = UiStyle.Divider( block, 1f, 3f );
+		rule.Style.MarginBottom = Length.Pixels( 0f );
 		return block;
 	}
 
 	static void AddControlLine( Panel parent, string text )
 	{
 		var label = new Label { Parent = parent, Text = text };
-		label.Style.FontColor = new Color( 0.8f, 0.82f, 0.86f );
-		label.Style.FontSize = Length.Pixels( BodyFontSize );
+		label.Style.Set( "flex-shrink", "0" );
+		UiStyle.Text( label, UiText.Body, BodyFontSize );
 		label.Style.MarginTop = Length.Pixels( 4f );
 		label.Style.Set( "white-space", "nowrap" );
 		label.Style.Set( "pointer-events", "none" );
@@ -475,19 +475,17 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		btn.Style.Set( "flex-shrink", "0" );
 		btn.Style.Width = Length.Pixels( ToolIconSize );
 		btn.Style.Height = Length.Pixels( ToolIconSize );
-		btn.Style.Set( "border-radius", "6px" );
-		btn.Style.Set( "border-width", "2px" );
-		btn.Style.Set( "border-color", "#3a4250" );
-		btn.Style.BackgroundColor = new Color( 0.12f, 0.13f, 0.16f, 0.95f );
+		UiStyle.Button( btn, UiButton.Ghost );
 		btn.Style.Set( "pointer-events", "none" );
 		btn.Style.Set( "overflow", "hidden" );
-		btn.Style.Set( "padding", "4px" );
 
 		// A plain flex child, never absolute: an absolute icon here anchored to the whole
-		// section and painted the pin shapes across the map at full size.
+		// section and painted the pin shapes across the map at full size. Inset by a fixed
+		// margin instead of button padding so the tile's outer size stays ToolIconSize + border
+		// (padding grew the old tiles to 64 px and only two pins fit a row).
 		var icon = new Panel { Parent = btn };
-		icon.Style.Width = Length.Percent( 100 );
-		icon.Style.Height = Length.Percent( 100 );
+		icon.Style.Width = Length.Pixels( ToolIconSize - 2f * ToolIconInset );
+		icon.Style.Height = Length.Pixels( ToolIconSize - 2f * ToolIconInset );
 		icon.Style.Set( "flex-shrink", "0" );
 		icon.Style.Set( "pointer-events", "none" );
 		MenuUiTextures.ApplyBackground( icon, texturePath );
@@ -502,12 +500,9 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		_nameEntry.Style.Height = Length.Pixels( 30f );
 		_nameEntry.Style.PaddingLeft = Length.Pixels( 6f );
 		_nameEntry.Style.PaddingRight = Length.Pixels( 6f );
-		_nameEntry.Style.BackgroundColor = new Color( 0.08f, 0.09f, 0.12f, 0.98f );
-		_nameEntry.Style.Set( "border-radius", "4px" );
-		_nameEntry.Style.Set( "border-width", "1px" );
-		_nameEntry.Style.Set( "border-color", "#ffd23a" );
-		_nameEntry.Style.FontColor = Color.White;
-		_nameEntry.Style.FontSize = Length.Pixels( BodyFontSize );
+		UiStyle.Field( _nameEntry );
+		// The entry floats over the map while a pin is named — accent border so it reads as live.
+		_nameEntry.Style.Set( "border-color", UiStyle.Css( UiTheme.Colors.AccentColor ) );
 		_nameEntry.Style.Set( "z-index", "50" );
 		_nameEntry.Style.Set( "display", "none" );
 		_nameEntry.Placeholder = "Name this pin";
@@ -895,7 +890,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 			_eyeButton.Style.Set( "background-position", "center" );
 			_eyeButton.Style.Set( "background-repeat", "no-repeat" );
 			// ApplyBackground clears the fill; keep the button looking like its + / - neighbours.
-			_eyeButton.Style.BackgroundColor = new Color( 0.16f, 0.18f, 0.22f, 0.95f );
+			UiStyle.SetButtonState( _eyeButton, UiButton.Ghost, hovered: false, pressed: false, disabled: false );
 		}
 
 		StyleZoomButton( _zoomInButton, TerrainMinimapZoom.Level < TerrainMinimapZoom.Max - 0.001f );
@@ -911,10 +906,10 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		if ( btn is null || !btn.IsValid() )
 			return;
 
-		btn.Style.Set( "border-color", selected ? "#ffd23a" : "#3a4250" );
-		btn.Style.BackgroundColor = selected
-			? new Color( 0.3f, 0.27f, 0.12f, 0.95f )
-			: new Color( 0.12f, 0.13f, 0.16f, 0.95f );
+		// The selected tool reads as pressed with the accent border.
+		UiStyle.SetButtonState( btn, UiButton.Ghost, hovered: false, pressed: selected, disabled: false );
+		if ( selected )
+			btn.Style.Set( "border-color", UiStyle.Css( UiTheme.Colors.AccentColor ) );
 	}
 
 	static void StyleZoomButton( Panel btn, bool canPress )
@@ -922,7 +917,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		if ( btn is null || !btn.IsValid() )
 			return;
 
-		btn.Style.Set( "opacity", canPress ? "1" : "0.45" );
+		UiStyle.SetButtonState( btn, UiButton.Ghost, hovered: false, pressed: false, disabled: !canPress );
 	}
 
 	void UpdateVisibility()

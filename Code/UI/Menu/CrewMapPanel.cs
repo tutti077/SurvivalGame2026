@@ -63,15 +63,15 @@ public sealed class CrewMapPanel
 		_root.Style.PaddingRight = Length.Pixels( 10f );
 		_root.Style.Set( "pointer-events", "none" );
 
-		_crewCount = AddLabel( _root, "Crew 1/4", 18f, Color.White );
+		_crewCount = AddLabel( _root, "Crew 1/4", UiText.Header, 18f );
 
 		var nameRow = new Panel { Parent = _root };
 		nameRow.Style.Set( "flex-direction", "row" );
 		nameRow.Style.Set( "align-items", "center" );
 		nameRow.Style.Set( "justify-content", "space-between" );
 
-		_crewName = AddLabel( nameRow, "Solo", 15f, new Color( 0.65f, 0.8f, 1f ) );
-		_renameButton = MakePersistentButton( nameRow, "Rename", new Color( 0.2f, 0.22f, 0.26f ) );
+		_crewName = AddLabel( nameRow, "Solo", UiText.Accent, 15f );
+		_renameButton = MakePersistentButton( nameRow, "Rename", UiButton.Default );
 		_renameButton.Style.Set( "display", "none" );
 
 		// Inline rename editor (leader only). Persistent panels so the TextEntry keeps its
@@ -88,15 +88,12 @@ public sealed class CrewMapPanel
 		_renameEntry.Style.Height = Length.Pixels( 24f );
 		_renameEntry.Style.PaddingLeft = Length.Pixels( 6f );
 		_renameEntry.Style.PaddingRight = Length.Pixels( 6f );
-		_renameEntry.Style.BackgroundColor = new Color( 0.1f, 0.11f, 0.14f );
-		_renameEntry.Style.Set( "border-radius", "4px" );
-		_renameEntry.Style.Set( "border-width", "1px" );
-		_renameEntry.Style.Set( "border-color", "#3a4250" );
-		_renameEntry.Style.FontColor = Color.White;
-		_renameEntry.Style.FontSize = Length.Pixels( 13f );
+		UiStyle.Field( _renameEntry );
+		// A 24 px tall inline entry: small text, not the field default.
+		_renameEntry.Style.FontSize = Length.Pixels( UiTheme.Metrics.FontSmall );
 
-		_renameOkButton = MakePersistentButton( _renameRow, "OK", new Color( 0.25f, 0.55f, 0.3f ) );
-		_renameCancelButton = MakePersistentButton( _renameRow, "Cancel", new Color( 0.3f, 0.32f, 0.36f ) );
+		_renameOkButton = MakePersistentButton( _renameRow, "OK", UiButton.Primary );
+		_renameCancelButton = MakePersistentButton( _renameRow, "Cancel", UiButton.Default );
 
 		_memberList = new Panel { Parent = _root };
 		_memberList.Style.Set( "flex-direction", "column" );
@@ -106,7 +103,7 @@ public sealed class CrewMapPanel
 		_leaveRow.Style.Set( "flex-direction", "row" );
 		_leaveRow.Style.MarginTop = Length.Pixels( 6f );
 
-		var nearbyHeader = AddLabel( _root, "Nearby Players", 15f, new Color( 0.8f, 0.82f, 0.86f ) );
+		var nearbyHeader = AddLabel( _root, "Nearby Players", UiText.Header, 15f );
 		nearbyHeader.Style.MarginTop = Length.Pixels( 14f );
 
 		// Boxed, fixed-height list — rows are windowed by _nearbyScrollIndex; the right edge is
@@ -116,10 +113,7 @@ public sealed class CrewMapPanel
 		nearbyBox.Style.Set( "flex-shrink", "0" );
 		nearbyBox.Style.MarginTop = Length.Pixels( 4f );
 		nearbyBox.Style.Height = Length.Pixels( NearbyVisibleRows * NearbyRowHeight + 12f );
-		nearbyBox.Style.BackgroundColor = new Color( 0.06f, 0.07f, 0.09f, 0.9f );
-		nearbyBox.Style.Set( "border-radius", "6px" );
-		nearbyBox.Style.Set( "border-width", "1px" );
-		nearbyBox.Style.Set( "border-color", "#3a4250" );
+		UiStyle.Surface( nearbyBox, UiSurface.Sunken );
 		nearbyBox.Style.PaddingLeft = Length.Pixels( 6f );
 		nearbyBox.Style.PaddingRight = Length.Pixels( 4f );
 		nearbyBox.Style.PaddingTop = Length.Pixels( 6f );
@@ -141,8 +135,6 @@ public sealed class CrewMapPanel
 		_nearbyTrack.Style.Set( "position", "relative" );
 		_nearbyTrack.Style.Set( "flex-grow", "1" );
 		_nearbyTrack.Style.Width = Length.Percent( 100 );
-		_nearbyTrack.Style.BackgroundColor = new Color( 0.1f, 0.11f, 0.14f );
-		_nearbyTrack.Style.Set( "border-radius", "4px" );
 		_nearbyTrack.Style.MarginTop = Length.Pixels( 2f );
 		_nearbyTrack.Style.MarginBottom = Length.Pixels( 2f );
 
@@ -150,17 +142,18 @@ public sealed class CrewMapPanel
 		_nearbyThumb.Style.Set( "position", "absolute" );
 		_nearbyThumb.Style.Set( "left", "2px" );
 		_nearbyThumb.Style.Set( "right", "2px" );
-		_nearbyThumb.Style.BackgroundColor = new Color( 0.4f, 0.44f, 0.52f );
-		_nearbyThumb.Style.Set( "border-radius", "4px" );
+		UiStyle.ScrollBar( _nearbyTrack, _nearbyThumb );
 
 		_nearbyDownButton = MakeScrollButton( scrollColumn, "▼" );
 
-		var inviteHeader = AddLabel( _root, "Crew Invites", 15f, new Color( 0.8f, 0.82f, 0.86f ) );
+		var inviteHeader = AddLabel( _root, "Crew Invites", UiText.Header, 15f );
 		inviteHeader.Style.MarginTop = Length.Pixels( 14f );
 
 		_inviteList = new Panel { Parent = _root };
 		_inviteList.Style.Set( "flex-direction", "column" );
 		_inviteList.Style.MarginTop = Length.Pixels( 4f );
+		UiStyle.Surface( _inviteList, UiSurface.Sunken );
+		_inviteList.Style.Set( "padding", "6px" );
 	}
 
 	public void Tick()
@@ -269,20 +262,20 @@ public sealed class CrewMapPanel
 			foreach ( var member in crew.Members )
 			{
 				var isMemberLeader = member.PlayerId == crew.LeaderId;
-				var row = AddLabel( _memberList, (isMemberLeader ? "★ " : "") + member.DisplayName, 13f,
-					member.PlayerId == localKey ? new Color( 0.95f, 0.9f, 0.6f ) : new Color( 0.85f, 0.87f, 0.9f ) );
+				var row = AddLabel( _memberList, (isMemberLeader ? "★ " : "") + member.DisplayName,
+					member.PlayerId == localKey ? UiText.Accent : UiText.Body, 13f );
 				row.Style.MarginBottom = Length.Pixels( 2f );
 			}
 		}
 		else
 		{
-			AddLabel( _memberList, CrewRegistry.ResolvePawnDisplayName( localRoot ), 13f, new Color( 0.95f, 0.9f, 0.6f ) );
+			AddLabel( _memberList, CrewRegistry.ResolvePawnDisplayName( localRoot ), UiText.Accent, 13f );
 		}
 
 		_leaveRow.DeleteChildren( true );
 		if ( crew is not null )
 		{
-			MakeButton( _leaveRow, "Leave Crew", new Color( 0.55f, 0.25f, 0.22f ),
+			MakeButton( _leaveRow, "Leave Crew", UiButton.Danger,
 				() => _interaction?.OwnerCrewLeave() );
 		}
 
@@ -325,7 +318,7 @@ public sealed class CrewMapPanel
 
 		if ( candidates.Count == 0 )
 		{
-			AddLabel( _nearbyRows, "No players nearby.", 12f, new Color( 0.5f, 0.53f, 0.58f ) );
+			AddLabel( _nearbyRows, "No players nearby.", UiText.Muted, 12f );
 			return;
 		}
 
@@ -343,11 +336,12 @@ public sealed class CrewMapPanel
 			row.Style.Set( "flex-shrink", "0" );
 			row.Style.Height = Length.Pixels( NearbyRowHeight );
 
-			AddLabel( row, $"{CrewRegistry.ResolvePawnDisplayName( root )} - {meters:0}m", 13f, new Color( 0.85f, 0.87f, 0.9f ) );
+			AddLabel( row, $"{CrewRegistry.ResolvePawnDisplayName( root )} - {meters:0}m", UiText.Body, 13f );
 
 			if ( inMyCrew )
 			{
-				AddLabel( row, "In crew", 12f, new Color( 0.5f, 0.7f, 0.5f ) );
+				var inCrew = AddLabel( row, "In crew", UiText.Secondary, 12f );
+				inCrew.Style.FontColor = UiTheme.Colors.PositiveColor;
 				continue;
 			}
 
@@ -356,14 +350,13 @@ public sealed class CrewMapPanel
 			                         && Time.NowDouble < until);
 			if ( alreadyInvited )
 			{
-				var invited = MakeButton( row, "Invited", new Color( 0.16f, 0.17f, 0.2f ), null );
-				invited.Style.Opacity = 0.5f;
+				var invited = MakeButton( row, "Invited", UiButton.Default, null );
+				UiStyle.SetButtonState( invited, UiButton.Default, hovered: false, pressed: false, disabled: true );
 			}
 			else
 			{
 				var targetKey = key;
-				var btn = MakeButton( row, "Invite to Crew",
-					crewFull ? new Color( 0.16f, 0.17f, 0.2f ) : new Color( 0.2f, 0.45f, 0.85f ),
+				var btn = MakeButton( row, "Invite to Crew", UiButton.Primary,
 					crewFull
 						? null
 						: () =>
@@ -373,7 +366,7 @@ public sealed class CrewMapPanel
 							_interaction?.OwnerCrewInvite( targetKey );
 						} );
 				if ( crewFull )
-					btn.Style.Opacity = 0.4f;
+					UiStyle.SetButtonState( btn, UiButton.Primary, hovered: false, pressed: false, disabled: true );
 			}
 		}
 	}
@@ -394,8 +387,10 @@ public sealed class CrewMapPanel
 		_nearbyThumb.Style.Height = Length.Percent( visibleFrac * 100f );
 
 		var canScroll = _nearbyCount > NearbyVisibleRows;
-		_nearbyUpButton.Style.Opacity = canScroll && _nearbyScrollIndex > 0 ? 1f : 0.35f;
-		_nearbyDownButton.Style.Opacity = canScroll && _nearbyScrollIndex < _nearbyCount - NearbyVisibleRows ? 1f : 0.35f;
+		var canUp = canScroll && _nearbyScrollIndex > 0;
+		var canDown = canScroll && _nearbyScrollIndex < _nearbyCount - NearbyVisibleRows;
+		UiStyle.SetButtonState( _nearbyUpButton, UiButton.Ghost, hovered: false, pressed: false, disabled: !canUp );
+		UiStyle.SetButtonState( _nearbyDownButton, UiButton.Ghost, hovered: false, pressed: false, disabled: !canDown );
 	}
 
 	void RefreshInvites( PlayerCrew playerCrew, int crewSize )
@@ -404,14 +399,14 @@ public sealed class CrewMapPanel
 		var invites = playerCrew?.GetMyInvites();
 		if ( invites is null || invites.Count == 0 )
 		{
-			AddLabel( _inviteList, "No pending invites.", 12f, new Color( 0.5f, 0.53f, 0.58f ) );
+			AddLabel( _inviteList, "No pending invites.", UiText.Muted, 12f );
 			_confirmLeaveForCrewKey = default;
 			return;
 		}
 
 		foreach ( var invite in invites )
 		{
-			AddLabel( _inviteList, $"{invite.InviterName} - join {invite.CrewName}", 13f, new Color( 0.85f, 0.87f, 0.9f ) );
+			AddLabel( _inviteList, $"{invite.InviterName} - join {invite.CrewName}", UiText.Body, 13f );
 
 			var row = new Panel { Parent = _inviteList };
 			row.Style.Set( "flex-direction", "row" );
@@ -421,17 +416,18 @@ public sealed class CrewMapPanel
 			var key = invite.CrewKey;
 			if ( _confirmLeaveForCrewKey == key )
 			{
-				AddLabel( row, "Leave current crew?", 12f, new Color( 0.95f, 0.8f, 0.5f ) );
-				MakeButton( row, "Yes", new Color( 0.25f, 0.55f, 0.3f ), () =>
+				var ask = AddLabel( row, "Leave current crew?", UiText.Secondary, 12f );
+				ask.Style.FontColor = UiTheme.Colors.WarningColor;
+				MakeButton( row, "Yes", UiButton.Primary, () =>
 				{
 					_confirmLeaveForCrewKey = default;
 					_interaction?.OwnerCrewAcceptInvite( key );
 				} );
-				MakeButton( row, "No", new Color( 0.55f, 0.25f, 0.22f ), () => _confirmLeaveForCrewKey = default );
+				MakeButton( row, "No", UiButton.Default, () => _confirmLeaveForCrewKey = default );
 			}
 			else
 			{
-				MakeButton( row, "Join", new Color( 0.25f, 0.55f, 0.3f ), () =>
+				MakeButton( row, "Join", UiButton.Primary, () =>
 				{
 					// Already crewed up: confirm the implicit leave first.
 					if ( crewSize >= 2 )
@@ -442,16 +438,15 @@ public sealed class CrewMapPanel
 
 					_interaction?.OwnerCrewAcceptInvite( key );
 				} );
-				MakeButton( row, "Decline", new Color( 0.3f, 0.32f, 0.36f ), () => _interaction?.OwnerCrewDeclineInvite( key ) );
+				MakeButton( row, "Decline", UiButton.Default, () => _interaction?.OwnerCrewDeclineInvite( key ) );
 			}
 		}
 	}
 
-	static Label AddLabel( Panel parent, string text, float size, Color color )
+	static Label AddLabel( Panel parent, string text, UiText kind, float? size = null )
 	{
 		var label = new Label { Parent = parent, Text = text };
-		label.Style.FontColor = color;
-		label.Style.FontSize = Length.Pixels( size );
+		UiStyle.Text( label, kind, size );
 		label.Style.Set( "pointer-events", "none" );
 		return label;
 	}
@@ -462,21 +457,16 @@ public sealed class CrewMapPanel
 		btn.Style.Set( "flex-shrink", "0" );
 		btn.Style.Height = Length.Pixels( 18f );
 		btn.Style.Width = Length.Percent( 100 );
-		btn.Style.Set( "align-items", "center" );
-		btn.Style.Set( "justify-content", "center" );
-		btn.Style.BackgroundColor = new Color( 0.2f, 0.22f, 0.26f );
-		btn.Style.Set( "border-radius", "4px" );
+		UiStyle.Button( btn, UiButton.Ghost );
 		btn.Style.Set( "pointer-events", "none" );
 
 		var label = new Label { Parent = btn, Text = glyph };
-		label.Style.FontColor = Color.White;
-		label.Style.FontSize = Length.Pixels( 10f );
-		label.Style.Set( "pointer-events", "none" );
+		UiStyle.ButtonLabel( label, UiButton.Ghost, 10f );
 		return btn;
 	}
 
 	/// <summary>Built-once button panel; callers register its click target per refresh.</summary>
-	static Panel MakePersistentButton( Panel parent, string text, Color background )
+	static Panel MakePersistentButton( Panel parent, string text, UiButton kind )
 	{
 		var btn = new Panel { Parent = parent };
 		btn.Style.Set( "flex-shrink", "0" );
@@ -484,33 +474,27 @@ public sealed class CrewMapPanel
 		btn.Style.PaddingRight = Length.Pixels( 8f );
 		btn.Style.PaddingTop = Length.Pixels( 3f );
 		btn.Style.PaddingBottom = Length.Pixels( 3f );
-		btn.Style.BackgroundColor = background;
-		btn.Style.Set( "border-radius", "4px" );
+		UiStyle.Button( btn, kind );
 		btn.Style.Set( "pointer-events", "none" );
 
 		var label = new Label { Parent = btn, Text = text };
-		label.Style.FontColor = Color.White;
-		label.Style.FontSize = Length.Pixels( 12f );
-		label.Style.Set( "pointer-events", "none" );
+		UiStyle.ButtonLabel( label, kind, 12f );
 		return btn;
 	}
 
 	/// <summary>Plain panel styled as a button; clicks arrive via <see cref="TryClickAtScreen"/> hit rects.</summary>
-	Panel MakeButton( Panel parent, string text, Color background, Action onClick )
+	Panel MakeButton( Panel parent, string text, UiButton kind, Action onClick )
 	{
 		var btn = new Panel { Parent = parent };
 		btn.Style.PaddingLeft = Length.Pixels( 8f );
 		btn.Style.PaddingRight = Length.Pixels( 8f );
 		btn.Style.PaddingTop = Length.Pixels( 4f );
 		btn.Style.PaddingBottom = Length.Pixels( 4f );
-		btn.Style.BackgroundColor = background;
-		btn.Style.Set( "border-radius", "4px" );
+		UiStyle.Button( btn, kind );
 		btn.Style.Set( "pointer-events", "none" );
 
 		var label = new Label { Parent = btn, Text = text };
-		label.Style.FontColor = Color.White;
-		label.Style.FontSize = Length.Pixels( 12f );
-		label.Style.Set( "pointer-events", "none" );
+		UiStyle.ButtonLabel( label, kind, 12f );
 
 		if ( onClick is not null )
 			_clickTargets.Add( (btn, onClick) );

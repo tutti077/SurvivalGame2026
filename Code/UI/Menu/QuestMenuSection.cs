@@ -14,11 +14,6 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 {
 	public string SectionId => "quests";
 
-	static readonly Color LockedText = new( 0.55f, 0.57f, 0.62f );
-	static readonly Color ActiveText = new( 0.55f, 0.72f, 0.98f );
-	static readonly Color DoneText = new( 0.55f, 0.85f, 0.55f );
-	static readonly Color BodyText = new( 0.82f, 0.84f, 0.88f );
-
 	/// <summary>Main quests unlock one after another; a locked quest reveals nothing, not even its name.</summary>
 	const string HiddenName = "??????????????";
 
@@ -92,9 +87,9 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 		_sectionRoot.Style.Set( "overflow", "hidden" );
 		_sectionRoot.Style.Set( "flex-shrink", "0" );
 
+		// Text() only — the section is a fixed-height box (MinSectionHeight), so no title rule here.
 		_title = new Label { Parent = _sectionRoot, Text = "Quests" };
-		_title.Style.FontColor = Color.White;
-		_title.Style.FontSize = Length.Pixels( CraftingMenuSection.CraftingTitleFontSize );
+		UiStyle.Text( _title, UiText.Title, CraftingMenuSection.CraftingTitleFontSize );
 		_title.Style.Set( "width", "100%" );
 
 		var detail = new Panel { Parent = _sectionRoot };
@@ -103,8 +98,8 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 		detail.Style.Set( "width", "100%" );
 		detail.Style.PaddingTop = Length.Pixels( 4f * CraftingMenuSection.LayoutScale );
 		detail.Style.PaddingBottom = Length.Pixels( 8f * CraftingMenuSection.LayoutScale );
-		detail.Style.Set( "border-bottom-width", "1px" );
-		detail.Style.Set( "border-bottom-color", "#383d47" );
+		detail.Style.Set( "border-bottom-width", UiStyle.Px( UiTheme.Metrics.BorderWidth ) );
+		detail.Style.Set( "border-bottom-color", UiStyle.Css( UiTheme.Colors.DividerColor ) );
 		// Fixed height (not max-height): showing/hiding detail blocks must never move the list below.
 		detail.Style.Height = Length.Pixels( CraftingMenuSection.DetailAreaMaxHeight );
 		detail.Style.MinHeight = Length.Pixels( CraftingMenuSection.DetailAreaMaxHeight );
@@ -119,13 +114,13 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 		header.Style.Set( "width", "100%" );
 
 		_detailName = new Label { Parent = header, Text = "Select a quest" };
-		_detailName.Style.FontColor = Color.White;
-		_detailName.Style.FontSize = Length.Pixels( CraftingMenuSection.ItemNameFontSize );
+		UiStyle.Text( _detailName, UiText.Value, CraftingMenuSection.ItemNameFontSize );
 		_detailName.Style.Set( "white-space", "normal" );
 		_detailName.Style.Set( "flex-shrink", "1" );
 
+		// Status tag: value weight; its colour follows the quest state in Refresh.
 		_detailStatus = new Label { Parent = header, Text = string.Empty };
-		_detailStatus.Style.FontSize = Length.Pixels( 13f * CraftingMenuSection.TextScale );
+		UiStyle.Text( _detailStatus, UiText.Value, 13f * CraftingMenuSection.TextScale );
 		_detailStatus.Style.Set( "flex-shrink", "0" );
 		_detailStatus.Style.PaddingLeft = Length.Pixels( 8f * CraftingMenuSection.LayoutScale );
 
@@ -139,6 +134,7 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 		_questList = new Panel { Parent = _sectionRoot };
 		_questList.Style.Set( "position", "relative" );
 		_questList.Style.Set( "width", "100%" );
+		UiStyle.Surface( _questList, UiSurface.Sunken );
 		_questList.Style.Set( "overflow", "hidden" );
 		_questList.Style.Height = Length.Pixels( ViewHeight );
 		_questList.Style.MinHeight = Length.Pixels( ViewHeight );
@@ -162,8 +158,6 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 		_scrollTrack.Style.Set( "right", "0" );
 		_scrollTrack.Style.Width = Length.Pixels( ScrollBarWidth );
 		_scrollTrack.Style.Set( "z-index", "30" );
-		_scrollTrack.Style.BackgroundColor = new Color( 0.08f, 0.09f, 0.11f, 0.95f );
-		_scrollTrack.Style.Set( "border-radius", "4px" );
 		_scrollTrack.Style.Set( "pointer-events", "none" );
 
 		_scrollThumb = new Panel { Parent = _scrollTrack };
@@ -173,9 +167,8 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 		_scrollThumb.Style.Set( "top", "0px" );
 		_scrollThumb.Style.Height = Length.Pixels( MinThumbHeight );
 		_scrollThumb.Style.Set( "z-index", "31" );
-		_scrollThumb.Style.BackgroundColor = new Color( 0.55f, 0.60f, 0.68f, 0.95f );
-		_scrollThumb.Style.Set( "border-radius", "3px" );
 		_scrollThumb.Style.Set( "pointer-events", "none" );
+		UiStyle.ScrollBar( _scrollTrack, _scrollThumb );
 
 		BuildQuestRows();
 
@@ -443,8 +436,7 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 	void BuildListHeader( string text )
 	{
 		var header = new Label { Parent = _questContent, Text = text };
-		header.Style.FontColor = new Color( 0.85f, 0.87f, 0.9f );
-		header.Style.FontSize = Length.Pixels( CraftingMenuSection.SectionHeaderFontSize );
+		UiStyle.Text( header, UiText.Header, CraftingMenuSection.SectionHeaderFontSize );
 		header.Style.Set( "pointer-events", "none" );
 		header.Style.Set( "flex-shrink", "0" );
 		header.Style.Set( "align-items", "flex-end" );
@@ -481,15 +473,13 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 		row.Style.Set( "flex-shrink", "0" );
 		row.Style.PaddingLeft = Length.Pixels( 8f * CraftingMenuSection.LayoutScale );
 		row.Style.PaddingRight = Length.Pixels( 8f * CraftingMenuSection.LayoutScale );
-		row.Style.BackgroundColor = new Color( 0.10f, 0.11f, 0.13f, 0.9f );
-		row.Style.Set( "border-width", "1px" );
-		row.Style.Set( "border-color", "#383d47" );
-		row.Style.Set( "border-radius", "4px" );
+		row.Style.Set( "border-width", UiStyle.Px( UiTheme.Metrics.BorderWidth ) );
+		row.Style.Set( "border-radius", UiStyle.Px( UiTheme.Metrics.RadiusSmall ) );
+		StyleRow( row, selected: false );
 		row.Style.Set( "pointer-events", "none" );
 
 		var name = new Label { Parent = row, Text = quest.DisplayName };
-		name.Style.FontColor = Color.White;
-		name.Style.FontSize = Length.Pixels( 15f * CraftingMenuSection.TextScale );
+		UiStyle.Text( name, UiText.Body, 15f * CraftingMenuSection.TextScale );
 		name.Style.Set( "pointer-events", "none" );
 		name.Style.Set( "white-space", "nowrap" );
 		name.Style.Set( "overflow", "hidden" );
@@ -497,7 +487,7 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 		row.NameLabel = name;
 
 		var status = new Label { Parent = row, Text = string.Empty };
-		status.Style.FontSize = Length.Pixels( 12f * CraftingMenuSection.TextScale );
+		UiStyle.Text( status, UiText.Value, 12f * CraftingMenuSection.TextScale );
 		status.Style.Set( "pointer-events", "none" );
 		status.Style.Set( "flex-shrink", "0" );
 		status.Style.PaddingLeft = Length.Pixels( 8f * CraftingMenuSection.LayoutScale );
@@ -590,20 +580,21 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 		if ( state == QuestState.Locked )
 		{
 			SetBlockVisible( _descriptionBlock, true );
-			PopulateLines( _descriptionEntries, new[] { "Locked — complete the previous quest to reveal." }, LockedText );
+			PopulateLines( _descriptionEntries, new[] { "Locked — complete the previous quest to reveal." }, UiTheme.Colors.TextMutedColor );
 			SetBlockVisible( _taskBlock, false );
 			SetBlockVisible( _objectivesBlock, false );
 			SetBlockVisible( _rewardsBlock, false );
 			return;
 		}
 
+		var bodyColor = UiTheme.Colors.TextSecondaryColor;
 		SetBlockVisible( _descriptionBlock, true );
 		PopulateLines( _descriptionEntries,
-			string.IsNullOrWhiteSpace( quest.Description ) ? Array.Empty<string>() : new[] { quest.Description }, BodyText );
+			string.IsNullOrWhiteSpace( quest.Description ) ? Array.Empty<string>() : new[] { quest.Description }, bodyColor );
 
 		SetBlockVisible( _taskBlock, true );
 		PopulateLines( _taskEntries,
-			string.IsNullOrWhiteSpace( quest.Summary ) ? Array.Empty<string>() : new[] { quest.Summary }, BodyText );
+			string.IsNullOrWhiteSpace( quest.Summary ) ? Array.Empty<string>() : new[] { quest.Summary }, bodyColor );
 
 		SetBlockVisible( _objectivesBlock, quest.Objectives.Count > 0 );
 		PopulateObjectives( quest );
@@ -611,7 +602,7 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 		var hasRewards = quest.Rewards is { Count: > 0 };
 		SetBlockVisible( _rewardsBlock, hasRewards );
 		if ( hasRewards )
-			PopulateLines( _rewardsEntries, quest.Rewards, BodyText );
+			PopulateLines( _rewardsEntries, quest.Rewards, bodyColor );
 	}
 
 	void PopulateObjectives( QuestDefinition quest )
@@ -633,7 +624,7 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 				? $"{( done ? "✓" : "•" )} {label}  {progress}/{required}"
 				: $"✓ {label}";
 
-			AddLine( _objectivesEntries, text, done ? DoneText : BodyText );
+			AddLine( _objectivesEntries, text, done ? UiTheme.Colors.PositiveColor : UiTheme.Colors.TextSecondaryColor );
 		}
 	}
 
@@ -702,16 +693,13 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 			var state = QuestTracker.GetState( row.QuestId );
 			var selected = string.Equals( row.QuestId, _selectedQuestId, StringComparison.OrdinalIgnoreCase );
 
-			row.Style.Set( "border-color", selected ? "#8ab4f8" : "#383d47" );
-			row.Style.BackgroundColor = selected
-				? new Color( 0.16f, 0.19f, 0.24f, 0.95f )
-				: new Color( 0.10f, 0.11f, 0.13f, 0.9f );
+			StyleRow( row, selected );
 
 			if ( row.NameLabel is not null )
 			{
 				var locked = state == QuestState.Locked;
 				row.NameLabel.Text = locked ? HiddenName : QuestCatalog.Get( row.QuestId )?.DisplayName ?? row.QuestId;
-				row.NameLabel.Style.FontColor = locked ? LockedText : Color.White;
+				row.NameLabel.Style.FontColor = locked ? UiTheme.Colors.TextMutedColor : UiTheme.Colors.TextPrimaryColor;
 			}
 
 			if ( row.StatusLabel is not null )
@@ -732,10 +720,21 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 
 	static Color StatusColor( QuestState state ) => state switch
 	{
-		QuestState.Completed => DoneText,
-		QuestState.Active => ActiveText,
-		_ => LockedText,
+		QuestState.Completed => UiTheme.Colors.PositiveColor,
+		QuestState.Active => UiTheme.Colors.InfoColor,
+		_ => UiTheme.Colors.TextMutedColor,
 	};
+
+	/// <summary>List row fill + border: selected = tab-selected fill with the accent border, idle = raised + subtle.</summary>
+	static void StyleRow( Panel row, bool selected )
+	{
+		if ( row is null || !row.IsValid() )
+			return;
+
+		var c = UiTheme.Colors;
+		row.Style.BackgroundColor = selected ? c.TabSelectedColor : c.PanelRaisedColor;
+		row.Style.Set( "border-color", UiStyle.Css( selected ? c.AccentColor : c.BorderSubtleColor ) );
+	}
 
 	static void SetBlockVisible( Panel block, bool visible )
 	{
@@ -750,8 +749,7 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 		block.Style.Set( "width", "100%" );
 
 		var heading = new Label { Parent = block, Text = headingText };
-		heading.Style.FontColor = Color.White;
-		heading.Style.FontSize = Length.Pixels( CraftingMenuSection.SectionHeaderFontSize );
+		UiStyle.Text( heading, UiText.Header, CraftingMenuSection.SectionHeaderFontSize );
 
 		entriesHost = new Panel { Parent = block };
 		entriesHost.Style.Set( "flex-direction", "column" );
@@ -782,8 +780,8 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 	static void AddLine( Panel host, string text, Color color )
 	{
 		var label = new Label { Parent = host, Text = text };
+		UiStyle.Text( label, UiText.Body, CraftingMenuSection.SectionEntryFontSize );
 		label.Style.FontColor = color;
-		label.Style.FontSize = Length.Pixels( CraftingMenuSection.SectionEntryFontSize );
 		label.Style.Set( "white-space", "normal" );
 	}
 }

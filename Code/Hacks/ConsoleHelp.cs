@@ -24,6 +24,8 @@ public static class ConsoleHelp
 		new( "World", "cycle_pause", "", "Freeze / resume the day-night cycle where it is (sun and sky stay lit).", "cycle_pause" ),
 		new( "World", "cycle_night", "", "Jump the cycle to midnight (key U).", "cycle_night" ),
 		new( "World", "pawn_toggle", "", "terrainTest: the same as L — fly camera → playable pawn, pawn → fly camera.", "pawn_toggle" ),
+		new( "World", "nameplates_reload", "", "Re-read data/nameplates.json (overhead nameplate sizes, scale curve, fades, targeting range).", "nameplates_reload" ),
+		new( "UI", "ui_theme", "[id|reload]", "UI theme from data/ui_themes.json: no argument lists them, an id switches (saved per machine; menus restyle on their next build, the main menu live), reload re-reads the JSON.", "ui_theme frost" ),
 
 		// ---- hacks
 		new( "Hacks", "hacks", "", "Print every hack flag and its value.", "hacks" ),

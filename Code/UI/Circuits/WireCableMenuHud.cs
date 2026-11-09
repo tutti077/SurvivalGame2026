@@ -63,13 +63,10 @@ public sealed class WireCableMenuHud
 		_panelRoot.Style.PaddingRight = Length.Pixels( 18f * Scale );
 		_panelRoot.Style.PaddingTop = Length.Pixels( 14f * Scale );
 		_panelRoot.Style.PaddingBottom = Length.Pixels( 14f * Scale );
-		_panelRoot.Style.BackgroundColor = new Color( 0.06f, 0.06f, 0.07f, 0.92f );
-		_panelRoot.Style.Set( "border-radius", "8px" );
+		UiStyle.Surface( _panelRoot, UiSurface.Frame );
 		_panelRoot.Style.Set( "pointer-events", "auto" );
 
-		var title = new Label { Parent = _panelRoot, Text = "Wire Colour" };
-		title.Style.FontColor = Color.White;
-		title.Style.FontSize = Length.Pixels( TitleFontSize );
+		UiStyle.AddTitle( _panelRoot, "Wire Colour", TitleFontSize );
 
 		var row = new Panel { Parent = _panelRoot };
 		row.Style.Set( "flex-direction", "row" );
@@ -88,15 +85,13 @@ public sealed class WireCableMenuHud
 			var swatch = new Panel { Parent = column };
 			swatch.Style.Width = Length.Pixels( SwatchSize );
 			swatch.Style.Height = Length.Pixels( SwatchSize );
+			UiStyle.Slot( swatch, UiTheme.Metrics.Radius );
+			// The cable colour is content, not chrome: it fills the slot after the theme frames it.
 			swatch.Style.BackgroundColor = cable.ToColor();
-			swatch.Style.Set( "border-radius", "6px" );
-			swatch.Style.Set( "border-width", "3px" );
-			swatch.Style.Set( "border-color", "#474d57" );
 			swatch.Style.Set( "pointer-events", "none" );
 
 			var label = new Label { Parent = column, Text = cable.DisplayName() };
-			label.Style.FontColor = Color.White;
-			label.Style.FontSize = Length.Pixels( BodyFontSize );
+			UiStyle.Text( label, UiText.Secondary, BodyFontSize );
 			label.Style.Set( "pointer-events", "none" );
 
 			column.AddEventListener( "onclick", () =>
@@ -113,8 +108,7 @@ public sealed class WireCableMenuHud
 		}
 
 		var hint = new Label { Parent = _panelRoot, Text = "Hold LMB on a sphere, release on another to wire them. Same pair again removes the wire." };
-		hint.Style.FontColor = new Color( 0.82f, 0.84f, 0.88f );
-		hint.Style.FontSize = Length.Pixels( BodyFontSize );
+		UiStyle.Text( hint, UiText.Secondary, BodyFontSize );
 		hint.Style.Set( "text-align", "center" );
 
 		_equipment.EquipmentChanged += OnEquipmentChanged;
@@ -161,7 +155,10 @@ public sealed class WireCableMenuHud
 		for ( var i = 0; i < _swatches.Count; i++ )
 		{
 			var isSelected = _swatches[i].Cable == selected;
-			_swatches[i].Panel.Style.Set( "border-color", isSelected ? "#ffffff" : "#474d57" );
+			var panel = _swatches[i].Panel;
+			// SetSlotState writes the slot fill; the cable colour goes back on top of it.
+			UiStyle.SetSlotState( panel, isSelected ? UiSlotState.Selected : UiSlotState.Idle );
+			panel.Style.BackgroundColor = _swatches[i].Cable.ToColor();
 		}
 	}
 

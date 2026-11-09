@@ -42,15 +42,13 @@ public sealed class BaseRaidHud
 		_banner.Style.Set( "height", "64px" );
 		_banner.Style.Set( "align-items", "center" );
 		_banner.Style.Set( "justify-content", "center" );
-		_banner.Style.BackgroundColor = new Color( 0.35f, 0.03f, 0.02f, 0.78f );
+		UiStyle.Surface( _banner, UiSurface.Pill, radius: 0f );
+		_banner.Style.BackgroundColor = UiTheme.Colors.NegativeColor.WithAlpha( 0.78f );
 		_banner.Style.Set( "pointer-events", "none" );
 		_banner.Style.Set( "display", "none" );
 
 		_bannerText = new Label { Parent = _banner, Text = "" };
-		_bannerText.Style.FontColor = Color.White;
-		_bannerText.Style.FontSize = Length.Pixels( 34f );
-		_bannerText.Style.Set( "font-weight", "bold" );
-		_bannerText.Style.Set( "text-shadow", "2px 2px 3px black" );
+		UiStyle.Text( _bannerText, UiText.Title, 34f );
 
 		_status = new Panel { Parent = parent };
 		_status.Style.Set( "position", "absolute" );
@@ -58,17 +56,14 @@ public sealed class BaseRaidHud
 		_status.Style.Set( "top", "96px" );
 		_status.Style.Set( "transform", "translateX(-50%)" );
 		_status.Style.Set( "padding", "4px 12px" );
-		_status.Style.BackgroundColor = new Color( 0.05f, 0.06f, 0.08f, 0.78f );
-		_status.Style.Set( "border-radius", "6px" );
-		_status.Style.Set( "border-width", "1px" );
-		_status.Style.Set( "border-color", "#c0392b" );
+		UiStyle.Surface( _status, UiSurface.Pill );
+		_status.Style.Set( "border-color", UiStyle.Css( UiTheme.Colors.NegativeColor ) );
 		_status.Style.Set( "pointer-events", "none" );
 		_status.Style.Set( "display", "none" );
 
 		_statusText = new Label { Parent = _status, Text = "" };
-		_statusText.Style.FontColor = new Color( 1f, 0.45f, 0.4f );
-		_statusText.Style.FontSize = Length.Pixels( 18f );
-		_statusText.Style.Set( "font-weight", "bold" );
+		UiStyle.Text( _statusText, UiText.Hud, 18f );
+		_statusText.Style.FontColor = UiTheme.Colors.NegativeColor;
 
 		BaseRaidSession.RaidEventRaised += OnRaidEvent;
 		BaseRaidSession.LocalNoticeRaised += ShowBanner;

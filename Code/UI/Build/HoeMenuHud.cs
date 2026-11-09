@@ -21,7 +21,7 @@ public sealed class HoeMenuHud
 	const float DetailNameFontSize = BuildMenuHud.DetailNameFontSize;
 	const float DetailPanelHeight = BuildMenuHud.DetailPanelHeight;
 
-	/// <summary>The tiles, in menu order (Mark 2026-11-02: grass, bare ground, tilled soil, the grading tool).</summary>
+	/// <summary>The tiles, in menu order (Mark 2026-11-02: grass, bare ground, tilled soil, the grading tool). Swatch colours are the ground each mode makes — content, not theme.</summary>
 	static readonly (HoeMode Mode, Color Color)[] Tiles =
 	{
 		(HoeMode.Grass, new Color( 0.30f, 0.62f, 0.24f )),
@@ -85,13 +85,10 @@ public sealed class HoeMenuHud
 		_panelRoot.Style.PaddingRight = Length.Pixels( 16f * Scale );
 		_panelRoot.Style.PaddingTop = Length.Pixels( 14f * Scale );
 		_panelRoot.Style.PaddingBottom = Length.Pixels( 14f * Scale );
-		_panelRoot.Style.BackgroundColor = new Color( 0.06f, 0.06f, 0.07f, 0.92f );
-		_panelRoot.Style.Set( "border-radius", "8px" );
+		UiStyle.Surface( _panelRoot, UiSurface.Frame );
 		_panelRoot.Style.Set( "pointer-events", "auto" );
 
-		var title = new Label { Parent = _panelRoot, Text = "Hoe" };
-		title.Style.FontColor = Color.White;
-		title.Style.FontSize = Length.Pixels( TitleFontSize );
+		UiStyle.AddTitle( _panelRoot, "Hoe", TitleFontSize );
 
 		_grid = new Panel { Parent = _panelRoot };
 		_grid.Style.Set( "flex-direction", "row" );
@@ -103,10 +100,7 @@ public sealed class HoeMenuHud
 			var slotPanel = new Panel { Parent = _grid };
 			slotPanel.Style.Width = Length.Pixels( SlotSize );
 			slotPanel.Style.Height = Length.Pixels( SlotSize );
-			slotPanel.Style.BackgroundColor = new Color( 0.12f, 0.13f, 0.15f, 0.92f );
-			slotPanel.Style.Set( "border-radius", "4px" );
-			slotPanel.Style.Set( "border-width", "1px" );
-			slotPanel.Style.Set( "border-color", "#474d57" );
+			UiStyle.Slot( slotPanel );
 			slotPanel.Style.Set( "flex-direction", "column" );
 			slotPanel.Style.Set( "align-items", "center" );
 			slotPanel.Style.Set( "justify-content", "center" );
@@ -122,8 +116,7 @@ public sealed class HoeMenuHud
 			swatch.Style.Set( "pointer-events", "none" );
 
 			var name = new Label { Parent = slotPanel, Text = ToolHoe.ModeTitle( mode ) };
-			name.Style.FontColor = Color.White;
-			name.Style.FontSize = Length.Pixels( BodyFontSize );
+			UiStyle.Text( name, UiText.Body, BodyFontSize );
 			name.Style.Set( "pointer-events", "none" );
 
 			var picked = mode;
@@ -140,21 +133,16 @@ public sealed class HoeMenuHud
 		_squareBox = new Panel { Parent = _squareRow };
 		_squareBox.Style.Width = Length.Pixels( 18f * Scale );
 		_squareBox.Style.Height = Length.Pixels( 18f * Scale );
-		_squareBox.Style.BackgroundColor = new Color( 0.18f, 0.18f, 0.2f );
-		_squareBox.Style.Set( "border-radius", "3px" );
+		UiStyle.Slot( _squareBox );
 		_squareBox.Style.Set( "align-items", "center" );
 		_squareBox.Style.Set( "justify-content", "center" );
-		_squareBox.Style.Set( "border-width", "2px" );
-		_squareBox.Style.Set( "border-color", "#595961" );
 
-		_squareCheck = new Label { Parent = _squareBox, Text = "\u2713" };
-		_squareCheck.Style.FontColor = new Color( 0.22f, 0.48f, 0.95f );
-		_squareCheck.Style.FontSize = Length.Pixels( 14f * Scale );
+		_squareCheck = new Label { Parent = _squareBox, Text = "✓" };
+		UiStyle.Text( _squareCheck, UiText.Accent, 14f * Scale );
 		_squareCheck.Style.Set( "display", "none" );
 
 		_squareLabel = new Label { Parent = _squareRow, Text = "Square patch (paint and raise; F swaps)" };
-		_squareLabel.Style.FontColor = Color.White;
-		_squareLabel.Style.FontSize = Length.Pixels( BodyFontSize );
+		UiStyle.Text( _squareLabel, UiText.Body, BodyFontSize );
 
 		var detailRoot = new Panel { Parent = _panelRoot };
 		detailRoot.Style.Set( "flex-direction", "column" );
@@ -166,15 +154,14 @@ public sealed class HoeMenuHud
 		detailRoot.Style.Set( "min-height", $"{DetailPanelHeight}px" );
 		detailRoot.Style.Set( "flex-shrink", "0" );
 		detailRoot.Style.Set( "overflow", "hidden" );
+		UiStyle.Surface( detailRoot, UiSurface.Raised );
 
 		_detailName = new Label { Parent = detailRoot };
-		_detailName.Style.FontColor = Color.White;
-		_detailName.Style.FontSize = Length.Pixels( DetailNameFontSize );
+		UiStyle.Text( _detailName, UiText.Value, DetailNameFontSize );
 		_detailName.Style.Set( "text-align", "center" );
 
 		_detailText = new Label { Parent = detailRoot };
-		_detailText.Style.FontColor = new Color( 0.82f, 0.84f, 0.88f );
-		_detailText.Style.FontSize = Length.Pixels( BodyFontSize );
+		UiStyle.Text( _detailText, UiText.Secondary, BodyFontSize );
 		_detailText.Style.Set( "text-align", "center" );
 		_detailText.Style.Set( "white-space", "pre-line" );
 
@@ -240,10 +227,7 @@ public sealed class HoeMenuHud
 	{
 		var on = ResolveHoe()?.SquarePatch ?? false;
 		if ( _squareBox is not null )
-		{
-			_squareBox.Style.BackgroundColor = on ? new Color( 0.14f, 0.24f, 0.42f, 0.95f ) : new Color( 0.18f, 0.18f, 0.2f );
-			_squareBox.Style.Set( "border-color", on ? "#387af2" : "#595961" );
-		}
+			UiStyle.SetSlotState( _squareBox, on ? UiSlotState.Selected : UiSlotState.Idle );
 		_squareCheck?.Style.Set( "display", on ? "flex" : "none" );
 	}
 
@@ -261,7 +245,7 @@ public sealed class HoeMenuHud
 		ApplySquareUi();
 	}
 
-	/// <summary>The hovered tile lifts (the build menu's treatment); the current mode keeps a blue border so the player sees what the hoe is set to.</summary>
+	/// <summary>The hovered tile lifts (the build menu's treatment); the current mode keeps the theme's selected frame so the player sees what the hoe is set to.</summary>
 	void UpdateSlotHighlights()
 	{
 		var current = ResolveHoe()?.Mode;
@@ -272,11 +256,7 @@ public sealed class HoeMenuHud
 				continue;
 			var isHovered = _hoveredMode == slot.Mode;
 			var isCurrent = current == slot.Mode;
-			slot.Panel.Style.Set( "border-color", isHovered ? "#8ab4f8" : isCurrent ? "#387af2" : "#474d57" );
-			slot.Panel.Style.Set( "border-width", isHovered || isCurrent ? "3px" : "1px" );
-			slot.Panel.Style.BackgroundColor = isHovered
-				? new Color( 0.20f, 0.28f, 0.42f, 0.98f )
-				: new Color( 0.12f, 0.13f, 0.15f, 0.92f );
+			UiStyle.SetSlotState( slot.Panel, isHovered ? UiSlotState.Hover : isCurrent ? UiSlotState.Selected : UiSlotState.Idle );
 			slot.Panel.Style.Set( "transform", isHovered ? "scale(1.08)" : "scale(1)" );
 		}
 	}

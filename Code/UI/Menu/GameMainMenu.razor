@@ -4,34 +4,43 @@
 @inherits PanelComponent
 
 <root>
-	<div class="backdrop" @ref="_backdrop">
-		<div class="card">
+	<div class="backdrop">
+		<div class="art" @ref="_art"></div>
+		<div class="vignette ui-backdrop"></div>
+		<div class="card ui-frame">
+			<div class="ui-corner tl"></div>
+			<div class="ui-corner tr"></div>
+			<div class="ui-corner br"></div>
+			<div class="ui-corner bl"></div>
 			@if ( Page == MenuPage.Main )
 			{
-				<div class="title">Unnamed Game</div>
+				<div class="title ui-title">Unnamed Game</div>
+				<div class="subtitle ui-muted">Survive · Build · Augment</div>
+				<div class="rule ui-divider"></div>
 				<div class="button-row">
-					<div class="menu-button" onclick="@ShowLoadPage">Load World</div>
-					<div class="menu-button" onclick="@ShowCreatePage">Create World</div>
+					<div class="menu-button ui-button primary" onclick="@ShowLoadPage">Load World</div>
+					<div class="menu-button ui-button" onclick="@ShowCreatePage">Create World</div>
 				</div>
 			}
 			else if ( Page == MenuPage.Load )
 			{
-				<div class="title">Load World</div>
+				<div class="title ui-title">Load World</div>
+				<div class="rule ui-divider"></div>
 				@if ( SaveEntries.Count == 0 )
 				{
-					<div class="hint">No saves in WorldSaves yet — create a world first.</div>
+					<div class="hint ui-secondary">No saves in WorldSaves yet — create a world first.</div>
 				}
 				else
 				{
 					<div class="save-list">
 						@foreach ( var save in SaveEntries )
 						{
-							<div class="save-row @(IsSelected(save.WorldName) ? "selected" : "")"
+							<div class="save-row ui-row @(IsSelected(save.WorldName) ? "selected" : "")"
 								 onclick="@(() => SelectWorld(save.WorldName))">
-								<div class="save-name">@save.WorldName</div>
-								<div class="save-meta">Seed @save.WorldSeed</div>
-								<div class="save-meta">First generated: @FormatTimestamp( save.FirstGeneratedUtc )</div>
-								<div class="save-meta">Last loaded: @FormatTimestamp( save.LastLoadedUtc )</div>
+								<div class="save-name ui-value">@save.WorldName</div>
+								<div class="save-meta ui-secondary">Seed @save.WorldSeed</div>
+								<div class="save-meta ui-muted">First generated: @FormatTimestamp( save.FirstGeneratedUtc )</div>
+								<div class="save-meta ui-muted">Last loaded: @FormatTimestamp( save.LastLoadedUtc )</div>
 							</div>
 						}
 					</div>
@@ -39,36 +48,41 @@
 
 				@if ( LoadPrompt != LoadPromptKind.None )
 				{
-					<div class="prompt-panel">
-						<div class="field-label">@PromptTitle</div>
-						<TextEntry class="text-field" Value:bind="@PromptWorldName" Placeholder="World name" />
+					<div class="prompt-panel ui-raised">
+						<div class="field-label ui-header">@PromptTitle</div>
+						<TextEntry class="text-field ui-field" Value:bind="@PromptWorldName" Placeholder="World name" />
 						<div class="prompt-actions">
-							<div class="menu-button" onclick="@ConfirmPrompt">Confirm</div>
-							<div class="menu-button secondary" onclick="@CancelPrompt">Cancel</div>
+							<div class="menu-button ui-button primary" onclick="@ConfirmPrompt">Confirm</div>
+							<div class="menu-button ui-button" onclick="@CancelPrompt">Cancel</div>
 						</div>
 					</div>
 				}
 
 				<div class="load-actions">
-					<div class="menu-button load-primary @(HasSelection ? "" : "disabled")" onclick="@TryLoadSelected">Load</div>
+					<div class="menu-button ui-button primary load-primary @(HasSelection ? "" : "disabled")" onclick="@TryLoadSelected">Load</div>
 					<div class="load-actions-secondary">
-						<div class="menu-button secondary action-small @(HasSelection ? "" : "disabled")" onclick="@TryDeleteSelected">Delete</div>
-						<div class="menu-button secondary action-small @(HasSelection ? "" : "disabled")" onclick="@BeginCopyPrompt">Copy</div>
-						<div class="menu-button secondary action-small @(HasSelection ? "" : "disabled")" onclick="@BeginRenamePrompt">Rename</div>
+						<div class="menu-button ui-button danger action-small @(HasSelection ? "" : "disabled")" onclick="@TryDeleteSelected">Delete</div>
+						<div class="menu-button ui-button action-small @(HasSelection ? "" : "disabled")" onclick="@BeginCopyPrompt">Copy</div>
+						<div class="menu-button ui-button action-small @(HasSelection ? "" : "disabled")" onclick="@BeginRenamePrompt">Rename</div>
 					</div>
-					<div class="menu-button secondary" onclick="@ShowMainPage">Back</div>
+					<div class="menu-button ui-button ghost" onclick="@ShowMainPage">Back</div>
 				</div>
 			}
 			else
 			{
-				<div class="title">Create World</div>
-				<div class="field-label">World name</div>
-				<TextEntry class="text-field" Value:bind="@NewWorldName" Placeholder="My World" />
-				<div class="field-label">Seed</div>
-				<TextEntry class="text-field" Value:bind="@NewWorldSeedText" Placeholder="1337" />
-				<div class="menu-button" onclick="@CreateWorld">Create</div>
-				<div class="menu-button secondary" onclick="@ShowMainPage">Back</div>
+				<div class="title ui-title">Create World</div>
+				<div class="rule ui-divider"></div>
+				<div class="field-label ui-header">World name</div>
+				<TextEntry class="text-field ui-field" Value:bind="@NewWorldName" Placeholder="My World" />
+				<div class="field-label ui-header">Seed</div>
+				<TextEntry class="text-field ui-field" Value:bind="@NewWorldSeedText" Placeholder="1337" />
+				<div class="menu-button ui-button primary" onclick="@CreateWorld">Create</div>
+				<div class="menu-button ui-button ghost" onclick="@ShowMainPage">Back</div>
 			}
+			<div class="footer">
+				<div class="ui-muted">Build @(global::Game.GameBuildLabel.Display)</div>
+				<div class="ui-muted">Theme @UiTheme.Current.DisplayName</div>
+			</div>
 		</div>
 	</div>
 </root>
@@ -104,9 +118,8 @@
 	public Action<string, int> OnCreateWorld { get; set; }
 	public Action OnRefreshSaves { get; set; }
 
-	Panel _backdrop;
-
-	const string BackgroundImagePath = "ui/menu/mainMenuBackground.png";
+	Panel _art;
+	bool _themeHooked;
 
 	bool HasSelection => !string.IsNullOrWhiteSpace( SelectedWorldName );
 
@@ -121,26 +134,73 @@
 	{
 		base.OnTreeFirstBuilt();
 		SyncFullscreenBounds();
+		ApplyTheme();
+		if ( !_themeHooked )
+		{
+			_themeHooked = true;
+			UiTheme.Changed += OnThemeChanged;
+		}
+	}
+
+	/// <summary>The art panel is rebuilt with the tree, so the background image is re-applied after every render.</summary>
+	protected override void OnTreeBuilt()
+	{
+		base.OnTreeBuilt();
+		ApplyMenuBackground();
+	}
+
+	protected override void OnDestroy()
+	{
+		if ( _themeHooked )
+		{
+			_themeHooked = false;
+			UiTheme.Changed -= OnThemeChanged;
+		}
+
+		base.OnDestroy();
+	}
+
+	void OnThemeChanged()
+	{
+		ApplyTheme();
+		StateHasChanged();
+	}
+
+	/// <summary>Theme classes (ui-frame, ui-title, ui-button …) resolve against the generated sheet on this root.</summary>
+	void ApplyTheme()
+	{
+		if ( Panel is null || !Panel.IsValid() )
+			return;
+
+		UiThemeStyleSheet.Attach( Panel );
 		ApplyMenuBackground();
 	}
 
 	void ApplyMenuBackground()
 	{
-		if ( _backdrop is null || !_backdrop.IsValid() )
+		if ( _art is null || !_art.IsValid() )
 			return;
 
-		_backdrop.Style.BackgroundColor = Color.Transparent;
-		_backdrop.Style.Set( "background-size", "cover" );
-		_backdrop.Style.Set( "background-repeat", "no-repeat" );
-		_backdrop.Style.Set( "background-position", "center" );
-
-		if ( MenuUiTextures.MountedPathExists( BackgroundImagePath ) )
+		var path = UiTheme.Textures.MainMenuBackground;
+		if ( string.IsNullOrWhiteSpace( path ) )
 		{
-			_backdrop.Style.SetBackgroundImage( BackgroundImagePath );
+			_art.Style.Set( "background-image", "none" );
+			_art.Style.BackgroundColor = UiTheme.Colors.PanelSunkenColor;
 			return;
 		}
 
-		MenuUiTextures.ApplyBackground( _backdrop, BackgroundImagePath );
+		_art.Style.BackgroundColor = Color.Transparent;
+		if ( MenuUiTextures.MountedPathExists( path ) )
+		{
+			_art.Style.SetBackgroundImage( path );
+			_art.Style.Set( "background-size", "cover" );
+			_art.Style.Set( "background-repeat", "no-repeat" );
+			_art.Style.Set( "background-position", "center" );
+			return;
+		}
+
+		MenuUiTextures.ApplyBackground( _art, path );
+		_art.Style.Set( "background-size", "cover" );
 	}
 
 	Vector2 _syncedScreenSize;
@@ -284,5 +344,5 @@
 	}
 
 	protected override int BuildHash()
-		=> HashCode.Combine( (int)Page, (int)LoadPrompt, SaveEntries.Count, SelectedWorldName, PromptWorldName, NewWorldName, NewWorldSeedText );
+		=> HashCode.Combine( (int)Page, (int)LoadPrompt, SaveEntries.Count, SelectedWorldName, PromptWorldName, NewWorldName, NewWorldSeedText, UiTheme.Version );
 }

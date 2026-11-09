@@ -106,13 +106,10 @@ public sealed class BuildMenuHud
 		_panelRoot.Style.PaddingRight = Length.Pixels( 16f * Scale );
 		_panelRoot.Style.PaddingTop = Length.Pixels( 14f * Scale );
 		_panelRoot.Style.PaddingBottom = Length.Pixels( 14f * Scale );
-		_panelRoot.Style.BackgroundColor = new Color( 0.06f, 0.06f, 0.07f, 0.92f );
-		_panelRoot.Style.Set( "border-radius", "8px" );
+		UiStyle.Surface( _panelRoot, UiSurface.Frame );
 		_panelRoot.Style.Set( "pointer-events", "auto" );
 
-		var title = new Label { Parent = _panelRoot, Text = "Build" };
-		title.Style.FontColor = Color.White;
-		title.Style.FontSize = Length.Pixels( TitleFontSize );
+		UiStyle.AddTitle( _panelRoot, "Build", TitleFontSize );
 
 		_blueprintToggleRow = new Panel { Parent = _panelRoot };
 		_blueprintToggleRow.Style.Set( "flex-direction", "row" );
@@ -123,21 +120,16 @@ public sealed class BuildMenuHud
 		_blueprintToggleBox = new Panel { Parent = _blueprintToggleRow };
 		_blueprintToggleBox.Style.Width = Length.Pixels( 18f * Scale );
 		_blueprintToggleBox.Style.Height = Length.Pixels( 18f * Scale );
-		_blueprintToggleBox.Style.BackgroundColor = new Color( 0.18f, 0.18f, 0.2f );
-		_blueprintToggleBox.Style.Set( "border-radius", "3px" );
+		UiStyle.Slot( _blueprintToggleBox );
 		_blueprintToggleBox.Style.Set( "align-items", "center" );
 		_blueprintToggleBox.Style.Set( "justify-content", "center" );
-		_blueprintToggleBox.Style.Set( "border-width", "2px" );
-		_blueprintToggleBox.Style.Set( "border-color", "#595961" );
 
 		_blueprintToggleCheck = new Label { Parent = _blueprintToggleBox, Text = "✓" };
-		_blueprintToggleCheck.Style.FontColor = new Color( 0.22f, 0.48f, 0.95f );
-		_blueprintToggleCheck.Style.FontSize = Length.Pixels( 14f * Scale );
+		UiStyle.Text( _blueprintToggleCheck, UiText.Accent, 14f * Scale );
 		_blueprintToggleCheck.Style.Set( "display", "none" );
 
 		_blueprintToggleLabel = new Label { Parent = _blueprintToggleRow, Text = "Blueprint mode: ON" };
-		_blueprintToggleLabel.Style.FontColor = Color.White;
-		_blueprintToggleLabel.Style.FontSize = Length.Pixels( BodyFontSize );
+		UiStyle.Text( _blueprintToggleLabel, UiText.Body, BodyFontSize );
 
 		_grid = new Panel { Parent = _panelRoot };
 		_grid.Style.Set( "flex-direction", "row" );
@@ -156,15 +148,14 @@ public sealed class BuildMenuHud
 		_detailRoot.Style.Set( "min-height", $"{DetailPanelHeight}px" );
 		_detailRoot.Style.Set( "flex-shrink", "0" );
 		_detailRoot.Style.Set( "overflow", "hidden" );
+		UiStyle.Surface( _detailRoot, UiSurface.Raised );
 
 		_detailName = new Label { Parent = _detailRoot };
-		_detailName.Style.FontColor = Color.White;
-		_detailName.Style.FontSize = Length.Pixels( DetailNameFontSize );
+		UiStyle.Text( _detailName, UiText.Value, DetailNameFontSize );
 		_detailName.Style.Set( "text-align", "center" );
 
 		_detailCosts = new Label { Parent = _detailRoot };
-		_detailCosts.Style.FontColor = new Color( 0.82f, 0.84f, 0.88f );
-		_detailCosts.Style.FontSize = Length.Pixels( BodyFontSize );
+		UiStyle.Text( _detailCosts, UiText.Secondary, BodyFontSize );
 		_detailCosts.Style.Set( "text-align", "center" );
 		_detailCosts.Style.Set( "white-space", "pre-line" );
 
@@ -204,10 +195,7 @@ public sealed class BuildMenuHud
 			var slotPanel = new Panel { Parent = _grid };
 			slotPanel.Style.Width = Length.Pixels( SlotSize );
 			slotPanel.Style.Height = Length.Pixels( SlotSize );
-			slotPanel.Style.BackgroundColor = new Color( 0.12f, 0.13f, 0.15f, 0.92f );
-			slotPanel.Style.Set( "border-radius", "4px" );
-			slotPanel.Style.Set( "border-width", "1px" );
-			slotPanel.Style.Set( "border-color", "#474d57" );
+			UiStyle.Slot( slotPanel );
 			slotPanel.Style.Set( "align-items", "center" );
 			slotPanel.Style.Set( "justify-content", "center" );
 			slotPanel.Style.Set( "cursor", "pointer" );
@@ -248,6 +236,7 @@ public sealed class BuildMenuHud
 		}
 
 		_builtPieceContentVersion = BuildPieceCatalog.ContentVersion;
+		UpdateSlotHighlights( null );
 		UpdateDetailPanel( null );
 		ApplyBlueprintModeUi();
 	}
@@ -305,7 +294,11 @@ public sealed class BuildMenuHud
 			_panelRoot.Style.Set( "display", visible ? "flex" : "none" );
 
 		if ( visible )
+		{
+			// The piece the hammer already holds gets the selected frame the moment the menu opens.
+			UpdateSlotHighlights( null );
 			ApplyBlueprintModeUi();
+		}
 		else
 		{
 			_hoveredPieceId = null;
@@ -331,12 +324,7 @@ public sealed class BuildMenuHud
 			_blueprintToggleLabel.Text = enabled ? "Blueprint mode: ON" : "Blueprint mode: OFF";
 
 		if ( _blueprintToggleBox is not null )
-		{
-			_blueprintToggleBox.Style.BackgroundColor = enabled
-				? new Color( 0.14f, 0.24f, 0.42f, 0.95f )
-				: new Color( 0.18f, 0.18f, 0.2f );
-			_blueprintToggleBox.Style.Set( "border-color", enabled ? "#387af2" : "#595961" );
-		}
+			UiStyle.SetSlotState( _blueprintToggleBox, enabled ? UiSlotState.Selected : UiSlotState.Idle );
 
 		if ( _blueprintToggleCheck is not null )
 			_blueprintToggleCheck.Style.Set( "display", enabled ? "flex" : "none" );
@@ -344,19 +332,19 @@ public sealed class BuildMenuHud
 
 	void UpdateSlotHighlights( PieceSlotUi hovered )
 	{
+		var selectedId = ResolveBuildHammer()?.SelectedPieceId;
 		for ( var i = 0; i < _slots.Count; i++ )
 		{
 			var slot = _slots[i];
 			if ( slot?.Panel is null )
 				continue;
 
-			// A 1px→2px border recolour was too subtle to read at slot size — lift the whole tile.
+			// Theme slot states carry the colours; a border recolour alone was too subtle to read at
+			// slot size, so the hovered tile still lifts.
 			var isHovered = hovered is not null && slot == hovered;
-			slot.Panel.Style.Set( "border-color", isHovered ? "#8ab4f8" : "#474d57" );
-			slot.Panel.Style.Set( "border-width", isHovered ? "3px" : "1px" );
-			slot.Panel.Style.BackgroundColor = isHovered
-				? new Color( 0.20f, 0.28f, 0.42f, 0.98f )
-				: new Color( 0.12f, 0.13f, 0.15f, 0.92f );
+			var isSelected = !string.IsNullOrEmpty( selectedId )
+			                 && string.Equals( slot.PieceId, selectedId, StringComparison.OrdinalIgnoreCase );
+			UiStyle.SetSlotState( slot.Panel, isHovered ? UiSlotState.Hover : isSelected ? UiSlotState.Selected : UiSlotState.Idle );
 			slot.Panel.Style.Set( "transform", isHovered ? "scale(1.08)" : "scale(1)" );
 		}
 	}

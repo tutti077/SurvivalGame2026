@@ -16,12 +16,29 @@ public sealed class PlayerScreenHud : PanelComponent
 	const float BarWidth = 360f;
 	const float BarHeight = 22f;
 	const float BarGap = 6f;
+	const float FoodSlotSize = 36f;
+	const float FoodSlotGap = 6f;
+	const float FoodRowTopGap = 8f;
+	const float VitalsMargin = 16f;
+	/// <summary>
+	/// Height of the bottom-left HUD strip (buff row, health + stamina bars, food slots and the screen
+	/// margin). It stays visible over the menu, so the menu side columns end above it instead of
+	/// running underneath it (Mark 2026-11-09: the health bar covered the equipment / crafting menu).
+	/// </summary>
+	public const float VitalsStripHeight = VitalsMargin + StatusEffectsHud.IconSize + StatusEffectsHud.RowBottomGap
+	                                       + BarHeight * 2f + BarGap + FoodRowTopGap + FoodSlotSize;
+	/// <summary>Top inset of the menu side anchors, so a full-height column never touches the screen edge.</summary>
+	public const float MenuColumnTopInset = 12f;
+	/// <summary>Bottom inset of the menu side anchors: the vitals strip plus the same breathing gap.</summary>
+	public const float MenuColumnBottomInset = VitalsStripHeight + MenuColumnTopInset;
+	/// <summary>The ScreenPanel runs AutoScreenScale, so 100vh is always this many design pixels.</summary>
+	public const float DesignScreenHeight = 1080f;
+	/// <summary>Vertical padding + border a side menu column adds around its section.</summary>
+	public static float MenuColumnChromeHeight => MenuColumnPadding( InventoryMenuColumnWidth ) * 2f + UiTheme.Metrics.BorderWidthStrong * 2f;
 	const float InventoryMenuColumnWidth = 400f;
 	const float CraftingMenuColumnWidth = 470f;
 	const string DefaultHarvestPromptText = "Harvest";
 	const int ZGameMenu = 2500;
-
-	static readonly Color DepletedPortionColor = new Color( 0.82f, 0.82f, 0.83f );
 
 	PlayerVitals _vitals;
 	PlayerFood _food;
@@ -432,8 +449,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		var vitalsHost = new Panel { Parent = root };
 		_vitalsHost = vitalsHost;
 		vitalsHost.Style.Set( "position", "absolute" );
-		vitalsHost.Style.Set( "left", "16px" );
-		vitalsHost.Style.Set( "bottom", "16px" );
+		vitalsHost.Style.Set( "left", $"{VitalsMargin}px" );
+		vitalsHost.Style.Set( "bottom", $"{VitalsMargin}px" );
 		vitalsHost.Style.Set( "flex-direction", "column" );
 		vitalsHost.Style.Set( "align-items", "flex-start" );
 		vitalsHost.Style.Set( "pointer-events", "none" );
@@ -445,10 +462,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_statusEffectsHud = new StatusEffectsHud( _vitals );
 		_statusEffectsHud.Build( vitalsHost );
 
-		const float foodSlotSize = 36f;
-		const float foodSlotGap = 6f;
-		const float foodRowTopGap = 8f;
-		var hostHeight = BarHeight * 2f + BarGap + foodRowTopGap + foodSlotSize;
+		var hostHeight = BarHeight * 2f + BarGap + FoodRowTopGap + FoodSlotSize;
 		var barsHost = new Panel { Parent = vitalsHost };
 		barsHost.Style.Width = Length.Pixels( BarWidth );
 		barsHost.Style.Height = Length.Pixels( hostHeight );
@@ -460,8 +474,6 @@ public sealed class PlayerScreenHud : PanelComponent
 		_healthRoot.Style.Set( "top", "0" );
 		_healthRoot.Style.Width = Length.Pixels( BarWidth );
 		_healthRoot.Style.Height = Length.Pixels( BarHeight );
-		_healthRoot.Style.BackgroundColor = DepletedPortionColor;
-		_healthRoot.Style.Set( "overflow", "hidden" );
 
 		_healthFill = new Panel { Parent = _healthRoot };
 		_healthFill.Style.Set( "position", "absolute" );
@@ -469,7 +481,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		_healthFill.Style.Set( "left", "0" );
 		_healthFill.Style.Set( "height", "100%" );
 		_healthFill.Style.Set( "z-index", "0" );
-		_healthFill.Style.BackgroundColor = new Color( 0.92f, 0.18f, 0.14f );
+		UiStyle.Bar( _healthRoot, _healthFill, UiTheme.Colors.HealthColor, UiTheme.Colors.HealthDepletedColor );
+		UiStyle.AddBarGloss( _healthFill );
 
 		_healthText = new Label { Parent = _healthRoot };
 		_healthText.Style.Set( "position", "absolute" );
@@ -478,8 +491,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_healthText.Style.Set( "align-items", "center" );
 		_healthText.Style.Set( "justify-content", "center" );
 		_healthText.Style.Set( "z-index", "1" );
-		_healthText.Style.FontColor = Color.Black;
-		_healthText.Style.FontSize = Length.Pixels( 14f );
+		UiStyle.BarLabel( _healthText, 14f );
 
 		_staminaRoot = new Panel { Parent = barsHost };
 		_staminaRoot.Style.Set( "position", "absolute" );
@@ -487,8 +499,6 @@ public sealed class PlayerScreenHud : PanelComponent
 		_staminaRoot.Style.Set( "top", $"{BarHeight + BarGap}px" );
 		_staminaRoot.Style.Width = Length.Pixels( BarWidth );
 		_staminaRoot.Style.Height = Length.Pixels( BarHeight );
-		_staminaRoot.Style.BackgroundColor = DepletedPortionColor;
-		_staminaRoot.Style.Set( "overflow", "hidden" );
 
 		_staminaFill = new Panel { Parent = _staminaRoot };
 		_staminaFill.Style.Set( "position", "absolute" );
@@ -496,7 +506,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		_staminaFill.Style.Set( "left", "0" );
 		_staminaFill.Style.Set( "height", "100%" );
 		_staminaFill.Style.Set( "z-index", "0" );
-		_staminaFill.Style.BackgroundColor = new Color( 0.98f, 0.86f, 0.2f );
+		UiStyle.Bar( _staminaRoot, _staminaFill, UiTheme.Colors.StaminaColor, UiTheme.Colors.StaminaDepletedColor );
+		UiStyle.AddBarGloss( _staminaFill );
 
 		_staminaText = new Label { Parent = _staminaRoot };
 		_staminaText.Style.Set( "position", "absolute" );
@@ -505,28 +516,23 @@ public sealed class PlayerScreenHud : PanelComponent
 		_staminaText.Style.Set( "align-items", "center" );
 		_staminaText.Style.Set( "justify-content", "center" );
 		_staminaText.Style.Set( "z-index", "1" );
-		_staminaText.Style.FontColor = Color.Black;
-		_staminaText.Style.FontSize = Length.Pixels( 14f );
+		UiStyle.BarLabel( _staminaText, 14f );
 
 		_food = FindOnAncestors<PlayerFood>();
 		_foodSlotsRoot = new Panel { Parent = barsHost };
 		_foodSlotsRoot.Style.Set( "position", "absolute" );
 		_foodSlotsRoot.Style.Set( "left", "0" );
-		_foodSlotsRoot.Style.Set( "top", $"{BarHeight * 2f + BarGap + foodRowTopGap}px" );
+		_foodSlotsRoot.Style.Set( "top", $"{BarHeight * 2f + BarGap + FoodRowTopGap}px" );
 		_foodSlotsRoot.Style.Set( "flex-direction", "row" );
-		_foodSlotsRoot.Style.Set( "gap", $"{foodSlotGap}px" );
+		_foodSlotsRoot.Style.Set( "gap", $"{FoodSlotGap}px" );
 		_foodSlotsRoot.Style.Set( "pointer-events", "none" );
 
 		for ( var i = 0; i < PlayerFood.MaxFoodSlots; i++ )
 		{
 			var slot = new Panel { Parent = _foodSlotsRoot };
-			slot.Style.Width = Length.Pixels( foodSlotSize );
-			slot.Style.Height = Length.Pixels( foodSlotSize );
-			slot.Style.BackgroundColor = new Color( 0.12f, 0.13f, 0.15f, 0.85f );
-			slot.Style.Set( "border-width", "1px" );
-			slot.Style.Set( "border-color", "#383d47" );
-			slot.Style.Set( "border-radius", "4px" );
-			slot.Style.Set( "overflow", "hidden" );
+			slot.Style.Width = Length.Pixels( FoodSlotSize );
+			slot.Style.Height = Length.Pixels( FoodSlotSize );
+			UiStyle.Slot( slot );
 
 			var timer = new Label { Parent = slot, Text = "" };
 			timer.Style.Set( "position", "absolute" );
@@ -536,9 +542,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			timer.Style.Set( "align-items", "center" );
 			timer.Style.Set( "justify-content", "center" );
 			timer.Style.Set( "z-index", "2" );
-			timer.Style.FontColor = Color.White;
-			timer.Style.FontSize = Length.Pixels( 11f );
-			timer.Style.Set( "text-shadow", "1px 1px 2px black" );
+			UiStyle.Text( timer, UiText.Hud, UiTheme.Metrics.FontMicro );
 
 			_foodSlotPanels[i] = slot;
 			_foodSlotTimers[i] = timer;
@@ -583,7 +587,7 @@ public sealed class PlayerScreenHud : PanelComponent
 				}
 				else
 				{
-					panel.Style.BackgroundColor = new Color( 0.12f, 0.13f, 0.15f, 0.85f );
+					panel.Style.BackgroundColor = UiTheme.Colors.SlotColor;
 					panel.Style.SetBackgroundImage( (Texture)null );
 					panel.Style.Set( "background-image", "none" );
 					panel.Style.Set( "opacity", "0.55" );
@@ -674,26 +678,16 @@ public sealed class PlayerScreenHud : PanelComponent
 		_promptRoot.Style.PaddingRight = Length.Pixels( 14f );
 		_promptRoot.Style.PaddingTop = Length.Pixels( 8f );
 		_promptRoot.Style.PaddingBottom = Length.Pixels( 8f );
-		_promptRoot.Style.BackgroundColor = new Color( 0.06f, 0.06f, 0.07f, 0.82f );
-		_promptRoot.Style.Set( "border-radius", "6px" );
+		UiStyle.Surface( _promptRoot, UiSurface.Pill );
 		_promptRoot.Style.Set( "display", "none" );
 
 		var keyCap = new Panel { Parent = _promptRoot };
 		_promptKeyCap = keyCap;
-		keyCap.Style.MinWidth = Length.Pixels( 28f );
-		keyCap.Style.Height = Length.Pixels( 28f );
-		keyCap.Style.Set( "align-items", "center" );
-		keyCap.Style.Set( "justify-content", "center" );
-		keyCap.Style.BackgroundColor = new Color( 0.92f, 0.92f, 0.94f );
-		keyCap.Style.Set( "border-radius", "4px" );
-
 		_promptKeyLabel = new Label { Parent = keyCap, Text = "E" };
-		_promptKeyLabel.Style.FontColor = Color.Black;
-		_promptKeyLabel.Style.FontSize = Length.Pixels( 15f );
+		UiStyle.KeyCap( keyCap, _promptKeyLabel );
 
 		_promptLabel = new Label { Parent = _promptRoot, Text = DefaultHarvestPromptText };
-		_promptLabel.Style.FontColor = Color.White;
-		_promptLabel.Style.FontSize = Length.Pixels( 18f );
+		UiStyle.Text( _promptLabel, UiText.Hud, 18f );
 
 		_handHarvest?.FocusedNodeChanged += OnInteractionPromptChanged;
 		_farming?.PromptChanged += OnInteractionPromptChanged;
@@ -729,21 +723,16 @@ public sealed class PlayerScreenHud : PanelComponent
 		host.Style.Set( "pointer-events", "none" );
 
 		_timeTrialCountdown = new Label { Parent = host, Text = "" };
-		_timeTrialCountdown.Style.FontColor = Color.White;
-		_timeTrialCountdown.Style.FontSize = Length.Pixels( 72f );
-		_timeTrialCountdown.Style.Set( "text-shadow", "2px 2px 4px black" );
+		UiStyle.Text( _timeTrialCountdown, UiText.Title, 72f );
 		_timeTrialCountdown.Style.Set( "display", "none" );
 
 		_timeTrialTimer = new Label { Parent = host, Text = "" };
-		_timeTrialTimer.Style.FontColor = new Color( 0.95f, 0.95f, 0.2f );
-		_timeTrialTimer.Style.FontSize = Length.Pixels( 28f );
-		_timeTrialTimer.Style.Set( "text-shadow", "1px 1px 2px black" );
+		UiStyle.Text( _timeTrialTimer, UiText.Hud, 28f );
+		_timeTrialTimer.Style.FontColor = UiTheme.Colors.AccentBrightColor;
 		_timeTrialTimer.Style.Set( "display", "none" );
 
 		_timeTrialBanner = new Label { Parent = host, Text = "" };
-		_timeTrialBanner.Style.FontColor = Color.White;
-		_timeTrialBanner.Style.FontSize = Length.Pixels( 26f );
-		_timeTrialBanner.Style.Set( "text-shadow", "1px 1px 3px black" );
+		UiStyle.Text( _timeTrialBanner, UiText.Title, 26f );
 		_timeTrialBanner.Style.Set( "display", "none" );
 
 		_timeTrialLbRoot = new Panel { Parent = root };
@@ -758,18 +747,16 @@ public sealed class PlayerScreenHud : PanelComponent
 		_timeTrialLbRoot.Style.PaddingRight = Length.Pixels( 14f );
 		_timeTrialLbRoot.Style.PaddingTop = Length.Pixels( 10f );
 		_timeTrialLbRoot.Style.PaddingBottom = Length.Pixels( 10f );
-		_timeTrialLbRoot.Style.BackgroundColor = new Color( 0.06f, 0.07f, 0.09f, 0.9f );
-		_timeTrialLbRoot.Style.Set( "border-radius", "6px" );
+		UiStyle.Surface( _timeTrialLbRoot, UiSurface.Frame );
 		_timeTrialLbRoot.Style.Set( "pointer-events", "none" );
 		_timeTrialLbRoot.Style.Set( "display", "none" );
 
 		_timeTrialLbTitle = new Label { Parent = _timeTrialLbRoot, Text = "Top 10" };
-		_timeTrialLbTitle.Style.FontColor = Color.White;
-		_timeTrialLbTitle.Style.FontSize = Length.Pixels( 16f );
+		UiStyle.Text( _timeTrialLbTitle, UiText.Header, 16f );
 
 		_timeTrialLbBody = new Label { Parent = _timeTrialLbRoot, Text = "" };
-		_timeTrialLbBody.Style.FontColor = new Color( 0.85f, 0.88f, 0.9f );
-		_timeTrialLbBody.Style.FontSize = Length.Pixels( 13f );
+		UiStyle.Text( _timeTrialLbBody, UiText.Secondary );
+		_timeTrialLbBody.Style.Set( "font-family", UiTheme.Fonts.Mono );
 		_timeTrialLbBody.Style.Set( "white-space", "pre" );
 
 		if ( _inventoryInteraction is not null )
@@ -1103,6 +1090,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		_sections.Add( _skillsSection );
 		_skillsSection.Build( _menuSkillsCenterRoot );
 
+		// Dim + vignette behind every menu page so the panels sit on a stage, not over raw gameplay.
+		UiStyle.Backdrop( _menuRoot );
 		_mapSection = new MapMenuSection( _inventoryInteraction );
 		_sections.Add( _mapSection );
 		_mapSection.Build( _menuMapRoot );
@@ -1225,8 +1214,9 @@ public sealed class PlayerScreenHud : PanelComponent
 	{
 		var anchor = new Panel { Parent = parent };
 		anchor.Style.Set( "position", "absolute" );
-		anchor.Style.Set( "top", "0" );
-		anchor.Style.Set( "bottom", "0" );
+		anchor.Style.Set( "top", $"{MenuColumnTopInset}px" );
+		// Columns live above the bottom HUD strip (vitals left, hotbar banks centre).
+		anchor.Style.Set( "bottom", $"{MenuColumnBottomInset}px" );
 		anchor.Style.Set( "width", "33%" );
 		anchor.Style.Set( "display", "none" );
 		anchor.Style.Set( "flex-direction", "column" );
@@ -1255,7 +1245,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 	static Panel CreateMenuColumn( Panel parent, float widthPixels )
 	{
-		var pad = widthPixels > 400f ? 20f : 16f;
+		var pad = MenuColumnPadding( widthPixels );
 		var gap = widthPixels > 400f ? 16f : 14f;
 
 		var column = new Panel { Parent = parent };
@@ -1269,12 +1259,11 @@ public sealed class PlayerScreenHud : PanelComponent
 		column.Style.PaddingBottom = Length.Pixels( pad );
 		column.Style.PaddingLeft = Length.Pixels( pad );
 		column.Style.PaddingRight = Length.Pixels( pad );
-		column.Style.BackgroundColor = new Color( 0.05f, 0.06f, 0.08f, 0.88f );
-		column.Style.Set( "border-radius", "8px" );
-		column.Style.Set( "border-width", "1px" );
-		column.Style.Set( "border-color", "#383d47" );
+		UiStyle.Surface( column, UiSurface.Frame );
 		return column;
 	}
+	static float MenuColumnPadding( float widthPixels ) => widthPixels > 400f ? 20f : 16f;
+
 
 	void OnInteractionPromptChanged()
 	{

@@ -20,19 +20,6 @@ public sealed class AugmentPaperdollView
 	public const float CostIconSize = 20f;
 	public const float PreviewWidth = 300f;
 
-	public static readonly Color BoxBg = new( 0.10f, 0.11f, 0.13f, 0.95f );
-	public static readonly Color TitleColor = Color.White;
-	public static readonly Color MutedColor = new( 0.72f, 0.74f, 0.78f );
-	public static readonly Color LabelColor = new( 0.78f, 0.8f, 0.84f );
-	public static readonly Color CostColor = new( 0.93f, 0.8f, 0.4f );
-	public static readonly Color ButtonOff = new( 0.2f, 0.21f, 0.24f, 0.95f );
-	static readonly Color EnhanceOn = new( 0.25f, 0.4f, 0.6f, 0.95f );
-	static readonly Color EnhanceDone = new( 0.16f, 0.18f, 0.22f, 0.95f );
-	public const string BorderIdle = "#474d57";
-	const string BorderLocked = "#2a2d33";
-	const string BorderPending = "#e0b84a";
-	const string BorderActive = "#5ec46a";
-
 	// Sketch order: left column Head / Arms / Legs, right column Torso / Hands / Feet.
 	static readonly AugmentBodyPart[] LeftParts = { AugmentBodyPart.Head, AugmentBodyPart.Arms, AugmentBodyPart.Legs };
 	static readonly AugmentBodyPart[] RightParts = { AugmentBodyPart.Torso, AugmentBodyPart.Hands, AugmentBodyPart.Feet };
@@ -111,10 +98,7 @@ public sealed class AugmentPaperdollView
 		previewFrame.Style.Width = Length.Pixels( PreviewWidth );
 		previewFrame.Style.Set( "flex-shrink", "0" );
 		_scaledBoxes.Add( (previewFrame, PreviewWidth, 0f) );
-		previewFrame.Style.BackgroundColor = BoxBg;
-		previewFrame.Style.Set( "border-radius", "4px" );
-		previewFrame.Style.Set( "border-width", "1px" );
-		previewFrame.Style.Set( "border-color", BorderIdle );
+		UiStyle.Surface( previewFrame, UiSurface.Raised );
 		previewFrame.Style.Set( "overflow", "hidden" );
 		previewFrame.Style.Set( "pointer-events", "none" );
 
@@ -147,8 +131,8 @@ public sealed class AugmentPaperdollView
 		_scaledBoxes.Add( (header, 0f, 26f) );
 
 		var name = new Label { Parent = header, Text = AugmentBodyParts.Label( part ) };
-		name.Style.FontColor = TitleColor;
-		name.Style.FontSize = Length.Pixels( BodyFont );
+		// Value, not Header: the part name sits in a fixed 60 px column where uppercase + letter spacing would clip.
+		UiStyle.Text( name, UiText.Value, BodyFont );
 		name.Style.Width = Length.Pixels( 60f );
 		name.Style.Set( "pointer-events", "none" );
 		_scaledLabels.Add( (name, BodyFont) );
@@ -164,21 +148,15 @@ public sealed class AugmentPaperdollView
 			enhance.Style.Width = Length.Pixels( 96f );
 			enhance.Style.Height = Length.Pixels( 28f );
 			_scaledBoxes.Add( (enhance, 96f, 28f) );
-			enhance.Style.BackgroundColor = EnhanceOn;
-			enhance.Style.Set( "border-radius", "4px" );
-			enhance.Style.Set( "justify-content", "center" );
-			enhance.Style.Set( "align-items", "center" );
+			UiStyle.Button( enhance, UiButton.Default );
 			enhance.Style.Set( "pointer-events", "all" );
 
 			enhanceLabel = new Label { Parent = enhance, Text = "Enhance" };
-			enhanceLabel.Style.FontColor = Color.White;
-			enhanceLabel.Style.FontSize = Length.Pixels( SmallFont + 1f );
-			enhanceLabel.Style.Set( "pointer-events", "none" );
+			UiStyle.ButtonLabel( enhanceLabel, UiButton.Default, SmallFont + 1f );
 			_scaledLabels.Add( (enhanceLabel, SmallFont + 1f) );
 
 			cost = new Label { Parent = header, Text = "" };
-			cost.Style.FontColor = CostColor;
-			cost.Style.FontSize = Length.Pixels( BodyFont );
+			UiStyle.Text( cost, UiText.Accent, BodyFont );
 			cost.Style.Set( "pointer-events", "none" );
 			_scaledLabels.Add( (cost, BodyFont) );
 
@@ -189,8 +167,7 @@ public sealed class AugmentPaperdollView
 		{
 			// Same header height as the station so the doll lines up identically; open-socket count instead of a button.
 			cost = new Label { Parent = header, Text = "" };
-			cost.Style.FontColor = MutedColor;
-			cost.Style.FontSize = Length.Pixels( SmallFont );
+			UiStyle.Text( cost, UiText.Muted, SmallFont );
 			cost.Style.Set( "pointer-events", "none" );
 			_scaledLabels.Add( (cost, SmallFont) );
 		}
@@ -227,19 +204,18 @@ public sealed class AugmentPaperdollView
 		lockOverlay.Style.Set( "top", "0" );
 		lockOverlay.Style.Set( "right", "0" );
 		lockOverlay.Style.Set( "bottom", "0" );
-		lockOverlay.Style.BackgroundColor = new Color( 0f, 0f, 0f, 0.62f );
+		lockOverlay.Style.BackgroundColor = UiTheme.Colors.BackdropColor;
 		lockOverlay.Style.Set( "justify-content", "center" );
 		lockOverlay.Style.Set( "align-items", "center" );
 		lockOverlay.Style.Set( "pointer-events", "none" );
 		var lockText = new Label { Parent = lockOverlay, Text = "locked" };
-		lockText.Style.FontColor = new Color( 0.55f, 0.57f, 0.62f );
-		lockText.Style.FontSize = Length.Pixels( 11f );
+		var lockFont = UiTheme.Metrics.FontMicro;
+		UiStyle.Text( lockText, UiText.Muted, lockFont );
 		lockText.Style.Set( "pointer-events", "none" );
-		_scaledLabels.Add( (lockText, 11f) );
+		_scaledLabels.Add( (lockText, lockFont) );
 
 		var label = new Label { Parent = host, Text = AugmentSlots.VariationLabel( slot ) };
-		label.Style.FontColor = LabelColor;
-		label.Style.FontSize = Length.Pixels( SmallFont - 1f );
+		UiStyle.Text( label, UiText.Secondary, SmallFont - 1f );
 		label.Style.Set( "pointer-events", "none" );
 		_scaledLabels.Add( (label, SmallFont - 1f) );
 
@@ -386,11 +362,11 @@ public sealed class AugmentPaperdollView
 			var unlocked = _augments?.IsSlotUnlocked( slot ) ?? false;
 			ui.LockOverlay.Style.Set( "display", unlocked ? "none" : "flex" );
 
-			var border = !unlocked ? BorderLocked
-				: _augments.IsSlotActive( slot ) ? BorderActive
-				: _augments.IsSlotPending( slot ) ? BorderPending
-				: BorderIdle;
-			ui.Root.Style.Set( "border-color", border );
+			var state = !unlocked ? UiSlotState.Locked
+				: _augments.IsSlotActive( slot ) ? UiSlotState.Active
+				: _augments.IsSlotPending( slot ) ? UiSlotState.Pending
+				: UiSlotState.Idle;
+			UiStyle.SetSlotState( ui.Root, state );
 		}
 	}
 
@@ -415,16 +391,16 @@ public sealed class AugmentPaperdollView
 			{
 				ui.CostLabel.Text = "full";
 				ui.CoreIcon.Style.Set( "display", "none" );
-				ui.EnhanceButton.Style.BackgroundColor = EnhanceDone;
-				ui.EnhanceLabel.Style.FontColor = MutedColor;
+				UiStyle.SetButtonState( ui.EnhanceButton, UiButton.Default, hovered: false, pressed: false, disabled: true );
+				ui.EnhanceLabel.Style.FontColor = UiTheme.Colors.TextMutedColor;
 				continue;
 			}
 
 			ui.CostLabel.Text = cost.ToString();
 			ui.CoreIcon.Style.Set( "display", "flex" );
 			var can = _augments?.CanEnhance( part ) ?? false;
-			ui.EnhanceButton.Style.BackgroundColor = can ? EnhanceOn : ButtonOff;
-			ui.EnhanceLabel.Style.FontColor = can ? Color.White : MutedColor;
+			UiStyle.SetButtonState( ui.EnhanceButton, UiButton.Default, hovered: false, pressed: false, disabled: !can );
+			ui.EnhanceLabel.Style.FontColor = can ? UiTheme.Colors.TextPrimaryColor : UiTheme.Colors.TextMutedColor;
 		}
 	}
 
@@ -459,12 +435,7 @@ public sealed class AugmentPaperdollView
 		slotPanel.Style.Height = Length.Pixels( SlotSize );
 		slotPanel.Style.Set( "flex-shrink", "0" );
 		slotPanel.Style.Set( "position", "relative" );
-		slotPanel.Style.Set( "box-sizing", "border-box" );
-		slotPanel.Style.BackgroundColor = new Color( 0.1f, 0.11f, 0.13f, 0.95f );
-		slotPanel.Style.Set( "border-width", "2px" );
-		slotPanel.Style.Set( "border-color", BorderIdle );
-		slotPanel.Style.Set( "border-radius", "4px" );
-		slotPanel.Style.Set( "overflow", "hidden" );
+		UiStyle.Slot( slotPanel );
 		slotPanel.Style.Set( "pointer-events", "auto" );
 	}
 
@@ -485,8 +456,7 @@ public sealed class AugmentPaperdollView
 		count.Style.Set( "position", "absolute" );
 		count.Style.Set( "right", "3px" );
 		count.Style.Set( "bottom", "1px" );
-		count.Style.FontColor = Color.White;
-		count.Style.FontSize = Length.Pixels( 12f );
+		UiStyle.CountBadge( count, 12f );
 		count.Style.Set( "pointer-events", "none" );
 
 		return new SlotUi( icon, count );

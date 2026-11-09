@@ -168,7 +168,7 @@ public static class SkillCatalog
 			Id = "guard_stance",
 			DisplayName = "Guard Stance",
 			Description = "Blocking recovers stamina sooner after a successful block (future tuning hook).",
-			Icon = "ui/menu/tab_blank.png",
+			Icon = "ui/menu/SkillsTab.png",
 			X = 0.62f,
 			Y = 0.76f,
 			Parents = new List<string> { "inventory_tidy" }

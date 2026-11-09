@@ -6,14 +6,20 @@
 <root class="@RootClass">
 	@if ( Visible )
 	{
-		<div class="backdrop">
-			<div class="card">
-				<div class="title">@Title</div>
-				<div class="status">@StatusText</div>
-				<div class="bar-track">
-					<div class="bar-fill" style="width: @FillWidth"></div>
+		<div class="backdrop" @ref="_backdrop">
+			<div class="vignette ui-backdrop"></div>
+			<div class="card ui-frame">
+				<div class="ui-corner tl"></div>
+				<div class="ui-corner tr"></div>
+				<div class="ui-corner br"></div>
+				<div class="ui-corner bl"></div>
+				<div class="title ui-title">@Title</div>
+				<div class="rule ui-divider"></div>
+				<div class="status ui-secondary">@StatusText</div>
+				<div class="bar-track ui-bar-track">
+					<div class="bar-fill ui-bar-fill" style="width: @FillWidth"></div>
 				</div>
-				<div class="percent">@PercentText</div>
+				<div class="percent ui-muted">@PercentText</div>
 			</div>
 		</div>
 	}
@@ -26,6 +32,9 @@
 	public string StatusText { get; set; } = "Starting…";
 	public float Progress01 { get; set; }
 
+	Panel _backdrop;
+	bool _themeHooked;
+
 	string RootClass => Visible ? "visible" : "hidden";
 	string FillWidth => $"{Math.Clamp( Progress01, 0f, 1f ) * 100f:0.0}%";
 	string PercentText => $"{Math.Clamp( Progress01, 0f, 1f ) * 100f:0}%";
@@ -34,6 +43,54 @@
 	{
 		base.OnTreeFirstBuilt();
 		SyncFullscreenBounds();
+		ApplyTheme();
+		if ( !_themeHooked )
+		{
+			_themeHooked = true;
+			UiTheme.Changed += OnThemeChanged;
+		}
+	}
+
+	/// <summary>The backdrop is rebuilt whenever Visible flips, so its opaque fill is re-applied after every render.</summary>
+	protected override void OnTreeBuilt()
+	{
+		base.OnTreeBuilt();
+		ApplyBackdropFill();
+	}
+
+	protected override void OnDestroy()
+	{
+		if ( _themeHooked )
+		{
+			_themeHooked = false;
+			UiTheme.Changed -= OnThemeChanged;
+		}
+
+		base.OnDestroy();
+	}
+
+	void OnThemeChanged()
+	{
+		ApplyTheme();
+		StateHasChanged();
+	}
+
+	void ApplyTheme()
+	{
+		if ( Panel is null || !Panel.IsValid() )
+			return;
+
+		UiThemeStyleSheet.Attach( Panel );
+		ApplyBackdropFill();
+	}
+
+	/// <summary>Opaque: the screen exists to hide the world while it streams in. Colour from the theme, not black.</summary>
+	void ApplyBackdropFill()
+	{
+		if ( _backdrop is null || !_backdrop.IsValid() )
+			return;
+
+		_backdrop.Style.BackgroundColor = UiTheme.Colors.PanelSunkenColor.WithAlpha( 1f );
 	}
 
 	Vector2 _syncedScreenSize;
@@ -65,5 +122,5 @@
 	}
 
 	protected override int BuildHash()
-		=> HashCode.Combine( Visible, Title, StatusText, (int)(Progress01 * 10000f) );
+		=> HashCode.Combine( Visible, Title, StatusText, (int)(Progress01 * 10000f), UiTheme.Version );
 }

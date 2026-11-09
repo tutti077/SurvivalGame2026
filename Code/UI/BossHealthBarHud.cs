@@ -6,7 +6,7 @@ using Sandbox.UI;
 namespace Survival;
 
 /// <summary>
-/// Screen-top boss bar: the boss's name over a bar whose black label reads "current/max".
+/// Screen-top boss bar: the boss's name over a bar whose label reads "current/max".
 /// A boss is shown to this viewer once their pawn comes within the boss's health-bar range of it —
 /// at spawn or later, when they walk into range; once engaged it stays up until the boss is gone.
 /// Every viewer also gets a 3 s full-width banner when a boss spawns, is killed, or despawns.
@@ -17,7 +17,6 @@ public sealed class BossHealthBarHud
 {
 	const float BarWidth = 480f;
 	const float BarHeight = 28f;
-	static readonly Color TrackColor = new( 0.82f, 0.82f, 0.83f );
 	/// <summary>How long the spawn banner stays on screen.</summary>
 	const float SpawnBannerSeconds = 3f;
 	/// <summary>Range checks for not-yet-engaged bosses run this often, not every frame.</summary>
@@ -61,20 +60,12 @@ public sealed class BossHealthBarHud
 		_root.Style.Set( "display", "none" );
 
 		_name = new Label { Parent = _root, Text = "" };
-		_name.Style.FontColor = Color.White;
-		_name.Style.FontSize = Length.Pixels( 26f );
-		_name.Style.Set( "font-weight", "bold" );
-		_name.Style.Set( "text-shadow", "1px 1px 0px #000, -1px -1px 0px #000, 1px -1px 0px #000, -1px 1px 0px #000" );
+		UiStyle.Text( _name, UiText.Title, 26f );
 
 		var track = new Panel { Parent = _root };
 		track.Style.Set( "position", "relative" );
 		track.Style.Width = Length.Pixels( BarWidth );
 		track.Style.Height = Length.Pixels( BarHeight );
-		track.Style.BackgroundColor = TrackColor;
-		track.Style.Set( "border-width", "2px" );
-		track.Style.Set( "border-color", "#0d0d0d" );
-		track.Style.Set( "border-radius", "2px" );
-		track.Style.Set( "overflow", "hidden" );
 
 		_fill = new Panel { Parent = track };
 		_fill.Style.Set( "position", "absolute" );
@@ -83,6 +74,10 @@ public sealed class BossHealthBarHud
 		_fill.Style.Set( "height", "100%" );
 		_fill.Style.Set( "z-index", "0" );
 		_fill.Style.Width = Length.Pixels( BarWidth );
+
+		// Track / border from the theme; the fill colour is the boss's own (bosses.json), applied in Tick.
+		UiStyle.Bar( track, _fill, ParseBarColor( BossEntity.FirstFormBarColorHex ) );
+		UiStyle.AddBarGloss( _fill );
 
 		_text = new Label { Parent = track, Text = "" };
 		_text.Style.Set( "position", "absolute" );
@@ -93,9 +88,7 @@ public sealed class BossHealthBarHud
 		_text.Style.Set( "align-items", "center" );
 		_text.Style.Set( "justify-content", "center" );
 		_text.Style.Set( "z-index", "1" );
-		_text.Style.FontColor = Color.Black;
-		_text.Style.FontSize = Length.Pixels( 16f );
-		_text.Style.Set( "font-weight", "bold" );
+		UiStyle.BarLabel( _text, 16f );
 
 		// Spawn banner: a strip right across the screen, a little above centre so it never covers the crosshair.
 		_banner = new Panel { Parent = parent };
@@ -106,15 +99,13 @@ public sealed class BossHealthBarHud
 		_banner.Style.Set( "height", "64px" );
 		_banner.Style.Set( "align-items", "center" );
 		_banner.Style.Set( "justify-content", "center" );
-		_banner.Style.BackgroundColor = new Color( 0.05f, 0.06f, 0.08f, 0.72f );
+		UiStyle.Surface( _banner, UiSurface.Pill, radius: 0f );
+		_banner.Style.BackgroundColor = UiTheme.Colors.PanelColor;
 		_banner.Style.Set( "pointer-events", "none" );
 		_banner.Style.Set( "display", "none" );
 
 		_bannerText = new Label { Parent = _banner, Text = "" };
-		_bannerText.Style.FontColor = Color.White;
-		_bannerText.Style.FontSize = Length.Pixels( 34f );
-		_bannerText.Style.Set( "font-weight", "bold" );
-		_bannerText.Style.Set( "text-shadow", "2px 2px 3px black" );
+		UiStyle.Text( _bannerText, UiText.Title, 34f );
 
 		BossEntity.Announced += OnBossAnnounced;
 	}

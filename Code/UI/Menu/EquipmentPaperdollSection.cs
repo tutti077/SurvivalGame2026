@@ -69,11 +69,7 @@ public sealed class EquipmentPaperdollSection : IPlayerMenuSection
 		_sectionRoot.Style.Set( "gap", $"{8f * Scale}px" );
 		_sectionRoot.Style.Width = Length.Percent( 100 );
 
-		var title = new Label { Parent = _sectionRoot, Text = "Equipment" };
-		title.Style.FontColor = Color.White;
-		title.Style.FontSize = Length.Pixels( TitleFontSize );
-		title.Style.Set( "width", "100%" );
-		title.Style.Set( "text-align", "center" );
+		UiStyle.AddTitle( _sectionRoot, "Equipment", TitleFontSize );
 
 		var grid = new Panel { Parent = _sectionRoot };
 		grid.Style.Set( "flex-direction", "row" );
@@ -98,25 +94,18 @@ public sealed class EquipmentPaperdollSection : IPlayerMenuSection
 			slotPanel.Style.Height = Length.Pixels( SlotSize );
 			slotPanel.Style.Set( "flex-shrink", "0" );
 			slotPanel.Style.Set( "position", "relative" );
-			slotPanel.Style.Set( "box-sizing", "border-box" );
-			slotPanel.Style.BackgroundColor = new Color( 0.1f, 0.11f, 0.13f, 0.95f );
-			slotPanel.Style.Set( "border-width", "1px" );
-			slotPanel.Style.Set( "border-color", "#474d57" );
-			slotPanel.Style.Set( "border-radius", "4px" );
-			slotPanel.Style.Set( "overflow", "hidden" );
+			UiStyle.Slot( slotPanel );
 			slotPanel.Style.Set( "pointer-events", "auto" );
 
 			var slotLabel = new Label { Parent = slotHost, Text = label };
-			slotLabel.Style.FontColor = new Color( 0.78f, 0.8f, 0.84f );
-			slotLabel.Style.FontSize = Length.Pixels( LabelFontSize );
+			UiStyle.Text( slotLabel, UiText.Muted, LabelFontSize );
 
 			_interaction?.RegisterSlot( slotPanel );
 			_slotUi.Add( CreateSlotUi( slotPanel ) );
 		}
 
 		_armorSummary = new Label { Parent = _sectionRoot, Text = string.Empty };
-		_armorSummary.Style.FontColor = new Color( 0.78f, 0.8f, 0.84f );
-		_armorSummary.Style.FontSize = Length.Pixels( LabelFontSize );
+		UiStyle.Text( _armorSummary, UiText.Secondary, LabelFontSize );
 		_armorSummary.Style.Height = Length.Pixels( SummaryHeight );
 		_armorSummary.Style.Set( "width", "100%" );
 		_armorSummary.Style.Set( "text-align", "center" );
