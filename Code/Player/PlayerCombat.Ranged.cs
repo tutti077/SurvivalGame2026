@@ -268,7 +268,7 @@ public partial class PlayerCombat
 		var power = MathX.Lerp( Math.Clamp( BowMinDrawPower, 0.05f, 1f ), 1f, charge01 );
 
 		var ammoDamage = AmmoCatalog.GetAmmoDamage( ammoId );
-		var weaponDamage = AmmoCatalog.GetWeaponDamage( weaponId );
+		var weaponDamage = EquipmentUpgrade.ScaleStat( AmmoCatalog.GetWeaponDamage( weaponId ), GetActiveWeaponTier() );
 		var weaponContribution = MathX.Lerp(
 			Math.Clamp( BowMinWeaponDamageContribution, 0f, Math.Max( 0f, weaponDamage ) ),
 			Math.Max( 0f, weaponDamage ),

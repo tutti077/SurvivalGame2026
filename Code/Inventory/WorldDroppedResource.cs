@@ -24,6 +24,10 @@ public sealed class WorldDroppedResource : Component
 	[Sync, Property, Group( "Pickup" )]
 	public string CrafterName { get; set; } = string.Empty;
 
+	/// <summary>Upgrade tier carried by dropped equipment (0 / 1 = as crafted).</summary>
+	[Sync, Property, Group( "Pickup" )]
+	public int Tier { get; set; }
+
 	/// <summary>Stuck arrows / pinned drops — still magnet-pickupable, but never clump-merged.</summary>
 	[Sync, Property, Group( "Pickup" )]
 	public bool PreventMerge { get; set; }
@@ -70,12 +74,13 @@ public sealed class WorldDroppedResource : Component
 		base.OnDisabled();
 	}
 
-	public void Configure( string resourceId, int count, int wear = 0, string crafterName = null )
+	public void Configure( string resourceId, int count, int wear = 0, string crafterName = null, int tier = 0 )
 	{
 		ResourceId = ResourceCatalog.NormalizeResourceId( resourceId );
 		Count = Math.Max( 1, count );
 		Wear = Math.Max( 0, wear );
 		CrafterName = crafterName ?? string.Empty;
+		Tier = Math.Max( 0, tier );
 		MarkSpawnedIfNeeded();
 		RefreshDespawnDeadline();
 	}
@@ -275,7 +280,7 @@ public sealed class WorldDroppedResource : Component
 		if ( !IsHostAuthority || !CanPickupInto( inventory ) )
 			return false;
 
-		if ( !inventory.HostTryAddResource( ResourceId, StackCount, Wear, CrafterName ) )
+		if ( !inventory.HostTryAddResource( ResourceId, StackCount, Wear, CrafterName, Tier ) )
 			return false;
 
 		Count = 0;

@@ -322,7 +322,7 @@ public sealed class PlayerInventory : Component
 		PeekInventoryAbsorb( _slots, resourceId, remaining );
 
 	/// <summary>Host/offline: add harvested resources into inventory. <paramref name="wear"/>/<paramref name="crafterName"/> carry per-item state (world pickups, craft output).</summary>
-	public bool HostTryAddResource( string resourceId, int amount, int wear = 0, string crafterName = null )
+	public bool HostTryAddResource( string resourceId, int amount, int wear = 0, string crafterName = null, int tier = 0 )
 	{
 		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
 			return false;
@@ -337,7 +337,7 @@ public sealed class PlayerInventory : Component
 		var hotbar = Components.Get<PlayerHotbar>();
 
 		if ( hotbar is not null )
-			remaining = hotbar.TryAddResourcePickup( resourceId, remaining, wear, crafterName );
+			remaining = hotbar.TryAddResourcePickup( resourceId, remaining, wear, crafterName, tier );
 
 		while ( remaining > 0 )
 		{
@@ -360,7 +360,7 @@ public sealed class PlayerInventory : Component
 				break;
 
 			var place = Math.Min( remaining, maxStack );
-			_slots[emptyIndex] = new InventorySlot { ResourceId = resourceId, Count = place, Wear = wear, CrafterName = crafterName };
+			_slots[emptyIndex] = new InventorySlot { ResourceId = resourceId, Count = place, Wear = wear, CrafterName = crafterName, Tier = tier };
 			remaining -= place;
 		}
 
@@ -438,18 +438,20 @@ public sealed class PlayerInventory : Component
 		var wears = new int[_slots.Length];
 		var crafters = new string[_slots.Length];
 		for ( var i = 0; i < _slots.Length; i++ )
+		var tiers = new int[_slots.Length];
 		{
 			ids[i] = _slots[i].ResourceId ?? string.Empty;
 			counts[i] = _slots[i].Count;
 			wears[i] = _slots[i].Wear;
 			crafters[i] = _slots[i].CrafterName ?? string.Empty;
 		}
+			tiers[i] = _slots[i].Tier;
 
-		RpcOwnerInventorySync( ids, counts, wears, crafters );
+		RpcOwnerInventorySync( ids, counts, wears, crafters, tiers );
 	}
 
 	[Rpc.Owner]
-	void RpcOwnerInventorySync( string[] resourceIds, int[] counts, int[] wears, string[] crafters )
+	void RpcOwnerInventorySync( string[] resourceIds, int[] counts, int[] wears, string[] crafters, int[] tiers )
 	{
 		if ( resourceIds is null || counts is null )
 			return;
@@ -463,8 +465,9 @@ public sealed class PlayerInventory : Component
 			var w = wears is not null && i < wears.Length ? wears[i] : 0;
 			var maker = crafters is not null && i < crafters.Length ? crafters[i] : null;
 			_slots[i] = string.IsNullOrWhiteSpace( id ) || c <= 0
+			var tier = tiers is not null && i < tiers.Length ? tiers[i] : 0;
 				? InventorySlot.Empty
-				: new InventorySlot { ResourceId = id, Count = c, Wear = w, CrafterName = maker };
+				: new InventorySlot { ResourceId = id, Count = c, Wear = w, CrafterName = maker, Tier = tier };
 		}
 
 		InventoryChanged?.Invoke();
@@ -510,7 +513,7 @@ public sealed class PlayerInventory : Component
 		if ( !TryGetSlotRef( slotIndex, out _ ) )
 			return false;
 
-		RpcHostPlaceHeld( slotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty );
+		RpcHostPlaceHeld( slotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, held.Tier );
 		return ClientTryApplyPlaceHeld( slotIndex, ref held );
 	}
 
@@ -529,7 +532,7 @@ public sealed class PlayerInventory : Component
 		if ( string.Equals( target.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 			return false;
 
-		RpcHostSwapDragToSlot( sourceSlotIndex, targetSlotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty );
+		RpcHostSwapDragToSlot( sourceSlotIndex, targetSlotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, held.Tier );
 		return ClientTryApplySwapDrag( sourceSlotIndex, targetSlotIndex, ref held );
 	}
 
@@ -545,7 +548,7 @@ public sealed class PlayerInventory : Component
 		if ( !TryGetSlotRef( targetSlotIndex, out _ ) )
 			return false;
 
-		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty );
+		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, held.Tier );
 		return ClientTryApplyFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
 	}
 
@@ -573,7 +576,7 @@ public sealed class PlayerInventory : Component
 			if ( !HostTryTakeOne( slotIndex ) )
 				return false;
 
-			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = 1, Wear = slot.Wear, CrafterName = slot.CrafterName };
+			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = 1, Wear = slot.Wear, CrafterName = slot.CrafterName, Tier = slot.Tier };
 			return true;
 		}
 
@@ -607,7 +610,7 @@ public sealed class PlayerInventory : Component
 		if ( !InventoryStackRules.DropOne( _slots, slotIndex, held, out placedCount ) )
 			return false;
 
-		RpcHostDropOne( slotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty );
+		RpcHostDropOne( slotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, held.Tier );
 		NotifyInventoryChanged();
 		return true;
 	}
@@ -627,7 +630,7 @@ public sealed class PlayerInventory : Component
 			if ( !HostTryTakeHalf( slotIndex ) )
 				return false;
 
-			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = half, Wear = slot.Wear, CrafterName = slot.CrafterName };
+			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = half, Wear = slot.Wear, CrafterName = slot.CrafterName, Tier = slot.Tier };
 			return true;
 		}
 
@@ -652,11 +655,12 @@ public sealed class PlayerInventory : Component
 		var heldWear = held.Wear;
 		var heldCrafter = held.CrafterName ?? string.Empty;
 
+		var heldTier = held.Tier;
 		EnsureSlotArray();
 		if ( !InventoryStackRules.PlaceHalf( _slots, slotIndex, ref held ) )
 			return false;
 
-		RpcHostPlaceHalf( slotIndex, heldResourceId, heldCount, heldWear, heldCrafter );
+		RpcHostPlaceHalf( slotIndex, heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
 		NotifyInventoryChanged();
 		return true;
 	}
@@ -832,7 +836,7 @@ public sealed class PlayerInventory : Component
 		if ( HasHostAuthority )
 			return HostTryAbsorbCursorStackIntoBag( ref held );
 
-		RpcHostAbsorbCursorStackIntoBag( held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty );
+		RpcHostAbsorbCursorStackIntoBag( held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, held.Tier );
 		return ClientTryApplyAbsorbCursorStackIntoBag( ref held );
 	}
 
@@ -971,13 +975,13 @@ public sealed class PlayerInventory : Component
 	}
 
 	[Rpc.Host]
-	void RpcHostAbsorbCursorStackIntoBag( string resourceId, int count, int wear, string crafter )
+	void RpcHostAbsorbCursorStackIntoBag( string resourceId, int count, int wear, string crafter, int tier )
 	{
 		if ( !Networking.IsHost )
 			return;
 
 		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear, crafter );
+		held.Set( resourceId, count, wear, crafter, tier );
 		HostTryAbsorbCursorStackIntoBag( ref held );
 
 		if ( !held.IsEmpty )
@@ -985,35 +989,35 @@ public sealed class PlayerInventory : Component
 	}
 
 	[Rpc.Host]
-	void RpcHostPlaceHeld( int slotIndex, string resourceId, int count, int wear, string crafter )
+	void RpcHostPlaceHeld( int slotIndex, string resourceId, int count, int wear, string crafter, int tier )
 	{
 		if ( !Networking.IsHost )
 			return;
 
 		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear, crafter );
+		held.Set( resourceId, count, wear, crafter, tier );
 		HostTryPlaceHeld( slotIndex, ref held );
 	}
 
 	[Rpc.Host]
-	void RpcHostSwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count, int wear, string crafter )
+	void RpcHostSwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count, int wear, string crafter, int tier )
 	{
 		if ( !Networking.IsHost )
 			return;
 
 		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear, crafter );
+		held.Set( resourceId, count, wear, crafter, tier );
 		HostTrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref held );
 	}
 
 	[Rpc.Host]
-	void RpcHostFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count, int wear, string crafter )
+	void RpcHostFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count, int wear, string crafter, int tier )
 	{
 		if ( !Networking.IsHost )
 			return;
 
 		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear, crafter );
+		held.Set( resourceId, count, wear, crafter, tier );
 		HostTryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
 	}
 
@@ -1027,13 +1031,13 @@ public sealed class PlayerInventory : Component
 	}
 
 	[Rpc.Host]
-	void RpcHostDropOne( int slotIndex, string heldResourceId, int heldCount, int heldWear, string heldCrafter )
+	void RpcHostDropOne( int slotIndex, string heldResourceId, int heldCount, int heldWear, string heldCrafter, int heldTier )
 	{
 		if ( !Networking.IsHost )
 			return;
 
 		var held = new InventoryCursorStack();
-		held.Set( heldResourceId, heldCount, heldWear, heldCrafter );
+		held.Set( heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
 		HostTryDropOne( slotIndex, held );
 	}
 
@@ -1047,13 +1051,13 @@ public sealed class PlayerInventory : Component
 	}
 
 	[Rpc.Host]
-	void RpcHostPlaceHalf( int slotIndex, string heldResourceId, int heldCount, int heldWear, string heldCrafter )
+	void RpcHostPlaceHalf( int slotIndex, string heldResourceId, int heldCount, int heldWear, string heldCrafter, int heldTier )
 	{
 		if ( !Networking.IsHost )
 			return;
 
 		var held = new InventoryCursorStack();
-		held.Set( heldResourceId, heldCount, heldWear, heldCrafter );
+		held.Set( heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
 		HostTryPlaceHalf( slotIndex, ref held );
 	}
 
@@ -1068,6 +1072,26 @@ public sealed class PlayerInventory : Component
 	}
 
 	/// <summary>Host: repair one bag slot back to full durability.</summary>
+	/// <summary>Host: set the workbench upgrade tier of one bag stack (<see cref="EquipmentUpgrade"/>).</summary>
+	public bool HostSetTier( int slotIndex, int tier )
+	{
+		if ( !HasHostAuthority )
+			return false;
+
+		EnsureSlotArray();
+		if ( slotIndex < 0 || slotIndex >= _slots.Length )
+			return false;
+
+		ref var slot = ref _slots[slotIndex];
+		tier = EquipmentUpgrade.NormalizeTier( tier );
+		if ( slot.IsEmpty || !EquipmentUpgrade.IsUpgradable( slot ) || slot.Tier == tier )
+			return false;
+
+		slot.Tier = tier;
+		NotifyInventoryChanged();
+		return true;
+	}
+
 	public bool HostClearWear( int slotIndex )
 	{
 		if ( !HasHostAuthority )

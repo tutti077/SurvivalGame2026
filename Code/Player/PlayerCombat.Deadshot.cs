@@ -78,7 +78,7 @@ public partial class PlayerCombat
 
 		var rangeMeters = def.EffectRadiusMeters > 0f ? def.EffectRadiusMeters : 40f;
 		var maxRange = TerrainWorldUnits.MetersToEngine( rangeMeters ) * DeadshotRangeSlack;
-		var weaponDamage = Math.Max( 0f, AmmoCatalog.GetWeaponDamage( weaponId ) );
+		var weaponDamage = EquipmentUpgrade.ScaleStat( Math.Max( 0f, AmmoCatalog.GetWeaponDamage( weaponId ) ), GetActiveWeaponTier() );
 
 		for ( var i = 0; i < count; i++ )
 		{

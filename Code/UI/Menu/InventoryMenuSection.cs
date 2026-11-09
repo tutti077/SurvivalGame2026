@@ -185,9 +185,10 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 		var preferred = IsPreferredAmmoStack( resourceId );
 
 		var wear = slot.IsEmpty ? 0 : slot.Wear;
+		var tier = slot.IsEmpty ? 0 : slot.Tier;
 		var iconPath = slot.IsEmpty ? string.Empty : ResourceCatalog.GetIconPath( resourceId );
 		if ( ui.LastResourceId == resourceId && ui.LastCount == count && ui.LastIconPath == iconPath
-		     && ui.LastPreferred == preferred && ui.LastWear == wear )
+		     && ui.LastPreferred == preferred && ui.LastWear == wear && ui.LastTier == tier )
 		{
 			return;
 		}
@@ -197,6 +198,7 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 		ui.LastIconPath = iconPath;
 		ui.LastPreferred = preferred;
 		ui.LastWear = wear;
+		ui.LastTier = tier;
 		ResourceCatalog.ApplyStackVisual( ui.IconPanel, ui.CountLabel, slot );
 		UiStyle.SetSlotState( ui.Root, preferred ? UiSlotState.Preferred : UiSlotState.Idle );
 	}
@@ -220,6 +222,7 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 		public int LastCount { get; set; } = -1;
 		public bool LastPreferred { get; set; }
 		public int LastWear { get; set; } = -1;
+		public int LastTier { get; set; } = -1;
 
 		public SlotUi( Panel root, Panel iconPanel, Label countLabel )
 		{

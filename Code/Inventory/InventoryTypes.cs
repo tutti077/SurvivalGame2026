@@ -21,6 +21,13 @@ public struct InventorySlot
 	/// </summary>
 	public string CrafterName { get; set; }
 
+	/// <summary>
+	/// Workbench upgrade tier (1 = as crafted, 0 on old stacks = tier 1). Only meaningful for
+	/// upgradable equipment (<see cref="EquipmentUpgrade.IsUpgradable(in InventorySlot)"/>); travels
+	/// with the stack like <see cref="Wear"/>.
+	/// </summary>
+	public int Tier { get; set; }
+
 	public bool IsEmpty => string.IsNullOrWhiteSpace( ResourceId ) || Count <= 0;
 
 	public static InventorySlot Empty => default;

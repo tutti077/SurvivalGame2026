@@ -12,6 +12,9 @@ public struct InventoryCursorStack
 	/// <summary>Crafter display name carried by the held item (equipment only; empty = untracked).</summary>
 	public string CrafterName { get; set; }
 
+	/// <summary>Upgrade tier carried by the held item (see <see cref="InventorySlot.Tier"/>).</summary>
+	public int Tier { get; set; }
+
 	public bool IsEmpty => string.IsNullOrWhiteSpace( ResourceId ) || Count <= 0;
 
 	public void Clear()
@@ -20,14 +23,16 @@ public struct InventoryCursorStack
 		Count = 0;
 		Wear = 0;
 		CrafterName = null;
+		Tier = 0;
 	}
 
-	public void Set( string resourceId, int count, int wear = 0, string crafterName = null )
+	public void Set( string resourceId, int count, int wear = 0, string crafterName = null, int tier = 0 )
 	{
 		ResourceId = resourceId;
 		Count = count;
 		Wear = wear;
 		CrafterName = crafterName;
+		Tier = tier;
 	}
 
 	public bool CanStack( string resourceId ) =>

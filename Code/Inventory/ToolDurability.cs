@@ -7,11 +7,12 @@ namespace Survival;
 /// Durability rules for tools/weapons. Config lives on equipment profiles
 /// (<c>durabilityMax</c>, <c>durabilityDrainSecondsEquipped</c>); wear state rides
 /// <see cref="InventorySlot.Wear"/>. Broken items (wear ≥ max) cannot attack, fire,
-/// or build until repaired at a workbench.
+/// or build until repaired at a workbench. The max grows with the stack's workbench
+/// upgrade tier (<see cref="EquipmentUpgrade"/>), so every max read takes the slot.
 /// </summary>
 public static class ToolDurability
 {
-	/// <summary>Max durability uses for an item, or 0 when the item never wears.</summary>
+	/// <summary>Base (tier I) durability uses for an item, or 0 when the item never wears.</summary>
 	public static int GetMax( string resourceId )
 	{
 		if ( string.IsNullOrWhiteSpace( resourceId ) )
@@ -19,6 +20,17 @@ public static class ToolDurability
 
 		return EquipmentCatalog.TryGet( resourceId, out var profile ) && profile is not null
 			? Math.Max( 0, profile.DurabilityMax )
+			: 0;
+	}
+
+	/// <summary>Durability uses of this stack at its upgrade tier, or 0 when the item never wears.</summary>
+	public static int GetMax( in InventorySlot slot )
+	{
+		if ( slot.IsEmpty )
+			return 0;
+
+		return EquipmentCatalog.TryGet( slot.ResourceId, out var profile ) && profile is not null
+			? EquipmentUpgrade.GetDurabilityMax( profile, slot.Tier )
 			: 0;
 	}
 
@@ -40,7 +52,7 @@ public static class ToolDurability
 		if ( slot.IsEmpty )
 			return false;
 
-		var max = GetMax( slot.ResourceId );
+		var max = GetMax( slot );
 		return max > 0 && slot.Wear >= max;
 	}
 
@@ -49,7 +61,7 @@ public static class ToolDurability
 		if ( slot.IsEmpty )
 			return false;
 
-		return GetMax( slot.ResourceId ) > 0 && slot.Wear > 0;
+		return GetMax( slot ) > 0 && slot.Wear > 0;
 	}
 
 	/// <summary>Remaining uses fraction (1 = fresh). 1 for items without durability.</summary>
@@ -58,17 +70,27 @@ public static class ToolDurability
 		if ( slot.IsEmpty )
 			return 1f;
 
-		var max = GetMax( slot.ResourceId );
+		var max = GetMax( slot );
 		if ( max <= 0 )
 			return 1f;
 
 		return Math.Clamp( 1f - slot.Wear / (float)max, 0f, 1f );
 	}
 
-	public static int ClampWear( string resourceId, int wear )
+	public static int ClampWear( in InventorySlot slot, int wear )
 	{
-		var max = GetMax( resourceId );
+		var max = GetMax( slot );
 		return max <= 0 ? 0 : Math.Clamp( wear, 0, max );
+	}
+
+	/// <summary>Active hotbar stack of a pawn (any item, durable or not); empty when nothing is selected.</summary>
+	public static InventorySlot GetActiveHotbarStack( GameObject pawn )
+	{
+		if ( pawn is null || !pawn.IsValid() )
+			return InventorySlot.Empty;
+
+		var hotbar = pawn.Components.Get<PlayerHotbar>();
+		return hotbar is null ? InventorySlot.Empty : hotbar.GetSlot( hotbar.ActiveSlotIndex );
 	}
 
 	/// <summary>Active hotbar stack of a pawn when it tracks durability (the equipped MainHand tool).</summary>

@@ -79,7 +79,8 @@ public sealed partial class Vehicle
 				GameObject,
 				applyDropperSelfPickupDelay: false,
 				wear: slot.Wear,
-				crafterName: slot.CrafterName );
+				crafterName: slot.CrafterName,
+				tier: slot.Tier );
 			if ( drop is not null && drop.IsValid() )
 				HeldStackWorldDrop.ApplyScatterBurst( drop, outward );
 		}

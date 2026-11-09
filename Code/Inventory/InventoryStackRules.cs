@@ -38,7 +38,7 @@ public static class InventoryStackRules
 			if ( place <= 0 )
 				return false;
 
-			dest = new InventorySlot { ResourceId = held.ResourceId, Count = place, Wear = held.Wear, CrafterName = held.CrafterName };
+			dest = new InventorySlot { ResourceId = held.ResourceId, Count = place, Wear = held.Wear, CrafterName = held.CrafterName, Tier = held.Tier };
 			ReduceHeld( ref held, place );
 			return true;
 		}
@@ -49,8 +49,8 @@ public static class InventoryStackRules
 			if ( room <= 0 )
 			{
 				var displaced = dest;
-				dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count, Wear = held.Wear, CrafterName = held.CrafterName };
-				held.Set( displaced.ResourceId, displaced.Count, displaced.Wear, displaced.CrafterName );
+				dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count, Wear = held.Wear, CrafterName = held.CrafterName, Tier = held.Tier };
+				held.Set( displaced.ResourceId, displaced.Count, displaced.Wear, displaced.CrafterName, displaced.Tier );
 				return true;
 			}
 
@@ -61,8 +61,8 @@ public static class InventoryStackRules
 		}
 
 		var swap = dest;
-		dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count, Wear = held.Wear, CrafterName = held.CrafterName };
-		held.Set( swap.ResourceId, swap.Count, swap.Wear, swap.CrafterName );
+		dest = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count, Wear = held.Wear, CrafterName = held.CrafterName, Tier = held.Tier };
+		held.Set( swap.ResourceId, swap.Count, swap.Wear, swap.CrafterName, swap.Tier );
 		return true;
 	}
 
@@ -75,7 +75,7 @@ public static class InventoryStackRules
 		ref var slot = ref slots[slotIndex];
 		if ( slot.IsEmpty )
 		{
-			slot = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count, Wear = held.Wear, CrafterName = held.CrafterName };
+			slot = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count, Wear = held.Wear, CrafterName = held.CrafterName, Tier = held.Tier };
 			held.Clear();
 			return true;
 		}
@@ -106,7 +106,7 @@ public static class InventoryStackRules
 			return false;
 
 		var displaced = target;
-		target = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count, Wear = held.Wear, CrafterName = held.CrafterName };
+		target = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count, Wear = held.Wear, CrafterName = held.CrafterName, Tier = held.Tier };
 		slots[sourceSlotIndex] = displaced;
 		held.Clear();
 		return true;
@@ -137,11 +137,12 @@ public static class InventoryStackRules
 		var resourceId = slots[slotIndex].ResourceId;
 		var wear = slots[slotIndex].Wear;
 		var crafter = slots[slotIndex].CrafterName;
+		var tier = slots[slotIndex].Tier;
 		slots[slotIndex].Count--;
 		if ( slots[slotIndex].Count <= 0 )
 			slots[slotIndex] = InventorySlot.Empty;
 
-		taken = new InventorySlot { ResourceId = resourceId, Count = 1, Wear = wear, CrafterName = crafter };
+		taken = new InventorySlot { ResourceId = resourceId, Count = 1, Wear = wear, CrafterName = crafter, Tier = tier };
 		return true;
 	}
 
@@ -156,7 +157,7 @@ public static class InventoryStackRules
 
 		if ( dest.IsEmpty )
 		{
-			dest = new InventorySlot { ResourceId = held.ResourceId, Count = 1, Wear = held.Wear, CrafterName = held.CrafterName };
+			dest = new InventorySlot { ResourceId = held.ResourceId, Count = 1, Wear = held.Wear, CrafterName = held.CrafterName, Tier = held.Tier };
 			placedCount = 1;
 			return true;
 		}
@@ -185,11 +186,12 @@ public static class InventoryStackRules
 		var resourceId = slots[slotIndex].ResourceId;
 		var wear = slots[slotIndex].Wear;
 		var crafter = slots[slotIndex].CrafterName;
+		var tier = slots[slotIndex].Tier;
 		slots[slotIndex].Count -= half;
 		if ( slots[slotIndex].Count <= 0 )
 			slots[slotIndex] = InventorySlot.Empty;
 
-		taken = new InventorySlot { ResourceId = resourceId, Count = half, Wear = wear, CrafterName = crafter };
+		taken = new InventorySlot { ResourceId = resourceId, Count = half, Wear = wear, CrafterName = crafter, Tier = tier };
 		return true;
 	}
 
@@ -207,7 +209,7 @@ public static class InventoryStackRules
 			if ( place <= 0 )
 				return false;
 
-			dest = new InventorySlot { ResourceId = held.ResourceId, Count = place, Wear = held.Wear, CrafterName = held.CrafterName };
+			dest = new InventorySlot { ResourceId = held.ResourceId, Count = place, Wear = held.Wear, CrafterName = held.CrafterName, Tier = held.Tier };
 			ReduceHeld( ref held, place );
 			return true;
 		}
@@ -261,7 +263,7 @@ public static class InventoryStackRules
 			if ( add <= 0 )
 				break;
 
-			slot = new InventorySlot { ResourceId = resourceId, Count = add, Wear = held.Wear, CrafterName = held.CrafterName };
+			slot = new InventorySlot { ResourceId = resourceId, Count = add, Wear = held.Wear, CrafterName = held.CrafterName, Tier = held.Tier };
 			held.Count -= add;
 			changed = true;
 		}

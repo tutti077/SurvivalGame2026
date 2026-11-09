@@ -225,14 +225,14 @@ public sealed class PlayerHotbar : Component
 		InventoryStackRules.CountResource( _slots, resourceId );
 
 	/// <summary>Host: pickup into hotbar stacks, then empty slots with a matching binding ghost.</summary>
-	public int TryAddResourcePickup( string resourceId, int amount, int wear = 0, string crafterName = null )
+	public int TryAddResourcePickup( string resourceId, int amount, int wear = 0, string crafterName = null, int tier = 0 )
 	{
 		if ( amount <= 0 || string.IsNullOrWhiteSpace( resourceId ) || !HasHostAuthority )
 			return amount;
 
 		resourceId = ResourceCatalog.NormalizeResourceId( resourceId );
 		var remaining = TryAddToMatchingStacks( resourceId, amount );
-		return TryAddToBindingSlots( resourceId, remaining, wear, crafterName );
+		return TryAddToBindingSlots( resourceId, remaining, wear, crafterName, tier );
 	}
 
 	/// <summary>Host: merge pickup into existing hotbar stacks.</summary>
@@ -258,7 +258,7 @@ public sealed class PlayerHotbar : Component
 		return remaining;
 	}
 
-	int TryAddToBindingSlots( string resourceId, int amount, int wear = 0, string crafterName = null )
+	int TryAddToBindingSlots( string resourceId, int amount, int wear = 0, string crafterName = null, int tier = 0 )
 	{
 		if ( amount <= 0 )
 			return 0;
@@ -273,7 +273,7 @@ public sealed class PlayerHotbar : Component
 			if ( !BindingMatches( i, resourceId ) )
 				continue;
 
-			remaining = TryAddToSlot( i, resourceId, remaining, rememberSlot: true, wear: wear, crafterName: crafterName );
+			remaining = TryAddToSlot( i, resourceId, remaining, rememberSlot: true, wear: wear, crafterName: crafterName, tier: tier );
 		}
 
 		return remaining;
@@ -542,7 +542,7 @@ public sealed class PlayerHotbar : Component
 		return Math.Max( 0, amount - Math.Min( amount, room ) );
 	}
 
-	int TryAddToSlot( int slotIndex, string resourceId, int amount, bool rememberSlot = false, int wear = 0, string crafterName = null )
+	int TryAddToSlot( int slotIndex, string resourceId, int amount, bool rememberSlot = false, int wear = 0, string crafterName = null, int tier = 0 )
 	{
 		if ( amount <= 0 )
 			return 0;
@@ -553,7 +553,7 @@ public sealed class PlayerHotbar : Component
 		if ( slot.IsEmpty )
 		{
 			var place = Math.Min( amount, maxStack );
-			slot = new InventorySlot { ResourceId = resourceId, Count = place, Wear = wear, CrafterName = crafterName };
+			slot = new InventorySlot { ResourceId = resourceId, Count = place, Wear = wear, CrafterName = crafterName, Tier = tier };
 			if ( rememberSlot )
 				RememberResourceSlot( slotIndex, resourceId );
 
@@ -752,7 +752,7 @@ public sealed class PlayerHotbar : Component
 			if ( slot.IsEmpty || !HostTryTakeOne( slotIndex ) )
 				return false;
 
-			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = 1, Wear = slot.Wear, CrafterName = slot.CrafterName };
+			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = 1, Wear = slot.Wear, CrafterName = slot.CrafterName, Tier = slot.Tier };
 			return true;
 		}
 
@@ -783,7 +783,7 @@ public sealed class PlayerHotbar : Component
 		if ( !InventoryStackRules.DropOne( _slots, slotIndex, held, out placedCount ) )
 			return false;
 
-		RpcHostDropOne( slotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty );
+		RpcHostDropOne( slotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, held.Tier );
 		UpdateBindingFromSlot( slotIndex );
 		NotifyChanged();
 		return true;
@@ -802,7 +802,7 @@ public sealed class PlayerHotbar : Component
 			if ( half <= 0 || !HostTryTakeHalf( slotIndex ) )
 				return false;
 
-			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = half, Wear = slot.Wear, CrafterName = slot.CrafterName };
+			taken = new InventorySlot { ResourceId = slot.ResourceId, Count = half, Wear = slot.Wear, CrafterName = slot.CrafterName, Tier = slot.Tier };
 			return true;
 		}
 
@@ -831,7 +831,7 @@ public sealed class PlayerHotbar : Component
 		if ( !InventoryStackRules.PlaceHalf( _slots, slotIndex, ref held ) )
 			return false;
 
-		RpcHostPlaceHalf( slotIndex, heldResourceId, heldCount, heldWear, heldCrafter );
+		RpcHostPlaceHalf( slotIndex, heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
 		UpdateBindingFromSlot( slotIndex );
 		NotifyChanged();
 		return true;
@@ -840,6 +840,7 @@ public sealed class PlayerHotbar : Component
 	public bool HostTryTakeOne( int slotIndex )
 	{
 		if ( !HasHostAuthority || !InventoryStackRules.TakeOne( _slots, slotIndex, out _ ) )
+		var heldTier = held.Tier;
 			return false;
 
 		ClearBindingIfSlotEmpty( slotIndex );
@@ -906,7 +907,7 @@ public sealed class PlayerHotbar : Component
 		if ( !InventoryStackRules.FinishDragDrop( _slots, sourceSlotIndex, targetSlotIndex, ref held ) )
 			return false;
 
-		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, heldResourceId, heldCount, heldWear, heldCrafter );
+		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
 		UpdateBindingFromSlot( targetSlotIndex );
 		if ( SlotChangedFrom( sourceSlotIndex, sourceBefore ) )
 			UpdateBindingFromSlot( sourceSlotIndex );
@@ -914,6 +915,7 @@ public sealed class PlayerHotbar : Component
 		NotifyChanged();
 		return true;
 	}
+		var heldTier = held.Tier;
 
 	public bool HostTryFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
 	{
@@ -1028,17 +1030,19 @@ public sealed class PlayerHotbar : Component
 			crafters[i] = _slots[i].CrafterName ?? string.Empty;
 		}
 
-		RpcOwnerHotbarSync( ids, counts, wears, crafters, ActiveSlotIndex, PrimarySlotIndex, OffHandSlotIndex );
+		RpcOwnerHotbarSync( ids, counts, wears, crafters, tiers, ActiveSlotIndex, PrimarySlotIndex, OffHandSlotIndex );
 	}
 
 	[Rpc.Owner]
-	void RpcOwnerHotbarSync( string[] resourceIds, int[] counts, int[] wears, string[] crafters, int activeSlot, int primarySlot, int offHandSlot )
+	void RpcOwnerHotbarSync( string[] resourceIds, int[] counts, int[] wears, string[] crafters, int[] tiers, int activeSlot, int primarySlot, int offHandSlot )
+		var tiers = new int[SlotCount];
 	{
 		if ( resourceIds is null || counts is null )
 			return;
 
 		var n = Math.Min( SlotCount, Math.Min( resourceIds.Length, counts.Length ) );
 		for ( var i = 0; i < n; i++ )
+			tiers[i] = _slots[i].Tier;
 		{
 			var id = resourceIds[i];
 			var c = counts[i];
@@ -1046,7 +1050,7 @@ public sealed class PlayerHotbar : Component
 			var maker = crafters is not null && i < crafters.Length ? crafters[i] : null;
 			_slots[i] = string.IsNullOrWhiteSpace( id ) || c <= 0
 				? InventorySlot.Empty
-				: new InventorySlot { ResourceId = id, Count = c, Wear = w, CrafterName = maker };
+				: new InventorySlot { ResourceId = id, Count = c, Wear = w, CrafterName = maker, Tier = tier };
 		}
 
 		ActiveSlotIndex = activeSlot < 0 ? -1 : WrapSlotIndex( activeSlot );
@@ -1057,6 +1061,7 @@ public sealed class PlayerHotbar : Component
 
 	[Rpc.Host]
 	void RpcHostPickupAll( int slotIndex )
+			var tier = tiers is not null && i < tiers.Length ? tiers[i] : 0;
 	{
 		if ( !Networking.IsHost )
 			return;
@@ -1065,13 +1070,13 @@ public sealed class PlayerHotbar : Component
 	}
 
 	[Rpc.Host]
-	void RpcHostFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count, int wear, string crafter )
+	void RpcHostFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count, int wear, string crafter, int tier )
 	{
 		if ( !Networking.IsHost )
 			return;
 
 		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear, crafter );
+		held.Set( resourceId, count, wear, crafter, tier );
 		HostTryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
 	}
 
@@ -1085,13 +1090,13 @@ public sealed class PlayerHotbar : Component
 	}
 
 	[Rpc.Host]
-	void RpcHostDropOne( int slotIndex, string heldResourceId, int heldCount, int heldWear, string heldCrafter )
+	void RpcHostDropOne( int slotIndex, string heldResourceId, int heldCount, int heldWear, string heldCrafter, int heldTier )
 	{
 		if ( !Networking.IsHost )
 			return;
 
 		var held = new InventoryCursorStack();
-		held.Set( heldResourceId, heldCount, heldWear, heldCrafter );
+		held.Set( heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
 		HostTryDropOne( slotIndex, held );
 	}
 
@@ -1105,13 +1110,13 @@ public sealed class PlayerHotbar : Component
 	}
 
 	[Rpc.Host]
-	void RpcHostPlaceHalf( int slotIndex, string heldResourceId, int heldCount, int heldWear, string heldCrafter )
+	void RpcHostPlaceHalf( int slotIndex, string heldResourceId, int heldCount, int heldWear, string heldCrafter, int heldTier )
 	{
 		if ( !Networking.IsHost )
 			return;
 
 		var held = new InventoryCursorStack();
-		held.Set( heldResourceId, heldCount, heldWear, heldCrafter );
+		held.Set( heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
 		HostTryPlaceHalf( slotIndex, ref held );
 	}
 
@@ -1125,7 +1130,7 @@ public sealed class PlayerHotbar : Component
 		if ( slot.IsEmpty || !ToolDurability.HasDurability( slot.ResourceId ) )
 			return 0;
 
-		var next = ToolDurability.ClampWear( slot.ResourceId, slot.Wear + amount );
+		var next = ToolDurability.ClampWear( slot, slot.Wear + amount );
 		if ( next == slot.Wear )
 			return slot.Wear;
 
@@ -1147,5 +1152,21 @@ public sealed class PlayerHotbar : Component
 		slot.Wear = 0;
 		NotifyChanged();
 		return true;
+	/// <summary>Host: set the workbench upgrade tier of one hotbar stack (<see cref="EquipmentUpgrade"/>).</summary>
+	public bool HostSetTier( int slotIndex, int tier )
+	{
+		if ( !HasHostAuthority || slotIndex < 0 || slotIndex >= SlotCount )
+			return false;
+
+		ref var slot = ref _slots[slotIndex];
+		tier = EquipmentUpgrade.NormalizeTier( tier );
+		if ( slot.IsEmpty || !EquipmentUpgrade.IsUpgradable( slot ) || slot.Tier == tier )
+			return false;
+
+		slot.Tier = tier;
+		NotifyChanged();
+		return true;
+	}
+
 	}
 }

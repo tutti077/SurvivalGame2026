@@ -3,10 +3,14 @@ using Sandbox.UI;
 
 namespace Survival;
 
+/// <summary>
+/// One row of the crafting / upgrade list. <see cref="RowKey"/> is a recipe id on the Craft tab and
+/// a <c>grid:slot</c> stack key on the workbench Upgrade tab; the section resolves it.
+/// </summary>
 public sealed class CraftingRecipeRowPanel : Panel
 {
 	public CraftingMenuSection Section { get; init; }
-	public string RecipeId { get; init; }
+	public string RowKey { get; init; }
 
 	public override bool WantsMouseInput() => false;
 
@@ -21,7 +25,7 @@ public sealed class CraftingRecipeRowPanel : Panel
 		if ( e.Button != "mouseleft" || Section is null )
 			return;
 
-		Section.SelectRecipe( RecipeId );
+		Section.SelectRow( RowKey );
 		e.StopPropagation();
 	}
 

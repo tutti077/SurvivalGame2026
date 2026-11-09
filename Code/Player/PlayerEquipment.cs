@@ -162,7 +162,7 @@ public sealed partial class PlayerEquipment : Component
 		}
 
 		var hotbarStack = _hotbar.GetSlot( hotbarIndex );
-		OwnerSetSlot( hand, CreateEquippedStack( resourceId, hotbarStack.Wear, hotbarStack.CrafterName ) );
+		OwnerSetSlot( hand, CreateEquippedStack( resourceId, hotbarStack.Wear, hotbarStack.CrafterName, hotbarStack.Tier ) );
 	}
 
 	/// <summary>MainHand and OffHand mirror the hotbar — never paperdoll storage.</summary>
@@ -240,7 +240,7 @@ public sealed partial class PlayerEquipment : Component
 		if ( !EquipmentCatalog.IsSlotAllowed( profile, slot ) )
 			return false;
 
-		var incoming = CreateEquippedStack( held.ResourceId, held.Wear, held.CrafterName );
+		var incoming = CreateEquippedStack( held.ResourceId, held.Wear, held.CrafterName, held.Tier );
 		var previous = GetSlot( slot );
 		OwnerSetSlot( slot, incoming );
 
@@ -251,7 +251,7 @@ public sealed partial class PlayerEquipment : Component
 		if ( !previous.IsEmpty )
 		{
 			if ( held.IsEmpty )
-				held.Set( previous.ResourceId, previous.Count, previous.Wear, previous.CrafterName );
+				held.Set( previous.ResourceId, previous.Count, previous.Wear, previous.CrafterName, previous.Tier );
 			else
 				return false;
 		}
@@ -338,7 +338,7 @@ public sealed partial class PlayerEquipment : Component
 		if ( !IsLocalManagingClient() )
 			return;
 
-		RpcHostSetEquipmentSlot( (int)slot, stack.ResourceId ?? string.Empty, stack.Count, stack.Wear, stack.CrafterName ?? string.Empty );
+		RpcHostSetEquipmentSlot( (int)slot, stack.ResourceId ?? string.Empty, stack.Count, stack.Wear, stack.CrafterName ?? string.Empty, stack.Tier );
 	}
 
 	void ApplySlotLocal( EquipmentSlot slot, InventorySlot stack )
@@ -425,19 +425,21 @@ public sealed partial class PlayerEquipment : Component
 		var counts = new int[SlotCount];
 		var wears = new int[SlotCount];
 		var crafters = new string[SlotCount];
+		var tiers = new int[SlotCount];
 		for ( var i = 0; i < SlotCount; i++ )
 		{
 			ids[i] = _slots[i].ResourceId ?? string.Empty;
 			counts[i] = _slots[i].Count;
 			wears[i] = _slots[i].Wear;
 			crafters[i] = _slots[i].CrafterName ?? string.Empty;
+			tiers[i] = _slots[i].Tier;
 		}
 
-		RpcOwnerEquipmentSync( ids, counts, wears, crafters );
+		RpcOwnerEquipmentSync( ids, counts, wears, crafters, tiers );
 	}
 
 	[Rpc.Host]
-	void RpcHostSetEquipmentSlot( int slotIndex, string resourceId, int count, int wear, string crafter )
+	void RpcHostSetEquipmentSlot( int slotIndex, string resourceId, int count, int wear, string crafter, int tier )
 	{
 		if ( !Networking.IsHost || !GameObject.IsValid() )
 			return;
@@ -457,6 +459,7 @@ public sealed partial class PlayerEquipment : Component
 				Count = Math.Max( 1, count ),
 				Wear = Math.Max( 0, wear ),
 				CrafterName = crafter,
+				Tier = tier,
 			};
 
 		ApplySlotLocal( (EquipmentSlot)slotIndex, stack );
@@ -521,7 +524,7 @@ public sealed partial class PlayerEquipment : Component
 	}
 
 	[Rpc.Owner]
-	void RpcOwnerEquipmentSync( string[] resourceIds, int[] counts, int[] wears, string[] crafters )
+	void RpcOwnerEquipmentSync( string[] resourceIds, int[] counts, int[] wears, string[] crafters, int[] tiers )
 	{
 		if ( resourceIds is null || counts is null )
 			return;
@@ -536,9 +539,10 @@ public sealed partial class PlayerEquipment : Component
 			var c = counts[i];
 			var w = wears is not null && i < wears.Length ? wears[i] : 0;
 			var maker = crafters is not null && i < crafters.Length ? crafters[i] : null;
+			var tier = tiers is not null && i < tiers.Length ? tiers[i] : 0;
 			_slots[i] = string.IsNullOrWhiteSpace( id ) || c <= 0
 				? InventorySlot.Empty
-				: new InventorySlot { ResourceId = id, Count = c, Wear = w, CrafterName = maker };
+				: new InventorySlot { ResourceId = id, Count = c, Wear = w, CrafterName = maker, Tier = tier };
 		}
 
 		RefreshDerivedState();
@@ -627,12 +631,13 @@ public sealed partial class PlayerEquipment : Component
 		_toolsRoot.Parent = GameObject;
 	}
 
-	static InventorySlot CreateEquippedStack( string resourceId, int wear = 0, string crafterName = null ) =>
+	static InventorySlot CreateEquippedStack( string resourceId, int wear = 0, string crafterName = null, int tier = 0 ) =>
 		new()
 		{
 			ResourceId = ResourceCatalog.NormalizeResourceId( resourceId ),
 			Count = 1,
 			Wear = Math.Max( 0, wear ),
 			CrafterName = crafterName,
+			Tier = tier,
 		};
 }

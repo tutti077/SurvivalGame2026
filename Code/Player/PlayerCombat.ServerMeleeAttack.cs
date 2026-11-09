@@ -107,7 +107,9 @@ public partial class PlayerCombat
 	}
 
 	public float GetMeleeWeaponBaseDamage() =>
-		MeleeWeaponBaseDamage > 0f ? MeleeWeaponBaseDamage : AttackCombatConstants.DefaultMeleeWeaponDamage;
+		EquipmentUpgrade.ScaleStat(
+			MeleeWeaponBaseDamage > 0f ? MeleeWeaponBaseDamage : AttackCombatConstants.DefaultMeleeWeaponDamage,
+			GetActiveWeaponTier() );
 
 	public float GetMeleeDamage( bool isHeavy )
 	{
@@ -116,6 +118,7 @@ public partial class PlayerCombat
 	}
 
 	/// <summary>Damage of the Q special attack — base weapon damage × class `specialDamageMultiplier`.</summary>
+	/// <summary>Base swing damage, grown by the held weapon's workbench upgrade tier (<see cref="EquipmentUpgrade"/>).</summary>
 	public float GetMeleeSpecialDamage()
 	{
 		var raw = GetMeleeWeaponBaseDamage() * Math.Max( 0f, GetMeleeWeaponTimings().SpecialDamageMultiplier );

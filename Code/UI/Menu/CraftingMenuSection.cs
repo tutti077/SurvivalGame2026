@@ -5,9 +5,16 @@ using Sandbox.UI;
 
 namespace Survival;
 
-/// <summary>Left-side crafting panel: recipe preview, list, and craft action.</summary>
+/// <summary>
+/// Left-side crafting panel: recipe preview, list, and craft action. At a workbench the header
+/// grows a Craft / Upgrade tab pair (Craft selected on every open): the Upgrade tab lists the
+/// player's upgradable gear (hotbar + bag), shows its tier numeral and the stats that grow one
+/// tier up, and the action button raises the tier through <see cref="PlayerCrafting.OwnerTryUpgradeEquipment"/>.
+/// </summary>
 public sealed class CraftingMenuSection : IPlayerMenuSection
 {
+	enum WorkbenchTab { Craft, Upgrade }
+
 	public const float WidthScale = 1.5f;
 	public const float LengthScale = 2f;
 	public const float TextScale = 1.4f;
@@ -60,9 +67,27 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	Label _detailDescription;
 	Panel _requirementsEntries;
 	Panel _statsEntries;
+	Panel _craftRequirementsBlock;
+	Panel _craftStatsBlock;
+	Panel _upgradeStatsBlock;
+	Panel _upgradeCostBlock;
+	Panel _upgradeStatsEntries;
+	Panel _upgradeCostEntries;
+	Label _detailTier;
 	string _detailIconPathApplied;
 	Panel _recipeList;
 	CraftingRecipeListPanel _recipeListPanel;
+
+	WorkbenchTab _activeTab = WorkbenchTab.Craft;
+	Panel _tabRow;
+	Panel _craftTabButton;
+	Panel _upgradeTabButton;
+	bool _wasWorkbenchOpen;
+	readonly List<UpgradeEntry> _upgradeEntries = new();
+	readonly List<UpgradeEntry> _upgradeScratch = new();
+	string _selectedUpgradeKey;
+	int _builtUpgradeSignature;
+	double _nextUpgradeListCheckAt;
 
 	string _selectedRecipeId;
 	bool _menuOpen;
@@ -160,6 +185,18 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_craftButtonLabel.Style.Set( "z-index", "2" );
 		_craftButtonLabel.Style.Set( "white-space", "nowrap" );
 
+		// Workbench only: Craft / Upgrade tabs. Hidden in the personal menu.
+		_tabRow = new Panel { Parent = _sectionRoot };
+		_tabRow.Style.Set( "flex-direction", "row" );
+		_tabRow.Style.Set( "align-items", "center" );
+		_tabRow.Style.Set( "gap", $"{6f * LayoutScale}px" );
+		_tabRow.Style.Set( "width", "100%" );
+		_tabRow.Style.Set( "flex-shrink", "0" );
+		_tabRow.Style.Set( "display", "none" );
+		_craftTabButton = CreateTabButton( _tabRow, "Craft" );
+		_upgradeTabButton = CreateTabButton( _tabRow, "Upgrade" );
+		UpdateTabVisual();
+
 		var detail = new Panel { Parent = _sectionRoot };
 		detail.Style.Set( "flex-direction", "column" );
 		detail.Style.Set( "gap", $"{10f * LayoutScale}px" );
@@ -208,17 +245,29 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_detailName = new Label { Parent = nameRow, Text = "Select a recipe" };
 		UiStyle.Text( _detailName, UiText.Value, ItemNameFontSize );
 		_detailName.Style.Set( "white-space", "normal" );
+		_detailName.Style.Set( "flex-shrink", "1" );
+		_detailName.Style.Set( "min-width", "0" );
+
+		// Upgrade tab: the selected item's current tier as a roman numeral.
+		_detailTier = new Label { Parent = nameRow, Text = "I" };
+		UiStyle.Text( _detailTier, UiText.Accent, ItemNameFontSize );
+		_detailTier.Style.Set( "white-space", "nowrap" );
+		_detailTier.Style.Set( "flex-shrink", "0" );
+		_detailTier.Style.Set( "display", "none" );
 
 		_detailDescription = new Label { Parent = detailText, Text = "" };
 		UiStyle.Text( _detailDescription, UiText.Secondary, ItemDescriptionFontSize );
 		_detailDescription.Style.Set( "white-space", "normal" );
 		_detailDescription.Style.Set( "display", "none" );
 
-		var requirementsBlock = CreateDetailListBlock( detail, "Requirements", out _requirementsEntries );
-		_ = requirementsBlock;
+		_craftRequirementsBlock = CreateDetailListBlock( detail, "Requirements", out _requirementsEntries );
+		_craftStatsBlock = CreateDetailListBlock( detail, "Stats", out _statsEntries );
 
-		var statsBlock = CreateDetailListBlock( detail, "Stats", out _statsEntries );
-		_ = statsBlock;
+		// Upgrade tab blocks: stats first (current >> next tier), then the materials.
+		_upgradeStatsBlock = CreateDetailListBlock( detail, "Stats", out _upgradeStatsEntries );
+		_upgradeCostBlock = CreateDetailListBlock( detail, "Requirements", out _upgradeCostEntries );
+		_upgradeStatsBlock.Style.Set( "display", "none" );
+		_upgradeCostBlock.Style.Set( "display", "none" );
 
 		var listPanel = new CraftingRecipeListPanel { Parent = _sectionRoot };
 		listPanel.Bind( this );
@@ -233,7 +282,16 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_recipeList.Style.Set( "pointer-events", "auto" );
 
 		var rowParent = listPanel.Content;
-		PopulateRecipeRows( rowParent );
+		PopulateRows( rowParent );
+	}
+
+	/// <summary>Fill the list for the active tab (recipes, or the player's upgradable gear).</summary>
+	void PopulateRows( Panel rowParent )
+	{
+		if ( IsUpgradeTab )
+			PopulateUpgradeRows( rowParent );
+		else
+			PopulateRecipeRows( rowParent );
 	}
 
 	void PopulateRecipeRows( Panel rowParent )
@@ -244,15 +302,6 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		CraftingRecipeCatalog.EnsureLoaded();
 		ResourceDefinitionCatalog.EnsureLoaded();
 
-		_detailName.Style.Set( "flex-shrink", "1" );
-		_detailName.Style.Set( "min-width", "0" );
-
-		// Upgrade tab: the selected item's current tier as a roman numeral.
-		_detailTier = new Label { Parent = nameRow, Text = "I" };
-		UiStyle.Text( _detailTier, UiText.Accent, ItemNameFontSize );
-		_detailTier.Style.Set( "white-space", "nowrap" );
-		_detailTier.Style.Set( "flex-shrink", "0" );
-		_detailTier.Style.Set( "display", "none" );
 		rowParent.DeleteChildren();
 		_rows.Clear();
 		var nearCampfire = IsNearCampfire();
@@ -290,10 +339,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 			AddListRow( rowParent, recipe.Id, CraftingRecipeCatalog.ResolveIconPath( recipe ), recipe.DisplayName, null );
 		}
 
-		if ( _rows.Count > 0 )
-			_rows[^1].Root.Style.MarginBottom = Length.Pixels( 0f );
-
-		_recipeListPanel?.SetRowCount( _rows.Count );
+		FinishRowList();
 		_builtRecipeContentVersion = BuildRecipeListVersion( nearCampfire );
 		RefreshWorkbenchHeader();
 
@@ -303,16 +349,16 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( keepSelection )
 			SelectRecipe( _selectedRecipeId );
 		else if ( _rows.Count > 0 )
-			SelectRecipe( _rows[0].RecipeId );
+			SelectRecipe( _rows[0].Key );
 		else
 			RefreshSelectedDetail();
 	}
 
-	/// <summary>Rebuild list when host catalog sync or fallback recovery changes recipe content.</summary>
-	void RebuildRecipeRowsIfNeeded()
+	/// <summary>Upgrade tab: one row per upgradable stack in the hotbar, then the bag.</summary>
+	void PopulateUpgradeRows( Panel rowParent )
 	{
-		CraftingRecipeCatalog.EnsureLoaded();
-		ResourceDefinitionCatalog.EnsureLoaded();
+		if ( rowParent is null || !rowParent.IsValid() )
+			return;
 
 		rowParent.DeleteChildren();
 		_rows.Clear();
@@ -408,8 +454,51 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( row is null || !row.IsValid() )
 			return;
 
+		var c = UiTheme.Colors;
+		row.Style.BackgroundColor = selected ? c.TabSelectedColor : c.PanelRaisedColor;
+		row.Style.Set( "border-color", UiStyle.Css( selected ? c.AccentColor : c.BorderSubtleColor ) );
+	}
+
+	void FinishRowList()
+	{
+		if ( _rows.Count > 0 )
+			_rows[^1].Root.Style.MarginBottom = Length.Pixels( 0f );
+
+		_recipeListPanel?.SetRowCount( _rows.Count );
+	}
+
+	/// <summary>
+	/// Rebuild the list when its content changed: recipe catalog sync / station state on the Craft
+	/// tab, the player's upgradable stacks (ids, slots, tiers) on the Upgrade tab — checked a few
+	/// times a second, never per frame.
+	/// </summary>
+	void RebuildRecipeRowsIfNeeded()
+	{
 		var content = _recipeListPanel?.Content;
 		if ( content is null || !content.IsValid() )
+			return;
+
+		if ( IsUpgradeTab )
+		{
+			if ( Time.NowDouble < _nextUpgradeListCheckAt )
+				return;
+
+			_nextUpgradeListCheckAt = Time.NowDouble + 0.25;
+			CollectUpgradeEntries( _upgradeScratch );
+			if ( ComputeUpgradeSignature( _upgradeScratch ) == _builtUpgradeSignature && IsWorkbenchOpen == _builtWorkbenchOpen )
+				return;
+
+			PopulateUpgradeRows( content );
+			return;
+		}
+
+		CraftingRecipeCatalog.EnsureLoaded();
+		ResourceDefinitionCatalog.EnsureLoaded();
+
+		var nearCampfire = IsNearCampfire();
+		var version = BuildRecipeListVersion( nearCampfire );
+		if ( version == _builtRecipeContentVersion && nearCampfire == _builtNearCampfire
+		     && IsWorkbenchOpen == _builtWorkbenchOpen )
 			return;
 
 		PopulateRecipeRows( content );
@@ -448,37 +537,20 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		     && _recipeListPanel.TryPickRowIndexAtScreen( screenPos, out var index )
 		     && index >= 0 && index < _rows.Count )
 		{
-			SelectRecipe( _rows[index].RecipeId );
+			SelectRow( _rows[index].Key );
 			return true;
 		}
 
 		return false;
 	}
-		var c = UiTheme.Colors;
-		row.Style.BackgroundColor = selected ? c.TabSelectedColor : c.PanelRaisedColor;
-		row.Style.Set( "border-color", UiStyle.Css( selected ? c.AccentColor : c.BorderSubtleColor ) );
-	}
-
-	void FinishRowList()
-	{
-		if ( _rows.Count > 0 )
-			_rows[^1].Root.Style.MarginBottom = Length.Pixels( 0f );
-
-		_recipeListPanel?.SetRowCount( _rows.Count );
-	}
-
-	/// <summary>
-	/// Rebuild the list when its content changed: recipe catalog sync / station state on the Craft
-	/// tab, the player's upgradable stacks (ids, slots, tiers) on the Upgrade tab — checked a few
-	/// times a second, never per frame.
-	/// </summary>
-	void RebuildRecipeRowsIfNeeded()
-	{
 
 	public bool TryCraftPointerAtScreen( Vector2 screenPos, bool pressed )
 	{
 		if ( !IsScrollTargetActive )
 			return false;
+
+		if ( TryTabPointerAtScreen( screenPos, pressed ) )
+			return true;
 
 		if ( TryRepairPointerAtScreen( screenPos, pressed ) )
 			return true;
@@ -521,6 +593,15 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		       && screenPos.y >= rect.Top && screenPos.y <= rect.Bottom;
 	}
 
+	/// <summary>Row click for whichever list is showing (recipe id, or an upgrade stack key).</summary>
+	public void SelectRow( string key )
+	{
+		if ( IsUpgradeTab )
+			SelectUpgrade( key );
+		else
+			SelectRecipe( key );
+	}
+
 	public void SelectRecipe( string recipeId )
 	{
 		if ( string.IsNullOrWhiteSpace( recipeId ) )
@@ -528,6 +609,16 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 		_selectedRecipeId = recipeId;
 		// Highlight first — full Refresh can hitch on icon loads and looked like a delayed select.
+		UpdateRowHighlights();
+		RefreshSelectedDetail();
+	}
+
+	public void SelectUpgrade( string key )
+	{
+		if ( string.IsNullOrWhiteSpace( key ) )
+			return;
+
+		_selectedUpgradeKey = key;
 		UpdateRowHighlights();
 		RefreshSelectedDetail();
 	}
@@ -543,6 +634,13 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 	void RefreshSelectedDetail()
 	{
+		if ( IsUpgradeTab )
+		{
+			RefreshUpgradeDetail();
+			return;
+		}
+
+		SetDetailMode( upgrade: false );
 		var recipe = CraftingRecipeCatalog.Get( _selectedRecipeId );
 		if ( recipe is null )
 		{
@@ -632,9 +730,15 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		Refresh();
 	}
 
-	/// <summary>Craft fires on the press itself — no hold, no progress bar.</summary>
+	/// <summary>Action button press (Craft tab: craft; Upgrade tab: upgrade) — no hold, no progress bar.</summary>
 	public void CraftSelectedOnClick()
 	{
+		if ( IsUpgradeTab )
+		{
+			UpgradeSelectedOnClick();
+			return;
+		}
+
 		if ( !CanCraftSelectedRecipe() )
 			return;
 
@@ -649,12 +753,15 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		RebuildRecipeRowsIfNeeded();
 		_recipeListPanel?.PollWheelWhileOpen();
 
-		// Repair grey state follows live wear (host sync lands shortly after a repair click).
+		// Repair grey state follows live wear (host sync lands shortly after a repair click);
+		// the upgrade detail follows live materials and the stack's synced tier the same way.
 		if ( _repairButton is not null && IsWorkbenchOpen && Time.NowDouble >= _nextRepairStateRefreshAt )
 		{
 			_nextRepairStateRefreshAt = Time.NowDouble + 0.25;
 			// RefreshWorkbenchHeader re-applies the rest state (clears a pressed look from a repair click).
 			RefreshWorkbenchHeader();
+			if ( IsUpgradeTab )
+				RefreshSelectedDetail();
 		}
 	}
 
@@ -696,13 +803,24 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 	bool IsWorkbenchOpen => ResolveInteraction()?.OpenWorkbench is not null;
 
-	/// <summary>Title + repair button follow the open workbench; repair grey state reads live slot wear.</summary>
+	/// <summary>
+	/// Title, tabs and repair button follow the open workbench; repair grey state reads live slot
+	/// wear. Opening a bench always lands on the Craft tab; closing it drops the Upgrade tab.
+	/// </summary>
 	void RefreshWorkbenchHeader()
 	{
 		var workbenchOpen = IsWorkbenchOpen;
 
 		if ( _titleLabel is not null )
 			_titleLabel.Text = workbenchOpen ? "Workbench" : "Crafting";
+
+		_tabRow?.Style.Set( "display", workbenchOpen ? "flex" : "none" );
+
+		if ( workbenchOpen != _wasWorkbenchOpen )
+		{
+			_wasWorkbenchOpen = workbenchOpen;
+			SetActiveTab( WorkbenchTab.Craft );
+		}
 
 		if ( _repairButton is null )
 			return;
@@ -837,6 +955,18 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		}
 	}
 
+	bool IsRowAffordable( string key )
+	{
+		if ( IsUpgradeTab )
+		{
+			var entry = FindUpgradeEntry( key );
+			return entry is not null && CanUpgradeEntry( entry.Value );
+		}
+
+		var recipe = CraftingRecipeCatalog.Get( key );
+		return recipe is not null && CanCraftRecipe( recipe );
+	}
+
 	static Panel CreateDetailListBlock( Panel parent, string headingText, out Panel entriesHost )
 	{
 		var block = new Panel { Parent = parent };
@@ -954,48 +1084,6 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		return null;
 	}
 
-	sealed class CraftButtonPanel : Panel
-	{
-		readonly CraftingMenuSection _section;
-
-		public CraftButtonPanel( CraftingMenuSection section ) => _section = section;
-
-		public override bool WantsMouseInput() => false;
-
-		protected override void OnMouseDown( MousePanelEvent e )
-		{
-			base.OnMouseDown( e );
-			if ( e.Button != "mouseleft" )
-				return;
-
-			_section.SetButtonPressedVisual( true );
-			_section.CraftSelectedOnClick();
-		}
-
-		protected override void OnMouseUp( MousePanelEvent e )
-		{
-			base.OnMouseUp( e );
-			if ( e.Button != "mouseleft" )
-				return;
-
-			_section.SetButtonPressedVisual( false );
-		}
-	}
-
-	sealed class RowUi
-	{
-		public Panel Root { get; }
-		public Panel IconPanel { get; }
-		public string RecipeId { get; }
-
-		public RowUi( Panel root, Panel iconPanel, string recipeId )
-		{
-			Root = root;
-			IconPanel = iconPanel;
-			RecipeId = recipeId;
-		}
-	}
-}
 	// ------------------------------------------------------------------ Upgrade tab
 
 	bool IsUpgradeTab => _activeTab == WorkbenchTab.Upgrade && IsWorkbenchOpen;
@@ -1280,3 +1368,49 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_nextRepairStateRefreshAt = 0;
 	}
 
+	sealed class CraftButtonPanel : Panel
+	{
+		readonly CraftingMenuSection _section;
+
+		public CraftButtonPanel( CraftingMenuSection section ) => _section = section;
+
+		public override bool WantsMouseInput() => false;
+
+		protected override void OnMouseDown( MousePanelEvent e )
+		{
+			base.OnMouseDown( e );
+			if ( e.Button != "mouseleft" )
+				return;
+
+			_section.SetButtonPressedVisual( true );
+			_section.CraftSelectedOnClick();
+		}
+
+		protected override void OnMouseUp( MousePanelEvent e )
+		{
+			base.OnMouseUp( e );
+			if ( e.Button != "mouseleft" )
+				return;
+
+			_section.SetButtonPressedVisual( false );
+		}
+	}
+
+	sealed class RowUi
+	{
+		public Panel Root { get; }
+		public Panel IconPanel { get; }
+		/// <summary>Row name label — muted while the recipe / upgrade is unaffordable.</summary>
+		public Label NameLabel { get; }
+		/// <summary>Recipe id (Craft tab) or <c>grid:slot</c> stack key (Upgrade tab).</summary>
+		public string Key { get; }
+
+		public RowUi( Panel root, Panel iconPanel, Label nameLabel, string key )
+		{
+			Root = root;
+			IconPanel = iconPanel;
+			NameLabel = nameLabel;
+			Key = key;
+		}
+	}
+}

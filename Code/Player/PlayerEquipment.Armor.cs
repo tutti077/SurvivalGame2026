@@ -89,7 +89,7 @@ public sealed partial class PlayerEquipment
 			if ( stack.IsEmpty || !EquipmentCatalog.TryGet( stack.ResourceId, out var profile ) || profile is null )
 				continue;
 
-			armor += EquipmentCatalog.GetArmor( profile );
+			armor += EquipmentUpgrade.GetArmor( profile, stack.Tier );
 
 			switch ( EquipmentCatalog.ParseArmorWeight( profile.ArmorWeight ) )
 			{

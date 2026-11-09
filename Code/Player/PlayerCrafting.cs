@@ -204,7 +204,8 @@ public sealed class PlayerCrafting : Component
 		// Equipment remembers its maker (shown in the item tooltip); bulk resources stay untagged.
 		var crafterName = EquipmentCatalog.TryGet( recipe.Id, out _ ) ? ResolveCrafterName() : null;
 
-		if ( !_inventory.HostTryAddResource( recipe.Id, outputTotal, wear: 0, crafterName: crafterName ) )
+		var tier = EquipmentUpgrade.IsUpgradable( recipe.Id ) ? EquipmentUpgrade.BaseTier : 0;
+		if ( !_inventory.HostTryAddResource( recipe.Id, outputTotal, wear: 0, crafterName: crafterName, tier: tier ) )
 		{
 			if ( LogCrafting )
 				Log.Warning( $"[PlayerCrafting] {GameObject.Name}: crafted '{recipeId}' but inventory could not fit output." );
@@ -336,6 +337,104 @@ public sealed class PlayerCrafting : Component
 	{
 		var list = new List<CraftingIngredient>();
 		if ( recipe.Ingredients is null )
+	/// <summary>
+	/// Workbench upgrade click: raise the stack at <paramref name="slotIndex"/> of the hotbar
+	/// (<see cref="EquipmentUpgrade.HotbarGridId"/>) or bag (<see cref="EquipmentUpgrade.BagGridId"/>)
+	/// one tier. The resource id guards against the slot changing under the click.
+	/// </summary>
+	public bool OwnerTryUpgradeEquipment( string gridId, int slotIndex, string resourceId )
+	{
+		if ( _inventory is null )
+			_inventory = Components.Get<PlayerInventory>();
+
+		if ( _inventory is null || !_inventory.IsLocalManagingClient() || string.IsNullOrWhiteSpace( gridId ) )
+			return false;
+
+		if ( _inventory.HasHostAuthority )
+			return HostTryUpgradeEquipment( gridId, slotIndex, resourceId );
+
+		RpcHostUpgradeEquipment( gridId, slotIndex, resourceId ?? string.Empty );
+		return true;
+	}
+
+	[Rpc.Host]
+	void RpcHostUpgradeEquipment( string gridId, int slotIndex, string resourceId )
+	{
+		if ( !Networking.IsHost )
+			return;
+
+		if ( Rpc.Caller is { } caller
+		     && GameObject.Network is { Active: true, Owner: { } owner }
+		     && caller.Id != owner.Id )
+			return;
+
+		HostTryUpgradeEquipment( gridId, slotIndex, resourceId );
+	}
+
+	/// <summary>
+	/// Host: validate once (sheltered workbench in reach, upgradable stack below max tier, recipe
+	/// materials in hand), consume the recipe cost and bump the stack's tier. <c>allCrafting</c>
+	/// waives the bench and the cost like it does for crafting.
+	/// </summary>
+	public bool HostTryUpgradeEquipment( string gridId, int slotIndex, string resourceId )
+	{
+		if ( _inventory is null )
+			_inventory = Components.Get<PlayerInventory>();
+
+		if ( _inventory is null || !_inventory.HasHostAuthority )
+			return false;
+
+		var hotbar = Components.Get<PlayerHotbar>();
+		var isHotbar = string.Equals( gridId, EquipmentUpgrade.HotbarGridId, StringComparison.OrdinalIgnoreCase );
+		var isBag = string.Equals( gridId, EquipmentUpgrade.BagGridId, StringComparison.OrdinalIgnoreCase );
+		if ( !isHotbar && !isBag )
+			return false;
+
+		var slot = isHotbar
+			? ( hotbar?.GetSlot( slotIndex ) ?? InventorySlot.Empty )
+			: _inventory.GetSlot( slotIndex );
+
+		if ( slot.IsEmpty || !EquipmentUpgrade.CanUpgradeFurther( slot ) )
+			return false;
+
+		if ( !string.IsNullOrWhiteSpace( resourceId ) && !ResourceCatalog.ResourceIdsMatch( slot.ResourceId, resourceId ) )
+			return false;
+
+		var free = AllCraftingHack;
+
+		if ( !free && !Workbench.IsPlayerNearUsableWorkbench( GameObject ) )
+		{
+			if ( LogCrafting )
+				Log.Info( $"[PlayerCrafting] {GameObject.Name}: need a sheltered workbench to upgrade '{slot.ResourceId}'." );
+			return false;
+		}
+
+		var cost = EquipmentUpgrade.BuildCost( slot.ResourceId );
+		if ( cost is null )
+			return false;
+
+		if ( cost.Count == 0 )
+			free = true;
+
+		if ( !free && !_inventory.HasResources( cost ) )
+		{
+			if ( LogCrafting )
+				Log.Info( $"[PlayerCrafting] {GameObject.Name}: missing materials to upgrade '{slot.ResourceId}'." );
+			return false;
+		}
+
+		if ( !free && !_inventory.HostTryConsumeResources( cost ) )
+			return false;
+
+		var nextTier = EquipmentUpgrade.NormalizeTier( slot.Tier ) + 1;
+		var applied = isHotbar ? hotbar.HostSetTier( slotIndex, nextTier ) : _inventory.HostSetTier( slotIndex, nextTier );
+
+		if ( LogCrafting )
+			Log.Info( $"[PlayerCrafting] {GameObject.Name}: upgraded {slot.ResourceId} to tier {EquipmentUpgrade.ToRoman( nextTier )} (applied={applied}{(free ? ", free" : string.Empty)})." );
+
+		return applied;
+	}
+
 			return list;
 
 		for ( var i = 0; i < recipe.Ingredients.Count; i++ )

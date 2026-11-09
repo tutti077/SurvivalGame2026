@@ -13,4 +13,8 @@ public partial class PlayerCombat
 	/// <summary>Host: one durability tick on the equipped weapon/tool (melee contact, bow shot).</summary>
 	public void HostAddWearToActiveMainHand( int amount = 1 ) =>
 		ToolDurability.HostAddWearToActiveTool( GameObject, amount );
+
+	/// <summary>Workbench upgrade tier of the held weapon (I when the hand is empty or the item has no tiers).</summary>
+	public int GetActiveWeaponTier() =>
+		EquipmentUpgrade.NormalizeTier( ToolDurability.GetActiveHotbarStack( GameObject ).Tier );
 }

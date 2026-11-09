@@ -314,6 +314,68 @@ public static class ResourceCatalog
 		iconPanel.Style.Set( "opacity", "1" );
 		ApplyDurabilityBar( iconPanel, slot );
 		ApplyBrokenOverlay( iconPanel, ToolDurability.IsBroken( slot ) );
+		ApplyTierBadge( iconPanel, slot );
+	}
+
+	static readonly Color TierBadgeColor = new( 0.93f, 0.86f, 0.62f );
+
+	/// <summary>
+	/// Roman numeral in the icon's top-right corner for upgradable gear (weapons, tools, armor):
+	/// I as crafted, II … V after workbench upgrades. Hooks and wingsuits carry no numeral.
+	/// </summary>
+	static void ApplyTierBadge( Panel iconPanel, in InventorySlot slot )
+	{
+		var badge = FindChildWithClass( iconPanel, "tier-badge" );
+
+		if ( slot.IsEmpty || !EquipmentUpgrade.IsUpgradable( slot ) )
+		{
+			badge?.Style.Set( "display", "none" );
+			return;
+		}
+
+		Label label = null;
+		if ( badge is null )
+		{
+			badge = new Panel { Parent = iconPanel };
+			badge.AddClass( "tier-badge" );
+			badge.Style.Set( "position", "absolute" );
+			badge.Style.Set( "left", "0" );
+			badge.Style.Set( "right", "3%" );
+			badge.Style.Set( "top", "3%" );
+			badge.Style.Set( "flex-direction", "row" );
+			badge.Style.Set( "justify-content", "flex-end" );
+			badge.Style.Set( "align-items", "flex-start" );
+			badge.Style.Set( "pointer-events", "none" );
+
+			label = new Label { Parent = badge };
+			label.AddClass( "tier-badge-text" );
+			label.Style.Set( "padding-left", "4px" );
+			label.Style.Set( "padding-right", "4px" );
+			label.Style.Set( "padding-top", "0px" );
+			label.Style.Set( "padding-bottom", "1px" );
+			label.Style.Set( "background-color", "rgba(0,0,0,0.6)" );
+			label.Style.Set( "border-radius", "3px" );
+			label.Style.FontColor = TierBadgeColor;
+			label.Style.FontSize = Length.Pixels( 14f );
+			label.Style.Set( "font-weight", "bold" );
+			label.Style.Set( "text-shadow", "1px 1px 2px black" );
+			label.Style.Set( "pointer-events", "none" );
+		}
+		else
+		{
+			foreach ( var child in badge.Children )
+			{
+				if ( child is Label l && l.HasClass( "tier-badge-text" ) )
+				{
+					label = l;
+					break;
+				}
+			}
+		}
+
+		badge.Style.Set( "display", "flex" );
+		if ( label is not null )
+			label.Text = EquipmentUpgrade.ToRoman( slot.Tier );
 	}
 
 	static readonly Color DurabilityBarColor = new( 0.87f, 0.76f, 0.38f );
@@ -448,6 +510,7 @@ public static class ResourceCatalog
 		iconPanel.Style.Set( "display", "flex" );
 		ApplyDurabilityBar( iconPanel, InventorySlot.Empty );
 		ApplyBrokenOverlay( iconPanel, broken: false );
+		ApplyTierBadge( iconPanel, InventorySlot.Empty );
 
 		if ( countLabel is not null )
 		{

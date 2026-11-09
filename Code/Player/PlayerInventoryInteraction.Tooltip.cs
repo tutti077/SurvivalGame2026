@@ -86,7 +86,7 @@ public sealed partial class PlayerInventoryInteraction
 
 		EnsureTooltipPanel();
 
-		var key = $"{slot.ResourceId}|{slot.Count}|{slot.Wear}|{slot.CrafterName}";
+		var key = $"{slot.ResourceId}|{slot.Count}|{slot.Wear}|{slot.Tier}|{slot.CrafterName}";
 		if ( !string.Equals( key, _tooltipContentKey, StringComparison.Ordinal ) )
 		{
 			_tooltipContentKey = key;
@@ -202,10 +202,15 @@ public sealed partial class PlayerInventoryInteraction
 	{
 		var lines = new List<(string Text, Color Color)>();
 
-		if ( profile.StatModifiers is { } stats && stats.Damage > 0f )
-			lines.Add( ($"Damage: {stats.Damage:0.#}", TooltipStatColor) );
+		// Upgradable gear: stats shown at the stack's tier (I = as crafted).
+		if ( EquipmentUpgrade.IsUpgradable( profile ) )
+			lines.Add( ($"Tier {EquipmentUpgrade.ToRoman( slot.Tier )}", TooltipDurabilityColor) );
 
-		var armor = EquipmentCatalog.GetArmor( profile );
+		var damage = EquipmentUpgrade.GetDamage( profile, slot.Tier );
+		if ( damage > 0f )
+			lines.Add( ($"Damage: {damage:0.#}", TooltipStatColor) );
+
+		var armor = EquipmentUpgrade.GetArmor( profile, slot.Tier );
 		if ( armor > 0f )
 			lines.Add( ($"Armor: {armor:0.#}", TooltipStatColor) );
 
@@ -239,7 +244,7 @@ public sealed partial class PlayerInventoryInteraction
 		if ( profile.TwoHanded )
 			lines.Add( ("Two-handed", TooltipTypeColor) );
 
-		var max = ToolDurability.GetMax( profile.ResourceId );
+		var max = ToolDurability.GetMax( slot );
 		if ( max > 0 )
 		{
 			if ( ToolDurability.IsBroken( slot ) )
