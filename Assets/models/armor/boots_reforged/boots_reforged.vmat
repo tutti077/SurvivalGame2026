@@ -1,0 +1,9 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.500"
+	PixelSpecular "1.000"
+	PixelFlatShading "1.000"
+	TextureColor "models/armor/boots_reforged/boots_reforged.png"
+}

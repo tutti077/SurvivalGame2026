@@ -8,7 +8,7 @@ from .mesh import rot_matrix
 
 
 def render(mesh, tex_img, size=256, azimuth=35.0, elevation=28.0, bg=(58, 58, 62), sun=(-0.4, -0.6, 0.7),
-		   ambient=0.42, margin=0.1, flat_plane=False):
+		   ambient=0.42, margin=0.1, flat_plane=False, cull=1):
 	tex = np.asarray(tex_img.convert("RGB"), float)
 	th, tw = tex.shape[:2]
 	# camera sits in front (-y) and above: tilting the world by +elevation about x brings high points
@@ -44,7 +44,7 @@ def render(mesh, tex_img, size=256, azimuth=35.0, elevation=28.0, bg=(58, 58, 62
 			continue
 		# back-face: skip triangles facing away (screen-space winding)
 		area = (x[1] - x[0]) * (y[2] - y[0]) - (x[2] - x[0]) * (y[1] - y[0])
-		if abs(area) < 1e-9:
+		if abs(area) < 1e-9 or (cull and area * cull > 0):
 			continue
 		yy, xx = np.mgrid[y0:y1 + 1, x0:x1 + 1]
 		px = xx + 0.5

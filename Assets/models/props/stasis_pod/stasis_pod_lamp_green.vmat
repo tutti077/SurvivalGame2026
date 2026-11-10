@@ -1,0 +1,9 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.150"
+	PixelSpecular "0.000"
+	PixelFlatShading "1.000"
+	TextureColor "models/props/stasis_pod/stasis_pod_lamp_green.png"
+}

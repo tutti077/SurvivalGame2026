@@ -1,0 +1,12 @@
+Layer0
+{
+	shader "shaders/glass.shader"
+
+	F_GLASS_QUALITY 1
+	F_RENDER_BACKFACES 1
+	g_flTintColor "[0.780000 0.900000 1.000000]"
+	g_flBlurAmount "0.000"
+	g_flRefractionStrength "1.000"
+	TextureColor "models/props/stasis_pod/stasis_pod_glass.png"
+	TextureTranslucency "models/props/stasis_pod/stasis_pod_glass_trans.png"
+}

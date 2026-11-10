@@ -173,6 +173,16 @@ public static class HeldStackWorldDrop
 		if ( renderer is null )
 			return;
 
+		// The item's own model when it has one (40 u/m: drawn at scale 1, untinted; an id with variants picks one per drop); else the tinted dev rock
+		if ( ItemWorldModelCatalog.TryGetModelPath( resourceId, out var modelPath, Sandbox.Game.Random.Int( 0, 1 << 20 ) ) && Model.Load( modelPath ) is { IsError: false } model )
+		{
+			renderer.Model = model;
+			renderer.MaterialOverride = null;
+			renderer.Tint = Color.White;
+			instance.LocalScale = Vector3.One;
+			return;
+		}
+
 		var def = ResourceCatalog.Resolve( resourceId );
 		renderer.Tint = def.FallbackColor.WithAlpha( 1f );
 	}
@@ -196,11 +206,27 @@ public static class HeldStackWorldDrop
 			collider.Destroy();
 		}
 
-		var sphere = root.Components.Create<SphereCollider>();
-		sphere.Radius = EstimateColliderRadius( root );
-		sphere.Static = false;
-		sphere.Friction = 0.85f;
-		sphere.Elasticity = 0.05f;
+		// An item model collides with its own convex hull (every item vmdl carries PhysicsHullFromRender), so a sword lies
+		// flat and a pouch sits on its base - the old sphere off the biggest dimension held thin items up in the air
+		// (Mark 2026-11-05: "they just kinda float"). Only the tinted fallback rock keeps a sphere.
+		var model = root.Components.Get<ModelRenderer>()?.Model;
+		Collider solid;
+		if ( model is { IsError: false, Physics.Parts.Count: > 0 } )
+		{
+			var hull = root.Components.Create<ModelCollider>();
+			hull.Model = model;
+			solid = hull;
+		}
+		else
+		{
+			var sphere = root.Components.Create<SphereCollider>();
+			sphere.Radius = EstimateColliderRadius( root );
+			solid = sphere;
+		}
+
+		solid.Static = false;
+		solid.Friction = 0.85f;
+		solid.Elasticity = 0.05f;
 
 		var body = root.Components.Get<Rigidbody>() ?? root.Components.Create<Rigidbody>();
 		body.MotionEnabled = true;

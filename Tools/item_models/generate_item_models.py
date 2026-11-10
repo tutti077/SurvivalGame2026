@@ -25,20 +25,36 @@ sys.path.insert(0, HERE)
 
 from itemgen import export, preview  # noqa: E402
 from itemgen import items_resources, items_held, items_wearables  # noqa: E402
+from itemgen import items_nature, items_fish, items_metal, items_materials, items_heads, items_stations, items_husbandry  # noqa: E402
 
 SEED = 2026
 
 
+MODULES = [items_resources, items_held, items_wearables, items_nature, items_fish, items_metal, items_materials, items_heads, items_stations, items_husbandry]
+
+
 def all_items():
-	return items_resources.ITEMS + items_held.ITEMS + items_wearables.ITEMS
+	out = []
+	for mod in MODULES:
+		for it in mod.ITEMS:
+			it["module"] = mod.__name__.split(".")[-1]
+			out.append(it)
+	return out
 
 
 def main(argv):
-	names = [a for a in argv if not a.startswith("--")]
+	# Flag values are dropped by position, so "badger_claws --sheet badger_claws" still builds just that item.
+	flag_values = {i + 1 for i, a in enumerate(argv) if a in ("--sheet", "--module", "--category")}
+	names = [a for i, a in enumerate(argv) if not a.startswith("--") and i not in flag_values]
 	cat = None
+	sheet_name = None
+	if "--sheet" in argv:  # one contact sheet of just the built items: preview/sheet_<sheet_name>.png
+		sheet_name = argv[argv.index("--sheet") + 1]
+	if "--module" in argv:  # every item of one itemgen module, e.g. --module items_fish
+		mod = argv[argv.index("--module") + 1]
+		names = names + [i["name"] for i in all_items() if i.get("module") == mod]
 	if "--category" in argv:
 		cat = argv[argv.index("--category") + 1]
-		names = [n for n in names if n != cat]
 	items = all_items()
 	if names:
 		items = [i for i in items if i["name"] in names]
@@ -52,13 +68,14 @@ def main(argv):
 		mesh, cells = it["build"](rng)
 		mesh.drop_degenerate()
 		out_dir, img = export.export_item(ROOT, it["category"], it["name"], mesh, cells, rng, surface=it["surface"],
-										 roughness=it["roughness"], specular=it["specular"])
+										 roughness=it["roughness"], specular=it["specular"],
+										 import_scale=it.get("import_scale", export.IMPORT_SCALE))
 		lo, hi = mesh.bounds()
 		size = hi - lo
 		print(f"{it['category']:10s} {it['name']:24s} {len(mesh.tris):5d} tris  {size[0]:.2f} x {size[1]:.2f} x {size[2]:.2f} m")
 		im = preview.render(mesh, img)
 		im.save(os.path.join(prev_dir, f"{it['name']}.png"))
-		sheets.setdefault(it["category"], []).append((it["name"], im))
+		sheets.setdefault(sheet_name or it["category"], []).append((f"{it['name']}  {size.max():.2f} m", im))
 	for cat_name, entries in sheets.items():
 		preview.contact_sheet(entries).save(os.path.join(prev_dir, f"sheet_{cat_name}.png"))
 	print(f"{len(items)} models written; previews in {prev_dir}")

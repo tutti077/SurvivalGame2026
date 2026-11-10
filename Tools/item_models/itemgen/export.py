@@ -120,7 +120,8 @@ VMAT = """Layer0
 """
 
 
-def export_item(root, category, name, mesh, cells, rng, surface="default", roughness=0.9, specular=1.0):
+def export_item(root, category, name, mesh, cells, rng, surface="default", roughness=0.9, specular=1.0, import_scale=IMPORT_SCALE):
+	"""import_scale: 40 u/m for items and for build pieces (items_stations passes BuildModuleDimensions.UnitsPerMeter explicitly)."""
 	rel_dir = f"models/{category}/{name}"
 	out_dir = os.path.join(root, "Assets", rel_dir)
 	os.makedirs(out_dir, exist_ok=True)
@@ -132,7 +133,7 @@ def export_item(root, category, name, mesh, cells, rng, surface="default", rough
 	img = texture.render_texture(rng, cells)
 	img.save(os.path.join(out_dir, f"{name}.png"))
 	with open(os.path.join(out_dir, f"{name}.vmdl"), "w", newline="\n") as f:
-		f.write(VMDL.format(name=name, vmat=vmat_rel, obj=obj_rel, scale=IMPORT_SCALE, surface=surface))
+		f.write(VMDL.format(name=name, vmat=vmat_rel, obj=obj_rel, scale=import_scale, surface=surface))
 	with open(os.path.join(out_dir, f"{name}.vmat"), "w", newline="\n") as f:
 		f.write(VMAT.format(rough=roughness, spec=specular, png=png_rel))
 	return out_dir, img

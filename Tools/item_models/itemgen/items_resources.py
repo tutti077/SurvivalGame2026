@@ -40,11 +40,8 @@ def wood_log(rng):
 	return ground(m), cells
 
 
-@item("stone", surface="rock")
-def stone(rng):
-	cells = [P.stone(), P.stone()]
-	m = blob(rng, 0.17, subdiv=2, jitter=0.35, noise=0.22, noise_cells=2.2, scale=(1.15, 1.0, 0.8), mat=0, flatten_bottom=0.75)
-	return ground(m), cells
+# resource_stone has no builder here: its drop is one of four gunmetal stones from Blender/scripts/create_mineable_rocks.py
+# (models/resources/stone/stone_drop1-4_v1, data/item_world_models.json lists the variants).
 
 
 @item("dirt")

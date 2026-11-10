@@ -192,7 +192,7 @@ def bola(rng):
 
 
 @item("simple_bow", "weapons", surface="wood")
-def simple_bow(rng):
+def simple_bow(rng, with_string=True):
 	cells = [P.wood_handle(), P.leather(), P.rope()]
 	L = 1.25
 	path = []
@@ -204,11 +204,20 @@ def simple_bow(rng):
 				  radius_fn=lambda t: 0.5 + 0.8 * math.sin(math.pi * t) ** 0.6, mat=0)
 	# string: straight tip to tip
 	string = tube(rng, length=L - 0.04, radius=0.003, segs=4, rings=2, jitter=0.0, wobble=0.0, profile=lambda t: 1.0, mat=2, axis="x")
-	m.add(string.translate(0.02, 0, 0.004))
+	if with_string:
+		m.add(string.translate(0.02, 0, 0.004))
 	# grip wrap at the centre
 	grip = lathe([(0.02, 0), (0.026, 0.01), (0.026, 0.14), (0.02, 0.15)], segs=7, mat=1, rng=rng, jitter=0.1)
 	m.add(grip.rotate("y", 90).translate(L / 2 - 0.075, 0, 0.16))
 	return butt_at_origin(m), cells
+
+
+@item("simple_bow_held", "weapons", surface="wood")
+def simple_bow_held(rng):
+	"""The bow in the hand: simple_bow's limbs and grip (same seed, so the same shape) without the string - the
+	archer stance draws the string live from each tip to the nock (Code/Player/PlayerAnimation.Bow.cs).
+	The string is still built so the random stream, and with it the grip wrap, match the drop model."""
+	return simple_bow(np.random.default_rng(2026 + sum(map(ord, "simple_bow"))), with_string=False)
 
 
 @item("bone_sword", "weapons", surface="default")

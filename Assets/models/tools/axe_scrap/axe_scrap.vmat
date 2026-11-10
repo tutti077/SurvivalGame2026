@@ -1,0 +1,9 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.850"
+	PixelSpecular "1.000"
+	PixelFlatShading "1.000"
+	TextureColor "models/tools/axe_scrap/axe_scrap.png"
+}

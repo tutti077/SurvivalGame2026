@@ -1,0 +1,9 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.600"
+	PixelSpecular "1.000"
+	PixelFlatShading "1.000"
+	TextureColor "models/weapons/bow_iron/bow_iron.png"
+}
