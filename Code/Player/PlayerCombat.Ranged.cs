@@ -42,6 +42,36 @@ public partial class PlayerCombat
 	double _bowChargeStartedAt;
 	bool _bowAdsActive;
 
+	/// <summary>Owner → every peer: the draw (0 = not drawing, quantised) so all peers pose the archer stance.</summary>
+	[Sync] public float BowDrawSynced { get; private set; }
+
+	/// <summary>Owner → every peer: +1 per arrow loosed (not per cancel) — the release follow-through.</summary>
+	[Sync] public int BowShotCounter { get; private set; }
+
+	/// <summary>Draw 0..1 as this peer should present it: the live charge on the driver, the synced value elsewhere.</summary>
+	public float PresentationBowDraw01 => IsLocalCombatDriver()
+		? (_bowCharging ? MathF.Max( 0.001f, BowDrawCharge01 ) : 0f)
+		: BowDrawSynced;
+
+	const double ArrowHitConfirmSeconds = 0.3;
+	double _arrowHitConfirmAt = -1d;
+
+	/// <summary>Local shooter: one of this pawn's arrows hit something that takes damage (crosshair hit tick).</summary>
+	internal void NotifyOwnArrowHit() => _arrowHitConfirmAt = Time.NowDouble;
+
+	/// <summary>1 right after an own arrow hit, falling to 0 over <see cref="ArrowHitConfirmSeconds"/>.</summary>
+	public float ArrowHitConfirm01 => _arrowHitConfirmAt < 0d
+		? 0f
+		: Math.Clamp( 1f - (float)((Time.NowDouble - _arrowHitConfirmAt) / ArrowHitConfirmSeconds), 0f, 1f );
+
+	void PublishBowDraw()
+	{
+		// Twentieths are plenty for a pose; a steady value writes nothing.
+		var draw = _bowCharging ? MathF.Max( 0.05f, MathF.Round( BowDrawCharge01 * 20f ) / 20f ) : 0f;
+		if ( MathF.Abs( draw - BowDrawSynced ) > 1e-3f )
+			BowDrawSynced = draw;
+	}
+
 	/// <summary>0 = just started charging, 1 = full draw. 0 when not charging.</summary>
 	public float BowDrawCharge01
 	{
@@ -82,6 +112,12 @@ public partial class PlayerCombat
 	}
 
 	void TickOwnerRangedInput()
+	{
+		TickOwnerRangedInputCore();
+		PublishBowDraw();
+	}
+
+	void TickOwnerRangedInputCore()
 	{
 		var equipped = Components.Get<PlayerEquippedItem>();
 		var hasBow = equipped is not null && equipped.HasAction( EquippedItemActions.PrimaryRanged );
@@ -129,7 +165,10 @@ public partial class PlayerCombat
 			_bowCharging = false;
 
 			if ( held >= Math.Max( 0.05f, BowMinHoldToFireSeconds ) && OwnerHasAmmoForEquippedBow() )
+			{
 				OwnerRequestFireBow( held );
+				BowShotCounter++;
+			}
 		}
 	}
 
@@ -171,11 +210,7 @@ public partial class PlayerCombat
 	void OwnerRequestFireBow( float holdSeconds )
 	{
 		var charge01 = Math.Clamp( holdSeconds / Math.Max( 0.05f, BowFullDrawSeconds ), 0f, 1f );
-		BuildViewCamera.TryGetViewRay( GameObject, out var origin, out var direction );
-		if ( direction.LengthSquared < 1e-8f )
-			direction = WorldRotation.Forward;
-
-		origin = ResolveBowMuzzleOrigin( origin, direction );
+		ResolveBowShot( out var origin, out var direction );
 
 		var preferred = Components.Get<PlayerAmmoPreference>()?.PreferredAmmoResourceId ?? string.Empty;
 		var intent = new BowFireIntent
@@ -203,6 +238,58 @@ public partial class PlayerCombat
 			RpcHostFireBow( intent );
 	}
 
+	/// <summary>Farthest the camera ray looks for the point under the crosshair (m).</summary>
+	const float BowAimTraceMeters = 120f;
+
+	/// <summary>
+	/// The arrow leaves the BOW (the nock the archer stance holds, <see cref="PlayerAnimation.TryGetBowNockWorld"/>)
+	/// and flies toward whatever is under the crosshair — not from the camera, where it shot straight away from the
+	/// viewer and its arc could not be read (Mark 2026-11-06). Nothing under the crosshair: the camera ray's far point.
+	/// </summary>
+	void ResolveBowShot( out Vector3 origin, out Vector3 direction )
+	{
+		BuildViewCamera.TryGetViewRay( GameObject, out var camOrigin, out var camDir );
+		if ( camDir.LengthSquared < 1e-8f )
+			camDir = WorldRotation.Forward;
+		camDir = camDir.Normal;
+
+		origin = Components.Get<PlayerAnimation>() is { } anim && anim.TryGetBowNockWorld( out var nock )
+			? nock
+			: ResolveBowHandEstimate( camDir );
+
+		var unitsPerMeter = ResolveBowUnitsPerMeter();
+		var far = camOrigin + camDir * (BowAimTraceMeters * unitsPerMeter);
+		var tr = Scene.Trace.Ray( camOrigin, far )
+			.IgnoreGameObjectHierarchy( GameObject )
+			.WithoutTags( "trigger", "worlddrop" )
+			.Run();
+		var aimPoint = tr.Hit ? tr.HitPosition : far;
+
+		// A point under the crosshair that sits behind or right at the bow (wall hugging) would turn the shot round.
+		direction = aimPoint - origin;
+		if ( Vector3.Dot( direction, camDir ) < unitsPerMeter )
+			direction = camDir;
+		direction = direction.Normal;
+	}
+
+	float ResolveBowUnitsPerMeter()
+	{
+		var controller = Components.Get<PlayerController>();
+		var bodyHeight = controller is not null && controller.IsValid() ? Math.Max( 24f, controller.BodyHeight ) : 72f;
+		return bodyHeight / 1.8f;
+	}
+
+	/// <summary>Bow hand when no stance pose is available (no body renderer): chest height, a step toward the aim.</summary>
+	Vector3 ResolveBowHandEstimate( Vector3 aimDir )
+	{
+		var bodyHeight = ResolveBowUnitsPerMeter() * 1.8f;
+		var flat = aimDir.WithZ( 0f );
+		if ( flat.LengthSquared < 1e-6f )
+			flat = WorldRotation.Forward.WithZ( 0f );
+		return WorldPosition + Vector3.Up * (bodyHeight * 0.8f) + flat.Normal * (bodyHeight * 0.3f);
+	}
+
+	/// <summary>Bola throw origin: the camera ray origin when it is clear of the pawn, else the hand.</summary>
 	Vector3 ResolveBowMuzzleOrigin( Vector3 cameraOrigin, Vector3 viewDir )
 	{
 		var controller = Components.Get<PlayerController>();
@@ -246,7 +333,7 @@ public partial class PlayerCombat
 		if ( IsCombatActionLocked )
 			return;
 
-		if ( Components.Get<PlayerMovement>() is { IsSeatedDriver: true } )
+		if ( Components.Get<PlayerMovement>() is { IsSeatedDriver: true } or { PodLocked: true } )
 			return;
 
 		var weaponId = ResolveEquippedMainHandId();
@@ -281,6 +368,10 @@ public partial class PlayerCombat
 		aimDir = aimDir.Normal;
 
 		var origin = new Vector3( intent.OriginX, intent.OriginY, intent.OriginZ );
+		// The shot leaves the archer's own bow: an origin further than a body height from the chest is not one.
+		var bodyHeight = ResolveBowUnitsPerMeter() * 1.8f;
+		if ( (origin - (WorldPosition + Vector3.Up * (bodyHeight * 0.6f))).Length > bodyHeight )
+			origin = ResolveBowHandEstimate( aimDir );
 		aimDir = ApplyBowInaccuracy( aimDir, charge01, intent.ClientSeed );
 
 		var speed = ComputeFullDrawSpeed() * power * Math.Max( 0.1f, BowLaunchSpeedMultiplier );

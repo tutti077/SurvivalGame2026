@@ -5,17 +5,40 @@ namespace Survival;
 
 /// <summary>
 /// Host-simulated arrow. Clients see the networked transform; only the host applies damage.
-/// On impact the host destroys the flyer and spawns a stuck brown-cylinder pickup
-/// (<see cref="WorldDroppedResource"/>) that can be magnet / E recovered. Hits on anything
+/// On impact the host spawns a stuck pickup drawn as the ammo's own item model (<see cref="AttachArrowVisual"/>,
+/// a <see cref="WorldDroppedResource"/>) that can be magnet / E recovered. Hits on anything
 /// damageable (entity, player, tree, build piece) parent the pickup to the hit object via
 /// <see cref="StuckArrow"/>, so it rides along and drops with physics when the victim dies.
+/// Every peer draws its flight streak and landing star with an <see cref="ArrowFlightTrail"/>: the host syncs the
+/// shooter and the landing (<see cref="ImpactKind"/> / <see cref="ImpactPosition"/>; a creature or player hit also
+/// gives the shooter's crosshair its hit tick) and keeps the spent, hidden arrow a moment so that state reaches the
+/// clients before the object goes.
 /// </summary>
 [Title( "Arrow Projectile" )]
 public sealed class ArrowProjectile : Component
 {
-	const int TrailPointCount = 12;
 	const string CylinderModelPath = "models/cylinder.vmdl";
 	const string FallbackBoxModelPath = "models/dev/box.vmdl";
+
+	/// <summary>Arrow shaft as drawn in flight, stuck and nocked on the bow (m).</summary>
+	public const float ShaftLengthMeters = 0.95f;
+	public const float ShaftThicknessMeters = 0.045f;
+	static readonly Color ShaftTint = new( 0.45f, 0.28f, 0.14f );
+
+	/// <summary>Host keeps a landed arrow (hidden) this long so the landing syncs before the object is gone.</summary>
+	const float SpentLingerSeconds = 0.3f;
+
+	public const byte ImpactNone = 0;
+	public const byte ImpactMiss = 1;
+	public const byte ImpactHitCreature = 2;
+
+	/// <summary>Pawn that loosed it (its root object id) - the shooter's own arc lingers on their screen.</summary>
+	[Sync( SyncFlags.FromHost )] public Guid ShooterId { get; set; }
+
+	/// <summary>Host to all: how the flight ended (<see cref="ImpactMiss"/> / <see cref="ImpactHitCreature"/>), 0 in flight.</summary>
+	[Sync( SyncFlags.FromHost )] public byte ImpactKind { get; set; }
+
+	[Sync( SyncFlags.FromHost )] public Vector3 ImpactPosition { get; set; }
 
 	[Property] public float LifetimeSeconds { get; set; } = 12f;
 	[Property] public float Radius { get; set; } = 2.5f;
@@ -24,17 +47,17 @@ public sealed class ArrowProjectile : Component
 	Component _attackerCombat;
 	Vector3 _velocity;
 	float _damage;
+	float _burnDamage;
+	float _burnSeconds;
 	float _age;
 	bool _spent;
 	bool _authority;
 	string _ammoResourceId = "arrow_wood";
 	float _shaftLength;
+	float _spentAge;
 
-	readonly Vector3[] _trail = new Vector3[TrailPointCount];
-	int _trailCount;
-	int _trailWrite;
-	Vector3 _lastTrailSample;
-	bool _hasTrailSample;
+	ArrowFlightTrail _trail;
+	bool _trailOwnResolved;
 
 	public void Configure(
 		GameObject attackerRoot,
@@ -43,12 +66,16 @@ public sealed class ArrowProjectile : Component
 		float damage,
 		bool hostAuthority,
 		string ammoResourceId,
-		float shaftLength )
+		float shaftLength,
+		float burnDamage = 0f,
+		float burnSeconds = 0f )
 	{
 		_attackerRoot = attackerRoot;
 		_attackerCombat = attackerCombat;
 		_velocity = velocity;
 		_damage = Math.Max( 0f, damage );
+		_burnDamage = Math.Max( 0f, burnDamage );
+		_burnSeconds = Math.Max( 0f, burnSeconds );
 		_authority = hostAuthority;
 		_ammoResourceId = string.IsNullOrWhiteSpace( ammoResourceId )
 			? "arrow_wood"
@@ -56,28 +83,75 @@ public sealed class ArrowProjectile : Component
 		_shaftLength = Math.Max( 8f, shaftLength );
 		_age = 0f;
 		_spent = false;
-		_trailCount = 0;
-		_trailWrite = 0;
-		_hasTrailSample = false;
 
 		if ( velocity.LengthSquared > 1e-6f )
 			WorldRotation = Rotation.LookAt( velocity.Normal, Vector3.Up );
 	}
 
+	protected override void OnStart()
+	{
+		base.OnStart();
+		_trail = ArrowFlightTrail.Create( Scene );
+		_trail?.Push( WorldPosition );
+	}
+
 	protected override void OnUpdate()
 	{
 		base.OnUpdate();
-		if ( _spent || !GameObject.IsValid() )
+		if ( !GameObject.IsValid() || _trail is null || !_trail.IsValid() || _trail.Ended )
 			return;
 
-		SampleAndDrawTrail();
+		ResolveTrailOwner();
+
+		if ( ImpactKind != ImpactNone )
+		{
+			// Landed (synced from the host): the star pops at the impact, hide the spent shaft here too.
+			if ( Components.Get<ModelRenderer>( FindMode.EverythingInSelfAndDescendants ) is { Enabled: true } shaft )
+				shaft.Enabled = false;
+			_trail.End( ImpactPosition );
+			if ( ImpactKind == ImpactHitCreature && _trail.IsOwn )
+				ResolveShooterCombat()?.NotifyOwnArrowHit();
+			return;
+		}
+
+		_trail.Push( WorldPosition );
+	}
+
+	protected override void OnDestroy()
+	{
+		// Lost in flight, or gone before the landing synced: the streak just fades, no star.
+		if ( _trail is { IsValid: true } && !_trail.Ended )
+			_trail.End( null );
+		base.OnDestroy();
+	}
+
+	PlayerCombat ResolveShooterCombat()
+	{
+		if ( ShooterId == Guid.Empty || !Scene.IsValid() )
+			return null;
+
+		return Scene.Directory.FindByGuid( ShooterId )?.Components.Get<PlayerCombat>();
+	}
+
+	/// <summary>Until found: is the shooter the pawn this peer drives?</summary>
+	void ResolveTrailOwner()
+	{
+		if ( _trailOwnResolved || ShooterId == Guid.Empty )
+			return;
+
+		var combat = ResolveShooterCombat();
+		if ( combat is null )
+			return;
+
+		_trail.IsOwn = combat.IsLocalCombatDriver();
+		_trailOwnResolved = true;
 	}
 
 	protected override void OnFixedUpdate()
 	{
 		base.OnFixedUpdate();
 
-		if ( _spent || !GameObject.IsValid() )
+		if ( !GameObject.IsValid() )
 			return;
 
 		// Only the host (or offline) advances physics + hits. Proxies just display synced transform.
@@ -87,6 +161,14 @@ public sealed class ArrowProjectile : Component
 		var dt = Math.Max( 0f, Time.Delta );
 		if ( dt <= 1e-6f )
 			return;
+
+		if ( _spent )
+		{
+			_spentAge += dt;
+			if ( _spentAge >= SpentLingerSeconds )
+				GameObject.Destroy();
+			return;
+		}
 
 		_age += dt;
 		if ( _age >= LifetimeSeconds )
@@ -120,9 +202,9 @@ public sealed class ArrowProjectile : Component
 		var tr = trace.Run();
 		if ( tr.Hit )
 		{
-			TryApplyHit( tr );
+			var hitCreature = TryApplyHit( tr );
 			HostEmbedAsPickup( scene, tr );
-			DestroySelf();
+			HostLand( tr.HitPosition, hitCreature );
 			return;
 		}
 
@@ -200,10 +282,7 @@ public sealed class ArrowProjectile : Component
 		go.WorldPosition = position;
 		go.WorldRotation = rotation;
 
-		var renderer = go.Components.Create<ModelRenderer>();
-		renderer.Model = LoadArrowModel();
-		renderer.Tint = new Color( 0.45f, 0.28f, 0.14f );
-		ApplyShaftScale( go, renderer.Model?.Bounds.Size ?? new Vector3( 1f ), shaftLength, thickness );
+		AttachArrowVisual( go, ammoResourceId, shaftLength, thickness );
 
 		var drop = go.Components.Create<WorldDroppedResource>();
 		drop.Configure( ammoResourceId, 1 );
@@ -247,14 +326,10 @@ public sealed class ArrowProjectile : Component
 		foreach ( var col in go.Components.GetAll<Collider>( FindMode.EverythingInSelf ) )
 			col.Destroy();
 
-		// Box in unscaled model space — GameObject.LocalScale already stretches it to the shaft.
-		var modelSize = go.Components.Get<ModelRenderer>()?.Model?.Bounds.Size ?? new Vector3( 1f );
+		// The pickup root is unscaled with the shaft along +X (the visual is a child): a shaft-sized box.
 		var box = go.Components.Create<BoxCollider>();
 		box.Static = false;
-		box.Scale = new Vector3(
-			Math.Max( 0.01f, modelSize.x ),
-			Math.Max( 0.01f, modelSize.y ),
-			Math.Max( 0.01f, modelSize.z ) );
+		box.Scale = new Vector3( shaftLength, thickness, thickness );
 		box.Friction = 0.9f;
 		box.Elasticity = 0.05f;
 
@@ -275,54 +350,44 @@ public sealed class ArrowProjectile : Component
 		body.AngularVelocity = Vector3.Random * 3f;
 	}
 
-	void SampleAndDrawTrail()
-	{
-		var pos = WorldPosition;
-		const float minSampleDist = 4f;
-		if ( !_hasTrailSample || (pos - _lastTrailSample).Length >= minSampleDist )
-		{
-			_trail[_trailWrite] = pos;
-			_trailWrite = (_trailWrite + 1) % TrailPointCount;
-			if ( _trailCount < TrailPointCount )
-				_trailCount++;
-			_lastTrailSample = pos;
-			_hasTrailSample = true;
-		}
-
-		if ( _trailCount < 2 )
-			return;
-
-		for ( var i = 1; i < _trailCount; i++ )
-		{
-			var aIndex = (_trailWrite - _trailCount + i - 1 + TrailPointCount * 2) % TrailPointCount;
-			var bIndex = (_trailWrite - _trailCount + i + TrailPointCount * 2) % TrailPointCount;
-			var t = i / (float)_trailCount;
-			var alpha = MathX.Lerp( 0.12f, 0.55f, t );
-			var grey = MathX.Lerp( 0.55f, 0.95f, t );
-			var color = new Color( grey, grey, grey, alpha );
-			DebugOverlay.Line( _trail[aIndex], _trail[bIndex], color, 0f );
-		}
-	}
-
-	void TryApplyHit( SceneTraceResult tr )
+	/// <summary>Host: damage what it struck. True when that was a living creature or player (the shooter's hit tick).</summary>
+	bool TryApplyHit( SceneTraceResult tr )
 	{
 		if ( !_authority && GameObject.Network is { Active: true } && !Networking.IsHost )
-			return;
+			return false;
 
 		if ( _damage <= 0f || !tr.GameObject.IsValid() )
-			return;
+			return false;
 
 		if ( !CombatAuthority.TryFindDamageable( tr.GameObject, out var recv ) || recv is not DamageReceiver dmg )
-			return;
+			return false;
 
 		if ( _attackerRoot is not null && _attackerRoot.IsValid()
 		     && !CombatAuthority.MayApplyMeleeDamageFromAttackerToReceiver( _attackerRoot, dmg ) )
-			return;
+			return false;
 
 		if ( !CombatAuthority.IsDamageVictimAlive( dmg ) )
-			return;
+			return false;
 
-		dmg.TakeDamage( _damage, _attackerCombat );
+		var creature = CombatAuthority.ResolveEntityVitalsForDamageReceiver( dmg ) is not null
+		               || CombatAuthority.ResolvePlayerVitalsForDamageReceiver( dmg ) is not null;
+		using ( PlaytestLog.Kind( "arrow" ) )
+			dmg.TakeDamage( _damage, _attackerCombat );
+		if ( creature && _burnDamage > 0f )
+			BurnEffect.HostApply( dmg, _burnDamage, _burnSeconds, _attackerCombat );
+		return creature;
+	}
+
+	/// <summary>Host: the flight is over - publish where and how it landed, hide the shaft, despawn shortly.</summary>
+	void HostLand( Vector3 at, bool hitCreature )
+	{
+		_spent = true;
+		_spentAge = 0f;
+		WorldPosition = at;
+		ImpactPosition = at;
+		ImpactKind = hitCreature ? ImpactHitCreature : ImpactMiss;
+		if ( Components.Get<ModelRenderer>( FindMode.EverythingInSelfAndDescendants ) is { } shaft )
+			shaft.Enabled = false;
 	}
 
 	void DestroySelf()
@@ -352,21 +417,19 @@ public sealed class ArrowProjectile : Component
 		if ( velocity.LengthSquared > 1e-6f )
 			go.WorldRotation = Rotation.LookAt( velocity.Normal, Vector3.Up );
 
-		var renderer = go.Components.Create<ModelRenderer>();
-		renderer.Model = LoadArrowModel();
-		renderer.Tint = new Color( 0.45f, 0.28f, 0.14f );
-
 		var unitsPerMeter = 40f;
 		var controller = attackerRoot?.Components.Get<PlayerController>();
 		if ( controller is not null && controller.IsValid() )
 			unitsPerMeter = Math.Max( 24f, controller.BodyHeight ) / 1.8f;
 
-		var length = 0.95f * unitsPerMeter;
-		var thickness = 0.045f * unitsPerMeter;
-		ApplyShaftScale( go, renderer.Model?.Bounds.Size ?? new Vector3( 1f ), length, thickness );
+		var length = ShaftLengthMeters * unitsPerMeter;
+		var thickness = ShaftThicknessMeters * unitsPerMeter;
+		AttachArrowVisual( go, ammoResourceId, length, thickness );
 
 		var proj = go.Components.Create<ArrowProjectile>();
+		proj.ShooterId = attackerRoot.IsValid() ? attackerRoot.Id : Guid.Empty;
 		var isHost = !Networking.IsActive || Networking.IsHost;
+		AmmoCatalog.TryGetAmmoBurn( ammoResourceId, out var burnDamage, out var burnSeconds );
 		proj.Configure(
 			attackerRoot,
 			attackerCombat,
@@ -374,7 +437,8 @@ public sealed class ArrowProjectile : Component
 			damage,
 			hostAuthority: isHost,
 			ammoResourceId: ammoResourceId,
-			shaftLength: length );
+			shaftLength: length,
+			burnDamage: burnDamage, burnSeconds: burnSeconds );
 		proj.Radius = Math.Max( 1.2f, thickness * 0.75f );
 
 		go.Enabled = true;
@@ -382,22 +446,43 @@ public sealed class ArrowProjectile : Component
 		return go;
 	}
 
-	static Model LoadArrowModel()
+	/// <summary>
+	/// The arrow's look, as a child of <paramref name="parent"/>: the ammo's item model (<c>item_world_models.json</c>,
+	/// built with its length along model +Y and the head at the +Y end) turned so the shaft runs along the parent's +X,
+	/// scaled to <paramref name="lengthUnits"/> and centred on the parent. No item model: the old brown cylinder.
+	/// The parent stays unscaled. Used by the flying arrow, the stuck pickup and the arrow nocked on the bow.
+	/// </summary>
+	internal static ModelRenderer AttachArrowVisual( GameObject parent, string ammoResourceId, float lengthUnits, float thicknessUnits )
 	{
-		var model = Model.Load( CylinderModelPath );
-		if ( model is not null )
-			return model;
+		var child = new GameObject( true, "arrow_visual" );
+		child.Parent = parent;
+		child.Tags.Add( "ignore" );
+		var renderer = child.Components.Create<ModelRenderer>();
 
-		return Model.Load( FallbackBoxModelPath );
-	}
+		Model model = null;
+		if ( ItemWorldModelCatalog.TryGetModelPath( ammoResourceId, out var path ) )
+			model = Model.Load( path );
 
-	static void ApplyShaftScale( GameObject go, Vector3 modelSize, float length, float thickness )
-	{
-		var modelX = Math.Max( 0.01f, modelSize.x );
-		var modelY = Math.Max( 0.01f, modelSize.y );
-		var modelZ = Math.Max( 0.01f, modelSize.z );
+		if ( model is { IsError: false } && model.Bounds.Size.y > 0.01f )
+		{
+			renderer.Model = model;
+			var s = lengthUnits / model.Bounds.Size.y;
+			child.LocalRotation = Rotation.FromYaw( -90f );
+			child.LocalScale = new Vector3( s );
+			child.LocalPosition = -(child.LocalRotation * (model.Bounds.Center * s));
+			return renderer;
+		}
 
-		// LookAt aims local +X along flight — length on X, thickness on Y/Z.
-		go.LocalScale = new Vector3( length / modelX, thickness / modelY, thickness / modelZ );
+		model = Model.Load( CylinderModelPath ) ?? Model.Load( FallbackBoxModelPath );
+		renderer.Model = model;
+		renderer.Tint = ShaftTint;
+		var size = model?.Bounds.Size ?? Vector3.One;
+		var scale = new Vector3(
+			lengthUnits / Math.Max( 0.01f, size.x ),
+			thicknessUnits / Math.Max( 0.01f, size.y ),
+			thicknessUnits / Math.Max( 0.01f, size.z ) );
+		child.LocalScale = scale;
+		child.LocalPosition = -((model?.Bounds.Center ?? Vector3.Zero) * scale);
+		return renderer;
 	}
 }

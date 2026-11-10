@@ -9,9 +9,34 @@
       "weaponClass": "oneHanded",
       "twoHanded": false,
       "hotbarEquipable": true,
-      "heldModel": "models/weapons/sword_reforged.vmdl",
+      "heldModel": "models/weapons/wooden_club/wooden_club.vmdl",
       "durabilityMax": 100,
       "statModifiers": { "armor": 0, "damage": 8, "speed": 0 }
+    },
+    {
+      "resourceId": "spear_flint",
+      "displayName": "Flint Spear",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": ["PrimaryMelee", "Block"],
+      "weaponClass": "spear",
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "heldModel": "models/weapons/spear_flint.vmdl",
+      "durabilityMax": 120,
+      "statModifiers": { "armor": 0, "damage": 10, "speed": 0 }
+    },
+    {
+      "resourceId": "bola_basic",
+      "displayName": "Bola",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": ["Bola"],
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "heldModel": "models/weapons/bola_basic.vmdl",
+      "durabilityMax": 0,
+      "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
     },
     {
       "resourceId": "build_hammer",
@@ -61,6 +86,36 @@
       "hotbarEquipable": true,
       "harvestToolType": "Axe",
       "harvestToolTier": 0,
+      "heldModel": "models/tools/stone_axe/stone_axe.vmdl",
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 4, "speed": 0 }
+    },
+    // Rumple's artist-pack sword and axe (Blender/scripts/import_artist_pack.py) are the Reforged weapons (Mark 2026-11-06).
+    // Stats mirror the wooden club / stone axe until the Reforged tier is tuned.
+    {
+      "resourceId": "sword_reforged",
+      "displayName": "Reforged Sword",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": ["PrimaryMelee", "Block"],
+      "weaponClass": "oneHanded",
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "heldModel": "models/weapons/sword_reforged.vmdl",
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 8, "speed": 0 }
+    },
+    {
+      "resourceId": "axe_reforged",
+      "displayName": "Reforged Axe",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": ["PrimaryMelee"],
+      "weaponClass": "oneHanded",
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "harvestToolType": "Axe",
+      "harvestToolTier": 0,
       "heldModel": "models/weapons/axe_reforged.vmdl",
       "durabilityMax": 100,
       "statModifiers": { "armor": 0, "damage": 4, "speed": 0 }
@@ -74,6 +129,7 @@
       "twoHanded": true,
       "hotbarEquipable": true,
       "ammoType": "bow",
+      "heldModel": "models/weapons/simple_bow_held/simple_bow_held.vmdl",
       "durabilityMax": 100,
       "statModifiers": { "armor": 0, "damage": 10, "speed": 0 }
     },
@@ -86,6 +142,17 @@
       "twoHanded": false,
       "hotbarEquipable": true,
       "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
+    },
+    {
+      "resourceId": "leed",
+      "displayName": "Leed",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": [],
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "heldModel": "models/tools/leed/leed.vmdl",
       "statModifiers": { "armor": 0, "damage": 0, "speed": 0 }
     },
     {
@@ -183,7 +250,7 @@
       "hotbarEquipable": true,
       "durabilityMax": 100,
       "durabilityDrainSecondsEquipped": 5,
-      "heldLight": { "anchor": "torchTip", "radiusMeters": 12, "color": "1,0.72,0.35,1" },
+      "heldLight": { "anchor": "torchTip", "radiusMeters": 20, "brightness": 2.2, "color": "1,0.72,0.35,1" },
       "statModifiers": { "armor": 0, "damage": 1, "speed": 0 }
     },
     {

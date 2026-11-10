@@ -35,6 +35,19 @@ public static class AmmoCatalog
 		return recipe is null ? 0f : Math.Max( 0f, recipe.Damage );
 	}
 
+	/// <summary>Ammo that sets a creature alight on hit: total burn damage over seconds (recipe burnDamage / burnSeconds).</summary>
+	public static bool TryGetAmmoBurn( string resourceId, out float damage, out float seconds )
+	{
+		damage = 0f;
+		seconds = 0f;
+		if ( string.IsNullOrWhiteSpace( resourceId ) || !CraftingRecipeCatalog.TryGetRecipeByOutput( resourceId, out var recipe ) || recipe is null || recipe.BurnDamage <= 0f )
+			return false;
+
+		damage = recipe.BurnDamage;
+		seconds = Math.Max( 0.5f, recipe.BurnSeconds );
+		return true;
+	}
+
 	public static bool TryGetWeaponAmmoType( string weaponResourceId, out string ammoType )
 	{
 		ammoType = null;
