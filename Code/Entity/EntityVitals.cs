@@ -38,8 +38,9 @@ public sealed class EntityVitals : Component
 	/// </summary>
 	public Func<Component, bool> LethalHitInterceptor { get; set; }
 
+	/// <summary>The banner name: the enemy type alone (Mark 2026-11-04: "drop the T1 from the Scav"), or the override.</summary>
 	public string GetDisplayName() =>
-		string.IsNullOrWhiteSpace( DisplayNameOverride ) ? $"{EnemyType} T{Math.Max( 1, Tier )}" : DisplayNameOverride;
+		string.IsNullOrWhiteSpace( DisplayNameOverride ) ? $"{EnemyType}" : DisplayNameOverride;
 
 	public string GetHealthLabel()
 	{
@@ -103,16 +104,19 @@ public sealed class EntityVitals : Component
 		if ( IsDead && LethalHitInterceptor is { } interceptor && interceptor( attacker ) )
 		{
 			// The interceptor refilled the pool (its ResetToFull raised OnVitalsChanged) — this hit landed but nobody died.
+			PlaytestLog.HostEntityDamaged( this, attacker, afterArmor );
 			OnDamaged?.Invoke( attacker );
 			return afterArmor;
 		}
 
+		PlaytestLog.HostEntityDamaged( this, attacker, afterArmor );
 		OnVitalsChanged?.Invoke();
 		OnDamaged?.Invoke( attacker );
 
 		if ( IsDead )
 		{
 			// Quest credit goes to the pawn that landed the killing blow (before OnDied destroys us).
+			PlaytestLog.HostEntityKilled( this, attacker );
 			PlayerQuests.HostReportKill( this, attacker );
 			OnDied?.Invoke();
 		}

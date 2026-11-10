@@ -12,6 +12,16 @@ public sealed class EntityLocomotion : Component
 	const float BodyTraceHeight = 48f;
 	/// <summary>Clearance kept between the body sphere and a wall after a clip — the next trace must start outside the solid.</summary>
 	const float ClipSurfaceGap = 1f;
+	/// <summary>
+	/// Closest two scav / animal bodies may stand (horizontal, units ≈ 0.65 m). Packmates are not walls to the body clip -
+	/// holding a body at its clip origin jammed packs into a knot (Mark 2026-11-05) - so a moving body is eased out
+	/// of a neighbour sideways instead, and the nav agent is left alone.
+	/// </summary>
+	const float MinBodySpacing = 26f;
+	/// <summary>Bodies further apart than this vertically (a floor above, a bird overhead) never push each other.</summary>
+	const float BodySpacingHeight = 64f;
+	/// <summary>Every enabled body, for the spacing pass (a static list, no scene scan; entities are host-simulated).</summary>
+	static readonly List<EntityLocomotion> _bodies = new();
 	const float EntityStandingHeight = 72f;
 	const float FallDamageHeightMultiplier = 5f;
 	const float FeetTraceLift = 8f;
@@ -40,11 +50,13 @@ public sealed class EntityLocomotion : Component
 	const float Gravity = 800f;
 	const float MaxFallSpeed = 1200f;
 	const float DefaultBodyTurnDegreesPerSecond = 303.75f;
-	const float AimReassessSeconds = 2.75f;
 	/// <summary>~40° — below this, speed blends down so corners can be taken without wall-rams.</summary>
 	const float DefaultMoveAlignMinDot = 0.76f;
-	/// <summary>Below this alignment, stop and turn (no reverse/side strafe).</summary>
-	const float MoveAlignStopDot = 0.25f;
+	/// <summary>
+	/// Speed fraction with the path straight behind; it eases up to full at <see cref="MoveAlignMinDot"/>. The body turns
+	/// while it keeps moving — it used to stop dead past ~75° and turn on the spot (tank steering, audit 2026-11-04).
+	/// </summary>
+	const float TurnWhileMovingSpeedFloor = 0.3f;
 
 	[Property] public NavMeshAgent Agent { get; set; }
 	[Property] public EntityVitals Vitals { get; set; }
@@ -57,13 +69,10 @@ public sealed class EntityLocomotion : Component
 	[Property, Group( "Aim" ), Title( "Body turn speed (degrees / second)" )]
 	public float TurnDegreesPerSecond { get; set; } = DefaultBodyTurnDegreesPerSecond;
 
-	[Property, Group( "Aim" ), Title( "Reassess look aim (seconds)" )]
-	public float AimReassessInterval { get; set; } = AimReassessSeconds;
-
-	[Property, Group( "Move" ), Title( "Forward-only run (turn then go)" ), Description( "Stop and rotate to face the path, then run straight. No sideways strafe." )]
+	[Property, Group( "Move" ), Title( "Face the path (turn while moving)" ), Description( "The body turns to face the path and slows while it is far off it. No sideways strafe outside melee." )]
 	public bool ForwardOnlyNavigation { get; set; } = true;
 
-	[Property, Group( "Move" ), Title( "Run align min (dot)" ), Range( 0.5f, 0.99f ), Step( 0.01f ), Description( "Full run speed above this facing-vs-path dot. Below it, creep while turning so corners work." )]
+	[Property, Group( "Move" ), Title( "Run align min (dot)" ), Range( 0.5f, 0.99f ), Step( 0.01f ), Description( "Full run speed above this facing-vs-path dot. Below it, slower while turning so corners work." )]
 	public float MoveAlignMinDot { get; set; } = DefaultMoveAlignMinDot;
 
 	Vector3 _lastPosition;
@@ -100,6 +109,8 @@ public sealed class EntityLocomotion : Component
 	bool _hasFrozenAim;
 	bool _preferAimOverVelocity;
 	bool _brainOwnsFacing;
+	/// <summary>Attacking: the combat cycle owns yaw, the agent may move the feet any direction (step in, hold a ring slot).</summary>
+	bool _combatStrafe;
 	bool _hasTravelHint;
 	Vector3 _travelHintWorld;
 	Vector3 _lastWishDir;
@@ -205,7 +216,6 @@ public sealed class EntityLocomotion : Component
 	float _fallSpeed;
 	float _fallStartZ;
 	float _intendedMaxSpeed = 220f;
-	double _nextAimReassessAt;
 	double _nextClipNotifyAt;
 
 	public bool IsAirborne => _isFalling;
@@ -253,13 +263,10 @@ public sealed class EntityLocomotion : Component
 			return;
 		}
 
-		// First acquire stores aim point; body turns toward it at TurnDegreesPerSecond.
-		if ( !_hasFrozenAim )
-		{
-			_frozenAimWorld = target.WorldPosition;
-			_hasFrozenAim = true;
-			_nextAimReassessAt = Time.NowDouble + Math.Max( 0.5f, AimReassessInterval );
-		}
+		// The live position, every call — the aim used to be re-read only every 2.75 s, so a turning body faced where the
+		// player had been. The body still turns toward it at TurnDegreesPerSecond.
+		_frozenAimWorld = target.WorldPosition;
+		_hasFrozenAim = true;
 	}
 
 	/// <summary>
@@ -271,11 +278,13 @@ public sealed class EntityLocomotion : Component
 	/// <summary>When true, locomotion does not write WorldRotation — brain turns the body.</summary>
 	public void SetBrainOwnsFacing( bool owns ) => _brainOwnsFacing = owns;
 
+	/// <summary>Brain: attacking — <see cref="EntityCombat"/> faces the target and the path gate leaves facing and speed alone.</summary>
+	public void SetCombatStrafe( bool strafe ) => _combatStrafe = strafe;
+
 	public void SetFrozenAimWorld( Vector3 worldPos )
 	{
 		_frozenAimWorld = worldPos;
 		_hasFrozenAim = true;
-		_nextAimReassessAt = Time.NowDouble + Math.Max( 0.5f, AimReassessInterval );
 	}
 
 	/// <summary>Wander/chase goal so forward-only can face something when WishVelocity is dead.</summary>
@@ -312,7 +321,7 @@ public sealed class EntityLocomotion : Component
 		if ( Agent is null || !Agent.IsValid() )
 			return;
 
-		if ( !ForwardOnlyNavigation || !Agent.IsNavigating
+		if ( !ForwardOnlyNavigation || !Agent.IsNavigating || _combatStrafe
 		     || Components.Get<EntityCombat>() is { IsMovementLocked: true } )
 		{
 			Agent.MaxSpeed = _intendedMaxSpeed;
@@ -333,22 +342,17 @@ public sealed class EntityLocomotion : Component
 		}
 
 		var align = Vector3.Dot( facing.Normal, desire );
-		if ( align < MoveAlignStopDot )
-		{
-			Agent.MaxSpeed = 0f;
-			return;
-		}
-
-		var fullDot = Math.Clamp( MoveAlignMinDot, MoveAlignStopDot + 0.05f, 0.99f );
+		var fullDot = Math.Clamp( MoveAlignMinDot, 0.5f, 0.99f );
 		if ( align >= fullDot )
 		{
 			Agent.MaxSpeed = _intendedMaxSpeed;
 			return;
 		}
 
-		// Creep while turning into the path — lets them arc around cubes instead of locking into a wall.
-		var t = (align - MoveAlignStopDot) / (fullDot - MoveAlignStopDot);
-		Agent.MaxSpeed = _intendedMaxSpeed * Math.Clamp( 0.12f + (0.55f * t), 0.12f, 0.7f );
+		// Turn while moving: slow with the path behind, easing to full speed as the body comes round — arcs round corners
+		// and cubes instead of stopping dead and turning on the spot.
+		var t = Math.Clamp( (align + 1f) / (fullDot + 1f), 0f, 1f );
+		Agent.MaxSpeed = _intendedMaxSpeed * (TurnWhileMovingSpeedFloor + (1f - TurnWhileMovingSpeedFloor) * t * t);
 	}
 
 	public static Vector3 GetNavAnchorWorld( GameObject go ) =>
@@ -389,6 +393,10 @@ public sealed class EntityLocomotion : Component
 		_fallStartZ = _lastPosition.z;
 	}
 
+	protected override void OnEnabled() => _bodies.Add( this );
+
+	protected override void OnDisabled() => _bodies.Remove( this );
+
 	protected override void OnFixedUpdate()
 	{
 		if ( !Active || !GameObject.IsValid() || GameObject.IsProxy )
@@ -424,19 +432,30 @@ public sealed class EntityLocomotion : Component
 		// that very step, then the feet glue: the glue resets the clip origin every frame, so a step
 		// taken here and clipped only in the next fixed tick was never seen — scavs walked clean
 		// through walls (Mark, 2026-09-23). Same trap TickManualStepToward documents.
+		// Off screen and far from every viewer, the render-rate clip + glue (2-4 traces) run every
+		// OffscreenStepFrames-th frame: the fixed tick still clips and checks support, and the glue's ease
+		// gets the skipped time, so the body is where it would have been — nobody sees the in-between Z.
+		var skipVisualStep = !_isFalling && SkipOffscreenStep();
+
 		if ( !_isFalling )
 		{
 			SyncAgentAttachment();
 			TickRebakeCoast();
 			if ( !_coasting )
 				FollowAgent();
-			ClipMovementAgainstSolids();
+			if ( !skipVisualStep )
+				ClipMovementAgainstSolids();
 		}
 
 		// Stick feet before measuring velocity so Z corrections don't pulse the walk anim.
 		// Runs even without a skinned body — placeholder animals still need terrain Z.
 		if ( !_isFalling )
-			GlueFeetToTerrain( force: false );
+		{
+			if ( skipVisualStep )
+				_glueDtCarry += Time.Delta;
+			else
+				GlueFeetToTerrain( force: false );
+		}
 
 		EnsureAnimHelper();
 		if ( AnimHelper is null )
@@ -461,20 +480,61 @@ public sealed class EntityLocomotion : Component
 			: !_isFalling && Agent is not null && Agent.IsValid()
 				? Agent.WishVelocity.WithZ( 0f )
 				: velocity.WithZ( 0f );
-		var facingTravel = IsFacingTravelDirection( out _ );
-		// Turn-in-place: don't feed sideways wish into the citizen anim.
-		if ( ForwardOnlyNavigation && !facingTravel )
-		{
-			animWish = Vector3.Zero;
-			velocity = Vector3.Zero;
-		}
-
 		AnimHelper.WithVelocity( velocity );
 		AnimHelper.WithWishVelocity( animWish );
 		AnimHelper.IsGrounded = !_isFalling;
 		AnimHelper.LookAtEnabled = false;
 
 		UpdateBodyFacing( velocity );
+	}
+
+	// ---- off-screen throttle (2026-11-04: 53 of 59 bodies were off screen, 70-735 m away; their per-frame
+	// clip + glue traces were most of EntityLocomotion's ~0.8 ms)
+
+	const int OffscreenStepFrames = 4;
+	/// <summary>Within this of the camera or any player pawn the body always steps every frame.</summary>
+	const float OffscreenNearMeters = 40f;
+	/// <summary>How often the on-screen test is redone (staggered per entity).</summary>
+	const float OffscreenRecheckSeconds = 0.1f;
+	/// <summary>Bounds margin for the frustum test: a camera turn between two rechecks must not catch a stale body.</summary>
+	const float OffscreenBoundsMarginUnits = 120f;
+
+	bool _offscreenThrottled;
+	float _offscreenCheckAt;
+	int _offscreenFrame;
+	float _glueDtCarry;
+
+	bool SkipOffscreenStep()
+	{
+		if ( RealTime.Now >= _offscreenCheckAt )
+		{
+			// Stagger the rechecks so 40 entities do not all test on the same frame.
+			_offscreenCheckAt = RealTime.Now + OffscreenRecheckSeconds * (0.75f + 0.5f * Random.Shared.Float());
+			_offscreenThrottled = IsOffscreenAndFar();
+			if ( !_offscreenThrottled )
+				_offscreenFrame = 0;
+		}
+
+		if ( !_offscreenThrottled )
+			return false;
+		return (++_offscreenFrame % OffscreenStepFrames) != 0;
+	}
+
+	bool IsOffscreenAndFar()
+	{
+		var cam = Scene.Camera;
+		if ( cam is null || !cam.IsValid() )
+			return false;   // no view (dedicated host): nothing to judge by, step normally
+
+		var here = GameObject.WorldPosition;
+		if ( EntityChunkMemory.AnyViewerWithin( Scene, here, OffscreenNearMeters )
+		     || (cam.WorldPosition - here).LengthSquared <= TerrainWorldUnits.MetersToEngine( OffscreenNearMeters ) * TerrainWorldUnits.MetersToEngine( OffscreenNearMeters ) )
+			return false;
+
+		var bounds = Body is not null && Body.IsValid() ? Body.Bounds : BBox.FromPositionAndSize( here + Vector3.Up * 36f, 96f );
+		bounds = new BBox( bounds.Mins - OffscreenBoundsMarginUnits, bounds.Maxs + OffscreenBoundsMarginUnits );
+		var frustum = cam.GetFrustum( new Rect( 0f, 0f, Screen.Width, Screen.Height ) );
+		return !frustum.IsInside( bounds, true );
 	}
 
 	void EnsureAnimHelper()
@@ -500,7 +560,7 @@ public sealed class EntityLocomotion : Component
 	void UpdateBodyFacing( Vector3 velocity )
 	{
 		// Attack cycle owns yaw — locomotion must not fight it.
-		if ( Components.Get<EntityCombat>() is { IsMovementLocked: true } )
+		if ( _combatStrafe || Components.Get<EntityCombat>() is { IsMovementLocked: true } )
 			return;
 
 		// Forward-only gate already rotates toward the path each FixedUpdate.
@@ -537,21 +597,15 @@ public sealed class EntityLocomotion : Component
 			return;
 		}
 
-		if ( !_hasFrozenAim || Time.NowDouble >= _nextAimReassessAt )
-		{
-			_frozenAimWorld = _lookTarget.WorldPosition;
-			_hasFrozenAim = true;
-			_nextAimReassessAt = Time.NowDouble + Math.Max( 0.5f, AimReassessInterval );
-		}
+		_frozenAimWorld = _lookTarget.WorldPosition;
+		_hasFrozenAim = true;
 
 		var toLiveAim = (_frozenAimWorld - GameObject.WorldPosition).WithZ( 0 );
 		if ( toLiveAim.LengthSquared > 1e-4f )
 			SmoothFaceBodyToward( toLiveAim.Normal, TurnDegreesPerSecond );
 	}
 
-	/// <summary>
-	/// Stop until facing the nav wish, then run straight. Prevents run-then-turn / strafe look.
-	/// </summary>
+	/// <summary>Turn toward the nav wish while moving (slower the further off it). Prevents the strafe look outside melee.</summary>
 	void TickForwardOnlyMoveGate()
 	{
 		if ( !ForwardOnlyNavigation )
@@ -561,7 +615,7 @@ public sealed class EntityLocomotion : Component
 		if ( Agent is null || !Agent.IsValid() || !Agent.IsNavigating )
 			return;
 
-		if ( Components.Get<EntityCombat>() is { IsMovementLocked: true } )
+		if ( _combatStrafe || Components.Get<EntityCombat>() is { IsMovementLocked: true } )
 			return;
 
 		if ( !TryGetTravelDirection( out var desire ) )
@@ -573,25 +627,6 @@ public sealed class EntityLocomotion : Component
 
 		SmoothFaceBodyToward( desire, TurnDegreesPerSecond );
 		ApplyForwardOnlySpeedNow();
-	}
-
-	bool IsFacingTravelDirection( out Vector3 desire )
-	{
-		desire = default;
-		if ( !ForwardOnlyNavigation )
-			return true;
-
-		if ( Agent is null || !Agent.IsValid() || !Agent.IsNavigating )
-			return true;
-
-		if ( !TryGetTravelDirection( out desire ) )
-			return true;
-
-		var facing = GameObject.WorldRotation.Forward.WithZ( 0f );
-		if ( facing.LengthSquared < 1e-6f )
-			return false;
-
-		return Vector3.Dot( facing.Normal, desire ) >= Math.Clamp( MoveAlignMinDot, 0.5f, 0.99f );
 	}
 
 	bool TryGetTravelDirection( out Vector3 desire )
@@ -672,7 +707,7 @@ public sealed class EntityLocomotion : Component
 		if ( !tr.Hit || !tr.GameObject.IsValid() )
 			return false;
 
-		if ( IsPlayerHierarchy( tr.GameObject ) )
+		if ( IsPawnOrEntityHierarchy( tr.GameObject ) )
 			return false;
 
 		// A stair riser ahead is the way up, not a wall to slide along.
@@ -715,11 +750,13 @@ public sealed class EntityLocomotion : Component
 		if ( !TryResolveFeetPosition( pos, out var feet ) )
 		{
 			_clipFromPosition = pos;
+			_glueDtCarry = 0f;
 			return;
 		}
 
 		var targetZ = feet.z;
-		var dt = Math.Max( Time.Delta, 1e-4f );
+		var dt = Math.Max( Time.Delta + _glueDtCarry, 1e-4f );   // + frames the off-screen throttle skipped
+		_glueDtCarry = 0f;
 
 		if ( !_hasSmoothedGroundZ )
 		{
@@ -1109,8 +1146,10 @@ public sealed class EntityLocomotion : Component
 		if ( _cachedTerrain is null )
 			return false;
 
+		// The loaded chunk's meshed height grid (the surface that is drawn and collided with, ~0.1 us), not the
+		// generator sample (~18 us, the whole height pipeline): 41 animals asking two or three times a frame cost ~1 ms.
 		var meters = TerrainWorldUnits.EngineToMeters( worldPos );
-		if ( !_cachedTerrain.TrySampleGroundMeters( meters.x, meters.y, out var groundZMeters ) )
+		if ( !_cachedTerrain.TrySampleMeshedGroundMeters( meters.x, meters.y, out var groundZMeters ) )
 			return false;
 
 		groundZEngine = TerrainWorldUnits.MetersToEngine( groundZMeters );
@@ -1157,6 +1196,9 @@ public sealed class EntityLocomotion : Component
 			return;
 		}
 
+		// Ease out of any packmate this step walked into, before the wall sweep checks the result.
+		current = KeepClearOfOtherBodies( current, horizontalDelta );
+
 		var from = _clipFromPosition.WithZ( current.z ) + Vector3.Up * BodyTraceHeight;
 		var to = current + Vector3.Up * BodyTraceHeight;
 		var trace = Scene.Trace.Ray( from, to )
@@ -1185,8 +1227,11 @@ public sealed class EntityLocomotion : Component
 			return;
 		}
 
-		// Never shove off players — that caused mutual scoot / launches.
-		if ( IsPlayerHierarchy( trace.GameObject ) )
+		// Never shove off players — that caused mutual scoot / launches. Nor off another scav / animal: two
+		// bodies that touched held each other at their clip origins and pulled each other's agents back, so a
+		// pack running at a player jammed into a knot (Mark 2026-11-05). The nav crowd's agent separation
+		// spaces them; the body sweep is for walls only.
+		if ( IsPawnOrEntityHierarchy( trace.GameObject ) )
 		{
 			_clipFromPosition = current;
 			return;
@@ -1212,7 +1257,7 @@ public sealed class EntityLocomotion : Component
 				.IgnoreGameObjectHierarchy( GameObject )
 				.Run();
 			if ( thin.Hit && !thin.StartedSolid && thin.Normal.LengthSquared > 1e-4f
-			     && thin.GameObject.IsValid() && !IsPlayerHierarchy( thin.GameObject ) )
+			     && thin.GameObject.IsValid() && !IsPawnOrEntityHierarchy( thin.GameObject ) )
 			{
 				trace = thin;
 			}
@@ -1250,6 +1295,40 @@ public sealed class EntityLocomotion : Component
 		var stop = embedded ? _clipFromPosition.WithZ( current.z ) : trace.EndPosition - Vector3.Up * BodyTraceHeight;
 		var slid = (stop + wallNormal * ClipSurfaceGap).WithZ( current.z );
 		ApplyClippedPosition( slid, trace.GameObject );
+	}
+
+	/// <summary>
+	/// A body that moved into another scav / animal is set back out to <see cref="MinBodySpacing"/> along the line between
+	/// them (sideways for a head-on overlap), so a pack spreads round each other instead of stacking or freezing. Only the
+	/// mover is moved, only on a step it took, and the agent is untouched - its crowd separation steers the path.
+	/// </summary>
+	Vector3 KeepClearOfOtherBodies( Vector3 current, Vector3 step )
+	{
+		var pushed = current;
+		foreach ( var other in _bodies )
+		{
+			if ( other == this || !other.IsValid() || !other.Active )
+				continue;
+
+			var otherPos = other.GameObject.WorldPosition;
+			if ( MathF.Abs( otherPos.z - pushed.z ) > BodySpacingHeight )
+				continue;
+
+			var away = (pushed - otherPos).WithZ( 0f );
+			var dist = away.Length;
+			if ( dist >= MinBodySpacing )
+				continue;
+
+			// Dead centre: slip to the side of the way we were walking.
+			away = dist > 0.5f ? away / dist : Vector3.Cross( Vector3.Up, step.Normal );
+			pushed = (otherPos + away * MinBodySpacing).WithZ( pushed.z );
+		}
+
+		if ( pushed == current )
+			return current;
+
+		GameObject.WorldPosition = pushed;
+		return pushed;
 	}
 
 	/// <summary>Embedded with no face to slide on — stay at the last good spot rather than tunnel.</summary>
@@ -1291,13 +1370,16 @@ public sealed class EntityLocomotion : Component
 		return false;
 	}
 
-	static bool IsPlayerHierarchy( GameObject hit )
+	/// <summary>A player, or another scav / animal body — something that moves, never a wall to clip or steer along.</summary>
+	static bool IsPawnOrEntityHierarchy( GameObject hit )
 	{
 		for ( var current = hit; current.IsValid(); current = current.Parent )
 		{
 			if ( current.Components.Get<PlayerController>() is not null )
 				return true;
 			if ( current.Components.Get<PlayerVitals>() is not null )
+				return true;
+			if ( current.Components.Get<EntityLocomotion>() is not null )
 				return true;
 		}
 

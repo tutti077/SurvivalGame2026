@@ -16,6 +16,20 @@
     "OwnerTransfer": 1,
     "Components": [
       {
+        "__type": "Survival.EnemyHealthBar",
+        "__guid": "de3d240b-3a74-4775-997a-4001c6dfed26",
+        "__enabled": true,
+        "Flags": 0,
+        "Anchor": null,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "Vitals": null
+      },
+      {
         "__type": "Sandbox.Rigidbody",
         "__guid": "a1f00001-0001-4001-8001-000000000001",
         "__enabled": true,
@@ -113,7 +127,6 @@
           "go": "c38d434a-c528-4a1d-8885-6b4f3e0cfded",
           "component_type": "NavMeshAgent"
         },
-        "AimReassessInterval": 2.75,
         "AnimHelper": null,
         "Body": null,
         "FallDamageMinHeight": 360,
@@ -168,6 +181,24 @@
     ],
     "Children": [
       {
+        "__guid": "b9309bc1-62ad-49ea-83d1-936dc09a2a33",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "HealthBarAnchor",
+        "Position": "0,0,30",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "",
+        "Enabled": true,
+        "NetworkMode": 1,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [],
+        "Children": []
+      },
+      {
         "__guid": "a1f00002-0002-4002-8002-000000000001",
         "__version": 2,
         "Flags": 0,
@@ -184,23 +215,35 @@
         "OwnerTransfer": 1,
         "Components": [
           {
-            "__type": "Sandbox.ModelRenderer",
+            "__type": "Sandbox.SkinnedModelRenderer",
             "__guid": "c8bdf57c-bfc9-4f8a-89f2-580e0e2a1298",
             "__enabled": true,
             "Flags": 0,
+            "AnimationGraph": null,
             "BodyGroups": 18446744073709551615,
+            "BoneMergeTarget": null,
             "CreateAttachments": false,
+            "CreateBoneObjects": false,
             "LodOverride": null,
             "MaterialGroup": null,
             "MaterialOverride": null,
             "Materials": null,
-            "Model": "models/entities/fox.vmdl",
+            "Model": "models/entities/fox_v2.vmdl",
+            "Morphs": {},
             "OnComponentDestroy": null,
             "OnComponentDisabled": null,
             "OnComponentEnabled": null,
             "OnComponentFixedUpdate": null,
             "OnComponentStart": null,
             "OnComponentUpdate": null,
+            "Parameters": {
+              "bools": {},
+              "ints": {},
+              "floats": {},
+              "vectors": {},
+              "rotations": {}
+            },
+            "PlaybackRate": 1,
             "RenderOptions": {
               "GameLayer": true,
               "OverlayLayer": false,
@@ -208,7 +251,13 @@
               "AfterUILayer": false
             },
             "RenderType": "On",
-            "Tint": "0.9,0.42,0.13,1"
+            "Sequence": {
+              "Name": "idle",
+              "Looping": true,
+              "Blending": false
+            },
+            "Tint": "0.9,0.42,0.13,1",
+            "UseAnimGraph": false
           }
         ],
         "Children": []

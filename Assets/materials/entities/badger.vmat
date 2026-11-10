@@ -1,0 +1,9 @@
+// Badger (Blender/scripts/create_badger.py): fur-stroke texture at 256 texels per metre, point filtered, faceted.
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.950"
+	PixelFlatShading "1.000"
+	TextureColor "materials/entities/badger.png"
+}

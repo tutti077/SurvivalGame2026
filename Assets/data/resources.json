@@ -4,7 +4,7 @@
       "id": "resource_stone",
       "displayName": "Stone",
       "icon": "ui/items/resource_stone.jpg",
-      "maxStack": 20,
+      "maxStack": 50,
       "fallbackColor": "0.58,0.5,0.42,1"
     },
     {
@@ -19,14 +19,14 @@
       "id": "resource_plantFiber",
       "displayName": "Plant Fiber",
       "icon": "ui/items/resource_plantFiber.png",
-      "maxStack": 20,
+      "maxStack": 50,
       "fallbackColor": "0.28,0.48,0.22,1"
     },
     {
       "id": "resource_woodBasic",
       "displayName": "Wood",
       "icon": "ui/items/resource_woodBasic.png",
-      "maxStack": 20,
+      "maxStack": 50,
       "fallbackColor": "0.45,0.32,0.18,1"
     },
     {
@@ -339,35 +339,35 @@
       "id": "resource_resin",
       "displayName": "Resin",
       "icon": "ui/items/resource_resin.png",
-      "maxStack": 20,
+      "maxStack": 50,
       "fallbackColor": "0.83,0.39,0.13,1"
     },
     {
       "id": "resource_flint",
       "displayName": "Flint",
       "icon": "ui/items/resource_flint.png",
-      "maxStack": 20,
+      "maxStack": 50,
       "fallbackColor": "0.74,0.74,0.74,1"
     },
     {
       "id": "resource_femur",
       "displayName": "Bone",
       "icon": "ui/items/resource_femur.png",
-      "maxStack": 20,
+      "maxStack": 50,
       "fallbackColor": "0.9,0.9,0.9,1"
     },
     {
       "id": "resource_hide",
       "displayName": "Deer Hide",
       "icon": "ui/items/resource_hide.png",
-      "maxStack": 20,
+      "maxStack": 50,
       "fallbackColor": "0.5,0.04,0.04,1"
     },
     {
       "id": "resource_animal_fat",
       "displayName": "Animal Fat",
       "icon": "ui/items/resource_animalFat.png",
-      "maxStack": 20,
+      "maxStack": 50,
       "fallbackColor": "0.9,0.9,0.9,1"
     },
     {
@@ -381,7 +381,7 @@
       "id": "resource_feathers",
       "displayName": "Feathers",
       "icon": "ui/items/resource_feathers.png",
-      "maxStack": 20,
+      "maxStack": 50,
       "fallbackColor": "0.95,0.87,0.87,1"
     },
     {
@@ -465,7 +465,7 @@
       "id": "resource_foxPelt",
       "displayName": "Fox Pelt",
       "icon": "ui/items/resource_foxPelt.png",
-      "maxStack": 20,
+      "maxStack": 50,
       "fallbackColor": "0.95,0.87,0.87,1"
     },
     {
@@ -753,6 +753,13 @@
       "icon": "ui/items/resource_vultureTalons.png",
       "maxStack": 20,
       "fallbackColor": "0.28,0.22,0.19,1"
+    },
+    {
+      "id": "resource_badgerClaws",
+      "displayName": "Badger Claws",
+      "icon": "ui/items/resource_badgerClaws.png",
+      "maxStack": 50,
+      "fallbackColor": "0.84,0.79,0.67,1"
     },
     {
       "id": "resource_dunewyrmScales",

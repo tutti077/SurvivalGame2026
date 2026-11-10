@@ -31,7 +31,15 @@
       "attackCooldownSeconds": 1.2,
       "attacksBeforeFlee": 1,
       "alertSeconds": 1,
-      "trapSize": "small"
+      "trapSize": "small",
+      "tameFoodResourceId": "rawmeat_whitetail",
+      "tameOfferRangeMeters": 12,
+      "tameEatRangeMeters": 1.4,
+      "tameEatSeconds": 2,
+      "loot": [
+        { "resourceId": "resource_foxPelt", "min": 2, "max": 2 },
+        { "resourceId": "rawmeat_fox", "min": 2, "max": 2 }
+      ]
     },
     "coyote": {
       "threatResponse": "harass",
@@ -77,14 +85,20 @@
       "grazeMaxSeconds": 14,
       "grazeChance": 0.7,
       "wanderRadiusMeters": 18,
-      "sightRangeMeters": 35,
-      "sightFovDegrees": 270,
+      "sightRangeMeters": 60,
+      "sightFovDegrees": 300,
       "eyeHeightMeters": 1.1,
-      "hearRangeMeters": 30,
-      "sneakHearFraction": 0.25,
+      "hearRangeMeters": 50,
+      "sneakHearFraction": 0.35,
       "fleeDistanceMeters": 90,
-      "calmRangeMeters": 55,
-      "trapSize": "small"
+      "calmRangeMeters": 75,
+      "trapSize": "small",
+      "fleeZigzagLegMeters": 5,
+      "fleeZigzagTurnDegrees": 45,
+      "loot": [
+        { "resourceId": "resource_hide", "min": 1, "max": 1 },
+        { "resourceId": "rawmeat_whitetail", "min": 2, "max": 3 }
+      ]
     },
     "jackrabbit": {
       "threatResponse": "flee",
@@ -278,25 +292,69 @@
       "reengageRangeMeters": 12,
       "alertSeconds": 1
     },
-    "jay": {
-      "threatResponse": "flee",
-      "maxHealth": 8,
-      "walkSpeedMps": 0.8,
+    "badger": {
+      "threatResponse": "predator",
+      "chargeOnAlert": true,
+      "lastStand": true,
+      "maxHealth": 70,
+      "walkSpeedMps": 1.1,
       "runSpeedMps": 6.0,
-      "idleMinSeconds": 1,
-      "idleMaxSeconds": 3,
-      "grazeMinSeconds": 3,
-      "grazeMaxSeconds": 8,
+      "sneakSpeedMps": 1.1,
+      "idleMinSeconds": 1.5,
+      "idleMaxSeconds": 4,
+      "grazeMinSeconds": 5,
+      "grazeMaxSeconds": 11,
       "grazeChance": 0.7,
       "wanderRadiusMeters": 12,
-      "sightRangeMeters": 22,
+      "sightRangeMeters": 25,
+      "sightFovDegrees": 160,
+      "eyeHeightMeters": 0.3,
+      "hearRangeMeters": 22,
+      "sneakHearFraction": 0.3,
+      "fleeDistanceMeters": 40,
+      "calmRangeMeters": 35,
+      "trackStartRangeMeters": 25,
+      "trackRangeMeters": 40,
+      "lungeRangeMeters": 40,
+      "attackRangeMeters": 1.4,
+      "attackDamage": 12,
+      "attackWindupSeconds": 0.3,
+      "attackCooldownSeconds": 1.0,
+      "fleeHealthFraction": 0.25,
+      "reengageRangeMeters": 0,
+      "alertSeconds": 0.5,
+      "trapSize": "small",
+      "loot": [
+        { "resourceId": "resource_badgerClaws", "min": 1, "max": 2 }
+      ]
+    },
+    "jay": {
+      "threatResponse": "flyaway",
+      "maxHealth": 8,
+      "walkSpeedMps": 0.8,
+      "runSpeedMps": 9.0,
+      "idleMinSeconds": 2,
+      "idleMaxSeconds": 6,
+      "grazeMinSeconds": 4,
+      "grazeMaxSeconds": 10,
+      "grazeChance": 0.75,
+      "wanderRadiusMeters": 6,
+      "sightRangeMeters": 18,
       "sightFovDegrees": 300,
       "eyeHeightMeters": 0.3,
-      "hearRangeMeters": 18,
-      "sneakHearFraction": 0.25,
+      "hearRangeMeters": 14,
+      "sneakHearFraction": 0.3,
       "fleeDistanceMeters": 50,
       "calmRangeMeters": 35,
-      "trapSize": "none"
+      "trapSize": "none",
+      "flyAwaySeconds": 7,
+      "flyClimbMps": 3.5,
+      "perchMinSeconds": 40,
+      "perchMaxSeconds": 150,
+      "loot": [
+        { "resourceId": "resource_feathers", "min": 1, "max": 1 },
+        { "resourceId": "rawmeat_bird", "min": 1, "max": 2 }
+      ]
     },
     "raven": {
       "threatResponse": "flee",

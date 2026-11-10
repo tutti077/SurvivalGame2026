@@ -1,0 +1,9 @@
+// Red fox (Blender/scripts/create_fox_texture.py): 256 px point-filtered texture, faceted.
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.950"
+	PixelFlatShading "1.000"
+	TextureColor "materials/entities/fox_v2.png"
+}

@@ -79,6 +79,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 	StatusEffectsHud _statusEffectsHud;
 	BossHealthBarHud _bossHealthBar;
+	OverheadNameplateHud _nameplates;
 	BaseRaidHud _baseRaidHud;
 	VehicleHud _vehicleHud;
 	Panel _foodSlotsRoot;
@@ -250,6 +251,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		using ( Prof( "supportReadout" ) ) _buildSupportReadout?.Tick();
 		using ( Prof( "fishing" ) ) _fishingHud?.Tick( _fishing );
 		using ( Prof( "minimapInput" ) ) _minimapHud?.TickInput();
+		using ( Prof( "podBlackout" ) ) TickPodBlackout();
 
 		// Passive readouts (Mark: HUD was the biggest player-mode cost; "static unless the player does
 		// something"): refreshed at PassiveHudTickSeconds instead of every frame. Anything the player
@@ -272,6 +274,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		     || _inventoryInteraction?.FocusedDoor is not null
 		     || _inventoryInteraction?.FocusedBlueprint is not null
 		     || _inventoryInteraction?.FocusedTrap is not null
+		     || _inventoryInteraction?.FocusedAnimal is not null
 	     || _inventoryInteraction?.FocusedLever is not null
 		     || _inventoryInteraction?.FocusedBed is not null
 		     || _inventoryInteraction?.FocusedVehicle is not null
@@ -310,6 +313,14 @@ public sealed class PlayerScreenHud : PanelComponent
 		}
 	}
 
+	/// <summary>After every camera moved this frame: overhead nameplates follow their projected head points without lag.</summary>
+	protected override void OnPreRender()
+	{
+		base.OnPreRender();
+		using ( Prof( "nameplates" ) )
+			_nameplates?.Tick( Scene, _vitals?.GameObject, _menuController is { IsMenuOpen: true } );
+	}
+
 	protected override void OnDestroy()
 	{
 		if ( _vitals is not null )
@@ -325,6 +336,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedDoorChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedBlueprintChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTrapChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedAnimalChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedLeverChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedVehicleChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTimeTrialStandChanged -= OnInteractionPromptChanged;
@@ -333,6 +345,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.ArenaMenuOpenChanged -= OnArenaMenuOpenChanged;
 			_inventoryInteraction.AugmentStationChanged -= OnAugmentStationChanged;
 			_inventoryInteraction.FocusedWorkbenchChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedDryingRackChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.WorkbenchChanged -= OnWorkbenchChanged;
 		}
 		if ( _handHarvest is not null )
@@ -359,6 +372,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		_statusEffectsHud = null;
 		_bossHealthBar?.Dispose();
 		_bossHealthBar = null;
+		_nameplates?.Dispose();
+		_nameplates = null;
 		_baseRaidHud?.Dispose();
 		_baseRaidHud = null;
 		_vehicleHud?.Dispose();
@@ -421,6 +436,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		BuildPickupNotifications( Panel );
 		BuildMinimap( Panel );
 		BuildGameMenu( Panel );
+		BuildPodBlackout( Panel );
 		BuildHotbar( Panel );
 		BuildBuildMenu( Panel );
 		BuildGrappleControlPrompt( Panel );
@@ -644,6 +660,9 @@ public sealed class PlayerScreenHud : PanelComponent
 	{
 		_bossHealthBar = new BossHealthBarHud();
 		_bossHealthBar.Build( root );
+		// Overhead entity / player nameplates share the root (screen space, under every other HUD element built later).
+		_nameplates = new OverheadNameplateHud();
+		_nameplates.Build( root );
 	}
 
 	/// <summary>Base raid banner + status line (<see cref="BaseRaidHud"/>); hidden until a raid starts.</summary>
@@ -701,6 +720,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedDoorChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedBlueprintChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTrapChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedAnimalChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedLeverChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedBedChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedVehicleChanged += OnInteractionPromptChanged;
@@ -1073,6 +1093,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		_menuRoot.Style.Set( "bottom", "0" );
 		_menuRoot.Style.Set( "pointer-events", "none" );
 		_menuRoot.Style.Set( "display", "none" );
+		// Dim + vignette behind every menu page so the panels sit on a stage, not over raw gameplay.
+		UiStyle.Backdrop( _menuRoot );
 
 		_menuMapRoot = CreateMapCenterAnchor( _menuRoot );
 		_menuAugmentRoot = CreateMapCenterAnchor( _menuRoot );
@@ -1093,8 +1115,6 @@ public sealed class PlayerScreenHud : PanelComponent
 		_sections.Add( _skillsSection );
 		_skillsSection.Build( _menuSkillsCenterRoot );
 
-		// Dim + vignette behind every menu page so the panels sit on a stage, not over raw gameplay.
-		UiStyle.Backdrop( _menuRoot );
 		_mapSection = new MapMenuSection( _inventoryInteraction );
 		_sections.Add( _mapSection );
 		_mapSection.Build( _menuMapRoot );
@@ -1143,6 +1163,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedDoorChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedBlueprintChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTrapChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedAnimalChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedLeverChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedBedChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedVehicleChanged += OnInteractionPromptChanged;
@@ -1152,6 +1173,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.ArenaMenuOpenChanged += OnArenaMenuOpenChanged;
 			_inventoryInteraction.AugmentStationChanged += OnAugmentStationChanged;
 			_inventoryInteraction.FocusedWorkbenchChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedDryingRackChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.WorkbenchChanged += OnWorkbenchChanged;
 		}
 
@@ -1247,6 +1269,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		return anchor;
 	}
 
+	static float MenuColumnPadding( float widthPixels ) => widthPixels > 400f ? 20f : 16f;
+
 	static Panel CreateMenuColumn( Panel parent, float widthPixels )
 	{
 		var pad = MenuColumnPadding( widthPixels );
@@ -1266,8 +1290,6 @@ public sealed class PlayerScreenHud : PanelComponent
 		UiStyle.Surface( column, UiSurface.Frame );
 		return column;
 	}
-	static float MenuColumnPadding( float widthPixels ) => widthPixels > 400f ? 20f : 16f;
-
 
 	void OnInteractionPromptChanged()
 	{
@@ -1290,20 +1312,24 @@ public sealed class PlayerScreenHud : PanelComponent
 		var showArena = !arenaMenuOpen && !showOpen && !showTrial
 		                && focusedArenaButton is not null && focusedArenaButton.IsValid();
 		var showCampfire = !showOpen && !showTrial && !showArena && focusedCampfire is not null && focusedCampfire.IsValid();
+		var focusedRack = _inventoryInteraction?.FocusedDryingRack;
+		var showRack = !showOpen && !showTrial && !showArena && !showCampfire && focusedRack is not null && focusedRack.IsValid();
 		var focusedDoor = _inventoryInteraction?.FocusedDoor;
-		var showDoor = !showOpen && !showTrial && !showArena && !showCampfire && focusedDoor is not null && focusedDoor.IsValid();
+		var showDoor = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && focusedDoor is not null && focusedDoor.IsValid();
 		var focusedTrap = _inventoryInteraction?.FocusedTrap;
-		var showTrap = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && focusedTrap is not null && focusedTrap.IsValid();
+		var showTrap = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && !showDoor && focusedTrap is not null && focusedTrap.IsValid();
 		var focusedLever = _inventoryInteraction?.FocusedLever;
-		var showLever = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && focusedLever is not null && focusedLever.IsValid();
+		var showLever = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && !showDoor && !showTrap && focusedLever is not null && focusedLever.IsValid();
 		var focusedBed = _inventoryInteraction?.FocusedBed;
-		var showBed = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && focusedBed is not null && focusedBed.IsValid();
+		var showBed = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && !showDoor && !showTrap && !showLever && focusedBed is not null && focusedBed.IsValid();
 		var focusedVehicle = _inventoryInteraction?.FocusedVehicle;
-		var showVehicle = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && !showBed && focusedVehicle is not null && focusedVehicle.IsValid();
+		var showVehicle = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && !showDoor && !showTrap && !showLever && !showBed && focusedVehicle is not null && focusedVehicle.IsValid();
+		var focusedAnimal = _inventoryInteraction?.FocusedAnimal;
+		var showAnimal = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && !showDoor && !showTrap && !showLever && !showBed && !showVehicle && focusedAnimal is not null && focusedAnimal.IsValid();
 		var farmingPrompt = _farming?.PromptText ?? string.Empty;
-		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && !showBed && !showVehicle && farmingPrompt.Length > 0;
-		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && !showBed && !showVehicle && !showFarming && _handHarvest?.FocusedNode is not null;
-		var show = showOpen || showTrial || showArena || showCampfire || showDoor || showTrap || showLever || showBed || showVehicle || showFarming || showHarvest;
+		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && !showDoor && !showTrap && !showLever && !showBed && !showVehicle && !showAnimal && farmingPrompt.Length > 0;
+		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && !showDoor && !showTrap && !showLever && !showBed && !showVehicle && !showAnimal && !showFarming && _handHarvest?.FocusedNode is not null;
+		var show = showOpen || showTrial || showArena || showCampfire || showRack || showDoor || showTrap || showLever || showBed || showVehicle || showAnimal || showFarming || showHarvest;
 
 		// An unbuilt blueprint under the crosshair only offers "Build" — the door / bed / trap / lever /
 		// campfire prompts stand down for it in their own ticks, so nothing else is showing here.
@@ -1373,6 +1399,10 @@ public sealed class PlayerScreenHud : PanelComponent
 				var max = Math.Max( 1, focusedCampfire.MaxFuelUnits );
 				_promptLabel.Text = $"Add Wood ({fuel}/{max})";
 			}
+			else if ( showRack )
+			{
+				_promptLabel.Text = focusedRack.PromptText;
+			}
 			else if ( showDoor )
 			{
 				_promptLabel.Text = focusedDoor.IsOpen ? "Close Door" : "Open Door";
@@ -1392,6 +1422,10 @@ public sealed class PlayerScreenHud : PanelComponent
 			else if ( showVehicle )
 			{
 				_promptLabel.Text = focusedVehicle.PromptTextFor( _inventoryInteraction.GameObject );
+			}
+			else if ( showAnimal )
+			{
+				_promptLabel.Text = $"Pet {focusedAnimal.DisplayNameForPlate}  (hold: name)";
 			}
 			else if ( showFarming )
 			{
@@ -1615,10 +1649,55 @@ public sealed class PlayerScreenHud : PanelComponent
 		_augmentBindsHud?.SetVisible( !hideForFullscreen );
 	}
 
+	// ---- stasis pod arrival blackout ("coming to out of a coma": black until the pod door is open) ----
+
+	Panel _podBlackout;
+	float _podBlackoutApplied = -1f;
+
+	void BuildPodBlackout( Panel root )
+	{
+		_podBlackout = new Panel { Parent = root };
+		_podBlackout.Style.Set( "position", "absolute" );
+		_podBlackout.Style.Set( "left", "0" );
+		_podBlackout.Style.Set( "top", "0" );
+		_podBlackout.Style.Set( "width", "100%" );
+		_podBlackout.Style.Set( "height", "100%" );
+		_podBlackout.Style.Set( "background-color", "#000000" );
+		_podBlackout.Style.Set( "pointer-events", "none" );
+		_podBlackout.Style.Set( "z-index", "5000" );
+		_podBlackout.Style.Set( "opacity", "0" );
+		_podBlackout.Style.Set( "display", "none" );
+	}
+
+	void TickPodBlackout()
+	{
+		if ( _podBlackout is null )
+			return;
+
+		_movement ??= FindOnAncestors<PlayerMovement>();
+		var amount = _movement is { IsValid: true } ? _movement.PodBlackout01 : 0f;
+		if ( MathF.Abs( amount - _podBlackoutApplied ) < 0.004f )
+			return;
+
+		var wasDark = _podBlackoutApplied > 0.02f;
+		_podBlackoutApplied = amount;
+		_podBlackout.Style.Set( "display", amount > 0.004f ? "flex" : "none" );
+		_podBlackout.Style.Set( "opacity", amount.ToString( "0.000", System.Globalization.CultureInfo.InvariantCulture ) );
+		if ( wasDark != amount > 0.02f )
+			UpdateMinimapVisibility();
+	}
+
 	void UpdateMinimapVisibility()
 	{
 		if ( _minimapHud is null )
 			return;
+
+		// No map discovery while the arrival blackout is up (Mark 2026-11-09: the flight must not give the map away).
+		if ( _movement is { IsValid: true, MapDiscoveryLocked: true } )
+		{
+			_minimapHud.SetVisible( false );
+			return;
+		}
 
 		if ( _menuController is null || !_menuController.IsMenuOpen )
 		{

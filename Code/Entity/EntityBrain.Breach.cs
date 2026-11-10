@@ -114,6 +114,9 @@ public sealed partial class EntityBrain
 
 	void OnAttackCycleFinished()
 	{
+		// Swing done: the next waiting attacker on this player may take the token (EntityAttackSlots).
+		EntityAttackSlots.ReturnToken( this );
+
 		if ( _state == EnemyAiState.Breaching )
 			_breachSwings++;
 

@@ -18,7 +18,7 @@ namespace Survival;
 /// a broken path can never freeze an animal.
 /// </summary>
 [Title( "Animal Brain" )]
-public sealed class AnimalBrain : Component
+public sealed partial class AnimalBrain : Component
 {
 	[Property] public AnimalSpecies Species { get; set; } = AnimalSpecies.Whitetail;
 	[Property] public EntityVitals Vitals { get; set; }
@@ -45,10 +45,19 @@ public sealed class AnimalBrain : Component
 	int _attacksDone;
 	double _stareStartedAt;
 	bool _fleeingLowHealth;
+	/// <summary>Hit while running from low health with <c>lastStand</c> on: fights to the death, never flees again.</summary>
+	bool _lastStand;
 	/// <summary>Short stare-spook hop (turn around and re-track after one leg) vs a full flee.</summary>
 	bool _fleeIsStareHop;
 	float _fleeLegDistance;
 	float _fleeYawNudge;
+	/// <summary>Zigzag flee: the heading of the last leg (deer turn ±N° from it each leg).</summary>
+	Vector3 _fleeHeading;
+	/// <summary>Fly-away bird: airborne and leaving.</summary>
+	bool _flyingAway;
+	double _flyAwayStartedAt;
+	/// <summary>Fly-away bird left undisturbed: when it takes off on its own (0 = not rolled yet).</summary>
+	double _perchLeavesAt;
 	double _lowHealthFleeSuppressedUntil;
 	Vector3 _progressPos;
 	double _progressAt;
@@ -130,6 +139,8 @@ public sealed class AnimalBrain : Component
 			Vitals.OnDied -= OnDeath;
 			Vitals.OnDamaged -= OnDamaged;
 		}
+
+		DestroyTamingPresentation();
 	}
 
 	public void ApplyBehavior( AnimalBehaviorProfile behavior ) => _behavior = behavior;
@@ -181,7 +192,14 @@ public sealed class AnimalBrain : Component
 
 	protected override void OnUpdate()
 	{
+		TickAnimationPresentation();
+		TickTamingPresentation();
+
 		if ( !CanRunHostLogic() || IsDead() || !_aiStarted )
+			return;
+
+		// No viewer within the shared entity range: gone to memory or asleep (AnimalBrain.Dormancy.cs).
+		if ( TickDormancy() )
 			return;
 
 		Locomotion ??= Components.Get<EntityLocomotion>();
@@ -201,6 +219,7 @@ public sealed class AnimalBrain : Component
 		}
 
 		TickNavRecovery();
+		TickTamingOffer();
 		TickPerception();
 		TickLowHealthFlee();
 		TickStateMachine();
@@ -209,6 +228,8 @@ public sealed class AnimalBrain : Component
 	/// <summary>The one master method — every species runs this same switch.</summary>
 	void TickStateMachine()
 	{
+		TickPerchTimer();
+
 		switch ( _state )
 		{
 			case AnimalAiState.Idle: TickIdle(); break;
@@ -218,6 +239,8 @@ public sealed class AnimalBrain : Component
 			case AnimalAiState.Tracking: TickTracking(); break;
 			case AnimalAiState.Attacking: TickAttacking(); break;
 			case AnimalAiState.Fleeing: TickFleeing(); break;
+			case AnimalAiState.Approaching: TickApproaching(); break;
+			case AnimalAiState.Eating: TickEating(); break;
 		}
 	}
 
@@ -260,6 +283,10 @@ public sealed class AnimalBrain : Component
 
 	void SenseThreat( GameObject threat, Vector3 worldPos )
 	{
+		// The hand that feeds: while walking up to or eating from a player, nothing that player does scares it off.
+		if ( _state is AnimalAiState.Approaching or AnimalAiState.Eating && threat.IsValid() && threat == _tameTarget )
+			return;
+
 		if ( threat.IsValid() && threat != GameObject )
 			_threat = threat;
 
@@ -273,6 +300,7 @@ public sealed class AnimalBrain : Component
 		switch ( _behavior.ThreatResponse )
 		{
 			case AnimalThreatResponse.Flee:
+			case AnimalThreatResponse.FlyAway:
 				EnterState( AnimalAiState.Fleeing );
 				break;
 
@@ -299,9 +327,16 @@ public sealed class AnimalBrain : Component
 
 		if ( _behavior.ThreatResponse == AnimalThreatResponse.Predator )
 		{
-			// Already running from low health — a hit is not an invitation to turn around.
 			if ( _state == AnimalAiState.Fleeing && _fleeingLowHealth )
+			{
+				// Already running from low health — a hit is not an invitation to turn around,
+				// unless the species makes its last stand (badger): then it fights to the death.
+				if ( !_behavior.LastStand )
+					return;
+				_lastStand = true;
+				EnterState( AnimalAiState.Attacking );
 				return;
+			}
 
 			// Fight back unless the low-health gate flips it to flee next tick.
 			if ( _state != AnimalAiState.Attacking )
@@ -317,7 +352,7 @@ public sealed class AnimalBrain : Component
 	/// <summary>Predator gate: engaged and health at/below the flee fraction → run (unless it just turned to fight).</summary>
 	void TickLowHealthFlee()
 	{
-		if ( _behavior.ThreatResponse != AnimalThreatResponse.Predator || _behavior.FleeHealthFraction <= 0f )
+		if ( _behavior.ThreatResponse != AnimalThreatResponse.Predator || _behavior.FleeHealthFraction <= 0f || _lastStand )
 			return;
 
 		if ( _state is not (AnimalAiState.Alerted or AnimalAiState.Tracking or AnimalAiState.Attacking) )
@@ -336,6 +371,31 @@ public sealed class AnimalBrain : Component
 	// ------------------------------------------------------------------
 	// Calm loop: Idle ⇄ Wander ⇄ Graze
 	// ------------------------------------------------------------------
+
+	/// <summary>Fly-away birds do not sit forever: after a random perch (json perchMin/MaxSeconds) a calm bird leaves on its own, in a random direction.</summary>
+	void TickPerchTimer()
+	{
+		if ( _behavior.ThreatResponse != AnimalThreatResponse.FlyAway || _behavior.PerchMaxSeconds <= 0f )
+			return;
+
+		if ( _state is not (AnimalAiState.Idle or AnimalAiState.Wander or AnimalAiState.Graze) )
+			return;
+
+		var now = Time.NowDouble;
+		if ( _perchLeavesAt <= 0d )
+		{
+			_perchLeavesAt = now + Sandbox.Game.Random.Float( _behavior.PerchMinSeconds, _behavior.PerchMaxSeconds );
+			return;
+		}
+
+		if ( now < _perchLeavesAt )
+			return;
+
+		// No threat: fly away from a point behind a random heading.
+		_threat = null;
+		_threatLastPos = GameObject.WorldPosition - Rotation.FromYaw( Sandbox.Game.Random.Float( 0f, 360f ) ).Forward * 100f;
+		EnterState( AnimalAiState.Fleeing );
+	}
 
 	void TickIdle()
 	{
@@ -439,10 +499,11 @@ public sealed class AnimalBrain : Component
 		if ( Time.NowDouble < _stateEndsAt )
 			return;
 
-		if ( _threat.IsValid() && ThreatDistance() <= _behavior.TrackRange )
-			EnterState( AnimalAiState.Tracking );
-		else
+		if ( !_threat.IsValid() || ThreatDistance() > _behavior.TrackRange )
 			EnterState( AnimalAiState.Wander );
+		else
+			// chargeOnAlert (badger): no stalk — noticed means attacked.
+			EnterState( _behavior.ChargeOnAlert ? AnimalAiState.Attacking : AnimalAiState.Tracking );
 	}
 
 	void TickTracking()
@@ -450,6 +511,14 @@ public sealed class AnimalBrain : Component
 		if ( !IsValidThreat( _threat ) )
 		{
 			EnterState( AnimalAiState.Wander );
+			return;
+		}
+
+		// Stalking a player who kneels with the food it likes: the meal wins over the bite (hand taming).
+		if ( !IsTamed && CanBeTamedByHand && IsOfferingFood( _threat ) )
+		{
+			_tameTarget = _threat;
+			EnterState( AnimalAiState.Approaching );
 			return;
 		}
 
@@ -534,6 +603,7 @@ public sealed class AnimalBrain : Component
 		{
 			Agent?.Stop();
 			_biteLandsAt = Time.NowDouble + _behavior.AttackWindupSeconds;
+			BiteSerial++;
 			return;
 		}
 
@@ -549,7 +619,8 @@ public sealed class AnimalBrain : Component
 	/// </summary>
 	bool TickStareSpook( float dist )
 	{
-		if ( !_behavior.SpookedByStare || dist <= _behavior.LungeRange )
+		// A player kneeling with food held out is looked at, not stared down.
+		if ( !_behavior.SpookedByStare || dist <= _behavior.LungeRange || (!IsTamed && CanBeTamedByHand && IsOfferingFood( _threat )) )
 		{
 			_stareStartedAt = 0d;
 			return false;
@@ -655,6 +726,7 @@ public sealed class AnimalBrain : Component
 		if ( !target.IsValid() || damage <= 0f )
 			return;
 
+		using var _ = PlaytestLog.Kind( "bite" );
 		var receiver = target.Components.Get<DamageReceiver>( FindMode.EnabledInSelfAndDescendants );
 		if ( receiver is not null )
 		{
@@ -673,6 +745,12 @@ public sealed class AnimalBrain : Component
 
 	void TickFleeing()
 	{
+		if ( _flyingAway )
+		{
+			TickFlyAway();
+			return;
+		}
+
 		// Live pursuit keeps the flee-from point fresh.
 		if ( _threat.IsValid() )
 			_threatLastPos = _threat.WorldPosition;
@@ -682,6 +760,7 @@ public sealed class AnimalBrain : Component
 		// Predator low-health flee: the player pressing in flips it back to a fight.
 		if ( _behavior.ThreatResponse == AnimalThreatResponse.Predator
 		     && _fleeingLowHealth
+		     && _behavior.ReengageRange > 0f
 		     && IsValidThreat( _threat )
 		     && threatDist <= _behavior.ReengageRange )
 		{
@@ -771,6 +850,25 @@ public sealed class AnimalBrain : Component
 			_fleeYawNudge = 0f;
 		}
 
+		// Panic zigzag (deer): each short leg turns up to ±N° from the last heading, but never swings
+		// round toward the threat - if the turn would point more than 70° off straight-away it bends
+		// back to 50° off on the same side.
+		if ( _behavior.FleeZigzagLeg > 0f )
+		{
+			var prev = _fleeHeading.LengthSquared > 1e-4f ? _fleeHeading : away;
+			var turn = Sandbox.Game.Random.Float( -_behavior.FleeZigzagTurnDegrees, _behavior.FleeZigzagTurnDegrees );
+			var candidate = (Rotation.FromYaw( turn ) * prev).WithZ( 0f );
+			candidate = candidate.LengthSquared > 1e-6f ? candidate.Normal : away;
+			if ( Vector3.Dot( candidate, away ) < MathF.Cos( 70f * (MathF.PI / 180f) ) )
+			{
+				var side = Vector3.Dot( Vector3.Cross( away, candidate ), Vector3.Up ) >= 0f ? 50f : -50f;
+				candidate = (Rotation.FromYaw( side ) * away).Normal;
+			}
+
+			away = candidate;
+			_fleeHeading = candidate;
+		}
+
 		if ( !IsAgentDriving() )
 		{
 			// Manual: straight-line leg; the stall handler nudges sideways when blocked.
@@ -821,6 +919,65 @@ public sealed class AnimalBrain : Component
 	}
 
 	// ------------------------------------------------------------------
+	// Fly-away birds: no nav, no locomotion — the brain lifts the body off and carries it away,
+	// then the bird is gone and its population slot queues a respawn.
+	// ------------------------------------------------------------------
+
+	void BeginFlyAway()
+	{
+		_flyingAway = true;
+		_flyAwayStartedAt = Time.NowDouble;
+		PublishAnimState( AnimStateFlyAway );
+
+		var away = (GameObject.WorldPosition - _threatLastPos).WithZ( 0f );
+		_fleeHeading = away.LengthSquared > 1e-4f ? away.Normal : GameObject.WorldRotation.Forward.WithZ( 0f ).Normal;
+
+		_agentOnNav = false;
+		if ( Agent is not null && Agent.IsValid() )
+		{
+			Agent.Stop();
+			Agent.UpdatePosition = false;
+			Agent.Enabled = false;
+		}
+
+		Locomotion ??= Components.Get<EntityLocomotion>();
+		if ( Locomotion is not null && Locomotion.IsValid() )
+		{
+			Locomotion.DetachAgent();
+			Locomotion.Enabled = false;
+		}
+
+		var body = Components.Get<Rigidbody>();
+		if ( body is not null && body.IsValid() )
+		{
+			body.Gravity = false;
+			body.MotionEnabled = false;
+		}
+	}
+
+	void TickFlyAway()
+	{
+		var elapsed = Time.NowDouble - _flyAwayStartedAt;
+		if ( elapsed >= _behavior.FlyAwaySeconds )
+		{
+			Components.Get<BiomePopulationSlot>()?.HandleOwnerDied();
+			GameObject.Destroy();
+			return;
+		}
+
+		// Keep heading away from wherever the threat is now, easing the turn so the flight path curves.
+		var away = (GameObject.WorldPosition - (_threat.IsValid() ? _threat.WorldPosition : _threatLastPos)).WithZ( 0f );
+		if ( away.LengthSquared > 1e-4f )
+			_fleeHeading = Vector3.Lerp( _fleeHeading, away.Normal, Time.Delta * 1.5f ).Normal;
+
+		// Steep climb for the first second, then level off into a long glide away.
+		var climb = elapsed < 1.0 ? _behavior.FlyClimbSpeed * 2f : _behavior.FlyClimbSpeed * 0.5f;
+		var velocity = _fleeHeading * _behavior.RunSpeed + Vector3.Up * climb;
+		GameObject.WorldPosition += velocity * Time.Delta;
+		GameObject.WorldRotation = Rotation.LookAt( velocity.Normal, Vector3.Up );
+	}
+
+	// ------------------------------------------------------------------
 	// State entry
 	// ------------------------------------------------------------------
 
@@ -830,6 +987,7 @@ public sealed class AnimalBrain : Component
 			Log.Info( $"[AnimalBrain] {GameObject.Name} {_state} -> {next}" );
 
 		_state = next;
+		PublishAnimState( (byte)next );
 		_biteLandsAt = 0d;
 		_stareStartedAt = 0d;
 		_agentIdleSince = 0d;
@@ -867,6 +1025,16 @@ public sealed class AnimalBrain : Component
 			case AnimalAiState.Attacking:
 				break;
 
+			case AnimalAiState.Approaching:
+				_attacksDone = 0;
+				break;
+
+			case AnimalAiState.Eating:
+				Agent?.Stop();
+				Locomotion?.ClearTravelHint();
+				_stateEndsAt = Time.NowDouble + _behavior.TameEatSeconds;
+				break;
+
 			case AnimalAiState.Fleeing:
 				_fleeingLowHealth = lowHealth;
 				_fleeIsStareHop = stareHop;
@@ -874,8 +1042,13 @@ public sealed class AnimalBrain : Component
 				_fleeLegDistance = stareHop
 					? _behavior.StareRetreatDistance
 					: (postBite ? _behavior.FleeDistance * 0.5f : _behavior.FleeDistance);
+				if ( _behavior.FleeZigzagLeg > 0f && !stareHop )
+					_fleeLegDistance = _behavior.FleeZigzagLeg;
+				_fleeHeading = default;
 				_fleeYawNudge = 0f;
 				_moveGoal = default;
+				if ( _behavior.ThreatResponse == AnimalThreatResponse.FlyAway )
+					BeginFlyAway();
 				break;
 		}
 	}
@@ -1114,9 +1287,9 @@ public sealed class AnimalBrain : Component
 		if ( go is null || !go.IsValid() || go == GameObject )
 			return false;
 
-		// Players must be alive to matter; anything else just has to exist.
+		// Players must be alive to matter; anything else just has to exist. A tamed animal never fears players.
 		if ( go.Components.Get<PlayerVitals>() is { } pv )
-			return pv.CurrentHealth > 0.001f;
+			return !IsTamed && pv.CurrentHealth > 0.001f;
 
 		return true;
 	}
@@ -1146,7 +1319,28 @@ public sealed class AnimalBrain : Component
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
 			return;
 
+		HostDropLoot();
 		Components.Get<BiomePopulationSlot>()?.HandleOwnerDied();
 		GameObject.Destroy();
+	}
+
+	/// <summary>Host, once at death: each <c>loot</c> row of the species' json rolls its count and drops as a world pickup round the body.</summary>
+	void HostDropLoot()
+	{
+		var loot = _behavior.Loot;
+		if ( loot is null || loot.Length == 0 )
+			return;
+
+		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+		var at = GameObject.WorldPosition + Vector3.Up * 8f;
+		for ( var i = 0; i < loot.Length; i++ )
+		{
+			var row = loot[i];
+			var count = Sandbox.Game.Random.Int( row.Min, row.Max );
+			if ( count <= 0 )
+				continue;
+			var spread = Rotation.FromYaw( (360f / loot.Length * i) + Sandbox.Game.Random.Float( -25f, 25f ) ).Forward * 14f;
+			HeldStackWorldDrop.TrySpawnWorldDrop( scene, row.ResourceId, count, at + spread, ignoreHierarchy: GameObject );
+		}
 	}
 }

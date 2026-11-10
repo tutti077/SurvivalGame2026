@@ -4,25 +4,25 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Far-entity dormancy and despawn-to-memory. An entity with no viewer within <see cref="SleepRangeMeters"/> — every
+/// Far-entity dormancy and despawn-to-memory. An entity with no viewer within
+/// <see cref="EntityChunkMemory.EnemyDespawnRangeMeters"/> (350 m, every enemy kind; animals have their own shorter pair) — every
 /// player pawn, or the scene camera when there is none (the terrainTest fly camera) — either leaves the world or sleeps:
 ///
 /// - Not tracking a player (Idle / Wander / Returning, no target) → its location, facing, health, leash and population
 ///   slot are written to <see cref="EntityChunkMemory"/> (host memory, filed under its chunk) and the object is destroyed
-///   (Mark 2026-11-02). The memory clones it back when a viewer comes within range of that spot and the ground there is live.
+///   (Mark 2026-11-02). The memory clones it back when a viewer comes within <see cref="EntityChunkMemory.EnemyReturnRangeMeters"/>
+///   of that spot and the ground there is live.
 /// - Tracking a player (searching, chasing, attacking, retreating, breaching), or an entity the memory cannot hold
 ///   (bosses, raiders, console spawns without a source prefab) → sleeps: locomotion, nav agent and skinned body are off,
 ///   so it neither traces the ground each frame nor animates (fps work, Mark 2026-10-20: perf_types measured 19 idle
-///   scavs at 0.6 ms locomotion + 0.6 ms skinned bodies per frame with nobody near them). Wakes the moment a viewer is back.
+///   scavs at 0.6 ms locomotion + 0.6 ms skinned bodies per frame with nobody near them). Wakes once a viewer is within
+///   the restore range.
 ///
 /// The check runs at 2 Hz, staggered. Stunned and dead entities are never put to sleep or remembered. Host only: proxies on
 /// clients already skip their locomotion.
 /// </summary>
 public sealed partial class EntityBrain
 {
-	[Property, Group( "Performance" ), Title( "Sleep Range (m)" ), Range( 0f, 2000f ), Step( 10f ), Description( "No player pawn (or the scene camera, when there is no pawn) within this many metres: an entity that is not tracking a player is written to host memory (chunk, position, health) and despawned, brought back once a viewer is within range less 50 m; one that is tracking a player sleeps (locomotion, nav agent and skinned body off) until a viewer returns. 0 = never sleep or despawn." )]
-	public float SleepRangeMeters { get; set; } = 350f;
-
 	/// <summary>True while asleep: locomotion / agent / body are off (the brain's own update returns early).</summary>
 	public bool IsDormant { get; private set; }
 
@@ -45,13 +45,6 @@ public sealed partial class EntityBrain
 	/// <summary>Called at the top of OnUpdate on the host; returns true when the entity is (now) asleep or gone and nothing else should tick.</summary>
 	bool TickDormancy()
 	{
-		if ( SleepRangeMeters <= 0f )
-		{
-			if ( IsDormant )
-				SetDormant( false );
-			return false;
-		}
-
 		if ( !_dormancyStaggered )
 		{
 			_dormancyStaggered = true;
@@ -62,7 +55,9 @@ public sealed partial class EntityBrain
 		_nextDormancyCheck = Time.Now + DormancyCheckSeconds;
 
 		var isDead = Vitals is not null && Vitals.IsDead;
-		var viewerNear = EntityChunkMemory.AnyViewerWithin( Scene, WorldPosition, SleepRangeMeters );
+		// Asleep it wakes inside the return range, awake it leaves past the despawn range: the 50 m between never thrashes.
+		var range = IsDormant ? EntityChunkMemory.EnemyReturnRangeMeters : EntityChunkMemory.EnemyDespawnRangeMeters;
+		var viewerNear = EntityChunkMemory.AnyViewerWithin( Scene, WorldPosition, range );
 
 		if ( !viewerNear && !isDead && CanDespawnToMemory() && TryDespawnToMemory() )
 			return true;

@@ -1,0 +1,9 @@
+// Whitetail deer (Blender/scripts/create_deer.py): 256 px point-filtered texture, faceted.
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.950"
+	PixelFlatShading "1.000"
+	TextureColor "materials/entities/deer_v2.png"
+}

@@ -59,7 +59,7 @@ public sealed class AnimalSpawnButton : Component
 		if ( SpawnPoint is { IsValid: true } )
 			instance.WorldRotation = SpawnPoint.WorldRotation;
 
-		AnimalSetup.Configure( instance, Species, SpawnHealth, LogStateDebug );
+		AnimalSetup.Configure( instance, Species, SpawnHealth, LogStateDebug, PrefabPath );
 
 		// Clone alone is host-local — remotes never see the animal without NetworkSpawn.
 		if ( Networking.IsActive && !HostNetworkSpawn.TrySpawn( instance ) )

@@ -8,6 +8,13 @@ public static class EntitySight
 {
 	const float LosProbeRadius = 2f;
 
+	/// <summary>
+	/// Bodies sight looks past: another scav or animal never hides a player. A pack running in lost sight of the player
+	/// behind the front-runners' capsules, dropped the trail and wandered off at 5 m (Mark 2026-11-05: "they get stuck on
+	/// each other").
+	/// </summary>
+	static readonly string[] SeeThroughTags = { "enemy", "animal" };
+
 	public static bool IsInFov( Vector3 originFlat, Vector3 facingFlat, Vector3 targetFlat, float fovDegrees )
 	{
 		facingFlat = facingFlat.WithZ( 0f );
@@ -92,6 +99,7 @@ public static class EntitySight
 			.Radius( LosProbeRadius )
 			.UsePhysicsWorld()
 			.IgnoreGameObjectHierarchy( ignoreRoot )
+			.WithoutTags( SeeThroughTags )
 			.Run();
 
 		if ( physics.Hit && physics.GameObject.IsValid() )
@@ -101,6 +109,7 @@ public static class EntitySight
 		var fallback = scene.Trace.Ray( start, end )
 			.Radius( LosProbeRadius )
 			.IgnoreGameObjectHierarchy( ignoreRoot )
+			.WithoutTags( SeeThroughTags )
 			.Run();
 
 		if ( fallback.Hit && fallback.GameObject.IsValid() )
@@ -110,6 +119,7 @@ public static class EntitySight
 		var thin = scene.Trace.Ray( start, end )
 			.UsePhysicsWorld()
 			.IgnoreGameObjectHierarchy( ignoreRoot )
+			.WithoutTags( SeeThroughTags )
 			.Run();
 
 		if ( thin.Hit && thin.GameObject.IsValid() )
@@ -117,6 +127,7 @@ public static class EntitySight
 
 		return scene.Trace.Ray( start, end )
 			.IgnoreGameObjectHierarchy( ignoreRoot )
+			.WithoutTags( SeeThroughTags )
 			.Run();
 	}
 }

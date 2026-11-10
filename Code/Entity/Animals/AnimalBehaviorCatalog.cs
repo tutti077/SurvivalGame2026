@@ -14,6 +14,11 @@ public static class AnimalBehaviorCatalog
 		new( StringComparer.OrdinalIgnoreCase );
 
 	static bool _loaded;
+	static int _loadedJsonHash;
+	// A JSON edit is picked up without a restart (same pattern as EquipmentCatalog): the file is read + hashed at
+	// most every JsonChangeCheckSeconds, never per call. Resolve runs per spawn, so this costs nothing per frame.
+	const float JsonChangeCheckSeconds = 2f;
+	static float _lastJsonChangeCheckTime = float.NegativeInfinity;
 
 	public static void ForceReload()
 	{
@@ -23,9 +28,31 @@ public static class AnimalBehaviorCatalog
 
 	public static void EnsureLoaded()
 	{
-		if ( _loaded )
+		if ( _loaded && RealTime.Now - _lastJsonChangeCheckTime < JsonChangeCheckSeconds )
 			return;
+
+		_lastJsonChangeCheckTime = RealTime.Now;
+		var jsonHash = TryReadJsonHash();
+		if ( _loaded && jsonHash == _loadedJsonHash )
+			return;
+
+		_loadedJsonHash = jsonHash;
 		ReloadFromDisk();
+	}
+
+	static int TryReadJsonHash()
+	{
+		try
+		{
+			if ( !FileSystem.Mounted.FileExists( FilePath ) )
+				return 0;
+
+			return StringComparer.Ordinal.GetHashCode( FileSystem.Mounted.ReadAllText( FilePath ) );
+		}
+		catch
+		{
+			return 0;
+		}
 	}
 
 	public static AnimalBehaviorProfile Resolve( AnimalSpecies species )

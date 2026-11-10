@@ -103,7 +103,6 @@ public static class EntityArchetype
 			return;
 
 		var profile = Get( type );
-		brain.AttackRange = 110f;
 		brain.WanderMoveSpeed = Math.Max( 72f, profile.MoveSpeed * 0.4f );
 		brain.ChaseMoveSpeed = Math.Max( 160f, profile.MoveSpeed );
 	}

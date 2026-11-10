@@ -1,0 +1,20 @@
+{
+  "_comment": "Overhead nameplates (OverheadNameplateHud): sizes are UI pixels at 1080p (the HUD scales them with resolution and UI scale), distances are camera-to-entity meters, times are seconds. scaleCurve: [meters, scale] points, linear between them.",
+  "plateWidthPixels": 160,
+  "fontSizePixels": 15,
+  "barWidthPixels": 84,
+  "barHeightPixels": 3,
+  "liftPixels": 4,
+  "scaleCurve": [ [ 3, 1.0 ], [ 10, 0.9 ], [ 20, 0.75 ], [ 30, 0.6 ], [ 40, 0.5 ] ],
+  "minScale": 0.5,
+  "fadeStartMeters": 30,
+  "fadeEndMeters": 40,
+  "fadeSeconds": 0.2,
+  "combatVisibleSeconds": 1.5,
+  "targetHoldSeconds": 0.3,
+  "targetingMeters": 30,
+  "playerNameMeters": 20,
+  "hostileColor": "#d8261e",
+  "neutralColor": "#e0b21d",
+  "friendlyColor": "#46c246"
+}

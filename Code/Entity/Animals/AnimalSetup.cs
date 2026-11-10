@@ -5,7 +5,8 @@ namespace Survival;
 /// <summary>Configures an animal prefab into a host-simulated animal (behavior tuning from <see cref="AnimalBehaviorCatalog"/>).</summary>
 public static class AnimalSetup
 {
-	public static void Configure( GameObject root, AnimalSpecies species, float healthOverride = 0f, bool logStateDebug = false )
+	/// <param name="prefabPath">The prefab <paramref name="root"/> was cloned from: <see cref="EntityChunkMemory"/> needs it to bring the animal back after it leaves the world (without one it only sleeps).</param>
+	public static void Configure( GameObject root, AnimalSpecies species, float healthOverride = 0f, bool logStateDebug = false, string prefabPath = null )
 	{
 		if ( root is null || !root.IsValid() )
 			return;
@@ -40,6 +41,7 @@ public static class AnimalSetup
 		locomotion.Agent = agent;
 
 		brain.Species = species;
+		brain.SourcePrefabPath = string.IsNullOrWhiteSpace( prefabPath ) ? null : prefabPath.Trim();
 		brain.LogStateDebug |= logStateDebug;
 		brain.ApplyBehavior( behavior );
 		brain.SetHomePosition( root.WorldPosition );
@@ -52,6 +54,9 @@ public static class AnimalSetup
 		if ( onNav )
 			brain.MarkAgentOnNav();
 		brain.BeginAiNow();
+
+		// Nameplate: the kind of animal until it is tamed and named (AnimalBrain.Taming.cs).
+		vitals.DisplayNameOverride = brain.DisplayNameForPlate;
 
 		root.Name = $"animal_{species}";
 		root.Tags.Add( "animal" );

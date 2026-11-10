@@ -23,4 +23,5 @@ public enum AnimalSpecies
 	Seagull = 17,
 	WildBoar = 18,
 	Iguana = 19,
+	Badger = 20,
 }

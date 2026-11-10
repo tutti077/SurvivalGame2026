@@ -25,7 +25,7 @@ public sealed class MapPingBillboardPanel : PanelComponent
 	public const float WorldScale = 3f;
 	/// <summary>Plate centre this far above the ground hit (≈2.75 m) so its bottom edge clears the terrain — the overlay is still depth-tested.</summary>
 	public const float RaiseUnits = 110f;
-	/// <summary>Same trick as <see cref="EnemyHealthBar"/>: the panel's front is its -forward.</summary>
+	/// <summary>A WorldPanel draws on its back: the panel's front is its -forward.</summary>
 	const float PanelFaceYawCorrection = 180f;
 
 	public string Text { get; set; } = "Ping";

@@ -16,6 +16,20 @@
     "OwnerTransfer": 1,
     "Components": [
       {
+        "__type": "Survival.EnemyHealthBar",
+        "__guid": "5b744401-969f-468f-a566-99ccc0d6fb7d",
+        "__enabled": true,
+        "Flags": 0,
+        "Anchor": null,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "Vitals": null
+      },
+      {
         "__type": "Sandbox.Rigidbody",
         "__guid": "b2e10001-0001-4001-8001-000000000001",
         "__enabled": true,
@@ -163,13 +177,31 @@
     ],
     "Children": [
       {
+        "__guid": "e6ef4375-2d0a-4792-a4a8-9e32f3d44dd9",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "HealthBarAnchor",
+        "Position": "0,0,62",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "",
+        "Enabled": true,
+        "NetworkMode": 1,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [],
+        "Children": []
+      },
+      {
         "__guid": "b2e10002-0002-4002-8002-000000000001",
         "__version": 2,
         "Flags": 0,
         "Name": "Body",
-        "Position": "0,0,26",
+        "Position": "0,0,0",
         "Rotation": "0,0,0,1",
-        "Scale": "1.6,0.5,1.1",
+        "Scale": "1,1,1",
         "Tags": "",
         "Enabled": true,
         "NetworkMode": 1,
@@ -179,23 +211,35 @@
         "OwnerTransfer": 1,
         "Components": [
           {
-            "__type": "Sandbox.ModelRenderer",
+            "__type": "Sandbox.SkinnedModelRenderer",
             "__guid": "b2e10003-0003-4003-8003-000000000001",
             "__enabled": true,
             "Flags": 0,
+            "AnimationGraph": null,
             "BodyGroups": 18446744073709551615,
+            "BoneMergeTarget": null,
             "CreateAttachments": false,
+            "CreateBoneObjects": false,
             "LodOverride": null,
             "MaterialGroup": null,
             "MaterialOverride": null,
             "Materials": null,
-            "Model": "models/dev/box.vmdl",
+            "Model": "models/entities/deer_v2.vmdl",
+            "Morphs": {},
             "OnComponentDestroy": null,
             "OnComponentDisabled": null,
             "OnComponentEnabled": null,
             "OnComponentFixedUpdate": null,
             "OnComponentStart": null,
             "OnComponentUpdate": null,
+            "Parameters": {
+              "bools": {},
+              "ints": {},
+              "floats": {},
+              "vectors": {},
+              "rotations": {}
+            },
+            "PlaybackRate": 1,
             "RenderOptions": {
               "GameLayer": true,
               "OverlayLayer": false,
@@ -203,7 +247,13 @@
               "AfterUILayer": false
             },
             "RenderType": "On",
-            "Tint": "0.45,0.3,0.18,1"
+            "Sequence": {
+              "Name": "idle",
+              "Looping": true,
+              "Blending": false
+            },
+            "Tint": "1,1,1,1",
+            "UseAnimGraph": false
           }
         ],
         "Children": []
@@ -229,7 +279,7 @@
             "__guid": "b2e10003-0003-4003-8003-000000000002",
             "__enabled": true,
             "Flags": 0,
-            "Center": "0,0,26",
+            "Center": "-4,0,29",
             "ColliderFlags": 0,
             "Elasticity": null,
             "Friction": 0,
@@ -245,7 +295,7 @@
             "OnTriggerEnter": null,
             "OnTriggerExit": null,
             "RollingResistance": null,
-            "Scale": "70,22,50",
+            "Scale": "43,23,21",
             "Static": false,
             "Surface": null,
             "SurfaceVelocity": "0,0,0"

@@ -117,7 +117,7 @@ public sealed class AnimalBehaviorData
 	[JsonPropertyName( "fleeHealthFraction" )]
 	public float FleeHealthFraction { get; set; }
 
-	/// <summary>Predator only: while low-health fleeing, a threat closing inside this range → turn and fight.</summary>
+	/// <summary>Predator only: while low-health fleeing, a threat closing inside this range → turn and fight. 0 = never (only a hit or a dead end turns it).</summary>
 	[JsonPropertyName( "reengageRangeMeters" )]
 	public float ReengageRangeMeters { get; set; } = 15f;
 
@@ -125,9 +125,75 @@ public sealed class AnimalBehaviorData
 	[JsonPropertyName( "alertSeconds" )]
 	public float AlertSeconds { get; set; } = 1f;
 
+	/// <summary>Harass / predator: when the alert pause ends, rush straight in (Attacking) instead of stalking (badger).</summary>
+	[JsonPropertyName( "chargeOnAlert" )]
+	public bool ChargeOnAlert { get; set; }
+
+	/// <summary>Predator: hit again while running from low health → turns round and fights to the death, never flees again (badger).</summary>
+	[JsonPropertyName( "lastStand" )]
+	public bool LastStand { get; set; }
+
 	/// <summary>"none" | "small" | "large" — which foot traps hold this species (see <see cref="BearTrap"/>). Missing = small.</summary>
 	[JsonPropertyName( "trapSize" )]
 	public string TrapSize { get; set; } = "small";
+
+	/// <summary>
+	/// Prey panic run (deer): &gt; 0 = flee in legs this long, each leg turned up to
+	/// <see cref="FleeZigzagTurnDegrees"/> from the last heading while still heading away from the threat,
+	/// so an archer never gets a straight line. 0 = one straight leg per flee (the old behaviour).
+	/// </summary>
+	[JsonPropertyName( "fleeZigzagLegMeters" )]
+	public float FleeZigzagLegMeters { get; set; }
+
+	[JsonPropertyName( "fleeZigzagTurnDegrees" )]
+	public float FleeZigzagTurnDegrees { get; set; } = 45f;
+
+	/// <summary>"flyaway" birds: seconds of flight away from the threat before the bird is gone (its slot respawns later).</summary>
+	[JsonPropertyName( "flyAwaySeconds" )]
+	public float FlyAwaySeconds { get; set; } = 7f;
+
+	/// <summary>"flyaway" birds: climb rate while flying off.</summary>
+	[JsonPropertyName( "flyClimbMps" )]
+	public float FlyClimbMps { get; set; } = 3f;
+
+	/// <summary>"flyaway" birds: undisturbed, the bird leaves on its own after a random perch of min..max seconds (0 = never).</summary>
+	[JsonPropertyName( "perchMinSeconds" )]
+	public float PerchMinSeconds { get; set; }
+
+	[JsonPropertyName( "perchMaxSeconds" )]
+	public float PerchMaxSeconds { get; set; }
+
+	/// <summary>Hand taming: the food a crouching player must hold (resource id). Empty = this species cannot be hand-fed.</summary>
+	[JsonPropertyName( "tameFoodResourceId" )]
+	public string TameFoodResourceId { get; set; } = string.Empty;
+
+	/// <summary>Hand taming: the animal notices the offer inside this range.</summary>
+	[JsonPropertyName( "tameOfferRangeMeters" )]
+	public float TameOfferRangeMeters { get; set; } = 8f;
+
+	/// <summary>Hand taming: it eats once this close to the player.</summary>
+	[JsonPropertyName( "tameEatRangeMeters" )]
+	public float TameEatRangeMeters { get; set; } = 1.4f;
+
+	[JsonPropertyName( "tameEatSeconds" )]
+	public float TameEatSeconds { get; set; } = 2f;
+
+	/// <summary>What the body drops when it dies: every row rolls min..max of its resource (Mark 2026-11-02).</summary>
+	[JsonPropertyName( "loot" )]
+	public List<AnimalLootRow> Loot { get; set; }
+}
+
+/// <summary>One drop of an animal's <c>loot</c>: <see cref="Min"/>..<see cref="Max"/> (inclusive) of a resource.</summary>
+public sealed class AnimalLootRow
+{
+	[JsonPropertyName( "resourceId" )]
+	public string ResourceId { get; set; }
+
+	[JsonPropertyName( "min" )]
+	public int Min { get; set; } = 1;
+
+	[JsonPropertyName( "max" )]
+	public int Max { get; set; } = 1;
 }
 
 sealed class AnimalBehaviorFile
@@ -169,9 +235,28 @@ public readonly struct AnimalBehaviorProfile
 	public float AttackCooldownSeconds { get; init; }
 	public int AttacksBeforeFlee { get; init; }
 	public float FleeHealthFraction { get; init; }
+	/// <summary>Units; 0 = proximity never turns a low-health flee into a fight.</summary>
 	public float ReengageRange { get; init; }
 	public float AlertSeconds { get; init; }
+	public bool ChargeOnAlert { get; init; }
+	public bool LastStand { get; init; }
 	public TrapSize TrapSize { get; init; }
+	/// <summary>Units; 0 = straight flee legs.</summary>
+	public float FleeZigzagLeg { get; init; }
+	public float FleeZigzagTurnDegrees { get; init; }
+	public float FlyAwaySeconds { get; init; }
+	/// <summary>Units per second.</summary>
+	public float FlyClimbSpeed { get; init; }
+	/// <summary>Seconds; 0 = the bird only leaves when spooked.</summary>
+	public float PerchMinSeconds { get; init; }
+	public float PerchMaxSeconds { get; init; }
+	/// <summary>Normalised resource id, empty = not hand-tameable.</summary>
+	public string TameFood { get; init; }
+	public float TameOfferRange { get; init; }
+	public float TameEatRange { get; init; }
+	public float TameEatSeconds { get; init; }
+	/// <summary>Resolved death drops (normalised ids, min ≤ max); empty = drops nothing.</summary>
+	public AnimalLootRow[] Loot { get; init; }
 
 	public static AnimalBehaviorProfile FromData( AnimalBehaviorData data )
 	{
@@ -182,6 +267,7 @@ public readonly struct AnimalBehaviorProfile
 		{
 			"harass" => AnimalThreatResponse.Harass,
 			"predator" => AnimalThreatResponse.Predator,
+			"flyaway" => AnimalThreatResponse.FlyAway,
 			_ => AnimalThreatResponse.Flee
 		};
 
@@ -225,9 +311,39 @@ public readonly struct AnimalBehaviorProfile
 			AttackCooldownSeconds = Math.Max( 0.2f, data.AttackCooldownSeconds ),
 			AttacksBeforeFlee = Math.Max( 0, data.AttacksBeforeFlee ),
 			FleeHealthFraction = Math.Clamp( data.FleeHealthFraction, 0f, 0.9f ),
-			ReengageRange = M( Math.Max( 1f, data.ReengageRangeMeters ) ),
+			ReengageRange = data.ReengageRangeMeters > 0f ? M( Math.Max( 1f, data.ReengageRangeMeters ) ) : 0f,
 			AlertSeconds = Math.Max( 0f, data.AlertSeconds ),
+			ChargeOnAlert = data.ChargeOnAlert,
+			LastStand = data.LastStand,
+			FleeZigzagLeg = data.FleeZigzagLegMeters > 0.5f ? M( data.FleeZigzagLegMeters ) : 0f,
+			FleeZigzagTurnDegrees = Math.Clamp( data.FleeZigzagTurnDegrees, 5f, 90f ),
+			FlyAwaySeconds = Math.Clamp( data.FlyAwaySeconds, 1f, 60f ),
+			FlyClimbSpeed = M( Math.Max( 0.2f, data.FlyClimbMps ) ),
+			PerchMinSeconds = Math.Max( 0f, data.PerchMinSeconds ),
+			PerchMaxSeconds = Math.Max( Math.Max( 0f, data.PerchMinSeconds ), data.PerchMaxSeconds ),
+			TameFood = string.IsNullOrWhiteSpace( data.TameFoodResourceId ) ? string.Empty : ResourceCatalog.NormalizeResourceId( data.TameFoodResourceId ),
+			TameOfferRange = M( Math.Clamp( data.TameOfferRangeMeters, 1f, 40f ) ),
+			TameEatRange = M( Math.Clamp( data.TameEatRangeMeters, 0.5f, 5f ) ),
+			TameEatSeconds = Math.Clamp( data.TameEatSeconds, 0.5f, 20f ),
+			Loot = ResolveLoot( data.Loot ),
 		};
+	}
+
+	static AnimalLootRow[] ResolveLoot( List<AnimalLootRow> rows )
+	{
+		if ( rows is null || rows.Count == 0 )
+			return [];
+
+		var result = new List<AnimalLootRow>( rows.Count );
+		foreach ( var row in rows )
+		{
+			if ( row is null || string.IsNullOrWhiteSpace( row.ResourceId ) )
+				continue;
+			var min = Math.Max( 0, row.Min );
+			result.Add( new AnimalLootRow { ResourceId = ResourceCatalog.NormalizeResourceId( row.ResourceId ), Min = min, Max = Math.Max( min, row.Max ) } );
+		}
+
+		return result.ToArray();
 	}
 
 	public static AnimalBehaviorProfile CreateFallback() => FromData( new AnimalBehaviorData() );

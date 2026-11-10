@@ -51,7 +51,7 @@ public static class EntityEnemySetup
 		combat.MeleeSweepSubstepLength = Math.Max( combat.MeleeSweepSubstepLength, 40f );
 
 		locomotion.Agent = agent;
-		healthBar.RefreshBinding();
+		healthBar.RefreshLabel();
 
 		EntityArchetype.ApplyToBrain( brain, enemyType );
 		var perceptionId = EntityPerceptionCatalog.BuildEntityId( enemyType, tier );

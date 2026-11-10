@@ -555,7 +555,7 @@ public sealed partial class EntityBrain
 		if ( receiver is null )
 			return;
 
-		var dealt = receiver.TakeDamage( combat.GetMeleeDamage( false ), combat );
+		var dealt = receiver.TakeDamage( combat.GetMeleeDamage(), combat );
 		LogRaid( $"swing landed on the bed's hit zone ({dealt:0.#} dmg)" );
 	}
 

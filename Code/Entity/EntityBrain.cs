@@ -6,11 +6,14 @@ using Sandbox.Navigation;
 namespace Survival;
 
 /// <summary>
-/// Host-only enemy AI: Idle → Wander; Searching on noise;
-/// once alerted → always nav to the live player and attack until geometric LOS has been lost for
-/// <see cref="ChaseLosLostAbandonSeconds"/>; Retreating at low HP. Breaching (see
-/// <c>EntityBrain.Breach.cs</c>) when build pieces are what keeps the player out of reach.
-/// Raiding (see <c>EntityBrain.Raid.cs</c>) for entities spawned by a base raid.
+/// Host-only enemy AI: Idle → Wander; a rising alert meter first stops it to look at the stimulus, a full one chases what it
+/// sees or searches where it heard something. Chasing hunts the live player while it sees them (and for the perception's
+/// <c>chaseCommitLosSeconds</c> after — it saw which way they went), then the last place it saw them led by how they were
+/// moving, then searches around there; <c>chaseLostLosSeconds</c> unseen ends the hunt. Close in, attackers take bearings on
+/// a ring around the player and at most two hold attack tokens (<see cref="EntityAttackSlots"/>). Retreating at low HP,
+/// committed until it got away or is cornered. Breaching (see <c>EntityBrain.Breach.cs</c>) when build pieces are what keeps
+/// the player out of reach. Raiding (see <c>EntityBrain.Raid.cs</c>) for entities spawned by a base raid.
+/// (Scav AI cleanup, Mark 2026-11-04: "The player tracking and entity states need work I think. Seems very artificial".)
 /// </summary>
 [Title( "Entity Brain" )]
 public sealed partial class EntityBrain : Component
@@ -27,11 +30,15 @@ public sealed partial class EntityBrain : Component
 	[Property, Group( "Home" ), Title( "Max travel distance from leash center (units, 0 = unbounded)" )] public float LeashMaxTravelDistance { get; set; }
 	public bool HasLeash => LeashWanderDistance > 0f;
 
-	[Property, Group( "Ranges" )] public float AttackRange { get; set; } = 110f;
-	[Property, Group( "Ranges" ), Title( "Find-player radius while chasing (units)" )]
+	/// <summary>
+	/// Root-to-root distance a swing connects at: the weapon class's lateral reach (meters in melee_weapon_classes.json,
+	/// converted once by <see cref="PlayerCombat.GetMeleeAttackRangeUnits"/>) plus the target's body radius. It used to be a
+	/// hard-coded 110 u against a 76 u blade, so scavs planted 2.75 m out and swung at the air.
+	/// </summary>
+	public float AttackRange => SwingReachUnits() + TargetBodyRadiusUnits;
+
+	[Property, Group( "Ranges" ), Title( "Breaching: give up beyond (units)" )]
 	public float ChaseAbandonRange { get; set; } = 2400f;
-	[Property, Group( "Ranges" ), Title( "Abandon chase after not seen (seconds)" ), Description( "Geometric LOS lost for this long ends the chase. Live player is tracked the whole time." )]
-	public float ChaseLosLostAbandonSeconds { get; set; } = 30f;
 
 	[Property, Group( "Timing" )] public float PathCheckInterval { get; set; } = 0.65f;
 	[Property, Group( "Timing" )] public float ClosePathCheckInterval { get; set; } = 0.28f;
@@ -96,10 +103,60 @@ public sealed partial class EntityBrain : Component
 	const float NavVerifyIntervalSeconds = 4f;
 	const float PathTargetMoveThreshold = 64f;
 	const float LiveChaseRepathMoveThreshold = 96f;
-	const float MinSearchSeconds = 6f;
+	/// <summary>A search lasts this long (random in the range) before the entity gives up and idles.</summary>
+	const float SearchSecondsMin = 8f, SearchSecondsMax = 14f;
 	/// <summary>Minimum flat distance for a search leg so contact alerts still cause a real walk.</summary>
 	const float MinSearchLegDistance = 180f;
+	/// <summary>Search: extra spots checked around where the trail went cold (meters from it).</summary>
+	const float SearchSpotMinMeters = 3f, SearchSpotMaxMeters = 7f;
 	const float AlertTurnDegreesPerSecond = 303.75f;
+
+	/// <summary>Player capsule radius added to the blade reach (root-to-root swing distance).</summary>
+	const float TargetBodyRadiusUnits = 12f;
+	/// <summary>Attacking hands back to Chasing past this many swing ranges (hysteresis; stepping in closes the gap first).</summary>
+	const float LeaveAttackRangeFactor = 1.6f;
+	/// <summary>Attack-token holders close to this fraction of the blade reach; waiters hold just outside it.</summary>
+	const float StrikeRingFraction = 0.7f, WaitRingFraction = 1.35f;
+	/// <summary>Inside this the chase goal is the attacker's ring slot, not the player's feet (meters).</summary>
+	const float SlotEngageMeters = 6f;
+	/// <summary>Past this the ring bearing is dropped, so a re-approach takes the side it comes from (meters).</summary>
+	const float SlotReleaseMeters = 9f;
+	/// <summary>A slot more than this off the side it stands on is re-claimed (no walking round the player to reach it).</summary>
+	const float SlotReclaimDegrees = 100f;
+	/// <summary>Step-in MoveTo re-issue interval while attacking.</summary>
+	const float StepInRepathSeconds = 0.25f;
+
+	/// <summary>Within this an entity senses a player outside its sight cone (LOS still needed), meters.</summary>
+	const float ProximitySenseMeters = 3f;
+	/// <summary>Sight / noise fill outside the cone (proximity sense) runs at this fraction of the in-cone rate.</summary>
+	const float ProximitySenseFillFraction = 0.6f;
+	/// <summary>Alert at or above this fraction (below full): stop and look at the stimulus — the "huh?" beat.</summary>
+	const float NoticeAlertFraction = 0.3f;
+
+	/// <summary>Once hunting, a player is still "seen" out to this many perception sight ranges (with line of sight).</summary>
+	const float ChaseSightRangeFactor = 2f;
+	/// <summary>Lost from sight: the trail goal is the last-seen spot plus the player's velocity for this long, capped (m).</summary>
+	const float TrailLeadSeconds = 1.2f, TrailLeadMaxMeters = 6f;
+
+	/// <summary>Low-HP retreat: re-engages only when a seen player is this close (cornered), meters.</summary>
+	const float RetreatCorneredMeters = 3f;
+	/// <summary>After a finished retreat it fights rather than flees again for this long.</summary>
+	const float RetreatCooldownSeconds = 15f;
+	/// <summary>A retreat ends after this long even if the flee distance was not covered.</summary>
+	const float RetreatMaxSeconds = 12f;
+
+	float _swingReachUnits;
+	double _searchEndsAt;
+	double _searchPauseUntil;
+	Vector3 _searchLookDir;
+	Vector3 _trailGoal;
+	bool _trailGoalSet;
+	Vector3 _lastSeenVelocity;
+	Vector3 _velocitySamplePos;
+	double _velocitySampleAt;
+	double _nextStepInAt;
+	bool _noticing;
+	Vector3 _idleLookDir;
 
 	public EnemyAiState CurrentState => _state;
 	public GameObject ChaseTarget => _target.IsValid() ? _target : null;
@@ -168,6 +225,7 @@ public sealed partial class EntityBrain : Component
 			EntityCombat.AttackCycleFinished -= OnAttackCycleFinished;
 
 		BreachClaims.Release( this );
+		EntityAttackSlots.Release( this );
 	}
 
 	public void SetHomePosition( Vector3 home ) => HomePosition = home;
@@ -201,6 +259,13 @@ public sealed partial class EntityBrain : Component
 		_awaitingNavToStartAi = false;
 		_aiStarted = true;
 		_needsImmediatePathCheck = true;
+
+		// A hit, provoke or noise already put it on a target while the nav was still settling: keep that. Resetting here
+		// wiped the chase and sent the scav off on a wander leg past the player (audit 2026-11-04).
+		if ( _state is EnemyAiState.Chasing or EnemyAiState.Attacking or EnemyAiState.Searching or EnemyAiState.Breaching
+		     or EnemyAiState.Retreating or EnemyAiState.Returning or EnemyAiState.Raiding )
+			return;
+
 		_alertMeter = 0f;
 		_alertLocked = false;
 		_hasSearchGoal = false;
@@ -459,8 +524,9 @@ public sealed partial class EntityBrain : Component
 		if ( IsRaider && RaiderIgnoresHitFrom( attacker.GameObject ) )
 			return;
 
-		// Leashed home: hits do not pull them back out — they re-aggro once inside the wander boundary.
-		if ( _state == EnemyAiState.Returning )
+		// Leashed home: while still past the max travel distance hits do not pull them back out (no luring a camp away);
+		// once back inside it a hit turns them round again.
+		if ( _state == EnemyAiState.Returning && FlatDistanceFromLeash() > LeashMaxTravelDistance )
 			return;
 
 		var player = attacker.GameObject;
@@ -549,12 +615,14 @@ public sealed partial class EntityBrain : Component
 		if ( !CanRunHostLogic() )
 			return;
 
-		// Nobody within Sleep Range: locomotion / agent / body are off and nothing below runs (EntityBrain.Dormancy.cs).
+		// No viewer within the shared entity range: gone to memory or asleep, nothing below runs (EntityBrain.Dormancy.cs).
 		if ( TickDormancy() )
 			return;
 
 		if ( Vitals is not null && Vitals.IsDead )
 			return;
+
+		TickAwareness();
 
 		EntityCombat ??= Components.Get<EntityCombat>();
 		Locomotion ??= Components.Get<EntityLocomotion>();
@@ -642,6 +710,24 @@ public sealed partial class EntityBrain : Component
 		TickMovementTrace();
 	}
 
+	/// <summary>
+	/// Host → everyone: 0 unaware, 1 suspicious (noticing something, searching), 2 alerted (hunting / fighting). Drives the
+	/// awareness mark on the overhead nameplate (<see cref="OverheadNameplateHud"/>); written only when it changes.
+	/// </summary>
+	[Sync( SyncFlags.FromHost )] public byte Awareness { get; private set; }
+
+	void TickAwareness()
+	{
+		byte level = _state switch
+		{
+			EnemyAiState.Chasing or EnemyAiState.Attacking or EnemyAiState.Breaching or EnemyAiState.Raiding => 2,
+			EnemyAiState.Searching => 1,
+			_ => _noticing ? (byte)1 : (byte)0
+		};
+		if ( Awareness != level )
+			Awareness = level;
+	}
+
 	void TickAmbientAlert( float dt )
 	{
 		if ( dt <= 0f || !Scene.IsValid() )
@@ -671,9 +757,12 @@ public sealed partial class EntityBrain : Component
 			var dist = Vector3.DistanceBetween( origin, go.WorldPosition );
 			var move = go.Components.Get<PlayerMovement>();
 
-			// Close FOV + LOS fills ~1s at sightClose; slower toward max sight range.
+			// Close FOV + LOS fills ~1s at sightClose; slower toward max sight range. Right next to it a player outside the
+			// cone is still sensed (slower) — a hard 150° cone made someone at 1 m behind it invisible.
+			var inFov = EntitySight.IsInFov( origin, facing, go.WorldPosition, _perception.SightFovDegrees );
+			var sensed = !inFov && dist <= TerrainWorldUnits.MetersToEngine( ProximitySenseMeters );
 			if ( dist <= _perception.SightRange
-			     && EntitySight.IsInFov( origin, facing, go.WorldPosition, _perception.SightFovDegrees )
+			     && (inFov || sensed)
 			     && EntitySight.HasClearLos( Scene, eye, GameObject, go, _perception.EyeHeight, out _lastLosDetail ) )
 			{
 				RememberStimulus( go.WorldPosition, go );
@@ -684,7 +773,9 @@ public sealed partial class EntityBrain : Component
 					? _perception.SightFillPerSecondClose
 					: (_perception.SightFillPerSecondClose
 					   + (_perception.SightFillPerSecondFar - _perception.SightFillPerSecondClose) * t );
-				AddAlertMeter( rate * dt, "sight" );
+				if ( sensed )
+					rate *= ProximitySenseFillFraction;
+				AddAlertMeter( rate * dt, sensed ? "sense" : "sight" );
 				anyFill = true;
 			}
 
@@ -796,7 +887,22 @@ public sealed partial class EntityBrain : Component
 			_target = go;
 			RememberStimulus( go.WorldPosition, go );
 			if ( _state == EnemyAiState.Searching )
+			{
 				EnterState( EnemyAiState.Chasing, go );
+				return;
+			}
+
+			// Chasing out of sight: footsteps tell it where they are now — the trail moves there and the hunt does not
+			// time out while they stay audible (it still has to see them to hunt the live position).
+			if ( _state == EnemyAiState.Chasing && go == _target )
+			{
+				_trailGoal = ProjectSearchPointToNav( go.WorldPosition );
+				_trailGoalSet = true;
+				RememberLastKnown( go.WorldPosition );
+				var heardFloor = Time.NowDouble - _perception.ChaseCommitLosSeconds - 0.05;
+				if ( _chaseLastSeenAt < heardFloor )
+					_chaseLastSeenAt = heardFloor;
+			}
 			return;
 		}
 	}
@@ -842,12 +948,14 @@ public sealed partial class EntityBrain : Component
 
 		_alertMeter = _perception.AlertThreshold;
 		_alertLocked = true;
+		_noticing = false;
 
-		var player = _target.IsValid() && IsValidPlayerTarget( _target )
-			? _target
-			: FindNearestPlayer( ChaseAbandonRange );
-
-		if ( !player.IsValid() && TryFindVisiblePlayer( out var seen ) )
+		// Chase only what it can actually see (or sense right beside it); a noise it cannot place by sight is searched.
+		// The old fallback was the nearest player within 60 m, line of sight or not.
+		GameObject player = null;
+		if ( _target.IsValid() && IsValidPlayerTarget( _target ) && HasSightOn( _target ) )
+			player = _target;
+		else if ( TryFindVisiblePlayer( out var seen ) )
 			player = seen;
 
 		if ( player.IsValid() )
@@ -918,13 +1026,50 @@ public sealed partial class EntityBrain : Component
 		Locomotion?.ClearTravelHint();
 		StopAndIdle();
 
+		if ( TickNotice() )
+			return;
+
+		// Glance somewhere while standing (picked on entering Idle) instead of staring down the last wander heading.
+		if ( _idleLookDir.LengthSquared > 0.5f )
+			Locomotion?.SmoothFaceTowardWorld( GameObject.WorldPosition + _idleLookDir * 64f, AlertTurnDegreesPerSecond * 0.4f );
+
 		if ( Time.NowDouble >= _stateEndsAt )
 			EnterState( EnemyAiState.Wander );
+	}
+
+	/// <summary>
+	/// Idle / wander with the alert meter part-filled: stop and turn to look at what it noticed. The sight fill keeps
+	/// running while it looks, so a player who stays in view gets chased, one who ducks out lets it decay and walk on.
+	/// </summary>
+	bool TickNotice()
+	{
+		var noticing = !_alertLocked && _hasStimulus && AlertMeter01 >= NoticeAlertFraction;
+		if ( !noticing )
+		{
+			if ( _noticing )
+			{
+				// Lost interest: carry on with the wander leg it was on.
+				_noticing = false;
+				_needsImmediatePathCheck = true;
+				if ( _state == EnemyAiState.Wander && _wanderGoal != default && IsNavAgentReady() )
+					Agent.MoveTo( _wanderGoal );
+			}
+
+			return false;
+		}
+
+		_noticing = true;
+		Agent?.Stop();
+		Locomotion?.SetLookTarget( null );
+		Locomotion?.SmoothFaceTowardWorld( _stimulusPos, AlertTurnDegreesPerSecond );
+		return true;
 	}
 
 	void TickWander()
 	{
 		Locomotion?.SetLookTarget( null );
+		if ( TickNotice() )
+			return;
 		// Chase re-applies speed every frame; wander must too or ForwardOnly can leave MaxSpeed at 0.
 		ApplyAgentSpeed( run: false );
 
@@ -1038,39 +1183,73 @@ public sealed partial class EntityBrain : Component
 
 	void TickSearching()
 	{
-		// Prefer live chase as soon as any player is in abandon range.
-		var player = FindNearestPlayer( ChaseAbandonRange );
-		if ( player.IsValid() )
+		// Found them: chase only on sight. "Any player within 60 m" used to end every search at once, so the investigate
+		// walk almost never played.
+		if ( TryFindVisiblePlayer( out var seen ) )
 		{
-			EnterState( EnemyAiState.Chasing, player );
+			EnterState( EnemyAiState.Chasing, seen );
 			return;
 		}
 
 		if ( !_hasSearchGoal )
 			FreezeSearchGoalFromStimulus();
 
-		FaceSearchNoiseDirection();
 		ApplyAgentSpeed( run: false );
 
-		if ( Time.NowDouble - _searchStartedAt >= MinSearchSeconds )
+		var now = Time.NowDouble;
+		if ( now >= _searchEndsAt )
 		{
 			DropChaseToIdle();
 			return;
 		}
 
+		// At the spot: stop, look around for a moment, then try another spot near where the trail went cold.
+		var anchor = Locomotion?.GetNavAnchorWorld() ?? GameObject.WorldPosition;
+		if ( Vector3.DistanceBetween( anchor.WithZ( 0f ), _searchGoal.WithZ( 0f ) ) <= WanderReachDistance )
+		{
+			if ( _searchPauseUntil <= 0d )
+			{
+				_searchPauseUntil = now + Sandbox.Game.Random.Float( 1f, 2.5f );
+				_searchLookDir = Rotation.FromYaw( Sandbox.Game.Random.Float( 0f, 360f ) ).Forward;
+				Agent?.Stop();
+			}
+
+			if ( now < _searchPauseUntil )
+			{
+				Locomotion?.SetLookTarget( null );
+				Locomotion?.SmoothFaceTowardWorld( anchor + _searchLookDir * 64f, AlertTurnDegreesPerSecond * 0.5f );
+				return;
+			}
+
+			_searchPauseUntil = 0d;
+			_searchGoal = PickSearchSpotNear( _searchNoisePos );
+			_needsImmediatePathCheck = true;
+		}
+
+		FaceSearchNoiseDirection();
 		if ( ShouldRunPathCheck() )
 			TryIssueNavMove( _searchGoal, 0f );
+	}
+
+	Vector3 PickSearchSpotNear( Vector3 center )
+	{
+		var dir = Rotation.FromYaw( Sandbox.Game.Random.Float( 0f, 360f ) ).Forward;
+		var meters = Sandbox.Game.Random.Float( SearchSpotMinMeters, SearchSpotMaxMeters );
+		return ProjectSearchPointToNav( center + dir * TerrainWorldUnits.MetersToEngine( meters ) );
 	}
 
 	void TickChasing()
 	{
 		if ( !_target.IsValid() || !IsValidPlayerTarget( _target ) )
-			_target = FindNearestPlayer( ChaseAbandonRange );
-
-		if ( !_target.IsValid() )
 		{
-			DropChaseToIdle();
-			return;
+			// Target gone (died, left): whoever it can see, else search where the hunt was.
+			if ( TryFindVisiblePlayer( out var seen ) )
+				_target = seen;
+			else
+			{
+				LoseTrailToSearch();
+				return;
+			}
 		}
 
 		_alertMeter = _perception.AlertThreshold;
@@ -1081,15 +1260,15 @@ public sealed partial class EntityBrain : Component
 			return;
 		ApplyAgentSpeed( run: true );
 
-		// Seen = geometric LOS. Always nav to the live player while alerted.
-		var hasLos = HasGeometricLos( _target );
+		var now = Time.NowDouble;
+		var hasLos = HasChaseSight( _target );
 		if ( hasLos )
-			_chaseLastSeenAt = Time.NowDouble;
+			NoteSighting( _target );
 
-		if ( ChaseLosLostAbandonSeconds > 0f
-		     && Time.NowDouble - _chaseLastSeenAt >= ChaseLosLostAbandonSeconds )
+		var unseen = now - _chaseLastSeenAt;
+		if ( unseen >= _perception.ChaseLostLosSeconds )
 		{
-			DropChaseToIdle();
+			LoseTrailToSearch();
 			return;
 		}
 
@@ -1101,31 +1280,156 @@ public sealed partial class EntityBrain : Component
 			return;
 		}
 
+		// Sees them, or lost them a moment ago (saw which way they went): hunt the live position. Past that it goes where it
+		// last saw them, led by how they were moving — no more pathing to an unseen player's live feet for 30 s.
+		var tracking = unseen <= _perception.ChaseCommitLosSeconds;
+
 		Locomotion?.SetPreferAimOverVelocity( false );
-		Locomotion?.SetLookTarget( _target );
+		Locomotion?.SetLookTarget( tracking ? _target : null );
 		if ( Locomotion is not null )
 			Locomotion.TurnDegreesPerSecond = AlertTurnDegreesPerSecond;
 
-		if ( Time.NowDouble < _nextChaseThinkAt )
+		if ( now < _nextChaseThinkAt )
 			return;
 
-		_nextChaseThinkAt = Time.NowDouble + ChaseThinkInterval;
+		_nextChaseThinkAt = now + ChaseThinkInterval;
 
-		// Plain nav only (per Mark): the mesh is correct, so a door or stairs is found by pathing.
-		// A piece directly ahead is remembered as the preferred breach target, nothing more.
-		RememberPieceInWay();
-
-		if ( ShouldRunPathCheck( dist ) )
+		if ( tracking )
 		{
-			TryIssueNavMove(
-				GetLiveChasePoint( _target ),
-				0f,
-				ClosePathCheckInterval,
-				LiveChaseRepathMoveThreshold );
+			// Plain nav only (per Mark): the mesh is correct, so a door or stairs is found by pathing.
+			// A piece directly ahead is remembered as the preferred breach target, nothing more.
+			RememberPieceInWay();
+
+			if ( ShouldRunPathCheck( dist ) )
+			{
+				TryIssueNavMove(
+					GetMeleeChasePoint( _target, dist, StrikeRingFraction ),
+					0f,
+					ClosePathCheckInterval,
+					LiveChaseRepathMoveThreshold );
+			}
+
+			// No complete route to where the player stands → tear a way through, now (per Mark).
+			TickChaseBlockedDetection( dist );
+			return;
 		}
 
-		// No complete route to where the player stands → tear a way through, now (per Mark).
-		TickChaseBlockedDetection( dist );
+		EntityAttackSlots.Release( this );
+		if ( !_trailGoalSet )
+		{
+			_trailGoal = BuildTrailGoal();
+			_trailGoalSet = true;
+			_needsImmediatePathCheck = true;
+		}
+
+		// Got to where they went and they are not here: search around it.
+		var anchor = Locomotion?.GetNavAnchorWorld() ?? GameObject.WorldPosition;
+		if ( Vector3.DistanceBetween( anchor.WithZ( 0f ), _trailGoal.WithZ( 0f ) ) <= WanderReachDistance )
+		{
+			LoseTrailToSearch();
+			return;
+		}
+
+		if ( ShouldRunPathCheck( dist ) )
+			TryIssueNavMove( _trailGoal, 0f, ClosePathCheckInterval, LiveChaseRepathMoveThreshold );
+	}
+
+	/// <summary>Seen this frame: refresh the clock, the last-known spot and a coarse velocity for the trail lead.</summary>
+	void NoteSighting( GameObject target )
+	{
+		var now = Time.NowDouble;
+		_chaseLastSeenAt = now;
+		_trailGoalSet = false;
+		var pos = target.WorldPosition;
+		if ( _velocitySampleAt <= 0d || now - _velocitySampleAt > 1.0 )
+		{
+			_velocitySamplePos = pos;
+			_velocitySampleAt = now;
+			_lastSeenVelocity = Vector3.Zero;
+		}
+		else if ( now - _velocitySampleAt >= 0.25 )
+		{
+			_lastSeenVelocity = ((pos - _velocitySamplePos) / (float)(now - _velocitySampleAt)).WithZ( 0f );
+			_velocitySamplePos = pos;
+			_velocitySampleAt = now;
+		}
+
+		_lastKnownPlayerPos = pos;
+		_hasLastKnown = true;
+	}
+
+	/// <summary>Where the player was last seen, plus where they were heading, on the nav.</summary>
+	Vector3 BuildTrailGoal()
+	{
+		var lead = _lastSeenVelocity * TrailLeadSeconds;
+		var maxLead = TerrainWorldUnits.MetersToEngine( TrailLeadMaxMeters );
+		if ( lead.Length > maxLead )
+			lead = lead.Normal * maxLead;
+		return ProjectSearchPointToNav( _lastKnownPlayerPos + lead );
+	}
+
+	/// <summary>The trail went cold: search around the last place the player was seen (or heard).</summary>
+	void LoseTrailToSearch()
+	{
+		var around = _trailGoalSet ? _trailGoal : _lastKnownPlayerPos;
+		if ( !_hasLastKnown && !_trailGoalSet )
+		{
+			DropChaseToIdle();
+			return;
+		}
+
+		_stimulusPos = around;
+		_hasStimulus = true;
+		_hasSearchGoal = false;
+		_trailGoalSet = false;
+		ClearBreachState();
+		EnterState( EnemyAiState.Searching );
+	}
+
+	/// <summary>
+	/// Close in (<see cref="SlotEngageMeters"/>) the goal is this attacker's bearing on a ring of
+	/// <paramref name="ringFraction"/> × blade reach around the player, so a group fans out round them instead of stacking
+	/// on their feet; further out (or when the player is off nav) it is the live chase point.
+	/// </summary>
+	Vector3 GetMeleeChasePoint( GameObject target, float dist, float ringFraction )
+	{
+		var live = GetLiveChasePoint( target );
+		if ( dist > TerrainWorldUnits.MetersToEngine( SlotReleaseMeters ) )
+			EntityAttackSlots.Release( this );
+		if ( !_chaseGoalReachesTarget || dist > TerrainWorldUnits.MetersToEngine( SlotEngageMeters ) )
+			return live;
+
+		var from = (GameObject.WorldPosition - target.WorldPosition).WithZ( 0f );
+		var side = from.LengthSquared > 1f ? MathF.Atan2( from.y, from.x ) * 180f / MathF.PI : 0f;
+		var bearing = EntityAttackSlots.ClaimBearing( target, this, side );
+		if ( MathF.Abs( Angles.NormalizeAngle( bearing - side ) ) > SlotReclaimDegrees )
+		{
+			EntityAttackSlots.Release( this );
+			bearing = EntityAttackSlots.ClaimBearing( target, this, side );
+		}
+
+		var rad = bearing * MathF.PI / 180f;
+		var slot = live + new Vector3( MathF.Cos( rad ), MathF.Sin( rad ), 0f ) * (SwingReachUnits() * ringFraction);
+		if ( Scene.IsValid()
+		     && EntityNavMeshUtility.TryProjectToNavMesh( Scene, slot, out var onNav, NavProjectTier.Fast )
+		     && MathF.Abs( onNav.z - live.z ) <= 48f )
+			return onNav;
+
+		return live;
+	}
+
+	/// <summary>Blade reach of this entity's weapon class (engine units), read once from its <see cref="PlayerCombat"/>.</summary>
+	float SwingReachUnits()
+	{
+		if ( _swingReachUnits > 1f )
+			return _swingReachUnits;
+
+		var pc = EntityCombat?.Combat ?? Components.Get<PlayerCombat>();
+		if ( pc is null || !pc.IsValid() )
+			return 76f;
+
+		_swingReachUnits = pc.GetMeleeAttackRangeUnits( MeleeAttackTypes.Right );
+		return _swingReachUnits;
 	}
 
 	/// <summary>Locomotion clipped a wall — request a fresh live repath; remember a build piece so breaching can prefer it.</summary>
@@ -1203,6 +1507,8 @@ public sealed partial class EntityBrain : Component
 		RememberLastKnown( noise );
 
 		_searchStartedAt = Time.NowDouble;
+		_searchEndsAt = _searchStartedAt + Sandbox.Game.Random.Float( SearchSecondsMin, SearchSecondsMax );
+		_searchPauseUntil = 0d;
 		_wanderStuckSince = 0d;
 		_hasSearchGoal = true;
 
@@ -1291,76 +1597,110 @@ public sealed partial class EntityBrain : Component
 	{
 		if ( !_target.IsValid() || !IsValidPlayerTarget( _target ) )
 		{
-			// Never abort mid-swing / recovery — finish the cycle first.
+			// Never abort mid-swing — finish it first.
 			if ( EntityCombat is { IsMovementLocked: true } )
 			{
 				Agent?.Stop();
 				return;
 			}
 
-			_target = FindNearestPlayer( ChaseAbandonRange );
-			if ( _target.IsValid() )
+			if ( TryFindVisiblePlayer( out var seen ) )
 			{
-				EnterState( EnemyAiState.Chasing, _target );
+				EnterState( EnemyAiState.Chasing, seen );
 				return;
 			}
 
-			DropChaseToIdle();
+			LoseTrailToSearch();
 			return;
 		}
 
 		var dist = Vector3.DistanceBetween( GameObject.WorldPosition, _target.WorldPosition );
-		var hasLos = HasGeometricLos( _target );
-
+		var hasLos = HasChaseSight( _target );
 		if ( hasLos )
-		{
-			_chaseLastSeenAt = Time.NowDouble;
-			RememberLastKnown( _target.WorldPosition );
-		}
+			NoteSighting( _target );
 
-		Agent?.Stop();
-
-		// Telegraph / swing / recovery: hold state + yaw; do not chase-cancel or re-aim.
-		if ( EntityCombat is { IsMovementLocked: true } )
+		// Released swing: feet planted, yaw locked by the combat cycle.
+		if ( EntityCombat.IsSwingInFlight )
 		{
+			Agent?.Stop();
 			EntityCombat.TickCombat( _target );
 			return;
 		}
 
-		if ( ChaseLosLostAbandonSeconds > 0f
-		     && Time.NowDouble - _chaseLastSeenAt >= ChaseLosLostAbandonSeconds )
+		// Telegraph: keep stepping in at a walk so the swing lands where the player is now, not where they stood.
+		if ( EntityCombat.IsTelegraphing )
 		{
-			DropChaseToIdle();
+			StepInToRing( dist, StrikeRingFraction, run: false );
+			EntityCombat.TickCombat( _target );
 			return;
 		}
 
-		// Only leave after the full attack cycle finished.
-		if ( dist > AttackRange * 1.75f || !hasLos || !IsWithinMeleeVertical( _target ) )
+		if ( Time.NowDouble - _chaseLastSeenAt >= _perception.ChaseLostLosSeconds )
+		{
+			LoseTrailToSearch();
+			return;
+		}
+
+		if ( dist > AttackRange * LeaveAttackRangeFactor || !hasLos || !IsWithinMeleeVertical( _target ) )
 		{
 			EnterState( EnemyAiState.Chasing, _target );
 			return;
 		}
 
+		// Two attack tokens per player: a holder closes in and swings, the rest hold their ring slot just out of reach and
+		// face the player until one frees up — no more three scavs on one spot swinging on their own clocks.
+		var ready = EntityCombat.IsReadyToSwing;
+		var hasToken = ready && EntityAttackSlots.TryTakeToken( _target, this );
+		EntityCombat.AttackPermitted = hasToken;
+		StepInToRing( dist, hasToken ? StrikeRingFraction : WaitRingFraction, run: true );
 		EntityCombat.TickCombat( _target );
+	}
+
+	/// <summary>Attacking: walk to this attacker's ring slot (<paramref name="ringFraction"/> × reach) and plant there.</summary>
+	void StepInToRing( float dist, float ringFraction, bool run )
+	{
+		ApplyAgentSpeed( run );
+		var ring = SwingReachUnits() * ringFraction;
+		if ( dist <= ring + TargetBodyRadiusUnits )
+		{
+			if ( Agent is { IsNavigating: true } )
+				Agent.Stop();
+			return;
+		}
+
+		if ( Time.NowDouble < _nextStepInAt || !IsNavAgentReady() )
+			return;
+
+		_nextStepInAt = Time.NowDouble + StepInRepathSeconds;
+		Agent.MoveTo( GetMeleeChasePoint( _target, dist, ringFraction ) );
 	}
 
 	void TickRetreating()
 	{
-		// Player still nearby while fleeing — re-engage live chase.
-		var nearby = FindNearestPlayer( ChaseAbandonRange * 0.5f );
-		if ( nearby.IsValid() )
+		// Committed to the flee: it turns and fights only when a player it can see is right on it (cornered), and then
+		// for a while. "Any player within 30 m → chase" flipped it back every frame — the next frame's low-HP check sent
+		// it fleeing again, and every flip reset the combat cycle, so it neither fled nor fought.
+		if ( TryFindVisiblePlayer( out var seen )
+		     && Vector3.DistanceBetween( GameObject.WorldPosition, seen.WorldPosition ) <= TerrainWorldUnits.MetersToEngine( RetreatCorneredMeters ) )
 		{
-			EnterState( EnemyAiState.Chasing, nearby );
+			_retreatBlockedUntil = Time.NowDouble + 6d;
+			EnterState( EnemyAiState.Chasing, seen );
 			return;
 		}
 
 		var anchor = Locomotion?.GetNavAnchorWorld() ?? GameObject.WorldPosition;
 		var fled = Vector3.DistanceBetween( _retreatStart.WithZ( 0f ), anchor.WithZ( 0f ) );
 		if ( fled >= _perception.RetreatDistance * 0.92f
+		     || Time.NowDouble - _stateEnteredAt >= RetreatMaxSeconds
 		     || (_retreatGoal != default
 		         && Vector3.DistanceBetween( anchor.WithZ( 0f ), _retreatGoal.WithZ( 0f ) ) <= WanderReachDistance) )
 		{
+			// Got away: calm down (the meter can fill again — it stayed locked before, so it never re-noticed anyone)
+			// and fight rather than flee next time for a while.
 			_alertMeter = 0f;
+			_alertLocked = false;
+			_target = null;
+			_retreatBlockedUntil = Time.NowDouble + RetreatCooldownSeconds;
 			EnterState( EnemyAiState.Idle );
 			return;
 		}
@@ -1496,6 +1836,19 @@ public sealed partial class EntityBrain : Component
 		if ( next != EnemyAiState.Breaching )
 			BreachClaims.Release( this );
 
+		// Melee ring: a token only while attacking, a bearing only while chasing / attacking.
+		if ( next != EnemyAiState.Attacking )
+		{
+			EntityAttackSlots.ReturnToken( this );
+			if ( EntityCombat is not null )
+				EntityCombat.AttackPermitted = true;
+		}
+		if ( next is not (EnemyAiState.Chasing or EnemyAiState.Attacking) )
+			EntityAttackSlots.Release( this );
+		Locomotion?.SetCombatStrafe( next == EnemyAiState.Attacking );
+
+		var prev = _state;
+		_noticing = false;
 		_state = next;
 		_stateEnteredAt = Time.NowDouble;
 		_needsImmediatePathCheck = true;
@@ -1519,6 +1872,12 @@ public sealed partial class EntityBrain : Component
 				else
 					_stateEndsAt = Time.NowDouble + Sandbox.Game.Random.Float(
 						IdleMinSeconds, Math.Max( IdleMinSeconds, IdleMaxSeconds ) );
+				// One idle in four is a longer pause; half of them glance somewhere new.
+				if ( !forceIdleSeconds.HasValue && Sandbox.Game.Random.Float( 0f, 1f ) < 0.25f )
+					_stateEndsAt += (_stateEndsAt - Time.NowDouble) * 1.5;
+				_idleLookDir = Sandbox.Game.Random.Float( 0f, 1f ) < 0.5f
+					? Rotation.FromYaw( GameObject.WorldRotation.Angles().yaw + Sandbox.Game.Random.Float( -110f, 110f ) ).Forward
+					: Vector3.Zero;
 				StopAndIdle();
 				EntityCombat?.SetEngaged( false );
 				EntityCombat?.ResetCycle();
@@ -1559,9 +1918,12 @@ public sealed partial class EntityBrain : Component
 				_alertLocked = true;
 				_nextChaseThinkAt = Time.NowDouble;
 				ResetChaseProgress();
-				// Seed unseen clock only on a fresh chase — Attack↔Chase must not reset the 30s.
-				if ( _chaseLastSeenAt <= 0d )
+				// A fresh hunt (from idle, a search, a retreat) starts its unseen clock now; Attack↔Chase keeps it.
+				if ( prev is not (EnemyAiState.Attacking or EnemyAiState.Chasing or EnemyAiState.Breaching) || _chaseLastSeenAt <= 0d )
+				{
 					_chaseLastSeenAt = Time.NowDouble;
+					_trailGoalSet = false;
+				}
 				if ( target.IsValid() )
 				{
 					RememberLastKnown( target.WorldPosition );
@@ -1642,11 +2004,16 @@ public sealed partial class EntityBrain : Component
 		else
 			facing = facing.Normal;
 
-		var radius = Math.Max( 160f, _perception.WanderDistance );
-		// Raid stragglers came off the same chase facing the same way — a ±70° leg sent the whole
+		// Legs of varied length (35–100 % of the wander distance) on a wide arc; without a leash, once it has drifted more
+		// than two wander distances from home the leg bends back toward home (it used to walk 15 m legs at ±70° forever).
+		var radius = Math.Max( 160f, _perception.WanderDistance * Sandbox.Game.Random.Float( 0.35f, 1f ) );
+		// Raid stragglers came off the same chase facing the same way — a narrow leg sent the whole
 		// group off together as a pack. They pick any direction.
-		var yaw = _isRaidStraggler ? Sandbox.Game.Random.Float( 0f, 360f ) : Sandbox.Game.Random.Float( -70f, 70f );
+		var yaw = _isRaidStraggler ? Sandbox.Game.Random.Float( 0f, 360f ) : Sandbox.Game.Random.Float( -100f, 100f );
 		var dir = Rotation.FromYaw( yaw ) * facing;
+		var toHome = (HomePosition - origin).WithZ( 0f );
+		if ( !HasLeash && !_isRaidStraggler && HomePosition != default && toHome.Length > _perception.WanderDistance * 2f )
+			dir = Rotation.FromYaw( Sandbox.Game.Random.Float( -35f, 35f ) ) * toHome.Normal;
 		var ideal = origin + dir * radius;
 		if ( HasLeash )
 			ideal = ClampWanderGoalToLeash( origin, ideal, radius );
@@ -1989,6 +2356,15 @@ public sealed partial class EntityBrain : Component
 			$"alert={alertPct}% reason={_lastAlertFillReason}" );
 	}
 
+	/// <summary>
+	/// Hunting sight: no cone (it is looking for them) but a range — <see cref="ChaseSightRangeFactor"/> × the perception
+	/// sight range. Plain line of sight at any distance kept a scav "seeing" a player 120 m across open grass.
+	/// </summary>
+	bool HasChaseSight( GameObject target ) =>
+		target.IsValid()
+		&& (target.WorldPosition - GameObject.WorldPosition).Length <= _perception.SightRange * ChaseSightRangeFactor
+		&& HasGeometricLos( target );
+
 	bool HasGeometricLos( GameObject target )
 	{
 		if ( !target.IsValid() )
@@ -2040,7 +2416,8 @@ public sealed partial class EntityBrain : Component
 		if ( !target.IsValid() )
 			return false;
 
-		if ( !EntitySight.IsInFov( origin, facing, target.WorldPosition, _perception.SightFovDegrees ) )
+		if ( !EntitySight.IsInFov( origin, facing, target.WorldPosition, _perception.SightFovDegrees )
+		     && (target.WorldPosition - origin).Length > TerrainWorldUnits.MetersToEngine( ProximitySenseMeters ) )
 			return false;
 
 		return EntitySight.HasClearLos( Scene, eye, GameObject, target, _perception.EyeHeight, out _lastLosDetail );
@@ -2356,6 +2733,7 @@ public sealed partial class EntityBrain : Component
 	{
 		_target = null;
 		BreachClaims.Release( this );
+		EntityAttackSlots.Release( this );
 		EntityCombat?.ResetCycle();
 		Agent?.Stop();
 		Enabled = false;
@@ -2369,9 +2747,6 @@ public sealed partial class EntityBrain : Component
 		Components.Get<BiomePopulationSlot>()?.HandleOwnerDied();
 		GameObject.Destroy();
 	}
-
-	public bool ShouldSkipNavRepath() =>
-		EntityCombat is { IsMovementLocked: true };
 
 	public void RequestImmediateRepath()
 	{

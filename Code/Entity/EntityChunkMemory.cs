@@ -8,14 +8,22 @@ namespace Survival;
 /// <summary>
 /// One despawned entity as the host remembers it: everything needed to clone it back where it stood,
 /// facing the same way, with the health it had. Position is world engine units; the chunk it is filed
-/// under is the terrain chunk (or a 64 m grid cell in a scene without streamed terrain).
+/// under is the terrain chunk (or a 64 m grid cell in a scene without streamed terrain). A population
+/// entity that was never cloned (its cell was beyond the range when the chunk populated) is a record with
+/// <see cref="CurrentHealth"/> 0 = full.
 /// </summary>
 public sealed class EntityMemoryRecord
 {
 	public string PrefabPath;
+	/// <summary>Set for an animal (cloned back through <see cref="AnimalSetup"/>); null = an enemy.</summary>
+	public AnimalSpecies? Species;
+	/// <summary>Animals: the calm state it left in (Idle / Wander / Graze).</summary>
+	public AnimalAiState AnimalState = AnimalAiState.Wander;
 	public EnemyType EnemyType;
 	public int Tier;
+	/// <summary>0 = the species' / type's default.</summary>
 	public float MaxHealth;
+	/// <summary>0 = full (never spawned).</summary>
 	public float CurrentHealth;
 	public Vector3 WorldPosition;
 	public float YawDegrees;
@@ -23,8 +31,6 @@ public sealed class EntityMemoryRecord
 	public Vector3 LeashCenter;
 	public float LeashWanderDistance;
 	public float LeashMaxTravelDistance;
-	/// <summary>A viewer within this many metres brings the entity back: the brain's Sleep Range less a margin so the edge never thrashes.</summary>
-	public float WakeRangeMeters;
 	/// <summary>Biome population binding (null for camp guards and console spawns).</summary>
 	public string SlotKey;
 	public bool SlotRespawn;
@@ -34,19 +40,41 @@ public sealed class EntityMemoryRecord
 
 /// <summary>
 /// Host memory of entities that left the live world (Mark 2026-11-02: a scav that is not tracking a player and has
-/// no player within range writes its location and health to server memory and despawns). <see cref="EntityBrain"/>
-/// calls <see cref="Remember"/> from its 2 Hz range check; this system ticks the records at the same rate and clones
-/// each one back (<see cref="EntityEnemySetup.Configure"/> + the remembered health / leash / population slot) once a
-/// viewer is within its wake range AND there is standable ground under it — on streamed terrain that is the chunk's
+/// no player within range writes its location and health to server memory and despawns; 2026-11-04: animals too, on
+/// their own shorter range: "Make all ferals/ascendants at 300/350m and animals can be 100/90 for now"). <see cref="EntityBrain"/> and
+/// <see cref="AnimalBrain"/> call <see cref="Remember(EntityBrain)"/> / <see cref="Remember(AnimalBrain)"/> from their 2 Hz
+/// range checks, and biome population files a cell that is already out of range straight here without cloning it
+/// (<see cref="TryRememberUnspawned"/>). This system ticks the records at the same rate and clones each one back
+/// (<see cref="EntityEnemySetup.Configure"/> or <see cref="AnimalSetup.Configure"/> + the remembered health / leash /
+/// state / population slot) once a viewer is within its kind's return range (<see cref="EnemyReturnRangeMeters"/> /
+/// <see cref="AnimalReturnRangeMeters"/>) AND there is standable ground under it — on streamed terrain that is the chunk's
 /// collider coming online inside Collision Range, exactly where fresh population spawns. In-memory only: a new world
 /// load clears it (<c>TerrainWorldManager.UnloadAll</c>). <c>entity_memory</c> dumps it.
 /// </summary>
 public sealed class EntityChunkMemory : GameObjectSystem
 {
+	// Entity ranges (Mark 2026-11-04: "Make all ferals/ascendants at 300/350m and animals can be 100/90 for now"). Each pair is
+	// despawn / return in metres: no viewer within the despawn range and an entity leaves the world (or sleeps, when something
+	// holds it here); a remembered one comes back, and a sleeper wakes, once a viewer is within the return range — the gap
+	// keeps the 2 Hz checks from thrashing at the edge. Converted to engine units once, in AnyViewerWithin.
+
+	/// <summary>Enemies (<see cref="EntityBrain"/>, every <see cref="EntityKind"/> — feral, robot, ascended): leave the world past this.</summary>
+	public const float EnemyDespawnRangeMeters = 350f;
+
+	/// <summary>Enemies come back / wake within this.</summary>
+	public const float EnemyReturnRangeMeters = 300f;
+
+	/// <summary>Animals (<see cref="AnimalBrain"/>): leave the world past this.</summary>
+	public const float AnimalDespawnRangeMeters = 100f;
+
+	/// <summary>Animals come back / wake within this.</summary>
+	public const float AnimalReturnRangeMeters = 90f;
+
+	public static float DespawnRangeMetersFor( AnimalSpecies? species ) => species is null ? EnemyDespawnRangeMeters : AnimalDespawnRangeMeters;
+
+	public static float ReturnRangeMetersFor( AnimalSpecies? species ) => species is null ? EnemyReturnRangeMeters : AnimalReturnRangeMeters;
+
 	const float TickSeconds = 0.5f;
-	/// <summary>Wake range = the brain's Sleep Range minus this, so an entity at the edge is not despawned and restored every tick.</summary>
-	public const float WakeHysteresisMeters = 50f;
-	const float MinWakeRangeMeters = 25f;
 	/// <summary>Restores per tick: a chunk full of remembered scavs lands over a few frames, never in one.</summary>
 	const int MaxRestoresPerTick = 2;
 	/// <summary>Grid cell for scenes without streamed terrain (testscene1 and friends).</summary>
@@ -104,19 +132,92 @@ public sealed class EntityChunkMemory : GameObjectSystem
 			LeashCenter = brain.LeashCenter,
 			LeashWanderDistance = brain.LeashWanderDistance,
 			LeashMaxTravelDistance = brain.LeashMaxTravelDistance,
-			WakeRangeMeters = Math.Max( MinWakeRangeMeters, brain.SleepRangeMeters - WakeHysteresisMeters ),
 			RememberedAt = Time.NowDouble,
 		};
 
-		var slot = go.Components.Get<BiomePopulationSlot>();
-		if ( slot is not null && !string.IsNullOrWhiteSpace( slot.SlotKey ) )
+		BindSlot( record, go );
+		File( record );
+		return true;
+	}
+
+	/// <summary>Host: file a calm, untamed animal (the caller checked). Same contract as the enemy overload.</summary>
+	public bool Remember( AnimalBrain brain )
+	{
+		if ( brain is null || !brain.IsValid() || string.IsNullOrWhiteSpace( brain.SourcePrefabPath ) )
+			return false;
+
+		var go = brain.GameObject;
+		var vitals = brain.Vitals ?? go.Components.Get<EntityVitals>();
+		if ( vitals is null )
+			return false;
+
+		var record = new EntityMemoryRecord
 		{
-			record.SlotKey = slot.SlotKey;
-			record.SlotRespawn = slot.Respawn;
-			record.SlotRespawnDelaySeconds = slot.RespawnDelaySeconds;
-			BiomePopulationRegistry.NotifyRemembered( slot.SlotKey );
+			PrefabPath = brain.SourcePrefabPath,
+			Species = brain.Species,
+			AnimalState = brain.CurrentState,
+			EnemyType = vitals.EnemyType,
+			Tier = Math.Max( 1, vitals.Tier ),
+			MaxHealth = Math.Max( 1f, vitals.CurrentHealthMax ),
+			CurrentHealth = Math.Clamp( vitals.CurrentHealth, 0.001f, Math.Max( 1f, vitals.CurrentHealthMax ) ),
+			WorldPosition = go.WorldPosition,
+			YawDegrees = go.WorldRotation.Yaw(),
+			HomePosition = brain.HomePosition,
+			RememberedAt = Time.NowDouble,
+		};
+
+		BindSlot( record, go );
+		File( record );
+		return true;
+	}
+
+	/// <summary>
+	/// Host, biome population: a cell whose spot has no viewer within its kind's despawn range goes straight into
+	/// memory instead of being cloned and despawned on its first range check. False = spawn it live.
+	/// </summary>
+	public static bool TryRememberUnspawned( Scene scene, BiomePopulationEntry entry, string slotKey, Vector3 worldPosition )
+	{
+		var memory = Get( scene );
+		if ( memory is null || string.IsNullOrWhiteSpace( entry.PrefabPath ) || AnyViewerWithin( scene, worldPosition, DespawnRangeMetersFor( entry.Species ) ) )
+			return false;
+
+		var record = new EntityMemoryRecord
+		{
+			PrefabPath = entry.PrefabPath.Trim(),
+			Species = entry.Species,
+			EnemyType = entry.EnemyType,
+			Tier = Math.Max( 1, entry.Tier ),
+			WorldPosition = worldPosition,
+			HomePosition = worldPosition,
+			RememberedAt = Time.NowDouble,
+		};
+
+		if ( !string.IsNullOrWhiteSpace( slotKey ) )
+		{
+			record.SlotKey = slotKey;
+			record.SlotRespawn = entry.Respawn;
+			record.SlotRespawnDelaySeconds = entry.RespawnDelaySeconds;
+			BiomePopulationRegistry.NotifyRemembered( slotKey );
 		}
 
+		memory.File( record );
+		return true;
+	}
+
+	static void BindSlot( EntityMemoryRecord record, GameObject go )
+	{
+		var slot = go.Components.Get<BiomePopulationSlot>();
+		if ( slot is null || string.IsNullOrWhiteSpace( slot.SlotKey ) )
+			return;
+
+		record.SlotKey = slot.SlotKey;
+		record.SlotRespawn = slot.Respawn;
+		record.SlotRespawnDelaySeconds = slot.RespawnDelaySeconds;
+		BiomePopulationRegistry.NotifyRemembered( slot.SlotKey );
+	}
+
+	void File( EntityMemoryRecord record )
+	{
 		var coord = ChunkOf( record.WorldPosition );
 		if ( !_chunks.TryGetValue( coord, out var list ) )
 		{
@@ -127,7 +228,6 @@ public sealed class EntityChunkMemory : GameObjectSystem
 		list.Add( record );
 		Count++;
 		RememberedTotal++;
-		return true;
 	}
 
 	void Tick()
@@ -152,7 +252,7 @@ public sealed class EntityChunkMemory : GameObjectSystem
 			for ( var i = list.Count - 1; i >= 0 && restores < MaxRestoresPerTick; i-- )
 			{
 				var record = list[i];
-				var wakeMeters = record.WakeRangeMeters;
+				var wakeMeters = ReturnRangeMetersFor( record.Species );
 				// Streamed terrain: an entity only exists where the chunk collider is live, like fresh population.
 				if ( manager is not null )
 					wakeMeters = Math.Min( wakeMeters, manager.CollisionRangeMeters );
@@ -194,17 +294,31 @@ public sealed class EntityChunkMemory : GameObjectSystem
 		instance.WorldPosition = feet;
 		instance.WorldRotation = Rotation.FromYaw( record.YawDegrees );
 
-		EntityEnemySetup.Configure( instance, record.EnemyType, record.Tier, record.MaxHealth, record.PrefabPath );
-
-		var brain = instance.Components.Get<EntityBrain>();
-		if ( brain is not null )
+		if ( record.Species is { } species )
 		{
-			brain.SetHomePosition( record.HomePosition );
-			if ( record.LeashWanderDistance > 0f )
-				brain.SetLeash( record.LeashCenter, record.LeashWanderDistance, record.LeashMaxTravelDistance );
+			AnimalSetup.Configure( instance, species, record.MaxHealth, prefabPath: record.PrefabPath );
+			var animal = instance.Components.Get<AnimalBrain>();
+			if ( animal is not null )
+			{
+				animal.SetHomePosition( record.HomePosition );
+				animal.ResumeRememberedState( record.AnimalState );
+			}
+		}
+		else
+		{
+			EntityEnemySetup.Configure( instance, record.EnemyType, record.Tier, record.MaxHealth, record.PrefabPath );
+
+			var brain = instance.Components.Get<EntityBrain>();
+			if ( brain is not null )
+			{
+				brain.SetHomePosition( record.HomePosition );
+				if ( record.LeashWanderDistance > 0f )
+					brain.SetLeash( record.LeashCenter, record.LeashWanderDistance, record.LeashMaxTravelDistance );
+			}
 		}
 
-		instance.Components.Get<EntityVitals>()?.RestoreHealth( record.CurrentHealth );
+		if ( record.CurrentHealth > 0f )
+			instance.Components.Get<EntityVitals>()?.RestoreHealth( record.CurrentHealth );
 
 		if ( !string.IsNullOrWhiteSpace( record.SlotKey ) )
 		{
@@ -214,6 +328,7 @@ public sealed class EntityChunkMemory : GameObjectSystem
 				EntityId = record.SlotKey.Split( ':' )[0],
 				PrefabPath = record.PrefabPath,
 				EnemyType = record.EnemyType,
+				Species = record.Species,
 				Tier = record.Tier,
 				Respawn = record.SlotRespawn,
 				RespawnDelaySeconds = record.SlotRespawnDelaySeconds,
@@ -366,7 +481,9 @@ public sealed class EntityChunkMemory : GameObjectSystem
 			{
 				var m = TerrainWorldUnits.EngineToMeters( r.WorldPosition );
 				var slot = string.IsNullOrWhiteSpace( r.SlotKey ) ? "" : $" slot {r.SlotKey}";
-				sb.Append( $"\n    {r.EnemyType} T{r.Tier} {r.CurrentHealth:0}/{r.MaxHealth:0} hp at ({m.x:0},{m.y:0},{m.z:0}) m, {Time.NowDouble - r.RememberedAt:0} s ago{slot}" );
+				var kind = r.Species is { } sp ? $"{sp} ({r.AnimalState})" : $"{r.EnemyType} T{r.Tier}";
+				var hp = r.CurrentHealth > 0f ? $"{r.CurrentHealth:0}/{r.MaxHealth:0} hp" : "full";
+				sb.Append( $"\n    {kind} {hp} at ({m.x:0},{m.y:0},{m.z:0}) m, {Time.NowDouble - r.RememberedAt:0} s ago{slot}" );
 			}
 		}
 
