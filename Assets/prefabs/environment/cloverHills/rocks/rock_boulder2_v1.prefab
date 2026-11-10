@@ -1,0 +1,298 @@
+{
+  "RootObject": {
+    "__guid": "b8f44c36-14dc-5144-8bfe-c0e7c00e6910",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "rock_boulder2_v1",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "",
+    "Enabled": true,
+    "NetworkMode": 2,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 1,
+    "Components": [
+      {
+        "__type": "Survival.MineableRock",
+        "__guid": "74564958-0168-5860-af11-b98f2ca2b859",
+        "__enabled": true,
+        "Flags": 0,
+        "HitsPerSection": 5,
+        "RequireMineTool": true,
+        "GroundedSections": [
+          0,
+          1,
+          2
+        ],
+        "SectionLinks": [
+          "3-0",
+          "3-1",
+          "3-2"
+        ],
+        "StoneResourceId": "resource_stone",
+        "StoneMin": 3,
+        "StoneMax": 5,
+        "CollapseStoneMin": 2,
+        "CollapseStoneMax": 4,
+        "PieceModels": [],
+        "BitModels": [
+          "models/environment/cloverHills/rocks/rock_bit1_v1.vmdl",
+          "models/environment/cloverHills/rocks/rock_bit2_v1.vmdl",
+          "models/environment/cloverHills/rocks/rock_bit3_v1.vmdl",
+          "models/environment/cloverHills/rocks/rock_bit4_v1.vmdl",
+          "models/environment/cloverHills/rocks/rock_bit5_v1.vmdl"
+        ],
+        "ChipModels": [
+          "models/resources/stone/stone_drop1_v1.vmdl",
+          "models/resources/stone/stone_drop2_v1.vmdl",
+          "models/resources/stone/stone_drop3_v1.vmdl",
+          "models/resources/stone/stone_drop4_v1.vmdl"
+        ],
+        "BitsPerSection": 7,
+        "BitScale": 0.9,
+        "DebrisLifetimeSeconds": 3.5,
+        "DebrisScatterMeters": 1.5,
+        "LogMining": false
+      }
+    ],
+    "Children": [
+      {
+        "__guid": "38d7b73a-ac01-570a-aa19-d8d7af24c180",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "section0",
+        "Position": "0,0,0",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "rock_section",
+        "Enabled": true,
+        "NetworkMode": 2,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "d98e7e2b-f03c-55c2-b2bf-79a9d28a6d56",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": null,
+            "Materials": null,
+            "Model": "models/environment/cloverHills/rocks/rock_boulder2_v1_s0.vmdl",
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          },
+          {
+            "__type": "Sandbox.ModelCollider",
+            "__guid": "7a4c7c5a-1557-534d-8da8-300cf417d5e1",
+            "__enabled": true,
+            "Flags": 0,
+            "ColliderFlags": 0,
+            "Elasticity": null,
+            "Friction": null,
+            "IsTrigger": false,
+            "Model": "models/environment/cloverHills/rocks/rock_boulder2_v1_s0.vmdl",
+            "RollingResistance": null,
+            "Static": true,
+            "Surface": null,
+            "SurfaceVelocity": "0,0,0"
+          }
+        ],
+        "Children": []
+      },
+      {
+        "__guid": "e5549994-bddf-58b1-a1d8-e14c333bbec7",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "section1",
+        "Position": "0,0,0",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "rock_section",
+        "Enabled": true,
+        "NetworkMode": 2,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "39fbc5a5-dbad-5e07-8e8e-a637501f300b",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": null,
+            "Materials": null,
+            "Model": "models/environment/cloverHills/rocks/rock_boulder2_v1_s1.vmdl",
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          },
+          {
+            "__type": "Sandbox.ModelCollider",
+            "__guid": "7b2b0a12-7f26-5906-90b4-1aca85fc32b2",
+            "__enabled": true,
+            "Flags": 0,
+            "ColliderFlags": 0,
+            "Elasticity": null,
+            "Friction": null,
+            "IsTrigger": false,
+            "Model": "models/environment/cloverHills/rocks/rock_boulder2_v1_s1.vmdl",
+            "RollingResistance": null,
+            "Static": true,
+            "Surface": null,
+            "SurfaceVelocity": "0,0,0"
+          }
+        ],
+        "Children": []
+      },
+      {
+        "__guid": "366d2816-108d-5b4a-af2c-7776bd0de558",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "section2",
+        "Position": "0,0,0",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "rock_section",
+        "Enabled": true,
+        "NetworkMode": 2,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "30b73da4-a383-5790-8dcb-b14520cd4375",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": null,
+            "Materials": null,
+            "Model": "models/environment/cloverHills/rocks/rock_boulder2_v1_s2.vmdl",
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          },
+          {
+            "__type": "Sandbox.ModelCollider",
+            "__guid": "68009f50-651f-55aa-a678-32dd712980f7",
+            "__enabled": true,
+            "Flags": 0,
+            "ColliderFlags": 0,
+            "Elasticity": null,
+            "Friction": null,
+            "IsTrigger": false,
+            "Model": "models/environment/cloverHills/rocks/rock_boulder2_v1_s2.vmdl",
+            "RollingResistance": null,
+            "Static": true,
+            "Surface": null,
+            "SurfaceVelocity": "0,0,0"
+          }
+        ],
+        "Children": []
+      },
+      {
+        "__guid": "67192afc-6156-56e0-91ce-03a6908d4d33",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "section3",
+        "Position": "0,0,0",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "rock_section",
+        "Enabled": true,
+        "NetworkMode": 2,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "1fe41030-769f-5c1c-851c-9f00b3e5de41",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": null,
+            "Materials": null,
+            "Model": "models/environment/cloverHills/rocks/rock_boulder2_v1_s3.vmdl",
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          },
+          {
+            "__type": "Sandbox.ModelCollider",
+            "__guid": "ad64899d-2c0a-5d7d-8d36-a146c2fbd8ba",
+            "__enabled": true,
+            "Flags": 0,
+            "ColliderFlags": 0,
+            "Elasticity": null,
+            "Friction": null,
+            "IsTrigger": false,
+            "Model": "models/environment/cloverHills/rocks/rock_boulder2_v1_s3.vmdl",
+            "RollingResistance": null,
+            "Static": true,
+            "Surface": null,
+            "SurfaceVelocity": "0,0,0"
+          }
+        ],
+        "Children": []
+      }
+    ],
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {}
+    },
+    "__variables": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

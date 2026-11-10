@@ -8,10 +8,11 @@ namespace Survival;
 /// (<see cref="ToolHoe"/>). The tools aim and preview on the client; every stroke comes through here as intent, the host
 /// checks it once (tool not broken, the point within the tool's reach, the voxel target's own radius / depth rules), applies
 /// it through the scene's <see cref="IVoxelBrushTarget"/> and charges one durability tick <b>only when the ground actually
-/// changed</b>. RPCs live on the networked pawn, never on the locally cloned tool prefab (the farming pattern).
+/// changed</b>. RPCs live on the networked pawn, never on the locally cloned tool prefab (the farming pattern). The pickaxe on
+/// a <see cref="MineableRock"/> goes through the same door (<c>PlayerTerraform.Rock.cs</c>).
 /// </summary>
 [Title( "Player Terraform" )]
-public sealed class PlayerTerraform : Component
+public sealed partial class PlayerTerraform : Component
 {
 	/// <summary>
 	/// The hoe's dirt costs nothing while this is on, or while the owner's <c>allCrafting</c> hack is (the same command that
@@ -22,7 +23,8 @@ public sealed class PlayerTerraform : Component
 	[Property, Group( "Materials" ), Title( "Free Materials" ), Description( "Raise costs no dirt and Cobblestone no stone (dev). Also free whenever the allCrafting hack is on." )] public bool FreeMaterials { get; set; } = true;
 	[Property, Group( "Materials" ), Title( "Dirt Resource Id" )] public string DirtResourceId { get; set; } = "resource_dirt";
 	[Property, Group( "Materials" ), Title( "Raise Dirt Cost" ), Range( 0, 20 ), Description( "Dirt one Raise layer costs (Mark 2026-11-02: \"make it cost some dirt\")." )] public int RaiseDirtCost { get; set; } = 1;
-	[Property, Group( "Materials" ), Title( "Chip Dirt Yield" ), Range( 0, 20 ), Description( "Dirt one pickaxe chip of the ground hands back - what the Raise layer is paid with." )] public int ChipDirtYield { get; set; } = 1;
+	[Property, Group( "Materials" ), Title( "Chip Dirt Yield" ), Range( 0, 20 ), Description( "Dirt one pickaxe chip of soil hands back - what the Raise layer is paid with." )] public int ChipDirtYield { get; set; } = 1;
+	[Property, Group( "Materials" ), Title( "Chip Stone Yield" ), Range( 0, 20 ), Description( "Stone one pickaxe chip of rock hands back (rock tile: mountain, 4-8 m down, cobblestone) instead of dirt." )] public int ChipStoneYield { get; set; } = 1;
 	[Property, Group( "Materials" ), Title( "Stone Resource Id" )] public string StoneResourceId { get; set; } = "resource_stone";
 	[Property, Group( "Materials" ), Title( "Cobble Stone Cost" ), Range( 0, 20 ), Description( "Stone one Cobblestone stroke costs (Mark 2026-11-02: \"should require 1 rock per action\")." )] public int CobbleStoneCost { get; set; } = 1;
 	[Property, Group( "Debug" )] public bool LogTerraform { get; set; }
@@ -144,13 +146,18 @@ public sealed class PlayerTerraform : Component
 				Log.Info( "[PlayerTerraform] chip rejected: too tired" );
 			return;
 		}
+		// What the pick is hitting decides the drop (Mark 2026-11-02: "the pickaxe needs to check what its hitting"): read the
+		// surface before the chip takes it away - rock (the shader's rock tile) gives stone, soil gives dirt.
+		var rock = Target.RockAt( hitEngine - (normal.Normal * TerrainWorldUnits.MetersToEngine( Math.Max( 0.05f, depthMeters ) * 0.5f )) ) >= 0.5f;
 		if ( !Target.RequestChip( hitEngine, normal, radiusMeters, depthMeters ) )
 			return;
-		// The ground changed: the swing is paid for - wear, stamina, and the dirt it loosened goes to the bag
+		// The ground changed: the swing is paid for - wear, stamina, and what it loosened goes to the bag
 		ToolDurability.HostAddWearToActiveTool( GameObject );
 		vitals?.TrySpendStamina( stamina );
-		if ( ChipDirtYield > 0 && !string.IsNullOrWhiteSpace( DirtResourceId ) )
-			Components.Get<PlayerInventory>()?.HostTryAddResource( DirtResourceId, ChipDirtYield );
+		var yieldId = rock ? StoneResourceId : DirtResourceId;
+		var yieldCount = rock ? ChipStoneYield : ChipDirtYield;
+		if ( yieldCount > 0 && !string.IsNullOrWhiteSpace( yieldId ) )
+			Components.Get<PlayerInventory>()?.HostTryAddResource( yieldId, yieldCount );
 		if ( LogTerraform )
 			Log.Info( $"[PlayerTerraform] chip r {radiusMeters:0.00} m, {depthMeters:0.00} m deep at {TerrainWorldUnits.EngineToMeters( hitEngine )}" );
 	}

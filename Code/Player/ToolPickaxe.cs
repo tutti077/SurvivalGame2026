@@ -10,8 +10,9 @@ namespace Survival;
 /// reach: a ring shows the circle the pick will take, lying on the surface (flat on a floor, upright on a cliff). Attack1
 /// chips a shallow disc of that radius and <see cref="ChipDepthMeters"/> deep out of it (<see cref="VoxelBrushMode.Chip"/>);
 /// holding the button swings again every <see cref="SwingSeconds"/>. The stroke goes through <see cref="PlayerTerraform"/>
-/// (host re-checks reach and tool, one durability tick per stroke that changed the ground). Does nothing in a scene without
-/// voxel ground.
+/// (host re-checks reach and tool, one durability tick per stroke that changed the ground). Does nothing to the ground in a
+/// scene without voxel ground. Aimed at a <see cref="MineableRock"/> it hits the rock instead (one hit per swing, the host
+/// counts them: PlayerTerraform.Rock.cs).
 /// </summary>
 [Title( "Tool Pickaxe" )]
 public sealed class ToolPickaxe : Component
@@ -56,10 +57,6 @@ public sealed class ToolPickaxe : Component
 		GameHacks.ApplySimulatedInput( SwingAction );
 
 		_terraform ??= Pawn.Components.Get<PlayerTerraform>();
-		var target = _terraform?.Target;
-		if ( target is null || !target.IsReady )
-			return;
-
 		if ( !BuildViewCamera.TryGetViewRay( Pawn, out var origin, out var direction ) )
 			return;
 		var scene = Pawn.Scene.IsValid() ? Pawn.Scene : Sandbox.Game.ActiveScene;
@@ -68,7 +65,18 @@ public sealed class ToolPickaxe : Component
 
 		var reach = TerrainWorldUnits.MetersToEngine( Math.Max( 0.5f, ReachMeters ) );
 		var tr = FarmingRules.TraceView( scene, Pawn, origin, direction, reach );
-		if ( !tr.Hit || !IsGround( tr.GameObject ) )
+		if ( !tr.Hit )
+			return;
+
+		// a mineable rock (breakable rock, boulder or spire section) takes the hit before the ground under it
+		if ( MineableRock.TryResolve( tr.GameObject, out var rock, out var section ) )
+		{
+			TickRockSwing( rock, section, tr );
+			return;
+		}
+
+		var target = _terraform?.Target;
+		if ( target is null || !target.IsReady || !IsGround( tr.GameObject ) )
 			return;
 
 		var normal = tr.Normal.LengthSquared > 1e-6f ? tr.Normal.Normal : Vector3.Up;
@@ -104,6 +112,27 @@ public sealed class ToolPickaxe : Component
 		_terraform.OwnerRequestChip( tr.HitPosition, normal, ChipRadiusMeters, ChipDepthMeters, ReachMeters );
 		if ( LogChips )
 			Log.Info( $"[ToolPickaxe] chip at {TerrainWorldUnits.EngineToMeters( tr.HitPosition )} m, normal {normal}" );
+	}
+
+	/// <summary>Swing timing on a rock: same button, interval, broken-tool and stamina rules as a chip; no ring.</summary>
+	void TickRockSwing( MineableRock rock, int section, in SceneTraceResult tr )
+	{
+		var pressed = Input.Pressed( SwingAction );
+		var held = Input.Down( SwingAction ) && Time.NowDouble >= _nextSwingAt;
+		if ( !pressed && !held )
+			return;
+		_nextSwingAt = Time.NowDouble + Math.Max( 0.1f, SwingSeconds );
+		if ( ToolDurability.IsActiveToolBroken( Pawn ) || _terraform is null || !_terraform.CanAffordStroke( VoxelBrushMode.Chip, out _ ) )
+		{
+			if ( LogChips )
+				Log.Info( "[ToolPickaxe] rock swing rejected: broken, tired or no PlayerTerraform" );
+			return;
+		}
+		var normal = tr.Normal.LengthSquared > 1e-6f ? tr.Normal.Normal : -tr.Direction;
+		rock.PlayHitChips( tr.HitPosition, normal );
+		_terraform.OwnerRequestMine( rock, section, tr.HitPosition, ReachMeters );
+		if ( LogChips )
+			Log.Info( $"[ToolPickaxe] hit {rock.GameObject.Name} section {section}" );
 	}
 
 	/// <summary>Only the world's ground (heightfield chunks and voxel chunks) takes a chip - not build pieces, props or rocks.</summary>

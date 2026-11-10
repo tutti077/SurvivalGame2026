@@ -1,0 +1,11 @@
+// Gunmetal stone (Blender/scripts/create_rock_gunmetal_texture.py): 256 px point-filtered texture, faceted,
+// tiled x0.23 so pebble1-3 + rockpickup1 (~550: the whole texture on one pebble) land at ~128 texels / m.
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.900"
+	PixelFlatShading "1.000"
+	PixelTexCoordScale "[0.230 0.230]"
+	TextureColor "materials/environment/cloverHills/rocks/rock_gunmetal.png"
+}

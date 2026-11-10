@@ -1,0 +1,11 @@
+// Gunmetal stone (Blender/scripts/create_rock_gunmetal_texture.py): 256 px point-filtered texture, faceted,
+// tiled x1 so the mineable set from create_mineable_rocks.py (UVs authored at 2 m per tile) land at ~128 texels / m.
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.900"
+	PixelFlatShading "1.000"
+	PixelTexCoordScale "[1.000 1.000]"
+	TextureColor "materials/environment/cloverHills/rocks/rock_gunmetal.png"
+}

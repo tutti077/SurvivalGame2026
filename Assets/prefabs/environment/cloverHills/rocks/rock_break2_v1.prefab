@@ -1,0 +1,129 @@
+{
+  "RootObject": {
+    "__guid": "38a39b69-8b13-53af-8580-30805cd82eb5",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "rock_break2_v1",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "",
+    "Enabled": true,
+    "NetworkMode": 2,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 1,
+    "Components": [
+      {
+        "__type": "Survival.MineableRock",
+        "__guid": "1db840c6-46ab-5845-94f3-41bec254cd87",
+        "__enabled": true,
+        "Flags": 0,
+        "HitsPerSection": 4,
+        "RequireMineTool": true,
+        "GroundedSections": [
+          0
+        ],
+        "SectionLinks": [],
+        "StoneResourceId": "resource_stone",
+        "StoneMin": 3,
+        "StoneMax": 5,
+        "CollapseStoneMin": 0,
+        "CollapseStoneMax": 0,
+        "PieceModels": [
+          "models/environment/cloverHills/rocks/rock_break2_v1_p0.vmdl",
+          "models/environment/cloverHills/rocks/rock_break2_v1_p1.vmdl",
+          "models/environment/cloverHills/rocks/rock_break2_v1_p2.vmdl",
+          "models/environment/cloverHills/rocks/rock_break2_v1_p3.vmdl",
+          "models/environment/cloverHills/rocks/rock_break2_v1_p4.vmdl",
+          "models/environment/cloverHills/rocks/rock_break2_v1_p5.vmdl",
+          "models/environment/cloverHills/rocks/rock_break2_v1_p6.vmdl"
+        ],
+        "BitModels": [],
+        "ChipModels": [
+          "models/resources/stone/stone_drop1_v1.vmdl",
+          "models/resources/stone/stone_drop2_v1.vmdl",
+          "models/resources/stone/stone_drop3_v1.vmdl",
+          "models/resources/stone/stone_drop4_v1.vmdl"
+        ],
+        "BitsPerSection": 0,
+        "BitScale": 1.0,
+        "DebrisLifetimeSeconds": 2.0,
+        "DebrisScatterMeters": 2.5,
+        "LogMining": false
+      }
+    ],
+    "Children": [
+      {
+        "__guid": "f16a3ccc-3f81-5941-b326-ccfb02b9b390",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "section0",
+        "Position": "0,0,0",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "rock_section",
+        "Enabled": true,
+        "NetworkMode": 2,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "7d6bc282-7a47-50d4-b5e1-a8d003c8b4fb",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": null,
+            "Materials": null,
+            "Model": "models/environment/cloverHills/rocks/rock_break2_v1.vmdl",
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          },
+          {
+            "__type": "Sandbox.ModelCollider",
+            "__guid": "73c72d2d-08b0-558b-9506-dcaabe4bab0d",
+            "__enabled": true,
+            "Flags": 0,
+            "ColliderFlags": 0,
+            "Elasticity": null,
+            "Friction": null,
+            "IsTrigger": false,
+            "Model": "models/environment/cloverHills/rocks/rock_break2_v1.vmdl",
+            "RollingResistance": null,
+            "Static": true,
+            "Surface": null,
+            "SurfaceVelocity": "0,0,0"
+          }
+        ],
+        "Children": []
+      }
+    ],
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {}
+    },
+    "__variables": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}
