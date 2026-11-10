@@ -34,8 +34,8 @@ public sealed class EnvironmentDayNightCycle : Component
 	[Property, Group( "Timing" ), Title( "Dawn / dusk blend (s)" )]
 	public float TransitionSeconds { get; set; } = 5f;
 
-	[Property, Group( "Timing" ), Title( "Start at night" )]
-	public bool StartAtNight { get; set; }
+	[Property, Group( "Timing" ), Title( "Start hour (0–24)" ), Range( 0f, 24f ), Description( "Clock time the cycle starts at when the scene loads (held there until the world load screen lifts): 6 = sunrise, 12 = noon, 18 = sunset, 0 = midnight. The sun turns at a constant rate, so hour h is cycle point (h − 6) / 24 whatever the day / night lengths." )]
+	public float StartHour { get; set; } = 6f;
 
 	[Property, Group( "Timing" ), Title( "Paused" )]
 	public bool Paused { get; set; }
@@ -76,8 +76,8 @@ public sealed class EnvironmentDayNightCycle : Component
 	[Property, Group( "Sky" ), Title( "Sky dome" )]
 	public SkyDome SkyDome { get; set; }
 
-	[Property, Group( "Sky" ), Title( "Fog (horizon colour)" ), Description( "Optional. Its colour follows the preset horizon so distant ground melts into the sky day and night." )]
-	public GradientFog Fog { get; set; }
+	[Property, Group( "Sky" ), Title( "Aerial perspective" ), Description( "Optional. The scene-wide distance haze; it takes the preset horizon and sun glow each frame so the far world melts into the sky day and night." )]
+	public AerialPerspective Haze { get; set; }
 
 	[Property, Group( "Disks" )]
 	public GameObject SunDisk { get; set; }
@@ -116,12 +116,6 @@ public sealed class EnvironmentDayNightCycle : Component
 	[Property, Group( "Debug" ), Title( "Log phase changes" )]
 	public bool LogPhaseChanges { get; set; }
 
-	[Property, Group( "Debug" ), Title( "Jump-to-noon action" ), Description( "Input action (ProjectSettings/Input.config) that snaps the cycle to noon. Empty = off. Console: cycle_day." )]
-	public string JumpToDayAction { get; set; } = "CycleDay";
-
-	[Property, Group( "Debug" ), Title( "Jump-to-midnight action" ), Description( "Input action that snaps the cycle to midnight. Empty = off. Console: cycle_night." )]
-	public string JumpToNightAction { get; set; } = "CycleNight";
-
 	[Property, Group( "Calendar" ), Title( "World save name" ), Description( "Optional override for world.json. Empty = TerrainWorldManager / menu session world." )]
 	public string WorldSaveName { get; set; } = "";
 
@@ -145,16 +139,19 @@ public sealed class EnvironmentDayNightCycle : Component
 	SkyPresetData _preset;
 	SkyLook _night, _dawn, _day, _noon, _dusk;
 	readonly System.Collections.Generic.Dictionary<Tonemapping, float> _authoredMaxExposure = new();
+	TerrainWorldManager _world;
 
 	protected override void OnStart()
 	{
 		ResolveRefs();
+		_world = Scene.GetAllComponents<TerrainWorldManager>().FirstOrDefault();
 		BanEngineSkyBoxes();
 		DisableFogOnLights();
 		EnsureDiskVisualOnly( SunDisk );
 		EnsureDiskVisualOnly( MoonDisk );
 		RecalculateCycleLength();
-		CycleTimeSeconds = StartAtNight ? DaySeconds + TransitionSeconds : 0f;
+		var startCycle01 = (StartHour - 6f) / 24f;
+		CycleTimeSeconds = _cycleLength * (startCycle01 - MathF.Floor( startCycle01 ));
 		LoadDayNumberFromWorldSave();
 		EvaluatePhase( out var startPhase, out _, out _, out _ );
 		Phase = startPhase;
@@ -165,12 +162,18 @@ public sealed class EnvironmentDayNightCycle : Component
 
 	protected override void OnUpdate()
 	{
-		if ( !string.IsNullOrEmpty( JumpToDayAction ) && Input.Pressed( JumpToDayAction ) )
-			JumpToNoon();
-		if ( !string.IsNullOrEmpty( JumpToNightAction ) && Input.Pressed( JumpToNightAction ) )
-			JumpToMidnight();
-
-		if ( !Paused )
+		// No single-key jumps (the Y / U hotkeys are gone, 2026-11-03): the U action fired while Mark flew the fly camera
+		// and snapped the world to midnight. Console cycle_day / cycle_night still jump.
+		// The clock holds behind the world load screen, so the scene opens on Start hour, not half an hour later.
+		var worldLoading = _world is not null && _world.IsValid() && _world.IsLoadScreenUp;
+		// Host-wide dev lock (Settings → Dev tools, synced to every peer): noon, held.
+		if ( DevToolsSettings.DayLocked )
+		{
+			RecalculateCycleLength();
+			if ( MathF.Abs( CycleTimeSeconds - _cycleLength * 0.25f ) > 1e-3f )
+				JumpToNoon();
+		}
+		else if ( !Paused && !worldLoading )
 		{
 			RecalculateCycleLength();
 			CycleTimeSeconds += Time.Delta;
@@ -197,6 +200,23 @@ public sealed class EnvironmentDayNightCycle : Component
 		ApplyVisuals( force: true );
 	}
 
+	/// <summary>
+	/// Game-clock hours since day 1 dawn: (DayNumber − 1) × 24 + hours into the cycle. What timed stations (the
+	/// drying rack) count in. False when the scene has no active cycle.
+	/// </summary>
+	public static bool TryGetGameHours( out double hours )
+	{
+		var cycle = FindActive();
+		if ( cycle is null || cycle._cycleLength <= 0f )
+		{
+			hours = 0;
+			return false;
+		}
+
+		hours = ( cycle.DayNumber - 1 ) * 24.0 + cycle.CycleTimeSeconds / cycle._cycleLength * 24.0;
+		return true;
+	}
+
 	static EnvironmentDayNightCycle FindActive()
 	{
 		var scene = Sandbox.Game.ActiveScene;
@@ -207,8 +227,7 @@ public sealed class EnvironmentDayNightCycle : Component
 
 	/// <summary>
 	/// Dev: switch the scene's day / night cycle on or off. Finds the cycle's GameObject even while it is disabled
-	/// (terrainTest ships its DayNightCycle group — cycle + sky dome + sun / moon disks + moon light — disabled, so
-	/// the plain sun stays until you ask for the 3-minute loop).
+	/// (the DayNightCycle group — cycle + sky dome + sun / moon disks + moon light; switched off, the plain sun stays).
 	/// </summary>
 	[ConCmd( "cycle_toggle" )]
 	public static void ConCmdToggle()
@@ -545,8 +564,8 @@ public sealed class EnvironmentDayNightCycle : Component
 		if ( SkyDome is not null && SkyDome.IsValid() )
 			SkyDome.Apply( look, sunDir, _preset.CloudScale, _preset.CloudSpeed, starVisibility );
 
-		if ( Fog is not null && Fog.IsValid() )
-			Fog.Color = look.Horizon.WithAlpha( 1f );
+		if ( Haze is not null && Haze.IsValid() )
+			Haze.Apply( look.Horizon, look.SunGlow, sunDir );
 
 		// Clear colour = horizon, so anything past the dome (or a scene without one) still matches.
 		var clear = look.Horizon.WithAlpha( 1f );

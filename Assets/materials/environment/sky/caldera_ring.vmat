@@ -1,0 +1,4 @@
+Layer0
+{
+	shader "shaders/environment/caldera_ring.shader"
+}

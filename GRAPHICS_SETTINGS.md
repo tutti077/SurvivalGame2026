@@ -108,7 +108,7 @@ engine setting but not in our menu yet (where it lives is noted) · `[ ]` = noth
 
 ## Characters and animation
 
-- [~] Entity animation distance / dormancy — **EntityBrain Sleep Range (m)** (**350**).
+- [~] Entity ranges — enemies leave the world (or sleep) past **`EntityChunkMemory.EnemyDespawnRangeMeters`** (**350 m**, back inside 300 m), animals past **`AnimalDespawnRangeMeters`** (**100 m**, back inside 90 m); code constants, not settings (Mark 2026-11-04).
 - [~] Entity animgraph on/off — `perf_entity_anim` dev switch.
 - [ ] Character detail / LOD bias.
 - [ ] Ragdoll count / disable ragdoll deaths.

@@ -327,43 +327,6 @@
       "Children": []
     },
     {
-      "__guid": "56263a9e-1f93-4af9-b69d-080d299c597d",
-      "__version": 2,
-      "Flags": 0,
-      "Name": "Fog",
-      "Position": "0,0,0",
-      "Rotation": "0,0,0,1",
-      "Scale": "1,1,1",
-      "Tags": "",
-      "Enabled": true,
-      "NetworkMode": 2,
-      "NetworkFlags": 0,
-      "NetworkOrphaned": 0,
-      "NetworkTransmit": true,
-      "OwnerTransfer": 1,
-      "Components": [
-        {
-          "__type": "Sandbox.GradientFog",
-          "__guid": "da639277-96ae-40a3-8e90-82d4dee2a2ee",
-          "__enabled": true,
-          "Flags": 0,
-          "Color": "0.72,0.76,0.84,1",
-          "EndDistance": 12000,
-          "FalloffExponent": 1.5,
-          "Height": 120,
-          "OnComponentDestroy": null,
-          "OnComponentDisabled": null,
-          "OnComponentEnabled": null,
-          "OnComponentFixedUpdate": null,
-          "OnComponentStart": null,
-          "OnComponentUpdate": null,
-          "StartDistance": 2500,
-          "VerticalFalloffExponent": 2
-        }
-      ],
-      "Children": []
-    },
-    {
       "__guid": "b400f2d5-dfe8-45be-b080-4cad883851e5",
       "__version": 2,
       "Flags": 0,
@@ -534,11 +497,11 @@
           "DayWeight": 1,
           "DiskOrbitRadiusMeters": 5200,
           "DiskScale": 0,
-          "Fog": {
+          "Haze": {
             "_type": "component",
-            "component_id": "da639277-96ae-40a3-8e90-82d4dee2a2ee",
-            "go": "56263a9e-1f93-4af9-b69d-080d299c597d",
-            "component_type": "GradientFog"
+            "component_id": "89f55f63-f917-40d0-94c4-e90b47d325cd",
+            "go": "af79ec20-3687-4c97-8191-127dcf670ce3",
+            "component_type": "AerialPerspective"
           },
           "JumpToDayAction": "CycleDay",
           "JumpToNightAction": "CycleNight",
@@ -597,6 +560,26 @@
           "SunPeakColor": "3.2,2.95,2.6,1",
           "TransitionSeconds": 15,
           "WorldSaveName": ""
+        },
+        {
+          "__type": "Survival.AerialPerspective",
+          "__guid": "89f55f63-f917-40d0-94c4-e90b47d325cd",
+          "__enabled": true,
+          "Flags": 0,
+          "DesaturateDistanceMeters": 1500,
+          "HazeColor": "0.72,0.76,0.84,1",
+          "HazeDistanceMeters": 20000,
+          "HazeScaleHeightMeters": 1000,
+          "MaxDesaturation01": 0.85,
+          "MaxHaze01": 0.9,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null,
+          "Strength01": 1,
+          "SunWarmth01": 0.6
         }
       ],
       "Children": []

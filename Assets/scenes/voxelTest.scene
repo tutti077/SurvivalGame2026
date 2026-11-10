@@ -325,7 +325,6 @@
           "EquipGrappleOnPlayable": false,
           "EquipWingsuitOnPlayable": false,
           "GrappleResourceId": "basic_hook",
-          "InfiniteStaminaOnPlayable": true,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,

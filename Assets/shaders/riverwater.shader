@@ -516,6 +516,10 @@ PS
 
 		// ---- lights: GGX glint from the sun (shadowed), the moon and local lights; their diffuse light on the foam
 		float alpha = min( sqrt( SurfaceRoughness * SurfaceRoughness + DistanceRoughness * DistanceRoughness * footprintMeters * footprintMeters ), 0.45 );
+		// Per-light cap, as a multiple of that light's own colour: the GGX term's 1 / (4 VdotH²) runs to ~100x at a grazing far
+		// view, and the old cap was absolute (4.0) — so a dim moon or a torch beside a distant river still made a 4.0 HDR blob
+		// that bloomed blue across the hill (Mark 2026-11-03). Near ripples keep their sparkle; a far pixel is a sheen.
+		float specCap = lerp( 40.0, 1.5, saturate( footprintMeters / 1.5 ) );
 		float3 glint = 0;
 		float3 foamLight = 0;
 		float3 fastSunDir = 0;
@@ -527,7 +531,7 @@ PS
 			if ( g_DirectionalLightCascadeCount > 0 )
 				vis = WaterShadow( lightPos + L * 40.0, vReceiverNormalWs, i.vPositionSs );
 			float3 col = g_DirectionalLightColor.rgb;
-			glint += col * (SpecularGGX( normal, V, L, alpha, FresnelF0 ) * vis);
+			glint += col * (min( SpecularGGX( normal, V, L, alpha, FresnelF0 ), specCap ) * vis);
 			foamLight += col * (saturate( L.z ) * columnVis);   // soft, like the water around it
 		}
 
@@ -548,7 +552,7 @@ PS
 			float f = light.Attenuation * light.Visibility;
 			if ( f <= 0.0 )
 				continue;
-			glint += light.Color * (SpecularGGX( normal, V, light.Direction, alpha, FresnelF0 ) * f);
+			glint += light.Color * (min( SpecularGGX( normal, V, light.Direction, alpha, FresnelF0 ), specCap ) * f);
 			foamLight += light.Color * (saturate( dot( baseNormal, light.Direction ) ) * f);
 		}
 		// Far / grazing glints (Mark 2026-10-25: a distant river on a hillside showed two blinding white blobs in a purple

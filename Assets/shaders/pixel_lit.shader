@@ -369,6 +369,9 @@ PS
 	// canopy, but over sand it darkens to this earth brown instead (Mark 2026-11-02: "Tilled ground ... just be dark brown")
 	float3 SplatTilledColor < UiType( Color ); Default3( 0.26, 0.16, 0.08 ); UiGroup( "Splat,40/105" ); >;
 	float SplatMacroVariation < Default( 0.22 ); Range( 0.0, 1.0 ); UiGroup( "Splat,40/110" ); >;
+	// Dry / lush hue drift on top of the brightness (Mark 2026-11-03: "everything looks cartoony from afar" — every biome
+	// was one flat colour across a whole hillside): 0 = off, 1 = about ±8 % red and ±12 % blue between patches
+	float SplatMacroHue < Default( 1.0 ); Range( 0.0, 2.0 ); UiGroup( "Splat,40/120" ); >;
 
 	// One ground layer at this pixel: point-sampled up close, its filtered colour once a texel is under a pixel. No
 	// visible repeat: a second copy of the tile, turned and shifted, takes over in noise patches (pick 0..1) — a hard
@@ -495,7 +498,12 @@ PS
 		// z darkens: toward the far canopy colour on land, toward the tilled earth where the ground is sand under it
 		float3 darkTarget = lerp( pow( SplatCanopyColor, 2.2 ), pow( SplatTilledColor, 2.2 ), step( 0.5, vSplat.x ) );
 		albedo = lerp( albedo, darkTarget, saturate( vSplat.z ) );
-		albedo *= 1.0 + (n3.r - 0.5) * SplatMacroVariation;
+		// Macro variation at two scales (~360 m and ~30 m): brightness, and a warm-dry / cool-lush drift
+		float4 n4 = g_tSplatNoise.SampleLevel( g_sSplatNoiseSampler, m / 30.0 + float2( 0.53, 0.29 ), 0 );
+		albedo *= 1.0 + ((n3.r - 0.5) + (n4.r - 0.5) * 0.6) * SplatMacroVariation;
+		float dry = (n3.g - 0.5) * 1.4 + (n4.g - 0.5) * 0.8;
+		// the warm-dry drift is for living ground only: on the mountain rock it read yellow (Mark 2026-11-03, "like piss")
+		albedo *= max( 1.0 + float3( 0.14, 0.04, -0.2 ) * dry * SplatMacroHue * (1.0 - mountain), 0.0 );
 		return albedo;
 	}
 

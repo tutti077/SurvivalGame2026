@@ -5,8 +5,8 @@ Layer0
 
 	PixelRoughness "1.000"
 	PixelSpecular "0.000"
-	PixelWorldUvMeters "3.200"
-	TextureColor "materials/lighttest/ground_grass.png"
+	PixelWorldUvMeters "4.000"
+	TextureColor "materials/terrain/ground_clover.png"
 	TextureSplatRedwood "materials/terrain/ground_redwood.png"
 	TextureSplatAmber "materials/terrain/ground_amber.png"
 	TextureSplatMountain "materials/terrain/ground_mountain.png"

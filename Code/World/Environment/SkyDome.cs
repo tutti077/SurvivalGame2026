@@ -17,7 +17,7 @@ public sealed class SkyDome : Component
 	[Property, Title( "Material" )]
 	public Material DomeMaterial { get; set; }
 
-	[Property, Title( "Radius (m)" ), Description( "Must sit beyond the sun / moon disk orbit and inside the camera's Z Far. Default 9000 m." )]
+	[Property, Title( "Radius (m)" ), Description( "Must sit beyond the sun / moon disk orbit (and the Caldera Ring, where there is one); the camera's Z Far is raised to cover it. Default 9000 m." )]
 	public float RadiusMeters { get; set; } = 9000f;
 
 	[Property, Title( "Cloud drift (uv/s at full wind)" ), Range( 0f, 0.05f ), Step( 0.001f ), Description( "How fast the cloud ceiling scrolls at wind strength 1, before the preset's Cloud Speed." )]
@@ -66,7 +66,13 @@ public sealed class SkyDome : Component
 		// Follow the camera (position only) so the sky has no parallax.
 		var cam = Scene.Camera;
 		if ( cam is not null && cam.IsValid() )
+		{
 			WorldPosition = cam.WorldPosition;
+			// The dome must sit inside Z Far (and past the caldera ring): raise it, never lower it.
+			var needed = TerrainWorldUnits.MetersToEngine( RadiusMeters ) * 1.05f;
+			if ( cam.ZFar < needed )
+				cam.ZFar = needed;
+		}
 		WorldRotation = Rotation.Identity;
 	}
 

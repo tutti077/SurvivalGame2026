@@ -378,6 +378,9 @@ PS
 
 		// ---- lights
 		float alpha = min( sqrt( SurfaceRoughness * SurfaceRoughness + DistanceRoughness * DistanceRoughness * footprintMeters * footprintMeters ), 0.45 );
+		// Per-light cap as a multiple of the light's own colour (as riverwater.shader): an absolute cap let a dim moon / torch
+		// make a 4.0 HDR blob on far water once the grazing 1 / (4 VdotH²) term ran away
+		float specCap = lerp( 40.0, 1.5, saturate( footprintMeters / 1.5 ) );
 		float3 glint = 0;
 		float3 foamLight = 0;
 		float3 fastSunDir = 0;
@@ -389,7 +392,7 @@ PS
 			if ( g_DirectionalLightCascadeCount > 0 )
 				vis = WaterShadow( lightPos + L * 40.0, vReceiverNormalWs, i.vPositionSs );
 			float3 col = g_DirectionalLightColor.rgb;
-			glint += col * (SpecularGGX( normal, V, L, alpha, FresnelF0 ) * vis);
+			glint += col * (min( SpecularGGX( normal, V, L, alpha, FresnelF0 ), specCap ) * vis);
 			foamLight += col * (saturate( L.z ) * columnVis);
 		}
 		uint nLightCount = Light::Count( i.vPositionSs );
@@ -409,7 +412,7 @@ PS
 			float f = light.Attenuation * light.Visibility;
 			if ( f <= 0.0 )
 				continue;
-			glint += light.Color * (SpecularGGX( normal, V, light.Direction, alpha, FresnelF0 ) * f);
+			glint += light.Color * (min( SpecularGGX( normal, V, light.Direction, alpha, FresnelF0 ), specCap ) * f);
 			foamLight += light.Color * (saturate( light.Direction.z ) * f);
 		}
 		// Far / grazing glints (Mark 2026-10-25: a distant river on a hillside showed two blinding white blobs in a purple

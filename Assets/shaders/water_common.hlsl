@@ -96,11 +96,15 @@ float3 SkyReflection( float3 dir )
 	if ( g_flSkyDomeActive < 0.5 )
 		return g_bGradientFogEnabled ? g_vGradientFogColor_Opacity.rgb : NoDomeSkyColor;
 
+	// A ray below the horizon (a ripple tilted it) reads the sky AT the horizon: the sky dome never shows what lies under
+	// it. Unclamped, a far grazing view after sunset reflected straight into the halo of the sun below the horizon — water
+	// glowing paler than the night sky over it, by view angle (Mark 2026-11-03: river artifacts at night)
+	dir = normalize( float3( dir.xy, max( dir.z, 0.0 ) ) + float3( 0.0, 0.0, 1e-4 ) );
 	float h = dir.z;
 	float3 sunDir = normalize( g_vSunDirection );
 
-	// Gradient: horizon colour hugs the rim, zenith fills the top. A ray below the horizon (a ripple tilted it) sees
-	// the horizon colour — the bank occlusion, not this, is what makes low reflections dark.
+	// Gradient: horizon colour hugs the rim, zenith fills the top — the bank occlusion, not this, is what makes low
+	// reflections dark.
 	float3 sky = lerp( g_vSkyHorizon, g_vSkyZenith, pow( saturate( h ), 0.5 ) );
 
 	// Warm band along the horizon on the sun's side (dawn / dusk does most of its work here).

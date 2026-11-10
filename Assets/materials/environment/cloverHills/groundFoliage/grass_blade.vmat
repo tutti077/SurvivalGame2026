@@ -14,8 +14,8 @@ Layer0
 	FlutterSpeed "4.000"
 	BendPower "2.000"
 
-	BaseColor "[0.055000 0.110000 0.032000]"
-	TipColor "[0.105000 0.180000 0.052000]"
+	BaseColor "[0.045000 0.090000 0.026000]"
+	TipColor "[0.086000 0.148000 0.043000]"
 	ColorVariation "0.150"
 	RootDarkening "0.450"
 }
