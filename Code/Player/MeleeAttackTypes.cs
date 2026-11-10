@@ -10,11 +10,11 @@ public static class MeleeAttackTypes
 	public const byte Right = 1;
 	public const byte Forward = 2;
 
-	/// <summary>Special attack (Q): straight thrust along the look direction — never selected from the cursor.</summary>
+	/// <summary>Straight jab along the look direction: the down cursor with any weapon (Mark 2026-11-05: "a club jab"), and every direction of a thrust weapon.</summary>
 	public const byte Stab = 3;
 
 	/// <summary>
-	/// Maps cursor cardinal to attack type. Default: right→Right, left→Left, up→Forward.
+	/// Maps cursor cardinal to attack type. Default: right→Right, left→Left, up→Forward, down→Stab.
 	/// When <paramref name="southpawSwing"/> is true, left/right are swapped (legacy inverted mapping).
 	/// </summary>
 	public static byte FromCursorDir( byte cursorDir, bool southpawSwing = false )
@@ -23,6 +23,8 @@ public static class MeleeAttackTypes
 			return southpawSwing ? Left : Right;
 		if ( cursorDir == SwingDirs.Left )
 			return southpawSwing ? Right : Left;
+		if ( cursorDir == SwingDirs.Down )
+			return Stab;
 		return Forward;
 	}
 
@@ -65,7 +67,6 @@ public readonly record struct MeleeHitResult
 	public Guid TargetId { get; init; }
 	public ushort AttackInstanceId { get; init; }
 	public byte AttackType { get; init; }
-	public bool IsHeavy { get; init; }
 	public byte AttackState { get; init; }
 	public Vector3 HitPosition { get; init; }
 	public float DamageApplied { get; init; }

@@ -94,13 +94,14 @@ public sealed partial class PlayerAnimation
 
 		if ( advance )
 		{
+			// Take the pass over unconditionally: a joining peer receives an existing pawn from the
+			// network snapshot with UseAnimatorControls already false (the host turned it off), so
+			// "only own it if I flipped the flag" left that pawn with nobody driving its legs.
 			if ( controller.UseAnimatorControls )
-			{
 				controller.UseAnimatorControls = false;
-				_ownsControllerAnimation = true;
-			}
+			_ownsControllerAnimation = true;
 
-			if ( !_ownsControllerAnimation || Components.Get<PlayerMovement>() is { IsSeated: true } )
+			if ( Components.Get<PlayerMovement>() is { IsSeated: true } )
 			{
 				_aimSmoothedValid = false;
 				return;
@@ -129,8 +130,10 @@ public sealed partial class PlayerAnimation
 		var behind = Math.Clamp( (MathF.Abs( rel.yaw ) - fade) / MathF.Max( 1f, 180f - fade ), 0f, 1f );
 		var pitchScale = 1f - behind;
 
-		var bodyT = new Angles( Math.Clamp( rel.pitch, -AimBodyMaxPitchDegrees, AimBodyMaxPitchDegrees ) * pitchScale,
-			ShapeLookAngle( rel.yaw, AimBodyMaxYawDegrees, fade ), 0f );
+		// Bow stance: the chest stays square to the side-on body (the arms carry the aim), only head and eyes turn.
+		var chestScale = 1f - BowStanceWeight;
+		var bodyT = new Angles( Math.Clamp( rel.pitch, -AimBodyMaxPitchDegrees, AimBodyMaxPitchDegrees ) * pitchScale * chestScale,
+			ShapeLookAngle( rel.yaw, AimBodyMaxYawDegrees, fade ) * chestScale, 0f );
 		var headT = new Angles( Math.Clamp( rel.pitch, -AimHeadMaxPitchDegrees, AimHeadMaxPitchDegrees ) * pitchScale,
 			ShapeLookAngle( rel.yaw, AimHeadMaxYawDegrees, fade ), 0f );
 		var eyesT = new Angles( Math.Clamp( rel.pitch, -80f, 80f ) * pitchScale,

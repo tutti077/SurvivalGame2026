@@ -37,8 +37,38 @@ public static class GameHacks
 	/// </summary>
 	public static bool DevSupply { get; private set; }
 
+	/// <summary>
+	/// Players arrive in a crash-landing <see cref="StasisPod"/> (<see cref="StasisPodSpawner"/>) on their first
+	/// spawn of the session. On by default (Mark 2026-11-09); <c>pod_arrivals 0</c> for plain dev spawns.
+	/// </summary>
+	public static bool PodArrivals { get; private set; } = true;
+
 	/// <summary>Bumps whenever any flag changes — UI that caches a hack-dependent layout rebuilds on this.</summary>
 	public static int Version { get; private set; }
+
+	/// <summary>Usage: <c>pod_arrivals 1</c> / <c>pod_arrivals 0</c>. No argument prints the state.</summary>
+	[ConCmd( "pod_arrivals" )]
+	public static void ConCmdPodArrivals( string enabled )
+	{
+		if ( string.IsNullOrWhiteSpace( enabled ) )
+		{
+			Log.Info( $"[Hacks] pod_arrivals is {(PodArrivals ? "1" : "0")} (usage: pod_arrivals 0|1)" );
+			return;
+		}
+
+		if ( !TryParseBool( enabled, out var value ) )
+		{
+			Log.Warning( $"[Hacks] pod_arrivals: '{enabled}' is not 0/1." );
+			return;
+		}
+
+		if ( value == PodArrivals )
+			return;
+
+		PodArrivals = value;
+		Version++;
+		Log.Info( $"[Hacks] pod_arrivals = {(value ? "1" : "0")}" );
+	}
 
 	/// <summary>Usage: <c>thermalView true</c> / <c>thermalView false</c>.</summary>
 	[ConCmd( "thermalView" )]
@@ -318,9 +348,10 @@ public static class GameHacks
 	}
 
 	/// <summary>
-	/// Usage: <c>swing [holdSeconds]</c> — holds the primary attack action for <c>holdSeconds</c>
-	/// (default 0.15 s = light attack) and releases it, exactly as a mouse press would, so the
-	/// windup → swing can be filmed from the editor, which cannot press keys.
+	/// Usage: <c>swing [holdSeconds]</c> — clicks the primary attack (the swing commits on the press) and
+	/// holds the button for <c>holdSeconds</c>, so the windup → swing can be filmed from the editor, which
+	/// cannot press keys. Held past the class windup (e.g. <c>swing 0.7</c>) the swing turns heavy. A second <c>swing</c>
+	/// during a swing is a queued follow-up click.
 	/// <see cref="PlayerCombat"/> calls <see cref="ApplySimulatedInput"/> at the top of its owner
 	/// input tick; <c>Input.SetAction</c> only lasts the frame it is set in.
 	/// </summary>
@@ -331,9 +362,103 @@ public static class GameHacks
 		Log.Info( $"[Hacks] swing: holding attack for {holdSeconds:0.##}s." );
 	}
 
-	/// <summary>Owner input tick hook: keeps the simulated attack action down until its time is up.</summary>
-	public static void ApplySimulatedInput( string primaryAttackAction, string blockAction = null )
+	/// <summary>Usage: <c>special_attack</c> — press the melee special (Q) for one frame, as the key would (static combo mode, on the ground).</summary>
+	[ConCmd( "special_attack" )]
+	public static void ConCmdSpecialAttack()
 	{
+		_simulatedSpecialPending = true;
+		Log.Info( "[Hacks] special_attack: pressing the special once." );
+	}
+
+	static bool _simulatedSpecialPending;
+
+	/// <summary>
+	/// Usage: <c>swing_dir L|R|U|D</c> — sets the local pawn's attack side as mouse movement would (Left / Right swing or the
+	/// Up overhead), so a filmed or scripted <c>swing</c> can pick its direction from the editor. Mouse movement overrides it.
+	/// </summary>
+	/// <summary>Usage: <c>wingsuit_test [meters]</c> — lift the local pawn and open the wingsuit (no gear needed).</summary>
+	[ConCmd( "wingsuit_test" )]
+	public static void ConCmdWingsuitTest( float meters = 80f )
+	{
+		var movement = FindLocalPawnVitals()?.Components.Get<PlayerMovement>();
+		if ( movement is null )
+		{
+			Log.Warning( "[Hacks] wingsuit_test: no local pawn." );
+			return;
+		}
+
+		if ( !movement.TestLiftForWingsuit( meters ) )
+		{
+			Log.Warning( "[Hacks] wingsuit_test: not the movement driver." );
+			return;
+		}
+
+		_ = DeployWingsuitWhenAirborne( movement, meters );
+	}
+
+	static async System.Threading.Tasks.Task DeployWingsuitWhenAirborne( PlayerMovement movement, float meters )
+	{
+		// The controller keeps its old ground contact for a tick after the lift - the first glide tick would stow.
+		await GameTask.DelaySeconds( 0.2f );
+		if ( !movement.IsValid() )
+			return;
+
+		Log.Info( movement.TestDeployWingsuit()
+			? $"[Hacks] wingsuit_test: gliding from {meters:0} m up."
+			: "[Hacks] wingsuit_test: the suit did not open." );
+	}
+
+	[ConCmd( "swing_dir" )]
+	public static void ConCmdSwingDir( string side = "R" )
+	{
+		var want = (side ?? "R").Trim().ToUpperInvariant() switch
+		{
+			"L" => MeleeAttackTypes.Left,
+			"U" => MeleeAttackTypes.Forward,
+			"D" => MeleeAttackTypes.Stab,
+			_ => MeleeAttackTypes.Right,
+		};
+		var combat = FindLocalPawnVitals()?.Components.Get<PlayerCombat>();
+		if ( combat is null )
+		{
+			Log.Warning( "[Hacks] swing_dir: no local pawn." );
+			return;
+		}
+
+		foreach ( var dir in new[] { SwingDirs.Left, SwingDirs.Right, SwingDirs.Up, SwingDirs.Down } )
+		{
+			if ( combat.ResolveAttackTypeFromCursorDir( dir ) != want )
+				continue;
+			combat.TestSetLiveSwingDir( dir );
+			Log.Info( $"[Hacks] swing_dir: next swing {side} (cursor {SwingDirs.Letter( dir )})." );
+			return;
+		}
+
+		Log.Warning( $"[Hacks] swing_dir: no cursor side gives a {side} attack with this weapon." );
+	}
+
+	static double _simulatedSneakUntilGlobal;
+
+	/// <summary>Usage: <c>sneak [holdSeconds]</c> — holds the crouch / sneak action as a key would (taming offers, sneak footsteps).</summary>
+	[ConCmd( "sneak" )]
+	public static void ConCmdSneak( float holdSeconds = 5f )
+	{
+		_simulatedSneakUntilGlobal = RealTime.GlobalNow + Math.Clamp( holdSeconds, 0.1f, 120f );
+		Log.Info( $"[Hacks] sneak: holding crouch for {holdSeconds:0.##}s." );
+	}
+
+	/// <summary>True while a <c>sneak</c> hack hold is running (PlayerMovement reads it beside the real key).</summary>
+	public static bool SimulatedSneakHeld => RealTime.GlobalNow < _simulatedSneakUntilGlobal;
+
+	/// <summary>Owner input tick hook: keeps the simulated attack action down until its time is up.</summary>
+	public static void ApplySimulatedInput( string primaryAttackAction, string blockAction = null, string specialAction = null )
+	{
+		if ( _simulatedSpecialPending && !string.IsNullOrWhiteSpace( specialAction ) )
+		{
+			_simulatedSpecialPending = false;
+			Input.SetAction( specialAction, true );
+		}
+
 		if ( RealTime.GlobalNow < _simulatedBlockUntilGlobal && !string.IsNullOrWhiteSpace( blockAction ) )
 			Input.SetAction( blockAction, true );
 
@@ -373,7 +498,7 @@ public static class GameHacks
 		sb.AppendLine( "  spawnPatrolBot  host: drop a robot patrol unit in front of you" );
 		sb.AppendLine( "  give <resourceId> [amount]  host: put an item in your hotbar / inventory" );
 		sb.AppendLine( "  equip <resourceId>  host: give one into hotbar slot 1 and hold it" );
-		sb.AppendLine( "  swing [holdSeconds]  press + release the primary attack (0.15 = light)" );
+		sb.AppendLine( "  swing [holdSeconds]  click the primary attack; held past the windup (0.7) = heavy" );
 		Log.Info( sb.ToString() );
 	}
 

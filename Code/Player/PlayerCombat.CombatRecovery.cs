@@ -10,21 +10,17 @@ namespace Survival;
 /// </summary>
 public partial class PlayerCombat
 {
-	// Attacker outcome recoveries (miss/hit/blocked/parried) live in melee_weapon_classes.json per
-	// weapon class — the properties below cover the pawn-level reactions that have no weapon class:
-	// shove and the defender side of blocks.
-
-	[Property, Group( "Combat — Timings" ), Title( "Defender recovery after heavy block (s)" )]
-	public float RecoveryDefenderHeavyBlockSeconds { get; set; } = 0.4f;
+	// Attacker lockouts after a blocked / parried swing live in melee_weapon_classes.json per weapon
+	// class — the properties below cover the pawn-level reactions that have no weapon class: the shove.
 
 	[Property, Group( "Combat — Timings" ), Title( "Defender recovery after shove-vs-block (s)" )]
-	public float RecoveryDefenderShoveBlockSeconds { get; set; } = 0.5f;
+	public float RecoveryDefenderShoveBlockSeconds { get; set; } = 0.4f;
 
 	[Property, Group( "Combat — Timings" ), Title( "Defender recovery after shove (unblocked) (s)" )]
-	public float RecoveryDefenderShoveSeconds { get; set; } = 1.2f;
+	public float RecoveryDefenderShoveSeconds { get; set; } = 0.4f;
 
-	[Property, Group( "Combat — Timings" ), Title( "Attacker shove combat lock (s)" ), Description( "After shove: lock sword/block/shove until this elapses AND the punch clip finishes. Attack1 during the kick is ignored (no buffered sword swing)." ), Range( 0.1f, 2f ), Step( 0.05f )]
-	public float RecoveryShoveCombatLockSeconds { get; set; } = 0.8f;
+	[Property, Group( "Combat — Timings" ), Title( "Attacker shove combat lock (s)" ), Description( "After a punch / shield bash: no sword, block or punch for this long (the punch pose itself may play on; a swing or a raised guard cuts it)." ), Range( 0.05f, 2f ), Step( 0.05f )]
+	public float RecoveryShoveCombatLockSeconds { get; set; } = 0.15f;
 
 	float _combatRecoveryRemaining;
 	CombatRecoveryAnim _combatRecoveryAnim = CombatRecoveryAnim.None;
@@ -42,9 +38,26 @@ public partial class PlayerCombat
 	[Sync( SyncFlags.FromHost )]
 	public float NetworkedCombatRecoveryRemaining { get; private set; }
 
-	public bool IsInCombatRecovery => _combatRecoveryRemaining > 1e-4f
-	                                  || NetworkedCombatRecoveryRemaining > 1e-4f
-	                                  || Time.NowDouble < _combatActionLockUntilSandbox;
+	public bool IsInCombatRecovery => IsPunchRecovery
+		? Time.NowDouble < _punchLockUntilSandbox
+		: _combatRecoveryRemaining > 1e-4f
+		  || NetworkedCombatRecoveryRemaining > 1e-4f
+		  || Time.NowDouble < _combatActionLockUntilSandbox;
+
+	/// <summary>
+	/// The recovery running is the punch: its pose plays for the whole clip, but it only locks actions until
+	/// <see cref="_punchLockUntilSandbox"/> (<see cref="RecoveryShoveCombatLockSeconds"/>, 0.15 s — Mark 2026-11-05).
+	/// A swing or a raised guard after that clears the rest of the punch pose.
+	/// </summary>
+	bool IsPunchRecovery =>
+		_combatRecoveryAnim == CombatRecoveryAnim.MeleePunchLeft
+		|| (_combatRecoveryRemaining <= 1e-4f && NetworkedCombatRecoveryAnim == (byte)CombatRecoveryAnim.MeleePunchLeft);
+
+	double _punchLockUntilSandbox;
+
+	/// <summary>Host / predicting owner: the punch locks actions for its windup plus the lock (its pose may run on).</summary>
+	internal void BeginPunchActionLock() =>
+		_punchLockUntilSandbox = Time.NowDouble + Math.Max( 0.05f, Math.Max( 0f, PunchWindupSeconds ) + RecoveryShoveCombatLockSeconds );
 
 	/// <summary>
 	/// Locks attack / block / shove / parry for the recovery pose duration.
@@ -147,8 +160,9 @@ public partial class PlayerCombat
 			durationSeconds = animLeft + Math.Max( 0.05f, _softPistolPoseSeconds );
 		}
 
+		// A new punch always restarts (its pose and its lock) — spamming F used to land hits with no new punch shown.
 		if ( durationSeconds + 1e-4f < _combatRecoveryRemaining
-		     && anim == _combatRecoveryAnim )
+		     && anim == _combatRecoveryAnim && anim != CombatRecoveryAnim.MeleePunchLeft )
 			return;
 
 		if ( anim == CombatRecoveryAnim.MeleePunchLeft )
@@ -428,7 +442,12 @@ public partial class PlayerCombat
 			CombatState = CombatState.PostAttack;
 	}
 
-	/// <summary>Attacker outcome recovery per the class combat timings: miss / hit / blocked / parried.</summary>
+	/// <summary>
+	/// Attacker lockout after the swing resolves (Mark 2026-11-04): a miss or a landed hit has none — the next
+	/// click's windup may start the moment the damage swoop ends; a blocked swing locks the attacker out for
+	/// the class <c>recoveryBlockedSeconds</c> (100 ms one-handed), a perfect parry for <c>recoveryParriedSeconds</c> (200 ms),
+	/// a parried heavy for <c>recoveryParriedHeavySeconds</c> (300 ms).
+	/// </summary>
 	void ApplyAttackerRecoveryFromFinish( in MeleeAttackFinishOutcome outcome )
 	{
 		if ( outcome.IsShove )
@@ -438,54 +457,12 @@ public partial class PlayerCombat
 
 		if ( outcome.WasParried )
 		{
-			ServerClearInitiative();
-			ServerBeginCombatRecovery( t.RecoveryParriedSeconds, CombatRecoveryAnim.Rpg2hAttackMoving );
+			ServerBeginCombatRecovery( outcome.IsHeavy ? t.RecoveryParriedHeavySeconds : t.RecoveryParriedSeconds,
+				CombatRecoveryAnim.Rpg2hAttackMoving );
 			return;
 		}
 
 		if ( outcome.WasBlocked )
-		{
-			ServerClearInitiative();
 			ServerBeginCombatRecovery( t.RecoveryBlockedSeconds, CombatRecoveryAnim.Rpg2hAttackMoving );
-			return;
-		}
-
-		if ( outcome.AnyHit )
-		{
-			// Initiative arms on a clean hit — its reward is the class hit recovery (shorter than
-			// miss) plus initiativeWindupSeconds on the follow-up attack.
-			ServerArmInitiative();
-			ServerBeginCombatRecovery( t.RecoveryHitSeconds, CombatRecoveryAnim.Pistol2hStandingIdle );
-			return;
-		}
-
-		ServerBeginCombatRecovery( t.RecoveryMissSeconds, CombatRecoveryAnim.Pistol2hStandingIdle );
-	}
-
-	/// <summary>Sandbox time until the initiative windup bonus stays armed (set by a clean hit).</summary>
-	double _initiativeArmedUntilSandbox;
-
-	/// <summary>Host: initiative currently armed — the next attack winds up with the class `initiativeWindupSeconds`.</summary>
-	internal bool ServerIsInitiativeArmed => Time.NowDouble < _initiativeArmedUntilSandbox;
-
-	/// <summary>Host: arm initiative for <see cref="InitiativeWindowSeconds"/> after a clean hit.</summary>
-	internal void ServerArmInitiative()
-	{
-		if ( InitiativeWindowSeconds <= 1e-4f )
-			return;
-
-		_initiativeArmedUntilSandbox = Time.NowDouble + Math.Max( 0f, InitiativeWindowSeconds );
-	}
-
-	internal void ServerClearInitiative() => _initiativeArmedUntilSandbox = 0;
-
-	/// <summary>Host: consume the armed initiative for an attack start — only one follow-up benefits per hit.</summary>
-	internal bool ServerConsumeInitiativeArmed()
-	{
-		if ( !ServerIsInitiativeArmed )
-			return false;
-
-		_initiativeArmedUntilSandbox = 0;
-		return true;
 	}
 }

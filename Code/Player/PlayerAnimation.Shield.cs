@@ -52,9 +52,17 @@ public sealed partial class PlayerAnimation
 	[Property, Group( "Shield" ), Title( "Block: tilt back (°)" ), Range( -30f, 45f ), Step( 1f )]
 	public float ShieldBlockTiltDegrees { get; set; } = 8f;
 
-	/// <summary>Seconds for the shield to travel arm → centre when the guard goes up (and back when it drops).</summary>
+	/// <summary>Seconds for the shield to travel arm → centre when the guard goes up (and back when it drops) — matches <see cref="PlayerCombat.BlockRaiseSeconds"/> (Mark 2026-11-04: the block shows and blocks in 50 ms).</summary>
+	/// <summary>Shield bash (F with a shield out, Mark 2026-11-05): the whole thrust-and-return, seconds.</summary>
+	[Property, Group( "Shield" ), Title( "Bash: time (s)" ), Range( 0.15f, 1f ), Step( 0.01f )]
+	public float ShieldBashSeconds { get; set; } = 0.35f;
+
+	/// <summary>How far past the block position the shield drives at the peak of a bash.</summary>
+	[Property, Group( "Shield" ), Title( "Bash: forward (m)" ), Range( 0f, 1f ), Step( 0.01f )]
+	public float ShieldBashForwardMeters { get; set; } = 0.35f;
+
 	[Property, Group( "Shield" ), Title( "Raise / lower time (s)" ), Range( 0.02f, 0.6f ), Step( 0.01f )]
-	public float ShieldRaiseSeconds { get; set; } = 0.12f;
+	public float ShieldRaiseSeconds { get; set; } = 0.05f;
 
 	/// <summary>
 	/// While the shield is raised, the left arm is solved onto it (Mark 2026-11-02: "make the arm follow
@@ -71,6 +79,22 @@ public sealed partial class PlayerAnimation
 	public Vector2 ShieldElbowPole { get; set; } = new( 0.7f, 0.7f );
 
 	GameObject _shieldProp;
+
+	/// <summary>Where the offhand shield is right now and which way its face points (block sparks). False without a shield.</summary>
+	public bool TryGetShieldWorld( out Vector3 position, out Vector3 faceNormal )
+	{
+		if ( _shieldProp is null || !_shieldProp.IsValid() || !_shieldProp.Enabled )
+		{
+			position = default;
+			faceNormal = default;
+			return false;
+		}
+
+		position = _shieldProp.WorldPosition;
+		// Model +Z is the outward face (create_shield_wood.py).
+		faceNormal = _shieldProp.WorldRotation.Up;
+		return true;
+	}
 	ModelRenderer _shieldRenderer;
 	string _shieldBuiltModelPath = string.Empty;
 	/// <summary>0 = resting on the forearm, 1 = raised to the body centre. Blended per frame toward the guard state.</summary>
@@ -81,6 +105,42 @@ public sealed partial class PlayerAnimation
 	Rotation _shieldHandRotLocal = Rotation.Identity;
 	bool _shieldHandOffsetValid;
 	bool _shieldIkActive;
+	/// <summary>Sandbox time the current shield bash started; negative = none.</summary>
+	double _shieldBashStartedAt = -1d;
+
+	/// <summary>The shield is on this pawn as this peer sees it — F is a shield bash instead of a punch.</summary>
+	internal bool HasShieldShown => _shieldProp is not null && _shieldProp.IsValid();
+
+	/// <summary>Play the shield bash (every peer, from the same host cue as the punch).</summary>
+	internal void PlayShieldBash() => _shieldBashStartedAt = Time.NowDouble;
+
+	/// <summary>
+	/// Bash envelope 0..1: up to the block pose and past it in the first 30 %, held to 45 %, back to rest by the end.
+	/// </summary>
+	float ShieldBashEnvelope()
+	{
+		if ( _shieldBashStartedAt < 0d )
+			return 0f;
+
+		var t = (float)((Time.NowDouble - _shieldBashStartedAt) / MathF.Max( 0.15f, ShieldBashSeconds ));
+		if ( t >= 1f )
+		{
+			_shieldBashStartedAt = -1d;
+			return 0f;
+		}
+
+		if ( t < 0.3f )
+		{
+			var u = t / 0.3f;
+			return u * u * (3f - 2f * u);
+		}
+
+		if ( t < 0.45f )
+			return 1f;
+
+		var d = 1f - (t - 0.45f) / 0.55f;
+		return d * d * (3f - 2f * d);
+	}
 
 	/// <summary>Offhand id as this peer sees it: local slots on host / owner, host Sync on other peers.</summary>
 	string ResolvePresentationOffHandId()
@@ -174,8 +234,16 @@ public sealed partial class PlayerAnimation
 			: MathF.Max( 0f, _shieldRaise01 - step );
 		var t = _shieldRaise01 * _shieldRaise01 * (3f - 2f * _shieldRaise01);
 
+		// Shield bash: drive into the block pose and on past it along the facing, then back.
+		var bash = ShieldBashEnvelope();
+		if ( bash > 0f )
+		{
+			t = MathF.Max( t, bash );
+			blockPos += basis.Forward * (bash * ShieldBashForwardMeters * unitsPerMeter);
+		}
+
 		// At full rest the arm places the shield, so this is where the hand's grip on it is read.
-		if ( _shieldRaise01 <= 1e-3f )
+		if ( _shieldRaise01 <= 1e-3f && bash <= 0f )
 		{
 			_shieldHandOffsetLocal = restRot.Inverse * (hand - restPos);
 			_shieldHandRotLocal = restRot.Inverse * handTx.Rotation;
@@ -208,22 +276,32 @@ public sealed partial class PlayerAnimation
 	/// Lengths come from the live pose, the elbow goes toward <see cref="ShieldElbowPole"/>. Out-of-reach
 	/// targets straighten the arm toward them.
 	/// </summary>
-	void SolveShieldArm( SkinnedModelRenderer body, Rotation basis, Vector3 handTarget, Rotation handRotTarget )
+	void SolveShieldArm( SkinnedModelRenderer body, Rotation basis, Vector3 handTarget, Rotation handRotTarget ) =>
+		_ = SolveTwoBoneArm( body, "arm_upper_L", "arm_lower_L", "hand_L", handTarget,
+			basis.Left * ShieldElbowPole.x + Vector3.Down * ShieldElbowPole.y, handRotTarget );
+
+	/// <summary>
+	/// The two-bone arm solve shared by the shield and the bow stance (see <see cref="SolveShieldArm"/>).
+	/// <paramref name="handRotTarget"/> null = the hand keeps its animated rotation relative to the forearm.
+	/// </summary>
+	/// <returns>The solved hand bone (world), or null when the chain is missing.</returns>
+	Transform? SolveTwoBoneArm( SkinnedModelRenderer body, string upperName, string lowerName, string handName,
+		Vector3 handTarget, Vector3 pole, Rotation? handRotTarget )
 	{
 		var bones = body.Model?.Bones;
 		if ( bones is null )
-			return;
+			return null;
 
-		var upperBone = bones.GetBone( "arm_upper_L" );
-		var lowerBone = bones.GetBone( "arm_lower_L" );
-		var handBone = bones.GetBone( "hand_L" );
+		var upperBone = bones.GetBone( upperName );
+		var lowerBone = bones.GetBone( lowerName );
+		var handBone = bones.GetBone( handName );
 		if ( upperBone is null || lowerBone is null || handBone is null )
-			return;
+			return null;
 
 		if ( !body.TryGetBoneTransformAnimation( upperBone, out var upperTx )
 		     || !body.TryGetBoneTransformAnimation( lowerBone, out var lowerTx )
 		     || !body.TryGetBoneTransformAnimation( handBone, out var handTx ) )
-			return;
+			return null;
 
 		var shoulder = upperTx.Position;
 		var elbow = lowerTx.Position;
@@ -231,15 +309,14 @@ public sealed partial class PlayerAnimation
 		var l1 = (elbow - shoulder).Length;
 		var l2 = (hand - elbow).Length;
 		if ( l1 < 1e-3f || l2 < 1e-3f )
-			return;
+			return null;
 
 		var toTarget = handTarget - shoulder;
 		var d = Math.Clamp( toTarget.Length, MathF.Abs( l1 - l2 ) + 0.05f, l1 + l2 - 0.05f );
 		if ( toTarget.LengthSquared < 1e-6f )
-			return;
+			return null;
 
 		var dir = toTarget.Normal;
-		var pole = basis.Left * ShieldElbowPole.x + Vector3.Down * ShieldElbowPole.y;
 		var poleSide = pole - dir * Vector3.Dot( pole, dir );
 		if ( poleSide.LengthSquared < 1e-4f )
 			poleSide = Vector3.Down - dir * Vector3.Dot( Vector3.Down, dir );
@@ -254,10 +331,13 @@ public sealed partial class PlayerAnimation
 		var newUpperRot = Rotation.FromToRotation( (elbow - shoulder).Normal, (newElbow - shoulder).Normal ) * upperTx.Rotation;
 		var newLowerRot = Rotation.FromToRotation( (hand - elbow).Normal, (newHand - newElbow).Normal ) * lowerTx.Rotation;
 
+		var newHandRot = handRotTarget ?? newLowerRot * lowerTx.Rotation.Inverse * handTx.Rotation;
+
 		var world = body.Transform.World;
 		body.SetBoneTransform( upperBone, world.ToLocal( new Transform( shoulder, newUpperRot ) ) );
 		body.SetBoneTransform( lowerBone, world.ToLocal( new Transform( newElbow, newLowerRot ) ) );
-		body.SetBoneTransform( handBone, world.ToLocal( new Transform( newHand, handRotTarget ) ) );
+		body.SetBoneTransform( handBone, world.ToLocal( new Transform( newHand, newHandRot ) ) );
+		return new Transform( newHand, newHandRot );
 	}
 
 	/// <summary>First bone of the candidates, read from the animation pose (world space, before any override this frame).</summary>

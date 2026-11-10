@@ -48,8 +48,14 @@ public sealed partial class PlayerVitals : Component
 	/// <summary>When health is reduced on the host, logs attacker → victim damage and remaining HP.</summary>
 	[Property, Group( "Debug" )] public bool LogDamageAppliedToConsole { get; set; } = true;
 
-	/// <summary>Debug: ignore stamina costs and keep the bar full. Remove before shipping.</summary>
-	[Property, Group( "Debug" )] public bool InfiniteStaminaDebug { get; set; }
+	/// <summary>
+	/// Stamina costs nothing and the bar stays full: the host-wide dev setting (Settings → Dev tools → Stamina drain,
+	/// <see cref="DevToolsSettings.InfiniteStamina"/>, synced to every peer), unless a test pawn measures real costs.
+	/// </summary>
+	public bool InfiniteStamina => !DrainStaminaForTests && DevToolsSettings.InfiniteStamina;
+
+	/// <summary>combat_test pawns: real stamina costs whatever the dev setting says.</summary>
+	internal bool DrainStaminaForTests { get; set; }
 
 	/// <summary>Optional spawn root; if unset, the first enabled <see cref="SpawnPoint"/> in this scene is used.</summary>
 	[Property, Group( "Death / Respawn" )] public GameObject RespawnPointOverride { get; set; }
@@ -147,14 +153,15 @@ public sealed partial class PlayerVitals : Component
 		if ( _pendingDeathRespawnHost )
 			TryRunHostDeathRespawn();
 
-		MaintainInfiniteStaminaDebugDisplay();
+		MaintainInfiniteStaminaDisplay();
 		TickStatusEffects( Time.Delta );
 		TickComfort();
+		TickWetStatus();
 	}
 
-	void MaintainInfiniteStaminaDebugDisplay()
+	void MaintainInfiniteStaminaDisplay()
 	{
-		if ( !InfiniteStaminaDebug )
+		if ( !InfiniteStamina )
 			return;
 
 		var max = Math.Max( 0f, CurrentStaminaMax );
@@ -245,7 +252,7 @@ public sealed partial class PlayerVitals : Component
 	/// <summary>True if current stamina can pay <paramref name="cost"/> (cost ≤ 0 always passes).</summary>
 	public bool HasStaminaFor( float cost )
 	{
-		if ( InfiniteStaminaDebug )
+		if ( InfiniteStamina )
 			return true;
 
 		if ( cost <= 0f )
@@ -297,7 +304,7 @@ public sealed partial class PlayerVitals : Component
 		if ( staminaCost <= 0f )
 			return true;
 
-		if ( InfiniteStaminaDebug )
+		if ( InfiniteStamina )
 			return true;
 
 		if ( !CanAffordStamina( staminaCost ) )
@@ -321,7 +328,7 @@ public sealed partial class PlayerVitals : Component
 	/// </summary>
 	public void ApplyLocalStaminaSprintPreviewSpend( float decrease )
 	{
-		if ( InfiniteStaminaDebug || decrease <= 0f || !IsLocalInputOwnedPawn() )
+		if ( InfiniteStamina || decrease <= 0f || !IsLocalInputOwnedPawn() )
 			return;
 
 		CurrentStamina = Math.Max( 0f, CurrentStamina - decrease );
@@ -364,7 +371,7 @@ public sealed partial class PlayerVitals : Component
 
 	/// <summary>True when current stamina is at or below the provided exhausted threshold.</summary>
 	public bool IsStaminaExhausted( float exhaustedStaminaEpsilon ) =>
-		!InfiniteStaminaDebug && CurrentStamina <= Math.Max( 0f, exhaustedStaminaEpsilon );
+		!InfiniteStamina && CurrentStamina <= Math.Max( 0f, exhaustedStaminaEpsilon );
 
 	/// <summary>
 	/// Host authority asks vitals for per-pawn stamina regen delay so lookup stays tied to this owning vitals root.
@@ -440,7 +447,7 @@ public sealed partial class PlayerVitals : Component
 		if ( !MayIssueVitalsDelta() )
 			return false;
 
-		if ( InfiniteStaminaDebug && staminaDelta < 0f )
+		if ( InfiniteStamina && staminaDelta < 0f )
 			return true;
 
 		if ( mergePendingSprintDebt && staminaDelta < 0f && !Networking.IsHost && GameObject.Network is { Active: true }

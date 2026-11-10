@@ -4,25 +4,25 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// F-key shove: grounded dash + punch sequence with sword still held.
-/// Post-shove combat lock uses the same recovery gate as sword (<see cref="IsCombatActionLocked"/>).
+/// F-key punch (shield bash with a shield out): whacks whoever stands within <see cref="ShoveRangeMeters"/> in front —
+/// no lunge (Mark 2026-11-05), shorter reach than the sword, so you have to be close. It breaks a guard but never
+/// cancels an attack already started (Mark 2026-11-05: hits never break attacks). Post-punch combat lock uses the same recovery gate as the sword (<see cref="IsCombatActionLocked"/>).
 /// </summary>
 public partial class PlayerCombat
 {
 	[Property, Group( "Combat — Shove" ), Title( "Shove input action" )]
 	public string ShoveAction { get; set; } = "Shove";
 
-	[Property, Group( "Combat — Shove" ), Title( "Shove range (m)" )]
-	public float ShoveRangeMeters { get; set; } = 70f;
+	/// <summary>Reach of the punch from the body, in meters (shorter than the sword's ~1.9 m — get close).</summary>
+	[Property, Group( "Combat — Shove" ), Title( "Punch reach (m)" ), Range( 0.3f, 3f ), Step( 0.05f )]
+	public float ShoveRangeMeters { get; set; } = 1.2f;
 
 	[Property, Group( "Combat — Shove" ), Title( "Shove damage (unblocked)" )]
 	public float ShoveDamage { get; set; } = 3f;
 
-	[Property, Group( "Combat — Shove" ), Title( "Shove radius (m)" )]
-	public float ShoveHitRadiusMeters { get; set; } = 28f;
-
-	[Property, Group( "Combat — Shove" ), Title( "Shove dash distance (m)" ), Description( "Designer meters; converted to pawn units via BodyHeight/1.8 (citizen ~40u per meter)." )]
-	public float ShoveDashMeters { get; set; } = 1f;
+	/// <summary>Thickness of the punch trace, in meters.</summary>
+	[Property, Group( "Combat — Shove" ), Title( "Punch radius (m)" ), Range( 0.05f, 1f ), Step( 0.05f )]
+	public float ShoveHitRadiusMeters { get; set; } = 0.3f;
 
 	[Property, Group( "Combat — Shove" ), Title( "Shove stamina cost" )]
 	public float ShoveStaminaCost { get; set; } = 10f;
@@ -51,12 +51,14 @@ public partial class PlayerCombat
 		if ( IsMeleeAttackChainBusy() )
 			return false;
 
-		// Mark 2026-11-02: F belongs to the hoe while it is out (its mode swap), and a punch at thin air is nothing -
-		// the shove only fires with someone to punch ahead.
+		// Punch cooldown (the host enforces the same).
+		if ( Time.NowDouble - _ownerLastPunchAt < Math.Max( 0f, PunchCooldownSeconds ) )
+			return false;
+
+		// F belongs to the hoe while it is out (its mode swap). Otherwise F always throws the punch, at someone or
+		// at nothing (Mark 2026-11-05: "add the punch back in, should be F").
 		var equipment = Components.Get<PlayerEquipment>();
 		if ( equipment is not null && equipment.MainHandHasAction( EquippedItemActions.Till ) )
-			return false;
-		if ( !HasShoveTargetAhead() )
 			return false;
 
 		var cost = Math.Max( 0f, ShoveStaminaCost );
@@ -68,33 +70,9 @@ public partial class PlayerCombat
 		}
 
 		BeginShoveFacingLock();
+		_ownerLastPunchAt = Time.NowDouble;
 		OwnerRequestShove();
 		return true;
-	}
-
-	/// <summary>Owner: is there a pawn or enemy (anything with a PlayerAnimation or PlayerCombat) within the shove's reach ahead, as the host's hit trace will see it after the dash?</summary>
-	bool HasShoveTargetAhead()
-	{
-		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
-		if ( !scene.IsValid() )
-			return false;
-		var forward = GetViewDirectionForIntent();
-		if ( forward.LengthSquared < 1e-4f )
-			forward = GameObject.WorldRotation.Forward;
-		forward = forward.Normal;
-		var eye = GameObject.WorldPosition + Vector3.Up * Math.Max( 32f, ServerEyeHeight * 0.5f );
-		var range = Math.Max( 10f, ShoveRangeMeters ) + TerrainWorldUnits.MetersToEngine( Math.Max( 0f, ShoveDashMeters ) );
-		var tr = scene.Trace.Ray( eye, eye + forward * range )
-			.Radius( Math.Max( 4f, ShoveHitRadiusMeters ) )
-			.IgnoreGameObjectHierarchy( GameObject )
-			.Run();
-		if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() )
-			return false;
-		var root = tr.GameObject.Root ?? tr.GameObject;
-		if ( root == GameObject.Root )
-			return false;
-		return root.Components.Get<PlayerAnimation>( FindMode.EverythingInSelfAndDescendants ) is not null
-		       || root.Components.Get<PlayerCombat>( FindMode.EverythingInSelfAndDescendants ) is not null;
 	}
 
 	bool IsLocalPlayerGroundedForShove()
@@ -118,26 +96,10 @@ public partial class PlayerCombat
 		}
 
 		// Predict lock so spam F / Attack1 can't slip through before Rpc.Owner recovery arrives.
-		ApplyCombatActionLock( Math.Max( 0.05f, RecoveryShoveCombatLockSeconds ) );
+		ApplyCombatActionLock( Math.Max( 0.05f, Math.Max( 0f, PunchWindupSeconds ) + RecoveryShoveCombatLockSeconds ) );
+		BeginPunchActionLock();
 		CancelAttackIntentsForShoveRecovery();
-		// Local lunge — host still applies authoritative dash; without this the client never sees movement.
-		PredictShoveDashLocal();
 		RpcHostRequestShove();
-	}
-
-	void PredictShoveDashLocal()
-	{
-		var meters = Math.Max( 0f, ShoveDashMeters );
-		if ( meters <= 1e-4f )
-			return;
-
-		var forward = GetViewDirectionForIntent().WithZ( 0f );
-		if ( forward.LengthSquared < 1e-6f )
-			forward = GameObject.WorldRotation.Forward.WithZ( 0f );
-		if ( forward.LengthSquared < 1e-6f )
-			return;
-
-		Components.Get<PlayerMovement>()?.PredictFlatDashMeters( forward.Normal, meters );
 	}
 
 	bool HasHostAuthorityForCombat() =>
@@ -157,99 +119,143 @@ public partial class PlayerCombat
 		ServerTryShove();
 	}
 
-	void ServerTryShove()
+	/// <summary>Click → the punch lands (readable, still quicker than the 0.6 s one-handed windup). The lockout runs this plus <see cref="RecoveryShoveCombatLockSeconds"/>.</summary>
+	[Property, Group( "Combat — Shove" ), Title( "Punch windup (s)" ), Range( 0f, 1f ), Step( 0.01f )]
+	public float PunchWindupSeconds { get; set; } = 0.3f;
+
+	/// <summary>
+	/// No second punch for this long after one (Mark 2026-11-05: punches could stagger a bot forever). The exchange it
+	/// protects: punch lands → puncher free after <see cref="RecoveryShoveCombatLockSeconds"/> (0.15) and its light swing
+	/// hits 0.4 s later (0.55) → the punched pawn is free after <see cref="RecoveryDefenderShoveSeconds"/> (0.4) and a held
+	/// guard is up by 0.45 — the punch buys initiative, not a free hit, and never a chain.
+	/// </summary>
+	[Property, Group( "Combat — Shove" ), Title( "Punch cooldown (s)" ), Range( 0f, 5f ), Step( 0.05f )]
+	public float PunchCooldownSeconds { get; set; } = 1.5f;
+
+	double _hostLastPunchAt = double.NegativeInfinity;
+	double _ownerLastPunchAt = double.NegativeInfinity;
+
+	/// <summary>Seconds until this pawn may punch again (host view; the owner predicts the same from its own clock).</summary>
+	public float PunchCooldownRemaining =>
+		Math.Max( 0f, (float)(_hostLastPunchAt + Math.Max( 0f, PunchCooldownSeconds ) - Time.NowDouble) );
+
+	/// <summary>Host: a punch thrown and not landed yet (lands at <see cref="_pendingPunchAt"/>).</summary>
+	bool _pendingPunch;
+	double _pendingPunchAt;
+	Vector3 _pendingPunchForward;
+
+	/// <summary>Host: start a punch — stamina, the punch pose and the lockout now, the hit <see cref="PunchWindupSeconds"/> later.</summary>
+	void ServerTryShove() => ServerStartPunch( requireGrounded: true );
+
+	/// <summary>Automated combat test (<c>combat_test</c>): the host punch path without the on-the-ground rule (the test pawns float).</summary>
+	internal bool TestServerPunch() => ServerStartPunch( requireGrounded: false );
+
+	bool ServerStartPunch( bool requireGrounded )
 	{
 		if ( !IsServerSideForMeleeAuthority() )
-			return;
+			return false;
 
-		if ( !IsServerPlayerGroundedForShove() )
-			return;
+		if ( requireGrounded && !IsServerPlayerGroundedForShove() )
+			return false;
 
-		if ( IsCombatActionLocked || ServerHasActiveMeleeAttackAction )
-			return;
+		if ( _pendingPunch || IsCombatActionLocked || ServerHasActiveMeleeAttackAction || PunchCooldownRemaining > 0f )
+			return false;
 
 		var cost = Math.Max( 0f, ShoveStaminaCost );
 		if ( cost > 1e-4f )
 		{
 			var vitals = Components.Get<PlayerVitals>();
 			if ( vitals is null || !vitals.TrySpendStamina( cost ) )
-				return;
+				return false;
 		}
 
-		// Dash + shove together (dash first so the hit traces from the new spot).
-		ServerApplyShoveDash();
-
-		var eye = GetCameraPositionForIntent();
-		var forward = GetViewDirectionForIntent();
+		// A flat punch at chest height along the facing at the click.
+		var forward = GetViewDirectionForIntent().WithZ( 0f );
 		if ( forward.LengthSquared < 1e-4f )
-			forward = GameObject.WorldRotation.Forward;
-		forward = forward.Normal;
+			forward = GameObject.WorldRotation.Forward.WithZ( 0f );
 
-		var range = Math.Max( 10f, ShoveRangeMeters );
-		var radius = Math.Max( 4f, ShoveHitRadiusMeters );
+		_pendingPunchForward = forward.Normal;
+		_pendingPunchAt = Time.NowDouble + Math.Max( 0f, PunchWindupSeconds );
+		_pendingPunch = true;
+		_hostLastPunchAt = Time.NowDouble;
+		ServerBeginShoveAttackerRecovery();
+		ServerTickPendingPunch();
+		return true;
+	}
+
+	/// <summary>Host, every tick (with the swing runtime): land the pending punch when its windup has run.</summary>
+	internal void ServerTickPendingPunch()
+	{
+		if ( !_pendingPunch || Time.NowDouble < _pendingPunchAt )
+			return;
+
+		_pendingPunch = false;
+		ServerLandPunch( _pendingPunchForward );
+	}
+
+	/// <summary>
+	/// Host: the punch connects — whoever stands within <see cref="ShoveRangeMeters"/> (reach and radius in meters, pawn
+	/// units via BodyHeight/1.8) takes it. It breaks a guard; an attack they already started plays on.
+	/// </summary>
+	void ServerLandPunch( Vector3 forward )
+	{
+		var unitsPerMeter = GetPawnUnitsPerMeter();
+		var range = Math.Max( 0.3f, ShoveRangeMeters ) * unitsPerMeter;
+		var radius = Math.Max( 0.05f, ShoveHitRadiusMeters ) * unitsPerMeter;
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
 		if ( !scene.IsValid() )
-		{
-			ServerBeginShoveAttackerRecovery();
 			return;
-		}
 
-		// Trace from after the dash.
-		eye = GameObject.WorldPosition + Vector3.Up * Math.Max( 32f, ServerEyeHeight * 0.5f );
+		var eye = GameObject.WorldPosition + Vector3.Up * Math.Max( 32f, ServerEyeHeight * 0.5f );
 		var tr = scene.Trace.Ray( eye, eye + forward * range )
 			.Radius( radius )
 			.IgnoreGameObjectHierarchy( GameObject )
 			.Run();
 
 		if ( !tr.Hit || tr.GameObject is null || !tr.GameObject.IsValid() )
-		{
-			ServerBeginShoveAttackerRecovery();
 			return;
-		}
 
-		// Find the victim by animation: being shoved is not equipment-dependent, and PlayerAnimation
-		// owns the reaction window.
+		// Find the victim by animation: being punched is not equipment-dependent, and PlayerAnimation owns the
+		// reaction window. Enemies come through PlayerCombat instead (no PlayerAnimation).
 		var victimRoot = tr.GameObject.Root ?? tr.GameObject;
 		var defenderAnimation = victimRoot.Components.Get<PlayerAnimation>( FindMode.EverythingInSelfAndDescendants );
-		// Enemies come through this one instead — they carry PlayerCombat but no PlayerAnimation.
 		var defenderCombat = victimRoot.Components.Get<PlayerCombat>( FindMode.EverythingInSelfAndDescendants );
 		if ( victimRoot == GameObject.Root || (defenderAnimation is null && defenderCombat is null) )
-		{
-			ServerBeginShoveAttackerRecovery();
 			return;
-		}
 
 		if ( defenderCombat is { IsAuthoritativeMeleeBlocking: true } )
 		{
 			defenderCombat.ServerApplyShoveVsBlock( this );
-			ServerBeginShoveAttackerRecovery();
 			return;
 		}
 
 		var receiver = victimRoot.Components.Get<DamageReceiver>( FindMode.EverythingInSelfAndDescendants );
 		if ( receiver is not null )
-			receiver.TakeDamage( Math.Max( 0f, ShoveDamage ), this );
+		{
+			using ( PlaytestLog.Kind( "punch" ) )
+				receiver.TakeDamage( Math.Max( 0f, ShoveDamage ), this );
+		}
 
 		defenderAnimation?.ServerBeginHitReaction( RecoveryDefenderShoveSeconds );
-		ServerBeginShoveAttackerRecovery();
 	}
 
 	/// <summary>
-	/// Punch pose + combat lock — same <see cref="IsCombatActionLocked"/> gate as post-sword recovery
-	/// (blocks sword, block, and another shove until it ends).
-	/// Lock lasts at least the punch clip so attack cannot start mid-kick.
+	/// Punch pose + combat lock. The lock (no sword, block or punch) is <see cref="RecoveryShoveCombatLockSeconds"/>
+	/// (0.15 s, Mark 2026-11-05); the recovery itself runs as long as the punch clip so the pose plays out, and a
+	/// swing or a raised guard after the lock clears what is left of it.
 	/// </summary>
 	void ServerBeginShoveAttackerRecovery()
 	{
-		var hold = Math.Max( 0.05f, RecoveryShoveCombatLockSeconds );
+		var hold = Math.Max( 0.05f, Math.Max( 0f, PunchWindupSeconds ) + RecoveryShoveCombatLockSeconds );
 		ServerBeginCombatRecovery( hold, CombatRecoveryAnim.MeleePunchLeft, playPresentation: false );
+		BeginPunchActionLock();
 		PlayShovePunchAnimationOnce( "host ServerBeginShoveAttackerRecovery" );
 
-		// Punch clip (~0.83s) can outlast the configured lock (0.8s) — extend so attack waits for kick end.
+		// The pose runs the whole punch clip (~0.83 s); IsInCombatRecovery only locks for the punch lock above.
 		var clip = Components.Get<PlayerAnimation>()?.GetActiveCombatSequenceDurationSeconds() ?? 0f;
 		if ( clip > hold + 1e-4f )
 		{
-			LogShoveAnim( $"extend lock to punch clip {clip:0.###}s (was {hold:0.###}s)" );
+			LogShoveAnim( $"punch pose runs the clip {clip:0.###}s (actions locked {hold:0.###}s)" );
 			ExtendCombatActionRecovery( clip );
 		}
 
@@ -291,9 +297,18 @@ public partial class PlayerCombat
 		}
 
 		_shovePunchPlayedThisRecovery = true;
+		var animation = Components.Get<PlayerAnimation>();
+
+		// Shield out (as this peer sees it): F is a shield bash — the shield drives forward instead of the left-hand punch.
+		if ( animation is { HasShieldShown: true } )
+		{
+			LogShoveAnim( $"PLAY shield bash reason={reason}" );
+			animation.PlayShieldBash();
+			return;
+		}
+
 		LogShoveAnim( $"PLAY punch once reason={reason}" );
-		Components.Get<PlayerAnimation>()
-			?.PlayCombatSequencePose( CombatRecoveryAnims.MeleePunchLeft, keepMeleeSwordVisible: true, forceRestart: true );
+		animation?.PlayCombatSequencePose( CombatRecoveryAnims.MeleePunchLeft, keepMeleeSwordVisible: true, forceRestart: true );
 	}
 
 	void LogShoveAnim( string detail )
@@ -312,49 +327,13 @@ public partial class PlayerCombat
 		LogShoveAnim( detail );
 	}
 
-	/// <summary>Host: move the shover ~<see cref="ShoveDashMeters"/> flat-forward (collision-clamped).</summary>
-	void ServerApplyShoveDash()
-	{
-		var meters = Math.Max( 0f, ShoveDashMeters );
-		if ( meters <= 1e-4f )
-			return;
-
-		var forward = GetViewDirectionForIntent().WithZ( 0f );
-		if ( forward.LengthSquared < 1e-6f )
-			forward = GameObject.WorldRotation.Forward.WithZ( 0f );
-		if ( forward.LengthSquared < 1e-6f )
-			return;
-
-		forward = forward.Normal;
-		var movement = Components.Get<PlayerMovement>();
-		if ( movement is not null )
-		{
-			movement.ServerApplyFlatDashMeters( forward, meters );
-			return;
-		}
-
-		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
-		if ( scene is null || !scene.IsValid() )
-			return;
-
-		var origin = GameObject.WorldPosition + Vector3.Up * 36f;
-		var tr = scene.Trace.Ray( origin, origin + forward * meters )
-			.Radius( 16f )
-			.IgnoreGameObjectHierarchy( GameObject )
-			.Run();
-		var delta = tr.Hit
-			? forward * Math.Max( 0f, (tr.HitPosition - origin).WithZ( 0f ).Length - 8f )
-			: forward * meters;
-		GameObject.WorldPosition += delta.WithZ( 0f );
-	}
-
 	/// <summary>Host: shove connected against an active guard.</summary>
 	internal void ServerApplyShoveVsBlock( Component attacker )
 	{
 		if ( !IsServerSideForMeleeAuthority() )
 			return;
 
-		ConsumeAuthoritativeMeleeBlock( attackWasHeavy: false, wasPerfectParry: false );
+		ConsumeAuthoritativeMeleeBlock( wasPerfectParry: false );
 		ServerBeginHitReaction( RecoveryDefenderShoveBlockSeconds );
 		Log.Info( $"[MeleeBlock] shove-vs-block {GameObject.Name} from {attacker?.GameObject?.Name}" );
 	}

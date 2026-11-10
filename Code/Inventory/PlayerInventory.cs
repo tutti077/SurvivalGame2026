@@ -374,6 +374,7 @@ public sealed class PlayerInventory : Component
 
 		NotifyInventoryChanged();
 		ReportResourcePickedUp( resourceId, added );
+		PlaytestLog.HostGained( GameObject, resourceId, added );
 
 		if ( LogInventory )
 			Log.Info( $"[PlayerInventory] {GameObject.Name}: +{added} {resourceId}{( remaining > 0 ? $" ({remaining} lost — full)" : "" )}." );
@@ -437,15 +438,15 @@ public sealed class PlayerInventory : Component
 		var counts = new int[_slots.Length];
 		var wears = new int[_slots.Length];
 		var crafters = new string[_slots.Length];
-		for ( var i = 0; i < _slots.Length; i++ )
 		var tiers = new int[_slots.Length];
+		for ( var i = 0; i < _slots.Length; i++ )
 		{
 			ids[i] = _slots[i].ResourceId ?? string.Empty;
 			counts[i] = _slots[i].Count;
 			wears[i] = _slots[i].Wear;
 			crafters[i] = _slots[i].CrafterName ?? string.Empty;
-		}
 			tiers[i] = _slots[i].Tier;
+		}
 
 		RpcOwnerInventorySync( ids, counts, wears, crafters, tiers );
 	}
@@ -464,8 +465,8 @@ public sealed class PlayerInventory : Component
 			var c = counts[i];
 			var w = wears is not null && i < wears.Length ? wears[i] : 0;
 			var maker = crafters is not null && i < crafters.Length ? crafters[i] : null;
-			_slots[i] = string.IsNullOrWhiteSpace( id ) || c <= 0
 			var tier = tiers is not null && i < tiers.Length ? tiers[i] : 0;
+			_slots[i] = string.IsNullOrWhiteSpace( id ) || c <= 0
 				? InventorySlot.Empty
 				: new InventorySlot { ResourceId = id, Count = c, Wear = w, CrafterName = maker, Tier = tier };
 		}
@@ -654,8 +655,8 @@ public sealed class PlayerInventory : Component
 		var heldCount = held.Count;
 		var heldWear = held.Wear;
 		var heldCrafter = held.CrafterName ?? string.Empty;
-
 		var heldTier = held.Tier;
+
 		EnsureSlotArray();
 		if ( !InventoryStackRules.PlaceHalf( _slots, slotIndex, ref held ) )
 			return false;
@@ -1071,7 +1072,6 @@ public sealed class PlayerInventory : Component
 		HostTryQuickMove( fromSlotIndex, grid );
 	}
 
-	/// <summary>Host: repair one bag slot back to full durability.</summary>
 	/// <summary>Host: set the workbench upgrade tier of one bag stack (<see cref="EquipmentUpgrade"/>).</summary>
 	public bool HostSetTier( int slotIndex, int tier )
 	{
@@ -1092,6 +1092,7 @@ public sealed class PlayerInventory : Component
 		return true;
 	}
 
+	/// <summary>Host: repair one bag slot back to full durability.</summary>
 	public bool HostClearWear( int slotIndex )
 	{
 		if ( !HasHostAuthority )

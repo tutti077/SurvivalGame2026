@@ -104,7 +104,8 @@ public sealed partial class PlayerAugments
 		if ( !CombatAuthority.MayApplyMeleeDamageFromAttackerToReceiver( GameObject, dmg ) || !CombatAuthority.IsDamageVictimAlive( dmg ) )
 			return;
 
-		dmg.TakeDamage( Math.Max( 0.1f, def.EffectScale ), Components.Get<PlayerCombat>() ?? (Component)this );
+		using ( PlaytestLog.Kind( "laser" ) )
+			dmg.TakeDamage( Math.Max( 0.1f, def.EffectScale ), Components.Get<PlayerCombat>() ?? (Component)this );
 	}
 
 	/// <summary>Every client, every frame: two beams from the eyes to the synced end point.</summary>

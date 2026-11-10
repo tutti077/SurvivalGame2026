@@ -114,22 +114,15 @@ public sealed partial class PlayerAnimation : Component
 	[Sync( SyncFlags.FromHost )]
 	public byte NetworkedSwingAttackType { get; set; }
 
-	[Sync( SyncFlags.FromHost )]
-	public bool NetworkedSwingHeavy { get; set; }
-
 	/// <summary>Host windup left before the strike when the swing was accepted — remotes hold the snap frame this long.</summary>
 	[Sync( SyncFlags.FromHost )]
 	public float NetworkedSwingWindupRemainingSeconds { get; set; }
 
 	int _lastAppliedSwingCounter;
 	byte _deferredSwingAnimType;
-	bool _deferredSwingAnimHeavy;
 	float _deferredSwingAnimWindupRemaining;
 	bool _deferSwingAnimBroadcast;
 
-	/// <summary>A heavy strike saved the body's playback rate and owns it until the clip ends.</summary>
-	bool _lateralSwingPlaybackSlowed;
-	float _playbackRateSaved = 1f;
 	/// <summary>Sandbox time until the strike clip (cocked → strike → rest) is finished.</summary>
 	double _meleeAttackAnimBusyUntilSandbox;
 
@@ -176,8 +169,10 @@ public sealed partial class PlayerAnimation : Component
 		TickMeleeSwing();
 		TickWornClothing();
 		TickLookUpBodyHide();
+		TickBowStanceState();
 		TickCombatFacingPresentation( advance: true );
 		TickLookAimLimits( advance: true );
+		TickWingsuitPose();
 	}
 
 	bool _combatFacingApplied;
@@ -190,9 +185,45 @@ public sealed partial class PlayerAnimation : Component
 			return;
 
 		_combatFacingApplied = false;
+		_wasdFacingApplied = false;
 		var body = ResolveBody();
 		if ( body is not null && body.IsValid() && body.GameObject != GameObject )
 			body.GameObject.LocalRotation = Rotation.Identity;
+	}
+
+	float _wasdFacingYaw;
+	bool _wasdFacingApplied;
+
+	/// <summary>
+	/// Body turns with WASD (Settings → Dev tools, <see cref="DevToolsSettings.WasdBodyFacing"/>): eases the body yaw
+	/// toward <see cref="PlayerMovement.TryGetWasdFacingTargetYaw"/> with <see cref="PlayerMovement.WasdFacingTurnSeconds"/>.
+	/// In: starts from wherever the body faces (a swing or guard may have just pinned it). Out: no writes - the body
+	/// stays where it was, like a swing release.
+	/// </summary>
+	bool TryGetWasdFacingYaw( PlayerMovement movement, bool advance, out float yaw )
+	{
+		yaw = _wasdFacingYaw;
+		if ( movement is null || !movement.IsValid() || !movement.Enabled || !movement.TryGetWasdFacingTargetYaw( out var target ) )
+		{
+			_wasdFacingApplied = false;
+			return false;
+		}
+
+		if ( !advance )
+			return _wasdFacingApplied;
+
+		if ( !_wasdFacingApplied )
+		{
+			var body = ResolveBody();
+			_wasdFacingYaw = body is { IsValid: true } ? body.WorldRotation.Yaw() : target;
+		}
+
+		var tau = MathF.Max( 0.02f, movement.WasdFacingTurnSeconds );
+		var k = 1f - MathF.Exp( -Time.Delta / tau );
+		_wasdFacingYaw += Angles.NormalizeAngle( target - _wasdFacingYaw ) * k;
+		_wasdFacingApplied = true;
+		yaw = _wasdFacingYaw;
+		return true;
 	}
 
 	/// <summary>
@@ -208,9 +239,20 @@ public sealed partial class PlayerAnimation : Component
 
 		// Wingsuit flight rotates the whole root (pitch/roll included) — an upright yaw override on
 		// the child would fight it and pin the model sideways mid-glide.
-		if ( Components.Get<PlayerMovement>() is { IsWingsuitDeployed: true } )
+		var movement = Components.Get<PlayerMovement>();
+		if ( movement is { IsWingsuitDeployed: true } )
 		{
 			ReleaseCombatFacingOverride();
+			return;
+		}
+
+		// The bow's archer stance turns the body side-on to the aim (PlayerAnimation.Bow.cs).
+		if ( TryGetBowFacingYaw( advance, out var bowYaw ) )
+		{
+			_combatFacingYaw = bowYaw;
+			_combatFacingApplied = true;
+			_wasdFacingApplied = false;
+			body.GameObject.WorldRotation = new Angles( 0f, bowYaw, 0f ).ToRotation();
 			return;
 		}
 
@@ -219,7 +261,17 @@ public sealed partial class PlayerAnimation : Component
 		{
 			_combatFacingYaw = activeYaw;
 			_combatFacingApplied = true;
+			_wasdFacingApplied = false;
 			body.GameObject.WorldRotation = new Angles( 0f, _combatFacingYaw, 0f ).ToRotation();
+			return;
+		}
+
+		// Body turns with WASD (dev tools): walk-facing toward the travel direction - S walks toward the camera.
+		if ( TryGetWasdFacingYaw( movement, advance, out var wasdYaw ) )
+		{
+			_combatFacingYaw = wasdYaw;
+			_combatFacingApplied = true;
+			body.GameObject.WorldRotation = new Angles( 0f, wasdYaw, 0f ).ToRotation();
 			return;
 		}
 
@@ -337,17 +389,22 @@ public sealed partial class PlayerAnimation : Component
 		// Facing before the stick transform so the held prop follows the rotated body this frame.
 		TickCombatFacingPresentation( advance: false );
 		TickLookAimLimits( advance: false );
+		TickWingsuitPose();
 		TickMeleeDemoStickTransform();
+		TickHeavyFlashFromHeldBlade();
 		TickHeldLightProp();
+		TickBolaProp();
 		TickOffhandShield();
+		TickHeldBow();
 	}
 
 	protected override void OnDestroy()
 	{
-		RestoreLateralSwingPlaybackRate();
 		DestroyMeleeDemoStick();
 		DestroyHeldLightProp();
+		DestroyBolaProp();
 		DestroyOffhandShield();
+		DestroyHeldBow();
 		ClearStuckNegativeBodyScale();
 		base.OnDestroy();
 	}
@@ -373,12 +430,12 @@ public sealed partial class PlayerAnimation : Component
 
 			anim._deferSwingAnimBroadcast = false;
 			authority.HostBroadcastMeleeSwingAnim( anim.GameObject.Id, anim._deferredSwingAnimType,
-				anim._deferredSwingAnimHeavy, anim._deferredSwingAnimWindupRemaining );
+				anim._deferredSwingAnimWindupRemaining );
 		}
 	}
 
 	/// <summary>Called on non-host peers from CombatAuthority Broadcast (low-latency path).</summary>
-	internal void ApplyRemoteMeleeSwingAttack( byte attackType, bool isHeavy, float windupRemainingSeconds )
+	internal void ApplyRemoteMeleeSwingAttack( byte attackType, float windupRemainingSeconds )
 	{
 		// Sync may have already applied this swing; don't double-fire.
 		if ( NetworkedSwingCounter > 0 && NetworkedSwingCounter == _lastAppliedSwingCounter )
@@ -390,7 +447,7 @@ public sealed partial class PlayerAnimation : Component
 		if ( ShouldSkipRemoteSwingRestart() )
 			return;
 
-		PlayMeleeSwingAttack( attackType, broadcastFromHost: false, isHeavy, windupRemainingSeconds );
+		PlayMeleeSwingAttack( attackType, broadcastFromHost: false, windupRemainingSeconds );
 	}
 
 	void TickSyncedSwingPresentation()
@@ -408,7 +465,7 @@ public sealed partial class PlayerAnimation : Component
 		if ( ShouldSkipRemoteSwingRestart() )
 			return;
 
-		PlayMeleeSwingAttack( NetworkedSwingAttackType, broadcastFromHost: false, NetworkedSwingHeavy,
+		PlayMeleeSwingAttack( NetworkedSwingAttackType, broadcastFromHost: false,
 			NetworkedSwingWindupRemainingSeconds );
 	}
 
@@ -454,6 +511,10 @@ public sealed partial class PlayerAnimation : Component
 		if ( heldLight is not null && heldLight.ResolveAnchor() == HeldLightAnchor.LanternHang
 		     && !HasActiveMeleeSwingPresentation )
 			return HoldPose.None;
+
+		// A bola is carried in the right hand like the torch (the prop hangs / spins from the hand bone).
+		if ( _equippedItem is not null && _equippedItem.IsValid() && _equippedItem.HasAction( EquippedItemActions.Bola ) )
+			return HoldPose.HoldItemRight;
 
 		if ( _equippedItem is not null && _equippedItem.IsValid()
 		     && _equippedItem.HasAction( EquippedItemActions.PrimaryMelee )
@@ -565,7 +626,6 @@ public sealed partial class PlayerAnimation : Component
 
 	void ClearMeleeTwoHandHold()
 	{
-		RestoreLateralSwingPlaybackRate();
 		DestroyMeleeDemoStick();
 
 		if ( _animHelper is not null && _animHelper.IsValid() )
@@ -732,12 +792,9 @@ public sealed partial class PlayerAnimation : Component
 				"seqClearedBeforeGraphOn UseAnimGraph=true" );
 		}
 
-		// A strike in flight keeps its clip window and (heavy) rate — the graph plays it under the pose.
+		// A strike in flight keeps its clip window — the graph plays it under the pose.
 		if ( !IsMeleeSwingAnimBusy )
-		{
-			RestoreLateralSwingPlaybackRate();
 			_meleeAttackAnimBusyUntilSandbox = 0;
-		}
 	}
 
 	/// <summary>Hard reset to citizen locomotion — call when a pose ends even if flags desynced.</summary>
@@ -766,8 +823,6 @@ public sealed partial class PlayerAnimation : Component
 	/// </summary>
 	public void ExitCombatSequenceToLocomotion()
 	{
-		// A strike in flight keeps its (heavy) playback rate: the graph plays it on under locomotion.
-		var strikeBusy = IsMeleeSwingAnimBusy;
 		ClearCombatSequencePose();
 		ForceRestoreLocomotionGraph();
 
@@ -781,8 +836,7 @@ public sealed partial class PlayerAnimation : Component
 			body.Sequence.Time = 0f;
 			body.Sequence.Looping = false;
 			body.UseAnimGraph = true;
-			if ( !strikeBusy )
-				body.PlaybackRate = 1f;
+			body.PlaybackRate = 1f;
 			ResetMeleeAttackAnimGraphToIdle( body );
 
 			body.Set( "b_grounded", true );
@@ -803,12 +857,6 @@ public sealed partial class PlayerAnimation : Component
 			// One-shot idle nudge — PlayerController resumes real velocity next frame.
 			_animHelper.WithVelocity( Vector3.Zero );
 			_animHelper.WithWishVelocity( Vector3.Zero );
-		}
-
-		if ( !strikeBusy )
-		{
-			_lateralSwingPlaybackSlowed = false;
-			_playbackRateSaved = 1f;
 		}
 
 		if ( ResolvePresentationHoldPose() == HoldPose.MeleeTwoHand )
@@ -1179,19 +1227,6 @@ public sealed partial class PlayerAnimation : Component
 		}
 
 		return false;
-	}
-
-	void RestoreLateralSwingPlaybackRate()
-	{
-		if ( !_lateralSwingPlaybackSlowed )
-			return;
-
-		var body = ResolveBody();
-		if ( body is not null && body.IsValid() )
-			body.PlaybackRate = _playbackRateSaved;
-
-		_lateralSwingPlaybackSlowed = false;
-		_playbackRateSaved = 1f;
 	}
 
 	/// <summary>Clear leftover −Y body scale from older left-mirror builds.</summary>

@@ -295,6 +295,7 @@ public sealed class VitalsAuthority : Component
 		}
 
 		var healthBefore = r.Health;
+		var staminaBefore = r.Stamina;
 		r.Health = Math.Clamp( r.Health + healthDelta, 0f, r.HealthMax );
 
 		if ( healthDelta < 0f )
@@ -302,12 +303,15 @@ public sealed class VitalsAuthority : Component
 			_healthRegenGate.ArmNoRegenBefore( id, nowT, HealthRegenDelayAfterDamageSeconds );
 			var removed = MathF.Max( 0f, healthBefore - r.Health );
 			if ( removed > 1e-4f )
+			{
 				vitals.LogDamageApplied( damageSource, removed, r.Health, r.HealthMax );
+				PlaytestLog.HostPlayerDamaged( vitals, damageSource, removed, r.Health, r.HealthMax );
+			}
 		}
 
 		if ( staminaDelta < 0f )
 		{
-			if ( vitals.InfiniteStaminaDebug )
+			if ( vitals.InfiniteStamina )
 			{
 				r.Stamina = r.StaminaMax;
 				_players[id] = r;
@@ -353,8 +357,14 @@ public sealed class VitalsAuthority : Component
 		var snap = ToSnapshot( r );
 		vitals.ApplyFromAuthorityAndSync( snap );
 
+		if ( PlaytestLog.Enabled )
+			PlaytestLog.HostStaminaChanged( vitals, staminaBefore, r.Stamina );
+
 		if ( healthBefore > 0.001f && r.Health <= 0.001f )
+		{
+			PlaytestLog.HostPlayerDied( vitals );
 			vitals.HostExecuteDeathRespawnIfDead();
+		}
 
 		return true;
 	}

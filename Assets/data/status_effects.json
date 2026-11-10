@@ -12,6 +12,14 @@
       "foodDurationPercent": 20
     },
     {
+      "id": "onFire",
+      "displayName": "On Fire!",
+      "description": "Burning from a fire arrow. The flames do their damage over a few seconds.",
+      "icon": "ui/status/onfire.png",
+      "fallbackColor": "1,0.45,0.1,1",
+      "isBuff": false
+    },
+    {
       "id": "poisoned",
       "displayName": "Poisoned",
       "description": "Venom is working through you.",
@@ -19,6 +27,14 @@
       "fallbackColor": "0.3,0.8,0.35,1",
       "isBuff": false,
       "healthPerSecond": -5
+    },
+    {
+      "id": "wet",
+      "displayName": "Wet",
+      "description": "Soaked through. Torches stay out until you dry off.",
+      "icon": "ui/status/wet.png",
+      "fallbackColor": "0.35,0.55,0.9,1",
+      "isBuff": false
     },
     {
       "id": "trapped",

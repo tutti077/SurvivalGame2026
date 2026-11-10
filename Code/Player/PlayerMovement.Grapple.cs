@@ -1512,6 +1512,7 @@ partial class PlayerMovement
 		{
 			if ( LogGrapple )
 				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host rejected attach." );
+			PlaytestLog.HostGrappleRejected( this, "point" );
 			return;
 		}
 
@@ -1519,6 +1520,7 @@ partial class PlayerMovement
 		{
 			if ( LogGrapple )
 				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host attach stamina reject." );
+			PlaytestLog.HostGrappleRejected( this, "stamina" );
 			return;
 		}
 
@@ -1551,10 +1553,12 @@ partial class PlayerMovement
 			HostTryBindGrappleRide( validatedPoint );
 		}
 
-		if ( LogGrapple )
+		if ( LogGrapple || PlaytestLog.Enabled )
 		{
 			var kind = playerTargetId != Guid.Empty ? "player" : towTargetId != Guid.Empty ? "tow" : GrappleAttachRideId != Guid.Empty ? "riding surface" : "surface";
-			Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: attached ({kind}) len={TerrainWorldUnits.EngineToMeters( length ):0.##}m" );
+			if ( LogGrapple )
+				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: attached ({kind}) len={TerrainWorldUnits.EngineToMeters( length ):0.##}m" );
+			PlaytestLog.HostGrappleAttached( this, kind, length );
 		}
 	}
 
@@ -1572,7 +1576,7 @@ partial class PlayerMovement
 		if ( _vitals is null )
 			return true;
 
-		if ( _vitals.InfiniteStaminaDebug )
+		if ( _vitals.InfiniteStamina )
 			return true;
 
 		if ( !_vitals.HasStaminaFor( AttachStaminaCost ) )
@@ -1604,6 +1608,7 @@ partial class PlayerMovement
 		_airborneStaminaDebt = 0f;
 		_grappleReleaseAir = true;
 
+		PlaytestLog.HostGrappleDetached( this, reason );
 		if ( LogGrapple )
 			Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: detached ({reason})" );
 	}

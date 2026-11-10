@@ -35,6 +35,6 @@ public struct InventorySlot
 
 public static class InventoryDefaults
 {
-	public const int DefaultSlotCount = 16;
+	public const int DefaultSlotCount = 24;
 	public const int DefaultColumns = 4;
 }

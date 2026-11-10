@@ -59,6 +59,14 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	[Property, Group( "Camera" ), Title( "Free look orbit (third person)" )]
 	public bool FreeLookOrbitEnabled { get; set; } = true;
 
+	/// <summary>
+	/// Time constant the body yaw eases toward the WASD travel direction with while
+	/// <see cref="DevToolsSettings.WasdBodyFacing"/> is on (Settings → Dev tools → Body turns with WASD).
+	/// </summary>
+	[Property, Group( "Camera" ), Title( "WASD facing turn time (s)" ), Range( 0.02f, 0.5f ),
+	 Description( "Body turns with WASD (dev tools): seconds for the body to ease round to the new travel direction." )]
+	public float WasdFacingTurnSeconds { get; set; } = 0.12f;
+
 	[Property, Group( "Camera" ), Title( "Scroll wheel zoom" ), Description( "Off by default — scroll selects hotbar. Use +/- for zoom." )]
 	public bool CameraScrollZoomEnabled { get; set; } = false;
 
@@ -366,6 +374,18 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		return _sneakHeldReportedOnHost;
 	}
 
+	/// <summary>
+	/// Crouch key held (or the <c>sneak</c> hack, or the controller ducked), whatever the stamina and whether the
+	/// pawn moves - a player kneeling still with food in hand is what an animal reads as a taming offer.
+	/// </summary>
+	public bool IsCrouchHeldForTaming()
+	{
+		var ducked = _controller is not null && _controller.IsValid() && _controller.IsDucking;
+		if ( IsLocalMovementDriver() )
+			return ducked || GameHacks.SimulatedSneakHeld || (!string.IsNullOrWhiteSpace( SneakInputAction ) && Input.Down( SneakInputAction ));
+		return ducked || _sneakHeldReportedOnHost;
+	}
+
 	/// <summary>True while sprint is held (local or host-reported). Used by entity ambient alert bands.</summary>
 	public bool IsSprintingForNoise()
 	{
@@ -487,7 +507,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// the air-control target and add swing speed — sprint is a walking thing, not a swinging one.
 		// Holding a player is not a swing: the attacker keeps full ground/air locomotion.
 		// A trap mutes the same way: zero wish so WASD cannot creep the pawn off the plate.
-		if ( WingsuitDeployed || TrapLocked || IsSeated || (GrappleAttached && !IsMovingTargetAttach && !_controller.IsOnGround) )
+		if ( WingsuitDeployed || TrapLocked || IsSeated || PodLocked || (GrappleAttached && !IsMovingTargetAttach && !_controller.IsOnGround) )
 		{
 			if ( !_walkSpeedMuteActive )
 			{
@@ -630,7 +650,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( _vitals is null || string.IsNullOrWhiteSpace( SneakInputAction ) )
 			return false;
 
-		if ( !Input.Down( SneakInputAction ) || _vitals.IsStaminaExhausted( ExhaustedStaminaEpsilon ) )
+		if ( !(Input.Down( SneakInputAction ) || GameHacks.SimulatedSneakHeld) || _vitals.IsStaminaExhausted( ExhaustedStaminaEpsilon ) )
 			return false;
 
 		if ( GrappleAttached )
@@ -661,7 +681,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			return;
 		}
 
-		if ( EventInputLocked || TrapLocked )
+		TickPodLock();
+		if ( EventInputLocked || TrapLocked || PodLocked )
 		{
 			ClearActionIfPressed( JumpInputAction );
 			if ( !string.IsNullOrWhiteSpace( SprintInputAction ) )
@@ -952,6 +973,11 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		var freeOrbit = FreeLookOrbitEnabled && _controller.ThirdPerson && !combatHold;
 
+		// Body turns with WASD (dev tools): PlayerAnimation turns the Body child toward the travel direction, so
+		// the controller must not keep pulling it toward the camera yaw while moving (same near-zero speed trick
+		// as a swing in flight - never exactly 0).
+		var wasdFacing = freeOrbit && WasdFacingAllowed();
+
 		// While a swing is IN FLIGHT, near-stop the controller rotating the ROOT: walking mid-swing
 		// kept turning the root toward movement, which wobbled the pinned renderer child and fed
 		// turn params that blended the attack clip out early (overheads visibly died halfway).
@@ -964,7 +990,45 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// matter how low RotationSpeed is, which is what still spun the model when strafing with
 		// WASD mid-swing. No model rotation during a swing, ever.
 		_controller.RotationAngleLimit = freeOrbit || swingInFlight ? 180f : _designRotationAngleLimit;
-		_controller.RotationSpeed = swingInFlight ? 0.001f : _designRotationSpeed;
+		_controller.RotationSpeed = swingInFlight || wasdFacing ? 0.001f : _designRotationSpeed;
+	}
+
+	/// <summary>The WASD facing mode may own the body on this pawn: setting on, third person, on foot, not flying.</summary>
+	bool WasdFacingAllowed()
+	{
+		if ( !DevToolsSettings.WasdBodyFacing || !FreeLookOrbitEnabled || IsSeated || IsWingsuitDeployed )
+			return false;
+
+		_controller ??= Components.Get<PlayerController>();
+		return _controller is not null && _controller.IsValid() && _controller.ThirdPerson;
+	}
+
+	/// <summary>
+	/// Valheim walk-facing (Settings → Dev tools → Body turns with WASD, <see cref="DevToolsSettings.WasdBodyFacing"/>):
+	/// the yaw of the travel direction the Body renderer should turn toward this frame, read from the controller's
+	/// wish velocity (synced, so every peer computes the same thing), while moving with no attack / block held.
+	/// Pure data - <see cref="PlayerAnimation"/> eases the Body child onto it after the combat facing sources, which
+	/// always win. False when standing still, in first person, seated, in the wingsuit or with the mode off.
+	/// </summary>
+	internal bool TryGetWasdFacingTargetYaw( out float yawDegrees )
+	{
+		yawDegrees = 0f;
+		if ( !WasdFacingAllowed() )
+			return false;
+
+		if ( IsLocalMovementDriver() )
+		{
+			var combat = Components.Get<PlayerCombat>();
+			if ( Input.Down( combat?.PrimaryAttackAction ?? "Attack1" ) || Input.Down( combat?.BlockAction ?? "Attack2" ) )
+				return false;
+		}
+
+		var wish = _controller.WishVelocity.WithZ( 0f );
+		if ( wish.Length < 10f )
+			return false;
+
+		yawDegrees = Rotation.LookAt( wish.Normal, Vector3.Up ).Angles().yaw;
+		return true;
 	}
 
 	void PollCameraScrollZoom()
@@ -1291,6 +1355,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		TickWingsuitAirborneTimer( Time.Delta );
 		TickWingsuitFlight( Time.Delta );
 		TickWingsuitFreefallHandoff();
+		TickSlideOffCreatures();
 	}
 
 	void DetectGrappleAttachEdge()
@@ -1920,82 +1985,6 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		}
 
 		return false;
-	}
-
-	/// <summary>
-	/// Host/authority: collision-clamped flat dash along <paramref name="flatForwardUnit"/>.
-	/// <paramref name="meters"/> is designer meters; converted to pawn engine units via BodyHeight/1.8
-	/// (citizen is ~72u tall ≈ 1.8m — a literal 1-unit "meter" was invisible).
-	/// </summary>
-	public void ServerApplyFlatDashMeters( Vector3 flatForwardUnit, float meters )
-	{
-		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
-			return;
-
-		ApplyFlatDashMeters( flatForwardUnit, meters );
-	}
-
-	/// <summary>Owner prediction: same dash math as host so the shover sees the lunge immediately.</summary>
-	public void PredictFlatDashMeters( Vector3 flatForwardUnit, float meters )
-	{
-		if ( Networking.IsHost )
-			return;
-
-		ApplyFlatDashMeters( flatForwardUnit, meters );
-	}
-
-	void ApplyFlatDashMeters( Vector3 flatForwardUnit, float meters )
-	{
-		meters = Math.Max( 0f, meters );
-		if ( meters <= 1e-4f )
-			return;
-
-		var flat = flatForwardUnit.WithZ( 0f );
-		if ( flat.LengthSquared < 1e-6f )
-			return;
-
-		flat = flat.Normal;
-		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
-		if ( scene is null || !scene.IsValid() )
-			return;
-
-		_controller ??= Components.Get<PlayerController>();
-
-		var bodyHeight = _controller is not null && _controller.IsValid()
-			? Math.Max( 24f, _controller.BodyHeight )
-			: 72f;
-		var bodyRadius = _controller is not null && _controller.IsValid()
-			? Math.Max( 8f, _controller.BodyRadius )
-			: 16f;
-		// Citizen BodyHeight 72 ≈ 1.8m → ~40 engine units per designer meter.
-		var unitsPerMeter = bodyHeight / 1.8f;
-		var distance = meters * unitsPerMeter;
-
-		var start = GameObject.WorldPosition + Vector3.Up * (bodyHeight * 0.5f);
-		var tr = scene.Trace.Ray( start, start + flat * distance )
-			.Radius( bodyRadius * 0.9f )
-			.IgnoreGameObjectHierarchy( GameObject )
-			.Run();
-
-		var travel = distance;
-		if ( tr.Hit )
-			travel = Math.Max( 0f, (tr.HitPosition - start).WithZ( 0f ).Length - bodyRadius );
-
-		if ( travel <= 1e-4f )
-			return;
-
-		GameObject.WorldPosition += flat * travel;
-		Transform.ClearInterpolation();
-		if ( GameObject.Network is { Active: true } )
-			GameObject.Network.ClearInterpolation();
-
-		var body = ResolveGrappleBody();
-		if ( body is not null && body.IsValid() )
-		{
-			var burst = flat * Math.Max( 200f, travel / 0.1f );
-			body.Velocity = new Vector3( burst.x, burst.y, body.Velocity.z );
-			body.AngularVelocity = Vector3.Zero;
-		}
 	}
 
 	void UpdateSprintStaminaHoldAndFlushOnRelease()

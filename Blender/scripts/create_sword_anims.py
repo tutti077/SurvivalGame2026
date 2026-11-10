@@ -29,6 +29,11 @@ Usage (from the repo root):
                                      every strike-clip frame and every graph blend; exit 1 on any failure
   blender -b --python Blender/scripts/create_sword_anims.py -- tune    [POSE ...]     search small fist / blade
                                      corrections that clear the limits; writes sword_pose_tuning.json
+  blender -b --python Blender/scripts/create_sword_anims.py -- path    tip vs debug-sphere distance per path frame and
+                                     the lateral reach that would put the tip on every sphere
+
+The left / right strikes (and their cocked poses) are not hand-placed: PATH_* poses are solved from the host's hit
+path (MeleeAttackPath.cs, mirrored under "debug attack path") so the blade tip sits on the line pivot -> sphere.
 """
 import json
 import math
@@ -392,7 +397,9 @@ def setup():
     if VERBOSE:
         print(f"grip: l1 {grip.l1:.1f} l2 {grip.l2:.1f} grip angle {grip.grip_deg:.0f} "
               f"shoulder {tuple(round(v, 3) for v in bone_world(rig, 'arm_upper_R'))}")
-    return rig, base, grip, base_head
+    ctx = (rig, base, grip, base_head)
+    solve_strike_paths(ctx)
+    return ctx
 
 
 # ------------------------------------------------------------------------------------------ clips
@@ -413,7 +420,16 @@ def segment_ease(index, count, t):
     return t * t * (3.0 - 2.0 * t)
 
 
-def build_clip(ctx, name, keys):
+EASES = {"linear": lambda t: t, "out": lambda t: 1.0 - (1.0 - t) ** 2, "smooth": lambda t: t * t * (3.0 - 2.0 * t)}
+
+
+def clip_keys(entry):
+    """CLIPS entry -> (fbx, keys, fps). Keys are (seconds, pose) or (seconds, pose, ease into this key)."""
+    fbx, keys = entry[0], entry[1]
+    return fbx, keys, (entry[2] if len(entry) > 2 else FPS)
+
+
+def build_clip(ctx, name, keys, fps=FPS):
     """Bake the clip frame by frame: each key pose is solved once, frames in between are per-bone slerps between
     the neighbouring keys (exactly what -- check and the tuner validate), keyed with linear interpolation."""
     rig, base, grip, base_head = ctx
@@ -421,11 +437,14 @@ def build_clip(ctx, name, keys):
         bpy.data.actions.remove(a)
     rig.animation_data_create()
     rig.animation_data.action = None
-    poses = []
-    for seconds, pose_name in keys:
+    bpy.context.scene.render.fps = fps
+    poses, eases = [], []
+    for key in keys:
+        seconds, pose_name = key[0], key[1]
         LAST_GRIP.clear()
         apply_pose(rig, base, grip, base_head, tuned_ops(pose_name))
-        poses.append((1 + int(round(seconds * FPS)), capture_basis(rig)))
+        poses.append((1 + int(round(seconds * fps)), capture_basis(rig)))
+        eases.append(EASES[key[2]] if len(key) > 2 else None)
     action = bpy.data.actions.new(name)
     rig.animation_data.action = action
     slot = action.slots.new(id_type="OBJECT", name=rig.name)
@@ -442,7 +461,8 @@ def build_clip(ctx, name, keys):
             f0, a = poses[i]
             f1, b = poses[i + 1]
             t = 0.0 if f1 == f0 else min(1.0, max(0.0, (f - f0) / (f1 - f0)))
-            blend_poses(rig, a, b, segment_ease(i, nseg, t))
+            ease = eases[i + 1]
+            blend_poses(rig, a, b, ease(t) if ease else segment_ease(i, nseg, t))
         key_pose(rig, f)
     bpy.context.scene.frame_start = 1
     bpy.context.scene.frame_end = last
@@ -475,6 +495,24 @@ def export_clip(rig, fbx_name):
 LEFT_GUARD = ["left", [0.22, -0.10, 0.90], [0.40, 0.40, 1.20]]      # relaxed, hanging a little forward
 LEFT_BALANCE = ["left", [0.20, -0.30, 1.08], [0.55, 0.05, 0.80]]    # forward for balance during a cut
 
+WINGSUIT_A = [  # wings out: arms spread wide at shoulder height a little behind the body (a dihedral once flat), chest
+    # arched, head tipped back so the face looks along the flight, legs a little apart, feet pointed
+    ["lean", -8],
+    ["grip", [-0.70, 0.10, 1.42], [0.0, -1.0, 0.0], [0.0, 0.6, 1.0]],
+    ["left", [0.70, 0.10, 1.42], [0.30, 0.60, 1.80]],
+    ["rot", "neck_0", "x", -20], ["rot", "head", "x", -35],
+    ["rot", "leg_upper_L", "y", -10], ["rot", "leg_upper_R", "y", 10],
+    ["rot", "ankle_L", "x", 35], ["rot", "ankle_R", "x", 35],
+]
+WINGSUIT_B = [  # the slow wing flex of the glide loop: arms a little higher and further back
+    ["lean", -10],
+    ["grip", [-0.69, 0.14, 1.47], [0.0, -1.0, 0.0], [0.0, 0.6, 1.0]],
+    ["left", [0.69, 0.14, 1.47], [0.30, 0.60, 1.80]],
+    ["rot", "neck_0", "x", -20], ["rot", "head", "x", -35],
+    ["rot", "leg_upper_L", "y", -12], ["rot", "leg_upper_R", "y", 12],
+    ["rot", "ankle_L", "x", 35], ["rot", "ankle_R", "x", 35],
+]
+
 REST_R = [  # shoulder carry: fist in front of the right shoulder, blade back over it
     ["lean", 3],
     ["grip", [-0.18, -0.30, 1.22], [-0.10, 0.60, 0.79], [-0.3, 0.1, -1.0]],
@@ -495,40 +533,23 @@ REST_L = [  # sword crossed to rest back over the left shoulder
     ["grip", [0.06, -0.26, 1.18], [0.38, 0.62, 0.69], [-0.35, -0.35, -1.0]],
     ["left", [0.24, -0.06, 0.97], [0.45, 0.45, 1.15]],
 ]
-COCKED_R = [  # wound up over the right shoulder, shoulders turned right
-    ["twist", -30], ["lean", 2],
-    ["grip", [-0.30, 0.04, 1.44], [-0.25, 0.55, 0.80], [-1.0, 0.3, -0.3]],
-    LEFT_BALANCE,
-]
-SWING_R_MID = [  # contact in front, travelling right -> left, edge leading
-    ["twist", 2], ["lean", 8],
-    ["grip", [-0.10, -0.48, 1.24], [0.45, -0.88, -0.15], [-0.4, 0.1, -1.0]],
-    LEFT_BALANCE,
-]
-SWING_R_END = [  # follow-through low on the left
-    ["twist", 30], ["lean", 12],
-    ["grip", [0.22, -0.42, 1.00], [0.78, 0.15, -0.60], [-0.3, -0.6, -0.8]],
-    ["left", [0.30, -0.05, 1.00], [0.70, 0.30, 0.90]],
+# COCKED_R / COCKED_L and the strike frames inside the host active window are not authored here: they are solved
+# from the debug attack path (see "debug attack path" below) so the blade tip follows the hit spheres.
+SWING_R_END = [  # follow-through out on the left, the mirror of SWING_L_END: arm across past the left side, blade drooping
+    # (twist 23: 28 held 0.42 s while looking 70 degrees aside reached anim_test's 65-degree chest limit)
+    ["twist", 23], ["lean", 8],
+    ["grip", [0.30, -0.38, 1.04], [0.76, 0.22, -0.61], [-0.3, -0.6, -0.8]],
+    ["left", [0.32, 0.02, 1.02], [0.70, 0.30, 0.90]],
 ]
 SWING_R_SETTLE = [
     ["twist", 12], ["lean", 6],
-    ["grip", [-0.10, -0.30, 1.14], [-0.15, 0.40, 0.90], [-0.4, 0.1, -1.0]],
+    ["grip", [-0.10, -0.30, 1.14], [-0.26, 0.40, 0.88], [-0.4, 0.1, -1.0]],
     LEFT_GUARD,
 ]
 
-COCKED_L = [  # backhand wind-up: forearm across the chest, sword over the left shoulder
-    ["twist", 32], ["lean", 2],
-    ["grip", [0.18, -0.06, 1.36], [0.45, 0.50, 0.74], [-0.55, -0.55, -0.6]],
-    ["left", [0.30, 0.02, 1.02], [0.70, 0.30, 0.90]],
-]
-SWING_L_MID = [  # contact in front, travelling left -> right
-    ["twist", -2], ["lean", 8],
-    ["grip", [-0.12, -0.50, 1.22], [-0.45, -0.88, -0.12], [-0.3, 0.3, -1.0]],
-    LEFT_BALANCE,
-]
-SWING_L_END = [  # follow-through low on the right
-    ["twist", -30], ["lean", 10],
-    ["grip", [-0.42, -0.24, 1.02], [-0.80, 0.30, -0.52], [-0.3, 0.6, -0.8]],
+SWING_L_END = [  # follow-through out on the right: arm reaching out past the right side, blade drooping down-right
+    ["twist", -32], ["lean", 8],
+    ["grip", [-0.52, -0.26, 1.10], [-0.78, 0.10, -0.62], [-0.3, 0.6, -0.8]],
     LEFT_BALANCE,
 ]
 SWING_L_SETTLE = [  # recovery comes up in front (like the shoulder swap) before laying onto the left shoulder
@@ -537,20 +558,65 @@ SWING_L_SETTLE = [  # recovery comes up in front (like the shoulder swap) before
     LEFT_GUARD,
 ]
 
-COCKED_OVER = [  # fully loaded overhead: fist above the head, blade tipped well back behind it
-    ["twist", -12], ["lean", -7],
-    ["grip", [-0.14, 0.00, 1.66], [0.0, 0.90, 0.42], [-1.0, 0.0, 0.2]],
+# Wind-ups (Mark 2026-11-05, the Last Oasis reference video): the cocked poses are WOUND UP behind the head / shoulder
+# with a bent elbow, reached by a drawn motion (Sword_Cocked_* clips: WIND_* -> COCKED_* over WIND_DRAW_S), never a
+# straight arm held out on the hit path.
+WIND_R = [  # forehand draw, halfway: fist up at the right shoulder, blade standing up
+    ["twist", -10], ["lean", 0],
+    ["grip", [-0.36, -0.14, 1.40], [-0.10, 0.15, 1.0], [-1.0, 0.1, -0.5]],
+    LEFT_GUARD,
+]
+COCKED_R = [  # forehand cocked, the mirror of COCKED_L: fist up in front of the right shoulder, club back over it.
+    # Twist 14: held through the 0.6 s windup while looking 70 degrees aside, 18 sat on anim_test's 65-degree chest limit
+    ["twist", -14], ["lean", -2],
+    ["grip", [-0.30, -0.22, 1.42], [-0.50, 0.62, 0.60], [-1.0, 0.2, -0.3]],
     LEFT_BALANCE,
 ]
-CHOP_MID = [
-    ["twist", -2], ["lean", 12],
-    ["grip", [-0.12, -0.50, 1.38], [0.02, -0.72, 0.70], [-0.8, 0.2, -0.6]],
+WIND_L = [  # backhand draw, halfway: fist crossing in front of the left chest, blade up and out to the left
+    ["twist", 10], ["lean", 2],
+    ["grip", [0.14, -0.33, 1.28], [0.82, 0.30, 0.48], [-0.2, -0.8, -0.6]],
+    LEFT_GUARD,
+]
+COCKED_L = [  # backhand cocked: fist up in front of the left shoulder (below the chin, never across the face), club back
+    # over the left shoulder - the mirror of COCKED_R
+    ["twist", 18], ["lean", -2],
+    ["grip", [0.18, -0.30, 1.38], [0.50, 0.62, 0.60], [-0.2, -0.8, -0.6]],
     LEFT_BALANCE,
 ]
-CHOP_END = [
-    ["twist", 6], ["lean", 22],
-    ["grip", [-0.21, -0.52, 1.02], [-0.05, -0.80, -0.60], [-0.6, 0.3, -0.8]],
-    ["left", [0.20, -0.18, 0.98], [0.60, 0.20, 0.85]],
+RELEASE_R = [  # forehand release (2 frames in), the mirror of RELEASE_L: fist driving forward, club swinging out right
+    ["twist", -14], ["lean", 2],
+    ["grip", [-0.30, -0.34, 1.38], [-0.82, 0.48, 0.30], [-1.0, 0.0, -0.3]],
+    LEFT_BALANCE,
+]
+ENTRY_L = [  # backhand entry (3 frames in): fist out in front of the left shoulder, level blade pointing out left
+    ["twist", 12], ["lean", 6],
+    ["grip", [0.36, -0.30, 1.36], [0.92, 0.38, -0.05], [0.0, -1.0, -0.4]],
+    LEFT_BALANCE,
+]
+RELEASE_L = [  # backhand release (2 frames in): fist driving forward-left, club swinging out left behind it
+    ["twist", 16], ["lean", 2],
+    ["grip", [0.26, -0.36, 1.36], [0.82, 0.48, 0.30], [-0.2, -0.8, -0.6]],
+    LEFT_BALANCE,
+]
+WIND_OVER = [  # overhead draw, halfway: fist rising in front of the right shoulder, blade up
+    ["twist", -6], ["lean", -2],
+    ["grip", [-0.18, -0.24, 1.55], [0.0, 0.15, 1.0], [-1.0, -0.2, -0.3]],
+    LEFT_BALANCE,
+]
+COCKED_OVER = [  # overhead cocked: fist above the head, elbow high, blade hanging down behind the head
+    ["twist", -10], ["lean", -8],
+    ["grip", [-0.12, 0.02, 1.80], [0.40, 0.62, -0.68], [-0.7, -0.3, 0.6]],
+    LEFT_BALANCE,
+]
+CHOP_MID = [  # coming over the top: fist out in front of the face, blade still pointing up
+    ["twist", -2], ["lean", 10],
+    ["grip", [-0.12, -0.48, 1.48], [0.02, -0.55, 0.83], [-0.8, 0.2, -0.6]],
+    LEFT_BALANCE,
+]
+CHOP_END = [  # chopped through: bent forward, fist at the waist in front, blade pointing down at the ground ahead
+    ["twist", 6], ["lean", 28],
+    ["grip", [-0.16, -0.50, 0.96], [-0.05, -0.62, -0.78], [-0.6, 0.3, -0.8]],
+    ["left", [0.22, -0.18, 0.98], [0.60, 0.20, 0.85]],
 ]
 CHOP_SETTLE = [
     ["twist", 0], ["lean", 8],
@@ -558,14 +624,22 @@ CHOP_SETTLE = [
     LEFT_GUARD,
 ]
 
-COCKED_STAB = [  # fist pulled back to the ribs, point forward
-    ["twist", -26], ["lean", 4],
-    ["grip", [-0.24, -0.12, 1.00], [0.05, -1.0, 0.18], [-0.3, 0.8, -0.5]],
-    LEFT_BALANCE,
+WIND_STAB = [  # jab draw, halfway: fist coming down off the shoulder in front of the chest, club tipping forward
+    ["twist", -12], ["lean", 2],
+    ["grip", [-0.24, -0.20, 1.20], [0.0, -0.70, 0.71], [-0.3, 1.0, -0.6]],
+    ["left", [0.14, -0.38, 1.16], [0.55, -0.05, 0.85]],
 ]
-STAB_END = [  # full extension
-    ["twist", 14], ["lean", 12],
-    ["grip", [-0.12, -0.56, 1.22], [0.04, -1.0, 0.0], [-0.6, 0.0, -1.0]],
+COCKED_STAB = [  # jab cocked - the telegraph (Mark 2026-11-05: "clear that a stab is coming"): a hip chamber - fist
+    # pulled back beside the right hip with the elbow behind the body and bent ~90 degrees (a fist by the shoulder folded
+    # the elbow to 38 degrees and flared it up: "elbow is wonky"), club level and aimed at the target, body turned away,
+    # free hand reaching out at the target. Twist 22: looking 70 degrees aside, 30 put the chest 66 degrees off the hips.
+    ["twist", -22], ["lean", -2],
+    ["grip", [-0.24, 0.12, 1.08], [0.04, -0.98, 0.18], [-0.3, 1.0, -0.4]],
+    ["left", [0.10, -0.52, 1.34], [0.55, -0.10, 0.90]],
+]
+STAB_END = [  # full extension: arm nearly straight at chest height, club in line with the forearm, elbow underneath
+    ["twist", 14], ["lean", 10],
+    ["grip", [-0.12, -0.58, 1.28], [0.03, -1.0, 0.03], [-0.6, 0.3, -1.0]],
     ["left", [0.26, -0.02, 1.02], [0.70, 0.30, 0.90]],
 ]
 STAB_SETTLE = [
@@ -574,25 +648,234 @@ STAB_SETTLE = [
     LEFT_GUARD,
 ]
 
-# Strike timing (0.30 s): cocked 0 -> contact 0.05 -> follow-through 0.11 -> settle 0.19 -> rest 0.30.
-# The host's active window opens at strike start and lasts ~0.1 s, so contact lands inside it.
+BLOCK = [  # guard up (Mark 2026-11-04): blade held level in front of the head, fist out on the right, point to the left
+    ["twist", 4], ["lean", 2],
+    ["grip", [-0.42, -0.34, 1.56], [1.0, -0.10, 0.05], [-1.0, 0.2, -0.5]],
+    LEFT_GUARD,
+]
+
+# ------------------------------------------------------------------------------------------ debug attack path
+# The left / right strikes follow the host's hit path, Code/Player/MeleeAttackPath.cs (ComputeLateralTip +
+# TransformLocalToWorld), the same path the debug sphere overlay draws. Engine pawn-local units, x forward, y up,
+# z right; the numbers mirror the one-handed class (melee_weapon_classes.json "oneHanded") and basicplayer.prefab.
+PATH_RANGE_U = 61.6          # reachLateralMeters 1.54 x (BodyHeight 72 / 1.8)
+PATH_ARC_DEG = 150.0         # lateralArcDegrees
+PATH_PIVOT_Y_U = 54.0        # ServerEyeHeight 64 + MeleeAttackZaxisStart -10 (the pitch pivot, shoulder height)
+PATH_TILT_DEG = {"R": 25.0, "L": 25.0}   # MeleeAttackTiltDegreesRight / Left: mirrored, a slight downward swoop (Mark 2026-11-05)
+PATH_PUSH_U = 8.0            # MeleeSwingForwardOffsetMeters 0.2 x 40
+PATH_ACTIVE_S = 0.20         # activeSeconds (Mark 2026-11-04: 200 ms damage swoop): the strike clip starts when the host's active window opens
+U_PER_M = 39.37              # human model units per Blender metre
+SWORD_TIP_M = 40.0 / U_PER_M  # sword_reforged.vmdl is 40 u butt -> tip and its butt sits on hold_R (grip along 0)
+STRIKE_FPS = 60              # lateral strikes are baked at 60 fps: 13 path samples inside the 0.2 s active window
+PATH_STEPS = int(round(PATH_ACTIVE_S * STRIKE_FPS))
+PATH_MARGIN = 0.5            # path poses stay this far inside LIMITS (see violations) so the bake between them passes
+PATH_KINDS = {"R": (PATH_ARC_DEG * 0.5, -PATH_ARC_DEG * 0.5),   # Right: right -> left (MeleeAttackPath.GetArcDegreeSpan)
+              "L": (-PATH_ARC_DEG * 0.5, PATH_ARC_DEG * 0.5)}   # Left: the mirror
+PATH_ELBOW = {"R": [-0.3, 0.2, -1.0], "L": [-0.3, 0.3, -1.0]}   # forehand / backhand elbow hint
+PATH_END_ARM_CLEAR = 0.05    # the last path frame keeps the arm this far off the torso (m): a guard cut from it (0.05 s blend
+                             # to BLOCK) swept the arm 1.4 cm into the chest at the 1.54 m reach (2026-11-05)
+PATH_INFO = {}               # per path pose: angle, sphere, blade turn, distance along the line (solve_strike_paths)
+
+
+def engine_to_blender(x, y, z):
+    """Engine pawn-local (x forward, y up, z right; units) -> Blender world metres (forward -Y, right -X, up Z)."""
+    return Vector((-z / U_PER_M, -x / U_PER_M, y / U_PER_M))
+
+
+def path_pivot(range_u=PATH_RANGE_U):
+    """MeleeAttackPath.GetSwingPivotWorld for a lateral strike: (0.14 R + push, pivot height, 0)."""
+    return engine_to_blender(range_u * 0.14 + PATH_PUSH_U, PATH_PIVOT_Y_U, 0.0)
+
+
+def path_sphere(kind, t, range_u=PATH_RANGE_U):
+    """MeleeAttackPath.ComputeLateralTip at stroke progress t (0..1): the debug sphere, Blender world metres."""
+    start, end = PATH_KINDS[kind]
+    a = math.radians(start + (end - start) * t)
+    drop = min(range_u * math.tan(math.radians(PATH_TILT_DEG[kind])) * 0.28, range_u * 0.42)
+    x = range_u * 0.14 + math.cos(a) * range_u + PATH_PUSH_U
+    return engine_to_blender(x, PATH_PIVOT_Y_U - drop * t, math.sin(a) * range_u), math.degrees(a)
+
+
+def path_body(a_deg):
+    """Torso along the sweep: the shoulders follow the blade (offset to bring the right shoulder forward for reach),
+    the spine leans into the cut most at the front. The turn toward the left stops at 20 degrees: held across the
+    back half of the sweep with the aim layer looking 70 degrees aside, 28 put the chest past anim_test's 65 degrees
+    from the hips. With the 0.2 s damage window (13 path samples) the peak is sampled, so both ends are 4 degrees
+    tighter (-26 / 16): 20 read 66-67 degrees looking aside and crouched."""
+    twist = max(-26.0, min(16.0, -0.4 * a_deg + 10.0))
+    lean = 4.0 + 12.0 * (1.0 - abs(a_deg) / 75.0)
+    return twist, lean
+
+
+def path_ops(kind, a_deg, tip, blade):
+    twist, lean = path_body(a_deg)
+    fist = tip - blade * SWORD_TIP_M
+    return [["twist", twist], ["lean", lean], ["grip", list(fist), list(blade), PATH_ELBOW[kind]], LEFT_BALANCE]
+
+
+def path_pose_ok(ctx, ops, margin=PATH_MARGIN, min_arm=0.0):
+    rig, base, grip, base_head = ctx
+    LAST_GRIP.clear()
+    apply_pose(rig, base, grip, base_head, ops)
+    m = pose_metrics(rig)
+    return not violations(m, margin) and m["arm_torso"] >= min_arm
+
+
+def solve_path_sample(ctx, kind, t, prev_phi=None, range_u=PATH_RANGE_U, at_sphere_only=False):
+    """Blade tip on the line pivot -> sphere: at the sphere when the arm can reach it inside LIMITS, else as far out
+    along that line as it can. The blade lies in the cut plane, turned `phi` degrees off the line (searched; a small
+    cost on changing it from the previous sample keeps the blade from flicking). Returns (distance along the line,
+    phi, ops) or None."""
+    pivot = path_pivot(range_u)
+    sphere, a_deg = path_sphere(kind, t, range_u)
+    min_arm = PATH_END_ARM_CLEAR if t >= 0.999 else 0.0
+    ok = lambda ops: path_pose_ok(ctx, ops, min_arm=min_arm)
+    u = (sphere - pivot).normalized()
+    ds = (sphere - pivot).length
+    best = None
+
+    def reach_along(phi):
+        """Furthest distance along the line that passes, scanning in from the sphere (the passing set is not always
+        one interval, so a plain bisection from the body undershoots), then refined to 5 mm."""
+        blade = Quaternion(Vector((0, 0, 1)), math.radians(phi)) @ u
+        ops_at = lambda d: path_ops(kind, a_deg, pivot + u * d, blade)
+        if ok(ops_at(ds)):
+            return ds, ops_at(ds)
+        if at_sphere_only:
+            return None
+        d = ds - 0.08
+        while d >= 0.6:
+            if ok(ops_at(d)):
+                lo, hi = d, d + 0.08
+                for _ in range(4):
+                    mid = 0.5 * (lo + hi)
+                    if ok(ops_at(mid)):
+                        lo = mid
+                    else:
+                        hi = mid
+                return lo, ops_at(lo)
+            d -= 0.08
+        return None
+
+    def consider(phi):
+        nonlocal best
+        r = reach_along(phi)
+        if r is None:
+            return
+        score = r[0] - (0.002 * abs(phi - prev_phi) if prev_phi is not None else 0.0)
+        if best is None or score > best[0]:
+            best = (score, r[0], phi, r[1])
+
+    for phi in range(-72, 73, 8):
+        consider(phi)
+        if at_sphere_only and best is not None:
+            return best[1:]
+    if best is not None:
+        for phi in (best[2] - 4, best[2] + 4):
+            consider(phi)
+    return None if best is None else best[1:]
+
+
+def solve_strike_paths(ctx):
+    """PATH_<kind>_<nn>: one pose per 60 fps frame of the active window, generated from the debug path."""
+    for kind in PATH_KINDS:
+        prev = None
+        for i in range(PATH_STEPS + 1):
+            t = i / PATH_STEPS
+            d, phi, ops = solve_path_sample(ctx, kind, t, prev)
+            prev = phi
+            name = f"PATH_{kind}_{i:02d}"
+            POSES[name] = ops
+            sphere, a_deg = path_sphere(kind, t)
+            PATH_INFO[name] = dict(kind=kind, t=t, a=a_deg, phi=phi, d=d, sphere=sphere)
+
+
+def blade_tip(rig):
+    hold_m = rig.matrix_world @ rig.pose.bones["hold_R"].matrix
+    return hold_m.translation + (hold_m.to_3x3().normalized() @ Vector((0, 0, 1))).normalized() * SWORD_TIP_M
+
+
+def path_report(ctx):
+    """Measured tip (posed rig, real sword length) against each debug sphere."""
+    rig, base, grip, base_head = ctx
+    pivot = path_pivot()
+    lines = []
+    for name, info in PATH_INFO.items():
+        LAST_GRIP.clear()
+        apply_pose(rig, base, grip, base_head, POSES[name])
+        tip, sphere = blade_tip(rig), info["sphere"]
+        u = (sphere - pivot).normalized()
+        off = ((tip - pivot) - u * (tip - pivot).dot(u)).length
+        lines.append(f"info path {name} t={info['t']:.2f} arc={info['a']:+.0f} blade turn {info['phi']:+d}: sphere "
+                     f"{(sphere - pivot).length:.3f} m from the pivot, tip {(tip - pivot).dot(u):.3f} m along the line "
+                     f"({off * 100:.1f} cm off it), tip->sphere {(sphere - tip).length:.3f} m, "
+                     f"shoulder->tip {(tip - bone_world(rig, 'arm_upper_R')).length:.3f} m")
+    return lines
+
+
+def reach_for_spheres(ctx, kind):
+    """Per path sample: the largest lateral reach (engine units) at which the tip can sit ON that debug sphere."""
+    out = []
+    for i in range(PATH_STEPS + 1):
+        t = i / PATH_STEPS
+        lo, hi = 20.0, PATH_RANGE_U
+        for _ in range(9):
+            mid = 0.5 * (lo + hi)
+            if solve_path_sample(ctx, kind, t, range_u=mid, at_sphere_only=True):
+                lo = mid
+            else:
+                hi = mid
+        out.append(lo)
+    return out
+
+
+# Strike timing (Mark 2026-11-05, Last Oasis reference): fast cut, then a deep follow-through that HOLDS before the
+# sword settles back to rest. A follow-up click cuts the hold short (b_sword_interrupt) and draws the next wind-up
+# straight from the follow-through, so a chain of swings flows R -> L -> R like the reference.
+STRIKE_ENTRY_FRAMES = {"R": 4, "L": 6}   # cocked (behind the shoulder) -> release -> onto the hit path (first frames of the window)
+# Entry keys (60 fps frame, pose) between the cocked frame and PATH_<kind>_04. The forehand drives forward over the
+# shoulder; the backhand swings its level blade round behind the head to the left shoulder and then round the left side
+# onto the path in small steps (one big step slerped the blade up over the head).
+STRIKE_ENTRY = {"R": [(2, "RELEASE_R")],
+                "L": [(2, "RELEASE_L"), (3, "ENTRY_L"), (4, "PATH_L_02"), (5, "PATH_L_04")]}
+FOLLOW_AT, FOLLOW_HOLD, SETTLE_AT, STRIKE_END = 0.28, 0.42, 0.54, 0.64   # PlayerAnimation.MeleeStrikeClipSeconds
+WIND_DRAW_S = 0.26           # Sword_Cocked_* draw (after the 0.12 s pose cross-fade): wound up ~0.38 s in (one-handed windup 0.6 s, scav 0.35 s - the draw stays short enough for both)
+
+
+def lateral_strike(kind, follow, settle, rest):
+    """Cocked pose -> onto the path in STRIKE_ENTRY_FRAMES, the path frames for the rest of the active window (linear:
+    the host sweeps the arc at constant speed), then the follow-through decelerating, held, the settle and rest."""
+    keys = [(0.0, f"COCKED_{kind}")] + [(f / STRIKE_FPS, pose, "linear") for f, pose in STRIKE_ENTRY[kind]]
+    keys += [(i / STRIKE_FPS, f"PATH_{kind}_{i:02d}", "linear") for i in range(STRIKE_ENTRY_FRAMES[kind], PATH_STEPS + 1)]
+    return keys + [(FOLLOW_AT, follow, "out"), (FOLLOW_HOLD, follow, "linear"), (SETTLE_AT, settle, "smooth"),
+                   (STRIKE_END, rest, "smooth")]
+
+
+# Strike timing (0.64 s, PlayerAnimation.MeleeStrikeClipSeconds). Left / right: cocked -> the debug path over the 0.2 s
+# active window (the clip starts when it opens), follow-through 0.28 held to 0.42, settle 0.54, rest 0.64. Overhead:
+# cocked -> over the top 0.08 -> chopped through 0.20 -> held -> settle -> rest. A follow-up click or the guard cuts the
+# hold short in the graph (b_sword_interrupt), so the next wind-up draws from the follow-through.
 CLIPS = {
     "Sword_Rest_R": ("human@sword_rest_r.fbx", [(0.0, "REST_R")]),
     "Sword_Rest_L": ("human@sword_rest_l.fbx", [(0.0, "REST_L")]),
     "Sword_Swap_Mid": ("human@sword_swap_mid.fbx", [(0.0, "SWAP_MID")]),
     "Sword_Rest_Up": ("human@sword_rest_up.fbx", [(0.0, "REST_UP")]),
-    "Sword_Cocked_R": ("human@sword_cocked_r.fbx", [(0.0, "COCKED_R")]),
-    "Sword_Cocked_L": ("human@sword_cocked_l.fbx", [(0.0, "COCKED_L")]),
-    "Sword_Cocked_Over": ("human@sword_cocked_over.fbx", [(0.0, "COCKED_OVER")]),
-    "Sword_Cocked_Stab": ("human@sword_cocked_stab.fbx", [(0.0, "COCKED_STAB")]),
-    "Sword_Attack_R": ("human@sword_attack_r.fbx",
-                       [(0.0, "COCKED_R"), (0.05, "SWING_R_MID"), (0.11, "SWING_R_END"), (0.19, "SWING_R_SETTLE"), (0.30, "REST_R")]),
-    "Sword_Attack_L": ("human@sword_attack_l.fbx",
-                       [(0.0, "COCKED_L"), (0.05, "SWING_L_MID"), (0.11, "SWING_L_END"), (0.19, "SWING_L_SETTLE"), (0.30, "REST_L")]),
+    "Sword_Block": ("human@sword_block.fbx", [(0.0, "BLOCK")]),
+    "Sword_Cocked_R": ("human@sword_cocked_r.fbx", [(0.0, "WIND_R"), (WIND_DRAW_S, "COCKED_R", "out")], STRIKE_FPS),
+    "Sword_Cocked_L": ("human@sword_cocked_l.fbx", [(0.0, "WIND_L"), (WIND_DRAW_S, "COCKED_L", "out")], STRIKE_FPS),
+    "Sword_Cocked_Over": ("human@sword_cocked_over.fbx", [(0.0, "WIND_OVER"), (WIND_DRAW_S, "COCKED_OVER", "out")], STRIKE_FPS),
+    "Sword_Cocked_Stab": ("human@sword_cocked_stab.fbx", [(0.0, "WIND_STAB"), (WIND_DRAW_S, "COCKED_STAB", "out")], STRIKE_FPS),
+    "Sword_Attack_R": ("human@sword_attack_r.fbx", lateral_strike("R", "SWING_R_END", "SWING_R_SETTLE", "REST_R"), STRIKE_FPS),
+    "Sword_Attack_L": ("human@sword_attack_l.fbx", lateral_strike("L", "SWING_L_END", "SWING_L_SETTLE", "REST_L"), STRIKE_FPS),
     "Sword_Attack_Over": ("human@sword_attack_over.fbx",
-                          [(0.0, "COCKED_OVER"), (0.05, "CHOP_MID"), (0.11, "CHOP_END"), (0.19, "CHOP_SETTLE"), (0.30, "REST_R")]),
+                          [(0.0, "COCKED_OVER"), (0.08, "CHOP_MID"), (0.20, "CHOP_END", "linear"),
+                           (FOLLOW_HOLD, "CHOP_END", "linear"), (SETTLE_AT, "CHOP_SETTLE", "smooth"),
+                           (STRIKE_END, "REST_R", "smooth")]),
     "Sword_Attack_Stab": ("human@sword_attack_stab.fbx",
-                          [(0.0, "COCKED_STAB"), (0.07, "STAB_END"), (0.16, "STAB_SETTLE"), (0.30, "REST_R")]),
+                          [(0.0, "COCKED_STAB"), (0.20, "STAB_END", "out"), (FOLLOW_HOLD - 0.08, "STAB_END", "linear"),
+                           (SETTLE_AT, "STAB_SETTLE", "smooth"), (STRIKE_END, "REST_R", "smooth")], STRIKE_FPS),
+    "Wingsuit_Glide": ("human@wingsuit_glide.fbx",
+                       [(0.0, "WINGSUIT_A"), (0.8, "WINGSUIT_B", "smooth"), (1.6, "WINGSUIT_A", "smooth")]),
 }
 POSES = {k: v for k, v in dict(globals()).items()
          if k.isupper() and isinstance(v, list) and v and isinstance(v[0], list) and isinstance(v[0][0], str)}
@@ -601,16 +884,31 @@ POSES = {k: v for k, v in dict(globals()).items()
 # frame by frame like a clip. The shoulder swap is two short blends through SWAP_MID, never R <-> L direct.
 GRAPH_BLENDS = [
     ("REST_R", "SWAP_MID"), ("SWAP_MID", "REST_L"),
-    ("REST_R", "COCKED_R"), ("REST_L", "COCKED_L"),
-    ("REST_R", "COCKED_OVER"), ("REST_L", "COCKED_OVER"),
-    ("REST_R", "COCKED_STAB"), ("REST_L", "COCKED_STAB"),
+    ("REST_R", "WIND_R"), ("REST_L", "WIND_L"),
+    ("REST_R", "WIND_OVER"), ("REST_L", "WIND_OVER"),
+    ("REST_R", "WIND_STAB"), ("REST_L", "WIND_STAB"),
     # a press during a swap / right after an aim flip cocks from wherever the pose is
-    ("SWAP_MID", "COCKED_R"), ("SWAP_MID", "COCKED_L"), ("SWAP_MID", "COCKED_OVER"), ("SWAP_MID", "COCKED_STAB"),
-    ("REST_R", "COCKED_L"), ("REST_L", "COCKED_R"),
+    ("SWAP_MID", "WIND_R"), ("SWAP_MID", "WIND_L"), ("SWAP_MID", "WIND_OVER"), ("SWAP_MID", "WIND_STAB"),
+    ("REST_R", "WIND_L"), ("REST_L", "WIND_R"),
     # aiming up: raised stance <-> right shoulder directly, <-> left shoulder through SWAP_MID; any press from it
     ("REST_R", "REST_UP"), ("REST_UP", "SWAP_MID"),
-    ("REST_UP", "COCKED_OVER"), ("REST_UP", "COCKED_R"), ("REST_UP", "COCKED_L"), ("REST_UP", "COCKED_STAB"),
+    ("REST_UP", "WIND_OVER"), ("REST_UP", "WIND_R"), ("REST_UP", "WIND_L"), ("REST_UP", "WIND_STAB"),
+    # guard up / down from any stance (a held heavy hangs cocked; right click raises the guard from it), and a click
+    # straight out of the guard
+    ("REST_R", "BLOCK"), ("REST_L", "BLOCK"), ("REST_UP", "BLOCK"), ("SWAP_MID", "BLOCK"),
+    ("COCKED_R", "BLOCK"), ("COCKED_L", "BLOCK"), ("COCKED_OVER", "BLOCK"), ("COCKED_STAB", "BLOCK"),
+    ("BLOCK", "WIND_R"), ("BLOCK", "WIND_L"), ("BLOCK", "WIND_OVER"), ("BLOCK", "WIND_STAB"),
 ]
+# b_sword_interrupt cuts a strike at the end of its damage window into the next cocked pose or the guard
+# (PATH_* end frames exist once solve_strike_paths ran; check_all adds them).
+INTERRUPT_FROM = ["CHOP_END", "STAB_END", "SWING_R_END", "SWING_L_END"]
+INTERRUPT_TO = ["WIND_R", "WIND_L", "WIND_OVER", "WIND_STAB", "BLOCK"]
+
+
+def graph_blends():
+    """GRAPH_BLENDS plus the b_sword_interrupt cuts out of every strike's last damage frame."""
+    ends = INTERRUPT_FROM + [f"PATH_{k}_{PATH_STEPS:02d}" for k in PATH_KINDS]
+    return GRAPH_BLENDS + [(a, b) for a in ends for b in INTERRUPT_TO]
 
 TUNE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sword_pose_tuning.json")
 
@@ -631,9 +929,14 @@ def rotate_dir(v, ax_deg, az_deg):
     return list(q @ Vector(v).normalized())
 
 
+def is_path_pose(name):
+    """Poses solved from the debug attack path are exact by construction: never tuned."""
+    return name.startswith("PATH_")
+
+
 def tuned_ops(name, override=None):
     """The pose's ops with its tuning (fist offset metres, blade tilt degrees) applied to the grip op."""
-    t = override if override is not None else TUNING.get(name)
+    t = override if override is not None else (None if is_path_pose(name) else TUNING.get(name))
     ops = []
     for op in POSES[name]:
         if op[0] == "grip" and t:
@@ -794,8 +1097,9 @@ def check_all(ctx, report_path=None):
         v = violations(m)
         failures += bool(v)
         lines.append(f"{'FAIL' if v else 'PASS'} pose {name}: {fmt(m)}" + (f"  !! {v}" if v else ""))
+    blends = graph_blends()
     for a, b in transition_pairs():
-        if (a, b) in GRAPH_BLENDS:
+        if (a, b) in blends:
             continue
         bad = []
         for i in range(1, 10):
@@ -805,7 +1109,7 @@ def check_all(ctx, report_path=None):
                 bad.append((i / 10, v))
         if bad:
             lines.append(f"info key-pair {a}->{b}: {bad[:2]}")
-    for a, b in GRAPH_BLENDS:
+    for a, b in blends:
         worst = None
         for i in range(11):
             blend_poses(rig, bases[a], bases[b], i / 10)
@@ -814,10 +1118,11 @@ def check_all(ctx, report_path=None):
                 worst = (i / 10, v)
         failures += worst is not None
         lines.append(f"{'FAIL' if worst else 'PASS'} blend {a}->{b}" + (f"  !! t={worst[0]} {worst[1]}" if worst else ""))
-    for clip, (fbx, keys) in CLIPS.items():
+    for clip, entry in CLIPS.items():
+        fbx, keys, fps = clip_keys(entry)
         if len(keys) < 2:
             continue
-        build_clip(ctx, clip, keys)
+        build_clip(ctx, clip, keys, fps)
         bad = []
         for f in range(1, bpy.context.scene.frame_end + 1):
             bpy.context.scene.frame_set(f)
@@ -827,6 +1132,7 @@ def check_all(ctx, report_path=None):
         rig.animation_data.action = None
         failures += bool(bad)
         lines.append(f"{'FAIL' if bad else 'PASS'} clip {clip}" + (f"  !! {bad[:3]}" if bad else ""))
+    lines.extend(path_report(ctx))
     lines.append(f"RESULT {failures} failing items")
     text = "\n".join(lines)
     print(text)
@@ -838,10 +1144,11 @@ def check_all(ctx, report_path=None):
 
 def transition_pairs():
     """Every pose pair the character ever moves between: graph blends plus consecutive clip keys."""
-    pairs = set(GRAPH_BLENDS)
-    for fbx, keys in CLIPS.values():
-        for (_, a), (_, b) in zip(keys, keys[1:]):
-            pairs.add((a, b))
+    pairs = set(graph_blends())
+    for entry in CLIPS.values():
+        keys = clip_keys(entry)[1]
+        for ka, kb in zip(keys, keys[1:]):
+            pairs.add((ka[1], kb[1]))
     return sorted(pairs)
 
 
@@ -900,7 +1207,7 @@ def tune_all(ctx, names, passes=int(os.environ.get("SWORD_TUNE_PASSES", "2"))):
     for p in range(passes):
         bases = all_bases(ctx)
         for name in names:
-            if any(op[0] == "grip" for op in POSES[name]):
+            if not is_path_pose(name) and any(op[0] == "grip" for op in POSES[name]):
                 TUNING[name] = tune_pose(ctx, name, bases, rounds=int(os.environ.get("SWORD_TUNE_ROUNDS", "70")), seed=1 + p)
                 LAST_GRIP.clear()
                 apply_pose(ctx[0], ctx[1], ctx[2], ctx[3], tuned_ops(name))
@@ -915,6 +1222,7 @@ VIEWS = {
     "front_left": (Vector((2.1, -2.2, 1.6)), Vector((0.0, -0.1, 1.15))),
     "right": (Vector((-3.0, 0.0, 1.45)), Vector((0.0, -0.1, 1.15))),
     "back": (Vector((0.0, 3.0, 1.6)), Vector((0.0, 0.0, 1.15))),
+    "chase": (Vector((-0.45, 2.7, 2.0)), Vector((0.0, -0.4, 1.25))),
     "top": (Vector((0.0, -0.4, 4.3)), Vector((0.0, -0.4, 1.0))),
 }
 
@@ -976,7 +1284,7 @@ def render_poses(out_dir, names, views):
     rig, base, grip, base_head = ctx
     add_sword(rig)
     os.makedirs(out_dir, exist_ok=True)
-    for name in names:
+    for name in names or list(POSES):
         if VERBOSE:
             print("pose", name)
         apply_pose(rig, base, grip, base_head, tuned_ops(name))
@@ -992,8 +1300,8 @@ def render_poses(out_dir, names, views):
 def sheet_clip(out_dir, clip, views, step):
     ctx = setup()
     add_sword(ctx[0])
-    fbx, keys = CLIPS[clip]
-    build_clip(ctx, clip, keys)
+    fbx, keys, fps = clip_keys(CLIPS[clip])
+    build_clip(ctx, clip, keys, fps)
     os.makedirs(out_dir, exist_ok=True)
     for f in range(1, bpy.context.scene.frame_end + 1, step):
         bpy.context.scene.frame_set(f)
@@ -1005,8 +1313,8 @@ def sheet_clip(out_dir, clip, views, step):
 def export_clips(names):
     ctx = setup()
     for name in names:
-        fbx, keys = CLIPS[name]
-        build_clip(ctx, name, keys)
+        fbx, keys, fps = clip_keys(CLIPS[name])
+        build_clip(ctx, name, keys, fps)
         export_clip(ctx[0], fbx)
 
 
@@ -1014,7 +1322,7 @@ if __name__ == "__main__":
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     if argv and argv[0] == "render":
         views = parse_flag(argv, "--views", "front,front_right").split(",")
-        render_poses(argv[1], argv[2:] or list(POSES), views)
+        render_poses(argv[1], argv[2:], views)
     elif argv and argv[0] == "sheet":
         views = parse_flag(argv, "--views", "front_right").split(",")
         step = int(parse_flag(argv, "--step", "1"))
@@ -1025,5 +1333,13 @@ if __name__ == "__main__":
         sys.exit(1 if check_all(setup(), argv[1] if len(argv) > 1 else None) else 0)
     elif argv and argv[0] == "tune":
         tune_all(setup(), argv[1:] or list(POSES))
+    elif argv and argv[0] == "path":
+        ctx = setup()
+        for line in path_report(ctx):
+            print(line)
+        for kind in PATH_KINDS:
+            reach = reach_for_spheres(ctx, kind)
+            print(f"info reach {kind}: per sample " + " ".join(f"{r / 40.0:.2f}" for r in reach)
+                  + f" m -> reachLateralMeters <= {min(reach) / 40.0:.2f} puts the tip on every sphere")
     else:
         print(__doc__)

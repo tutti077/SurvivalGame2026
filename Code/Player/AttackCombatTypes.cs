@@ -39,7 +39,7 @@ public readonly record struct AttackReleaseIntent
 	/// </summary>
 	public float SwingVerticalHint { get; init; }
 
-	/// <summary>Discrete swing-from: <see cref="SwingDirs.Left"/>, <see cref="SwingDirs.Right"/>, or <see cref="SwingDirs.Up"/> only.</summary>
+	/// <summary>Discrete swing-from: <see cref="SwingDirs.Left"/>, <see cref="SwingDirs.Right"/>, <see cref="SwingDirs.Up"/> or <see cref="SwingDirs.Down"/>.</summary>
 	public byte SwingDir { get; init; }
 
 	/// <summary>Locked attack pattern from cursor via <see cref="PlayerCombat.ResolveAttackTypeFromCursorDir"/> (informational; host re-resolves from <see cref="SwingDir"/>).</summary>
@@ -51,22 +51,27 @@ public readonly record struct AttackReleaseIntent
 	/// <summary>Cursor-aligned swing pitch (degrees) when submitted; unset (NaN) = derive from view forward.</summary>
 	public float CombatBasisPitchDegrees { get; init; }
 
-	/// <summary>Q special attack (stab): class special timings/cost, never heavy, resolves to <see cref="MeleeAttackTypes.Stab"/>.</summary>
+	/// <summary>Static combo mode: which combo swing the owner clicked (1 right, 2 left, 3 overhead); 0 = free aim / entity. The host recounts it.</summary>
+	public byte ComboStep { get; init; }
+
+	/// <summary>Q special (static combo mode): the class special attack (sword / club stab). Host checks it once.</summary>
 	public bool IsSpecial { get; init; }
 }
 
-/// <summary>Only three melee swing directions (no forward).</summary>
+/// <summary>Melee cursor directions: left, right, up (overhead) and down (the jab, Mark 2026-11-05). Guards use L / R / U only.</summary>
 public static class SwingDirs
 {
 	public const byte Left = 0;
 	public const byte Right = 1;
 	public const byte Up = 2;
+	public const byte Down = 3;
 
 	public static string Letter( byte c )
 	{
 		if ( c == Left ) return "L";
 		if ( c == Right ) return "R";
 		if ( c == Up ) return "U";
+		if ( c == Down ) return "D";
 		return "?";
 	}
 
@@ -111,7 +116,7 @@ public static class AttackReleaseDebugCode
 	public const int OkMeleeSweepStarted = 15;
 	public const int RejectMeleeBusy = 16;
 	public const int RejectNoMeleeItemEquipped = 17;
-	public const int RejectSpecialUnavailable = 18;
+	public const int RejectSpecialNotAllowed = 18;
 }
 
 public interface IDamageable
@@ -206,18 +211,8 @@ public static class AttackCombatConstants
 	public const float DefaultMeleeWeaponDamage = 8f;
 }
 
-/// <summary>
-/// Global melee combat damage multiplier: starts at <see cref="Standard"/> (1.0); a heavy attack adds its bonus.
-/// </summary>
+/// <summary>Global melee combat damage multiplier baseline (1.0).</summary>
 public static class MeleeCombatDamageMultiplier
 {
 	public const float Standard = 1f;
-
-	public static float Compute( bool isHeavy, float heavyBonus, float baseMultiplier = Standard )
-	{
-		var total = baseMultiplier;
-		if ( isHeavy )
-			total += heavyBonus;
-		return Math.Max( 0f, total );
-	}
 }

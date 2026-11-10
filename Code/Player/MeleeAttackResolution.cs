@@ -13,12 +13,11 @@ public static class MeleeAttackResolution
 		DamageReceiver victimReceiver,
 		Vector3 hitPosition,
 		byte attackType,
-		bool attackWasHeavy,
 		out MeleeBlockOutcome outcome,
 		out PlayerCombat blockingCombat,
 		out MeleeBlockValidationTrace blockTrace ) =>
 		TryGetBlockOutcome( attackerRoot, victimReceiver, hitPosition, attackType, attackSwingDir: 0,
-			attackWasHeavy, blockRayOrigin: null, blockRayEnd: null, extraRayThickness: 0f, out outcome,
+			blockRayOrigin: null, blockRayEnd: null, extraRayThickness: 0f, out outcome,
 			out blockingCombat, out blockTrace );
 
 	public static bool TryGetBlockOutcome(
@@ -27,7 +26,6 @@ public static class MeleeAttackResolution
 		Vector3 hitPosition,
 		byte attackType,
 		byte attackSwingDir,
-		bool attackWasHeavy,
 		Vector3? blockRayOrigin,
 		Vector3? blockRayEnd,
 		float extraRayThickness,
@@ -75,7 +73,6 @@ public static class MeleeAttackResolution
 			HitPosition = resolveHitPos,
 			AttackType = attackType,
 			AttackSwingDir = attackSwingDir,
-			AttackWasHeavy = attackWasHeavy,
 			HitSandboxTime = Time.NowDouble,
 			AttackRayGeometryValidated = attackRayGeometryValidated
 		};

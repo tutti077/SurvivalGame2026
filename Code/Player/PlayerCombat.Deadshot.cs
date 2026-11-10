@@ -102,7 +102,10 @@ public partial class PlayerCombat
 				break;
 
 			var damage = AmmoCatalog.GetAmmoDamage( ammoId ) + weaponDamage;
-			dmg.TakeDamage( damage, this );
+			using ( PlaytestLog.Kind( "deadshot" ) )
+				dmg.TakeDamage( damage, this );
+			if ( AmmoCatalog.TryGetAmmoBurn( ammoId, out var burnDamage, out var burnSeconds ) )
+				BurnEffect.HostApply( dmg, burnDamage, burnSeconds, this );
 
 			var dir = ( world - muzzle );
 			var rotation = dir.LengthSquared > 1e-6f ? Rotation.LookAt( dir.Normal, Vector3.Up ) : WorldRotation;

@@ -61,6 +61,11 @@ public sealed partial class PlayerAnimation
 	HeldLightAnchor _heldLightBuiltAnchor;
 	float _heldLightMeshHalfExtent = 0.5f;
 
+	/// <summary>Flame + light are off while the pawn is wet or the flame is under water (Mark 2026-11-02). Probed a few times a second.</summary>
+	bool _heldLightDoused;
+	double _nextHeldLightDouseProbeAt;
+	const float HeldLightDouseProbeInterval = 0.2f;
+
 	/// <summary>Held-light block of whatever this peer knows is in the main hand, or null.</summary>
 	HeldLightData ResolveHeldLightProfile()
 	{
@@ -175,6 +180,29 @@ public sealed partial class PlayerAnimation
 
 		if ( _heldLight is { IsValid: true } )
 			_heldLight.GameObject.WorldPosition = tip + Vector3.Up * (flame * 0.5f);
+
+		ApplyHeldLightDoused( tip + Vector3.Up * (flame * 0.5f) );
+	}
+
+	/// <summary>
+	/// A wet pawn (<see cref="PlayerVitals.WetStatusId"/>, synced from the host) or a flame under the water
+	/// surface puts the torch out: the light and the flame glow go dark, the stick stays in the hand. Lanterns
+	/// are glass-shielded and keep burning (only the open flame anchor is checked).
+	/// </summary>
+	void ApplyHeldLightDoused( Vector3 flameWorld )
+	{
+		if ( Time.NowDouble >= _nextHeldLightDouseProbeAt )
+		{
+			_nextHeldLightDouseProbeAt = Time.NowDouble + HeldLightDouseProbeInterval;
+			var wet = Components.Get<PlayerVitals>() is { IsValid: true } vitals && vitals.HasStatusEffect( PlayerVitals.WetStatusId );
+			_heldLightDoused = wet || WaterProbe.IsPointUnderWater( Scene, flameWorld );
+		}
+
+		var lit = !_heldLightDoused;
+		if ( _heldLight is { IsValid: true } && _heldLight.GameObject.Enabled != lit )
+			_heldLight.GameObject.Enabled = lit;
+		if ( _heldLightGlowRenderer is { IsValid: true } && _heldLightGlowRenderer.GameObject.Enabled != lit )
+			_heldLightGlowRenderer.GameObject.Enabled = lit;
 	}
 
 	/// <summary>Pawn distances: Citizen BodyHeight 72 ≈ 1.8 m (commandment #5).</summary>
@@ -191,7 +219,7 @@ public sealed partial class PlayerAnimation
 		{
 			if ( _heldLight is { IsValid: true } )
 			{
-				_heldLight.LightColor = data.ResolveColor();
+				_heldLight.LightColor = data.ResolveLightColor();
 				_heldLight.Radius = TerrainWorldUnits.MetersToEngine( MathF.Max( 0.5f, data.RadiusMeters ) );
 			}
 
@@ -228,7 +256,7 @@ public sealed partial class PlayerAnimation
 		lamp.NetworkMode = NetworkMode.Never;
 		lamp.Parent = _heldLightProp;
 		_heldLight = lamp.Components.Create<PointLight>();
-		_heldLight.LightColor = data.ResolveColor();
+		_heldLight.LightColor = data.ResolveLightColor();
 		_heldLight.Radius = TerrainWorldUnits.MetersToEngine( MathF.Max( 0.5f, data.RadiusMeters ) );
 
 		// Open flame wanders; a lantern's glass steadies it.
@@ -258,6 +286,8 @@ public sealed partial class PlayerAnimation
 		if ( _heldLightProp is not null && _heldLightProp.IsValid() )
 			_heldLightProp.Destroy();
 
+		_heldLightDoused = false;
+		_nextHeldLightDouseProbeAt = 0d;
 		_heldLightProp = null;
 		_heldLightRenderer = null;
 		_heldLightGlowRenderer = null;

@@ -68,14 +68,14 @@ public sealed partial class PlayerAnimation
 		if ( end > _hitReactionEndsAtSandbox )
 			_hitReactionEndsAtSandbox = end;
 
-		// The swing clip (snap or strike) and any recovery pose lose to the hit — kill them before the pose goes on.
-		AbortMeleeAttackAnimClip( "hit reaction" );
-
 		// Null on pawns that carry no combat state at all — nothing to drop then.
 		ResolveCombat()?.OnHitReactionBegan();
 		Components.Get<PlayerMovement>()?.OnHitReactionBegan();
 
-		ApplyHitReactionPose();
+		// A hit never breaks an attack (Mark 2026-11-05): a swing in flight keeps its clip, and the flail only
+		// takes what is left of the window once it is done (TickHitReactionPose).
+		if ( !HasActiveMeleeSwingPresentation )
+			ApplyHitReactionPose();
 
 		if ( LogHitReaction )
 			Log.Info( $"[HitReaction] {GameObject.Name}: {(extending ? "extend" : "begin")} "
@@ -91,7 +91,8 @@ public sealed partial class PlayerAnimation
 	{
 		if ( IsHitReactionActive )
 		{
-			ApplyHitReactionPose();
+			if ( !HasActiveMeleeSwingPresentation )
+				ApplyHitReactionPose();
 			return;
 		}
 

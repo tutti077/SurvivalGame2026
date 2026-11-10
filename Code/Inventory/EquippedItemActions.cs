@@ -22,4 +22,6 @@ public enum EquippedItemActions
 	Wire = 1 << 8,
 	/// <summary>Pickaxe: chip discs off the voxel ground (<see cref="ToolPickaxe"/>). No melee or ranged paths.</summary>
 	Mine = 1 << 9,
+	/// <summary>Bola: hold the block button to wind up, release to throw (<c>PlayerCombat.Bola.cs</c>). No melee or ranged paths.</summary>
+	Bola = 1 << 10,
 }

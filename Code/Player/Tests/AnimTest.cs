@@ -275,25 +275,58 @@ public sealed class AnimTest : Component
 		{
 			_combat.TestSetLiveSwingDir( dir );
 			await Hold( 0.8f, sample: false );
-			await Scenario( label, async () => await Attack( type, heavy: false, hold: 0.25f ) );
+			await Scenario( label, async () => await Attack( type, hold: 0.25f ) );
 		}
 
 		_combat.TestSetLiveSwingDir( SwingDirs.Right );
 		await Hold( 0.8f, sample: false );
-		await Scenario( "heavy right attack", async () => await Attack( MeleeAttackTypes.Right, heavy: true, hold: 0.25f ) );
+		// Follow-up click the moment the damage swoop ends: the next cocked pose cuts the strike's settle short.
+		// Timings come from the live weapon class, so retuning the windup / swoop knobs never needs a test edit.
+		var timings = _combat.GetMeleeWeaponTimings();
+		await Scenario( "right then left follow-up", async () =>
+		{
+			_anim.BeginMeleeSwingSnap( MeleeAttackTypes.Right );
+			_anim.ReleaseMeleeSwingSnap( MeleeAttackTypes.Right, timings.WindupSeconds );
+			await Hold( timings.WindupSeconds + timings.ActiveSeconds );
+			_combat.TestSetLiveSwingDir( SwingDirs.Left );
+			_anim.BeginMeleeSwingSnap( MeleeAttackTypes.Left );
+			_anim.ReleaseMeleeSwingSnap( MeleeAttackTypes.Left, timings.WindupSeconds );
+			await Hold( 1.0f );
+		} );
+
+		// Guard up: the blade level in front of the head (also straight out of a settling strike).
+		_combat.TestSetLiveSwingDir( SwingDirs.Right );
+		await Hold( 0.8f, sample: false );
+		await Scenario( "block pose", async () =>
+		{
+			_combat.TestSubmitBlockIntent( true, Time.NowDouble, _pawn.WorldRotation.Angles().yaw );
+			await Hold( 0.8f );
+			_combat.TestSubmitBlockIntent( false, 0d, _pawn.WorldRotation.Angles().yaw );
+			await Hold( 0.6f );
+		} );
+		await Scenario( "block out of a strike", async () =>
+		{
+			_anim.BeginMeleeSwingSnap( MeleeAttackTypes.Right );
+			_anim.ReleaseMeleeSwingSnap( MeleeAttackTypes.Right, timings.WindupSeconds );
+			await Hold( timings.WindupSeconds + timings.ActiveSeconds + 0.02f );
+			_combat.TestSubmitBlockIntent( true, Time.NowDouble, _pawn.WorldRotation.Angles().yaw );
+			await Hold( 0.6f );
+			_combat.TestSubmitBlockIntent( false, 0d, _pawn.WorldRotation.Angles().yaw );
+			await Hold( 0.6f );
+		} );
 
 		await Scenario( "aim flip then instant left attack", async () =>
 		{
 			_combat.TestSetLiveSwingDir( SwingDirs.Left );
 			await Hold( 0.05f );
-			await Attack( MeleeAttackTypes.Left, heavy: false, hold: 0.1f );
+			await Attack( MeleeAttackTypes.Left, hold: 0.1f );
 		} );
 
 		await Scenario( "overhead from the left shoulder", async () =>
 		{
 			_combat.TestSetLiveSwingDir( SwingDirs.Left );
 			await Hold( 0.8f );
-			await Attack( MeleeAttackTypes.Forward, heavy: false, hold: 0.2f );
+			await Attack( MeleeAttackTypes.Forward, hold: 0.2f );
 		} );
 
 		// ── Crouched: the same stances, swaps, look limits and attacks (the crouch input used to ignore the stance).
@@ -337,7 +370,7 @@ public sealed class AnimTest : Component
 		{
 			_combat.TestSetLiveSwingDir( dir );
 			await Hold( 0.8f, sample: false );
-			await Scenario( label, async () => await Attack( type, heavy: false, hold: 0.2f ) );
+			await Scenario( label, async () => await Attack( type, hold: 0.2f ) );
 		}
 
 		await Scenario( "crouch and stand while on the left shoulder", async () =>
@@ -359,9 +392,9 @@ public sealed class AnimTest : Component
 		{
 			_combat.TestSetLiveSwingDir( SwingDirs.Right );
 			await LookTo( 70f, 0f, 0.3f );
-			await Attack( MeleeAttackTypes.Right, heavy: false, hold: 0.2f );
+			await Attack( MeleeAttackTypes.Right, hold: 0.2f );
 			await LookTo( -70f, 0f, 0.3f );
-			await Attack( MeleeAttackTypes.Right, heavy: false, hold: 0.2f );
+			await Attack( MeleeAttackTypes.Right, hold: 0.2f );
 			await LookTo( 0f, 0f, 0.3f );
 		} );
 	}
@@ -440,11 +473,12 @@ public sealed class AnimTest : Component
 		await Hold( 0.3f );
 	}
 
-	async System.Threading.Tasks.Task Attack( byte type, bool heavy, float hold )
+	/// <summary>Click, hang at least the live class windup (the wind-up draw runs inside it, as in play), strike.</summary>
+	async System.Threading.Tasks.Task Attack( byte type, float hold )
 	{
 		_anim.BeginMeleeSwingSnap( type );
-		await Hold( hold );
-		_anim.ReleaseMeleeSwingSnap( type, heavy, 0f );
+		await Hold( Math.Max( hold, _combat.GetMeleeWeaponTimings().WindupSeconds ) );
+		_anim.ReleaseMeleeSwingSnap( type, 0f );
 		await Hold( 1.3f );
 	}
 

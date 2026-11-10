@@ -178,7 +178,6 @@ public sealed class TrainingDummyAttackTelegraph : Component
 		var swingFrom = GetSwingFromXz( _nextSwingDir, view );
 		var swingVert = _nextSwingDir == SwingDirs.Up ? 1f : 0f;
 		var hold = Math.Max( 0f, HoldSeconds );
-		var heavy = Combat.IsHeavyAttackForHoldDuration( hold );
 
 		var intent = new AttackReleaseIntent
 		{
@@ -204,7 +203,7 @@ public sealed class TrainingDummyAttackTelegraph : Component
 			CombatBasisPitchDegrees = basisAngles.pitch
 		};
 
-		Combat.ServerStartMeleeAttackAction( intent, hold, heavy,
+		Combat.ServerStartMeleeAttackAction( intent, hold,
 			$"dummy telegraph {SwingDirs.Letter( _nextSwingDir )}" );
 
 		_telegraphActive = false;

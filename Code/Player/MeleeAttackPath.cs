@@ -12,13 +12,9 @@ public static class MeleeAttackPath
 {
 	const float Deg2Rad = MathF.PI / 180f;
 
-	public static float GetActiveDurationSeconds( PlayerCombat pc, byte attackType, bool isHeavy = false )
-	{
-		if ( attackType == MeleeAttackTypes.Stab )
-			return Math.Max( 0.04f, pc.GetMeleeSpecialActiveSeconds() );
-
-		return Math.Max( 0.04f, pc.GetMeleeActiveSeconds( isHeavy ) );
-	}
+	/// <summary>Damage-swoop seconds — one class value for every attack type.</summary>
+	public static float GetActiveDurationSeconds( PlayerCombat pc ) =>
+		Math.Max( 0.04f, pc.GetMeleeActiveSeconds() );
 
 	public static float GetAttackRange( PlayerCombat pc, byte attackType ) =>
 		Math.Max( 8f, pc.GetMeleeAttackRangeUnits( attackType ) );
@@ -57,23 +53,6 @@ public static class MeleeAttackPath
 		var total = Math.Clamp( pc.GetMeleeForwardArcTotalDegrees(), 90f, 180f );
 		startDeg = pc.GetMeleeForwardArcStartDegrees();
 		endDeg = startDeg - total;
-	}
-
-	/// <summary>Windup / Active / Recovery from elapsed seconds after the active sweep begins.</summary>
-	public static byte ClassifyActiveState( PlayerCombat pc, byte attackType, float activeElapsedSeconds, bool isHeavy = false )
-	{
-		activeElapsedSeconds = Math.Max( 0f, activeElapsedSeconds );
-		if ( activeElapsedSeconds <= GetActiveDurationSeconds( pc, attackType, isHeavy ) + 1e-5f )
-			return MeleeAttackStates.Active;
-		return MeleeAttackStates.Recovery;
-	}
-
-	public static float ActiveProgressFromElapsed( PlayerCombat pc, byte attackType, float activeElapsedSeconds, bool isHeavy = false )
-	{
-		var total = GetActiveDurationSeconds( pc, attackType, isHeavy );
-		if ( total <= 1e-6f )
-			return 0f;
-		return Math.Clamp( activeElapsedSeconds / total, 0f, 1f );
 	}
 
 	/// <summary>Maps an arc angle (degrees along the attack fan) to normalized stroke progress 0–1.</summary>
@@ -284,7 +263,7 @@ public static class MeleeAttackPath
 	const float StabStartReachFraction = 0.35f;
 
 	/// <summary>
-	/// Special stab: straight thrust on local +X at side-slash height; the tip travels from
+	/// Stab (spear thrust): straight thrust on local +X at side-slash height; the tip travels from
 	/// <see cref="StabStartReachFraction"/> of reach to full reach over the active window. Basis pitch
 	/// aims the line 1:1 (rotating about the shoulder pivot), so the thrust goes where the crosshair looks.
 	/// </summary>
@@ -359,9 +338,15 @@ public static class MeleeAttackPath
 		var range = GetAttackRange( pc, attackType );
 		var angleRad = Lerp( startDeg, endDeg, t ) * Deg2Rad;
 
+		// Thrust weapons (spear): a side attack is an angled stab - the tip drives out from stab-start reach to
+		// full reach while it crosses the (narrow) arc, instead of sweeping round at full length.
+		var radius = pc.GetMeleeWeaponTimings().ForwardAttackIsThrust
+			? Lerp( range * StabStartReachFraction, range, SmoothStep( t ) )
+			: range;
+
 		var pivotForward = range * 0.14f;
-		var arcForward = pivotForward + MathF.Cos( angleRad ) * range;
-		var arcRight = MathF.Sin( angleRad ) * range;
+		var arcForward = pivotForward + MathF.Cos( angleRad ) * radius;
+		var arcRight = MathF.Sin( angleRad ) * radius;
 
 		var tiltDeg = attackType == MeleeAttackTypes.Left
 			? pc.MeleeAttackTiltDegreesLeft

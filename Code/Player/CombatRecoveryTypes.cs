@@ -36,6 +36,7 @@ public readonly struct MeleeAttackFinishOutcome
 	public bool AnyHit { get; init; }
 	public bool WasBlocked { get; init; }
 	public bool WasParried { get; init; }
+	/// <summary>The swing was a heavy (held past the light windup).</summary>
 	public bool IsHeavy { get; init; }
 	public bool IsShove { get; init; }
 }

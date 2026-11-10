@@ -28,16 +28,13 @@ public static class MeleeBlockStaggerCatalog
 		ReloadFromDisk();
 	}
 
-	public static MeleeBlockOutcome Resolve( bool attackWasHeavy, bool perfectParry )
+	public const string BlockId = "block";
+	public const string ParryId = "parry";
+
+	public static MeleeBlockOutcome Resolve( bool perfectParry )
 	{
 		EnsureLoaded();
-		var id = (attackWasHeavy, perfectParry) switch
-		{
-			(false, false) => "lightBlock",
-			(false, true) => "lightParry",
-			(true, false) => "heavyBlock",
-			(true, true) => "heavyParry",
-		};
+		var id = perfectParry ? ParryId : BlockId;
 
 		if ( !Outcomes.TryGetValue( id, out var row ) || row is null )
 			row = CreateFallback( id );
@@ -110,7 +107,7 @@ public static class MeleeBlockStaggerCatalog
 
 	static void EnsureRequiredKeys()
 	{
-		foreach ( var id in new[] { "lightBlock", "lightParry", "heavyBlock", "heavyParry" } )
+		foreach ( var id in new[] { BlockId, ParryId } )
 		{
 			if ( !Outcomes.ContainsKey( id ) )
 				Outcomes[id] = CreateFallback( id );
@@ -119,18 +116,14 @@ public static class MeleeBlockStaggerCatalog
 
 	static void SeedFallbacks()
 	{
-		Outcomes["lightBlock"] = CreateFallback( "lightBlock" );
-		Outcomes["lightParry"] = CreateFallback( "lightParry" );
-		Outcomes["heavyBlock"] = CreateFallback( "heavyBlock" );
-		Outcomes["heavyParry"] = CreateFallback( "heavyParry" );
+		Outcomes[BlockId] = CreateFallback( BlockId );
+		Outcomes[ParryId] = CreateFallback( ParryId );
 	}
 
 	static MeleeBlockStaggerOutcomeData CreateFallback( string id ) => id switch
 	{
-		"lightBlock" => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 8f },
-		"lightParry" => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 0f },
-		"heavyBlock" => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 2f, StaminaCost = 12f },
-		"heavyParry" => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 0f },
+		BlockId => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 8f },
+		ParryId => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 0f },
 		_ => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 8f },
 	};
 

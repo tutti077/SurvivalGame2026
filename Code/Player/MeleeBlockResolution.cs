@@ -87,7 +87,8 @@ public static class MeleeBlockResolution
 			return false;
 		}
 
-		if ( contact.HitSandboxTime + 1e-4 < defender.ServerBlockStartedAtSandbox )
+		// The guard needs BlockRaiseSeconds after the press before it stops anything.
+		if ( contact.HitSandboxTime + 1e-4 < defender.ServerBlockActiveFromSandbox )
 		{
 			rejectReason = MeleeBlockRejectReason.BlockStartedAfterHit;
 			trace = new MeleeBlockValidationTrace
@@ -128,7 +129,7 @@ public static class MeleeBlockResolution
 			return false;
 		}
 
-		outcome = MeleeBlockStaggerCatalog.Resolve( contact.AttackWasHeavy, perfectParry );
+		outcome = MeleeBlockStaggerCatalog.Resolve( perfectParry );
 		rejectReason = MeleeBlockRejectReason.None;
 		trace = trace with
 		{
@@ -141,7 +142,7 @@ public static class MeleeBlockResolution
 		if ( perfectParry )
 		{
 			Log.Info(
-				$"[MeleeBlock] PARRY {defender.GameObject.Name}: {outcome.OutcomeId} heavy={contact.AttackWasHeavy} "
+				$"[MeleeBlock] PARRY {defender.GameObject.Name}: {outcome.OutcomeId} "
 				+ $"angle={angle:0.#}° duration={outcome.DurationSeconds:0.###}s hp={outcome.HealthDamage:0.#} stam={outcome.StaminaCost:0.#} "
 				+ $"from {contact.AttackerRoot?.Name}" );
 		}
@@ -158,7 +159,7 @@ public static class MeleeBlockResolution
 		if ( window <= 1e-6f )
 			return false;
 
-		var blockAge = hitSandboxTime - defender.ServerBlockStartedAtSandbox;
+		var blockAge = hitSandboxTime - defender.ServerBlockActiveFromSandbox;
 		return blockAge >= -1e-4 && blockAge <= window + 1e-4;
 	}
 
@@ -187,7 +188,7 @@ public static class MeleeBlockResolution
 
 		Log.Info(
 			$"[MeleeBlock] reject {defender.GameObject.Name}: {rejectReason} angle={angle:0.#}° "
-			+ $"teardrop={SwingDirs.Letter( blockDir )} (hud-only) heavy={contact.AttackWasHeavy} parryCandidate={perfectParry} "
+			+ $"teardrop={SwingDirs.Letter( blockDir )} (hud-only) parryCandidate={perfectParry} "
 			+ $"swing={SwingDirs.Letter( contact.AttackSwingDir )} from {contact.AttackerRoot?.Name}" );
 	}
 

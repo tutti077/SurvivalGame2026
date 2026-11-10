@@ -278,6 +278,34 @@ partial class PlayerMovement
 
 	float _wingsuitStowedTime = float.MinValue;
 
+	/// <summary>
+	/// Dev hack (<c>wingsuit_test</c>), step 1: lift the local pawn <paramref name="heightMeters"/>. The controller still
+	/// reports the old ground contact for a tick, so <see cref="TestDeployWingsuit"/> runs a moment later.
+	/// </summary>
+	internal bool TestLiftForWingsuit( float heightMeters )
+	{
+		if ( !IsLocalMovementDriver() )
+			return false;
+
+		StowWingsuit( keepMomentum: false );
+		var controller = Components.Get<PlayerController>();
+		var unitsPerMeter = (controller is { IsValid: true } ? MathF.Max( 24f, controller.BodyHeight ) : 72f) / 1.8f;
+		GameObject.WorldPosition += Vector3.Up * (Math.Clamp( heightMeters, 5f, 2000f ) * unitsPerMeter);
+		Transform.ClearInterpolation();
+		return true;
+	}
+
+	/// <summary>Dev hack (<c>wingsuit_test</c>), step 2: open the suit through the normal deploy path - no gear or mid-air jump.</summary>
+	internal bool TestDeployWingsuit()
+	{
+		if ( !IsLocalMovementDriver() )
+			return false;
+
+		_wingsuitStowedTime = float.MinValue;
+		DeployWingsuit();
+		return WingsuitDeployed;
+	}
+
 	void DeployWingsuit()
 	{
 		if ( WingsuitDeployed )

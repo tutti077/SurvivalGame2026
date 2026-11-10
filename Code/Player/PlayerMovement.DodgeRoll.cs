@@ -192,6 +192,23 @@ public sealed partial class PlayerMovement
 		body.Velocity = new Vector3( _rollMotionDir.x * speed, _rollMotionDir.y * speed, body.Velocity.z );
 	}
 
+	/// <summary>
+	/// Host check for ground-only actions (roll, the melee special): the host's view of a remote pawn can flicker
+	/// IsOnGround off (latency), so a small vertical speed still means "not jumping or falling".
+	/// </summary>
+	public bool HostSeesStandingOnGround()
+	{
+		_controller ??= Components.Get<PlayerController>();
+		if ( _controller is null )
+			return false;
+
+		if ( _controller.IsOnGround )
+			return true;
+
+		var body = _controller.Body ?? Components.Get<Rigidbody>();
+		return body is null || !body.IsValid() || Math.Abs( body.Velocity.z ) < RollGraceMaxVerticalSpeed;
+	}
+
 	/// <summary>Grounded a blink ago and not launching or falling — treat as grounded for the roll.</summary>
 	bool WasGroundedWithinRollGrace()
 	{
@@ -273,18 +290,8 @@ public sealed partial class PlayerMovement
 		if ( Time.NowDouble < _rollRecoveryUntil )
 			return;
 
-		_controller ??= Components.Get<PlayerController>();
-		if ( _controller is null )
+		if ( !HostSeesStandingOnGround() )
 			return;
-
-		// Lenient grounded check: the host's view of a remote pawn can flicker IsOnGround off
-		// (latency) — a small vertical speed still means "not jumping or falling".
-		if ( !_controller.IsOnGround )
-		{
-			var body = _controller.Body ?? Components.Get<Rigidbody>();
-			if ( body is not null && body.IsValid() && Math.Abs( body.Velocity.z ) >= RollGraceMaxVerticalSpeed )
-				return;
-		}
 
 		_rollRecoveryUntil = Time.NowDouble + Math.Max( 0f, RollRecoverySeconds );
 		_rollInvulnUntil = Time.NowDouble + Math.Max( 0f, RollInvulnerabilitySeconds );

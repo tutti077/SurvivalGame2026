@@ -27,12 +27,24 @@ public sealed class HeldLightData
 	[JsonPropertyName( "color" )]
 	public string Color { get; set; } = "1,0.75,0.4,1";
 
+	/// <summary>Multiplies the light colour (1 = the colour as written; 2 = twice as bright). Reach is <see cref="RadiusMeters"/>.</summary>
+	[JsonPropertyName( "brightness" )]
+	public float Brightness { get; set; } = 1f;
+
 	public HeldLightAnchor ResolveAnchor() =>
 		string.Equals( Anchor?.Trim(), "lanternHang", System.StringComparison.OrdinalIgnoreCase )
 			? HeldLightAnchor.LanternHang
 			: HeldLightAnchor.TorchTip;
 
 	public Color ResolveColor() => BuildPieceCatalog.ParseFallbackColor( Color );
+
+	/// <summary>What the point light is set to: colour x brightness (HDR above 1 is fine for a light).</summary>
+	public Color ResolveLightColor()
+	{
+		var c = ResolveColor();
+		var b = System.MathF.Max( 0.05f, Brightness );
+		return new Color( c.r * b, c.g * b, c.b * b, 1f );
+	}
 }
 
 public sealed class EquipmentStatModifiersData

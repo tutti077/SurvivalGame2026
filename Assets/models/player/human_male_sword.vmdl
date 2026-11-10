@@ -616,7 +616,7 @@
 								weight_list_name = ""
 								fade_in_time = 0.15
 								fade_out_time = 0.15
-								looping = true
+								looping = false
 								delta = false
 								worldSpace = false
 								hidden = false
@@ -685,7 +685,7 @@
 								weight_list_name = ""
 								fade_in_time = 0.15
 								fade_out_time = 0.15
-								looping = true
+								looping = false
 								delta = false
 								worldSpace = false
 								hidden = false
@@ -708,7 +708,7 @@
 								weight_list_name = ""
 								fade_in_time = 0.15
 								fade_out_time = 0.15
-								looping = true
+								looping = false
 								delta = false
 								worldSpace = false
 								hidden = false
@@ -731,7 +731,7 @@
 								weight_list_name = ""
 								fade_in_time = 0.15
 								fade_out_time = 0.15
-								looping = true
+								looping = false
 								delta = false
 								worldSpace = false
 								hidden = false
@@ -786,6 +786,29 @@
 								disable_interpolation = false
 								enable_scale = false
 								source_filename = "models/player/animations/human@sword_rest_up.fbx"
+								start_frame = -1
+								end_frame = -1
+								framerate = -1.0
+								take = 0
+								reverse = false
+							},
+							{
+								_class = "AnimFile"
+								name = "Sword_Block"
+								activity_name = ""
+								activity_weight = 1
+								weight_list_name = ""
+								fade_in_time = 0.15
+								fade_out_time = 0.15
+								looping = true
+								delta = false
+								worldSpace = false
+								hidden = false
+								anim_markup_ordered = false
+								disable_compression = true
+								disable_interpolation = false
+								enable_scale = false
+								source_filename = "models/player/animations/human@sword_block.fbx"
 								start_frame = -1
 								end_frame = -1
 								framerate = -1.0
@@ -878,6 +901,29 @@
 								disable_interpolation = false
 								enable_scale = false
 								source_filename = "models/player/animations/human@sword_attack_stab.fbx"
+								start_frame = -1
+								end_frame = -1
+								framerate = -1.0
+								take = 0
+								reverse = false
+							},
+							{
+								_class = "AnimFile"
+								name = "Wingsuit_Glide"
+								activity_name = ""
+								activity_weight = 1
+								weight_list_name = ""
+								fade_in_time = 0.2
+								fade_out_time = 0.2
+								looping = true
+								delta = false
+								worldSpace = false
+								hidden = false
+								anim_markup_ordered = false
+								disable_compression = true
+								disable_interpolation = false
+								enable_scale = false
+								source_filename = "models/player/animations/human@wingsuit_glide.fbx"
 								start_frame = -1
 								end_frame = -1
 								framerate = -1.0

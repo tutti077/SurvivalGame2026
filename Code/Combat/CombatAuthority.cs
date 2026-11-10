@@ -60,16 +60,16 @@ public sealed class CombatAuthority : Component
 	/// Called from <see cref="PlayerAnimation.FlushDeferredSwingAnimBroadcasts"/> after Rpc.Host unwinds.
 	/// Lives on CombatAuthority (scene NetworkManager) so delivery isn't tied to attacker ownership.
 	/// </summary>
-	public void HostBroadcastMeleeSwingAnim( Guid attackerRootId, byte attackType, bool isHeavy, float windupRemainingSeconds )
+	public void HostBroadcastMeleeSwingAnim( Guid attackerRootId, byte attackType, float windupRemainingSeconds )
 	{
 		if ( !Networking.IsHost || !GameObject.IsValid() )
 			return;
 
-		RpcBroadcastMeleeSwingAnim( attackerRootId, attackType, isHeavy, windupRemainingSeconds );
+		RpcBroadcastMeleeSwingAnim( attackerRootId, attackType, windupRemainingSeconds );
 	}
 
 	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable | NetFlags.SendImmediate )]
-	void RpcBroadcastMeleeSwingAnim( Guid attackerRootId, byte attackType, bool isHeavy, float windupRemainingSeconds )
+	void RpcBroadcastMeleeSwingAnim( Guid attackerRootId, byte attackType, float windupRemainingSeconds )
 	{
 		if ( Networking.IsHost )
 			return;
@@ -85,13 +85,13 @@ public sealed class CombatAuthority : Component
 			if ( anim.GameObject.Id != attackerRootId )
 				continue;
 
-			anim.ApplyRemoteMeleeSwingAttack( attackType, isHeavy, windupRemainingSeconds );
+			anim.ApplyRemoteMeleeSwingAttack( attackType, windupRemainingSeconds );
 			return;
 		}
 	}
 
 	/// <summary>
-	/// Host→all peers: hide a deterministic world-scatter tree that was chopped on the host.
+	/// Host→all peers: a deterministic world-scatter tree was chopped (stage) or a mineable rock lost sections (mask) on the host.
 	/// </summary>
 	public void HostBroadcastScatterBroken( string stableKey, int stage )
 	{
@@ -186,27 +186,17 @@ public sealed class CombatAuthority : Component
 		if ( intent.ViewForwardOnRelease.LengthSquared < 0.01f )
 			return Fail( AttackReleaseDebugCode.RejectDirection, "view release too small" );
 
-		var holdSeconds = Math.Max( 0f, (float)( intent.ReleasedGlobalSeconds - intent.PressedGlobalSeconds ) );
 		if ( !double.IsFinite( intent.PressedGlobalSeconds ) || !double.IsFinite( intent.ReleasedGlobalSeconds ) )
 			return Fail( AttackReleaseDebugCode.RejectDirection, "attack intent timing not finite" );
 
 		if ( !pc.ServerCanBeginMeleeAttackAction() )
 			return Fail( AttackReleaseDebugCode.RejectMeleeBusy, "melee attack action busy or cannot begin on host" );
 
-		// Special stab: grounded only (it lunges), and never while grappling (Q is the rope detract key).
-		if ( intent.IsSpecial )
-		{
-			if ( attacker.Components.Get<PlayerMovement>() is { GrappleAttached: true } )
-				return Fail( AttackReleaseDebugCode.RejectSpecialUnavailable, "special attack unavailable while grappling" );
+		// Q special (static combo mode): the class must have one and the pawn must stand on the ground.
+		if ( intent.IsSpecial && !pc.HostMaySpecialAttack( out var specialReason ) )
+			return Fail( AttackReleaseDebugCode.RejectSpecialNotAllowed, specialReason );
 
-			var attackerController = attacker.Components.Get<PlayerController>();
-			if ( attackerController is null || !attackerController.IsOnGround )
-				return Fail( AttackReleaseDebugCode.RejectSpecialUnavailable, "special attack requires being grounded" );
-		}
-
-		var staminaCost = intent.IsSpecial
-			? pc.GetSpecialAttackStaminaCost()
-			: pc.GetPrimaryAttackStaminaCostForHoldDuration( holdSeconds );
+		var staminaCost = pc.GetPrimaryAttackStaminaCost();
 		if ( staminaCost > 1e-4f )
 		{
 			if ( pv is null )
@@ -239,18 +229,20 @@ public sealed class CombatAuthority : Component
 			}
 
 			if ( LogMeleeStaminaSettlement )
-				Log.Info( $"[CombatAuthority/Stamina] {attacker.Name} drain hold={holdSeconds:0.###}s cost={staminaCost:0.#} → st={pv.CurrentStamina:0.#}/{pv.CurrentStaminaMax:0.#}" );
+				Log.Info( $"[CombatAuthority/Stamina] {attacker.Name} drain cost={staminaCost:0.#} → st={pv.CurrentStamina:0.#}/{pv.CurrentStaminaMax:0.#}" );
 		}
 
 		var swingAuth = ServerNormalizeSwingFromXz( intent.SwingFromX, intent.SwingFromY, attacker.WorldRotation );
 		var swingVert = ServerClampSwingVertical( intent.SwingVerticalHint );
-		// The special stab is never heavy — instant press, no charge.
-		var isHeavy = !intent.IsSpecial && pc.IsHeavyAttackForHoldDuration( holdSeconds );
 		var attackType = pc.ResolveAttackTypeFromIntent( intent );
 		var swingNote =
-			$" {FormatSwingLog( swingAuth, swingVert, intent.SwingDir )} type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} special={intent.IsSpecial} hold={holdSeconds:0.###}s";
+			$" {FormatSwingLog( swingAuth, swingVert, intent.SwingDir )} type={MeleeAttackTypes.Label( attackType )}";
 
-		pc.ServerStartMeleeAttackAction( intent, holdSeconds, isHeavy, swingNote );
+		// Players commit on the click, so the host always plays the full class windup: client press / release
+		// times are never trusted to shorten it (that would let a client skip the readable windup). Held past it, the
+		// swing turns heavy unless the owner's release reached the host first (HostNotePrimaryAttackReleased).
+		// The Q special never turns heavy.
+		pc.ServerStartMeleeAttackAction( intent, 0f, swingNote, canTurnHeavy: !intent.IsSpecial );
 
 		_lastAcceptedAttackByAttacker[attacker.Id] = RealTime.GlobalNow;
 
@@ -261,7 +253,7 @@ public sealed class CombatAuthority : Component
 			DamageDealt = 0f,
 			TargetGameObjectId = Guid.Empty,
 			DebugCode = AttackReleaseDebugCode.OkMeleeSweepStarted,
-			DebugDetail = $"scheduled host sweep seq={intent.IntentSequence} type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} wind={pc.GetMeleeWindupSeconds():0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( pc, attackType, isHeavy ):0.###}s{swingNote}"
+			DebugDetail = $"scheduled host sweep seq={intent.IntentSequence} type={MeleeAttackTypes.Label( attackType )} wind={pc.GetMeleeWindupSeconds():0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( pc ):0.###}s{swingNote}"
 		};
 	}
 

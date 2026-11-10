@@ -4,8 +4,10 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// During a committed melee swing (windup → recovery): walk-only on the ground, slowed look,
-/// and a soft cone clamp around the aim at attack start.
+/// During a committed melee swing (windup → recovery): walk-only on the ground. The look is free through the windup /
+/// held heavy (the swing aims wherever the player faces); once the strike swoops it is slowed — never limited, the
+/// player can spin as far as they like (Mark 2026-11-05) — with the pitch held near the strike-start pitch. The swing
+/// turns with the look throughout (<c>PlayerCombat.LiveSwingBasisYaw</c>).
 /// </summary>
 public partial class PlayerCombat : Component, PlayerController.IEvents
 {
@@ -19,9 +21,6 @@ public partial class PlayerCombat : Component, PlayerController.IEvents
 	/// <summary>Multiplies per-frame look delta while the swing is committed (1 = normal, 0.4 = 40% mouse rate).</summary>
 	[Property, Group( "Combat — Attack commitment" ), Title( "Look sensitivity scale" ), Range( 0f, 1f ), Step( 0.05f )]
 	public float MeleeAttackLookSensitivityScale { get; set; } = 0.4f;
-
-	[Property, Group( "Combat — Attack commitment" ), Title( "Max yaw from aim at swing start (°)" ), Range( 0f, 90f ), Step( 1f )]
-	public float MeleeAttackMaxYawDegrees { get; set; } = 40f;
 
 	[Property, Group( "Combat — Attack commitment" ), Title( "Max pitch from aim at swing start (°)" ), Range( 0f, 90f ), Step( 1f )]
 	public float MeleeAttackMaxPitchDegrees { get; set; } = 30f;
@@ -40,6 +39,7 @@ public partial class PlayerCombat : Component, PlayerController.IEvents
 	/// </summary>
 	public bool IsMeleeAttackWalkOnlyActive =>
 		IsCombatActionLocked
+		|| _bolaCharging
 		|| (MeleeAttackCommitmentLockEnabled && (MeleeAttackLocomotionLock || IsLocalAttackCommitmentPreview()));
 
 	/// <summary>Owner prediction: slow + no sprint from Attack1 press through post-release phase / windup.</summary>
@@ -59,7 +59,7 @@ public partial class PlayerCombat : Component, PlayerController.IEvents
 		if ( equipped is not null && !equipped.HasAction( EquippedItemActions.PrimaryMelee ) )
 			return false;
 
-		if ( ServerHasActiveMeleeAttackAction || _primary.Down )
+		if ( ServerHasActiveMeleeAttackAction || _ownerExpectsHostMeleeBusy )
 			return true;
 
 		if ( Input.Down( PrimaryAttackAction ) )
@@ -116,7 +116,17 @@ public partial class PlayerCombat : Component, PlayerController.IEvents
 	public void OnEyeAngles( ref Angles angles )
 	{
 		if ( !ShouldApplyMeleeAttackLookLockLocally() )
+		{
+			_meleeLookSwoopActive = false;
 			return;
+		}
+
+		if ( !_meleeLookSwoopActive )
+		{
+			// The strike just started: the pitch cone is measured from where the player looks now.
+			_meleeLookSwoopActive = true;
+			_meleeLookLockBasis = GetCurrentEyeAnglesForLookLock();
+		}
 
 		var scale = Math.Clamp( MeleeAttackLookSensitivityScale, 0f, 1f );
 		angles = new Angles( angles.pitch * scale, angles.yaw * scale, angles.roll * scale );
@@ -126,33 +136,26 @@ public partial class PlayerCombat : Component, PlayerController.IEvents
 			return;
 
 		var current = controller.EyeAngles;
-		var proposed = new Angles(
-			current.pitch + angles.pitch,
-			current.yaw + angles.yaw,
-			current.roll + angles.roll );
 
-		var clamped = ClampEyeAnglesToMeleeLookCone( _meleeLookLockBasis, proposed );
-		angles = new Angles(
-			NormalizeAngleDelta( clamped.pitch - current.pitch ),
-			NormalizeAngleDelta( clamped.yaw - current.yaw ),
-			NormalizeAngleDelta( clamped.roll - current.roll ) );
+		// Yaw: just slowed (above), never limited.
+		// Pitch: absolute cone around the pitch at the swing start.
+		var maxPitch = Math.Max( 0f, MeleeAttackMaxPitchDegrees );
+		var proposedPitch = current.pitch + angles.pitch;
+		var dpitch = Math.Clamp( NormalizeAngleDelta( proposedPitch - _meleeLookLockBasis.pitch ), -maxPitch, maxPitch );
+		var clampedPitch = _meleeLookLockBasis.pitch + dpitch;
+
+		angles = new Angles( NormalizeAngleDelta( clampedPitch - current.pitch ), angles.yaw, angles.roll );
 	}
 
+	/// <summary>Only while the strike swoops on this owner's screen — the windup and a held heavy turn freely.</summary>
 	bool ShouldApplyMeleeAttackLookLockLocally() =>
 		MeleeAttackCommitmentLockEnabled
 		&& _meleeLookLockActive
-		&& IsLocalCombatDriver();
+		&& IsLocalCombatDriver()
+		&& Components.Get<PlayerAnimation>() is { IsMeleeStrikePresenting: true };
 
-	Angles ClampEyeAnglesToMeleeLookCone( in Angles basis, in Angles proposed )
-	{
-		var maxYaw = Math.Max( 0f, MeleeAttackMaxYawDegrees );
-		var maxPitch = Math.Max( 0f, MeleeAttackMaxPitchDegrees );
-
-		var dyaw = Math.Clamp( NormalizeAngleDelta( proposed.yaw - basis.yaw ), -maxYaw, maxYaw );
-		var dpitch = Math.Clamp( NormalizeAngleDelta( proposed.pitch - basis.pitch ), -maxPitch, maxPitch );
-
-		return new Angles( basis.pitch + dpitch, basis.yaw + dyaw, proposed.roll );
-	}
+	/// <summary>The look lock is applying this frame (the yaw sum restarts from the facing at each strike).</summary>
+	bool _meleeLookSwoopActive;
 
 	Angles GetCurrentEyeAnglesForLookLock()
 	{

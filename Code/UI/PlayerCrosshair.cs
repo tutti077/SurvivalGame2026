@@ -15,6 +15,8 @@ namespace Survival;
 ///           <see cref="EquippedItemActions.PrimaryMelee"/> (build hammer shows the plain ring)
 ///   inner — small yellow lock ring when a grapple attach target is valid right now; slides
 ///           with aim assist to the actual attach point (also mid-grapple for re-targeting)
+///   hit   — a red X round the centre for a moment when one of this pawn's arrows hits a creature or
+///           player (<see cref="PlayerCombat.ArrowHitConfirm01"/>); overlay lines, only while it shows
 /// Hidden while any game menu is open.
 /// <para>
 /// The rings are UI panels (a bordered circle each) under the pawn's <see cref="PlayerScreenHud"/>
@@ -48,6 +50,10 @@ public sealed class PlayerCrosshair : Component
 	static readonly Color GrappleYellow = new( 1f, 0.92f, 0.2f, 0.95f );
 	static readonly Color BorderBlack = Color.Black.WithAlpha( 0.9f );
 	static readonly Color BowDrawRing = Color.White.WithAlpha( 0.35f );
+	static readonly Color ArrowHitRed = new( 1f, 0.25f, 0.18f, 1f );
+	const float HitTickInner = 9f;
+	const float HitTickOuter = 17f;
+	const float HitTickWidth = 2.5f;
 
 	PlayerMovement _movement;
 	PlayerCombat _combat;
@@ -129,8 +135,12 @@ public sealed class PlayerCrosshair : Component
 		else
 			_lock.Apply( false, 0f, 0f, default, null );
 
+		var hit = _combat?.ArrowHitConfirm01 ?? 0f;
+		if ( hit > 0f )
+			DrawArrowHitTick( hit );
+
 		// The attack teardrop is a filled triangle — still overlay lines, only while a melee weapon is out.
-		if ( (weaponOut || shieldGuardUp) && _combat is not null )
+		if ( (weaponOut || shieldGuardUp) && _combat is not null && _combat.ShowsAttackTeardrop )
 		{
 			var cam = BuildViewCamera.Resolve( GameObject );
 			if ( cam.IsValid() )
@@ -337,6 +347,31 @@ public sealed class PlayerCrosshair : Component
 
 		static string Rgba( Color c ) =>
 			$"rgba({(int)MathF.Round( c.r * 255f )},{(int)MathF.Round( c.g * 255f )},{(int)MathF.Round( c.b * 255f )},{c.a.ToString( "0.###", CultureInfo.InvariantCulture )})";
+	}
+
+	/// <summary>Arrow hit confirm: four short diagonal ticks round the centre, black-edged, fading out.</summary>
+	void DrawArrowHitTick( float alpha01 )
+	{
+		var cam = BuildViewCamera.Resolve( GameObject );
+		if ( !cam.IsValid() )
+			return;
+
+		var rect = cam.ScreenRect;
+		var center = new Vector2( rect.Left + rect.Width * 0.5f, rect.Top + rect.Height * 0.5f );
+		var hud = cam.Overlay;
+		var black = BorderBlack.WithAlpha( BorderBlack.a * alpha01 );
+		var red = ArrowHitRed.WithAlpha( alpha01 );
+		// A little pop outward as it appears.
+		var push = (1f - alpha01) * 3f;
+		for ( var i = 0; i < 4; i++ )
+		{
+			var a = (45f + 90f * i) * (MathF.PI / 180f);
+			var d = new Vector2( MathF.Cos( a ), MathF.Sin( a ) );
+			var p0 = center + d * (HitTickInner + push);
+			var p1 = center + d * (HitTickOuter + push);
+			hud.DrawLine( p0 - d * BorderWidth, p1 + d * BorderWidth, HitTickWidth + BorderWidth * 2f, black );
+			hud.DrawLine( p0, p1, HitTickWidth, red );
+		}
 	}
 
 	// ── Attack teardrop (overlay lines, melee weapon out only) ───────────────────────────────

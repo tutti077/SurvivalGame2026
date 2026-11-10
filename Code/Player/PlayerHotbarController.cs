@@ -6,7 +6,8 @@ namespace Survival;
 /// <summary>
 /// Number row 1-0, mouse wheel and mouse4 / mouse5 select hotbar slots in the bank on screen; Alt swaps the
 /// bank (Mark 2026-11-02: numbers and the wheel pick items, augments moved to Z X C V G T). A selected shield
-/// equips the offhand and keeps the primary, anything else is the primary; a number key on a slot that is
+/// equips the offhand and keeps the primary, anything else is the primary (the wheel and mouse4 / 5 pass over
+/// shield slots - <see cref="PlayerHotbar.StepActiveSlot"/>); a number key on a slot that is
 /// already selected unequips it (<see cref="PlayerHotbar.SelectOrToggleSlot"/>).
 /// Camera zoom uses +/- keys — not the wheel.
 /// </summary>

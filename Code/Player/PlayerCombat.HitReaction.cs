@@ -22,10 +22,10 @@ public partial class PlayerCombat
 	internal void ServerBeginHitReaction( float durationSeconds ) =>
 		Components.Get<PlayerAnimation>()?.ServerBeginHitReaction( durationSeconds );
 
-	/// <summary>Called by <see cref="PlayerAnimation"/> when a reaction starts: the hit beats whatever combat was doing.</summary>
-	internal void OnHitReactionBegan()
-	{
-		ClearCombatRecoveryPresentation( pushOwnerClear: false );
-		ClearQueuedAttackPress();
-	}
+	/// <summary>
+	/// Called by <see cref="PlayerAnimation"/> when a reaction starts. A hit never breaks an attack (Mark 2026-11-05):
+	/// a swing in its windup, held as a heavy or striking plays on, and a queued click still fires once the reaction
+	/// lock ends — only a leftover recovery pose gives way to the flail.
+	/// </summary>
+	internal void OnHitReactionBegan() => ClearCombatRecoveryPresentation( pushOwnerClear: false );
 }

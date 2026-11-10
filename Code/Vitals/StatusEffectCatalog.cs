@@ -63,6 +63,11 @@ public static class StatusEffectCatalog
 	static readonly List<StatusEffectData> Effects = new();
 	static readonly Dictionary<string, StatusEffectData> ById = new( StringComparer.OrdinalIgnoreCase );
 	static bool _loaded;
+	static int _loadedJsonHash;
+	// A JSON edit is picked up without a restart (same pattern as EquipmentCatalog): the file is read + hashed at
+	// most every JsonChangeCheckSeconds, never per call.
+	const float JsonChangeCheckSeconds = 2f;
+	static float _lastJsonChangeCheckTime = float.NegativeInfinity;
 
 	public static IReadOnlyList<StatusEffectData> All
 	{
@@ -75,15 +80,36 @@ public static class StatusEffectCatalog
 
 	public static void EnsureLoaded()
 	{
-		if ( _loaded )
+		if ( _loaded && RealTime.Now - _lastJsonChangeCheckTime < JsonChangeCheckSeconds )
+			return;
+
+		_lastJsonChangeCheckTime = RealTime.Now;
+		var jsonHash = TryReadJsonHash();
+		if ( _loaded && jsonHash == _loadedJsonHash )
 			return;
 
 		_loaded = true;
+		_loadedJsonHash = jsonHash;
 		Effects.Clear();
 		ById.Clear();
 
 		if ( !TryLoadFromFile() )
 			Log.Warning( "[StatusEffectCatalog] No status_effects.json — buffs / debuffs unavailable." );
+	}
+
+	static int TryReadJsonHash()
+	{
+		try
+		{
+			if ( !FileSystem.Mounted.FileExists( FilePath ) )
+				return 0;
+
+			return StringComparer.Ordinal.GetHashCode( FileSystem.Mounted.ReadAllText( FilePath ) );
+		}
+		catch
+		{
+			return 0;
+		}
 	}
 
 	public static bool TryGet( string id, out StatusEffectData effect )

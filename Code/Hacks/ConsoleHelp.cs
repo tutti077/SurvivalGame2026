@@ -20,9 +20,9 @@ public static class ConsoleHelp
 		new( "World", "wind_toggle", "", "Scene wind on / off live (trees + grass stand still when off).", "wind_toggle" ),
 		new( "World", "grass_toggle", "", "World grass on / off live (applies as chunks refresh) — the quickest fps bisect.", "grass_toggle" ),
 		new( "World", "cycle_toggle", "", "Day / night cycle group on / off (terrainTest ships it ON since 2026-10-21: cycle + sky dome + disks + moon).", "cycle_toggle" ),
-		new( "World", "cycle_day", "", "Jump the cycle to noon (key Y does the same).", "cycle_day" ),
+		new( "World", "cycle_day", "", "Jump the cycle to noon.", "cycle_day" ),
 		new( "World", "cycle_pause", "", "Freeze / resume the day-night cycle where it is (sun and sky stay lit).", "cycle_pause" ),
-		new( "World", "cycle_night", "", "Jump the cycle to midnight (key U).", "cycle_night" ),
+		new( "World", "cycle_night", "", "Jump the cycle to midnight.", "cycle_night" ),
 		new( "World", "pawn_toggle", "", "terrainTest: the same as L — fly camera → playable pawn, pawn → fly camera.", "pawn_toggle" ),
 		new( "World", "nameplates_reload", "", "Re-read data/nameplates.json (overhead nameplate sizes, scale curve, fades, targeting range).", "nameplates_reload" ),
 		new( "UI", "ui_theme", "[id|reload]", "UI theme from data/ui_themes.json: no argument lists them, an id switches (saved per machine; menus restyle on their next build, the main menu live), reload re-reads the JSON.", "ui_theme frost" ),
@@ -33,8 +33,16 @@ public static class ConsoleHelp
 		new( "Hacks", "equip", "<resourceId>", "Give one of the item into hotbar slot 1 (slot 2 for a shield), select and equip it.", "equip shield_wood" ),
 		new( "Hacks", "hoe_mode", "<till|grass|bare|grade>", "Set the equipped hoe's ground mode without opening its menu (Attack2 in play).", "hoe_mode grade" ),
 		new( "Hacks", "hoe_menu", "", "Open / close the equipped hoe's mode menu (dev screenshots; Attack2 does it in play).", "hoe_menu" ),
-		new( "Hacks", "swing", "[holdSeconds]", "Press and release the primary attack as a mouse would (0.15 = light, longer = heavy).", "swing 0.5" ),
+		new( "Hacks", "swing_dir", "L|R|U|D", "Set the attack the next swing uses (Left, Right, the overhead or the down jab) as mouse movement would; the sword rests on that side.", "swing_dir D" ),
+		new( "Hacks", "wingsuit_test", "[meters]", "Lift your pawn this high (default 80 m) and open the wingsuit through the normal deploy path - no wingsuit gear or mid-air jump needed.", "wingsuit_test 120" ),
+		new( "Hacks", "stamina_infinite", "[0|1]", "Host: infinite stamina for every player on / off (Settings > Dev tools > Stamina drain does the same; on by default). No argument prints it.", "stamina_infinite 0" ),
+		new( "Hacks", "day_lock", "[0|1]", "Host: jump the clock to noon and hold it there on every peer (Settings > Dev tools > Lock daytime). No argument prints it.", "day_lock 1" ),
+		new( "Hacks", "wasd_facing", "[0|1]", "Body turns with WASD on / off (Settings > Dev tools does the same): on, the body turns toward the travel direction and S walks toward the camera; off, it faces the camera and strafes / back-pedals. No argument prints it.", "wasd_facing 0" ),
+		new( "Hacks", "melee_combo_static", "[0|1]", "Static 3-hit melee combo on / off (Settings > Dev tools does the same): quick clicks go right, left, overhead, a hold is a heavy, Q on the ground stabs. No argument prints it.", "melee_combo_static 1" ),
+		new( "Hacks", "special_attack", "", "Press the melee special (Q) once as the key would - static combo mode, on the ground (sword / club stab).", "special_attack" ),
+		new( "Hacks", "swing", "[holdSeconds]", "Click the primary attack and hold it this long; held past the windup (e.g. 0.7) it turns heavy. A click mid-swing queues one follow-up.", "swing 0.7" ),
 		new( "Hacks", "block", "[holdSeconds]", "Hold the block action (Attack2) as a mouse would — shield raise / guard checks.", "block 2" ),
+		new( "Hacks", "sneak", "[holdSeconds]", "Hold the crouch / sneak action as a key would — taming offers (crouch + food in hand), sneak footsteps.", "sneak 20" ),
 		new( "Hacks", "status", "<effectId> <seconds>", "Apply a buff / debuff from status_effects.json to your pawn; 0 removes it; 'status clear' drops all. (Engine owns a 'status' command — if nothing happens, this one lost the name.)", "status poisoned 10" ),
 		new( "Hacks", "spawnPatrolBot", "", "Host drops a patrol bot 3 m in front of your pawn (Medusa Eye / Hackd testing).", "spawnPatrolBot" ),
 		new( "Hacks", "thermalView", "true|false", "Force the Thermal Eye post-process on / off.", "thermalView true" ),
@@ -45,6 +53,7 @@ public static class ConsoleHelp
 
 		// ---- terrain
 		new( "Terrain", "terrain_cam", "<x> <y> <z> [pitch] [yaw]", "Park the fly camera at world metres looking along pitch / yaw (pitch + = down).", "terrain_cam 0 0 300 10 0" ),
+		new( "Terrain", "world_find", "<kind> [radius m] [park]", "Nearest generated wheat / spire / boulder / rock / any forage kind, or camp sites, from the camera (the scatter's own planner, read-only); park = fly camera to the nearest.", "world_find spire 1500 park" ),
 		new( "Terrain", "terrain_fly", "[m/s] [seconds]", "Fly the fly camera level along its heading at a fixed speed (default 55 m/s ≈ 120 mph for 20 s) — perf runs; terrain_fly 0 stops.", "terrain_fly 55 30" ),
 		new( "Nav", "nav_stream_request", "0|1", "Streamed terrain chunk nav bakes: 1 = incremental RequestTilesGeneration (default, no hitch), 0 = synchronous GenerateTiles from physics (A/B).", "nav_stream_request 0" ),
 		new( "Terrain", "terrain_horizon", "0|1", "Hide / show the horizon tier (the whole-world coarse terrain past Far View Distance).", "terrain_horizon 0" ),
@@ -153,8 +162,18 @@ public static class ConsoleHelp
 		new( "Vehicles", "vehicle_test", "", "Timed throttle / brake / reverse / turn / fuel script with logged numbers.", "vehicle_test" ),
 		new( "Vehicles", "vehicle_demo", "", "Scripted showcase run with a chase camera (vehicle_spawn + vehicle_fuel first).", "vehicle_demo" ),
 		new( "Vehicles", "vehicle_rolltest", "[mph] [turnSeconds] [steer]", "Full throttle to a speed, then a held steer; logs whether it rolled.", "vehicle_rolltest 60 2 1" ),
+
+		// ---- props
+		new( "Props", "pod_spawn", "[metersAhead]", "Host stands a stasis pod on the ground ahead of you (default 4 m), door facing you - no flight.", "pod_spawn 3" ),
+		new( "Props", "pod_door", "[open|close|toggle]", "Host swings the nearest stasis pod's door (default toggle).", "pod_door open" ),
+		new( "Props", "pod_test", "[count] [here]", "Host crash-lands this many empty stasis pods (default 10) around the spawn centre - or around you with here. Needs a StasisPodSpawner in the scene (terrainTest has one).", "pod_test 10 here" ),
+		new( "Props", "pod_arrivals", "[0|1]", "Players arrive by crash-landing pod on their first spawn of the session (default 1). No argument prints it.", "pod_arrivals 0" ),
 		new( "Tests", "combat_test", "", "Automated melee regression suite (play mode, testscene1): scripted fights, PASS/FAIL per case.", "combat_test" ),
 		new( "Tests", "anim_test", "", "Sword animation anatomy suite (play mode): rests, shoulder swaps, look sweep, every attack; PASS/FAIL per scenario.", "anim_test" ),
+
+		// ---- playtest logger
+		new( "Playtest", "playtest_log", "[0|1]", "Host: the playtest logger on (a new <steam name>_<date_time>_v<build>.jsonl under data/2Tgames/playtest/) or off. Hits, kills with time-to-kill and the killer's pools, player damage and deaths, stamina empties, 2 s vitals samples, blocks, grapple attach / detach with speed and distance, crafts, builds, item gains, pawn positions, joins / leaves, each client's fps and menu time. No argument prints the state. Tools/playtest_report.py reads the file.", "playtest_log 1" ),
+		new( "Playtest", "playtest_mark", "<text>", "Drop a marker line in the running playtest log; quote more than one word.", "playtest_mark \"toys unlocked\"" ),
 	];
 
 	[ConCmd( "help" )]

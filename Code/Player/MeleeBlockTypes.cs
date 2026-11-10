@@ -31,7 +31,6 @@ public readonly struct MeleeBlockContact
 	public byte AttackType { get; init; }
 	/// <summary>Attacker cursor swing at release (<see cref="AttackReleaseIntent.SwingDir"/>); logging only for blocks.</summary>
 	public byte AttackSwingDir { get; init; }
-	public bool AttackWasHeavy { get; init; }
 	public double HitSandboxTime { get; init; }
 
 	/// <summary>Host attack ray entered the body-radius block shell before the body.</summary>

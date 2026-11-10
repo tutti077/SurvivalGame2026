@@ -91,45 +91,98 @@ public partial class PlayerCombat
 		intent.IsSpecial ? MeleeAttackTypes.Stab : ResolveAttackTypeFromCursorDir( intent.SwingDir );
 
 	/// <summary>Resolves attack type from cursor cardinal using <see cref="SouthpawSwing"/> (call once when attack starts).</summary>
-	public byte ResolveAttackTypeFromCursorDir( byte cursorDir ) =>
-		MeleeAttackTypes.FromCursorDir( cursorDir, SouthpawSwing );
-
-	/// <summary>
-	/// Heavy attack: the button was held for the effective windup plus the full charge time.
-	/// With initiative armed the shorter initiative windup applies (sheet: heavy with initiative =
-	/// initiativeWindup + charge); non-host owners predict with the base windup.
-	/// </summary>
-	public bool IsHeavyAttackForHoldDuration( float holdSeconds )
+	public byte ResolveAttackTypeFromCursorDir( byte cursorDir )
 	{
-		var t = GetMeleeWeaponTimings();
-		var windup = ServerIsInitiativeArmed ? t.InitiativeWindupSeconds : t.WindupSeconds;
-		return holdSeconds + 1e-5f >= windup + t.ChargeSeconds;
+		var type = MeleeAttackTypes.FromCursorDir( cursorDir, SouthpawSwing );
+		// Spear: up is a forward thrust, not an overhead chop (weapon class forwardAttackIsThrust).
+		if ( type == MeleeAttackTypes.Forward && GetMeleeWeaponTimings().ForwardAttackIsThrust )
+			return MeleeAttackTypes.Stab;
+		return type;
 	}
 
+	/// <summary>Playtest logger (<see cref="PlaytestLog"/>): the host swing in flight — heavy flag and attack type; false between swings.</summary>
+	internal bool TryGetServerSwingInfo( out bool heavy, out byte attackType )
+	{
+		var runtime = _serverMeleeAttack;
+		if ( runtime is null )
+		{
+			heavy = false;
+			attackType = 0;
+			return false;
+		}
+
+		heavy = runtime.IsHeavy;
+		attackType = runtime.AttackType;
+		return true;
+	}
+
+	/// <summary>Base swing damage, grown by the held weapon's workbench upgrade tier (<see cref="EquipmentUpgrade"/>).</summary>
 	public float GetMeleeWeaponBaseDamage() =>
 		EquipmentUpgrade.ScaleStat(
 			MeleeWeaponBaseDamage > 0f ? MeleeWeaponBaseDamage : AttackCombatConstants.DefaultMeleeWeaponDamage,
 			GetActiveWeaponTier() );
 
-	public float GetMeleeDamage( bool isHeavy )
+	/// <summary>
+	/// Damage of one swing: base weapon damage × the combat multiplier (× the class heavy multiplier for a heavy)
+	/// × <paramref name="scale"/> (the static combo overhead bonus / the Q special multiplier), rounded.
+	/// </summary>
+	public float GetMeleeDamage( bool isHeavy = false, float scale = 1f )
 	{
-		var raw = GetMeleeWeaponBaseDamage() * ComputeMeleeCombatDamageMultiplier( isHeavy );
+		var raw = GetMeleeWeaponBaseDamage() * ComputeMeleeCombatDamageMultiplier() * Math.Max( 0f, scale );
+		if ( isHeavy )
+			raw *= GetMeleeWeaponTimings().HeavyDamageMultiplier;
 		return MathF.Round( raw, MidpointRounding.AwayFromZero );
 	}
 
-	/// <summary>Damage of the Q special attack — base weapon damage × class `specialDamageMultiplier`.</summary>
-	/// <summary>Base swing damage, grown by the held weapon's workbench upgrade tier (<see cref="EquipmentUpgrade"/>).</summary>
-	public float GetMeleeSpecialDamage()
+	/// <summary>Host: charge the heavy's extra stamina once, when the swing turns heavy. False = cannot pay → it stays light.</summary>
+	internal bool HostTrySpendHeavyStamina()
 	{
-		var raw = GetMeleeWeaponBaseDamage() * Math.Max( 0f, GetMeleeWeaponTimings().SpecialDamageMultiplier );
-		return MathF.Round( raw, MidpointRounding.AwayFromZero );
+		var extra = GetHeavyExtraStaminaCost();
+		if ( extra <= 1e-4f )
+			return true;
+
+		var pv = Components.Get<PlayerVitals>();
+		if ( pv is null )
+			return false;
+
+		if ( VitalsAuthority.Instance is { } vAuth )
+			return vAuth.TryApplyDeltas( GameObject, 0f, -extra, pv );
+
+		return pv.HasStaminaFor( extra ) && pv.RequestVitalsDelta( 0f, -extra );
 	}
 
-	/// <summary>Global combat damage multiplier (base + heavy bonus).</summary>
-	public float ComputeMeleeCombatDamageMultiplier( bool isHeavy ) =>
-		MeleeCombatDamageMultiplier.Compute( isHeavy, MeleeHeavyAttackDamageBonus, MeleeBaseCombatDamageMultiplier );
+	/// <summary>
+	/// Host: the damage swoop just opened. Remote peers (and the host's own view of pawns it does not drive) hold
+	/// the cocked pose until this cue, so an opponent never sees a light strike that then turns heavy.
+	/// </summary>
+	void ServerOnStrikeStarted( byte attackType )
+	{
+		Components.Get<PlayerAnimation>()?.PlayMeleeSwingAttack( attackType, broadcastFromHost: true,
+			windupRemainingSeconds: 0f, applyLocally: !IsLocalCombatDriver() );
+	}
 
-	public float GetMeleeStagger() => Math.Max( 0f, MeleeBaseStagger );
+	/// <summary>Host: a blocked heavy breaks the defender's guard — no block, no attack for the attacker's class time.</summary>
+	void ServerBreakGuard( Guid defenderId )
+	{
+		var seconds = GetMeleeWeaponTimings().HeavyGuardBreakSeconds;
+		if ( seconds <= 1e-4f || defenderId == Guid.Empty )
+			return;
+
+		var scene = GameObject.Scene;
+		var target = scene.IsValid() ? scene.Directory.FindByGuid( defenderId ) : null;
+		var defender = target?.Root?.Components.Get<PlayerCombat>( FindMode.EverythingInSelfAndDescendants );
+		if ( defender is null || defender == this )
+			return;
+
+		defender.ServerBeginCombatRecovery( seconds, CombatRecoveryAnim.Rpg2hAttackMoving );
+		LogMeleePhasePulse( "Guard break", $"{defender.GameObject.Name} locked {seconds:0.###}s by a blocked heavy" );
+	}
+
+	/// <summary>Global combat damage multiplier.</summary>
+	public float ComputeMeleeCombatDamageMultiplier() => Math.Max( 0f, MeleeBaseCombatDamageMultiplier );
+
+	/// <summary>Victim flail seconds for a landed swing (<see cref="MeleeHitReactionSeconds"/>).</summary>
+	public float GetMeleeStagger() => Math.Max( 0f, MeleeHitReactionSeconds );
 
 	public Color GetMeleeDebugColorForState( byte attackState )
 	{
@@ -156,10 +209,14 @@ public partial class PlayerCombat
 		if ( victimAnimation is null || victimAnimation.GameObject == GameObject )
 			return;
 
-		victimAnimation.ServerBeginHitReaction( Math.Max( stagger, victimAnimation.HitReactionSeconds ) );
+		victimAnimation.ServerBeginHitReaction( stagger );
 	}
 
-	public void ServerStartMeleeAttackAction( in AttackReleaseIntent intent, float holdSeconds, bool isHeavy, string swingLogNote )
+	/// <summary>
+	/// Host: start one phased swing — windup (class windup minus <paramref name="telegraphedSeconds"/>, the time an
+	/// entity already showed its cocked pose before committing; players click-commit, so 0) then the damage swoop.
+	/// </summary>
+	public void ServerStartMeleeAttackAction( in AttackReleaseIntent intent, float telegraphedSeconds, string swingLogNote, bool canTurnHeavy = false )
 	{
 		if ( !GameObject.IsValid() || !IsServerSideForMeleeAuthority() )
 			return;
@@ -184,17 +241,21 @@ public partial class PlayerCombat
 		// Press/release already snapped the clip — don't abort before the strike is scheduled.
 		if ( animation is null || !animation.HasActiveMeleeSwingPresentation )
 			animation?.AbortMeleeAttackAnimClip( "new swing" );
-		_serverMeleeAttack = new ServerMeleeAttackRuntime( this, intent, holdSeconds, isHeavy, swingLogNote );
+		var damageScale = HostResolveSwingDamageScale( intent );
+		_serverMeleeAttack = new ServerMeleeAttackRuntime( this, intent, telegraphedSeconds, swingLogNote, canTurnHeavy: canTurnHeavy,
+			damageScale: damageScale );
 
 		var attackType = ResolveAttackTypeFromIntent( intent );
 		LogMeleePhasePulse( "Swing start",
-			$"type={MeleeAttackTypes.Label( attackType )} heavy={isHeavy} hold={holdSeconds:0.###}s windRemaining={_serverMeleeAttack.WindupRemainingSeconds:0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( this, attackType, isHeavy ):0.###}s seq={intent.IntentSequence}" );
+			$"type={MeleeAttackTypes.Label( attackType )} combo={intent.ComboStep} special={intent.IsSpecial} dmg×{damageScale:0.##} telegraphed={telegraphedSeconds:0.###}s windRemaining={_serverMeleeAttack.WindupRemainingSeconds:0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( this ):0.###}s seq={intent.IntentSequence}" );
 		LogMeleePhaseEnter( "windup start",
-			$"remaining={_serverMeleeAttack.WindupRemainingSeconds:0.###}s (class windup {GetMeleeWindupSeconds():0.###}s − hold)" );
+			$"remaining={_serverMeleeAttack.WindupRemainingSeconds:0.###}s (class windup {GetMeleeWindupSeconds():0.###}s)" );
 
 		EmitSwingNoiseIfPlayer();
-		animation?.PlayMeleeSwingAttack( attackType, broadcastFromHost: true, isHeavy,
-			_serverMeleeAttack.WindupRemainingSeconds );
+		// The pawn this machine drives strikes on its own (predicted) clock; everyone else holds the cocked pose until
+		// the host's strike cue (ServerOnStrikeStarted), which is what makes a light that turns heavy read correctly.
+		animation?.PlayMeleeSwingAttack( attackType, broadcastFromHost: true,
+			IsLocalCombatDriver() ? _serverMeleeAttack.WindupRemainingSeconds : PlayerAnimation.StrikeOnCue );
 
 		// Don't Broadcast inside Rpc.Host handling of the attacker pawn — nested HostOnly broadcasts on a
 		// host-owned object often never reach joining clients (host still runs it locally → host sees clients).
@@ -241,7 +302,7 @@ public partial class PlayerCombat
 		}
 	}
 
-	/// <summary>Host→all peers: start local DebugOverlay replay for the named attacker.</summary>
+	/// <summary>Host→all peers: start the local swing replay (slash ribbon, optional debug overlay) for the named attacker.</summary>
 	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable | NetFlags.SendImmediate )]
 	public static void RpcStaticBroadcastMeleeSwingTraceDebug( Guid attackerRootId, AttackReleaseIntent intent )
 	{
@@ -256,7 +317,8 @@ public partial class PlayerCombat
 			if ( pc.GameObject.Id != attackerRootId )
 				continue;
 
-			if ( !pc.MeleeDebugDrawEnabled || !pc.ClientMeleeSwingTraceDebug )
+			// The replay drives the slash ribbon on this peer, debug overlay or not.
+			if ( !pc.ClientMeleeSwingTraceDebug )
 				return;
 
 			pc.StartClientMeleeSwingTracePlayback( intent );
@@ -321,12 +383,15 @@ public partial class PlayerCombat
 		if ( !IsServerSideForMeleeAuthority() )
 			return;
 
+		ServerTickPendingPunch();
+
 		if ( _serverMeleeAttack is null )
 			return;
 
 		if ( !_serverMeleeAttack.Tick( scene ) )
 		{
 			_serverMeleeAttack = null;
+			HostNoteSwingEnded();
 			SetMeleeAttackCommitmentLock( false );
 			// Don't wait on Rpc.Owner to clear the spam-click gate (listen-server host can stall otherwise).
 			// Remote owners are cleared by RpcOwnerMeleeSwingComplete inside Tick; if that path
@@ -362,9 +427,8 @@ public partial class PlayerCombat
 		if ( _serverMeleeAttack is { } authority && authority.IntentSequence == intent.IntentSequence )
 			return;
 
-		var hold = Math.Max( 0f, (float)( intent.ReleasedGlobalSeconds - intent.PressedGlobalSeconds ) );
-		var heavy = IsHeavyAttackForHoldDuration( hold );
-		_clientSwingTracePlayback = new ServerMeleeAttackRuntime( this, intent, hold, heavy, "client-trace", visualOnly: true );
+		var telegraphed = Math.Max( 0f, (float)( intent.ReleasedGlobalSeconds - intent.PressedGlobalSeconds ) );
+		_clientSwingTracePlayback = new ServerMeleeAttackRuntime( this, intent, telegraphed, "client-trace", visualOnly: true );
 	}
 
 	/// <summary>Local owner ticks remote swing overlays — proxy pawns may not receive OnUpdate.</summary>
@@ -407,6 +471,7 @@ public partial class PlayerCombat
 			// Every peer ticks visual arc replay once per pawn. Host proxies already ran MaybeTick
 			// above (authority only — playback is not ticked there anymore).
 			pc.TickClientSwingTracePlaybackOnly( scene );
+			pc.TickSwingVfx();
 
 			if ( pc.IsLocalCombatDriver() )
 				continue;
@@ -443,6 +508,10 @@ public partial class PlayerCombat
 		activeProgress01 = Math.Clamp( activeProgress01, 0f, 1f );
 		if ( attackState == MeleeAttackStates.Recovery )
 			return;
+
+		// Slash ribbon: exactly where this frame's damage sweep went (every pawn, every peer running the swing).
+		if ( MeleeAttackStates.DealsDamage( attackState ) && activeProgress01 > 1e-5f )
+			FeedSwingVfxFromDamageArc( attackType, activeProgress01 );
 
 		// Arcs are bound to the swing animation on this peer: no clip playing here means no arc drawn here.
 		// (Damage sweeps below still run on the host — authority never depends on presentation.)
@@ -659,7 +728,7 @@ public partial class PlayerCombat
 		if ( !ShowMeleeAttackWindupTelegraph || !_windupTelegraphActive )
 			return;
 
-		DrawMeleeAttackWindupTelegraph( _windupTelegraphAttackType, _windupTelegraphBasisYaw, _windupTelegraphHeavy );
+		DrawMeleeAttackWindupTelegraph( _windupTelegraphAttackType, _windupTelegraphBasisYaw );
 	}
 
 	void TickWindupTelegraphNetworkState()
@@ -667,117 +736,74 @@ public partial class PlayerCombat
 		if ( !ShowMeleeAttackWindupTelegraph )
 		{
 			if ( _windupTelegraphActive )
-				PublishWindupTelegraphState( false, 0, 0f, false );
+				PublishWindupTelegraphState( false, 0, 0f );
 			return;
 		}
 
-		if ( !TryComputeLocalWindupTelegraph( out var attackType, out var basisYaw, out var isHeavy ) )
+		if ( !TryComputeLocalWindupTelegraph( out var attackType, out var basisYaw ) )
 		{
 			if ( _windupTelegraphActive )
-				PublishWindupTelegraphState( false, 0, 0f, false );
+				PublishWindupTelegraphState( false, 0, 0f );
 			return;
 		}
 
-		PublishWindupTelegraphState( true, attackType, basisYaw, isHeavy );
+		PublishWindupTelegraphState( true, attackType, basisYaw );
 	}
 
-	bool TryComputeLocalWindupTelegraph( out byte attackType, out float basisYaw, out bool isHeavy )
+	/// <summary>The swing is in its windup (cocked, hanging) on this machine: the client replay or the host runtime.</summary>
+	bool TryComputeLocalWindupTelegraph( out byte attackType, out float basisYaw )
 	{
 		attackType = 0;
 		basisYaw = 0f;
-		isHeavy = false;
 
 		if ( _clientSwingTracePlayback?.IsInWindupPhase == true )
 		{
 			attackType = _clientSwingTracePlayback.AttackType;
 			basisYaw = GetMeleeCombatBasisYaw( attackType );
-			isHeavy = _clientSwingTracePlayback.IsHeavy;
 			return true;
 		}
 
-		if ( ServerHasActiveMeleeAttackInWindup( out attackType, out basisYaw, out isHeavy ) )
-			return true;
-
-		// Special charge: black stab telegraph for the whole chargeup (the host plays no windup after it).
-		if ( IsSpecialAttackCharging )
-		{
-			attackType = MeleeAttackTypes.Stab;
-			basisYaw = GetMeleeCombatBasisYaw( MeleeAttackTypes.Stab );
-			isHeavy = false;
-			return true;
-		}
-
-		// Press / hold: black (light) or white (heavy) aim bar before release.
-		if ( !_hasLockedPrimaryAttackDir )
-			return false;
-
-		if ( !Input.Down( PrimaryAttackAction ) && !_primary.Down )
-			return false;
-
-		if ( IsBlockPreventingAttack() || IsCombatActionLocked )
-			return false;
-
-		// Chain-busy without a real press channel = fake black bar (common when ownerExpects stuck).
-		if ( IsMeleeAttackChainBusy() && !_primary.Down )
-			return false;
-
-		attackType = ResolveAttackTypeFromCursorDir( _lockedPrimaryAttackSwingDir );
-		basisYaw = GetMeleeCombatBasisYaw( attackType );
-		isHeavy = IsHeavyAttackForHoldDuration( _primary.Down ? _primary.Snapshot.HoldDurationSeconds : 0f );
-		return true;
-	}
-
-	bool ServerHasActiveMeleeAttackInWindup( out byte attackType, out float basisYaw, out bool isHeavy )
-	{
-		attackType = 0;
-		basisYaw = 0f;
-		isHeavy = false;
 		if ( _serverMeleeAttack?.IsInWindupPhase != true )
 			return false;
 
 		attackType = _serverMeleeAttack.AttackType;
 		basisYaw = GetMeleeCombatBasisYaw( attackType );
-		isHeavy = _serverMeleeAttack.IsHeavy;
 		return true;
 	}
 
-	void PublishWindupTelegraphState( bool active, byte attackType, float basisYaw, bool isHeavy )
+	void PublishWindupTelegraphState( bool active, byte attackType, float basisYaw )
 	{
 		if ( active == _lastSentWindupTelegraphActive && _lastSentWindupTelegraphValid
 		     && attackType == _lastSentWindupTelegraphAttackType
-		     && isHeavy == _lastSentWindupTelegraphHeavy
 		     && ( !active || MathF.Abs( basisYaw - _lastSentWindupTelegraphBasisYaw ) < 0.4f ) )
 			return;
 
 		_lastSentWindupTelegraphActive = active;
 		_lastSentWindupTelegraphAttackType = attackType;
 		_lastSentWindupTelegraphBasisYaw = basisYaw;
-		_lastSentWindupTelegraphHeavy = isHeavy;
 		_lastSentWindupTelegraphValid = true;
-		ApplyWindupTelegraphState( active, attackType, basisYaw, isHeavy );
+		ApplyWindupTelegraphState( active, attackType, basisYaw );
 
 		if ( GameObject.Network is not { Active: true } )
 			return;
 
 		if ( Networking.IsHost )
-			BroadcastWindupTelegraphIfHost( active, attackType, basisYaw, isHeavy );
+			BroadcastWindupTelegraphIfHost( active, attackType, basisYaw );
 		else
-			RpcSubmitWindupTelegraph( active, attackType, basisYaw, isHeavy );
+			RpcSubmitWindupTelegraph( active, attackType, basisYaw );
 	}
 
-	void ApplyWindupTelegraphState( bool active, byte attackType, float basisYaw, bool isHeavy )
+	void ApplyWindupTelegraphState( bool active, byte attackType, float basisYaw )
 	{
 		_windupTelegraphActive = active;
 		_windupTelegraphAttackType = attackType;
 		_windupTelegraphBasisYaw = basisYaw;
-		_windupTelegraphHeavy = isHeavy;
 	}
 
-	void BroadcastWindupTelegraphIfHost( bool active, byte attackType, float basisYaw, bool isHeavy )
+	void BroadcastWindupTelegraphIfHost( bool active, byte attackType, float basisYaw )
 	{
 		var changed = active != _lastBroadcastWindupTelegraphActive
 		              || attackType != _lastBroadcastWindupTelegraphAttackType
-		              || isHeavy != _lastBroadcastWindupTelegraphHeavy
 		              || !_lastBroadcastWindupTelegraphValid
 		              || ( active && MathF.Abs( basisYaw - _lastBroadcastWindupTelegraphBasisYaw ) >= 0.4f );
 
@@ -787,13 +813,12 @@ public partial class PlayerCombat
 		_lastBroadcastWindupTelegraphActive = active;
 		_lastBroadcastWindupTelegraphAttackType = attackType;
 		_lastBroadcastWindupTelegraphBasisYaw = basisYaw;
-		_lastBroadcastWindupTelegraphHeavy = isHeavy;
 		_lastBroadcastWindupTelegraphValid = true;
-		RpcBroadcastWindupTelegraph( active, attackType, basisYaw, isHeavy );
+		RpcBroadcastWindupTelegraph( active, attackType, basisYaw );
 	}
 
 	[Rpc.Host]
-	void RpcSubmitWindupTelegraph( bool active, byte attackType, float basisYaw, bool isHeavy )
+	void RpcSubmitWindupTelegraph( bool active, byte attackType, float basisYaw )
 	{
 		if ( !Networking.IsHost || !GameObject.IsValid() )
 			return;
@@ -802,21 +827,21 @@ public partial class PlayerCombat
 		     && !ConnectionIdentity.SameClient( caller, owner ) )
 			return;
 
-		ApplyWindupTelegraphState( active, attackType, basisYaw, isHeavy );
-		BroadcastWindupTelegraphIfHost( active, attackType, basisYaw, isHeavy );
+		ApplyWindupTelegraphState( active, attackType, basisYaw );
+		BroadcastWindupTelegraphIfHost( active, attackType, basisYaw );
 	}
 
 	[Rpc.Broadcast( NetFlags.HostOnly )]
-	void RpcBroadcastWindupTelegraph( bool active, byte attackType, float basisYaw, bool isHeavy )
+	void RpcBroadcastWindupTelegraph( bool active, byte attackType, float basisYaw )
 	{
 		if ( Networking.IsHost )
 			return;
 
-		ApplyWindupTelegraphState( active, attackType, basisYaw, isHeavy );
+		ApplyWindupTelegraphState( active, attackType, basisYaw );
 	}
 
-	/// <summary>Thick line at the first attack-path sample — black (light) or white (heavy) until colored sweep rays begin.</summary>
-	void DrawMeleeAttackWindupTelegraph( byte attackType, float basisYaw, bool isHeavy )
+	/// <summary>Thick black line at the first attack-path sample until the coloured sweep rays begin.</summary>
+	void DrawMeleeAttackWindupTelegraph( byte attackType, float basisYaw )
 	{
 		if ( !GameObject.IsValid() )
 			return;
@@ -825,7 +850,7 @@ public partial class PlayerCombat
 		var origin = MeleeAttackPath.GetSwingPivotWorld( GameObject, this, attackType, basis );
 		MeleeAttackPath.EvaluateWorldBlade( GameObject, this, attackType, 0f, basis, out var tip, out _ );
 		var drawFor = MathF.Max( 0.03f, Time.Delta * 1.5f );
-		var color = isHeavy ? Color.White.WithAlpha( 0.92f ) : Color.Black.WithAlpha( 0.92f );
+		var color = Color.Black.WithAlpha( 0.92f );
 		var thickness = Math.Max( 2f, MeleeWindupTelegraphThickness );
 		DrawThickDebugLine( origin, tip, color, drawFor, thickness );
 		DrawThickDebugLineSphere( tip, thickness * 0.45f, color.WithAlpha( 0.85f ), drawFor );
@@ -950,19 +975,27 @@ public partial class PlayerCombat
 		readonly byte _attackType;
 		readonly ushort _sequence;
 		readonly ushort _instanceId;
-		readonly bool _isHeavy;
-		readonly float _windup;
+		float _windup;
 		readonly float _active;
 		readonly float _radius;
 		readonly float _substep;
 		readonly string _swingNote;
 		readonly bool _logHits;
 		readonly bool _visualOnly;
+		/// <summary>Player swings only: still held when the light windup ends → heavy (entities never turn heavy).</summary>
+		readonly bool _canTurnHeavy;
+		readonly float _heavyWindup;
+		bool _heavyDecided;
+		bool _isHeavy;
+		/// <summary>Heavy, button still down on the host's view: the cocked pose hangs until the release (or the max hold).</summary>
+		bool _heavyHolding;
+		readonly float _heavyMaxHold;
+		/// <summary>Host-decided at the start: static combo overhead bonus or the Q special multiplier (1 otherwise).</summary>
+		readonly float _damageScale;
+		bool _strikeCueSent;
+		bool _heavyReadySent;
 		readonly bool _allowMultiple;
 		readonly int _maxTargets;
-		readonly bool _isSpecial;
-		readonly float _specialLungeAtSeconds;
-		bool _specialLungeApplied;
 		bool _loggedAttackPhase;
 
 		readonly HashSet<Guid> _hitVictims = new();
@@ -984,34 +1017,28 @@ public partial class PlayerCombat
 		internal ServerMeleeAttackRuntime(
 			PlayerCombat pc,
 			in AttackReleaseIntent intent,
-			float holdSeconds,
-			bool isHeavy,
+			float telegraphedSeconds,
 			string swingNote,
-			bool visualOnly = false )
+			bool visualOnly = false,
+			bool canTurnHeavy = false,
+			float damageScale = 1f )
 		{
 			_pc = pc;
 			_intent = intent;
 			_attackType = pc.ResolveAttackTypeFromIntent( intent );
-			_isSpecial = _attackType == MeleeAttackTypes.Stab;
 			_sequence = intent.IntentSequence;
 			_instanceId = _nextMeleeAttackInstanceId++;
-			_isHeavy = isHeavy;
 			_visualOnly = visualOnly;
-			// Windup elapses while the button is held: a long hold releases straight into the sweep,
-			// a quick click still plays the remaining lift before damage starts. Initiative swaps in
-			// the class initiativeWindupSeconds (consumed — one follow-up per clean hit). The special
-			// attack is an instant press (hold 0) with its own class windup pair.
-			var timings = pc.GetMeleeWeaponTimings();
-			var initiativeArmed = !visualOnly && pc.ServerConsumeInitiativeArmed();
-			var windupBase = _isSpecial
-				? ( initiativeArmed ? timings.SpecialInitiativeWindupSeconds : timings.SpecialWindupSeconds )
-				: ( initiativeArmed ? timings.InitiativeWindupSeconds : timings.WindupSeconds );
-			_windup = Math.Max( 0f, windupBase - Math.Max( 0f, holdSeconds ) );
-			// Special: the lunge fires this long before the active window opens (windup-relative).
-			_specialLungeAtSeconds = _isSpecial
-				? Math.Max( 0f, _windup - Math.Max( 0f, pc.SpecialLungeLeadSeconds ) )
-				: 0f;
-			_active = MeleeAttackPath.GetActiveDurationSeconds( pc, _attackType, isHeavy );
+			// Click → damage is the class windup, always (no charge, no initiative). Entities that already
+			// showed their cocked pose before committing play only the rest of it.
+			// The Q special (sword / club stab) has its own, longer class windup.
+			var classWindup = intent.IsSpecial ? pc.GetMeleeWeaponTimings().SpecialWindupSeconds : pc.GetMeleeWindupSeconds();
+			_windup = Math.Max( 0f, classWindup - Math.Max( 0f, telegraphedSeconds ) );
+			_damageScale = damageScale;
+			_active = MeleeAttackPath.GetActiveDurationSeconds( pc );
+			_canTurnHeavy = canTurnHeavy && !visualOnly;
+			_heavyWindup = Math.Max( _windup, pc.GetMeleeWeaponTimings().HeavyWindupSeconds - Math.Max( 0f, telegraphedSeconds ) );
+			_heavyMaxHold = Math.Max( _heavyWindup, pc.HeavyMaxHoldSeconds );
 			_radius = Math.Max( 2f, pc.MeleeHitVolumeThickness );
 			_substep = Math.Max( 4f, pc.MeleeSweepSubstepLength );
 			_swingNote = swingNote;
@@ -1027,19 +1054,21 @@ public partial class PlayerCombat
 
 		internal ushort IntentSequence => _intent.IntentSequence;
 
-		/// <summary>Windup left to play after release (class windup minus hold, times initiative).</summary>
+		/// <summary>Windup left to play before the damage swoop opens.</summary>
 		internal float WindupRemainingSeconds => _windup;
 
 		internal bool IsInWindupPhase
 		{
 			get
 			{
+				// A heavy-capable swing is still winding up until the heavy decision is made at the light windup's end.
 				var elapsed = (float)( Time.NowDouble - _startedAtSandbox );
-				return elapsed < _windup;
+				return elapsed < _windup || (_canTurnHeavy && !_heavyDecided) || _heavyHolding;
 			}
 		}
 
 		internal bool IsHeavy => _isHeavy;
+
 
 		internal float GetActiveArcProgress01()
 		{
@@ -1070,15 +1099,44 @@ public partial class PlayerCombat
 			}
 
 			var elapsed = (float)( Time.NowDouble - _startedAtSandbox );
+
+			// End of the light windup: button still held (no release reached the host) and the heavy's extra stamina
+			// paid → heavy: the cocked pose keeps hanging to the heavy windup, then the same swoop hits harder.
+			if ( !_heavyDecided && elapsed >= _windup )
+			{
+				_heavyDecided = true;
+				if ( _canTurnHeavy && !_pc.HostWasPrimaryAttackReleased( _sequence ) && _pc.HostTrySpendHeavyStamina() )
+				{
+					_isHeavy = true;
+					_heavyHolding = true;
+					_pc.HostNoteComboBrokenByHeavy();
+					_pc.LogMeleePhasePulse( "Heavy", $"held past the windup — strikes on release (≥ {_heavyWindup:0.###}s), x{_pc.GetMeleeWeaponTimings().HeavyDamageMultiplier:0.##} damage" );
+				}
+			}
+
+			// Heavy: hang in the cocked pose while the button is down; the release (or the max hold) is the strike,
+			// never earlier than the heavy windup.
+			if ( _heavyHolding )
+			{
+				if ( _pc.HostWasPrimaryAttackReleased( _sequence ) || elapsed >= _heavyMaxHold )
+				{
+					_heavyHolding = false;
+					_windup = Math.Max( _heavyWindup, elapsed );
+				}
+				else
+					_windup = Math.Max( _heavyWindup, elapsed + 0.05f );
+			}
+
+			// Heavy-ready glint for every other peer, at the heavy windup on the host's clock.
+			if ( _isHeavy && !_heavyReadySent && elapsed >= _heavyWindup )
+			{
+				_heavyReadySent = true;
+				_pc.ServerBroadcastHeavyReady();
+			}
+
 			var windEnd = _windup;
 			var activeEnd = windEnd + _active;
 
-			// Special stab: authoritative lunge, timed to land shortly before the thrust goes active.
-			if ( _isSpecial && !_visualOnly && !_specialLungeApplied && elapsed >= _specialLungeAtSeconds )
-			{
-				_specialLungeApplied = true;
-				_pc.ServerApplySpecialLunge();
-			}
 
 			// Path overlay: visual-only replay draws for clients. Authority also draws unless a
 			// visual companion is already running (avoids double lines on listen-server host).
@@ -1097,12 +1155,19 @@ public partial class PlayerCombat
 			if ( !_visualOnly && !_loggedAttackPhase )
 			{
 				_loggedAttackPhase = true;
+				if ( !_strikeCueSent )
+				{
+					_strikeCueSent = true;
+					_pc.ServerOnStrikeStarted( _attackType );
+				}
 				_pc.LogMeleePhaseEnter( "attack phase",
 					$"duration={_active:0.###}s type={MeleeAttackTypes.Label( _attackType )}" );
 			}
 
 			if ( elapsed >= activeEnd )
 			{
+				// The last frame of the window usually lands short of 1: close the ribbon to the end of the arc.
+				_pc.FeedSwingVfxFromDamageArc( _attackType, 1f );
 				_debugDrawScratch.Reset();
 				TrySendCompletion();
 				return false;
@@ -1128,7 +1193,7 @@ public partial class PlayerCombat
 			if ( !_visualOnly && !_stopHitValidation )
 			{
 				const byte hitState = MeleeAttackStates.Active;
-				var damage = _isSpecial ? _pc.GetMeleeSpecialDamage() : _pc.GetMeleeDamage( _isHeavy );
+				var damage = _pc.GetMeleeDamage( _isHeavy, _damageScale );
 				var stagger = _pc.GetMeleeStagger();
 				var hitRadius = Math.Max( 2f, _pc.MeleeHitVolumeThickness );
 				var basis = _pc.GetMeleeCombatBasisRotation( _attackType );
@@ -1153,7 +1218,6 @@ public partial class PlayerCombat
 					stagger,
 					hitState,
 					_attackType,
-					_isHeavy,
 					_instanceId,
 					_swingNote,
 					_logHits,
@@ -1177,7 +1241,6 @@ public partial class PlayerCombat
 						hitState,
 						_attackType,
 						_intent.SwingDir,
-						_isHeavy,
 						_instanceId,
 						_swingNote,
 						_logHits,
@@ -1185,8 +1248,10 @@ public partial class PlayerCombat
 						OnHit );
 				}
 
-				// End this attack action immediately on first relevant contact (hit or block).
-				if ( _stopHitValidation )
+				// A blocked / parried swing bounces off: it ends on contact and the attacker's lockout starts now.
+				// A landed hit keeps sweeping (no more hit checks) to the end of the damage swoop, so hitting
+				// never makes the next attack come sooner (Mark 2026-11-04: "attack speed does not change").
+				if ( _stopHitValidation && (_wasBlocked || _wasParried) )
 				{
 					_debugDrawScratch.Reset();
 					TrySendCompletion();
@@ -1210,6 +1275,9 @@ public partial class PlayerCombat
 				_wasParried = true;
 			if ( _firstHitTargetId == Guid.Empty && hit.TargetId != Guid.Empty )
 				_firstHitTargetId = hit.TargetId;
+			// A heavy that is blocked (not parried) breaks the guard.
+			if ( _isHeavy && !_visualOnly && hit.WasBlocked && !hit.WasParried )
+				_pc.ServerBreakGuard( hit.TargetId );
 		}
 
 		void TrySendCompletion()

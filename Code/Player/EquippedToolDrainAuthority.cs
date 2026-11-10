@@ -40,7 +40,7 @@ public static class EquippedToolDrainAuthority
 			while ( progress >= drainSeconds )
 			{
 				progress -= drainSeconds;
-				if ( hotbar.HostAddWearToSlot( slotIndex, 1 ) >= ToolDurability.GetMax( slot.ResourceId ) )
+				if ( hotbar.HostAddWearToSlot( slotIndex, 1 ) >= ToolDurability.GetMax( slot ) )
 				{
 					progress = 0f;
 					break;

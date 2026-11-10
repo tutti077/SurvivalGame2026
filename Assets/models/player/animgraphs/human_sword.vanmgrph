@@ -2605,6 +2605,30 @@
 				m_maxValue = 3
 			},
 			{
+				_class = "CBoolAnimParameter"
+				m_name = "b_sword_interrupt"
+				m_id =
+				{
+					m_id = 1860011003
+				}
+				m_previewButton = "ANIMPARAM_BUTTON_NONE"
+				m_bUseMostRecentValue = true
+				m_bAutoReset = false
+				m_bDefaultValue = false
+			},
+			{
+				_class = "CBoolAnimParameter"
+				m_name = "b_sword_guard"
+				m_id =
+				{
+					m_id = 1860011004
+				}
+				m_previewButton = "ANIMPARAM_BUTTON_NONE"
+				m_bUseMostRecentValue = true
+				m_bAutoReset = false
+				m_bDefaultValue = false
+			},
+			{
 				_class = "CFloatAnimParameter"
 				m_name = "speed_reload"
 				m_id = 

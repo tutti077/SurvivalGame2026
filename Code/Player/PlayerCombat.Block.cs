@@ -5,11 +5,14 @@ namespace Survival;
 
 public partial class PlayerCombat
 {
-	/// <summary>Host: apply JSON block costs, then the blocker's reaction (parry = none, heavy block = hit reaction).</summary>
-	internal void ServerApplyBlockOutcome( in MeleeBlockOutcome outcome, Component attacker )
+	/// <summary>Host: apply the JSON block / parry costs to the blocker and use up the guard.</summary>
+	internal void ServerApplyBlockOutcome( in MeleeBlockOutcome outcome, Component attacker, Vector3 hitWorld )
 	{
 		if ( !IsServerSideForMeleeAuthority() )
 			return;
+
+		ServerBroadcastBlockSparks( hitWorld );
+		PlaytestLog.HostBlocked( this, attacker, in outcome );
 
 		var vitals = Components.Get<PlayerVitals>();
 		if ( vitals is not null )
@@ -21,10 +24,9 @@ public partial class PlayerCombat
 				vitals.ApplyDamageAfterArmor( outcome.HealthDamage, attacker );
 		}
 
-		var wasHeavy = outcome.OutcomeId.StartsWith( "heavy", StringComparison.OrdinalIgnoreCase );
 		var wasParry = outcome.WasPerfectParry;
 
-		ConsumeAuthoritativeMeleeBlock( attackWasHeavy: wasHeavy, wasPerfectParry: wasParry );
+		ConsumeAuthoritativeMeleeBlock( wasPerfectParry: wasParry );
 
 		// Parry Recharge augment: a perfect parry opens a short stamina regen boost window.
 		if ( wasParry && vitals is not null
@@ -32,19 +34,16 @@ public partial class PlayerCombat
 		     && augments.TryGetActiveDefinition( AugmentAbility.ParryRecharge, out var parryDef ) )
 			vitals.HostBeginStaminaRegenBoost( parryDef.EffectSeconds, parryDef.EffectScale );
 
-		if ( !wasParry && wasHeavy )
-			ServerBeginHitReaction( RecoveryDefenderHeavyBlockSeconds );
-
 		Log.Info(
 			$"[MeleeBlock] outcome {GameObject.Name}: {outcome.OutcomeId} tier={outcome.Tier} "
 			+ $"duration={outcome.DurationSeconds:0.###}s hp={outcome.HealthDamage:0.#} stam={outcome.StaminaCost:0.#} parry={outcome.WasPerfectParry}" );
 	}
 
-	[Property, Group( "Combat — Block" ), Title( "Show block guard + ground arc" )]
-	public bool ShowBlockVisualization { get; set; } = true;
+	[Property, Group( "Combat — Block" ), Title( "Show block guard + ground arc (debug)" )]
+	public bool ShowBlockVisualization { get; set; }
 
-	[Property, Group( "Combat — Block" ), Title( "Show block footprint volume (wedge fill)" )]
-	public bool ShowBlockFootprintVolume { get; set; } = true;
+	[Property, Group( "Combat — Block" ), Title( "Show block footprint volume (debug wedge fill)" )]
+	public bool ShowBlockFootprintVolume { get; set; }
 
 	[Property, Group( "Combat — Block" ), Title( "Footprint volume fill alpha" )]
 	public float BlockFootprintFillAlpha { get; set; } = 0.09f;
@@ -67,7 +66,11 @@ public partial class PlayerCombat
 	[Property, Group( "Combat — Block" ), Title( "Ground arc height offset" )]
 	public float BlockGroundArcHeightOffset { get; set; } = 2f;
 
-	[Property, Group( "Combat — Block" ), Title( "Parry window (s)" ), Range( 0f, 0.5f ), Step( 0.01f ), Description( "Block started within this many seconds of the hit = perfect parry. Block viz lines are white during this window." )]
+	/// <summary>Click → guard up (Mark 2026-11-04: 50 ms). The guard blocks nothing before this, and the shield / sword block pose finish raising in the same time.</summary>
+	[Property, Group( "Combat — Block" ), Title( "Block raise time (s)" ), Range( 0f, 0.3f ), Step( 0.01f ), Description( "Press → the block actually stops hits. Hits landing earlier go through; the parry window starts when the guard is up." )]
+	public float BlockRaiseSeconds { get; set; } = 0.05f;
+
+	[Property, Group( "Combat — Block" ), Title( "Parry window (s)" ), Range( 0f, 0.5f ), Step( 0.01f ), Description( "Hit within this many seconds of the guard coming up = perfect parry. Block viz lines are white during this window." )]
 	public float MeleeBlockParryWindowSeconds { get; set; } = 0.2f;
 
 	[Property, Group( "Combat — Block" ), Title( "Standard block free hold (s)" ), Range( 0f, 10f ), Step( 0.25f ), Description( "From block start (parry window included): holding guard costs nothing for this long. Past it the long block phase drains stamina." )]
@@ -90,6 +93,8 @@ public partial class PlayerCombat
 	byte _authoritativeMeleeBlockDirection = SwingDirs.Up;
 
 	bool _hostReportedBlockActive;
+	/// <summary>Host, remote owner: the guard was used up (block landed / broken) — ignore "held" reports until the owner reports a release.</summary>
+	bool _hostBlockAwaitingRelease;
 	byte _hostReportedBlockDirection = SwingDirs.Up;
 	float _hostReportedBlockBasisYaw;
 
@@ -139,15 +144,12 @@ public partial class PlayerCombat
 
 	public double ServerBlockStartedAtSandbox => _serverBlockStartedAtSandbox;
 
+	/// <summary>Host time the guard actually blocks from: block start + <see cref="BlockRaiseSeconds"/>.</summary>
+	public double ServerBlockActiveFromSandbox => _serverBlockStartedAtSandbox + Math.Max( 0f, BlockRaiseSeconds );
+
 	public byte GetActiveBlockDirection() => GetBlockGuardDirection();
 
 	public bool BlockDirectionChangedThisFrame => _blockDirectionChangedThisFrame;
-
-	public float GetMeleeBlockStaminaCost( bool attackWasHeavy )
-	{
-		var outcome = MeleeBlockStaggerCatalog.Resolve( attackWasHeavy, perfectParry: false );
-		return Math.Max( 0f, outcome.StaminaCost );
-	}
 
 	internal int GetBlockGuardSampleCount() =>
 		(int)Math.Clamp( BlockGuardSampleCount, 4f, 48f );
@@ -179,7 +181,7 @@ public partial class PlayerCombat
 			return;
 
 		if ( !vitals.TrySpendStamina( drain ) )
-			ConsumeAuthoritativeMeleeBlock( attackWasHeavy: false );
+			ConsumeAuthoritativeMeleeBlock();
 	}
 
 	internal void OnBlockPressCommitGuardDirection()
@@ -195,7 +197,7 @@ public partial class PlayerCombat
 			return;
 
 		var blockHeld = LocalBlockInputActive();
-		var attacking = _primary.Down || ServerHasActiveMeleeAttackAction;
+		var attacking = _ownerExpectsHostMeleeBusy || ServerHasActiveMeleeAttackAction;
 
 		if ( blockHeld )
 		{
@@ -219,9 +221,9 @@ public partial class PlayerCombat
 
 	void CancelAllAttackActivity()
 	{
+		// Right click (guard) cancels the queued click and a held / charging heavy alike.
 		ClearQueuedAttackPress();
-		// Raising the guard also cancels a charging special before it can auto-fire.
-		ClearSpecialAttackChargeState();
+		ClearOwnerSwingTracking();
 		Components.Get<PlayerAnimation>()?.CancelMeleeSwingSnap();
 		ServerCancelMeleeAttack();
 		// Pure clients never run ServerCancelMeleeAttack locally — still unlock Attack1 immediately.
@@ -254,7 +256,10 @@ public partial class PlayerCombat
 
 		if ( IsServerSideForMeleeAuthority() && !IsLocalCombatDriver() )
 		{
-			SetAuthoritativeMeleeBlockState( _hostReportedBlockActive, _hostReportedBlockDirection, _hostReportedBlockBasisYaw );
+			// Same gates as the owner's own input (CanStartBlock / LocalBlockInputActive): a used-up guard stays down
+			// until released, and a lockout (blocked / parried swing, guard break) allows no guard.
+			var hostActive = _hostReportedBlockActive && !_hostBlockAwaitingRelease && !IsCombatActionLocked;
+			SetAuthoritativeMeleeBlockState( hostActive, _hostReportedBlockDirection, _hostReportedBlockBasisYaw );
 			return;
 		}
 
@@ -284,6 +289,11 @@ public partial class PlayerCombat
 	void SetAuthoritativeMeleeBlockState( bool active, byte direction, float? remoteBasisYaw = null )
 	{
 		var now = Time.NowDouble;
+
+		// Guard up after the punch lock: drop what is left of the punch pose so the guard shows.
+		if ( active && !_authoritativeMeleeBlockActive && IsServerSideForMeleeAuthority()
+		     && _combatRecoveryAnim == CombatRecoveryAnim.MeleePunchLeft && !IsInCombatRecovery )
+			ClearCombatRecoveryPresentation();
 
 		if ( active && !_authoritativeMeleeBlockActive )
 			_serverBlockStartedAtSandbox = now;
@@ -381,6 +391,8 @@ public partial class PlayerCombat
 	void HostAcceptBlockState( bool active, byte direction, double blockPressedSandboxTime, float basisYaw )
 	{
 		_hostReportedBlockActive = active;
+		if ( !active )
+			_hostBlockAwaitingRelease = false;
 		if ( direction is SwingDirs.Left or SwingDirs.Right or SwingDirs.Up )
 			_hostReportedBlockDirection = direction;
 		_hostReportedBlockBasisYaw = basisYaw;
@@ -390,10 +402,11 @@ public partial class PlayerCombat
 
 		if ( !IsLocalCombatDriver() )
 		{
-			if ( active && !_authoritativeMeleeBlockActive && blockPressedSandboxTime > 1e-6 )
+			var guardAllowed = active && !_hostBlockAwaitingRelease && !IsCombatActionLocked;
+			if ( guardAllowed && !_authoritativeMeleeBlockActive && blockPressedSandboxTime > 1e-6 )
 				_serverBlockStartedAtSandbox = blockPressedSandboxTime;
 
-			SetAuthoritativeMeleeBlockState( active, direction, basisYaw );
+			SetAuthoritativeMeleeBlockState( guardAllowed, direction, basisYaw );
 		}
 	}
 
@@ -424,12 +437,14 @@ public partial class PlayerCombat
 			return;
 	}
 
-	internal void ConsumeAuthoritativeMeleeBlock( bool attackWasHeavy, bool wasPerfectParry = false )
+	internal void ConsumeAuthoritativeMeleeBlock( bool wasPerfectParry = false )
 	{
 		if ( !IsServerSideForMeleeAuthority() )
 			return;
 
-		_ = attackWasHeavy;
+		if ( !IsLocalCombatDriver() )
+			_hostBlockAwaitingRelease = true;
+
 		SetAuthoritativeMeleeBlockState( false, _authoritativeMeleeBlockDirection );
 
 		if ( GameObject.Network is { Active: true } )
