@@ -58,4 +58,27 @@ public static class TerrainGroundSplat
 				: new Vector4( Math.Clamp( sample.Beach01, 0f, 1f ), wet * wet * (3f - (2f * wet)), 0f, 0f );
 		}
 	}
+
+	/// <summary>
+	/// Generated tilled soil (<see cref="TerrainGroundPatch"/>, the wild-wheat beds) on a near chunk's vertices: the same contract
+	/// as the hoe's tilled paint on voxel ground (<c>VoxelMesher</c>) — sand under it (X, so pixel_lit's darkening turns to
+	/// earth brown instead of canopy green) and the darkening channel (Z), both = coverage × 1.5 (saturated). Equal on purpose:
+	/// the shader turns Z brown only where X ≥ 0.5, so sand ahead of the darkening drew a pale sand ring round the soil
+	/// (2026-11-02 first look); equal channels leave a soft dark fringe instead. Near tier only: Z is the canopy on the far tier.
+	/// </summary>
+	public static void ApplyTilledPatches( TerrainGroundPatch[] patches, float chunkMinX, float chunkMinY, float step, int verticesPerSide, Vector4[] splat )
+	{
+		if ( patches is null || patches.Length == 0 )
+			return;
+		var count = verticesPerSide * verticesPerSide;
+		for ( var i = 0; i < count; i++ )
+		{
+			var c = TerrainGroundPatch.CoverageAt( patches, chunkMinX + ((i % verticesPerSide) * step), chunkMinY + ((i / verticesPerSide) * step) );
+			if ( c <= 0f )
+				continue;
+			var s = splat[i];
+			var t = Math.Clamp( c * 1.5f, 0f, 1f );
+			splat[i] = new Vector4( MathF.Max( s.x, t ), s.y, MathF.Max( s.z, t ), s.w );
+		}
+	}
 }

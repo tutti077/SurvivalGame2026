@@ -6,7 +6,7 @@
     "Name": "sampleBush",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
-    "Scale": "0.400000006,0.400000006,0.400000006",
+    "Scale": "1,1,1",
     "Tags": "",
     "Enabled": true,
     "NetworkMode": 1,
@@ -26,7 +26,7 @@
         "MaterialGroup": null,
         "MaterialOverride": null,
         "Materials": null,
-        "Model": "models/8riv_wildbush_b02.vmdl",
+        "Model": "models/environment/cloverHills/groundFoliage/blueberry_bush2.vmdl",
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
@@ -113,8 +113,6 @@
   "MenuPath": null,
   "MenuIcon": null,
   "DontBreakAsTemplate": false,
-  "__references": [
-    "orus.8riv_wildbush_b02#33982"
-  ],
+  "__references": [],
   "__version": 2
 }

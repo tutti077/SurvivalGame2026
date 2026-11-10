@@ -81,10 +81,19 @@ public static class HandHarvestTargeting
 		return true;
 	}
 
+	/// <summary>
+	/// Ground forage (daisies, mushrooms, wheat …) has its origin on - or a hair under - the terrain surface, so a
+	/// ray to the origin itself ends in the ground. Aim a little above it and let anything that stops this
+	/// close to the plant count as reaching it.
+	/// </summary>
+	const float LosTargetLift = 8f;
+	const float LosReachedSlack = 14f;
+
 	static bool HasClearLineToNode( Scene scene, Vector3 from, Vector3 to, GameObject harvesterRoot, ResourceItemDefinition node, out string failReason )
 	{
 		failReason = null;
 
+		to += Vector3.Up * LosTargetLift;
 		var delta = to - from;
 		if ( delta.LengthSquared <= 1e-6f )
 			return true;
@@ -96,9 +105,7 @@ public static class HandHarvestTargeting
 		if ( ResourceHarvestTrace.TryFindOnHierarchy( tr.GameObject, out var hitNode ) && hitNode == node )
 			return true;
 
-		if ( Vector3.DistanceBetween( tr.HitPosition, to ) <= 20f
-		     && ResourceHarvestTrace.TryFindOnHierarchy( tr.GameObject, out hitNode )
-		     && hitNode == node )
+		if ( Vector3.DistanceBetween( tr.HitPosition, to ) <= LosReachedSlack )
 			return true;
 
 		failReason = "blocked line of sight";

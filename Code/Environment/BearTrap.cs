@@ -400,7 +400,8 @@ public sealed class BearTrap : Component
 	// ------------------------------------------------------------------
 
 	/// <summary>Walk up from a touching collider to the pawn / entity root and read its trap size.</summary>
-	static bool TryResolveVictimRoot( GameObject start, out GameObject root, out bool isPlayer, out TrapSize size )
+	/// <summary>Walks up from a hit object to the creature root: entities by <see cref="EntityLocomotion"/>, players by <see cref="PlayerMovement"/>; the bola shares it.</summary>
+	internal static bool TryResolveVictimRoot( GameObject start, out GameObject root, out bool isPlayer, out TrapSize size )
 	{
 		root = null;
 		isPlayer = false;

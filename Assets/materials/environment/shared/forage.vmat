@@ -1,0 +1,12 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+	F_ALPHA_TEST 1
+	F_RENDER_BACKFACES 1
+
+	PixelRoughness "0.900"
+	PixelFlatShading "1.000"
+	PixelAlphaCutoff "0.500"
+	TextureColor "materials/environment/shared/forage_palette.png"
+	TextureTranslucency "materials/environment/shared/forage_palette_mask.png"
+}

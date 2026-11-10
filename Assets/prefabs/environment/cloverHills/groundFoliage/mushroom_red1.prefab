@@ -1,0 +1,112 @@
+{
+  "RootObject": {
+    "__guid": "59d88e4a-5fdc-4281-add7-c3b4d93c34b2",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "mushroom_red1",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "",
+    "Enabled": true,
+    "NetworkMode": 1,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 1,
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "6fe23880-62c3-424d-b9de-bc80042258f4",
+        "__enabled": true,
+        "Flags": 0,
+        "BodyGroups": 18446744073709551615,
+        "CreateAttachments": false,
+        "LodOverride": null,
+        "MaterialGroup": null,
+        "MaterialOverride": null,
+        "Materials": null,
+        "Model": "models/environment/cloverHills/groundFoliage/mushroom_red1.vmdl",
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "RenderOptions": {
+          "GameLayer": true,
+          "OverlayLayer": false,
+          "BloomLayer": false,
+          "AfterUILayer": false
+        },
+        "RenderType": "On",
+        "Tint": "1,1,1,1"
+      },
+      {
+        "__type": "Survival.ResourceItemDefinition",
+        "__guid": "6cd08b8d-7def-4122-8294-fdb34ccc868b",
+        "__enabled": true,
+        "Flags": 0,
+        "AutoEnsureTraceCollider": true,
+        "BaseYieldPerTickHigh": 1,
+        "BaseYieldPerTickLow": 1,
+        "HarvestYields": [
+          {
+            "AmountHigh": 1,
+            "AmountLow": 1,
+            "ChancePercent": 100,
+            "ResourceId": "food_mushroom"
+          }
+        ],
+        "DisplayName": "Mushroom",
+        "FallbackColor": "0.65,0.5,0.35,1",
+        "HandHarvestRange": 80,
+        "Harvestable": true,
+        "HarvestTicksUntilGone": 1,
+        "HideModelWhenDepleted": true,
+        "Icon": "ui/items/food_mushroom.png",
+        "LogHarvest": false,
+        "MaxStack": 20,
+        "MinimumToolTier": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "ResourceId": "world_mushroom",
+        "RespawnRateSeconds": 300,
+        "ToolTypeRequired": "Hand"
+      }
+    ],
+    "Children": [],
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

@@ -1,0 +1,118 @@
+{
+  "RootObject": {
+    "__guid": "d3742267-5106-4211-9877-d37d7e06d278",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "blueberry_bush1",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "",
+    "Enabled": true,
+    "NetworkMode": 1,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 1,
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "40a74408-b170-46b0-b493-1af07d20fc25",
+        "__enabled": true,
+        "Flags": 0,
+        "BodyGroups": 18446744073709551615,
+        "CreateAttachments": false,
+        "LodOverride": null,
+        "MaterialGroup": null,
+        "MaterialOverride": null,
+        "Materials": null,
+        "Model": "models/environment/cloverHills/groundFoliage/blueberry_bush1.vmdl",
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "RenderOptions": {
+          "GameLayer": true,
+          "OverlayLayer": false,
+          "BloomLayer": false,
+          "AfterUILayer": false
+        },
+        "RenderType": "On",
+        "Tint": "1,1,1,1"
+      },
+      {
+        "__type": "Survival.ResourceItemDefinition",
+        "__guid": "ddd49e92-1db4-4b65-95a3-6cdd82106951",
+        "__enabled": true,
+        "Flags": 0,
+        "AutoEnsureTraceCollider": true,
+        "BaseYieldPerTickHigh": 1,
+        "BaseYieldPerTickLow": 1,
+        "HarvestYields": [
+          {
+            "AmountHigh": 4,
+            "AmountLow": 2,
+            "ChancePercent": 100,
+            "ResourceId": "food_blueberry"
+          },
+          {
+            "AmountHigh": 1,
+            "AmountLow": 1,
+            "ChancePercent": 30,
+            "ResourceId": "seed_blueberry"
+          }
+        ],
+        "DisplayName": "Blueberry Bush",
+        "FallbackColor": "0.3,0.35,0.7,1",
+        "HandHarvestRange": 80,
+        "Harvestable": true,
+        "HarvestTicksUntilGone": 3,
+        "HideModelWhenDepleted": false,
+        "Icon": "ui/items/food_blueberry.png",
+        "LogHarvest": false,
+        "MaxStack": 20,
+        "MinimumToolTier": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "ResourceId": "world_blueberrybush",
+        "RespawnRateSeconds": 600,
+        "ToolTypeRequired": "Hand"
+      }
+    ],
+    "Children": [],
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

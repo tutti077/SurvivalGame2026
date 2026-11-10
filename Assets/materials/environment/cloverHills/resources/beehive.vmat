@@ -1,0 +1,9 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.950"
+	PixelSpecular "0.300"
+	PixelFlatShading "1.000"
+	TextureColor "materials/environment/cloverHills/resources/beehive.png"
+}

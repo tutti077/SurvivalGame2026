@@ -62,7 +62,7 @@
         "FallbackColor": "0.46512,0.23688,0.00865,1",
         "HandHarvestRange": 80,
         "Harvestable": true,
-        "HarvestTicksUntilGone": 3,
+        "HarvestTicksUntilGone": 1,
         "HideModelWhenDepleted": true,
         "Icon": "ui/items/resource_woodBasic.png",
         "LogHarvest": false,
