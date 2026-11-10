@@ -5,7 +5,7 @@
   "Ident": "survivalgamebasics",
   "Schema": 1,
   "IncludeSourceFiles": false,
-  "Resources": null,
+  "Resources": "// Loose files the game reads at runtime through FileSystem.Mounted. The editor host only sends compiled\n// _c files to joining clients by itself; everything listed here is sent too (Mark 2026-11-04: MP clients had\n// no catalogs, UI art or music). The game is never published, so this list is the only way clients get them.\ndata/*.json\nui/*.png\nui/*.jpg\nsounds/music/*.mp3\nmaterials/water/water_caustics.png\nterrain/preview/.latest_preview.json\nterrain/preview/*.json",
   "PublishUsedAssetsOnly": false,
   "PackageReferences": [],
   "EditorReferences": null,

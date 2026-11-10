@@ -342,6 +342,9 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 	public void SetActivePage( string pageId )
 
 	{
+		if ( IsPageLocked( pageId ) )
+			return;
+
 
 		if ( !IsMenuOpen )
 
@@ -373,9 +376,19 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 
 
 
+	/// <summary>The map page stays shut while the pawn rides / wakes from its stasis pod (<see cref="PlayerMovement.MapDiscoveryLocked"/>).</summary>
+	bool IsPageLocked( string pageId )
+	{
+		return pageId == MenuPageIds.Map && Components.Get<PlayerMovement>() is { IsValid: true, MapDiscoveryLocked: true };
+	}
+
 	void HandlePageHotkey( string pageId )
 
 	{
+		// Map discovery is locked during the stasis pod arrival (Mark 2026-11-09): the page will not open while the view is dark.
+		if ( IsPageLocked( pageId ) )
+			return;
+
 
 		if ( !IsMenuOpen )
 
@@ -410,6 +423,9 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 	void OpenPage( string pageId )
 
 	{
+		if ( IsPageLocked( pageId ) )
+			return;
+
 
 		ApplyPage( pageId );
 

@@ -21,6 +21,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		( "audio", "Audio" ),
 		( "video", "Video" ),
 		( "player_stats", "Player stats" ),
+		( "dev_tools", "Dev tools" ),
 	};
 
 	Panel _sectionRoot;
@@ -35,6 +36,14 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 	readonly Dictionary<string, Panel> _subPageById = new();
 	readonly List<SettingsMenuButtonPanel> _rootButtons = new();
 	readonly List<SettingsMenuButtonPanel> _controlSchemeButtons = new();
+	readonly List<SettingsMenuButtonPanel> _devToolButtons = new();
+	Label _staticComboLabel;
+	Label _wasdFacingLabel;
+	Label _allCraftingLabel;
+	Label _staminaLabel;
+	Label _dayLockLabel;
+	SettingsMenuButtonPanel _staminaButton;
+	SettingsMenuButtonPanel _dayLockButton;
 	SettingsMenuBackButtonPanel _backButton;
 	string _activeSubPageId;
 
@@ -138,6 +147,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		AddMenuButton( buttonColumn, "audio", "Audio" );
 		AddMenuButton( buttonColumn, "video", "Video" );
 		AddMenuButton( buttonColumn, "player_stats", "Player stats" );
+		AddMenuButton( buttonColumn, "dev_tools", "Dev tools" );
 		AddMenuButton( buttonColumn, "quit_menu", "Quit to menu" );
 		AddMenuButton( buttonColumn, "quit_desktop", "Quit to desktop" );
 
@@ -206,6 +216,27 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 			AddControlSchemeButton( body, "grapple_pro", "Pro (E / Q)" );
 			AddControlSchemeButton( body, "grapple_training", "Training Wheels (Space / Ctrl)" );
 		}
+		else if ( string.Equals( pageId, "dev_tools", StringComparison.OrdinalIgnoreCase ) )
+		{
+			// Dev toggles (DevToolsSettings): one fixed-width button per flag, its label reads the current state.
+			var column = new Panel { Parent = body };
+			column.Style.Set( "flex-direction", "column" );
+			column.Style.Set( "align-items", "stretch" );
+			column.Style.Set( "gap", $"{ButtonGap}px" );
+			column.Style.Width = Length.Pixels( ButtonWidth + 120f );
+
+			AddDevToolHint( column, "Your player: quick clicks go right, left, overhead; hold for a heavy; Q on the ground stabs." );
+			_staticComboLabel = AddDevToolButton( column, "dev_static_combo", out _ );
+			AddDevToolHint( column, "Your player: W/A/S/D turn the body to walk that way - S walks toward the camera. Off: face the camera, strafe and back-pedal. Guard and swings face the camera either way." );
+			_wasdFacingLabel = AddDevToolButton( column, "dev_wasd_facing", out _ );
+			AddDevToolHint( column, "Crafting menu: every recipe in your pocket and free (dev), or only where it belongs - workbench and stations." );
+			_allCraftingLabel = AddDevToolButton( column, "dev_all_crafting", out _ );
+
+			AddDevToolHint( column, "Everyone on the server (host only):" ).Style.Set( "margin-top", "14px" );
+			_staminaLabel = AddDevToolButton( column, "dev_stamina", out _staminaButton );
+			_dayLockLabel = AddDevToolButton( column, "dev_day_lock", out _dayLockButton );
+			RefreshDevToolLabels();
+		}
 		else
 		{
 			var placeholder = new Label { Parent = body, Text = $"{titleText} options coming soon." };
@@ -225,8 +256,24 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 			Section = this,
 			ActionId = actionId
 		};
-		StyleMenuButton( row, UiButton.Default );
+		var kind = ButtonKindFor( actionId );
+		StyleMenuButton( row, kind );
 		_rootButtons.Add( row );
+
+		var label = new Label { Parent = row, Text = labelText };
+		UiStyle.ButtonLabel( label, kind, CraftingMenuSection.ItemNameFontSize );
+	}
+
+	void AddControlSchemeButton( Panel parent, string actionId, string labelText )
+	{
+		var row = new SettingsMenuButtonPanel
+		{
+			Parent = parent,
+			Section = this,
+			ActionId = actionId
+		};
+		StyleMenuButton( row, UiButton.Default );
+		_controlSchemeButtons.Add( row );
 
 		var label = new Label { Parent = row, Text = labelText };
 		UiStyle.ButtonLabel( label, UiButton.Default, CraftingMenuSection.ItemNameFontSize );
@@ -259,22 +306,6 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		return label;
 	}
 
-	void AddControlSchemeButton( Panel parent, string actionId, string labelText )
-	{
-		var row = new SettingsMenuButtonPanel
-		{
-			Parent = parent,
-			Section = this,
-			ActionId = actionId
-		};
-		var kind = ButtonKindFor( actionId );
-		StyleMenuButton( row, kind );
-		_controlSchemeButtons.Add( row );
-
-		var label = new Label { Parent = row, Text = labelText };
-		UiStyle.ButtonLabel( label, kind, CraftingMenuSection.ItemNameFontSize );
-	}
-
 	/// <summary>Quit actions are destructive; everything else is a plain menu button.</summary>
 	static UiButton ButtonKindFor( string actionId ) =>
 		actionId is "quit_menu" or "quit_desktop" ? UiButton.Danger : UiButton.Default;
@@ -283,6 +314,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 	void RefreshDevToolLabels()
 	{
 		SetLabel( _staticComboLabel, $"Static 3-hit combo: {OnOff( DevToolsSettings.StaticMeleeCombo )}" );
+		SetLabel( _wasdFacingLabel, $"Body turns with WASD: {OnOff( DevToolsSettings.WasdBodyFacing )}" );
 		SetLabel( _allCraftingLabel, GameHacks.AllCrafting ? "Recipes: all in pocket, free" : "Recipes: stations only" );
 
 		// Clients see the host-wide state greyed out; only the host's click changes it.
@@ -308,8 +340,6 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 	static void StyleMenuButton( Panel row, UiButton kind )
 	{
 		row.Style.Set( "flex-direction", "row" );
-		row.Style.Set( "align-items", "center" );
-		row.Style.Set( "justify-content", "center" );
 		row.Style.Set( "width", "100%" );
 		row.Style.PaddingTop = Length.Pixels( 10f );
 		row.Style.PaddingBottom = Length.Pixels( 10f );
@@ -319,32 +349,6 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		row.Style.Set( "pointer-events", "none" );
 	}
 
-	/// <summary>Soft-cursor Attack1 — OS mouse is Hidden while the menu is open.</summary>
-	public bool TryInvokeAtScreen( Vector2 screenPos )
-	{
-		if ( !_menuOpen || !_panelVisible )
-			return false;
-
-		var onRoot = string.IsNullOrEmpty( _activeSubPageId );
-		if ( !onRoot )
-		{
-			if ( _backButton is not null && _backButton.IsValid()
-			     && InventoryScreenPointer.PanelBoxContainsScreen( _backButton, screenPos ) )
-			{
-				NavigateToRoot();
-				return true;
-			}
-
-			if ( string.Equals( _activeSubPageId, "controls", StringComparison.OrdinalIgnoreCase ) )
-			{
-				for ( var i = 0; i < _controlSchemeButtons.Count; i++ )
-				{
-					var button = _controlSchemeButtons[i];
-					if ( button is null || !button.IsValid() )
-						continue;
-
-					if ( !InventoryScreenPointer.PanelBoxContainsScreen( button, screenPos ) )
-						continue;
 	// ---- Soft-cursor hover (polled from TickMenu; the overlay never sends real mouse events) ----
 
 	Panel _hoveredButton;
@@ -404,18 +408,39 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 	static UiButton KindOf( Panel button ) =>
 		button is SettingsMenuButtonPanel menuButton ? ButtonKindFor( menuButton.ActionId ) : UiButton.Default;
 
+	/// <summary>Soft-cursor Attack1 — OS mouse is Hidden while the menu is open.</summary>
+	public bool TryInvokeAtScreen( Vector2 screenPos )
+	{
+		if ( !_menuOpen || !_panelVisible )
+			return false;
 
-					InvokeAction( button.ActionId );
-					return true;
-				}
+		var onRoot = string.IsNullOrEmpty( _activeSubPageId );
+		if ( !onRoot )
+		{
+			if ( _backButton is not null && _backButton.IsValid()
+			     && InventoryScreenPointer.PanelBoxContainsScreen( _backButton, screenPos ) )
+			{
+				NavigateToRoot();
+				return true;
 			}
+
+			if ( string.Equals( _activeSubPageId, "controls", StringComparison.OrdinalIgnoreCase ) )
+				return TryInvokeButtonAt( _controlSchemeButtons, screenPos );
+
+			if ( string.Equals( _activeSubPageId, "dev_tools", StringComparison.OrdinalIgnoreCase ) )
+				return TryInvokeButtonAt( _devToolButtons, screenPos );
 
 			return false;
 		}
 
-		for ( var i = 0; i < _rootButtons.Count; i++ )
+		return TryInvokeButtonAt( _rootButtons, screenPos );
+	}
+
+	bool TryInvokeButtonAt( List<SettingsMenuButtonPanel> buttons, Vector2 screenPos )
+	{
+		for ( var i = 0; i < buttons.Count; i++ )
 		{
-			var button = _rootButtons[i];
+			var button = buttons[i];
 			if ( button is null || !button.IsValid() )
 				continue;
 
@@ -438,7 +463,28 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 			case "audio":
 			case "video":
 			case "player_stats":
+			case "dev_tools":
 				NavigateToSubPage( actionId );
+				break;
+			case "dev_all_crafting":
+				GameHacks.SetAllCrafting( !GameHacks.AllCrafting );
+				RefreshDevToolLabels();
+				break;
+			case "dev_static_combo":
+				DevToolsSettings.StaticMeleeCombo = !DevToolsSettings.StaticMeleeCombo;
+				RefreshDevToolLabels();
+				break;
+			case "dev_wasd_facing":
+				DevToolsSettings.WasdBodyFacing = !DevToolsSettings.WasdBodyFacing;
+				RefreshDevToolLabels();
+				break;
+			case "dev_stamina":
+				DevToolsSettings.HostSetInfiniteStamina( !DevToolsSettings.InfiniteStamina );
+				RefreshDevToolLabels();
+				break;
+			case "dev_day_lock":
+				DevToolsSettings.HostSetDayLocked( !DevToolsSettings.DayLocked );
+				RefreshDevToolLabels();
 				break;
 			case "grapple_pro":
 				GrappleControlSchemeStore.Set( GrappleControlScheme.Pro );
@@ -508,6 +554,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 	{
 		if ( _buildLabel is not null )
 			_buildLabel.Text = $"Build {GameBuildLabel.Display}";
+		RefreshDevToolLabels();
 	}
 
 	public void SetMenuOpen( bool isOpen )
