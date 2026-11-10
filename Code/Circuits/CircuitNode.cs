@@ -16,7 +16,7 @@ namespace Survival;
 [Title( "Circuit Node" )]
 public sealed class CircuitNode : Component
 {
-	/// <summary>Sphere size at build scale (50 u/m), 10% bigger under the crosshair. Started at 0.1 m; tripled because 0.1 m was too hard to hit.</summary>
+	/// <summary>Sphere size in meters (40 u/m), 10% bigger under the crosshair. Started at 0.1 m; tripled because 0.1 m was too hard to hit.</summary>
 	public const float SphereDiameterMeters = 0.3f;
 	public const float HoverScale = 1.1f;
 
@@ -77,7 +77,7 @@ public sealed class CircuitNode : Component
 
 	public Vector3 SphereWorldPosition => WorldTransform.PointToWorld( SphereLocalOffset );
 
-	public float SphereRadiusUnits => SphereDiameterMeters * BuildColliderSnap.PrefabColliderSize.x * 0.5f;
+	public float SphereRadiusUnits => SphereDiameterMeters * BuildModuleDimensions.UnitsPerMeter * 0.5f;
 
 	/// <summary>Wires stored on this node, decoded once per synced change.</summary>
 	public IReadOnlyList<CircuitLink> Links

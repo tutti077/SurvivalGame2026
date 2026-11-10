@@ -11,12 +11,14 @@ running is safe: every object is rebuilt from scratch by name.
 Geometry contract — keep in step with Code/Building/BuildModuleDimensions.cs:
   ModuleMeters     2.0     floor / wall module edge
   HalfModule       1.0     the 1 m size variants, and the rise of one stair piece
-  ThinMeters       0.06    floor, wall and roof plate thickness
-  BeamMeters       0.2     square section of every post / beam
+  ThinMeters       0.25    floor, wall and roof plate thickness (Valheim-chunky; was 0.06)
+  BeamMeters       0.25    square section of every post / beam - the same as a plate, so a post
+                           sits flush in a wall and a beam flush under a floor
   RoofSlopeMeters  2.8284  sqrt(2*2 + 2*2); the code constant is rounded to 2.82
 
 STAIRS climb 1 m per piece over a 2 m footprint, so two pieces make one 2 m storey and a
-flight can turn part way up. Three pieces share that rise: the straight run, and a left and
+flight can turn part way up. Treads are their own STAIR_PLATE thickness (thinner than a wall:
+a 0.25 m tread on a 0.25 m rise is a solid block, not a step). Three pieces share that rise: the straight run, and a left and
 right quarter-turn winder that both keep the straight run's -X entry face.
 
 ORIENTATION AND ORIGIN — this is what makes the pieces drop into the prefabs:
@@ -46,8 +48,8 @@ is baked into the mesh instead and the prefab has to cancel what it would apply 
   and the mesh crosses its own collider.
 
   Both families therefore fall outside the size table: a pitched roof measures about
-  2 x 2.04 x 2.04 instead of 2 x 2.82 x 0.06 (its shell is 0.06 m perpendicular to the slope),
-  and a leaning 2 m brace measures 1.56 x 0.2 x 1.56 instead of 2 x 0.2 x 0.2.
+  2 x 2.18 x 2.18 instead of 2 x 2.83 x 0.25 (its shell is 0.25 m perpendicular to the slope),
+  and a leaning 2 m brace measures 1.59 x 0.25 x 1.59 instead of 2 x 0.25 x 0.25.
 
 WORKFLOW NOTE: pieces are spread out on a grid using the OBJECT location, never baked into
 the mesh. If you export by hand, clear the location first (Object > Clear > Location, Alt+G)
@@ -62,17 +64,18 @@ import bpy
 # --- kit contract ---
 MODULE = 2.0
 HALF_MODULE = 1.0
-THIN = 0.06
-BEAM = 0.2
+THIN = 0.25
+BEAM = 0.25
 ROOF_SLOPE = math.sqrt( MODULE * MODULE + MODULE * MODULE )
 
 # --- tweak these ---
 DOOR_OPENING_WIDTH = 1.0          # doorway hole, centred on the wall (m)
-DOOR_OPENING_HEIGHT = 1.8         # measured up from the wall bottom (m)
+DOOR_OPENING_HEIGHT = 1.9         # measured up from the wall bottom (m); the pawn is 1.8 m, so a 1.8 m hole jammed him
 STAIR_RISE = HALF_MODULE          # climb per stair piece (m) — two pieces make one wall height
-STAIR_STEP_COUNT = 8              # 8 steps over a 1 m rise = 0.125 m rise / 0.25 m going
-STAIR_PLATE = THIN                # tread / riser plate thickness; stairs are hollow underneath
-SPIRAL_STEP_COUNT = 8             # same rise per step as the straight run, so they read as one flight
+STAIR_STEP_COUNT = 4              # 4 steps over a 1 m rise = 0.25 m rise / 0.5 m going (Valheim's step)
+STAIR_PLATE = 0.1                 # tread / riser plate thickness; stairs are hollow underneath
+SPIRAL_STEP_COUNT = 4             # same rise per step as the straight run, so they read as one flight
+DOOR_LEAF_THICKNESS = 0.08        # the swinging leaf; a THIN leaf is a slab, not a door
 SPIRAL_TURN_DEGREES = 90.0        # quarter turn inside the 2 x 2 footprint
 BUILD_DOOR_LEAF = True            # extra loose leaf to sit in the doorway; not a catalog id
 BUILD_REFERENCE = True            # assembled seam checks, in their own collection
@@ -564,7 +567,7 @@ def brace_45_geometry( length ):
 
 def door_leaf_geometry():
 	"""Loose leaf sized to swing inside the doorway, with a 0.02 m gap all round."""
-	return _wall( DOOR_OPENING_WIDTH - 0.04, DOOR_OPENING_HEIGHT - 0.02, THIN )
+	return _wall( DOOR_OPENING_WIDTH - 0.04, DOOR_OPENING_HEIGHT - 0.02, DOOR_LEAF_THICKNESS )
 
 
 # ---------------------------------------------------------------- build

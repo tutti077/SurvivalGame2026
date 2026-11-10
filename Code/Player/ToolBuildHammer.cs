@@ -74,7 +74,18 @@ public sealed class ToolBuildHammer : Component
 	GameObject _prefabTemplate;
 	GameObject _previewRoot;
 	float _yawDegrees;
+	/// <summary>Wheel delta carried between frames so fractional (high-resolution) wheel reports add up to whole detents.</summary>
+	float _wheelAccumulator;
 	int _snapAnchorIndex;
+	/// <summary>
+	/// Placing snap index the player is holding the piece by, or -1 for Auto. Captured from the
+	/// picked candidate after a Q/E press (or the first snap after selecting a piece) and handed to
+	/// the picker so scroll spins the piece about that corner even when the variant list re-sorts
+	/// under the index — see <see cref="BuildSnapCandidateGrouper.TryPickCandidate"/>.
+	/// </summary>
+	int _heldAnchorSnapIndex = -1;
+	/// <summary>Q/E moved the index (or a new piece was selected): the next snapped pick names the held corner.</summary>
+	bool _heldAnchorDirty;
 	int _lastSnapAnchorCount;
 	BuildSnapGroupKey? _lockedSnapGroup;
 	/// <summary>Last Q/E variant per piece id — kept across places of the same type.</summary>
@@ -229,6 +240,8 @@ public sealed class ToolBuildHammer : Component
 		_prefabTemplate = BuildPrefabUtility.GetTemplate( data.Prefab );
 		_yawDegrees = 0f;
 		_snapAnchorIndex = _snapVariantByPieceId.TryGetValue( pieceId, out var saved ) ? saved : 0;
+		_heldAnchorSnapIndex = -1;
+		_heldAnchorDirty = true;
 		_lastSnapAnchorCount = 0;
 		_lockedSnapGroup = null;
 		RefreshPlacingSnaps();
@@ -353,17 +366,37 @@ public sealed class ToolBuildHammer : Component
 		if ( !IsRepairMode )
 		{
 			// Hardcoded Q/E so snap cycle isn't lost if Use/Menu share those keys.
+			// Q/E walks the slots of the current seam: the built corner stays where it is and the
+			// next corner of the held piece lands on it. The remembered corner has to let go for
+			// that frame — handed to the picker it would win over the new index and the press
+			// would do nothing — and is re-captured from whatever the new slot shows.
 			if ( Input.Pressed( SnapPrevAction ) || Input.Keyboard.Pressed( "q" ) )
+			{
 				_snapAnchorIndex--;
+				_heldAnchorSnapIndex = -1;
+				_heldAnchorDirty = true;
+			}
 
 			if ( Input.Pressed( SnapNextAction ) || Input.Keyboard.Pressed( "e" ) )
+			{
 				_snapAnchorIndex++;
+				_heldAnchorSnapIndex = -1;
+				_heldAnchorDirty = true;
+			}
 
 			if ( IsPreviewingPlacePiece )
 			{
-				var scroll = Input.MouseWheel.y;
-				if ( Math.Abs( scroll ) > 0.01f )
+				// One detent = one step, however the wheel reports it. A plain wheel gives ±1 per
+				// notch; smooth / high-resolution wheels and touchpads spread a notch over several
+				// frames as fractions, and the old "any delta over 0.01 is a step" turned one notch
+				// into two or three quarter turns on those. The remainder is carried, so a slow
+				// wheel still gets its step once a whole notch has arrived.
+				_wheelAccumulator += Input.MouseWheel.y;
+				var notches = (int)MathF.Truncate( _wheelAccumulator );
+				if ( notches != 0 )
 				{
+					_wheelAccumulator -= notches;
+
 					// Hardcoded physical Ctrl for fine rotate — not a rebindable action. Shift used to
 					// do this and collided with sprint.
 					var fine = Input.Keyboard.Down( "ctrl" )
@@ -372,9 +405,13 @@ public sealed class ToolBuildHammer : Component
 					           || Input.Keyboard.Down( "leftcontrol" )
 					           || Input.Keyboard.Down( "rightcontrol" );
 					var step = fine ? FineYawStep : ScrollYawStep;
-					_yawDegrees += scroll > 0f ? step : -step;
+					_yawDegrees += notches * step;
 					_debugYawScrolled = true;
 				}
+			}
+			else
+			{
+				_wheelAccumulator = 0f;
 			}
 		}
 
@@ -455,12 +492,29 @@ public sealed class ToolBuildHammer : Component
 			_yawDegrees,
 			BuildRange,
 			_snapAnchorIndex,
-			_lockedSnapGroup );
+			_lockedSnapGroup,
+			_heldAnchorSnapIndex );
 
 		if ( _lastPlacement.SnappedToStructure && _lastPlacement.ActiveSnapGroup is { } activeGroup )
 		{
 			// Keep Q/E index across seams and places of the same piece type (1234 sticky).
 			_lockedSnapGroup = activeGroup;
+		}
+
+		if ( _lastPlacement.SnappedToStructure && _lastPlacement.SnapCandidate is { } picked )
+		{
+			// A Q/E press names a corner, not a slot: remember which placing snap the chosen slot
+			// held so scroll keeps pivoting on it. Auto (cycle 0) stays Auto — its corner is meant
+			// to follow the flush fit as the piece turns.
+			if ( _heldAnchorDirty )
+			{
+				_heldAnchorDirty = false;
+				_heldAnchorSnapIndex = picked.CycleOrder == 0 ? -1 : picked.AnchorSnapIndex;
+			}
+
+			// The picker may have followed the held corner to a different slot — keep Q/E and the
+			// HUD number on the slot actually shown.
+			_snapAnchorIndex = _lastPlacement.SnapAnchorVariantIndex;
 		}
 		else if ( !_lastPlacement.SnappedToStructure )
 		{

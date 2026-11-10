@@ -59,7 +59,7 @@ public sealed partial class PlayerInventoryInteraction
 
 		// Chest / station / workbench / campfire / door / trap under the reticule keep their prompt.
 		if ( FocusedContainer is not null || FocusedAugmentStation is not null || FocusedWorkbench is not null
-		     || FocusedCampfire is not null || FocusedDoor is not null || FocusedTrap is not null )
+		     || FocusedCampfire is not null || FocusedDoor is not null || FocusedBlueprint is not null || FocusedTrap is not null )
 		{
 			SetFocusedBed( null );
 			return;

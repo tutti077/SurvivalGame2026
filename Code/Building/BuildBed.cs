@@ -127,8 +127,7 @@ public sealed class BuildBed : Component
 	/// <summary>Distance (units) from <paramref name="worldPoint"/> to the enemy hit zone cube — 0 inside it.</summary>
 	public float DistanceToEnemyHitZone( Vector3 worldPoint )
 	{
-		var unitsPerMeter = BuildColliderSnap.PrefabColliderSize.x;
-		var half = Math.Max( 0.5f, EnemyHitZoneMeters ) * unitsPerMeter * 0.5f;
+		var half = Math.Max( 0.5f, EnemyHitZoneMeters ) * BuildModuleDimensions.UnitsPerMeter * 0.5f;
 		var floorLocal = Piece is { } piece && piece.IsValid() ? -piece.HalfExtents.z : 0f;
 		var local = GameObject.WorldTransform.PointToLocal( worldPoint );
 		var clamped = new Vector3(

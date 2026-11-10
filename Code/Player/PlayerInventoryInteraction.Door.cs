@@ -56,8 +56,10 @@ public sealed partial class PlayerInventoryInteraction
 
 		_nextDoorFocusScanAt = Time.NowDouble + Math.Max( 0.05, DoorFocusScanIntervalSeconds );
 
-		// Chest / station / workbench under the reticule keep their prompt.
-		if ( FocusedContainer is not null || FocusedAugmentStation is not null || FocusedWorkbench is not null )
+		// Chest / station / workbench under the reticule keep their prompt; an unbuilt blueprint
+		// (a door frame included) only offers "Build".
+		if ( FocusedContainer is not null || FocusedAugmentStation is not null || FocusedWorkbench is not null
+		     || FocusedBlueprint is not null )
 		{
 			SetFocusedDoor( null );
 			return;

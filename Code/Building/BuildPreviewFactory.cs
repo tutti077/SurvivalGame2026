@@ -15,7 +15,8 @@ static class BuildPreviewFactory
 		if ( scene.IsValid() )
 			go.Parent = scene;
 
-		go.Components.Create<BoxCollider>().Scale = BuildColliderSnap.PrefabColliderSize;
+		// Placeholder solid; BuildPieceCollider.Ensure (via ApplyStandardPieceTransform) sizes it to the piece.
+		go.Components.Create<BoxCollider>().Scale = Vector3.One * BuildModuleDimensions.UnitsPerMeter;
 
 		BuildPrefabUtility.ApplyStandardPieceTransform( go, pieceId, worldTransform );
 

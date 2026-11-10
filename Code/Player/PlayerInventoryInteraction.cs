@@ -242,6 +242,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		}
 
 		TickDevSupplyAccess();
+		TickBlueprintAccess();
 		TickContainerAccess();
 		TickAugmentStationAccess();
 		TickWorkbenchAccess();

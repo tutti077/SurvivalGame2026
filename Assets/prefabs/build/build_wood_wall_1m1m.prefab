@@ -63,7 +63,7 @@
         "OnTriggerEnter": null,
         "OnTriggerExit": null,
         "RollingResistance": null,
-        "Scale": "50,3,50",
+        "Scale": "10,40,40",
         "Static": true,
         "Surface": null,
         "SurfaceVelocity": "0,0,0"

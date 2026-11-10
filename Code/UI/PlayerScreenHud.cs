@@ -270,6 +270,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		}
 		if ( _inventoryInteraction?.FocusedCampfire is not null
 		     || _inventoryInteraction?.FocusedDoor is not null
+		     || _inventoryInteraction?.FocusedBlueprint is not null
 		     || _inventoryInteraction?.FocusedTrap is not null
 	     || _inventoryInteraction?.FocusedLever is not null
 		     || _inventoryInteraction?.FocusedBed is not null
@@ -322,6 +323,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedAugmentStationChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedCampfireChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedDoorChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedBlueprintChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTrapChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedLeverChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedVehicleChanged -= OnInteractionPromptChanged;
@@ -697,6 +699,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedAugmentStationChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedDoorChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedBlueprintChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTrapChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedLeverChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedBedChanged += OnInteractionPromptChanged;
@@ -1138,6 +1141,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.FocusedAugmentStationChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedCampfireChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedDoorChanged += OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedBlueprintChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedTrapChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedLeverChanged += OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedBedChanged += OnInteractionPromptChanged;
@@ -1301,13 +1305,23 @@ public sealed class PlayerScreenHud : PanelComponent
 		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showDoor && !showTrap && !showLever && !showBed && !showVehicle && !showFarming && _handHarvest?.FocusedNode is not null;
 		var show = showOpen || showTrial || showArena || showCampfire || showDoor || showTrap || showLever || showBed || showVehicle || showFarming || showHarvest;
 
+		// An unbuilt blueprint under the crosshair only offers "Build" — the door / bed / trap / lever /
+		// campfire prompts stand down for it in their own ticks, so nothing else is showing here.
+		var focusedBlueprint = _inventoryInteraction?.FocusedBlueprint;
+		var showBlueprint = !showOpen && focusedBlueprint is not null && focusedBlueprint.IsValid() && focusedBlueprint.IsBlueprint;
+		if ( showBlueprint )
+		{
+			show = true;
+			showFarming = false;
+		}
+
 		if ( _promptKeyLabel is not null )
 			_promptKeyLabel.Text = showFarming ? (_farming?.PromptKey ?? "E") : "E";
 
 		// Someone else's bed only says whose it is — there is nothing to press.
 		var bedIsInfoOnly = showBed && _inventoryInteraction is { } interaction && !focusedBed.CanClaim( interaction.GameObject );
 		var vehicleIsInfoOnly = showVehicle && _inventoryInteraction is { } vInteraction && !focusedVehicle.CanUse( vInteraction.GameObject );
-		var infoOnly = bedIsInfoOnly || vehicleIsInfoOnly;
+		var infoOnly = !showBlueprint && ( bedIsInfoOnly || vehicleIsInfoOnly );
 		if ( _promptKeyCap is not null && infoOnly != _promptKeyCapHidden )
 		{
 			_promptKeyCapHidden = infoOnly;
@@ -1331,6 +1345,17 @@ public sealed class PlayerScreenHud : PanelComponent
 			else if ( focusedWorkbench is not null && focusedWorkbench.IsValid() )
 			{
 				_promptLabel.Text = focusedWorkbench.IsSheltered ? "Open Workbench" : "Workbench needs a roof";
+			}
+			else if ( showBlueprint )
+			{
+				var blueprintName = BuildPieceCatalog.TryGet( focusedBlueprint.PieceId, out var blueprintData )
+				                    && !string.IsNullOrWhiteSpace( blueprintData.DisplayName )
+					? $"Build {blueprintData.DisplayName}"
+					: "Build";
+				var missingMaterials = _inventoryInteraction is { } bpInteraction
+					? BuildAuthority.DescribeMissingMaterials( bpInteraction.GameObject, focusedBlueprint.PieceId )
+					: string.Empty;
+				_promptLabel.Text = missingMaterials.Length == 0 ? blueprintName : $"{blueprintName}  (needs {missingMaterials})";
 			}
 			else if ( showTrial )
 			{

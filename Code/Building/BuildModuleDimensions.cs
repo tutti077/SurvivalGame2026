@@ -5,26 +5,30 @@ namespace Survival;
 
 /// <summary>
 /// Strict build piece sizes in literal meters (X, Y, Z). Z-up.
-/// Prefab <see cref="BuildColliderSnap.PrefabColliderSize"/> is 50 per meter on each axis;
-/// piece <see cref="GetColliderScale"/> bakes meters into <see cref="BoxCollider.Scale"/> while
-/// the root stays at scale 1. Snap/overlap world sizes read that collider half-extent directly.
+/// Build pieces live at the world's <see cref="UnitsPerMeter"/> (40 u/m — the same factor as the
+/// terrain and, within rounding, the 72-unit pawn; the kit's old 50 u/m was retired 2026-11-08 so a
+/// 2 m wall stands 80 units, just over the pawn's head, Valheim-style). The kit vmdls import at 0.4
+/// to match. Piece <see cref="GetColliderScale"/> bakes meters into <see cref="BoxCollider.Scale"/>
+/// while the root stays at scale 1. Snap/overlap world sizes read that collider half-extent directly.
 /// </summary>
 public static class BuildModuleDimensions
 {
-	/// <summary>World scale outside build snap: 40 engine units per meter (see <see cref="TerrainWorldUnits"/>). Build piece colliders use 50/m — see <see cref="BuildColliderSnap.PrefabColliderSize"/>.</summary>
+	/// <summary>Engine units per meter, world-wide (see <see cref="TerrainWorldUnits"/>). Build colliders, snaps and camp layouts all convert through this one number.</summary>
 	public const float UnitsPerMeter = 40f;
 	/// <summary>Floor / wall module edge length (m). Floors are Module×Module; walls Module tall × Module wide.</summary>
 	public const float ModuleMeters = 2f;
 	public const float HalfModuleMeters = 1f;
-	public const float ThinMeters = 0.06f;
-	/// <summary>Square section of every post / beam (m).</summary>
-	public const float BeamMeters = 0.2f;
+	/// <summary>Floor / wall / roof plate thickness (m). Valheim-chunky; was 0.06 until 2026-11-08 (Mark: "3–5 times thicker").</summary>
+	public const float ThinMeters = 0.25f;
+	/// <summary>Square section of every post / beam (m) — equal to <see cref="ThinMeters"/> so a post sits flush in a wall.</summary>
+	public const float BeamMeters = 0.25f;
 	/// <summary>
 	/// Doorway height (m) measured up from the wall bottom — mirrors <c>DOOR_OPENING_HEIGHT</c> in
 	/// <c>Blender/scripts/create_build_kit.py</c>. <see cref="BuildDoor"/> hangs the leaf so its
-	/// sill gap and head gap split whatever the leaf model leaves over.
+	/// sill gap and head gap split whatever the leaf model leaves over. 1.9 because the pawn is
+	/// 1.8 m: at 40 u/m a 1.8 m hole is exactly his 72-unit hull and he jams in it.
 	/// </summary>
-	public const float DoorOpeningHeightMeters = 1.8f;
+	public const float DoorOpeningHeightMeters = 1.9f;
 	/// <summary>
 	/// 45° roof slope length (m): √(Module²+Module²) so one roof covers the run+rise of a module
 	/// and two roofs meet in the middle across a 2-module span. Width stays <see cref="ModuleMeters"/>.
@@ -33,10 +37,7 @@ public static class BuildModuleDimensions
 	/// </summary>
 	public const float RoofSlopeMeters = 2.8284271f;
 
-	/// <summary>Dev box at local scale 1 = 1 m edge.</summary>
-	public const float DevBoxEdgeMeters = 1f;
-
-	/// <summary>Half module in snap/collider world units (50×ModuleMeters/2).</summary>
+	/// <summary>Half module in snap/collider world units (UnitsPerMeter×ModuleMeters/2).</summary>
 	public static float SnapModuleHalfUnits => HalfUnitsFor( ModuleMeters );
 
 	/// <summary>Half thin axis in snap/collider world units.</summary>
@@ -103,7 +104,7 @@ public static class BuildModuleDimensions
 		["build_wood_stairsSpiralLeft"] = new( ModuleMeters, ModuleMeters, HalfModuleMeters ),
 		["build_wood_stairsSpiralRight"] = new( ModuleMeters, ModuleMeters, HalfModuleMeters ),
 
-		// Beams / posts — 0.2 m square section.
+		// Beams / posts — BeamMeters square section.
 		["build_wood_horizontalBeam_1m"] = new( HalfModuleMeters, BeamMeters, BeamMeters ),
 		["build_wood_horizontalBeam_2m"] = new( ModuleMeters, BeamMeters, BeamMeters ),
 		["build_wood_verticalBeam_1m"] = new( BeamMeters, BeamMeters, HalfModuleMeters ),
@@ -136,14 +137,11 @@ public static class BuildModuleDimensions
 	};
 
 	static float HalfUnitsFor( float meters ) =>
-		BuildColliderSnap.PrefabColliderSize.x * 0.5f * meters;
+		UnitsPerMeter * 0.5f * meters;
 
-	/// <summary>Collider-space half extents for a size in meters (collider is 50³ at scale 1).</summary>
+	/// <summary>Collider-space half extents (world units) for a size in meters.</summary>
 	public static Vector3 HalfExtentsFor( Vector3 sizeMeters ) =>
-		new(
-			BuildColliderSnap.PrefabColliderSize.x * 0.5f * sizeMeters.x,
-			BuildColliderSnap.PrefabColliderSize.y * 0.5f * sizeMeters.y,
-			BuildColliderSnap.PrefabColliderSize.z * 0.5f * sizeMeters.z );
+		sizeMeters * ( UnitsPerMeter * 0.5f );
 
 	public static bool TryGetSizeMeters( string pieceId, out Vector3 sizeMeters )
 	{
@@ -257,8 +255,11 @@ public static class BuildModuleDimensions
 		return Math.Max( 0f, -minZ ) + SurfaceContactBias;
 	}
 
-	/// <summary>Corners within this many units of the lowest count as ground contact (covers a plate's thickness pair).</summary>
-	const float GroundContactCornerTolerance = 6f;
+	/// <summary>
+	/// Corners within this many units of the lowest count as ground contact — a whole plate
+	/// thickness plus a unit of slack, so a pitched plate's low edge keeps both its corner rows.
+	/// </summary>
+	static float GroundContactCornerTolerance => SnapThinHalfUnits * 2f + 1f;
 
 	/// <summary>
 	/// XY offset from the piece origin to the centroid of its ground-contact corners — the lowest
@@ -328,18 +329,11 @@ public static class BuildModuleDimensions
 	/// <summary>Root transform scale — always 1; sizing lives on the box collider.</summary>
 	public static Vector3 GetPieceLocalScale( string pieceId ) => Vector3.One;
 
-	/// <summary>BoxCollider.Scale per axis: 50 world units per meter on that axis.</summary>
+	/// <summary>BoxCollider.Scale per axis: the piece's meters × <see cref="UnitsPerMeter"/>, table frame.</summary>
 	public static Vector3 GetColliderScale( string pieceId ) =>
-		DevBoxScale( GetSizeMeters( pieceId ) ) * BuildColliderSnap.PrefabColliderSize;
+		GetSizeMeters( pieceId ) * UnitsPerMeter;
 
 	/// <summary>Collider-local half extents (same space as snap corner math).</summary>
 	public static Vector3 GetColliderHalfLocal( string pieceId ) =>
 		GetColliderScale( pieceId ) * 0.5f;
-
-	/// <summary>Meters per axis — multiplied by <see cref="BuildColliderSnap.PrefabColliderSize"/> for the box.</summary>
-	public static Vector3 DevBoxScale( Vector3 sizeMeters ) =>
-		new(
-			sizeMeters.x / DevBoxEdgeMeters,
-			sizeMeters.y / DevBoxEdgeMeters,
-			sizeMeters.z / DevBoxEdgeMeters );
 }

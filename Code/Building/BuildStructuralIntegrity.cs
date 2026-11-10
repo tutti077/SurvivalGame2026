@@ -18,7 +18,7 @@ namespace Survival;
 /// </summary>
 public static class BuildStructuralIntegrity
 {
-	/// <summary>Adjacency slack in build-collider units (~12 cm at 50 u/m) so flush snapped mates count as touching.</summary>
+	/// <summary>Adjacency slack in world units (15 cm at 40 u/m) so flush snapped mates count as touching.</summary>
 	const float ContactToleranceUnits = 6f;
 
 	/// <summary>

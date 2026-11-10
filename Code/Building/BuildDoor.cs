@@ -156,8 +156,8 @@ public sealed class BuildDoor : Component
 		var widthAxis = _widthOnY ? new Vector3( 0f, 1f, 0f ) : new Vector3( 1f, 0f, 0f );
 		var halfWidth = _widthOnY ? leafHalf.y : leafHalf.x;
 
-		// Build pieces are 50 u/m (BuildColliderSnap.PrefabColliderSize) — convert the doorway height once, here.
-		var openingHeight = BuildModuleDimensions.DoorOpeningHeightMeters * BuildColliderSnap.PrefabColliderSize.z;
+		// Convert the doorway height once, here (40 u/m like every build piece).
+		var openingHeight = BuildModuleDimensions.DoorOpeningHeightMeters * BuildModuleDimensions.UnitsPerMeter;
 		var sillGap = Math.Max( 0f, (openingHeight - leafSize.z) * 0.5f );
 
 		_hinge.LocalPosition = frameCenter + widthAxis * -halfWidth + new Vector3( 0f, 0f, -frameHalf.z + sillGap + leafHalf.z );

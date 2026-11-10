@@ -49,7 +49,8 @@ public static class BuildPlacementUtility
 		float yawDegrees,
 		float maxRange,
 		int snapAnchorVariantIndex,
-		BuildSnapGroupKey? lockedSnapGroup )
+		BuildSnapGroupKey? lockedSnapGroup,
+		int heldAnchorSnapIndex = -1 )
 	{
 		var dir = rayDirection.Normal;
 		if ( data is null || !pawn.IsValid() || !scene.IsValid() || dir.LengthSquared < 1e-8f )
@@ -73,6 +74,7 @@ public static class BuildPlacementUtility
 			if ( !BuildSnapCandidateGrouper.TryPickCandidate(
 				     list,
 				     snapAnchorVariantIndex,
+				     heldAnchorSnapIndex,
 				     lockedSnapGroup,
 				     data.Id,
 				     placingSnaps,

@@ -8,9 +8,6 @@ namespace Survival;
 /// </summary>
 static class BuildColliderSnap
 {
-	/// <summary>Legacy prefab box size — only used when a piece has no model and no size table hit.</summary>
-	public static readonly Vector3 PrefabColliderSize = new( 50f, 50f, 50f );
-
 	/// <summary>
 	/// The kit's meshes arrive in engine space yawed a quarter turn from the frame
 	/// <see cref="BuildModuleDimensions.SizesMeters"/> describes: what the size table calls the X
@@ -73,7 +70,8 @@ static class BuildColliderSnap
 		if ( piece is not null && !string.IsNullOrWhiteSpace( piece.PieceId ) )
 			return GetColliderHalfForPiece( piece.PieceId );
 
-		return PrefabColliderSize * 0.5f;
+		// Not a catalog piece at all — a 1 m cube is the only honest guess.
+		return Vector3.One * ( BuildModuleDimensions.UnitsPerMeter * 0.5f );
 	}
 
 	public static Rotation GetSnapWorldRotation( GameObject go, string pieceId )

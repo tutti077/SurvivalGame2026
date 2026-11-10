@@ -85,15 +85,16 @@ a scene transform you type by hand.
 |-------|--------|-----------|
 | Terrain, environment, sky, fly-cam, harvest, containers, grapple | 40 u/m | `TerrainWorldUnits.MetersToEngine` |
 | Pawn distances (shove, bow range, wingsuit) | ≈40 u/m | `BodyHeight / 1.8` (Citizen `BodyHeight` 72 ≈ 1.8 m) |
-| Build pieces only — snap math, piece colliders | **50 u/m** | `BuildColliderSnap.PrefabColliderSize` |
+| Build pieces — snap math, piece colliders, camp layouts | 40 u/m | `BuildModuleDimensions.UnitsPerMeter` (kit vmdls import at 0.4) |
 
 Convert **once**, inside the system that owns the value. A number that has already been converted —
 a mesh AABB, a `BuildPieceModelCache` extent, a `BoxCollider.Scale` — is in final world units;
 **do not scale it a second time.** That double-scale is what put the build snap points in the wrong
 place.
 
-Open item: build's 50 u/m is the odd one out. Unifying it to 40 moves every snap point in the kit,
-so it stays until that migration is done deliberately.
+The build kit's old 50 u/m was retired 2026-11-08 (Valheim scale: a 2 m wall is 80 units, just over the
+72-unit pawn). A floor meets other pieces at its **face**, never its mid-plane
+(`BuildSnapPlacement.ApplyFloorFaceOffset`), so a 0.25 m deck does not eat the room's headroom.
 
 ---
 

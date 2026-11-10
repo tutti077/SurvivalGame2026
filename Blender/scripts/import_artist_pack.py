@@ -41,8 +41,8 @@ What it does
                     takes the printed (X, Y, Z) metres and the ground-sit / box collider line up.
        environment  centred on X / Y, standing on z = 0.
   4. Exports the FBX (Blender metres x 100) and writes the .vmdl beside it: import_scale 0.4 for
-     weapons / environment (40 units per metre, CLAUDE.md commandment 4) and 0.5 for building
-     (the build kit's 50 units per metre), material remap to the baked .vmat.
+     weapons / environment and building alike (40 units per metre, CLAUDE.md commandment 5; the build kit
+     moved from 50 to 40 u/m on 2026-11-08), material remap to the baked .vmat.
 
 Prints the authored size in metres and, for building, the SizesMeters line to paste.
 """
@@ -51,7 +51,7 @@ import numpy as np
 from mathutils import Matrix, Vector
 
 ROOT = r"M:\s&box\Projects\SurvivalGame2026\Assets"
-IMPORT_SCALE = {"weapons": 0.4, "environment": 0.4, "building": 0.5}
+IMPORT_SCALE = {"weapons": 0.4, "environment": 0.4, "building": 0.4}
 DEFAULT_PHYSICS = {"weapons": "hull", "building": "none", "environment": "mesh"}
 AXES = {"+x": (1, 0, 0), "-x": (-1, 0, 0), "+y": (0, 1, 0), "-y": (0, -1, 0), "+z": (0, 0, 1), "-z": (0, 0, -1)}
 

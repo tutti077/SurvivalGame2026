@@ -60,13 +60,13 @@ public sealed class EnemyCampEntityData
 }
 
 /// <summary>
-/// Camp-local → world conversion. Camp layouts are written in the build kit's meters (50 u/m,
-/// <see cref="BuildColliderSnap.PrefabColliderSize"/>) so entity offsets line up with piece
-/// footprints — a 2 m floor is exactly one tile. Convert once here; never pre-scale in JSON.
+/// Camp-local → world conversion. Camp layouts are written in meters at the build kit's scale
+/// (<see cref="BuildModuleDimensions.UnitsPerMeter"/>, 40 u/m) so entity offsets line up with
+/// piece footprints — a 2 m floor is exactly one tile. Convert once here; never pre-scale in JSON.
 /// </summary>
 public static class EnemyCampLayout
 {
-	public static float UnitsPerMeter => BuildColliderSnap.PrefabColliderSize.x;
+	public static float UnitsPerMeter => BuildModuleDimensions.UnitsPerMeter;
 
 	/// <summary>Camp-local meters → world offset (units) rotated into the camp facing.</summary>
 	public static Vector3 ToWorldOffset( float xMeters, float yMeters, float zMeters, Rotation campRotation ) =>

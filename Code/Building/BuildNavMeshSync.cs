@@ -84,6 +84,8 @@ public static class BuildNavMeshSync
 		navMesh.IncludeStaticBodies = true;
 		navMesh.IncludeKeyframedBodies = true;
 		navMesh.DeferGeneration = false;
+		// An unbuilt blueprint is walked through, by entities too — it must not carve the mesh.
+		navMesh.ExcludedBodies.Add( BuildPiece.BlueprintTag );
 
 		if ( navMesh.AgentMaxSlope < BuildTraversalMaxSlope )
 			navMesh.AgentMaxSlope = BuildTraversalMaxSlope;

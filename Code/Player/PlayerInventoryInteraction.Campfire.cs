@@ -52,7 +52,8 @@ public sealed partial class PlayerInventoryInteraction
 		_nextCampfireFocusScanAt = Time.NowDouble + Math.Max( 0.05, CampfireFocusScanIntervalSeconds );
 
 		// Don't steal the prompt from an openable chest / augment station / workbench under the reticule.
-		if ( FocusedContainer is not null || FocusedAugmentStation is not null || FocusedWorkbench is not null )
+		if ( FocusedContainer is not null || FocusedAugmentStation is not null || FocusedWorkbench is not null
+		     || FocusedBlueprint is not null )
 		{
 			SetFocusedCampfire( null );
 			return;

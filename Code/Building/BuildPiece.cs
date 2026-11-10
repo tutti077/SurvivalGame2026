@@ -12,8 +12,21 @@ public sealed class BuildPiece : Component
 	public static readonly Color ValidPreviewTint = new( 0.45f, 0.92f, 0.5f, 0.55f );
 	public static readonly Color InvalidPreviewTint = new( 0.92f, 0.18f, 0.14f, 0.55f );
 
+	/// <summary>
+	/// On an unbuilt blueprint. Players and enemies ignore it (ProjectSettings/Collision.config pairs),
+	/// the nav bake excludes it (<see cref="BuildNavMeshSync.EnsureBuildTraversalSettings"/>), so a
+	/// blueprint is something you walk through until it is built. Traces still hit it, which is how
+	/// the hammer snaps to it and the E prompt finds it.
+	/// </summary>
+	public const string BlueprintTag = "blueprint";
+
 	[Property] public string PieceId { get; set; } = string.Empty;
-	[Property] public bool IsBlueprint { get; set; }
+	/// <summary>
+	/// Placed but not built yet: the piece keeps the blue ghost look it had on the hammer until a
+	/// player finishes it (E on the piece, or the hammer's repair tool). Host-owned and synced, so
+	/// every client sees the same ghost and the same moment it turns solid.
+	/// </summary>
+	[Property, Sync, Change] public bool IsBlueprint { get; set; }
 
 	/// <summary>Structural support (host-solved, see <see cref="BuildStructuralIntegrity"/>) — synced for client hover display.</summary>
 	[Sync] public float Support { get; set; }
@@ -75,6 +88,7 @@ public sealed class BuildPiece : Component
 			HostSeedHealth();
 		}
 
+		ApplyBlueprintTags();
 		ApplyVisualTint();
 	}
 
@@ -105,6 +119,12 @@ public sealed class BuildPiece : Component
 		BuildPieceCollider.Ensure( GameObject, PieceId, previewGhost: false );
 		EnsureGrappleSurfaceTag();
 		HostSeedHealth();
+
+		// A client's copy of a blueprint spawns with the prefab's renderers and tags; give it the ghost look
+		// and the walk-through tag.
+		ApplyBlueprintTags();
+		if ( IsBlueprint )
+			ApplyTint( BlueprintTint );
 	}
 
 	bool IsHostAuthority =>
@@ -156,9 +176,44 @@ public sealed class BuildPiece : Component
 	/// <summary>[Change] callback for <see cref="Health"/> — host and clients darken the piece as it wears down.</summary>
 	void OnHealthChanged( float oldValue, float newValue ) => ApplyDamageTint();
 
-	/// <summary>Placed-piece resting colour: catalog fallback, pulled toward <see cref="DamageTint"/> by missing health.</summary>
+	/// <summary>[Change] callback for <see cref="IsBlueprint"/> — host and clients swap ghost look and built look.</summary>
+	void OnIsBlueprintChanged( bool oldValue, bool newValue )
+	{
+		if ( IsPreviewGhost || !GameObject.IsValid() )
+			return;
+
+		ApplyBlueprintTags();
+		if ( !_supportTintApplied )
+			ApplyTint( RestingColor() );
+	}
+
+	/// <summary>Unbuilt: walk-through tag on, nothing to grapple. Built: the reverse. Ghosts carry neither.</summary>
+	void ApplyBlueprintTags()
+	{
+		if ( !GameObject.IsValid() )
+			return;
+
+		if ( IsBlueprint && !IsPreviewGhost )
+		{
+			GameObject.Tags.Add( BlueprintTag );
+			GameObject.Tags.Remove( PlayerMovement.GrappleSurfaceTag );
+			return;
+		}
+
+		GameObject.Tags.Remove( BlueprintTag );
+		if ( !IsPreviewGhost )
+			GameObject.Tags.Add( PlayerMovement.GrappleSurfaceTag );
+	}
+
+	/// <summary>
+	/// Placed-piece resting colour: the blueprint ghost tint while unbuilt, otherwise the catalog
+	/// fallback pulled toward <see cref="DamageTint"/> by missing health.
+	/// </summary>
 	Color RestingColor()
 	{
+		if ( IsBlueprint )
+			return BlueprintTint;
+
 		var restore = BuildPieceCatalog.TryGet( PieceId, out var data )
 			? BuildPieceCatalog.ParseFallbackColor( data.FallbackColor )
 			: Color.White;
@@ -219,7 +274,14 @@ public sealed class BuildPiece : Component
 	public void ApplyVisualTint()
 	{
 		if ( !IsPreviewGhost )
+		{
+			// A placed blueprint stays the ghost it was on the hammer. Built pieces keep whatever
+			// BuildPieceVisual / the prefab gave them — nothing to re-tint on a plain placement.
+			if ( IsBlueprint && !_supportTintApplied )
+				ApplyTint( BlueprintTint );
+
 			return;
+		}
 
 		ApplyTint( IsBlueprint ? BlueprintTint : ValidPreviewTint );
 	}

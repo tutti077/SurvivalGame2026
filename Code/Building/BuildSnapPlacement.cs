@@ -517,7 +517,20 @@ static class BuildSnapPlacement
 					continue;
 
 				if ( !sameFamily )
-					return anchorRole;   // Cross-family: one honest fit, take it.
+				{
+					// Cross-family fits are honest on either end, but a deck on a wall top measures
+					// flush on BOTH sides of the wall, and taking the first one hung the ceiling
+					// outside the room at every other quarter turn — scrolling a held ceiling made
+					// it hop sides. Keep the player's side; a pair with a single fit is unchanged.
+					var crossSide = Vector3.Dot( ( placement.Position - seamMid ).WithZ( 0f ), toPlayer );
+					if ( best is null || crossSide > bestSide )
+					{
+						best = anchorRole;
+						bestSide = crossSide;
+					}
+
+					continue;
+				}
 
 				// Same family: several ends can measure "flush" on the same seam, so geometry picks.
 				// A vertical wall end is direction-blind (both corners on one plumb line), which let a
@@ -918,6 +931,8 @@ static class BuildSnapPlacement
 		// yaw went 3/3 → 2/2 → 3/3 and silently changed which corner was held. Same type + same
 		// origin + same orientation only — an X-brace of two 45° beams, and two triangle floors
 		// closing a square at 180°, share an origin on purpose.
+		placement = ApplyFloorFaceOffset( placingPieceId, targetPiece, placement );
+
 		var coLocated = IsLikePieceCoLocation( scene, ignorePreview, placingPieceId, placement );
 
 		var anchorIndex = FindSnapIndex( placingSnaps, anchorRole );
@@ -958,6 +973,35 @@ static class BuildSnapPlacement
 			CycleOrder = cycleOrder,
 			RayScore = rayScore,
 		} );
+	}
+
+	/// <summary>
+	/// A floor meets everything else at its <b>face</b>, not its mid-plane. Plate corner snaps sit on
+	/// the plate's mid-plane, so a wall stood on a floor edge used to sink half the floor's
+	/// thickness into the deck and a floor laid on a wall top hung that far below it. At 0.06 m that
+	/// was 3 units and nobody saw it; at 0.25 m a one-storey room (2 m wall, 1.8 m pawn) lost 0.25 m
+	/// of headroom to the ceiling plate and 0.125 m to the deck underfoot and the pawn no longer fit.
+	/// Every seam with a floor on exactly one side therefore moves the placing piece away from the
+	/// other piece, along world up, by the floor's half thickness: a wall, post or flight stands ON
+	/// the deck, a floor or roof sits ON the wall top, and the build-downward mates (wall hung under
+	/// a deck edge, deck hung under a wall bottom) move the other way. Floor-beside-floor and
+	/// wall-on-wall share no horizontal face and are untouched. One place, after every path that
+	/// produces a placement, so the ghost, the placed piece and the structural touch test all agree
+	/// (<see cref="BuildStructuralIntegrity"/> counts an exact face-to-face contact as touching).
+	/// </summary>
+	static Transform ApplyFloorFaceOffset( string placingPieceId, BuildPiece targetPiece, Transform placement )
+	{
+		if ( targetPiece is null || !targetPiece.IsValid() )
+			return placement;
+
+		var placingIsFloor = IsFloor( placingPieceId );
+		if ( placingIsFloor == IsFloor( targetPiece.PieceId ) )
+			return placement;
+
+		var floorId = placingIsFloor ? placingPieceId : targetPiece.PieceId;
+		var floorThinHalf = BuildColliderSnap.GetColliderHalfForPiece( floorId ).z;
+		var above = placement.Position.z >= targetPiece.GameObject.WorldPosition.z;
+		return placement.WithPosition( placement.Position + Vector3.Up * ( above ? floorThinHalf : -floorThinHalf ) );
 	}
 
 	public static Vector3 GetPlacingSnapWorld(

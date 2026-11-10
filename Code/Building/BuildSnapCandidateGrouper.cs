@@ -79,9 +79,18 @@ static class BuildSnapCandidateGrouper
 		}
 	}
 
+	/// <param name="heldAnchorSnapIndex">
+	/// Placing snap the player is holding the piece by (chosen with Q/E), or -1 for Auto. The
+	/// variant list puts the corner that completes a flush mate first, and that corner changes
+	/// with yaw — so a bare index ("4/4") named a different corner after a half turn and the
+	/// piece jumped to pivot on the other end of the seam mid-scroll. A held corner is picked by
+	/// role whatever slot it sits in now; the index is only the fallback when the group has no
+	/// member on that role.
+	/// </param>
 	public static bool TryPickCandidate(
 		IReadOnlyList<BuildSnapCandidate> candidates,
 		int anchorVariantIndex,
+		int heldAnchorSnapIndex,
 		BuildSnapGroupKey? lockedGroup,
 		string placingPieceId,
 		IReadOnlyList<BuildSnapPoint> placingSnaps,
@@ -128,6 +137,19 @@ static class BuildSnapCandidateGrouper
 		}
 
 		variantCount = CountVariants( candidates, bestGroup );
+
+		if ( heldAnchorSnapIndex >= 0 )
+		{
+			for ( var i = 0; i < candidates.Count; i++ )
+			{
+				if ( !candidates[i].GroupKey.Equals( bestGroup ) || candidates[i].AnchorSnapIndex != heldAnchorSnapIndex )
+					continue;
+
+				selected = candidates[i];
+				return true;
+			}
+		}
+
 		var clamped = variantCount > 0
 			? ( anchorVariantIndex % variantCount + variantCount ) % variantCount
 			: 0;
