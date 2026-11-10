@@ -36,6 +36,13 @@ public static class EnemyCampCatalog
 			Log.Warning( "[EnemyCampCatalog] No enemy_camps.json — enemy camps unavailable." );
 	}
 
+	/// <summary>Read the layouts again (once per world load — <see cref="TerrainWorldManager"/>).</summary>
+	public static void Reload()
+	{
+		_loaded = false;
+		EnsureLoaded();
+	}
+
 	public static bool TryGet( string campId, out EnemyCampData camp )
 	{
 		EnsureLoaded();

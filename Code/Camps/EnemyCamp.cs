@@ -17,6 +17,9 @@ public sealed class EnemyCamp : Component
 	[Property, Title( "Wander distance (units)" )] public float WanderDistance { get; set; }
 	[Property, Title( "Max travel distance (units)" )] public float MaxTravelDistance { get; set; }
 
+	/// <summary>The build pieces this camp placed (host): a world reset takes them down with the root (<see cref="EnemyCampSites.ClearWorldCamps"/>).</summary>
+	public readonly List<GameObject> Pieces = new();
+
 	const int RingSegments = 64;
 	/// <summary>Ring line height above the sampled ground.</summary>
 	const float RingLift = 12f;

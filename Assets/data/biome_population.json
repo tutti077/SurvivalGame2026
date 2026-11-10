@@ -12,6 +12,58 @@
           "respawn": true,
           "respawnDelaySeconds": 90,
           "near": null
+        },
+        {
+          "entityId": "scav_camp",
+          "camp": "scav_camp_clover",
+          "spacingMeters": 500,
+          "spawnWeight": 0.85,
+          "respawn": true,
+          "respawnDelaySeconds": 300
+        },
+        {
+          "entityId": "fox",
+          "prefab": "prefabs/entity/fox.prefab",
+          "species": "Fox",
+          "spacingMeters": 226,
+          "spawnWeight": 0.8,
+          "respawn": true,
+          "respawnDelaySeconds": 240,
+          "near": null
+        },
+        {
+          "entityId": "whitetail",
+          "prefab": "prefabs/entity/whitetail.prefab",
+          "species": "Whitetail",
+          "spacingMeters": 184,
+          "spawnWeight": 0.9,
+          "groupChance": 0.75,
+          "groupMin": 2,
+          "groupMax": 4,
+          "groupRadiusMeters": 9,
+          "respawn": true,
+          "respawnDelaySeconds": 300,
+          "near": null
+        },
+        {
+          "entityId": "badger",
+          "prefab": "prefabs/entity/badger.prefab",
+          "species": "Badger",
+          "spacingMeters": 245,
+          "spawnWeight": 0.75,
+          "respawn": true,
+          "respawnDelaySeconds": 300,
+          "near": null
+        },
+        {
+          "entityId": "jay",
+          "prefab": "prefabs/entity/bluejay.prefab",
+          "species": "Jay",
+          "spacingMeters": 110,
+          "spawnWeight": 0.6,
+          "respawn": true,
+          "respawnDelaySeconds": 150,
+          "near": null
         }
       ]
     }

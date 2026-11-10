@@ -28,6 +28,29 @@
         { "archetype": "Scav", "tier": 1, "x": 4, "y": 4, "yawDegrees": -135 },
         { "archetype": "Scav", "tier": 1, "x": -4, "y": 4, "yawDegrees": -45 }
       ]
+    },
+    {
+      // The world's generated camps (biome_population.json camp rows, EnemyCampSites). Placeholder structure from the
+      // build kit until the camp models exist (Mark prompt 13: falling-apart fence + rope + tiny thatch huts): a 2 x 2
+      // floor platform beside a campfire, five guards round it.
+      "id": "scav_camp_clover",
+      "displayName": "Scav Camp",
+      "wanderDistanceMeters": 20,
+      "maxTravelDistanceMeters": 70,
+      "pieces": [
+        { "pieceId": "build_wood_floor", "x": -4, "y": -1 },
+        { "pieceId": "build_wood_floor", "x": -4, "y": 1 },
+        { "pieceId": "build_wood_floor", "x": -2, "y": -1 },
+        { "pieceId": "build_wood_floor", "x": -2, "y": 1 },
+        { "pieceId": "furniture_campfire", "x": 2, "y": 0 }
+      ],
+      "entities": [
+        { "archetype": "Scav", "tier": 1, "x": 5, "y": 0, "yawDegrees": 180 },
+        { "archetype": "Scav", "tier": 1, "x": 2, "y": 3, "yawDegrees": -90 },
+        { "archetype": "Scav", "tier": 1, "x": 2, "y": -3, "yawDegrees": 90 },
+        { "archetype": "Scav", "tier": 1, "x": -7, "y": 0, "yawDegrees": 0 },
+        { "archetype": "Scav", "tier": 1, "x": -1, "y": 4, "yawDegrees": -45 }
+      ]
     }
   ]
 }
