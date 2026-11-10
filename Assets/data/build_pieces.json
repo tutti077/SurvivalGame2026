@@ -295,13 +295,17 @@
       "displayName": "Workbench",
       "icon": "",
       "prefab": "prefabs/build/workbench.prefab",
-      "fallbackColor": "0.79,0.64,0.44,1",
-      "halfWidth": 50,
-      "halfHeight": 25,
-      "halfDepth": 25,
+      "fallbackColor": "1,1,1,1",
+      "halfWidth": 40.4,
+      "halfHeight": 19.6,
+      "halfDepth": 20.0,
       "costs": [
         {
           "resourceId": "resource_woodBasic",
+          "amount": 10
+        },
+        {
+          "resourceId": "resource_plantFiber",
           "amount": 10
         }
       ]
@@ -311,16 +315,106 @@
       "displayName": "Augment Station",
       "icon": "",
       "prefab": "prefabs/build/augment_station.prefab",
-      "fallbackColor": "0.28,0.48,0.62,1",
-      "halfWidth": 25,
-      "halfHeight": 15,
-      "halfDepth": 18.75,
+      "fallbackColor": "1,1,1,1",
+      "halfWidth": 37.6,
+      "halfHeight": 32.6,
+      "halfDepth": 33.8,
+      "costs": []
+    },
+    {
+      "id": "drying_rack",
+      "displayName": "Drying Rack",
+      "icon": "",
+      "prefab": "prefabs/build/drying_rack.prefab",
+      "fallbackColor": "1,1,1,1",
+      "halfWidth": 44.0,
+      "halfHeight": 17.4,
+      "halfDepth": 37.2,
+      "costs": [
+        {
+          "resourceId": "crafted_rope",
+          "amount": 10
+        },
+        {
+          "resourceId": "crafted_boneGlue",
+          "amount": 5
+        },
+        {
+          "resourceId": "resource_woodBasic",
+          "amount": 10
+        }
+      ]
+    },
+    {
+      "id": "furnace",
+      "displayName": "Furnace",
+      "icon": "",
+      "prefab": "prefabs/build/furnace.prefab",
+      "fallbackColor": "1,1,1,1",
+      "halfWidth": 25.0,
+      "halfHeight": 27.6,
+      "halfDepth": 40.0,
+      "costs": []
+    },
+    {
+      "id": "anvil",
+      "displayName": "Anvil",
+      "icon": "",
+      "prefab": "prefabs/build/anvil.prefab",
+      "fallbackColor": "1,1,1,1",
+      "halfWidth": 18.8,
+      "halfHeight": 11.4,
+      "halfDepth": 19.0,
       "costs": [
         {
           "resourceId": "resource_woodBasic",
           "amount": 10
         }
       ]
+    },
+    {
+      "id": "refinery",
+      "displayName": "Refinery",
+      "icon": "",
+      "prefab": "prefabs/build/refinery.prefab",
+      "fallbackColor": "1,1,1,1",
+      "halfWidth": 41.2,
+      "halfHeight": 24.8,
+      "halfDepth": 49.0,
+      "costs": []
+    },
+    {
+      "id": "cauldron",
+      "displayName": "Cauldron",
+      "icon": "",
+      "prefab": "prefabs/build/cauldron.prefab",
+      "fallbackColor": "1,1,1,1",
+      "halfWidth": 22.4,
+      "halfHeight": 21.8,
+      "halfDepth": 26.6,
+      "costs": []
+    },
+    {
+      "id": "fabricator",
+      "displayName": "Fabricator",
+      "icon": "",
+      "prefab": "prefabs/build/fabricator.prefab",
+      "fallbackColor": "1,1,1,1",
+      "halfWidth": 33.2,
+      "halfHeight": 19.4,
+      "halfDepth": 38.2,
+      "costs": []
+    },
+    {
+      "id": "chemistry_station",
+      "displayName": "Chemistry Station",
+      "icon": "",
+      "prefab": "prefabs/build/chemistry_station.prefab",
+      "fallbackColor": "1,1,1,1",
+      "halfWidth": 32.4,
+      "halfHeight": 14.8,
+      "halfDepth": 33.0,
+      "costs": []
     },
     {
       "id": "repair",

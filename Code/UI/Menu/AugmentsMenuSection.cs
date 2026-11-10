@@ -66,6 +66,8 @@ public sealed class AugmentsMenuSection : IPlayerMenuSection
 		_sectionRoot = new Panel { Parent = parent };
 		_sectionRoot.Style.Set( "position", "relative" );
 		_sectionRoot.Style.Set( "width", "60%" );
+		// The centre anchor stretches its children; a 60 % column must centre itself or it sits left.
+		_sectionRoot.Style.Set( "align-self", "center" );
 		_sectionRoot.Style.Set( "height", "100%" );
 		_sectionRoot.Style.Set( "flex-direction", "column" );
 		_sectionRoot.Style.Set( "align-items", "center" );

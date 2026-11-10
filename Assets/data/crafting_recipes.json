@@ -22,15 +22,30 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,
+                "stations": [ "workbench" ],
                 "ingredients": [
-                  { "resourceId": "resource_woodBasic", "amount": 1 },
-                  //{ "resourceId": "resource_woodBasic", "amount": 10 },
-                  //{ "resourceId": "resource_stone", "amount": 3 },
-                  //{ "resourceId": "crafted_rope", "amount": 2 }
+                  { "resourceId": "crafted_rope", "amount": 3 },
+                  { "resourceId": "resource_stone", "amount": 1 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "GLHF" },
                   { "label": "Type", "value": "Grappling Hook" }
+                ]
+              },
+              {
+                "id": "leed",
+                "displayName": "Leed",
+                "icon": "ui/items/leed.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "workbench" ],
+                "ingredients": [
+                  { "resourceId": "crafted_rope", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "A long lead rope with a proper handle - clip tames on and walk them" },
+                  { "label": "Type", "value": "Animal management" }
                 ]
               },
               {
@@ -57,8 +72,8 @@
                 "maxStack": 1,
                 "stations": [ "inventory", "workbench" ],
                 "ingredients": [
-                  { "resourceId": "resource_woodBasic", "amount": 10 },
-                  { "resourceId": "resource_plantFiber", "amount": 10 }
+                  { "resourceId": "resource_woodBasic", "amount": 5 },
+                  { "resourceId": "resource_stone", "amount": 3 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Build Hammer for all construction" },
@@ -72,11 +87,10 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,
-                "stations": [ "inventory", "workbench" ],
+                "stations": [ "workbench" ],
                 "ingredients": [
-                  { "resourceId": "crafted_rope", "amount": 1 },
-                  { "resourceId": "resource_woodBasic", "amount": 5 },
-                  { "resourceId": "resource_stone", "amount": 5 }
+                  { "resourceId": "resource_stone", "amount": 5 },
+                  { "resourceId": "resource_woodBasic", "amount": 5 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Basic Axe" },
@@ -92,9 +106,9 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,
-                "stations": [ "inventory", "workbench" ],
+                "stations": [ "workbench" ],
                 "ingredients": [
-                  { "resourceId": "resource_woodBasic", "amount": 5 },
+                  { "resourceId": "resource_woodBasic", "amount": 3 },
                   { "resourceId": "resource_stone", "amount": 3 }
                 ],
                 "stats": [
@@ -129,9 +143,9 @@
                 "maxStack": 1,
                 "stations": [ "inventory", "workbench" ],
                 "ingredients": [
-                  { "resourceId": "resource_woodBasic", "amount": 1 },
-                  { "resourceId": "resource_resin", "amount": 1 },
-                  { "resourceId": "resource_plantFiber", "amount": 2 }
+                  { "resourceId": "resource_resin", "amount": 2 },
+                  { "resourceId": "resource_woodBasic", "amount": 2 },
+                  { "resourceId": "crafted_rope", "amount": 1 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Basic Torch for lighting the way!" },
@@ -344,10 +358,7 @@
                 "maxStack": 1,
                 "stations": [ "inventory", "workbench" ],
                 "ingredients": [
-                    { "resourceId": "resource_woodBasic", "amount": 1 }
-                  //{ "resourceId": "resource_stone", "amount": 3 },
-                  //{ "resourceId": "resource_woodBasic", "amount": 2 },
-                  //{ "resourceId": "resource_plantFiber", "amount": 5 }
+                  { "resourceId": "resource_woodBasic", "amount": 5 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "A crude wooden club. Better than nothing." },
@@ -363,12 +374,9 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,
-                "stations": [ "inventory", "workbench" ],
+                "stations": [ "workbench" ],
                 "ingredients": [
-                    { "resourceId": "resource_woodBasic", "amount": 1 }
-                  //{ "resourceId": "resource_woodBasic", "amount": 6 },
-                  //{ "resourceId": "resource_plantFiber", "amount": 4 },
-                  //{ "resourceId": "resource_resin", "amount": 2 }
+                  { "resourceId": "resource_woodBasic", "amount": 12 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Planks banded with iron. Straps to the left forearm; right-click raises it." },
@@ -382,9 +390,10 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,
-                "stations": [ "inventory", "workbench" ],
+                "stations": [ "workbench" ],
                 "ingredients": [
-                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                  { "resourceId": "resource_woodBasic", "amount": 5 },
+                  { "resourceId": "crafted_rope", "amount": 5 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Wooden bow — hold to draw, release to fire" },
@@ -416,17 +425,61 @@
                 "icon": "ui/items/arrow_wood.png",
                 "unlockId": "",
                 "outputAmount": 10,
-                "maxStack": 50,
-                "ammoType": "bow",
-                "damage": 5,
+                "maxStack": 100,
                 "stations": [ "inventory", "workbench" ],
+                "ammoType": "bow",
+                "damage": 7,
                 "ingredients": [
-                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                  { "resourceId": "resource_woodBasic", "amount": 5 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Basic wooden arrows" },
                   { "label": "Type", "value": "Ammo" },
-                  { "label": "Damage", "value": "5" },
+                  { "label": "Damage", "value": "Pierce 7" },
+                  { "label": "Ammo", "value": "bow" }
+                ]
+              },
+              {
+                "id": "arrow_fire",
+                "displayName": "Fire Arrow",
+                "icon": "ui/items/arrow_fire.png",
+                "unlockId": "",
+                "outputAmount": 10,
+                "maxStack": 100,
+                "ammoType": "bow",
+                "damage": 7,
+                "burnDamage": 15,
+                "burnSeconds": 5,
+                "stations": [ "workbench" ],
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 5 },
+                  { "resourceId": "resource_resin", "amount": 1 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Resin-tipped arrows" },
+                  { "label": "Type", "value": "Ammo" },
+                  { "label": "Damage", "value": "Pierce 7, 15 On Fire!" },
+                  { "label": "Ammo", "value": "bow" }
+                ]
+              },
+              {
+                "id": "arrow_flint",
+                "displayName": "Flint Arrow",
+                "icon": "ui/items/arrow_flint.png",
+                "unlockId": "",
+                "outputAmount": 10,
+                "maxStack": 100,
+                "ammoType": "bow",
+                "damage": 10,
+                "stations": [ "workbench" ],
+                "ingredients": [
+                  { "resourceId": "resource_woodBasic", "amount": 5 },
+                  { "resourceId": "resource_flint", "amount": 5 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Flint-headed arrows" },
+                  { "label": "Type", "value": "Ammo" },
+                  { "label": "Damage", "value": "Pierce 10" },
                   { "label": "Ammo", "value": "bow" }
                 ]
               },
@@ -437,13 +490,14 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,
-                "stations": [ "inventory", "workbench" ],
+                "stations": [ "workbench" ],
                 "ingredients": [
-                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                  { "resourceId": "resource_woodBasic", "amount": 10 },
+                  { "resourceId": "resource_flint", "amount": 3 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Sharpened flint on a wooden shaft" },
-                  { "label": "Type", "value": "Two Handed" }
+                  { "label": "Type", "value": "One Handed" }
                 ]
               },
               {
@@ -452,10 +506,11 @@
                 "icon": "ui/items/bola_basic.png",
                 "unlockId": "",
                 "outputAmount": 1,
-                "maxStack": 1,
+                "maxStack": 10,
                 "stations": [ "inventory", "workbench" ],
                 "ingredients": [
-                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                  { "resourceId": "crafted_rope", "amount": 3 },
+                  { "resourceId": "resource_stone", "amount": 3 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Weighted cords — tangles a target's legs" },
@@ -469,8 +524,10 @@
                 "unlockId": "",
                 "outputAmount": 1,
                 "maxStack": 1,
+                "stations": [ "workbench" ],
                 "ingredients": [
-                  { "resourceId": "resource_woodBasic", "amount": 1 }
+                  { "resourceId": "resource_femur", "amount": 5 },
+                  { "resourceId": "crafted_rope", "amount": 3 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Sharpened bone blade" },
@@ -873,10 +930,10 @@
                 "icon": "ui/items/crafted_rope.png",
                 "unlockId": "",
                 "outputAmount": 1,
-                "maxStack": 20,
-                "stations": [ "inventory", "workbench" ],
+                "maxStack": 50,
+                "stations": [ "workbench" ],
                 "ingredients": [
-                  { "resourceId": "resource_plantFiber", "amount": 5 }
+                  { "resourceId": "resource_plantFiber", "amount": 3 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Rope for crafting" },
@@ -888,10 +945,11 @@
                 "displayName": "Bone Glue",
                 "icon": "ui/items/crafted_boneGlue.png",
                 "unlockId": "",
-                "outputAmount": 2,
-                "maxStack": 20,
+                "outputAmount": 1,
+                "maxStack": 50,
+                "stations": [ "workbench" ],
                 "ingredients": [
-                  { "resourceId": "resource_femur", "amount": 1 }
+                  { "resourceId": "resource_femur", "amount": 3 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Bone Glue for crafting" },
@@ -903,8 +961,9 @@
                 "displayName": "Leather",
                 "icon": "ui/items/crafted_leather.png",
                 "unlockId": "",
-                "outputAmount": 1,
-                "maxStack": 1,
+                "outputAmount": 2,
+                "maxStack": 50,
+                "stations": [ "drying_rack" ],
                 "ingredients": [
                   { "resourceId": "resource_hide", "amount": 1 }
                 ],
@@ -1442,7 +1501,7 @@
                 "maxStack": 1,
                 "stations": [ "workbench" ],
                 "ingredients": [
-                  { "resourceId": "crafted_leather", "amount": 2 }
+                  { "resourceId": "crafted_leather", "amount": 3 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Light leather cap — 1 armor, leather set" },
@@ -1458,7 +1517,7 @@
                 "maxStack": 1,
                 "stations": [ "workbench" ],
                 "ingredients": [
-                  { "resourceId": "crafted_leather", "amount": 10 }
+                  { "resourceId": "crafted_leather", "amount": 7 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Light leather chest — 3 armor, covers the arms and hands, leather set" },
@@ -1474,11 +1533,75 @@
                 "maxStack": 1,
                 "stations": [ "workbench" ],
                 "ingredients": [
-                  { "resourceId": "crafted_leather", "amount": 6 }
+                  { "resourceId": "crafted_leather", "amount": 5 }
                 ],
                 "stats": [
                   { "label": "Description", "value": "Light leather pants — 2 armor, covers the feet, leather set" },
                   { "label": "Type", "value": "Armor" }
+                ]
+              },
+              {
+                "id": "cowl_leather",
+                "displayName": "Cowl",
+                "icon": "ui/items/cowl_leather.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "workbench" ],
+                "ingredients": [
+                  { "resourceId": "crafted_leather", "amount": 3 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Leather cowl" },
+                  { "label": "Type", "value": "Clothing" }
+                ]
+              },
+              {
+                "id": "headdress",
+                "displayName": "Headdress",
+                "icon": "ui/items/headdress.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "workbench" ],
+                "ingredients": [
+                  { "resourceId": "crafted_leather", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Feathered leather headdress" },
+                  { "label": "Type", "value": "Clothing" }
+                ]
+              },
+              {
+                "id": "bandana_leather",
+                "displayName": "Bandana",
+                "icon": "ui/items/bandana_leather.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "workbench" ],
+                "ingredients": [
+                  { "resourceId": "crafted_leather", "amount": 2 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Leather bandana" },
+                  { "label": "Type", "value": "Clothing" }
+                ]
+              },
+              {
+                "id": "handwraps_leather",
+                "displayName": "Hand Wraps",
+                "icon": "ui/items/handwraps_leather.png",
+                "unlockId": "",
+                "outputAmount": 1,
+                "maxStack": 1,
+                "stations": [ "workbench" ],
+                "ingredients": [
+                  { "resourceId": "crafted_leather", "amount": 3 }
+                ],
+                "stats": [
+                  { "label": "Description", "value": "Leather hand wraps" },
+                  { "label": "Type", "value": "Clothing" }
                 ]
               }
   ]

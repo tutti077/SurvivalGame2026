@@ -47,6 +47,13 @@ public sealed class CraftingRecipe
 	[JsonPropertyName( "damage" )]
 	public float Damage { get; set; }
 
+	/// <summary>Fire arrows: total burn damage dealt over <see cref="BurnSeconds"/> after a creature hit (0 = none; <see cref="BurnEffect"/>).</summary>
+	[JsonPropertyName( "burnDamage" )]
+	public float BurnDamage { get; set; }
+
+	[JsonPropertyName( "burnSeconds" )]
+	public float BurnSeconds { get; set; } = 5f;
+
 	/// <summary>
 	/// Crafting station required nearby (e.g. <c>campfire</c>). Empty = craft anywhere.
 	/// </summary>

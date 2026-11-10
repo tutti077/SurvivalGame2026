@@ -247,9 +247,11 @@ public sealed partial class PlayerInventoryInteraction : Component
 		TickAugmentStationAccess();
 		TickWorkbenchAccess();
 		TickCampfireAccess();
+		TickDryingRackAccess();
 		TickDoorAccess();
 		TickTrapAccess();
 		TickLeverAccess();
+		TickAnimalAccess();
 		TickBedAccess();
 		TickTimeTrialAccess();
 		TickArenaAccess();

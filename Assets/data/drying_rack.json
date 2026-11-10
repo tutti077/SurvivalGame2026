@@ -1,0 +1,5 @@
+{
+  "processes": [
+    { "input": "resource_hide", "output": "crafted_leather", "outputAmount": 2, "hours": 6 }
+  ]
+}

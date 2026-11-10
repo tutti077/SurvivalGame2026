@@ -159,7 +159,7 @@ public sealed class PlayerCrafting : Component
 		}
 
 		if ( !free && recipe.RequiresStation
-		     && !Campfire.IsPlayerNearLitOrFueledStation( GameObject, recipe.RequiredStation ) )
+		     && !CraftingStations.IsPlayerNear( GameObject, recipe.RequiredStation ) )
 		{
 			if ( LogCrafting )
 				Log.Info( $"[PlayerCrafting] {GameObject.Name}: need station '{recipe.RequiredStation}' for '{recipeId}'." );
@@ -205,7 +205,10 @@ public sealed class PlayerCrafting : Component
 		var crafterName = EquipmentCatalog.TryGet( recipe.Id, out _ ) ? ResolveCrafterName() : null;
 
 		var tier = EquipmentUpgrade.IsUpgradable( recipe.Id ) ? EquipmentUpgrade.BaseTier : 0;
-		if ( !_inventory.HostTryAddResource( recipe.Id, outputTotal, wear: 0, crafterName: crafterName, tier: tier ) )
+		bool outputAdded;
+		using ( PlaytestLog.Gain( "craft" ) )
+			outputAdded = _inventory.HostTryAddResource( recipe.Id, outputTotal, wear: 0, crafterName: crafterName, tier: tier );
+		if ( !outputAdded )
 		{
 			if ( LogCrafting )
 				Log.Warning( $"[PlayerCrafting] {GameObject.Name}: crafted '{recipeId}' but inventory could not fit output." );
@@ -216,6 +219,7 @@ public sealed class PlayerCrafting : Component
 			Log.Info( $"[PlayerCrafting] {GameObject.Name}: crafted {outputTotal} {recipe.Id}{(free ? " (allCrafting hack, free)" : string.Empty)}." );
 
 		Components.Get<PlayerQuests>()?.HostReport( QuestEventIds.ItemCrafted, recipe.Id, outputTotal );
+		PlaytestLog.HostCrafted( GameObject, recipe.Id, outputTotal );
 
 		return true;
 	}
@@ -333,10 +337,6 @@ public sealed class PlayerCrafting : Component
 		return false;
 	}
 
-	static List<CraftingIngredient> BuildIngredients( CraftingRecipe recipe )
-	{
-		var list = new List<CraftingIngredient>();
-		if ( recipe.Ingredients is null )
 	/// <summary>
 	/// Workbench upgrade click: raise the stack at <paramref name="slotIndex"/> of the hotbar
 	/// (<see cref="EquipmentUpgrade.HotbarGridId"/>) or bag (<see cref="EquipmentUpgrade.BagGridId"/>)
@@ -435,6 +435,10 @@ public sealed class PlayerCrafting : Component
 		return applied;
 	}
 
+	static List<CraftingIngredient> BuildIngredients( CraftingRecipe recipe )
+	{
+		var list = new List<CraftingIngredient>();
+		if ( recipe.Ingredients is null )
 			return list;
 
 		for ( var i = 0; i < recipe.Ingredients.Count; i++ )

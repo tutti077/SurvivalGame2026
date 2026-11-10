@@ -232,7 +232,7 @@ public sealed partial class PlayerInventoryInteraction
 		{
 			// Timings come from this item's weapon class row, not from whatever is currently in hand.
 			var timings = MeleeWeaponClassCatalog.Resolve( profile.WeaponClass, profile.MeleeOverrides );
-			lines.Add( ($"Windup {timings.WindupSeconds:0.00}s · charge {timings.ChargeSeconds:0.00}s · reach {timings.ReachForwardMeters:0.0}m", TooltipStatColor) );
+			lines.Add( ($"Windup {timings.WindupSeconds:0.00}s · swing {timings.ActiveSeconds:0.00}s · reach {timings.ReachForwardMeters:0.0}m", TooltipStatColor) );
 		}
 
 		if ( EquipmentCatalog.HasAction( profile.ResourceId, EquippedItemActions.PrimaryRanged ) && combat is not null )

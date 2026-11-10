@@ -23,7 +23,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	public const float RecipeListItemScale = 0.5f;
 
 	public const float RowIconSize = 48f * WidthScale * RecipeListItemScale;
-	public const float DetailIconSize = 80f * WidthScale;
+	public const float DetailIconSize = 64f * WidthScale;
 	public const float MinSectionHeight = 420f * LengthScale;
 	/// <summary>
 	/// The section fills the menu side anchor: the viewport minus the bottom HUD strip the vitals keep
@@ -48,7 +48,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	public const float WheelItemsPerNotch = 4.5f;
 
 	public const float CraftingTitleFontSize = 24f * TextScale;
-	public const float ItemNameFontSize = 20f * TextScale;
+	public const float ItemNameFontSize = 16f * TextScale;
 	public const float ItemDescriptionFontSize = 12f * TextScale;
 	public const float SectionHeaderFontSize = 17f * TextScale;
 	public const float SectionEntryFontSize = 14f * TextScale;
@@ -94,7 +94,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	bool _panelVisible = true;
 	bool _craftButtonPressedVisual;
 	int _builtRecipeContentVersion = -1;
-	bool _builtNearCampfire;
+	int _builtNearStations;
 	bool _builtWorkbenchOpen;
 
 	PlayerInventoryInteraction _interaction;
@@ -147,45 +147,9 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		title.Style.Set( "white-space", "nowrap" );
 		_titleLabel = title;
 
-		// Workbench-only: free tool repair, one most-damaged tool per click.
-		_repairButton = new Panel { Parent = header };
-		_repairButton.Style.Set( "padding-left", $"{10f * LayoutScale}px" );
-		_repairButton.Style.Set( "padding-right", $"{10f * LayoutScale}px" );
-		_repairButton.Style.Set( "padding-top", $"{6f * LayoutScale}px" );
-		_repairButton.Style.Set( "padding-bottom", $"{6f * LayoutScale}px" );
-		UiStyle.Button( _repairButton, UiButton.Default );
-		_repairButton.Style.Set( "pointer-events", "auto" );
-		_repairButton.Style.Set( "flex-shrink", "0" );
-		_repairButton.Style.Set( "display", "none" );
-
-		_repairButtonLabel = new Label { Parent = _repairButton, Text = "Repair Tool" };
-		UiStyle.ButtonLabel( _repairButtonLabel, UiButton.Default, 15f * TextScale );
-		_repairButtonLabel.Style.Set( "white-space", "nowrap" );
-
-		var craftWrap = new Panel { Parent = header };
-		craftWrap.Style.Set( "position", "relative" );
-		craftWrap.Style.Set( "flex-shrink", "1" );
-		craftWrap.Style.Set( "min-width", "0" );
-
-		_craftButton = new CraftButtonPanel( this ) { Parent = craftWrap };
-		_craftButton.Style.Set( "position", "relative" );
-		_craftButton.Style.Set( "overflow", "hidden" );
-		_craftButton.Style.Set( "padding-left", $"{12f * LayoutScale}px" );
-		_craftButton.Style.Set( "padding-right", $"{12f * LayoutScale}px" );
-		_craftButton.Style.Set( "padding-top", $"{6f * LayoutScale}px" );
-		_craftButton.Style.Set( "padding-bottom", $"{6f * LayoutScale}px" );
-		// The one primary action on the page (Craft / Upgrade).
-		UiStyle.Button( _craftButton, UiButton.Primary );
-		_craftButton.Style.Set( "pointer-events", "auto" );
-		_craftButton.Style.Set( "z-index", "4" );
-
-		_craftButtonLabel = new Label { Parent = _craftButton, Text = "Craft" };
-		UiStyle.ButtonLabel( _craftButtonLabel, UiButton.Primary, 15f * TextScale );
-		_craftButtonLabel.Style.Set( "position", "relative" );
-		_craftButtonLabel.Style.Set( "z-index", "2" );
-		_craftButtonLabel.Style.Set( "white-space", "nowrap" );
-
-		// Workbench only: Craft / Upgrade tabs. Hidden in the personal menu.
+		// Workbench only: Craft / Upgrade tabs on the left, the repair button on the right. Hidden in
+		// the personal menu. (The header above holds the title alone: "Workbench" plus two buttons
+		// never fit the 400 px column - the repair label was clipped and the action button pushed out.)
 		_tabRow = new Panel { Parent = _sectionRoot };
 		_tabRow.Style.Set( "flex-direction", "row" );
 		_tabRow.Style.Set( "align-items", "center" );
@@ -196,6 +160,21 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_craftTabButton = CreateTabButton( _tabRow, "Craft" );
 		_upgradeTabButton = CreateTabButton( _tabRow, "Upgrade" );
 		UpdateTabVisual();
+
+		// Free tool repair, one most-damaged tool per click; greyed when nothing is damaged.
+		_repairButton = new Panel { Parent = _tabRow };
+		_repairButton.Style.Set( "margin-left", "auto" );
+		_repairButton.Style.Set( "padding-left", $"{10f * LayoutScale}px" );
+		_repairButton.Style.Set( "padding-right", $"{10f * LayoutScale}px" );
+		_repairButton.Style.Set( "padding-top", $"{5f * LayoutScale}px" );
+		_repairButton.Style.Set( "padding-bottom", $"{5f * LayoutScale}px" );
+		UiStyle.Button( _repairButton, UiButton.Default );
+		_repairButton.Style.Set( "pointer-events", "auto" );
+		_repairButton.Style.Set( "flex-shrink", "0" );
+
+		_repairButtonLabel = new Label { Parent = _repairButton, Text = "Repair" };
+		UiStyle.ButtonLabel( _repairButtonLabel, UiButton.Default, 15f * TextScale );
+		_repairButtonLabel.Style.Set( "white-space", "nowrap" );
 
 		var detail = new Panel { Parent = _sectionRoot };
 		detail.Style.Set( "flex-direction", "column" );
@@ -281,6 +260,30 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_recipeList.Style.Set( "flex-grow", "1" );
 		_recipeList.Style.Set( "pointer-events", "auto" );
 
+		// The one primary action on the page (Craft / Upgrade), full width at the foot of the column:
+		// "Need materials / space" and "Need Workbench nearby" fit here, never in the title row.
+		_craftButton = new CraftButtonPanel( this ) { Parent = _sectionRoot };
+		_craftButton.Style.Set( "position", "relative" );
+		_craftButton.Style.Set( "overflow", "hidden" );
+		_craftButton.Style.Set( "width", "100%" );
+		_craftButton.Style.Set( "flex-shrink", "0" );
+		_craftButton.Style.Set( "align-items", "center" );
+		_craftButton.Style.Set( "justify-content", "center" );
+		_craftButton.Style.Set( "padding-left", $"{12f * LayoutScale}px" );
+		_craftButton.Style.Set( "padding-right", $"{12f * LayoutScale}px" );
+		_craftButton.Style.Set( "padding-top", $"{7f * LayoutScale}px" );
+		_craftButton.Style.Set( "padding-bottom", $"{7f * LayoutScale}px" );
+		UiStyle.Button( _craftButton, UiButton.Primary );
+		_craftButton.Style.Set( "pointer-events", "auto" );
+		_craftButton.Style.Set( "z-index", "4" );
+
+		_craftButtonLabel = new Label { Parent = _craftButton, Text = "Craft" };
+		UiStyle.ButtonLabel( _craftButtonLabel, UiButton.Primary, 15f * TextScale );
+		_craftButtonLabel.Style.Set( "position", "relative" );
+		_craftButtonLabel.Style.Set( "z-index", "2" );
+		_craftButtonLabel.Style.Set( "white-space", "nowrap" );
+		_craftButtonLabel.Style.Set( "text-align", "center" );
+
 		var rowParent = listPanel.Content;
 		PopulateRows( rowParent );
 	}
@@ -304,9 +307,9 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 		rowParent.DeleteChildren();
 		_rows.Clear();
-		var nearCampfire = IsNearCampfire();
+		var nearStations = NearbyStationsMask();
 		var workbenchOpen = IsWorkbenchOpen;
-		_builtNearCampfire = nearCampfire;
+		_builtNearStations = nearStations;
 		_builtWorkbenchOpen = workbenchOpen;
 
 		var allCrafting = GameHacks.AllCrafting;
@@ -340,7 +343,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		}
 
 		FinishRowList();
-		_builtRecipeContentVersion = BuildRecipeListVersion( nearCampfire );
+		_builtRecipeContentVersion = BuildRecipeListVersion( nearStations );
 		RefreshWorkbenchHeader();
 
 		var keepSelection = !string.IsNullOrWhiteSpace( _selectedRecipeId )
@@ -495,20 +498,20 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		CraftingRecipeCatalog.EnsureLoaded();
 		ResourceDefinitionCatalog.EnsureLoaded();
 
-		var nearCampfire = IsNearCampfire();
-		var version = BuildRecipeListVersion( nearCampfire );
-		if ( version == _builtRecipeContentVersion && nearCampfire == _builtNearCampfire
+		var nearStations = NearbyStationsMask();
+		var version = BuildRecipeListVersion( nearStations );
+		if ( version == _builtRecipeContentVersion && nearStations == _builtNearStations
 		     && IsWorkbenchOpen == _builtWorkbenchOpen )
 			return;
 
 		PopulateRecipeRows( content );
 	}
 
-	static int BuildRecipeListVersion( bool nearCampfire ) =>
+	static int BuildRecipeListVersion( int nearStations ) =>
 		CraftingRecipeCatalog.ContentVersion
 		^ (ResourceDefinitionCatalog.ContentVersion << 16)
 		^ (GameHacks.Version << 24)
-		^ (nearCampfire ? 1 << 30 : 0);
+		^ (nearStations << 29);
 
 	public void ApplyRecipeListWheel( Vector2 wheel )
 	{
@@ -794,9 +797,9 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		return _inventory.CanFitResource( recipe.Id, recipe.TotalOutputAmount );
 	}
 
-	bool IsNearCampfire() =>
-		_inventory is not null
-		&& Campfire.IsPlayerNearLitOrFueledStation( _inventory.GameObject, Campfire.StationId );
+	/// <summary>Campfire / drying rack within use range (CraftingStations bits) — station-gated recipes list by proximity.</summary>
+	int NearbyStationsMask() =>
+		_inventory is null ? 0 : CraftingStations.NearbyMask( _inventory.GameObject );
 
 	PlayerInventoryInteraction ResolveInteraction() =>
 		_interaction ??= _inventory?.Components.Get<PlayerInventoryInteraction>();
@@ -833,7 +836,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		UiStyle.SetButtonState( _repairButton, UiButton.Default, hovered: false, pressed: false, disabled: !_repairAvailable );
 		_repairButton.Style.Set( "cursor", _repairAvailable ? "pointer" : "default" );
 		if ( _repairButtonLabel is not null )
-			_repairButtonLabel.Text = _repairAvailable ? "Repair Tool" : "No damaged tools";
+			_repairButtonLabel.Text = "Repair";
 	}
 
 	bool TryRepairPointerAtScreen( Vector2 screenPos, bool pressed )
@@ -861,7 +864,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		if ( recipe is null || !recipe.RequiresStation || _inventory is null )
 			return false;
 
-		return Campfire.IsPlayerNearLitOrFueledStation( _inventory.GameObject, recipe.RequiredStation );
+		return CraftingStations.IsPlayerNear( _inventory.GameObject, recipe.RequiredStation );
 	}
 
 	bool HasScaledResources( CraftingRecipe recipe )
@@ -902,7 +905,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 			if ( GameHacks.AllCrafting )
 				_craftButtonLabel.Text = "Need space";
 			else if ( recipe is not null && recipe.RequiresStation && !HasRequiredStation( recipe ) )
-				_craftButtonLabel.Text = $"Need {recipe.RequiredStation} nearby";
+				_craftButtonLabel.Text = $"Need {CraftingStations.DisplayName( recipe.RequiredStation )} nearby";
 			else
 				_craftButtonLabel.Text = "Need materials / space";
 		}

@@ -116,19 +116,26 @@ public static class BuildModuleDimensions
 		// printed by Blender/scripts/import_artist_pack.py (building category: bbox centred on the
 		// origin, width X / depth Y / height Z), so the box collider and ground-sit match the mesh.
 		// Chest: Rumple's box1pack.blend imported 2026-10-06 (models/building/chest.vmdl).
-		// The augment station stays a dev box (augtable1pack.blend imports as 1 × 0.57 × 0.78 m).
 		["chest"] = new( 0.83f, 0.71f, 0.93f ),
 		["vehicle_dune_buggy"] = new( 4.2f, 2.5f, 1.7f ),   // ghost / placement box only; the prefab authors the real colliders
 		// Hover platform: 3 × 2 build tiles of deck (6 × 4 m, create_hover_platform.py) plus the console; ghost box only.
 		["vehicle_hover_platform"] = new( 6f, 4f, 1.5f ),
-		["augment_station"] = new( 1f, 0.6f, 0.75f ),
 		["furniture_campfire"] = new( 0.35f, 0.35f, 0.35f ),
 		// Foot traps (BearTrap): flat plates you walk onto. The solid is the thin base; the
 		// catch volume is the trigger child on the prefab.
 		["trap_small"] = new( 0.6f, 0.6f, 0.06f ),
 		["trap_large"] = new( 1.2f, 1.2f, 0.08f ),
-		// Workbench: 2 m wide, 1 m deep, 1 m tall (tool repair + workbench recipes).
-		["workbench"] = new( 2f, 1f, 1f ),
+		// Crafting stations (2026-11-08): temp models from Tools/item_models/itemgen/items_stations.py; each row is
+		// the size the generator prints (width along engine Y = this table's X, depth, height). Prefab box colliders match.
+		["workbench"] = new( 2.02f, 0.98f, 1.0f ),
+		["drying_rack"] = new( 2.2f, 0.87f, 1.86f ),
+		["furnace"] = new( 1.25f, 1.38f, 2.0f ),
+		["anvil"] = new( 0.94f, 0.57f, 0.95f ),
+		["refinery"] = new( 2.06f, 1.24f, 2.45f ),
+		["cauldron"] = new( 1.12f, 1.09f, 1.33f ),
+		["fabricator"] = new( 1.66f, 0.97f, 1.91f ),
+		["chemistry_station"] = new( 1.62f, 0.74f, 1.65f ),
+		["augment_station"] = new( 1.88f, 1.63f, 1.69f ),
 		// Bed: 2 m long, 1 m wide, 0.5 m tall — claimable respawn point and the base-raid target.
 		["bed"] = new( 2f, 1f, 0.5f ),
 		// Circuit pieces: a 0.3 m bulb cube and a 0.2 x 0.2 x 0.3 m lever box. Gates will be 0.15 m cubes.
