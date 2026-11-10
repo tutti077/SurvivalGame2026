@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using Sandbox;
 
 namespace Survival;
@@ -10,23 +9,43 @@ namespace Survival;
 /// terrain scatter, world grass, wind — restoring it before the next, then a trailing baseline. Prints one
 /// table sorted by saving. Run it as the pawn AND as the fly camera; the two tables side by side say what the
 /// pawn costs. Stand still while it runs (~40 s). Driven through the sbox MCP console (Mark 2026-10-13).
+/// CPU is the engine's frame work without the cap wait (<see cref="FrameWorkMs"/>), GPU the latest GPU frame time —
+/// both valid on a vsynced window.
 /// </summary>
 public sealed partial class TerrainPerfBench
 {
+	/// <summary>
+	/// The previous frame's CPU work WITHOUT the vsync / fps_max wait (ms): wall time between two StartUpdate ticks minus
+	/// the engine's <c>Idle</c> timing (the cap wait at the flip). <c>PerformanceStats.FrameTime</c> read from game code
+	/// is the wall time, so it cannot be used for this. Sampled once per bench tick (<see cref="SampleFrameWork"/>).
+	/// </summary>
+	static double FrameWorkMs { get; set; }
+
+	readonly System.Diagnostics.Stopwatch _workClock = new();
+
+	void SampleFrameWork()
+	{
+		var wall = _workClock.IsRunning ? _workClock.Elapsed.TotalMilliseconds : 0d;
+		_workClock.Restart();
+		FrameWorkMs = Math.Max( 0d, wall - Sandbox.Diagnostics.PerformanceStats.Timings.Idle.AverageMs( 1 ) );
+	}
+
+	/// <summary>Latest GPU frame time the engine has (ms; arrives a few frames late).</summary>
+	static double FrameGpuMs => Sandbox.Diagnostics.PerformanceStats.GpuFrametime;
+
 	float _bisectSecondsPerStep = 3f;
 	float _bisectWarmupSeconds = 0.4f;
 
 	sealed record BisectStep( string Name, Action Off, Action On );
 
 	readonly List<BisectStep> _bisectSteps = new();
-	readonly List<(string Name, double AvgMs)> _bisectResults = new();
-	readonly Stopwatch _bisectClock = new();
+	readonly List<(string Name, double AvgMs, double GpuMs)> _bisectResults = new();
 	bool _bisectRunning;
 	int _bisectIndex;          // -1 = leading baseline, Count = trailing baseline
 	float _bisectStepStarted;
-	double _bisectSumMs;
+	double _bisectSumMs, _bisectGpuSumMs;
 	int _bisectFrames;
-	double _bisectBaselineMs;
+	double _bisectBaselineMs, _bisectBaselineGpuMs;
 
 	[ConCmd( "perf_bisect" )]
 	public static void ConCmdBisect()
@@ -89,43 +108,45 @@ public sealed partial class TerrainPerfBench
 	{
 		_bisectStepStarted = Time.Now;
 		_bisectSumMs = 0;
+		_bisectGpuSumMs = 0;
 		_bisectFrames = 0;
-		_bisectClock.Restart();
 		if ( _bisectIndex >= 0 && _bisectIndex < _bisectSteps.Count )
 			_bisectSteps[_bisectIndex].Off();
 	}
 
 	void TickBisect()
 	{
-		var ms = _bisectClock.Elapsed.TotalMilliseconds;
-		_bisectClock.Restart();
 		var elapsed = Time.Now - _bisectStepStarted;
 		if ( elapsed < _bisectWarmupSeconds )
 			return;
 
-		_bisectSumMs += ms;
+		_bisectSumMs += FrameWorkMs;
+		_bisectGpuSumMs += FrameGpuMs;
 		_bisectFrames++;
 		if ( elapsed < _bisectWarmupSeconds + _bisectSecondsPerStep )
 			return;
 
 		var avg = _bisectFrames > 0 ? _bisectSumMs / _bisectFrames : 0;
+		var gpuAvg = _bisectFrames > 0 ? _bisectGpuSumMs / _bisectFrames : 0;
 		var count = _bisectSteps.Count;
 		if ( _bisectIndex == -1 )
 		{
 			_bisectBaselineMs = avg;
+			_bisectBaselineGpuMs = gpuAvg;
 		}
 		else if ( _bisectIndex < count )
 		{
-			_bisectResults.Add( (_bisectSteps[_bisectIndex].Name, avg) );
+			_bisectResults.Add( (_bisectSteps[_bisectIndex].Name, avg, gpuAvg) );
 			_bisectSteps[_bisectIndex].On();
 		}
 		else
 		{
 			_bisectBaselineMs = (_bisectBaselineMs + avg) * 0.5;
+			_bisectBaselineGpuMs = (_bisectBaselineGpuMs + gpuAvg) * 0.5;
 			_bisectRunning = false;
-			Log.Info( $"[PerfBench] bisect done — baseline {_bisectBaselineMs:0.00} ms ({1000.0 / Math.Max( _bisectBaselineMs, 0.01 ):0} fps). Saving = baseline − avg with that one thing off:" );
-			foreach ( var (name, a) in _bisectResults.OrderByDescending( r => _bisectBaselineMs - r.AvgMs ) )
-				Log.Info( $"[PerfBench]   {_bisectBaselineMs - a,6:+0.00;-0.00} ms  {name}  (avg {a:0.00} ms = {1000.0 / Math.Max( a, 0.01 ):0} fps)" );
+			Log.Info( $"[PerfBench] bisect done — baseline cpu {_bisectBaselineMs:0.00} ms, gpu {_bisectBaselineGpuMs:0.00} ms. Saving = baseline − avg with that one thing off (cpu | gpu):" );
+			foreach ( var (name, a, g) in _bisectResults.OrderByDescending( r => _bisectBaselineMs - r.AvgMs ) )
+				Log.Info( $"[PerfBench]   cpu {_bisectBaselineMs - a,6:+0.00;-0.00} | gpu {_bisectBaselineGpuMs - g,6:+0.00;-0.00} ms  {name}  (cpu {a:0.00}, gpu {g:0.00})" );
 			return;
 		}
 

@@ -113,6 +113,38 @@ public sealed partial class TerrainWorldManager
 		return best;
 	}
 
+	static TerrainWorldManager _waterProbeManager;
+	static Scene _waterProbeScene;
+	static float _waterProbeLookupAt = float.MinValue;
+
+	/// <summary>
+	/// Metres of water above a world point in the streamed world (sea, lakes, tarns, rivers), negative above the
+	/// water. False when the scene has no terrain world (test scenes - see <see cref="WaterProbe"/> for the trigger
+	/// fallback). The manager lookup is cached per scene and retried every 2 s.
+	/// </summary>
+	public static bool TryGetWaterDepthMeters( Scene scene, Vector3 worldPosition, out float depthMeters )
+	{
+		depthMeters = float.MinValue;
+		if ( scene is null || !scene.IsValid() )
+			return false;
+
+		if ( _waterProbeScene != scene || _waterProbeManager is null || !_waterProbeManager.IsValid() )
+		{
+			if ( _waterProbeScene == scene && Time.Now - _waterProbeLookupAt < 2f )
+				return false;
+
+			_waterProbeScene = scene;
+			_waterProbeLookupAt = Time.Now;
+			_waterProbeManager = scene.GetAllComponents<TerrainWorldManager>().FirstOrDefault();
+		}
+
+		if ( _waterProbeManager is null || !_waterProbeManager.IsValid() || _waterProbeManager._loadSettings is null )
+			return false;
+
+		depthMeters = _waterProbeManager.CameraWaterDepthMeters( worldPosition );
+		return true;
+	}
+
 	void DestroyUnderwater()
 	{
 		if ( _underwaterCamera is not null && _underwaterCamera.IsValid() && _underwaterCommands is not null )

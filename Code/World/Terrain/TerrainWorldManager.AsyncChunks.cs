@@ -63,6 +63,9 @@ public sealed partial class TerrainWorldManager
 		public bool Visible;
 		/// <summary>A LOD rebuild of a chunk that is already loaded (apply to its existing GameObject).</summary>
 		public bool Remesh;
+		/// <summary>A load's grass biome mask, built on the worker after the geometry (read once Task has completed).</summary>
+		public bool[] GrassMask;
+		public bool GrassMaskBuilt;
 	}
 
 	readonly Dictionary<TerrainChunkCoord, PendingChunkBuild> _pendingBuilds = new();
@@ -88,17 +91,25 @@ public sealed partial class TerrainWorldManager
 		var fineSides = ResolveFineBorderSides( coord, settings, chunkSize );
 		var backend = _backend;
 		var chunkSizeMeters = ChunkSizeMeters;
+		var patchSources = GroundPatchSources();   // wild-wheat beds: planned on the worker with the samples
 
-		var task = GameTask.RunInThreadAsync( () => TerrainMeshBuilder.BuildChunkGeometry(
-			settings, backend, coord, chunkSizeMeters, verticesPerSide, smoothPasses, smoothStrength, border, fineSides ) );
-
-		_pendingBuilds[coord] = new PendingChunkBuild
+		var pending = new PendingChunkBuild();
+		var task = GameTask.RunInThreadAsync( () =>
 		{
-			Coord = coord,
-			Task = task,
-			VerticesPerSide = verticesPerSide,
-			Visible = visible,
-		};
+			var geometry = TerrainMeshBuilder.BuildChunkGeometry(
+				settings, backend, coord, chunkSizeMeters, verticesPerSide, smoothPasses, smoothStrength, border, fineSides,
+				TerrainVegetationScatter.PlanGroundPatches( settings, backend, coord, chunkSizeMeters, patchSources ) );
+			// 64 pipeline samples (~1.2 ms) that were the main thread's at chunk finish (NotifyGrassChunkChanged).
+			pending.GrassMask = BuildGrassBiomeMask( coord, settings, backend, Math.Max( 32f, chunkSizeMeters ) );
+			pending.GrassMaskBuilt = true;
+			return geometry;
+		} );
+
+		pending.Coord = coord;
+		pending.Task = task;
+		pending.VerticesPerSide = verticesPerSide;
+		pending.Visible = visible;
+		_pendingBuilds[coord] = pending;
 		return true;
 	}
 
@@ -117,9 +128,11 @@ public sealed partial class TerrainWorldManager
 		var fineSides = ResolveFineBorderSides( coord, settings, Math.Max( 32f, ChunkSizeMeters ) );
 		var backend = _backend;
 		var chunkSizeMeters = ChunkSizeMeters;
+		var patchSources = GroundPatchSources();   // wild-wheat beds: planned on the worker with the samples
 
 		var task = GameTask.RunInThreadAsync( () => TerrainMeshBuilder.BuildChunkGeometry(
-			settings, backend, coord, chunkSizeMeters, verticesPerSide, smoothPasses, smoothStrength, border, fineSides ) );
+			settings, backend, coord, chunkSizeMeters, verticesPerSide, smoothPasses, smoothStrength, border, fineSides,
+			TerrainVegetationScatter.PlanGroundPatches( settings, backend, coord, chunkSizeMeters, patchSources ) ) );
 
 		_pendingBuilds[coord] = new PendingChunkBuild
 		{
@@ -201,7 +214,7 @@ public sealed partial class TerrainWorldManager
 			}
 
 			var built = TerrainMeshBuilder.BuildModelFromGeometry( geometry, ChunkSizeMeters, MaxTerrainHeightMeters, withCollision: true, sinkMeters: 0f );
-			FinishChunkLoad( coord, settings, streamPos, pending.Visible, pending.VerticesPerSide, built );
+			FinishChunkLoad( coord, settings, streamPos, pending.Visible, pending.VerticesPerSide, built, pending.GrassMask, pending.GrassMaskBuilt );
 			finished++;
 		}
 

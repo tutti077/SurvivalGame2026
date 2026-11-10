@@ -27,9 +27,11 @@ public static class TerrainVegetationScatter
 		public string Kind { get; init; }
 	}
 
-	// The plan list the populate calls write into (main thread only). Null = spawn immediately (legacy callers).
-	static List<SpawnPlan> _plans;
+	// The plan list the populate calls write into, per thread: the main thread's chunk populate and the far ring's worker
+	// planner (EnumerateTrees → far-ring landmarks) each set their own. Null = spawn immediately (legacy callers).
+	[ThreadStatic] static List<SpawnPlan> _plans;
 	static readonly Dictionary<string, Vector3> _authoredScale = new();
+	static readonly object _authoredScaleLock = new();
 
 	/// <summary>
 	/// Clone and place a planned instance. Main thread; called by the manager's budgeted spawner.
@@ -71,8 +73,11 @@ public static class TerrainVegetationScatter
 
 	static Vector3 AuthoredScale( string path )
 	{
-		if ( _authoredScale.TryGetValue( path, out var cached ) )
-			return cached;
+		lock ( _authoredScaleLock )
+		{
+			if ( _authoredScale.TryGetValue( path, out var cached ) )
+				return cached;
+		}
 
 		var scale = Vector3.One;
 		var template = GameObject.GetPrefab( path );
@@ -83,7 +88,8 @@ public static class TerrainVegetationScatter
 				scale = Vector3.One;
 		}
 
-		_authoredScale[path] = scale;
+		lock ( _authoredScaleLock )
+			_authoredScale[path] = scale;
 		return scale;
 	}
 
@@ -120,6 +126,8 @@ public static class TerrainVegetationScatter
 		public bool Enabled { get; init; }
 		public TerrainPreviewBiomeId BiomeId { get; init; }
 		public string Prefab { get; init; }
+		/// <summary>Variants picked per member by hash (forage kinds with several models). Null / empty = <see cref="Prefab"/> only.</summary>
+		public string[] Prefabs { get; init; }
 		public string InstancePrefix { get; init; }
 		public string KindLabel { get; init; }
 		public int NoiseSeedSalt { get; init; }
@@ -131,6 +139,32 @@ public static class TerrainVegetationScatter
 		public float ScaleMin { get; init; }
 		public float ScaleMax { get; init; }
 		public int MaxPerChunk { get; init; }
+		/// <summary>&gt; 0 = the cluster stands on generated tilled soil reaching this far past its radius (<see cref="TerrainGroundPatch"/>, <see cref="PlanGroundPatches"/>): the wild-wheat beds.</summary>
+		public float TilledPatchPadMeters { get; init; }
+		/// <summary>Planted with the large trees (inside Tree Objects Range, once per chunk load, kept until the chunk unloads) instead of the small-prop range: landmarks that must be seen from further than a pebble.</summary>
+		public bool WithTrees { get; init; }
+		/// <summary>&gt; 0 = a wide base (metres at scale 1, × the mean scale): the member stands at the LOWEST ground of six points on this
+		/// ring round it (then <see cref="SinkMeters"/> lower), so no side of a spire hangs over a slope. Six samples once per placement.</summary>
+		public float FootprintRadiusMeters { get; init; }
+		/// <summary>&gt; 0 = clearings only: the cluster centre and six points on a ring this wide must all lie outside the biome's forest patches (where no large tree is ever planted).</summary>
+		public float ClearingRadiusMeters { get; init; }
+		/// <summary>No member closer than this to a large trunk planted in the same chunk.</summary>
+		public float TrunkClearanceMeters { get; init; }
+		/// <summary>Members are lowered this far (× their scale) so a wide base on a slope does not float on its downhill side.</summary>
+		public float SinkMeters { get; init; }
+		/// <summary>&gt; 0 = each member leans this many degrees (min..max by hash) off vertical toward a hashed heading, and sinks a further
+		/// <see cref="FootprintRadiusMeters"/> × sin(lean) so the raised edge of its base stays in the ground: the stone spires
+		/// (Mark 2026-11-03: "make them angled on the ground — it'll help with grappling").</summary>
+		public float LeanMinDegrees { get; init; }
+		public float LeanMaxDegrees { get; init; }
+		/// <summary>Share of members that stand straight up instead of leaning (Mark 2026-11-04: "some of the spires should be straight up").</summary>
+		public float LeanUprightChance01 { get; init; }
+		/// <summary>&gt; 1 = members are this much wider (x / y) than their scale makes them, height unchanged; the footprint ring widens
+		/// with them. The spires: 2 (Mark 2026-11-04: "still far too skinny, make them 2x as thick").</summary>
+		public float ThicknessMul { get; init; }
+		/// <summary>Also drawn by the far ring past Tree Objects Range, as the prefab's <c>_far.vmdl</c> (a <see cref="WithTrees"/> landmark
+		/// that must be seen as far as the trees: the stone spires, Mark 2026-11-03 "they pop in from too close up").</summary>
+		public bool FarRing { get; init; }
 	}
 
 	public readonly struct Options
@@ -160,9 +194,16 @@ public static class TerrainVegetationScatter
 		public float NearLargeTreeStickChance01 { get; init; }
 		public float NearLargeTreeStickMinRadiusMeters { get; init; }
 		public float NearLargeTreeStickMaxRadiusMeters { get; init; }
+		/// <summary>Clover Hills only: after each large tree, roll this chance to hang a beehive from a low limb (0.02 = one tree in fifty).</summary>
+		public string[] BeehivePrefabs { get; init; }
+		public float BeehiveChance01 { get; init; }
+		public float BeehiveHangMinMeters { get; init; }
+		public float BeehiveHangMaxMeters { get; init; }
+		public float BeehiveReachMinMeters { get; init; }
+		public float BeehiveReachMaxMeters { get; init; }
 	}
 
-	sealed class ResolvedProfile
+	internal sealed class ResolvedProfile
 	{
 		public TerrainPreviewBiomeId BiomeId;
 		public string[] Paths;
@@ -193,7 +234,8 @@ public static class TerrainVegetationScatter
 		List<Vector2> trunks,
 		List<SpawnPlan> plans = null,
 		bool largeTrees = true,
-		bool props = true )
+		bool props = true,
+		bool landmarks = false )
 	{
 		if ( !options.Enabled || chunkRoot is null || !chunkRoot.IsValid() )
 			return;
@@ -204,7 +246,7 @@ public static class TerrainVegetationScatter
 		_plans = plans;
 		try
 		{
-			PopulateChunkCore( chunkRoot, coord, settings, backend, chunkSizeMeters, options, trunks, largeTrees, props );
+			PopulateChunkCore( chunkRoot, coord, settings, backend, chunkSizeMeters, options, trunks, largeTrees, props, landmarks );
 		}
 		finally
 		{
@@ -221,7 +263,8 @@ public static class TerrainVegetationScatter
 		Options options,
 		List<Vector2> trunks,
 		bool largeTrees,
-		bool props )
+		bool props,
+		bool landmarks )
 	{
 		var profiles = ResolveProfiles( options.Profiles );
 		var chunkSize = Math.Max( 32f, chunkSizeMeters );
@@ -244,39 +287,70 @@ public static class TerrainVegetationScatter
 				options,
 				trunks ?? [] );
 
-		if ( !props || options.PropClusters is null )
+		if ( (!props && !landmarks) || options.PropClusters is null )
 			return;
 
+		var forest = ForestPatchField.For( settings, options, profiles );
 		foreach ( var cluster in options.PropClusters )
 		{
-			if ( string.Equals( cluster.KindLabel, "stick", StringComparison.OrdinalIgnoreCase ) )
+			// Landmarks (spires, boulders) ride the tree pass; everything else the prop pass
+			if ( cluster.WithTrees ? !landmarks : !props )
+				continue;
+			ScatterPropClusters( chunkRoot, coord, settings, backend, chunkSize, chunkMinX, chunkMinY, seed, cluster, forest, trunks ?? [] );
+		}
+	}
+
+	/// <summary>
+	/// The large-tree forest patches as a pure noise field (thread-safe): the planner's own Fbm, wavelength and threshold for
+	/// one biome profile. A point is a <b>clearing</b> where the patch value is under the threshold — no large tree is ever
+	/// planted there (<see cref="TryPlanTree"/>). Biomes without hard patches (Redwood) have no clearings.
+	/// </summary>
+	public readonly struct ForestPatchField
+	{
+		public bool Valid { get; init; }
+		public TerrainPreviewBiomeId BiomeId { get; init; }
+		public int NoiseSeed { get; init; }
+		public float Wave { get; init; }
+		public float Threshold { get; init; }
+
+		/// <summary>The Clover Hills field (the only biome with hard clearings) for these options.</summary>
+		static ForestPatchField For( TerrainPreviewSettings settings, Options options, List<ResolvedProfile> profiles, TerrainPreviewBiomeId biome )
+		{
+			var profile = FindProfile( profiles, biome );
+			if ( profile is null || profile.IgnoreForestPatches )
+				return default;
+			return new ForestPatchField
 			{
-				ScatterPropClusters(
-					chunkRoot,
-					coord,
-					settings,
-					backend,
-					chunkSize,
-					chunkMinX,
-					chunkMinY,
-					seed,
-					cluster,
-					ref _loggedFirstStick );
-			}
-			else
+				Valid = true,
+				BiomeId = biome,
+				NoiseSeed = settings.WorldSeed + profile.NoiseSalt,
+				Wave = Math.Max( 32f, options.PatchWavelengthMeters ),
+				Threshold = Math.Clamp( options.PatchThreshold01, 0.05f, 0.95f ),
+			};
+		}
+
+		internal static ForestPatchField For( TerrainPreviewSettings settings, Options options, List<ResolvedProfile> profiles )
+			=> For( settings, options, profiles, TerrainPreviewBiomeId.CloverHills );
+
+		/// <summary>Public entry for callers outside the scatter (camp sites): resolves the profiles once (main thread — prefab lookups).</summary>
+		public static ForestPatchField ForBiome( TerrainPreviewSettings settings, Options options, TerrainPreviewBiomeId biome )
+			=> For( settings, options, ResolveProfiles( options.Profiles ), biome );
+
+		public bool IsClearing( float x, float y )
+			=> Valid && TerrainPreviewNoise.Fbm( NoiseSeed + 910, x / Wave, y / Wave, 4, 2.05f, 0.5f ) < Threshold;
+
+		/// <summary>The centre and six points on a ring of <paramref name="radiusMeters"/> are all clearing.</summary>
+		public bool IsClearingDisc( float x, float y, float radiusMeters )
+		{
+			if ( !IsClearing( x, y ) )
+				return false;
+			for ( var k = 0; k < 6; k++ )
 			{
-				ScatterPropClusters(
-					chunkRoot,
-					coord,
-					settings,
-					backend,
-					chunkSize,
-					chunkMinX,
-					chunkMinY,
-					seed,
-					cluster,
-					ref _loggedFirstRock );
+				var a = k * (MathF.Tau / 6f);
+				if ( !IsClearing( x + (MathF.Cos( a ) * radiusMeters), y + (MathF.Sin( a ) * radiusMeters) ) )
+					return false;
 			}
+			return true;
 		}
 	}
 
@@ -368,6 +442,9 @@ public static class TerrainVegetationScatter
 						iy,
 						options );
 				}
+
+				if ( profile.BiomeId == TerrainPreviewBiomeId.CloverHills )
+					TrySpawnBeehiveOnTree( chunkRoot, coord, chunkMinX, chunkMinY, wx, wy, sample.HeightMeters, noiseSeed, ix, iy, options );
 			}
 		}
 	}
@@ -632,6 +709,10 @@ public static class TerrainVegetationScatter
 		public float YawDegrees { get; init; }
 		/// <summary>The prefab the real scatter would clone here — the far ring draws its model's _far sibling.</summary>
 		public string PrefabPath { get; init; }
+		/// <summary>Full rotation when it is not upright (a leaning spire); null = <see cref="YawDegrees"/> about the vertical.</summary>
+		public Rotation? Rotation { get; init; }
+		/// <summary>Non-uniform scale (a widened spire); null = <see cref="ScaleMul"/> on every axis.</summary>
+		public Vector3? Scale { get; init; }
 	}
 
 	/// <summary>
@@ -691,6 +772,70 @@ public static class TerrainVegetationScatter
 					PrefabPath = plan.Profile.Paths[plan.Pick],
 				} );
 			}
+		}
+
+		EnumerateFarRingLandmarks( settings, backend, coord, chunkSize, chunkMinX, chunkMinY, seed, options, profiles, result );
+	}
+
+	/// <summary>
+	/// The far-ring landmarks of this chunk (<see cref="PropClusterOptions.FarRing"/>: the spires): the very plans the tree pass
+	/// would make, recorded on this thread's plan list and turned into far entries — same spot, lean and size as the real one.
+	/// </summary>
+	static void EnumerateFarRingLandmarks(
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		TerrainChunkCoord coord,
+		float chunkSize,
+		float chunkMinX,
+		float chunkMinY,
+		int seed,
+		Options options,
+		List<ResolvedProfile> profiles,
+		List<FarTree> result )
+	{
+		if ( options.PropClusters is null )
+			return;
+
+		List<Vector2> trunks = null;
+		var forest = default( ForestPatchField );
+		var plans = new List<SpawnPlan>();
+		var previous = _plans;
+		_plans = plans;
+		try
+		{
+			foreach ( var cluster in options.PropClusters )
+			{
+				if ( !cluster.Enabled || !cluster.WithTrees || !cluster.FarRing )
+					continue;
+				if ( trunks is null )
+				{
+					// the trunks this chunk's tree pass planted (the far entries so far), for the clusters' trunk clearance
+					trunks = new List<Vector2>( result.Count );
+					foreach ( var tree in result )
+						trunks.Add( new Vector2( tree.X, tree.Y ) );
+					forest = ForestPatchField.For( settings, options, profiles );
+				}
+				ScatterPropClusters( null, coord, settings, backend, chunkSize, chunkMinX, chunkMinY, seed, cluster, forest, trunks );
+			}
+		}
+		finally
+		{
+			_plans = previous;
+		}
+
+		foreach ( var plan in plans )
+		{
+			var local = TerrainWorldUnits.EngineToMeters( plan.LocalPosition );
+			result.Add( new FarTree
+			{
+				X = chunkMinX + local.x,
+				Y = chunkMinY + local.y,
+				HeightMeters = local.z,
+				ScaleMul = plan.LocalScale.z,
+				Scale = plan.LocalScale,
+				PrefabPath = plan.Path,
+				Rotation = plan.LocalRotation,
+			} );
 		}
 	}
 
@@ -812,6 +957,235 @@ public static class TerrainVegetationScatter
 			"stick" );
 	}
 
+	/// <summary>
+	/// One large Clover tree in <c>1 / BeehiveChance01</c> carries a wild beehive: hung by its origin (the top of
+	/// its twig stub) <c>BeehiveHang</c> metres above the trunk base and <c>BeehiveReach</c> metres out from it, at
+	/// a hashed yaw - a low limb, where a player walking under the tree spots it.
+	/// </summary>
+	static void TrySpawnBeehiveOnTree(
+		GameObject chunkRoot,
+		TerrainChunkCoord coord,
+		float chunkMinX,
+		float chunkMinY,
+		float treeWx,
+		float treeWy,
+		float groundMeters,
+		int noiseSeed,
+		int ix,
+		int iy,
+		Options options )
+	{
+		var chance = Math.Clamp( options.BeehiveChance01, 0f, 1f );
+		if ( chance <= 1e-6f || options.BeehivePrefabs is null || options.BeehivePrefabs.Length == 0 )
+			return;
+
+		var roll = TerrainPreviewNoise.Hash01( noiseSeed + 970, coord.X * 384 + ix, coord.Y * 384 + iy );
+		if ( roll > chance )
+			return;
+
+		var paths = ResolvePaths( options.BeehivePrefabs, TerrainPreviewBiomeId.CloverHills, "beehive" );
+		if ( paths.Length == 0 )
+			return;
+
+		var pick = Math.Clamp( (int)(TerrainPreviewNoise.Hash01( noiseSeed + 971, coord.X * 400 + ix, coord.Y * 400 + iy ) * paths.Length), 0, paths.Length - 1 );
+		var yaw = TerrainPreviewNoise.Hash01( noiseSeed + 972, coord.X * 416 + ix, coord.Y * 416 + iy ) * MathF.Tau;
+		var reachMin = Math.Clamp( options.BeehiveReachMinMeters, 0.3f, 6f );
+		var reachMax = Math.Max( reachMin, Math.Clamp( options.BeehiveReachMaxMeters, 0.3f, 6f ) );
+		var hangMin = Math.Clamp( options.BeehiveHangMinMeters, 1f, 12f );
+		var hangMax = Math.Max( hangMin, Math.Clamp( options.BeehiveHangMaxMeters, 1f, 12f ) );
+		var reach = reachMin + (reachMax - reachMin) * TerrainPreviewNoise.Hash01( noiseSeed + 973, coord.X * 432 + ix, coord.Y * 432 + iy );
+		var hang = hangMin + (hangMax - hangMin) * TerrainPreviewNoise.Hash01( noiseSeed + 974, coord.X * 448 + ix, coord.Y * 448 + iy );
+
+		TrySpawnInstance(
+			chunkRoot,
+			paths[pick],
+			"veg_beehive",
+			pick.ToString(),
+			chunkMinX,
+			chunkMinY,
+			treeWx + MathF.Cos( yaw ) * reach,
+			treeWy + MathF.Sin( yaw ) * reach,
+			groundMeters + hang,
+			noiseSeed,
+			coord,
+			ix,
+			iy,
+			2,
+			360f,
+			1f,
+			1f,
+			Vector3.Up,
+			ref _loggedFirstRock,
+			"beehive" );
+	}
+
+	/// <summary>A cluster kind's cell edge (m): its spacing, never more than a chunk (one cell per chunk at most).</summary>
+	static float ClusterCell( in PropClusterOptions props, float chunkSize )
+		=> Math.Clamp( props.ClusterSpacingMeters, 8f, Math.Max( 8f, chunkSize ) );
+
+	/// <summary>
+	/// The centre of one prop cluster cell, or false: strong jitter (centres never read as a grid), the chance roll, the land
+	/// disc, land under it, the cluster's biome and — for <see cref="PropClusterOptions.ClearingRadiusMeters"/> kinds — a
+	/// clearing round it. Pure and thread-safe; <see cref="ScatterPropClusters"/> and <see cref="PlanGroundPatches"/> both
+	/// ask it, so a wheat cluster and its tilled bed always share one centre.
+	/// </summary>
+	static bool TryPlanClusterCenter(
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		TerrainChunkCoord coord,
+		float chunkMinX,
+		float chunkMinY,
+		float cell,
+		int ix,
+		int iy,
+		int noiseSeed,
+		in PropClusterOptions props,
+		in ForestPatchField forest,
+		out float cx,
+		out float cy )
+	{
+		var jitterX = (TerrainPreviewNoise.Hash01( noiseSeed + 10, coord.X * 48 + ix, coord.Y * 48 + iy ) - 0.5f) * cell * 0.85f;
+		var jitterY = (TerrainPreviewNoise.Hash01( noiseSeed + 11, coord.X * 48 + ix, coord.Y * 48 + iy ) - 0.5f) * cell * 0.85f;
+		cx = chunkMinX + ((ix + 0.5f) * cell) + jitterX;
+		cy = chunkMinY + ((iy + 0.5f) * cell) + jitterY;
+
+		// Cheapest first: the roll, then the clearing noise, then the terrain sample
+		var chance = Math.Clamp( props.ClusterChance01, 0.005f, 1f );
+		if ( TerrainPreviewNoise.Hash01( noiseSeed + 20, coord.X * 96 + ix, coord.Y * 96 + iy ) > chance )
+			return false;
+		if ( !IsInsideLandDisk( settings, cx, cy ) )
+			return false;
+		if ( props.ClearingRadiusMeters > 0f && !forest.IsClearingDisc( cx, cy, props.ClearingRadiusMeters ) )
+			return false;
+
+		var centerSample = backend.Sample( settings, cx, cy );
+		if ( !centerSample.IsInsideWorld || !centerSample.IsOnLand || centerSample.OceanHeight01 > 0.5f )
+			return false;
+
+		return TerrainPreviewBiomeResolver.ResolveLandOverlay( settings, centerSample, cx, cy ).BiomeId == props.BiomeId;
+	}
+
+	/// <summary>
+	/// The generated tilled beds (<see cref="TerrainGroundPatch"/>) that reach one chunk: every cluster kind with a
+	/// <see cref="PropClusterOptions.TilledPatchPadMeters"/>, planned on this chunk's cells and its eight neighbours' (a bed by
+	/// a border spills over), kept when it reaches the chunk square plus <paramref name="marginMeters"/> (a voxel column's
+	/// margin). Pure and thread-safe: the chunk sampling worker calls it, so the splat, the grass, farming and a voxel column
+	/// all read the same array. Null = no bed here.
+	/// </summary>
+	public static TerrainGroundPatch[] PlanGroundPatches(
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		TerrainChunkCoord coord,
+		float chunkSizeMeters,
+		PropClusterOptions[] sources,
+		float marginMeters = 2f )
+	{
+		if ( sources is null || sources.Length == 0 || settings is null || backend is null )
+			return null;
+
+		var chunkSize = Math.Max( 32f, chunkSizeMeters );
+		var worldRadius = settings.TotalWorldRadiusMeters;
+		var minX = -worldRadius + (coord.X * chunkSize) - marginMeters;
+		var minY = -worldRadius + (coord.Y * chunkSize) - marginMeters;
+		var maxX = minX + chunkSize + (2f * marginMeters);
+		var maxY = minY + chunkSize + (2f * marginMeters);
+		List<TerrainGroundPatch> result = null;
+
+		foreach ( var props in sources )
+		{
+			if ( !props.Enabled || props.TilledPatchPadMeters <= 0f )
+				continue;
+			var cell = ClusterCell( props, chunkSize );
+			var cells = Math.Max( 1, (int)MathF.Floor( chunkSize / cell ) );
+			var radius = Math.Clamp( props.ClusterRadiusMeters, 0.25f, cell * 0.45f ) + props.TilledPatchPadMeters;
+			var noiseSeed = settings.WorldSeed + props.NoiseSeedSalt;
+			// Reach test on the cell's widest jitter before any sampling
+			var reach = (radius * 1.2f) + TerrainGroundPatch.EdgeMeters + (cell * 0.5f);
+			for ( var ny = -1; ny <= 1; ny++ )
+			{
+				for ( var nx = -1; nx <= 1; nx++ )
+				{
+					var c = new TerrainChunkCoord( coord.X + nx, coord.Y + ny );
+					var cMinX = -worldRadius + (c.X * chunkSize);
+					var cMinY = -worldRadius + (c.Y * chunkSize);
+					for ( var iy = 0; iy < cells; iy++ )
+					{
+						for ( var ix = 0; ix < cells; ix++ )
+						{
+							var ccx = cMinX + ((ix + 0.5f) * cell);
+							var ccy = cMinY + ((iy + 0.5f) * cell);
+							if ( ccx + reach < minX || ccx - reach > maxX || ccy + reach < minY || ccy - reach > maxY )
+								continue;
+							if ( !TryPlanClusterCenter( settings, backend, c, cMinX, cMinY, cell, ix, iy, noiseSeed, props, default, out var px, out var py ) )
+								continue;
+							var patch = new TerrainGroundPatch
+							{
+								X = px,
+								Y = py,
+								RadiusMeters = radius,
+								Phase = TerrainPreviewNoise.Hash01( noiseSeed + 70, c.X * 48 + ix, c.Y * 48 + iy ) * MathF.Tau,
+							};
+							var r = patch.ReachMeters;
+							if ( px + r < minX || px - r > maxX || py + r < minY || py - r > maxY )
+								continue;
+							(result ??= new List<TerrainGroundPatch>()).Add( patch );
+						}
+					}
+				}
+			}
+		}
+
+		return result?.ToArray();
+	}
+
+	/// <summary>
+	/// Dev (<c>world_find</c>): the planned cluster centres of one kind (its <see cref="PropClusterOptions.KindLabel"/>) within
+	/// <paramref name="radiusMeters"/> of a point, as (x, y, ground height) metres — the same planner the scatter runs, so a
+	/// centre found here is where the cluster stands once its chunk is planted. Main thread (resolves the tree profiles).
+	/// </summary>
+	public static void FindClusterCenters( TerrainPreviewSettings settings, ITerrainPreviewBackend backend, Options options, string kind, float xMeters, float yMeters, float radiusMeters, float chunkSizeMeters, List<Vector3> result )
+	{
+		if ( options.PropClusters is null || settings is null || backend is null )
+			return;
+		var chunkSize = Math.Max( 32f, chunkSizeMeters );
+		var worldRadius = settings.TotalWorldRadiusMeters;
+		var forest = ForestPatchField.For( settings, options, ResolveProfiles( options.Profiles ) );
+		foreach ( var props in options.PropClusters )
+		{
+			if ( !props.Enabled || !string.Equals( props.KindLabel, kind, StringComparison.OrdinalIgnoreCase ) )
+				continue;
+			var cell = ClusterCell( props, chunkSize );
+			var cells = Math.Max( 1, (int)MathF.Floor( chunkSize / cell ) );
+			var noiseSeed = settings.WorldSeed + props.NoiseSeedSalt;
+			var lo = TerrainChunkStreaming.WorldToChunkCoord( xMeters - radiusMeters, yMeters - radiusMeters, worldRadius, chunkSize );
+			var hi = TerrainChunkStreaming.WorldToChunkCoord( xMeters + radiusMeters, yMeters + radiusMeters, worldRadius, chunkSize );
+			for ( var y = lo.Y; y <= hi.Y; y++ )
+			{
+				for ( var x = lo.X; x <= hi.X; x++ )
+				{
+					var c = new TerrainChunkCoord( x, y );
+					var cMinX = -worldRadius + (x * chunkSize);
+					var cMinY = -worldRadius + (y * chunkSize);
+					for ( var iy = 0; iy < cells; iy++ )
+					{
+						for ( var ix = 0; ix < cells; ix++ )
+						{
+							if ( !TryPlanClusterCenter( settings, backend, c, cMinX, cMinY, cell, ix, iy, noiseSeed, props, forest, out var px, out var py ) )
+								continue;
+							var dx = px - xMeters;
+							var dy = py - yMeters;
+							if ( (dx * dx) + (dy * dy) <= radiusMeters * radiusMeters )
+								result.Add( new Vector3( px, py, backend.Sample( settings, px, py ).HeightMeters ) );
+						}
+					}
+				}
+			}
+		}
+	}
+
+	/// <summary>Most members one prop cluster can plant (a wild-wheat bed fills with up to 14 tufts).</summary>
+	const int MaxClusterSize = 16;
+
 	static void ScatterPropClusters(
 		GameObject chunkRoot,
 		TerrainChunkCoord coord,
@@ -822,22 +1196,24 @@ public static class TerrainVegetationScatter
 		float chunkMinY,
 		int seed,
 		PropClusterOptions props,
-		ref bool loggedFirst )
+		in ForestPatchField forest,
+		List<Vector2> trunks )
 	{
 		if ( !props.Enabled )
 			return;
 
-		var path = NormalizePrefabPath( props.Prefab );
-		if ( !PrefabPathResolves( path ) )
+		var paths = props.Prefabs is { Length: > 0 }
+			? ResolvePaths( props.Prefabs, props.BiomeId, props.KindLabel )
+			: ResolvePaths( [props.Prefab], props.BiomeId, props.KindLabel );
+		if ( paths.Length == 0 )
 		{
-			Log.Warning( $"[Vegetation] {props.KindLabel} prefab missing ('{path}')." );
+			Log.Warning( $"[Vegetation] {props.KindLabel} prefab missing ('{props.Prefab}')." );
 			return;
 		}
 
-		var cell = Math.Clamp( props.ClusterSpacingMeters, 8f, Math.Max( 8f, chunkSize ) );
-		var chance = Math.Clamp( props.ClusterChance01, 0.05f, 1f );
-		var sizeMin = Math.Clamp( props.ClusterSizeMin, 1, 8 );
-		var sizeMax = Math.Max( sizeMin, Math.Clamp( props.ClusterSizeMax, 1, 8 ) );
+		var cell = ClusterCell( props, chunkSize );
+		var sizeMin = Math.Clamp( props.ClusterSizeMin, 1, MaxClusterSize );
+		var sizeMax = Math.Max( sizeMin, Math.Clamp( props.ClusterSizeMax, 1, MaxClusterSize ) );
 		var radius = Math.Clamp( props.ClusterRadiusMeters, 0.25f, cell * 0.45f );
 		var scaleMin = Math.Clamp( props.ScaleMin, 0.05f, 4f );
 		var scaleMax = Math.Max( scaleMin, Math.Clamp( props.ScaleMax, 0.05f, 4f ) );
@@ -846,31 +1222,17 @@ public static class TerrainVegetationScatter
 		var noiseSeed = seed + props.NoiseSeedSalt;
 		var prefix = string.IsNullOrWhiteSpace( props.InstancePrefix ) ? "veg_prop" : props.InstancePrefix.Trim();
 		var kind = string.IsNullOrWhiteSpace( props.KindLabel ) ? "prop" : props.KindLabel.Trim();
+		var clearanceSq = props.TrunkClearanceMeters > 0f ? props.TrunkClearanceMeters * props.TrunkClearanceMeters : 0f;
+		var sink = Math.Max( 0f, props.SinkMeters ) * 0.5f * (scaleMin + scaleMax);
+		var thickness = Math.Max( 1f, props.ThicknessMul );
+		var footprint = Math.Max( 0f, props.FootprintRadiusMeters ) * 0.5f * (scaleMin + scaleMax) * thickness;
 		var spawned = 0;
 
 		for ( var iy = 0; iy < cells && spawned < maxPerChunk; iy++ )
 		{
 			for ( var ix = 0; ix < cells && spawned < maxPerChunk; ix++ )
 			{
-				// Strong jitter so cluster centers don't read as a grid.
-				var jitterX = (TerrainPreviewNoise.Hash01( noiseSeed + 10, coord.X * 48 + ix, coord.Y * 48 + iy ) - 0.5f) * cell * 0.85f;
-				var jitterY = (TerrainPreviewNoise.Hash01( noiseSeed + 11, coord.X * 48 + ix, coord.Y * 48 + iy ) - 0.5f) * cell * 0.85f;
-				var cx = chunkMinX + ((ix + 0.5f) * cell) + jitterX;
-				var cy = chunkMinY + ((iy + 0.5f) * cell) + jitterY;
-
-				if ( !IsInsideLandDisk( settings, cx, cy ) )
-					continue;
-
-				var centerSample = backend.Sample( settings, cx, cy );
-				if ( !centerSample.IsInsideWorld || !centerSample.IsOnLand || centerSample.OceanHeight01 > 0.5f )
-					continue;
-
-				var biome = TerrainPreviewBiomeResolver.ResolveLandOverlay( settings, centerSample, cx, cy );
-				if ( biome.BiomeId != props.BiomeId )
-					continue;
-
-				var roll = TerrainPreviewNoise.Hash01( noiseSeed + 20, coord.X * 96 + ix, coord.Y * 96 + iy );
-				if ( roll > chance )
+				if ( !TryPlanClusterCenter( settings, backend, coord, chunkMinX, chunkMinY, cell, ix, iy, noiseSeed, props, forest, out var cx, out var cy ) )
 					continue;
 
 				var countRoll = TerrainPreviewNoise.Hash01( noiseSeed + 30, coord.X * 112 + ix, coord.Y * 112 + iy );
@@ -887,6 +1249,8 @@ public static class TerrainVegetationScatter
 
 					if ( !IsInsideLandDisk( settings, wx, wy ) )
 						continue;
+					if ( clearanceSq > 0f && NearAnyTrunk( trunks, wx, wy, clearanceSq ) )
+						continue;
 
 					var sample = backend.Sample( settings, wx, wy );
 					if ( !sample.IsInsideWorld || !sample.IsOnLand || sample.OceanHeight01 > 0.5f )
@@ -896,16 +1260,45 @@ public static class TerrainVegetationScatter
 					if ( memberBiome.BiomeId != props.BiomeId )
 						continue;
 
+					var pick = paths.Length == 1
+						? 0
+						: Math.Clamp( (int)(TerrainPreviewNoise.Hash01( noiseSeed + 60 + r, coord.X * 192 + ix, coord.Y * 192 + iy ) * paths.Length), 0, paths.Length - 1 );
+
+					var groundZ = sample.HeightMeters;
+					if ( footprint > 0f )
+					{
+						for ( var k = 0; k < 6; k++ )
+						{
+							var a = k * (MathF.PI / 3f);
+							var rim = backend.Sample( settings, wx + (MathF.Cos( a ) * footprint), wy + (MathF.Sin( a ) * footprint) );
+							if ( rim.IsInsideWorld )
+								groundZ = MathF.Min( groundZ, rim.HeightMeters );
+						}
+					}
+
+					var up = Vector3.Up;
+					var leanSink = 0f;
+					var upright = props.LeanUprightChance01 > 0f
+						&& TerrainPreviewNoise.Hash01( noiseSeed + 90 + r, coord.X * 240 + ix, coord.Y * 240 + iy ) < props.LeanUprightChance01;
+					if ( props.LeanMaxDegrees > 0f && !upright )
+					{
+						var leanT = TerrainPreviewNoise.Hash01( noiseSeed + 70 + r, coord.X * 208 + ix, coord.Y * 208 + iy );
+						var lean = MathX.Lerp( Math.Max( 0f, props.LeanMinDegrees ), props.LeanMaxDegrees, leanT ) * (MathF.PI / 180f);
+						var heading = TerrainPreviewNoise.Hash01( noiseSeed + 80 + r, coord.X * 224 + ix, coord.Y * 224 + iy ) * MathF.PI * 2f;
+						up = new Vector3( MathF.Cos( heading ) * MathF.Sin( lean ), MathF.Sin( heading ) * MathF.Sin( lean ), MathF.Cos( lean ) );
+						leanSink = footprint * MathF.Sin( lean );
+					}
+
 					if ( !TrySpawnInstance(
 						    chunkRoot,
-						    path,
+						    paths[pick],
 						    prefix,
-						    "a",
+						    paths.Length == 1 ? "a" : pick.ToString(),
 						    chunkMinX,
 						    chunkMinY,
 						    wx,
 						    wy,
-						    sample.HeightMeters,
+						    groundZ - sink - leanSink,
 						    noiseSeed,
 						    coord,
 						    ix,
@@ -914,9 +1307,10 @@ public static class TerrainVegetationScatter
 						    360f,
 						    scaleMin,
 						    scaleMax,
-						    Vector3.Up,
-						    ref loggedFirst,
-						    kind ) )
+						    up,
+						    ref _loggedFirstRock,
+						    kind,
+						    thickness ) )
 						continue;
 
 					spawned++;
@@ -1008,7 +1402,8 @@ public static class TerrainVegetationScatter
 		float scaleMax,
 		Vector3 up,
 		ref bool loggedFirst,
-		string kindLabel )
+		string kindLabel,
+		float thicknessMul = 1f )
 	{
 		_ = loggedFirst;
 		_ = kindLabel;
@@ -1046,7 +1441,7 @@ public static class TerrainVegetationScatter
 			coord.X * 1024 + ix,
 			coord.Y * 1024 + iy );
 		var mul = scaleMin + ((scaleMax - scaleMin) * scaleT);
-		var localScale = AuthoredScale( path ) * mul;
+		var localScale = AuthoredScale( path ) * mul * new Vector3( thicknessMul, thicknessMul, 1f );
 
 		var plan = new SpawnPlan
 		{
@@ -1081,17 +1476,24 @@ public static class TerrainVegetationScatter
 	}
 
 	// Profiles are re-resolved on every chunk populate (several per chunk while streaming): remember each path's answer.
+	// Locked: SampleForestCover01 resolves profiles on the far / horizon tier workers (four horizon quadrants at once on
+	// load) while the main thread populates chunks — the unguarded dictionary corrupted and threw on every later read.
 	static readonly Dictionary<string, bool> _prefabResolves = new();
+	static readonly object _prefabResolvesLock = new();
 
 	static bool PrefabPathResolves( string path )
 	{
 		if ( string.IsNullOrWhiteSpace( path ) )
 			return false;
-		if ( _prefabResolves.TryGetValue( path, out var known ) )
-			return known;
+		lock ( _prefabResolvesLock )
+		{
+			if ( _prefabResolves.TryGetValue( path, out var known ) )
+				return known;
+		}
 
 		var resolves = GameObject.GetPrefab( path ) is { IsValid: true } || ResourceLibrary.Get<PrefabFile>( path ) is not null;
-		_prefabResolves[path] = resolves;
+		lock ( _prefabResolvesLock )
+			_prefabResolves[path] = resolves;
 		return resolves;
 	}
 

@@ -21,6 +21,8 @@ public static class TerrainMeshBuilder
 		/// <summary>Per-vertex splat weights / extras of the grid (<see cref="ChunkGeometry.Colors"/>, <see cref="ChunkGeometry.Splat"/>) — a voxel column seeds its ground style from them.</summary>
 		public Color[] Colors { get; init; }
 		public Vector4[] Splat { get; init; }
+		/// <summary>Generated tilled soil reaching this chunk (<see cref="ChunkGeometry.GroundPatches"/>): grass, farming and a voxel column read it.</summary>
+		public TerrainGroundPatch[] GroundPatches { get; init; }
 	}
 
 	/// <summary>Everything a chunk mesh is made of, in chunk-local metres — shared by <see cref="BuildChunk"/> and the dev dump command.</summary>
@@ -38,6 +40,8 @@ public static class TerrainMeshBuilder
 		public Color[] Colors { get; init; }
 		/// <summary>Splat extras per vertex: sand, wet, far canopy darkening (w unused).</summary>
 		public Vector4[] Splat { get; init; }
+		/// <summary>Generated tilled soil reaching this chunk (wild-wheat beds), already painted into <see cref="Splat"/>; null = none.</summary>
+		public TerrainGroundPatch[] GroundPatches { get; init; }
 		public int[] Indices { get; init; }
 		/// <summary>Heights as sampled, before border snapping and smoothing (edge normals are built from these).</summary>
 		public float[] RawHeights { get; init; }
@@ -60,14 +64,15 @@ public static class TerrainMeshBuilder
 		int heightSmoothPasses = 1,
 		float heightSmoothStrength01 = 0.38f,
 		int borderLatticeVerticesPerSide = 0,
-		int fineBorderSides = 0 )
+		int fineBorderSides = 0,
+		TerrainGroundPatch[] groundPatches = null )
 	{
 		chunkSizeMeters = Math.Max( 16f, chunkSizeMeters );
 		maxTerrainHeightMeters = Math.Max( 50f, maxTerrainHeightMeters );
 		var maxHeightMeters = Math.Max( 50f, settings.MaxTerrainHeightMeters );
 		maxTerrainHeightMeters = Math.Max( maxHeightMeters, maxTerrainHeightMeters );
 
-		var g = BuildChunkGeometry( settings, backend, coord, chunkSizeMeters, verticesPerSide, heightSmoothPasses, heightSmoothStrength01, borderLatticeVerticesPerSide, fineBorderSides );
+		var g = BuildChunkGeometry( settings, backend, coord, chunkSizeMeters, verticesPerSide, heightSmoothPasses, heightSmoothStrength01, borderLatticeVerticesPerSide, fineBorderSides, groundPatches );
 		return BuildModelFromGeometry( g, chunkSizeMeters, maxTerrainHeightMeters, withCollision: true, sinkMeters: 0f );
 	}
 
@@ -206,6 +211,7 @@ public static class TerrainMeshBuilder
 			StepUnits = TerrainWorldUnits.MetersToEngine( step ),
 			Colors = colors,
 			Splat = splat,
+			GroundPatches = g.GroundPatches,
 		};
 	}
 
@@ -234,7 +240,8 @@ public static class TerrainMeshBuilder
 		int heightSmoothPasses,
 		float heightSmoothStrength01,
 		int borderLatticeVerticesPerSide,
-		int fineBorderSides = 0 )
+		int fineBorderSides = 0,
+		TerrainGroundPatch[] groundPatches = null )
 	{
 		backend ??= TerrainPreviewBackendRegistry.Active;
 		verticesPerSide = Math.Clamp( verticesPerSide, 4, 256 );
@@ -295,6 +302,7 @@ public static class TerrainMeshBuilder
 		// made 1 m faces vertical is gone with it — it was the source of every fin and spike along a ledge (2026-10-07).
 
 		TerrainGroundSplat.Fill( settings, samples, chunkMinX, chunkMinY, step, verticesPerSide, colors, splat );
+		TerrainGroundSplat.ApplyTilledPatches( groundPatches, chunkMinX, chunkMinY, step, verticesPerSide, splat );
 
 		TerrainPreviewHeightDiagnostics.TryLogChunkVertexTrace(
 			settings,
@@ -354,6 +362,7 @@ public static class TerrainMeshBuilder
 			Samples = samples,
 			Colors = colors,
 			Splat = splat,
+			GroundPatches = groundPatches is { Length: > 0 } ? groundPatches : null,
 			Indices = indices,
 			RawHeights = rawHeights,
 			EdgeRing = edgeRing,

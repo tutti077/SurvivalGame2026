@@ -166,6 +166,8 @@ public interface IVoxelBrushTarget
 	bool RequestBrush( Vector3 centerEngine, float radiusMeters, VoxelBrushMode mode, bool square = false, float depth = 0f );
 	/// <summary>Tilled coverage (0..1) of the ground under a world point (engine units): 0 where no voxel ground stands. Farming sows from 0.5 up.</summary>
 	float TilledAt( Vector3 pointEngine );
+	/// <summary>Rock share (0..1) of the ground at a world point (engine units) - what the surface there is painted as (<see cref="VoxelMesher.RockShare"/>). The pickaxe yields stone from 0.5 up, dirt below.</summary>
+	float RockAt( Vector3 pointEngine );
 	/// <summary>Client intent: the pickaxe's disc at a surface point with its normal (engine units / direction), radius and depth in metres. Same return as <see cref="RequestBrush"/>.</summary>
 	bool RequestChip( Vector3 centerEngine, Vector3 normal, float radiusMeters, float depthMeters );
 	/// <summary>One line for <c>voxel_info</c>.</summary>

@@ -53,6 +53,31 @@ public static class VoxelMesher
 
 	const byte OutXLo = 1, OutXHi = 2, OutYLo = 4, OutYHi = 8;
 
+	/// <summary>
+	/// Rock share (0..1) of the ground at a point - the ONE rule the mesher paints the rock tile with and the pickaxe's yield
+	/// reads (Mark 2026-11-02: "when i destroy rock i should get stone"): the style's mountain weight or rock from 4–8 m under
+	/// the original surface, washed out by the hoe's grass / soil paint, and cobblestone paint is rock outright.
+	/// </summary>
+	public static float RockShare( float styleRock, float underMeters, float grass, float soil, float cobble )
+	{
+		var rock = MathF.Max( styleRock, Math.Clamp( (underMeters - 4f) / 4f, 0f, 1f ) );
+		return (rock * (1f - grass) * (1f - soil) * (1f - cobble)) + cobble;
+	}
+
+	/// <summary>Rock share of the ground at a world point (metres) in <paramref name="field"/>: <see cref="RockShare"/> on the field's paint, depth and style.</summary>
+	public static float RockAt( VoxelField field, VoxelSurfaceStyle style, Vector3 pointMeters )
+	{
+		var sx = (pointMeters.x - field.OriginMeters.x) / field.CellMeters;
+		var sy = (pointMeters.y - field.OriginMeters.y) / field.CellMeters;
+		var ix = Math.Clamp( (int)MathF.Round( sx ), 0, field.SamplesX - 1 );
+		var iy = Math.Clamp( (int)MathF.Round( sy ), 0, field.SamplesY - 1 );
+		var under = field.GroundZ( ix, iy ) - pointMeters.z;
+		var weights = new Color( 1f, 0f, 0f, 0f );
+		style?.Invoke( pointMeters.x, pointMeters.y, out weights, out _ );
+		field.PaintAt( sx, sy, out var bare, out var grass, out var tilled, out var cobble );
+		return RockShare( weights.a, under, grass, MathF.Max( bare, tilled ), cobble );
+	}
+
 	public static MeshData Build( VoxelField field, int cx, int cy, int cz, VoxelSurfaceStyle style = null, Clip clip = default )
 	{
 		if ( clip == default )
@@ -135,9 +160,8 @@ public static class VoxelMesher
 					field.PaintAt( p.x, p.y, out var bare, out var grass, out var tilled, out var cobble );
 					var cover = MathF.Max( bare, tilled );   // soil of either kind; tilled is the same soil darkened to earth brown
 					var sandHere = MathF.Max( splat.x, sandDug );
-					var rockHere = MathF.Max( weights.a, rock );
 					sandHere = ((sandHere * (1f - grass) * (1f - cover)) + cover) * (1f - cobble);
-					rockHere = (rockHere * (1f - grass) * (1f - cover) * (1f - cobble)) + cobble;   // cobblestone = the rock tile
+					var rockHere = RockShare( weights.a, under, grass, cover, cobble );   // cobblestone = the rock tile
 					splat = new Vector2( sandHere, splat.y );
 					weights = new Color( weights.r, weights.g, weights.b, rockHere );
 					sandDug = 0f;

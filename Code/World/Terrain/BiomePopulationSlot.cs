@@ -11,6 +11,8 @@ public sealed class BiomePopulationSlot : Component
 	[Property] public string PrefabPath { get; set; }
 	[Property] public EnemyType EnemyType { get; set; } = EnemyType.Scav;
 	[Property] public int Tier { get; set; } = 1;
+	/// <summary>Animal slots: the species the respawn is configured as (null = an enemy). Set from the entry, never authored.</summary>
+	public AnimalSpecies? Species { get; set; }
 
 	bool _died;
 	EntityVitals _vitals;
@@ -25,6 +27,7 @@ public sealed class BiomePopulationSlot : Component
 		PrefabPath = entry.PrefabPath;
 		EnemyType = entry.EnemyType;
 		Tier = entry.Tier;
+		Species = entry.Species;
 	}
 
 	protected override void OnStart()
@@ -64,6 +67,9 @@ public sealed class BiomePopulationSlot : Component
 		if ( !Respawn )
 			return;
 
+		// A camp guard keeps its camp's leash through the respawn (read from the brain, so a guard restored from
+		// EntityChunkMemory carries it too)
+		var brain = Components.Get<EntityBrain>();
 		BiomePopulationRespawnQueue.EnqueueFromSlot(
 			SlotKey,
 			PrefabPath,
@@ -72,6 +78,10 @@ public sealed class BiomePopulationSlot : Component
 			Respawn,
 			RespawnDelaySeconds,
 			_spawnWorldPos != default ? _spawnWorldPos : GameObject.WorldPosition,
-			_chunkRoot.IsValid() ? _chunkRoot : GameObject.Parent );
+			_chunkRoot.IsValid() ? _chunkRoot : GameObject.Parent,
+			brain?.LeashCenter ?? default,
+			brain?.LeashWanderDistance ?? 0f,
+			brain?.LeashMaxTravelDistance ?? 0f,
+			Species );
 	}
 }

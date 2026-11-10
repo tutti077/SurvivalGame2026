@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using Sandbox;
 
 namespace Survival;
@@ -11,6 +10,11 @@ namespace Survival;
 /// 55 m/s turning, looking 15° down; 500 m up looking straight down, still; the player pawn standing. Target: 200 fps
 /// (5.0 ms) in every row on an RTX 4090. Lift the caps first (<c>fps_max 0</c>, <c>fps_max_inactive 0</c>) and keep the
 /// hands off the mouse — the camera is scripted (<see cref="TerrainTestFlyCamera.BeginScript"/>). ~45 s.
+/// <para>
+/// Each frame is scored as max(CPU work, GPU): <see cref="FrameWorkMs"/> is the engine's own frame time WITHOUT the
+/// vsync / fps_max wait, so the table means the same thing on a 60 Hz vsynced window as uncapped (2026-11-04: the
+/// editor sat vsynced at 60 Hz and every wall-clock row read 16.7 ms). The cpu and gpu columns say which side to fix.
+/// </para>
 /// </summary>
 public sealed partial class TerrainPerfBench
 {
@@ -22,8 +26,8 @@ public sealed partial class TerrainPerfBench
 
 	readonly List<SuiteScenario> _suite = new();
 	readonly List<float> _suiteFrames = new();
-	readonly List<(string Name, float AvgMs, float P50Ms, float P99Ms, float WorstMs)> _suiteResults = new();
-	readonly Stopwatch _suiteClock = new();
+	double _suiteCpuSum, _suiteGpuSum;
+	readonly List<(string Name, float AvgMs, float P50Ms, float P99Ms, float WorstMs, float CpuMs, float GpuMs)> _suiteResults = new();
 	bool _suiteRunning;
 	int _suiteIndex;
 	float _suiteStarted;
@@ -163,19 +167,21 @@ public sealed partial class TerrainPerfBench
 	void BeginSuiteScenario()
 	{
 		_suiteFrames.Clear();
+		_suiteCpuSum = _suiteGpuSum = 0;
 		_suiteStarted = Time.Now;
-		_suiteClock.Restart();
 		_suite[_suiteIndex].Begin();
 	}
 
 	void TickSuite()
 	{
-		var ms = (float)_suiteClock.Elapsed.TotalMilliseconds;
-		_suiteClock.Restart();
 		var elapsed = Time.Now - _suiteStarted;
 		if ( elapsed < SuiteWarmupSeconds )
 			return;
-		_suiteFrames.Add( ms );
+		var cpu = FrameWorkMs;
+		var gpu = FrameGpuMs;
+		_suiteCpuSum += cpu;
+		_suiteGpuSum += gpu;
+		_suiteFrames.Add( (float)Math.Max( cpu, gpu ) );
 		if ( elapsed < SuiteWarmupSeconds + SuiteMeasureSeconds )
 			return;
 
@@ -185,7 +191,8 @@ public sealed partial class TerrainPerfBench
 		var p50 = frames.Count > 0 ? frames[frames.Count / 2] : 0f;
 		var p99 = frames.Count > 0 ? frames[Math.Min( frames.Count - 1, (int)(frames.Count * 0.99f) )] : 0f;
 		var worst = frames.Count > 0 ? frames[^1] : 0f;
-		_suiteResults.Add( (_suite[_suiteIndex].Name, avg, p50, p99, worst) );
+		var n = Math.Max( 1, frames.Count );
+		_suiteResults.Add( (_suite[_suiteIndex].Name, avg, p50, p99, worst, (float)(_suiteCpuSum / n), (float)(_suiteGpuSum / n)) );
 
 		_suiteIndex++;
 		if ( _suiteIndex < _suite.Count )
@@ -195,8 +202,8 @@ public sealed partial class TerrainPerfBench
 		}
 
 		_suiteRunning = false;
-		Log.Info( "[PerfBench] perf_suite — avg ms (fps) | p50 | p99 | worst   target 5.0 ms = 200 fps:" );
-		foreach ( var (name, a, p50v, p99v, w) in _suiteResults )
-			Log.Info( $"[PerfBench]   {(a <= SuiteTargetMs ? "PASS" : "FAIL")}  {a,5:0.00} ms ({1000f / Math.Max( a, 0.01f ),4:0} fps) | {p50v,5:0.00} | {p99v,5:0.00} | {w,6:0.0}   {name}" );
+		Log.Info( "[PerfBench] perf_suite — max(cpu, gpu) avg ms (fps) | p50 | p99 | worst | cpu | gpu   target 5.0 ms = 200 fps:" );
+		foreach ( var (name, a, p50v, p99v, w, c, g) in _suiteResults )
+			Log.Info( $"[PerfBench]   {(a <= SuiteTargetMs ? "PASS" : "FAIL")}  {a,5:0.00} ms ({1000f / Math.Max( a, 0.01f ),4:0} fps) | {p50v,5:0.00} | {p99v,5:0.00} | {w,6:0.0} | cpu {c,5:0.00} | gpu {g,5:0.00}   {name}" );
 	}
 }

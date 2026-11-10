@@ -480,6 +480,10 @@ public sealed partial class TerrainWorldManager
 
 		var trigger = go.Components.Create<BoxCollider>();
 		trigger.IsTrigger = true;
+		// Static: a collider without a Rigidbody is otherwise a KEYFRAMED body, and 89 keyframed chunk-sized trigger boxes
+		// lying on the terrain colliders cost 2.2 ms of Physics every frame (2026-11-04). A static body still follows the
+		// GameObject (TickSeaVolumeUnderCamera moves / rescales the one under the camera) and still fires trigger events.
+		trigger.Static = true;
 		trigger.Scale = new Vector3( size, size, Math.Max( 8f, top - minZ ) );
 
 		var volume = go.Components.Create<WaterVolume>();

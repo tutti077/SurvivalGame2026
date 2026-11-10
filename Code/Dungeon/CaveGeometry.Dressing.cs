@@ -260,6 +260,7 @@ public static partial class CaveGeometry
 		var extent = BuildContext.E( new Vector3( sizeAlongM, sizeAcrossM, depthM ) );
 		var trigger = pool.Components.Create<BoxCollider>();
 		trigger.IsTrigger = true;
+		trigger.Static = true; // never moves; a non-static collider without a Rigidbody is a keyframed body
 		trigger.Scale = extent;
 		pool.Components.Create<WaterVolume>();
 

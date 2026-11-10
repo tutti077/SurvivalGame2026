@@ -649,6 +649,7 @@ public sealed partial class TerrainPerfBench : GameObjectSystem
 
 	void Tick()
 	{
+		SampleFrameWork();
 		if ( _watching )
 			TickWatch();
 

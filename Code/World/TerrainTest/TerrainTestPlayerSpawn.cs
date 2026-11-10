@@ -31,9 +31,6 @@ public sealed class TerrainTestPlayerSpawn : Component
 	[Property, Title( "Wingsuit resource id" )]
 	public string WingsuitResourceId { get; set; } = DefaultWingsuitResourceId;
 
-	[Property, Title( "Infinite stamina on L spawn" )]
-	public bool InfiniteStaminaOnPlayable { get; set; } = true;
-
 	GameObject _playablePlayer;
 	GameObject _flyView;
 	TerrainTestFlyCamera _flyControl;
@@ -150,6 +147,9 @@ public sealed class TerrainTestPlayerSpawn : Component
 	/// <summary>A playable pawn spawned by L / pawn_toggle is alive in the scene - the pawn's own tools own digging then, not the scene's VoxelDigger.</summary>
 	public static bool PlayableActive => _activePlayable is not null && _activePlayable.IsValid();
 
+	/// <summary>The pawn L / pawn_toggle spawned (null when the fly camera is in charge) - the one real player of an offline terrainTest.</summary>
+	public static GameObject ActivePlayable => PlayableActive ? _activePlayable : null;
+
 	void DestroyPlayableIfAny()
 	{
 		if ( !IsPlayableActive() )
@@ -238,10 +238,6 @@ public sealed class TerrainTestPlayerSpawn : Component
 			controller.UseCameraControls = true;
 			controller.UseLookControls = true;
 		}
-
-		var vitals = root.Components.Get<PlayerVitals>( FindMode.EverythingInSelfAndDescendants );
-		if ( vitals is not null && vitals.IsValid() && InfiniteStaminaOnPlayable )
-			vitals.InfiniteStaminaDebug = true;
 
 		if ( !EquipGrappleOnPlayable && !EquipWingsuitOnPlayable )
 			return;

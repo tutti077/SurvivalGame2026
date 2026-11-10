@@ -169,7 +169,11 @@ public sealed partial class TerrainWorldManager
 		if ( entry.GameObject is null || !entry.GameObject.IsValid() || _loadSettings is null )
 			return;
 
-		entry.GrassMask ??= BuildGrassBiomeMask( entry, _loadSettings, Math.Max( 32f, ChunkSizeMeters ) );
+		if ( !entry.GrassMaskBuilt )
+		{
+			entry.GrassMask = BuildGrassBiomeMask( entry.Coord, _loadSettings, _backend, Math.Max( 32f, ChunkSizeMeters ) );
+			entry.GrassMaskBuilt = true;
+		}
 
 		if ( _worldGrassClutter is null || !_worldGrassClutter.IsValid() )
 			return;
@@ -177,6 +181,20 @@ public sealed partial class TerrainWorldManager
 		var origin = entry.GameObject.WorldPosition;
 		var size = TerrainWorldUnits.MetersToEngine( Math.Max( 32f, ChunkSizeMeters ) );
 		_worldGrassClutter.InvalidateTilesInBounds( new BBox( origin + new Vector3( 0f, 0f, -4000f ), origin + new Vector3( size, size, 30000f ) ) );
+	}
+
+	/// <summary>
+	/// The ground changed inside a circle (metres): only the grass tiles under it regenerate. An invalidated tile drops its
+	/// clumps at once and the engine refills 8 tiles a frame, so a whole chunk (~36 tiles) blinked for several frames
+	/// (Mark 2026-11-03: "the whole chunks grass gets reloaded and is flashing"); a stroke's 1–4 tiles refill in the same frame.
+	/// </summary>
+	void NotifyGrassAreaChanged( float xMeters, float yMeters, float radiusMeters )
+	{
+		if ( _worldGrassClutter is null || !_worldGrassClutter.IsValid() )
+			return;
+		var r = TerrainWorldUnits.MetersToEngine( Math.Max( 0.5f, radiusMeters ) );
+		var c = TerrainWorldUnits.MetersToEngine( new Vector3( xMeters, yMeters, 0f ) );
+		_worldGrassClutter.InvalidateTilesInBounds( new BBox( c + new Vector3( -r, -r, -40000f ), c + new Vector3( r, r, 40000f ) ) );
 	}
 
 	List<Model> ResolveGrassModels()
@@ -232,6 +250,9 @@ public sealed partial class TerrainWorldManager
 				return null;
 			return (TerrainWorldUnits.MetersToEngine( zm ), n);
 		}
+		if ( entry.GroundPatches is not null
+		     && TerrainGroundPatch.CoverageAt( entry.GroundPatches, TerrainWorldUnits.EngineToMeters( wx ), TerrainWorldUnits.EngineToMeters( wy ) ) >= 0.5f )
+			return null;   // a generated tilled bed (wild wheat): bare soil, no clumps — the same 0.5 rule as the hoe's paint
 
 		var heights = entry.GrassHeightsZ;
 		var side = entry.GrassHeightsSide;
@@ -268,11 +289,15 @@ public sealed partial class TerrainWorldManager
 	}
 
 	/// <summary>Coarse Clover-Hills mask for one chunk (8×8 cells, sampled once on the main thread). Null when no cell qualifies.</summary>
-	bool[] BuildGrassBiomeMask( LoadedChunk entry, TerrainPreviewSettings settings, float chunkSize )
+	/// <summary>
+	/// Which of the chunk's 8×8 cells are Clover Hills land (null = none): 64 pipeline samples (~1.2 ms), so a streamed load
+	/// builds it on the chunk's worker beside the geometry (<see cref="PendingChunkBuild.GrassMask"/>). Worker-safe.
+	/// </summary>
+	static bool[] BuildGrassBiomeMask( TerrainChunkCoord coord, TerrainPreviewSettings settings, ITerrainPreviewBackend backend, float chunkSize )
 	{
 		var worldRadius = settings.TotalWorldRadiusMeters;
-		var minX = -worldRadius + (entry.Coord.X * chunkSize);
-		var minY = -worldRadius + (entry.Coord.Y * chunkSize);
+		var minX = -worldRadius + (coord.X * chunkSize);
+		var minY = -worldRadius + (coord.Y * chunkSize);
 		var cell = chunkSize / GrassMaskCells;
 		var mask = new bool[GrassMaskCells * GrassMaskCells];
 		var any = false;
@@ -283,7 +308,7 @@ public sealed partial class TerrainWorldManager
 			{
 				var wx = minX + ((ix + 0.5f) * cell);
 				var wy = minY + ((iy + 0.5f) * cell);
-				var sample = _backend.Sample( settings, wx, wy );
+				var sample = backend.Sample( settings, wx, wy );
 				if ( !sample.IsInsideWorld || !sample.IsOnLand || sample.OceanHeight01 > 0.5f )
 					continue;
 

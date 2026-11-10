@@ -20,6 +20,9 @@ public static class BiomePopulationCatalog
 		ReloadFromDisk();
 	}
 
+	/// <summary>Read the table again (once per world load — <see cref="TerrainWorldManager"/>).</summary>
+	public static void Reload() => ReloadFromDisk();
+
 	public static IReadOnlyList<BiomePopulationEntry> GetEntries( TerrainPreviewBiomeId biome )
 	{
 		EnsureLoaded();
@@ -63,25 +66,35 @@ public static class BiomePopulationCatalog
 					var list = new List<BiomePopulationEntry>();
 					foreach ( var row in biomeData.Entries )
 					{
-						if ( row is null || string.IsNullOrWhiteSpace( row.Prefab ) )
+						if ( row is null || (string.IsNullOrWhiteSpace( row.Prefab ) && string.IsNullOrWhiteSpace( row.Camp )) )
 							continue;
 
 						if ( !TryParseEnemyType( row.EnemyType, out var enemyType ) )
 							enemyType = EnemyType.Scav;
 
+						AnimalSpecies? species = null;
+						if ( !string.IsNullOrWhiteSpace( row.Species ) && Enum.TryParse<AnimalSpecies>( row.Species.Trim(), ignoreCase: true, out var parsedSpecies ) )
+							species = parsedSpecies;
+
 						list.Add( new BiomePopulationEntry
 						{
 							EntityId = string.IsNullOrWhiteSpace( row.EntityId )
-								? EntityPerceptionCatalog.BuildEntityId( enemyType, row.Tier )
+								? (species is { } sp ? sp.ToString().ToLowerInvariant() : EntityPerceptionCatalog.BuildEntityId( enemyType, row.Tier ))
 								: row.EntityId.Trim(),
 							PrefabPath = NormalizePrefabPath( row.Prefab ),
 							EnemyType = enemyType,
+							Species = species,
 							Tier = Math.Max( 1, row.Tier ),
 							SpacingMeters = Math.Clamp( row.SpacingMeters, 16f, 4000f ),
 							SpawnWeight = Math.Clamp( row.SpawnWeight, 0f, 1f ),
 							Respawn = row.Respawn,
 							RespawnDelaySeconds = Math.Max( 0f, row.RespawnDelaySeconds ),
 							Near = string.IsNullOrWhiteSpace( row.Near ) ? null : row.Near.Trim(),
+							CampId = string.IsNullOrWhiteSpace( row.Camp ) ? null : row.Camp.Trim(),
+							GroupChance = Math.Clamp( row.GroupChance, 0f, 1f ),
+							GroupMin = Math.Clamp( row.GroupMin, 1, 8 ),
+							GroupMax = Math.Clamp( Math.Max( row.GroupMin, row.GroupMax ), 1, 8 ),
+							GroupRadiusMeters = Math.Clamp( row.GroupRadiusMeters, 1f, 40f ),
 						} );
 					}
 

@@ -39,7 +39,9 @@ public sealed partial class TerrainWorldManager
 		{
 			var (chunk, col) = _vegColliderEnableQueue[^1];
 			_vegColliderEnableQueue.RemoveAt( _vegColliderEnableQueue.Count - 1 );
-			if ( col is null || !col.IsValid() || chunk.Collider is null || !chunk.Collider.IsValid() || !chunk.Collider.Enabled )
+			// Gate on the chunk being near, not on its heightfield collider: a voxel column switches that off for good, and
+			// its trees and spires kept no collision at all.
+			if ( col is null || !col.IsValid() || !chunk.VegetationNear )
 				continue;
 			if ( !col.Enabled )
 			{
@@ -118,8 +120,14 @@ public sealed partial class TerrainWorldManager
 				{
 					if ( plan.Sapling )
 						entry.Saplings.Add( new SaplingState { Go = instance, PosMeters = TerrainWorldUnits.EngineToMeters( instance.WorldPosition ), Renderers = instance.Components.GetAll<ModelRenderer>( FindMode.EverythingInSelfAndDescendants ).ToArray() } );
+					else if ( IsPickupPlan( plan ) )
+					{
+						// hidden until the visibility tick finds the camera within Pickup Visible Range (m), then it fades in
+						instance.Enabled = false;
+						entry.Pickups.Add( new SaplingState { Go = instance, PosMeters = TerrainWorldUnits.EngineToMeters( instance.WorldPosition ), Renderers = instance.Components.GetAll<ModelRenderer>( FindMode.EverythingInSelfAndDescendants ).ToArray() } );
+					}
 					else if ( plan.Kind != "tree" )
-						BeginSmallFadeIn( instance );   // rocks, sticks: no LODs, so they may fade in (Mark 2026-10-20)
+						BeginSmallFadeIn( instance );   // boulders, spires, beehives: no LODs, so they may fade in (Mark 2026-10-20)
 				}
 				var oneMs = (float)(stopwatch.Elapsed.TotalMilliseconds - before);
 				if ( oneMs > Stats.SpawnOneMs )
@@ -141,4 +149,8 @@ public sealed partial class TerrainWorldManager
 		}
 		Stats.SpawnGateBlocked = _unloadingChunks.Count;
 	}
+
+	/// <summary>A small pickup (rock, stick, forage): drawn only within Pickup Visible Range (m). Trees, beehives and the landmark boulders / spires are not.</summary>
+	static bool IsPickupPlan( in TerrainVegetationScatter.SpawnPlan plan )
+		=> !plan.Sapling && plan.Kind is not ("tree" or "beehive" or "boulder" or "spire");
 }

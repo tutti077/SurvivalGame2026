@@ -173,6 +173,9 @@ public sealed class VoxelTerrain : Component, IVoxelBrushTarget
 		return _set.Field.TilledAt( m.x, m.y );
 	}
 
+	public float RockAt( Vector3 pointEngine )
+		=> IsReady ? VoxelMesher.RockAt( _set.Field, _set.Style, TerrainWorldUnits.EngineToMeters( pointEngine ) ) : 0f;
+
 	public bool RequestChip( Vector3 centerEngine, Vector3 normal, float radiusMeters, float depthMeters )
 		=> Request( VoxelEdit.Chip( TerrainWorldUnits.EngineToMeters( centerEngine ), normal, radiusMeters, depthMeters ) );
 

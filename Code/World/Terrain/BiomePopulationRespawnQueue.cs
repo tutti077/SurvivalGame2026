@@ -12,12 +12,16 @@ public static class BiomePopulationRespawnQueue
 		public string SlotKey;
 		public string PrefabPath;
 		public EnemyType EnemyType;
+		public AnimalSpecies? Species;
 		public int Tier;
 		public bool Respawn;
 		public float RespawnDelaySeconds;
 		public Vector3 WorldPosition;
 		public GameObject ChunkRoot;
 		public double ReadyAt;
+		public Vector3 LeashCenter;
+		public float LeashWander;
+		public float LeashMaxTravel;
 	}
 
 	static readonly List<Pending> Queue = new();
@@ -32,7 +36,11 @@ public static class BiomePopulationRespawnQueue
 		bool respawn,
 		float respawnDelaySeconds,
 		Vector3 worldPosition,
-		GameObject chunkRoot )
+		GameObject chunkRoot,
+		Vector3 leashCenter = default,
+		float leashWander = 0f,
+		float leashMaxTravel = 0f,
+		AnimalSpecies? species = null )
 	{
 		if ( !respawn || string.IsNullOrWhiteSpace( slotKey ) || chunkRoot is null || !chunkRoot.IsValid() )
 			return;
@@ -42,12 +50,16 @@ public static class BiomePopulationRespawnQueue
 			SlotKey = slotKey,
 			PrefabPath = prefabPath,
 			EnemyType = enemyType,
+			Species = species,
 			Tier = Math.Max( 1, tier ),
 			Respawn = true,
 			RespawnDelaySeconds = respawnDelaySeconds,
 			WorldPosition = worldPosition,
 			ChunkRoot = chunkRoot,
 			ReadyAt = Time.NowDouble + Math.Max( 0f, respawnDelaySeconds ),
+			LeashCenter = leashCenter,
+			LeashWander = leashWander,
+			LeashMaxTravel = leashMaxTravel,
 		} );
 	}
 
@@ -77,6 +89,7 @@ public static class BiomePopulationRespawnQueue
 					EntityId = pending.SlotKey.Split( ':' )[0],
 					PrefabPath = pending.PrefabPath,
 					EnemyType = pending.EnemyType,
+					Species = pending.Species,
 					Tier = pending.Tier,
 					Respawn = pending.Respawn,
 					RespawnDelaySeconds = pending.RespawnDelaySeconds,
@@ -84,7 +97,10 @@ public static class BiomePopulationRespawnQueue
 					SpawnWeight = 1f,
 				},
 				pending.SlotKey,
-				pending.WorldPosition );
+				pending.WorldPosition,
+				pending.LeashCenter,
+				pending.LeashWander,
+				pending.LeashMaxTravel );
 		}
 	}
 }

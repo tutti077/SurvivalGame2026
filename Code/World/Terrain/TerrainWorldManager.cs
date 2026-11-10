@@ -42,6 +42,8 @@ public sealed partial class TerrainWorldManager : Component
 		public bool HasEntityPopulation;
 		/// <summary>8×8 Clover-Hills mask for the world grass (TerrainWorldManager.Grass.cs); null = no grass on this chunk.</summary>
 		public bool[] GrassMask;
+		/// <summary>GrassMask has been built (it is null for a chunk with no Clover Hills cell).</summary>
+		public bool GrassMaskBuilt;
 		/// <summary>The meshed height grid (engine units, chunk-local) the grass is planted on — refreshed on every remesh.</summary>
 		public float[] GrassHeightsZ;
 		public int GrassHeightsSide;
@@ -49,6 +51,10 @@ public sealed partial class TerrainWorldManager : Component
 		/// <summary>Per-vertex splat of the meshed grid (same layout as GrassHeightsZ): what the ground is made of, for a voxel column's seed.</summary>
 		public Color[] SplatWeights;
 		public Vector4[] SplatExtras;
+		/// <summary>Generated tilled soil on this chunk (wild-wheat beds, <see cref="TerrainGroundPatch"/>): no grass clumps there, seeds sow there, a voxel column seeds its tilled paint from it. Null = none.</summary>
+		public TerrainGroundPatch[] GroundPatches;
+		/// <summary>The tree-pass props (spires, boulders — <c>PropClusterOptions.WithTrees</c>) are planned; they stay until the chunk unloads.</summary>
+		public bool HasLandmarks;
 		/// <summary>Tree colliders are on (follows Collision Range, not the chunk collider — a voxel column keeps that one off).</summary>
 		public bool VegetationNear;
 		/// <summary>The voxel ground standing in for this chunk once dug (TerrainWorldManager.Voxel.cs); null = plain heightfield.</summary>
@@ -64,6 +70,9 @@ public sealed partial class TerrainWorldManager : Component
 		public readonly List<SaplingState> Saplings = new();
 		/// <summary>True while every sapling on the chunk is hidden because the chunk is out of sapling range (skip the per-sapling loop).</summary>
 		public bool SaplingsAllHidden = true;
+		/// <summary>Small pickups on this chunk (rocks, sticks, forage — spawned hidden); the same tick shows each within Pickup Visible Range (m).</summary>
+		public readonly List<SaplingState> Pickups = new();
+		public bool PickupsAllHidden = true;
 		/// <summary>Trees on this chunk currently cast shadows (inside Tree Shadow Range).</summary>
 		public bool ShadowsOn;
 		/// <summary>
@@ -129,6 +138,9 @@ public sealed partial class TerrainWorldManager : Component
 
 	[Property, Group( "Vegetation" ), Title( "Sapling Visible Range (m)" ), Range( 10f, 300f ), Step( 5f ), Description( "A sapling is drawn only while the camera is within this distance of it — the same distance in and out, no hysteresis (Mark 2026-10-20). Checked every frame per sapling on the nearby chunks. Saplings are planted on every chunk within this range + ¾ chunk that has its large trees (they cluster on the trunks), whatever its mesh detail (2026-10-22: 80 → 200, Mark: 2-3x as far; → 150 the same day: way too many seen from above)." )]
 	public float VegetationSaplingVisibleMeters { get; set; } = 150f;
+
+	[Property, Group( "Vegetation" ), Title( "Pickup Visible Range (m)" ), Range( 20f, 300f ), Step( 5f ), Description( "Small pickups — rocks, sticks, forage (worms, mushrooms, berries, flowers, wheat) — are drawn only while the camera is within this distance, fading in and out like saplings (Mark 2026-11-03: 100 m). They are planted out to Prop Objects Range and stayed drawn until their chunk unloaded: ~200 of them past 150 m on a still camera. Boulders and spires are landmarks and stay." )]
+	public float VegetationPickupVisibleMeters { get; set; } = 100f;
 
 	[Property, Group( "Vegetation" ), Title( "Prop Objects Range (m)" ), Range( 50f, 600f ), Step( 10f ), Description( "Rocks and sticks are planted only once their chunk is within this distance (they are pickups: a chunk keeps them until it unloads)." )]
 	public float VegetationPropRangeMeters { get; set; } = 192f;
@@ -214,9 +226,6 @@ public sealed partial class TerrainWorldManager : Component
 
 	[Property, Group( "Vegetation" ), Title( "Max Slope Tilt (deg)" ), Range( 0f, 45f ), Step( 1f ), Description( "Trees never lean further than this from vertical, however steep the slope." )]
 	public float VegetationSlopeTiltMaxDegrees { get; set; } = 15f;
-
-	[Property, Group( "Vegetation" ), Title( "Clover — Rock Prefab" )]
-	public string VegetationCloverRockPrefab { get; set; } = "prefabs/environment/cloverHills/rocks/rock.prefab";
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Scatter Rocks" )]
 	public bool VegetationCloverRocksEnabled { get; set; } = true;
@@ -474,6 +483,8 @@ public sealed partial class TerrainWorldManager : Component
 		try
 		{
 			OnUpdateInner();
+			if ( _worldFieldsTask is not null )
+				return;   // the world fields are building on a worker: the water below samples them (it would wait on their lock)
 			TickVoxelColumns();   // voxel columns: land meshes, swap in for their dug chunk
 			TickRiverSurface();   // merged river surface: rebuilds only after a chunk with river loaded / unloaded
 			PublishFarSinkAttributes();   // the far tier sinks under the near chunks only (pixel_lit F_FAR_SINK)
@@ -883,6 +894,8 @@ public sealed partial class TerrainWorldManager : Component
 		public int SpawnPendingChunks, SpawnPendingPlans, SpawnGateBlocked, FrameIndex, LoadedChunks, UnloadingChunks;
 		// Worst single chunk finish (ms): model + collider + river, scatter planning, grass + nav notify.
 		public float FinishModelMs, FinishScatterMs, FinishGrassNavMs;
+		// The grassNav tail split: grass tile notify, voxel column restore, nav notify, entity population.
+		public float FinishGrassMs, FinishVoxelMs, FinishNavMs, FinishPopulateMs;
 		// Far-tree ring: most instanced draw calls / instances drawn in one frame since the last line.
 		public int FarDrawCalls, FarDrawInstances, FarHookCalls, FarCachedChunks;
 		public float FarBuildMs, FarGatherMs;
@@ -902,6 +915,7 @@ public sealed partial class TerrainWorldManager : Component
 			SpawnOneMs = 0f;
 			SpawnOneName = null;
 			FinishModelMs = FinishScatterMs = FinishGrassNavMs = 0f;
+			FinishGrassMs = FinishVoxelMs = FinishNavMs = FinishPopulateMs = 0f;
 			FarDrawCalls = FarDrawInstances = FarHookCalls = 0;
 			FarBuildMs = FarGatherMs = 0f;
 			LodFades = 0;
@@ -911,7 +925,7 @@ public sealed partial class TerrainWorldManager : Component
 		}
 
 		public string PhaseLine()
-			=> $"manager update avg {(UpdateFrames > 0 ? UpdateSumMs / UpdateFrames : 0f):0.0} max {UpdateMaxMs:0.0} ms | phase max ms: refresh {RefreshMs:0.0} (collect {RefreshCollectMs:0.0} stale {RefreshStaleMs:0.0} sync {RefreshSyncMs:0.0} queue {RefreshQueueMs:0.0} colliders {RefreshCollidersMs:0.0}) unload {UnloadMs:0.0} stale {StaleMs:0.0} queue {QueueMs:0.0} (chunk: model {FinishModelMs:0.0} scatter {FinishScatterMs:0.0} grassNav {FinishGrassNavMs:0.0}) spawn {SpawnMs:0.0} (one {SpawnOneMs:0.0} {SpawnOneName}; queue {SpawnPendingChunks} chunks / {SpawnPendingPlans} plans, loaded {LoadedChunks}, unloading {UnloadingChunks}, frame {FrameIndex}) farTier {FarTierMs:0.0} farTrees {FarTreesMs:0.0} grass {GrassMs:0.0} lod {LodMs:0.0} ({LodFades} fades) | far ring: {FarDrawCalls} draws / {FarDrawInstances} inst, hook calls {FarHookCalls}, cached {FarCachedChunks}, build {FarBuildMs:0.0} ms (gather {FarGatherMs:0.0}); impostor cards {FarImpostorInstances} baked";
+			=> $"manager update avg {(UpdateFrames > 0 ? UpdateSumMs / UpdateFrames : 0f):0.0} max {UpdateMaxMs:0.0} ms | phase max ms: refresh {RefreshMs:0.0} (collect {RefreshCollectMs:0.0} stale {RefreshStaleMs:0.0} sync {RefreshSyncMs:0.0} queue {RefreshQueueMs:0.0} colliders {RefreshCollidersMs:0.0}) unload {UnloadMs:0.0} stale {StaleMs:0.0} queue {QueueMs:0.0} (chunk: model {FinishModelMs:0.0} scatter {FinishScatterMs:0.0} grassNav {FinishGrassNavMs:0.0} = grass {FinishGrassMs:0.0} voxel {FinishVoxelMs:0.0} nav {FinishNavMs:0.0} populate {FinishPopulateMs:0.0}) spawn {SpawnMs:0.0} (one {SpawnOneMs:0.0} {SpawnOneName}; queue {SpawnPendingChunks} chunks / {SpawnPendingPlans} plans, loaded {LoadedChunks}, unloading {UnloadingChunks}, frame {FrameIndex}) farTier {FarTierMs:0.0} farTrees {FarTreesMs:0.0} grass {GrassMs:0.0} lod {LodMs:0.0} ({LodFades} fades) | far ring: {FarDrawCalls} draws / {FarDrawInstances} inst, hook calls {FarHookCalls}, cached {FarCachedChunks}, build {FarBuildMs:0.0} ms (gather {FarGatherMs:0.0}); impostor cards {FarImpostorInstances} baked";
 	}
 
 	static void MarkPhase( ref float slot, Stopwatch sw )
@@ -962,7 +976,7 @@ public sealed partial class TerrainWorldManager : Component
 	{
 		foreach ( var entry in _loaded.Values )
 		{
-			foreach ( var sapling in entry.Saplings )
+			foreach ( var sapling in entry.Saplings.Concat( entry.Pickups ) )
 			{
 				if ( sapling.Go is not null && sapling.Go.IsValid() && sapling.Fade <= 0f )
 					sapling.Go.Enabled = false;
@@ -1006,6 +1020,19 @@ public sealed partial class TerrainWorldManager : Component
 	/// <summary>Ground elevation at world meters — same sampler as chunk meshes.</summary>
 	public bool TrySampleGroundMeters( float worldXMeters, float worldYMeters, out float groundZMeters )
 		=> TerrainHeightQuery.TrySampleGroundMeters( BuildGenerationSettings(), worldXMeters, worldYMeters, out groundZMeters );
+
+	/// <summary>
+	/// Ground (m) as it is MESHED: bilinear on the loaded chunk's vertex height grid where a chunk is loaded (what is drawn
+	/// and collided with, ~0.1 us), else <see cref="TrySampleGroundMeters"/> (the generator, ~18 us). For per-frame callers
+	/// such as entity feet. Main thread only.
+	/// </summary>
+	public bool TrySampleMeshedGroundMeters( float worldXMeters, float worldYMeters, out float groundZMeters )
+	{
+		if ( _loadSettings is not null && _loaded.TryGetValue( VoxelCoordAt( worldXMeters, worldYMeters ), out var entry )
+		     && TryChunkMeshZMeters( entry, worldXMeters, worldYMeters, out groundZMeters ) )
+			return true;
+		return TrySampleGroundMeters( worldXMeters, worldYMeters, out groundZMeters );
+	}
 
 	/// <summary>PNG/inspector map post-process only — does not affect streamed meshes.</summary>
 	public TerrainBiomeMapPreviewOptions BuildPreviewMapOptions()
@@ -1191,20 +1218,48 @@ public sealed partial class TerrainWorldManager : Component
 		_initialChunksLoaded = 0;
 		_loadSettings = BuildGenerationSettings();
 		_biomeMapLoadSettled = !RegeneratePreviewOnStart;
+		// The population and camp tables are read once per world load: the editor keeps statics across play sessions and
+		// hotloads, so without this a biome_population.json / enemy_camps.json edit never reached the next play
+		BiomePopulationCatalog.Reload();
+		EnemyCampCatalog.Reload();
 
 		SetStreamerInputEnabled( false );
 
 		if ( ShowWorldLoadScreen )
 			ShowLoadScreen( "Loading World", "Preparing terrain…", 0f );
 
-		TerrainPreviewLandDiskFields.EnsureReady( _loadSettings );
+		// The world-wide fields (lake shore distance, rivers, biome placement: ~11 s on a fresh load) build on a worker, so the
+		// load screen keeps drawing instead of the whole game hanging (Mark 2026-11-03); the chunks queue once they are in
+		var fieldSettings = _loadSettings;
+		_worldFieldsTask = GameTask.RunInThreadAsync( () => TerrainPreviewLandDiskFields.EnsureReady( fieldSettings ) );
+	}
 
+	/// <summary>The world-wide fields building behind the load screen (<see cref="BeginWorldLoad"/>); null once handled.</summary>
+	System.Threading.Tasks.Task _worldFieldsTask;
+
+	/// <summary>True while the world fields are still building: nothing that samples the terrain may run yet.</summary>
+	bool WaitForWorldFields()
+	{
+		if ( _worldFieldsTask is null )
+			return false;
+		if ( !_worldFieldsTask.IsCompleted )
+			return true;
+		if ( _worldFieldsTask.IsFaulted )
+		{
+			Log.Warning( $"[TerrainWorldManager] world fields failed on the worker ({_worldFieldsTask.Exception?.InnerException?.Message}); building them here." );
+			TerrainPreviewLandDiskFields.EnsureReady( _loadSettings );
+		}
+		_worldFieldsTask = null;
 		if ( RegeneratePreviewOnStart )
 			StartBiomePreviewGeneration();
+		return false;
 	}
 
 	void ProcessWorldLoad()
 	{
+		if ( WaitForWorldFields() )
+			return;
+
 		ResolveLoadStreamTransform();
 
 		if ( !_initialChunksQueued )
@@ -1338,7 +1393,11 @@ public sealed partial class TerrainWorldManager : Component
 
 	void ProcessStreamChunkQueue()
 	{
-		if ( _isWorldLoading || _streamLoadQueue.Count == 0 )
+		// Finished worker builds land even with nothing queued: a LOD remesh (TickStaleReloads) never goes through the
+		// load queue, so with the queue empty — hovering, standing — its result sat unapplied, the chunk kept its old
+		// LOD and the six in-flight slots stayed full, re-arming the stale pass over every loaded chunk each frame
+		// (2026-11-04: chunks 80-160 m from a still camera stuck at 17 verts, 0.15 ms/frame).
+		if ( _isWorldLoading || (_streamLoadQueue.Count == 0 && _pendingBuilds.Count == 0) )
 			return;
 
 		if ( !TryGetStreamTransform( out var streamPosEngine, out _ ) )
@@ -1879,7 +1938,8 @@ public sealed partial class TerrainWorldManager : Component
 			smoothPasses,
 			ChunkHeightSmoothStrength01,
 			ResolveBorderLatticeVerticesPerSide( verticesPerSide ),
-			ResolveFineBorderSides( entry.Coord, settings, Math.Max( 32f, ChunkSizeMeters ) ) );
+			ResolveFineBorderSides( entry.Coord, settings, Math.Max( 32f, ChunkSizeMeters ) ),
+			TerrainVegetationScatter.PlanGroundPatches( settings, _backend, entry.Coord, ChunkSizeMeters, GroundPatchSources() ) );
 
 		ApplyChunkRemesh( entry, built, verticesPerSide, distance );
 	}
@@ -1909,6 +1969,7 @@ public sealed partial class TerrainWorldManager : Component
 		}
 		entry.SplatWeights = built.Colors;
 		entry.SplatExtras = built.Splat;
+		entry.GroundPatches = built.GroundPatches;
 
 		entry.VerticesPerSide = verticesPerSide;
 		// A LOD remesh must NOT regenerate the grass tiles over this chunk: chunks promote at 128 m and demote
@@ -2045,7 +2106,8 @@ public sealed partial class TerrainWorldManager : Component
 			smoothPasses,
 			ChunkHeightSmoothStrength01,
 			ResolveBorderLatticeVerticesPerSide( verticesPerSide ),
-			ResolveFineBorderSides( coord, settings, Math.Max( 32f, ChunkSizeMeters ) ) );
+			ResolveFineBorderSides( coord, settings, Math.Max( 32f, ChunkSizeMeters ) ),
+			TerrainVegetationScatter.PlanGroundPatches( settings, _backend, coord, ChunkSizeMeters, GroundPatchSources() ) );
 
 		FinishChunkLoad( coord, settings, streamPos, visible, verticesPerSide, built );
 	}
@@ -2057,7 +2119,9 @@ public sealed partial class TerrainWorldManager : Component
 		Vector3 streamPos,
 		bool visible,
 		int verticesPerSide,
-		TerrainMeshBuilder.BuildResult built )
+		TerrainMeshBuilder.BuildResult built,
+		bool[] grassMask = null,
+		bool grassMaskBuilt = false )
 	{
 		Stats.Loads++;
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
@@ -2105,7 +2169,10 @@ public sealed partial class TerrainWorldManager : Component
 			GrassStepUnits = built.StepUnits,
 			SplatWeights = built.Colors,
 			SplatExtras = built.Splat,
+			GroundPatches = built.GroundPatches,
 			VegetationNear = collider.Enabled,
+			GrassMask = grassMask,
+			GrassMaskBuilt = grassMaskBuilt,
 		};
 		_loaded[coord] = entry;
 		MarkPhase( ref Stats.FinishModelMs, finish );
@@ -2114,8 +2181,11 @@ public sealed partial class TerrainWorldManager : Component
 			ScatterVegetationOnChunk( entry, settings, verticesPerSide );
 		MarkPhase( ref Stats.FinishScatterMs, finish );
 
+		var tail = Stopwatch.StartNew();
 		NotifyGrassChunkChanged( entry );
+		MarkPhase( ref Stats.FinishGrassMs, tail );
 		TryRestoreVoxelColumn( entry );
+		MarkPhase( ref Stats.FinishVoxelMs, tail );
 
 		// Nav + scavs only when collision is live — far render chunks must not schedule Recast.
 		if ( collider.Enabled )
@@ -2124,7 +2194,9 @@ public sealed partial class TerrainWorldManager : Component
 				chunkOriginEngine + built.LocalBounds.Mins,
 				chunkOriginEngine + built.LocalBounds.Maxs );
 			BuildNavMeshSync.NotifyTerrainChunkLoaded( GameObject.Scene, chunkBounds );
+			MarkPhase( ref Stats.FinishNavMs, tail );
 			TryPopulateEntitiesOnChunk( _loaded[coord], settings, distance, chunkSize );
+			MarkPhase( ref Stats.FinishPopulateMs, tail );
 		}
 		MarkPhase( ref Stats.FinishGrassNavMs, finish );
 	}
@@ -2140,7 +2212,8 @@ public sealed partial class TerrainWorldManager : Component
 			settings,
 			_backend,
 			ChunkSizeMeters,
-			settings.WorldSeed );
+			settings.WorldSeed,
+			TerrainVegetationScatter.ForestPatchField.ForBiome( settings, BuildVegetationOptions(), TerrainPreviewBiomeId.CloverHills ) );   // camp rows want clearings
 	}
 
 	/// <summary>
@@ -2167,10 +2240,12 @@ public sealed partial class TerrainWorldManager : Component
 			entry.Trunks,
 			entry.PendingSpawns,
 			largeTrees,
-			props );
+			props,
+			landmarks: largeTrees );
 		entry.HasVegetation = true;
 		entry.HasLargeTrees = largeTrees;
 		entry.HasProps = props;
+		entry.HasLandmarks = largeTrees;
 
 		if ( WantsSaplings( largeTrees, distance, Math.Max( 32f, ChunkSizeMeters ) ) )
 		{
@@ -2184,8 +2259,9 @@ public sealed partial class TerrainWorldManager : Component
 	void ScatterLargeTreesOnChunk( LoadedChunk entry, TerrainPreviewSettings settings, int verticesPerSide )
 	{
 		TerrainVegetationScatter.PopulateChunk( entry.GameObject, entry.Coord, settings, _backend, ChunkSizeMeters, verticesPerSide, ChunkVerticesPerSide,
-			BuildVegetationOptions(), entry.Trunks, entry.PendingSpawns, largeTrees: true, props: false );
+			BuildVegetationOptions(), entry.Trunks, entry.PendingSpawns, largeTrees: true, props: false, landmarks: !entry.HasLandmarks );
 		entry.HasLargeTrees = true;
+		entry.HasLandmarks = true;
 		QueueVegetationSpawns( entry );
 	}
 
@@ -2220,50 +2296,67 @@ public sealed partial class TerrainWorldManager : Component
 			return;
 
 		var cam = TerrainWorldUnits.EngineToMeters( camEngine );
-		var range = Math.Max( 5f, VegetationSaplingVisibleMeters );
-		var rangeSq = range * range;
+		var saplingRange = Math.Max( 5f, VegetationSaplingVisibleMeters );
+		var pickupRange = Math.Max( 5f, VegetationPickupVisibleMeters );
 		var chunkSize = Math.Max( 32f, ChunkSizeMeters );
 		var worldRadius = _loadSettings.TotalWorldRadiusMeters;
-		var chunkReach = range + (chunkSize * 0.75f);
 		var step = VegetationSmallFadeSeconds <= 0.001f ? 1f : Time.Delta / VegetationSmallFadeSeconds;
 
 		foreach ( var entry in _loaded.Values )
 		{
-			if ( entry.Saplings.Count == 0 )
+			if ( entry.Saplings.Count == 0 && entry.Pickups.Count == 0 )
 				continue;
 
 			var cx = -worldRadius + ((entry.Coord.X + 0.5f) * chunkSize) - cam.x;
 			var cy = -worldRadius + ((entry.Coord.Y + 0.5f) * chunkSize) - cam.y;
-			var far = (cx * cx) + (cy * cy) > chunkReach * chunkReach;
-			if ( far && entry.SaplingsAllHidden )
-				continue;
-
-			var anyShown = false;
-			foreach ( var sapling in entry.Saplings )
-			{
-				var go = sapling.Go;
-				if ( go is null || !go.IsValid() )
-					continue;
-				var target = !far && (sapling.PosMeters - cam).LengthSquared <= rangeSq ? 1f : 0f;
-				if ( sapling.Fade == target )
-				{
-					anyShown |= target > 0f;
-					continue;
-				}
-				if ( !go.Enabled )
-					go.Enabled = true;
-				sapling.Fade = target > sapling.Fade ? Math.Min( target, sapling.Fade + step ) : Math.Max( target, sapling.Fade - step );
-				foreach ( var renderer in sapling.Renderers )
-				{
-					if ( renderer is not null && renderer.IsValid() )
-						renderer.Attributes.Set( "TreeFade", sapling.Fade );
-				}
-				if ( sapling.Fade <= 0f )
-					go.Enabled = false;
-				anyShown |= sapling.Fade > 0f;
-			}
-			entry.SaplingsAllHidden = !anyShown;
+			var chunkDistSq = (cx * cx) + (cy * cy);
+			if ( entry.Saplings.Count > 0 )
+				entry.SaplingsAllHidden = TickRangeVisibility( entry.Saplings, entry.SaplingsAllHidden, cam, chunkDistSq, saplingRange, chunkSize, step );
+			if ( entry.Pickups.Count > 0 )
+				entry.PickupsAllHidden = TickRangeVisibility( entry.Pickups, entry.PickupsAllHidden, cam, chunkDistSq, pickupRange, chunkSize, step );
 		}
+	}
+
+	/// <summary>One chunk's list (saplings or pickups): each fades toward shown inside <paramref name="range"/> metres, hidden past it. Returns whether all are hidden.</summary>
+	static bool TickRangeVisibility( List<SaplingState> list, bool allHidden, Vector3 cam, float chunkDistSq, float range, float chunkSize, float step )
+	{
+		var chunkReach = range + (chunkSize * 0.75f);
+		var far = chunkDistSq > chunkReach * chunkReach;
+		if ( far && allHidden )
+			return true;
+
+		var rangeSq = range * range;
+		var anyShown = false;
+		foreach ( var item in list )
+		{
+			var go = item.Go;
+			if ( go is null || !go.IsValid() )
+				continue;
+			var target = !far && (item.PosMeters - cam).LengthSquared <= rangeSq ? 1f : 0f;
+			if ( item.Fade == target )
+			{
+				anyShown |= target > 0f;
+				continue;
+			}
+			if ( !go.Enabled )
+			{
+				go.Enabled = true;
+				// a harvest / break that arrived while it was off registered nowhere: put it back on the object
+				var identity = go.Components.Get<WorldScatterIdentity>();
+				if ( identity is not null )
+					WorldScatterIdentity.ReapplyRemembered( identity );
+			}
+			item.Fade = target > item.Fade ? Math.Min( target, item.Fade + step ) : Math.Max( target, item.Fade - step );
+			foreach ( var renderer in item.Renderers )
+			{
+				if ( renderer is not null && renderer.IsValid() )
+					renderer.Attributes.Set( "TreeFade", item.Fade );
+			}
+			if ( item.Fade <= 0f )
+				go.Enabled = false;
+			anyShown |= item.Fade > 0f;
+		}
+		return !anyShown;
 	}
 
 	/// <summary>A freshly spawned rock / stick starts fully dithered out and fades in (no LODs, so a fade is allowed).</summary>
@@ -2318,13 +2411,17 @@ public sealed partial class TerrainWorldManager : Component
 			}
 			entry.LodTrees.Clear();
 			entry.Trunks.Clear();
-			entry.PendingSpawns.RemoveAll( p => p.Name.StartsWith( "veg_", StringComparison.Ordinal ) && !p.Name.StartsWith( "veg_rock", StringComparison.Ordinal ) && !p.Name.StartsWith( "veg_stick", StringComparison.Ordinal ) && !p.Name.StartsWith( "veg_clover_small", StringComparison.Ordinal ) );
+			entry.PendingSpawns.RemoveAll( p => IsLeavingTreePlan( p ) );
 			entry.HasLargeTrees = false;
 			entry.TreesLeaving = false;
 			entry.FarHandoverFrame = -1;
 			CollectVegetationColliders( entry );
 		}
 	}
+
+	/// <summary>A planned clone that leaves with the large trees (dropped from the queue when they hand back to the far ring): the trees and their beehives. Props (rocks, sticks, forage), saplings and the landmarks (spires, boulders) stay until the chunk unloads.</summary>
+	static bool IsLeavingTreePlan( in TerrainVegetationScatter.SpawnPlan p )
+		=> p.Kind is "tree" or "beehive";
 
 	/// <summary>
 	/// Saplings are planted by distance, not mesh detail: on a chunk whose centre is within Sapling Visible Range + ¾ chunk
@@ -2486,13 +2583,20 @@ public sealed partial class TerrainWorldManager : Component
 			NearLargeTreeStickChance01 = VegetationCloverStickNearLargeTreeChance01,
 			NearLargeTreeStickMinRadiusMeters = VegetationCloverStickNearLargeTreeMinRadiusMeters,
 			NearLargeTreeStickMaxRadiusMeters = VegetationCloverStickNearLargeTreeMaxRadiusMeters,
-			PropClusters =
+			BeehivePrefabs = VegetationCloverBeehivePrefabs?.ToArray(),
+			BeehiveChance01 = VegetationCloverBeehiveChance01,
+			BeehiveHangMinMeters = VegetationCloverBeehiveHangMinMeters,
+			BeehiveHangMaxMeters = VegetationCloverBeehiveHangMaxMeters,
+			BeehiveReachMinMeters = VegetationCloverBeehiveReachMinMeters,
+			BeehiveReachMaxMeters = VegetationCloverBeehiveReachMaxMeters,
+			PropClusters = ConcatClusters(
 			[
 				new TerrainVegetationScatter.PropClusterOptions
 				{
 					Enabled = VegetationCloverRocksEnabled,
 					BiomeId = TerrainPreviewBiomeId.CloverHills,
-					Prefab = VegetationCloverRockPrefab,
+					Prefabs = CloverRockPrefabs(),
+					Prefab = CloverRockPrefabs()[0],
 					InstancePrefix = "veg_rock",
 					KindLabel = "rock",
 					NoiseSeedSalt = 7000,
@@ -2522,7 +2626,7 @@ public sealed partial class TerrainWorldManager : Component
 					ScaleMax = 1.15f,
 					MaxPerChunk = 24,
 				},
-			],
+			], ConcatClusters( BuildStoneClusters(), BuildForageClusters() ) ),
 		};
 
 	bool ShouldScatterVegetation( int verticesPerSide )
@@ -2764,6 +2868,7 @@ public sealed partial class TerrainWorldManager : Component
 		_chunkGroundZMeters.Clear();
 		BiomePopulationRegistry.Clear();
 		BiomePopulationRespawnQueue.Clear();
+		EnemyCampSites.ClearWorldCamps();
 		EntityChunkMemory.Get( Scene )?.Clear();
 		InvalidateMinimapHostCache();
 	}
@@ -2844,6 +2949,8 @@ public sealed partial class TerrainWorldManager : Component
 	}
 
 	bool _settling;
+	/// <summary>True while the world load screen is up (generating, then settling). The day / night cycle holds its clock meanwhile.</summary>
+	public bool IsLoadScreenUp => IsWorldLoading || _settling;
 	float _settleStartedAt;
 	int _settleGoodFrames;
 	/// <summary>A frame slower than this breaks the streak (16.7 ms = 60 fps; the engine's idle throttles still pass).</summary>

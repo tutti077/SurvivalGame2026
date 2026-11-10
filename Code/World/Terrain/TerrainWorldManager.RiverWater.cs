@@ -963,6 +963,7 @@ public sealed partial class TerrainWorldManager
 
 		var trigger = go.Components.Create<BoxCollider>();
 		trigger.IsTrigger = true;
+		trigger.Static = true; // never moves; keyframed trigger boxes on the terrain cost Physics every frame (see the sea volumes)
 		trigger.Scale = TerrainWorldUnits.MetersToEngine( new Vector3( length + 1f, width, depth ) );
 
 		var volume = go.Components.Create<WaterVolume>();

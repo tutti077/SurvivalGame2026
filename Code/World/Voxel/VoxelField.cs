@@ -135,6 +135,20 @@ public sealed class VoxelField
 		return tilled;
 	}
 
+	/// <summary>Generated tilled ground (the world's wild-wheat beds, <see cref="TerrainGroundPatch"/>): raise each sample column's tilled coverage to <paramref name="coverage"/> at its world xy (m). Seed time only, before any stroke is replayed.</summary>
+	public void SeedTilled( Func<float, float, float> coverage )
+	{
+		for ( var y = 0; y < SamplesY; y++ )
+		{
+			for ( var x = 0; x < SamplesX; x++ )
+			{
+				var c = coverage( OriginMeters.x + (x * CellMeters), OriginMeters.y + (y * CellMeters) );
+				if ( c > 0f )
+					_tilled[(y * SamplesX) + x] = MathF.Max( _tilled[(y * SamplesX) + x], Math.Clamp( c, 0f, 1f ) );
+			}
+		}
+	}
+
 	/// <summary>Forget every paint stroke (reset).</summary>
 	public void ClearPaint()
 	{

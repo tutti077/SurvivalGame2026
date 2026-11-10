@@ -383,12 +383,17 @@ public sealed partial class TerrainWorldManager
 		if ( options.Profiles is null )
 			return byPrefab;
 
-		foreach ( var profile in options.Profiles )
+		// the tree prefabs, then the far-ring landmarks (spires) — the same _far.vmdl rule for both
+		var prefabLists = options.Profiles.Select( p => p.Prefabs ).ToList();
+		if ( options.PropClusters is not null )
+			prefabLists.AddRange( options.PropClusters.Where( c => c.FarRing ).Select( c => c.Prefabs is { Length: > 0 } ? c.Prefabs : [c.Prefab] ) );
+
+		foreach ( var prefabs in prefabLists )
 		{
-			if ( profile.Prefabs is null )
+			if ( prefabs is null )
 				continue;
 
-			foreach ( var raw in profile.Prefabs )
+			foreach ( var raw in prefabs )
 			{
 				var prefabPath = TerrainVegetationScatter.NormalizePrefabPath( raw );
 				if ( string.IsNullOrEmpty( prefabPath ) || byPrefab.ContainsKey( prefabPath ) )
@@ -428,7 +433,12 @@ public sealed partial class TerrainWorldManager
 		if ( string.IsNullOrEmpty( modelPath ) || !modelPath.EndsWith( ".vmdl", StringComparison.OrdinalIgnoreCase ) )
 			return null;
 
-		var farPath = modelPath[..^5] + "_far.vmdl";
+		// a sectioned rock's first renderer is section 0 ("rock_spire1_v1_s0.vmdl"): its far model is the whole rock's
+		var stem = modelPath[..^5];
+		var cut = stem.LastIndexOf( "_s", StringComparison.Ordinal );
+		if ( cut > 0 && cut + 2 < stem.Length && stem[(cut + 2)..].All( char.IsDigit ) )
+			stem = stem[..cut];
+		var farPath = stem + "_far.vmdl";
 		return FileSystem.Mounted.FileExists( farPath ) || FileSystem.Mounted.FileExists( farPath + "_c" ) ? farPath : null;
 	}
 
@@ -452,7 +462,7 @@ public sealed partial class TerrainWorldManager
 			}
 
 			var position = TerrainWorldUnits.MetersToEngine( new Vector3( tree.X, tree.Y, tree.HeightMeters ) );
-			list.Add( new Transform( position, Rotation.FromYaw( tree.YawDegrees ), tree.ScaleMul ) );
+			list.Add( new Transform( position, tree.Rotation ?? Rotation.FromYaw( tree.YawDegrees ), tree.Scale ?? new Vector3( tree.ScaleMul ) ) );
 		}
 
 		var batches = new FarDrawBatch[groups.Count];

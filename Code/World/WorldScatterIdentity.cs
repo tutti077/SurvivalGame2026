@@ -13,7 +13,8 @@ public sealed class WorldScatterIdentity : Component
 {
 	static readonly Dictionary<string, WorldScatterIdentity> ByKey = new( StringComparer.Ordinal );
 	/// <summary>
-	/// Keys whose tree was felled (stage) or whose node was harvested, remembered for the session: a deterministic
+	/// Keys whose tree was felled (stage), whose rock lost sections (<see cref="MineableRock"/>: the broken-section mask) or
+	/// whose node was harvested, remembered for the session: a deterministic
 	/// scatter object that is destroyed and re-planted (chunk unload / reload, the tree object range) comes back in
 	/// that state instead of regrowing (2026-10-20). Cleared with the world.
 	/// </summary>
@@ -37,6 +38,9 @@ public sealed class WorldScatterIdentity : Component
 			var tree = identity.Components.Get<ChopableTree>( FindMode.EverythingInSelfAndDescendants );
 			if ( tree is not null && tree.IsValid() )
 				tree.ApplyStagePresentation( stage );
+			var rock = identity.Components.Get<MineableRock>( FindMode.EverythingInSelfAndDescendants );
+			if ( rock is not null && rock.IsValid() )
+				rock.ApplyBrokenMask( stage, animate: false );   // already broken: no burst, no stone
 		}
 
 		if ( DepletedKeys.Contains( identity.StableKey ) && TryFindHarvestNode( identity.StableKey, out var node ) )
@@ -102,17 +106,9 @@ public sealed class WorldScatterIdentity : Component
 		return node is not null && node.IsValid();
 	}
 
-	public static bool TryFindChopableTree( string stableKey, out ChopableTree tree )
-	{
-		tree = null;
-		if ( !TryFind( stableKey, out var identity ) )
-			return false;
-		tree = identity.Components.Get<ChopableTree>( FindMode.EverythingInSelfAndDescendants );
-		return tree is not null && tree.IsValid();
-	}
-
 	/// <summary>Host→peers: move the local deterministic tree matching this key to <paramref name="stage"/>
-	/// (<see cref="ChopableTree.StageStump"/> or <see cref="ChopableTree.StageGone"/>).</summary>
+	/// (<see cref="ChopableTree.StageStump"/> or <see cref="ChopableTree.StageGone"/>), or a <see cref="MineableRock"/> to
+	/// its broken-section mask.</summary>
 	public static void HostBroadcastBroken( string stableKey, int stage )
 	{
 		if ( string.IsNullOrWhiteSpace( stableKey ) || !Networking.IsHost )
@@ -147,10 +143,15 @@ public sealed class WorldScatterIdentity : Component
 	{
 		if ( !string.IsNullOrWhiteSpace( stableKey ) )
 			BrokenStages[stableKey] = stage;
-		if ( !TryFindChopableTree( stableKey, out var tree ) )
+		if ( !TryFind( stableKey, out var identity ) )
 			return;
 
-		tree.ApplyStagePresentation( stage );
+		var tree = identity.Components.Get<ChopableTree>( FindMode.EverythingInSelfAndDescendants );
+		if ( tree is not null && tree.IsValid() )
+			tree.ApplyStagePresentation( stage );
+		var rock = identity.Components.Get<MineableRock>( FindMode.EverythingInSelfAndDescendants );
+		if ( rock is not null && rock.IsValid() )
+			rock.ApplyBrokenMask( stage, animate: true );
 	}
 
 	internal static void ApplyHarvestDepletedLocal( string stableKey )

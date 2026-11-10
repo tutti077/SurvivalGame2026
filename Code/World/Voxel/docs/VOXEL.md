@@ -54,7 +54,10 @@ soil, or the grading tool which flattens the surface which we worked on previous
     Grass clutter: `SampleGrassGround` now stands clumps on a swapped column's voxel surface (`VoxelField.TrySurface`, the
     field gradient for the normal) and returns none where the paint is Bare; the biome mask (Clover only) still decides
     where clutter grows at all, so Grass in a redwood chunk is texture only. A paint stroke makes a column like a dig does
-    (the seed is the chunk's own mesh, so the swap is invisible) and invalidates the grass tiles over it.
+    (the seed is the chunk's own mesh, so the swap is invisible) and invalidates only the grass tiles under the stroke
+    (`NotifyGrassAreaChanged`): an invalidated clutter tile drops its clumps at once and the engine refills 8 tiles a
+    frame, so the old whole-chunk invalidate (~36 tiles) blinked the chunk's grass for several frames (Mark 2026-11-03);
+    a stroke's 1–4 tiles refill in the frame after, before the batches rebuild.
   - **Tilled soil** (Mark 2026-11-02: "Tilled ground should work the same as the bare ground just be dark brown, also
     have no grass there"): on the world's voxel ground a third paint, `PaintTilled` / `VoxelPaint.Tilled` (`_tilled`
     coverage), the same circle / square stroke as bare; the mesher writes it to TexCoord1.x (the splat's darkening channel,
@@ -71,7 +74,10 @@ soil, or the grading tool which flattens the surface which we worked on previous
     rim fades the layer out over half a metre, a square is a hard step. Fill only (never cuts), through the same
     `LayColumn` the rake uses (the two samples bracketing the new surface take its exact signed height, air below fills
     down to existing ground). One layer per press. Costs **Raise Dirt Cost** 1 `resource_dirt` (a new resource) and the
-    pickaxe's chip hands back **Chip Dirt Yield** 1 dirt per stroke that changed the ground - both on `PlayerTerraform`.
+    pickaxe's chip hands back what it hit, per stroke that changed the ground: **Chip Stone Yield** 1 `resource_stone` where the
+    surface is rock (`IVoxelBrushTarget.RockAt` >= 0.5, read just under the hit before the chip - the same `VoxelMesher.RockShare`
+    rule that paints the rock tile: mountain weight, 4-8 m under the original surface, cobblestone paint; Mark 2026-11-02: "when i
+    destroy rock i should get stone"), else **Chip Dirt Yield** 1 dirt - both on `PlayerTerraform`.
     **Free while everything else is** (Mark 2026-11-02): `PlayerTerraform.MaterialsAreFree` = the prefab flag **Free
     Materials** (on, like the hammer's Free Build Enabled) OR the owner's `allCrafting` hack (the console command that
     already makes crafting and augments free, read through `PlayerCrafting.AllCraftingHack` so the host honours it).
@@ -84,8 +90,8 @@ soil, or the grading tool which flattens the surface which we worked on previous
     paint repeats 4 a second), **Hoe Grade Stamina Cost** 3, **Hoe Raise Stamina Cost** 3; the old tile till and the uproot
     take the paint cost. The tool checks `PlayerTerraform.CanAffordStroke` for the preview (the ring turns red when too
     tired or short of dirt) and the host spends only when the ground actually changed.
-  - **F to punch**: the shove no longer fires at thin air - `PlayerCombat.Shove.HasShoveTargetAhead` needs a pawn or enemy
-    within its reach ahead - and never while the hoe is out (its F is the mode swap).
+  - **F to punch**: F always throws the punch (at thin air too since 2026-11-05) - never while the hoe is out
+    (its F is the mode swap); with a shield out it is a shield bash.
 - **Host path**: `PlayerTerraform` on `basicplayer.prefab` (the farming pattern: owner intent -> `[Rpc.Host]` -> caller is
   the owner -> target ready, tool not broken, point within reach + 1.5 m slack -> `IVoxelBrushTarget.RequestChip` /
   `RequestBrush`, which now return whether the stroke landed -> `ToolDurability.HostAddWearToActiveTool` only then).
@@ -174,12 +180,15 @@ digs, fills or rakes gets a **voxel column**:
   the loaded chunk's `HeightsZ` grid — the mesh the player sees, smoothing and LOD included — and the margin from the
   neighbours' grids (the sampler where none is loaded yet). The splat weights / extras come from the same vertices
   (`BuildResult.Colors` / `Splat`, kept on `LoadedChunk`), baked per sample column on the main thread so the worker-side
-  mesher reads only those arrays. ~35 ms for one column, once.
+  mesher reads only those arrays (~6 ms). The field itself — seed, wild-wheat tilled beds, every logged stroke replayed —
+  is built off the main thread when a chunk with strokes loads (`TryRestoreVoxelColumn` → `BuildVoxelField` on a worker,
+  landed by `LandPendingVoxelColumns`): a column with 222 strokes took 2.1 s on the main thread at load (2026-11-03). A
+  stroke on a chunk with no column builds it inline (one stroke: ~60 ms) and drops a restore still on its worker.
 - **The swap.** The column's chunks are a `VoxelChunkSet` under a `VoxelColumn (x,y)` root (tags `voxel` + `terrain`).
   Once its first meshes have all landed (`Settled`) the heightfield chunk's renderer and collider switch off
   (`LoadedChunk.Voxel.Swapped`; `UpdateChunkColliders` / `ApplyChunkRemesh` keep them off, tree colliders keep following
-  Collision Range through `LoadedChunk.VegetationNear`) and the grass tiles over it regenerate without clumps
-  (`SampleGrassGround` returns null for a swapped chunk). Trees, props, saplings and scavs stay where they were — a tree
+  Collision Range through `LoadedChunk.VegetationNear`) and the grass tiles under the strokes applied before the swap
+  (`VoxelColumn.GrassAreas`) regenerate on the voxel surface (`SampleGrassGround` reads the field once swapped). Trees, props, saplings and scavs stay where they were — a tree
   over a pit floats until scatter reads the voxel surface (step 3 below). Nav is not rebaked for voxel ground yet.
 - **Seams.** The field carries a two-cell margin past the square, so a brush at a chunk border writes the same samples
   into both columns, and `VoxelMesher.Clip` moves every vertex of a cell outside the square onto the square's edge —
