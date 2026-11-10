@@ -25,7 +25,12 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 	const float RowHeight = 44f;
 	const float RowGap = 4f;
 	const float GroupHeaderHeight = 30f;
-	const float InfoBoxHeight = 250f;
+	/// <summary>
+	/// Fixed height of the selected augment's info box: name, description (up to four wrapped lines in
+	/// the 24 % column at 16:9), class / fit / activation / craft cost lines and the pinned gold cost row.
+	/// At 250 px the lines were squeezed into each other.
+	/// </summary>
+	const float InfoBoxHeight = 310f;
 	const float ButtonHeight = 36f;
 	const float WheelPixelsPerNotch = RowHeight * 2f + RowGap * 2f;
 	const float ScrollBarWidth = 18f;
@@ -150,6 +155,7 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 		_detailName = new Label { Parent = info, Text = "Select an augment" };
 		UiStyle.Text( _detailName, UiText.Header, BodyFont + 2f );
 		_detailName.Style.Set( "pointer-events", "none" );
+		_detailName.Style.Set( "flex-shrink", "0" );
 
 		_detailLines = new Panel { Parent = info };
 		_detailLines.Style.Set( "flex-direction", "column" );
@@ -369,6 +375,8 @@ public sealed class AugmentStationMenuSection : IPlayerMenuSection
 			};
 			line.Style.Set( "white-space", "normal" );
 			line.Style.Set( "pointer-events", "none" );
+			// Lines keep their height; anything past the box is clipped, never drawn over its neighbour.
+			line.Style.Set( "flex-shrink", "0" );
 		}
 
 		SetButtonEnabled( _craftButton, _craftLabel, _augments?.CanCraft( def.Id ) ?? false );

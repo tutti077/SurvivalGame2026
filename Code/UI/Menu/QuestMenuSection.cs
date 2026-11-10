@@ -57,10 +57,19 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 	float _contentHeightStyle;
 
 	/// <summary>
-	/// Deliberately not a whole number of rows: the crafting height ends flush with a row, which
-	/// hid that the list continues. +15px leaves about half of the next quest peeking under the fold.
+	/// Fixed height of the quest detail block: name row, then Description / Task / Objectives (and
+	/// Rewards once quests carry any). Three objectives need about 305 px at the detail font sizes;
+	/// at the old 300 px with the old larger text a three-objective quest ran out of the block.
+	/// Title + this + <see cref="ViewHeight"/> + the two section gaps fill the section's fixed height.
 	/// </summary>
-	const float ViewHeight = CraftingMenuSection.RecipeListMinHeight + 15f;
+	const float DetailHeight = 355f;
+
+	/// <summary>
+	/// Deliberately not a whole number of rows: a height flush with a row hid that the list
+	/// continues. This leaves about half of the next quest peeking under the fold, and keeps
+	/// title + detail + list inside the section's fixed height.
+	/// </summary>
+	const float ViewHeight = 410f;
 
 	string _selectedQuestId;
 	bool _menuOpen;
@@ -94,24 +103,26 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 
 		var detail = new Panel { Parent = _sectionRoot };
 		detail.Style.Set( "flex-direction", "column" );
-		detail.Style.Set( "gap", $"{10f * CraftingMenuSection.LayoutScale}px" );
+		detail.Style.Set( "gap", $"{CraftingMenuSection.DetailBlockGap}px" );
 		detail.Style.Set( "width", "100%" );
 		detail.Style.PaddingTop = Length.Pixels( 4f * CraftingMenuSection.LayoutScale );
 		detail.Style.PaddingBottom = Length.Pixels( 8f * CraftingMenuSection.LayoutScale );
 		detail.Style.Set( "border-bottom-width", UiStyle.Px( UiTheme.Metrics.BorderWidth ) );
 		detail.Style.Set( "border-bottom-color", UiStyle.Css( UiTheme.Colors.DividerColor ) );
 		// Fixed height (not max-height): showing/hiding detail blocks must never move the list below.
-		detail.Style.Height = Length.Pixels( CraftingMenuSection.DetailAreaMaxHeight );
-		detail.Style.MinHeight = Length.Pixels( CraftingMenuSection.DetailAreaMaxHeight );
-		detail.Style.MaxHeight = Length.Pixels( CraftingMenuSection.DetailAreaMaxHeight );
+		detail.Style.Height = Length.Pixels( DetailHeight );
+		detail.Style.MinHeight = Length.Pixels( DetailHeight );
+		detail.Style.MaxHeight = Length.Pixels( DetailHeight );
 		detail.Style.Set( "flex-shrink", "0" );
-		detail.Style.Set( "overflow-y", "scroll" );
+		// Clipped, never scrolled (no wheel on this block in the soft-cursor menu): DetailHeight holds the content.
+		detail.Style.Set( "overflow", "hidden" );
 
 		var header = new Panel { Parent = detail };
 		header.Style.Set( "flex-direction", "row" );
 		header.Style.Set( "align-items", "center" );
 		header.Style.Set( "justify-content", "space-between" );
 		header.Style.Set( "width", "100%" );
+		header.Style.Set( "flex-shrink", "0" );
 
 		_detailName = new Label { Parent = header, Text = "Select a quest" };
 		UiStyle.Text( _detailName, UiText.Value, CraftingMenuSection.ItemNameFontSize );
@@ -745,16 +756,19 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 	{
 		var block = new Panel { Parent = parent };
 		block.Style.Set( "flex-direction", "column" );
-		block.Style.Set( "gap", $"{4f * CraftingMenuSection.LayoutScale}px" );
+		block.Style.Set( "gap", $"{CraftingMenuSection.DetailEntryGap}px" );
 		block.Style.Set( "width", "100%" );
+		block.Style.Set( "flex-shrink", "0" );
 
 		var heading = new Label { Parent = block, Text = headingText };
 		UiStyle.Text( heading, UiText.Header, CraftingMenuSection.SectionHeaderFontSize );
+		heading.Style.Set( "flex-shrink", "0" );
 
 		entriesHost = new Panel { Parent = block };
 		entriesHost.Style.Set( "flex-direction", "column" );
-		entriesHost.Style.Set( "gap", $"{3f * CraftingMenuSection.LayoutScale}px" );
+		entriesHost.Style.Set( "gap", $"{CraftingMenuSection.DetailEntryGap}px" );
 		entriesHost.Style.Set( "width", "100%" );
+		entriesHost.Style.Set( "flex-shrink", "0" );
 		entriesHost.Style.PaddingLeft = Length.Pixels( 6f * CraftingMenuSection.LayoutScale );
 
 		return block;
@@ -783,5 +797,6 @@ public sealed class QuestMenuSection : IPlayerMenuSection
 		UiStyle.Text( label, UiText.Body, CraftingMenuSection.SectionEntryFontSize );
 		label.Style.FontColor = color;
 		label.Style.Set( "white-space", "normal" );
+		label.Style.Set( "flex-shrink", "0" );
 	}
 }

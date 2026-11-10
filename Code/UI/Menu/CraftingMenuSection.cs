@@ -35,8 +35,21 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		   / PlayerScreenHud.DesignScreenHeight * 100f;
 	/// <summary>Shortest the recipe list gets; it grows with the section on taller windows.</summary>
 	public const float RecipeListMinHeight = 220f * LengthScale;
-	public const float DetailAreaMaxHeight = MinSectionHeight - RecipeListMinHeight - 80f * LayoutScale;
+	/// <summary>
+	/// Fixed height of the detail block above the list (icon + name row, then two header + entry
+	/// blocks). Sized from the content, not from what the list leaves over: the tallest cases today are
+	/// three stats + three costs on the Upgrade tab and a three-line description with five entries on
+	/// the Craft tab, about 356 px at the detail font sizes below. At the old 300 px a selected item's
+	/// stats ran out of the block (Mark 2026-11-10). Keep in step with the entry counts in the data.
+	/// </summary>
+	public const float DetailAreaMaxHeight = 370f;
+	/// <summary>Vertical gap between the detail block's rows (icon row, each header + entries block).</summary>
+	public const float DetailBlockGap = 8f;
+	/// <summary>Gap between a detail header and its entries, and between two entries.</summary>
+	public const float DetailEntryGap = 2f;
 	public const float RecipeRowGap = 3f;
+	/// <summary>Fewest recipe rows the list keeps when the column is at its tightest (workbench, short window).</summary>
+	public const float RecipeListFloorRows = 5f;
 	/// <summary>
 	/// Exact Style.Height for each recipe row (border-box). Scroll range uses this — keep in sync.
 	/// </summary>
@@ -44,14 +57,15 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	public const float RecipeRowBorder = 1f;
 	/// <summary>Readable list names (not scaled as hard as the 50% row shrink).</summary>
 	public const float RecipeListRowFontSize = 14f * TextScale * 0.85f;
-	/// <summary>One physical mouse-wheel notch reveals this many recipe rows.</summary>
+	/// <summary>Most recipe rows one mouse-wheel notch moves; the list uses half its visible rows when that is fewer.</summary>
 	public const float WheelItemsPerNotch = 4.5f;
 
 	public const float CraftingTitleFontSize = 24f * TextScale;
 	public const float ItemNameFontSize = 16f * TextScale;
 	public const float ItemDescriptionFontSize = 12f * TextScale;
-	public const float SectionHeaderFontSize = 17f * TextScale;
-	public const float SectionEntryFontSize = 14f * TextScale;
+	/// <summary>Detail headers and entries sit at the menu guideline sizes (headers 20, body 17) — the theme defaults, const for layout arithmetic.</summary>
+	public const float SectionHeaderFontSize = 20f;
+	public const float SectionEntryFontSize = 17f;
 
 	public string SectionId => "crafting";
 
@@ -178,7 +192,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 
 		var detail = new Panel { Parent = _sectionRoot };
 		detail.Style.Set( "flex-direction", "column" );
-		detail.Style.Set( "gap", $"{10f * LayoutScale}px" );
+		detail.Style.Set( "gap", $"{DetailBlockGap}px" );
 		detail.Style.Set( "width", "100%" );
 		detail.Style.PaddingTop = Length.Pixels( 4f * LayoutScale );
 		detail.Style.PaddingBottom = Length.Pixels( 8f * LayoutScale );
@@ -191,13 +205,17 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		detail.Style.MinHeight = Length.Pixels( DetailAreaMaxHeight );
 		detail.Style.MaxHeight = Length.Pixels( DetailAreaMaxHeight );
 		detail.Style.Set( "flex-shrink", "0" );
-		detail.Style.Set( "overflow-y", "scroll" );
+		// Clipped, never scrolled: the soft-cursor menu has no wheel on this block, so the height above
+		// has to hold the content.
+		detail.Style.Set( "overflow", "hidden" );
 
 		var detailRow = new Panel { Parent = detail };
 		detailRow.Style.Set( "flex-direction", "row" );
 		detailRow.Style.Set( "gap", $"{10f * LayoutScale}px" );
 		detailRow.Style.Set( "align-items", "flex-start" );
 		detailRow.Style.Set( "width", "100%" );
+		// Never squeezed by the blocks below: a shrunk row let the "Stats" header draw over the icon.
+		detailRow.Style.Set( "flex-shrink", "0" );
 
 		_detailIcon = new Panel { Parent = detailRow };
 		_detailIcon.Style.Width = Length.Pixels( DetailIconSize );
@@ -254,8 +272,10 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		_recipeListPanel = listPanel;
 		_recipeList = listPanel;
 		_recipeList.Style.Set( "width", "100%" );
-		// Takes whatever height the section has left under the fixed header / button / detail block.
-		_recipeList.Style.MinHeight = Length.Pixels( RecipeListMinHeight );
+		// Takes whatever height the section has left between the fixed header / tabs / detail block
+		// above and the action button below. The floor is five rows, not RecipeListMinHeight: with the
+		// workbench tab row and the button in the column, 440 px pushed the button out of the section.
+		_recipeList.Style.MinHeight = Length.Pixels( RecipeListFloorRows * (RecipeRowHeight + RecipeRowGap) );
 		_recipeList.Style.Set( "flex-shrink", "1" );
 		_recipeList.Style.Set( "flex-grow", "1" );
 		_recipeList.Style.Set( "pointer-events", "auto" );
@@ -974,16 +994,19 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 	{
 		var block = new Panel { Parent = parent };
 		block.Style.Set( "flex-direction", "column" );
-		block.Style.Set( "gap", $"{4f * LayoutScale}px" );
+		block.Style.Set( "gap", $"{DetailEntryGap}px" );
 		block.Style.Set( "width", "100%" );
+		block.Style.Set( "flex-shrink", "0" );
 
 		var heading = new Label { Parent = block, Text = headingText };
 		UiStyle.Text( heading, UiText.Header, SectionHeaderFontSize );
+		heading.Style.Set( "flex-shrink", "0" );
 
 		entriesHost = new Panel { Parent = block };
 		entriesHost.Style.Set( "flex-direction", "column" );
-		entriesHost.Style.Set( "gap", $"{3f * LayoutScale}px" );
+		entriesHost.Style.Set( "gap", $"{DetailEntryGap}px" );
 		entriesHost.Style.Set( "width", "100%" );
+		entriesHost.Style.Set( "flex-shrink", "0" );
 		entriesHost.Style.PaddingLeft = Length.Pixels( 6f * LayoutScale );
 
 		return block;
@@ -1011,6 +1034,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		var label = new Label { Parent = host, Text = text };
 		UiStyle.Text( label, UiText.Secondary, SectionEntryFontSize );
 		label.Style.Set( "white-space", "normal" );
+		label.Style.Set( "flex-shrink", "0" );
 	}
 
 	List<string> BuildRequirementLines( CraftingRecipe recipe )
@@ -1287,6 +1311,7 @@ public sealed class CraftingMenuSection : IPlayerMenuSection
 		row.Style.Set( "align-items", "baseline" );
 		row.Style.Set( "gap", $"{6f * LayoutScale}px" );
 		row.Style.Set( "width", "100%" );
+		row.Style.Set( "flex-shrink", "0" );
 
 		AddInlineLabel( row, $"{label}:", UiText.Secondary );
 		AddInlineLabel( row, $"{current:0.#}", UiText.Value );

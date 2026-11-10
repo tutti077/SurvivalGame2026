@@ -52,6 +52,21 @@ hotbar's old gold) and **frost** (steel + ice) as the proof that a swap is a JSO
   menu side anchors end `PlayerScreenHud.MenuColumnBottomInset` above the screen bottom (and start
   `MenuColumnTopInset` below the top). A section that fills its column derives its height from those
   constants (`CraftingMenuSection.SectionViewHeightPercent`) — never from a bare vh number.
+- **Layers while a menu is open**: the dim + vignette is its own panel at `PlayerScreenHud.ZMenuBackdrop`
+  (1900) - above the world HUD and minimap, below the hotbar and augment binds (`HotbarHud.ZIndex`
+  2000), the menu overlay with its soft cursor (2500) and the vitals (2600). A HUD element that stays
+  usable beside a menu goes on the hotbar layer; never put the backdrop back on the menu overlay.
+- **Fixed-height detail blocks** (crafting / upgrade detail, quest detail, augment info box) never
+  reflow, so their height is sized from the longest content the data can produce
+  (`CraftingMenuSection.DetailAreaMaxHeight`, `QuestMenuSection.DetailHeight`,
+  `AugmentStationMenuSection.InfoBoxHeight`) and every row inside is `flex-shrink: 0`: content that
+  outgrows the block is clipped at the bottom, never squeezed over its neighbour. Adding a stat line,
+  an objective or a longer description means re-checking those constants.
+- **Wheel-scrolled lists** (crafting recipes): one notch moves half of the rows the viewport shows
+  (`CraftingRecipeListPanel.EffectiveNotchRows`), so two notches turn one page and no row is jumped
+  over however short the list gets; the scroll range is clamped, with half a row of slack at the end.
+  A camera screenshot at a different size than the live viewport re-lays the rows at another pixel
+  pitch, so judge deep-scroll positions from a screenshot at the live viewport size.
 - **Hover** on soft-cursor menus is polled (`InventoryScreenPointer.PanelBoxContainsScreen`) — map
   the poll result to `SetButtonState` / `SetSlotState`; CSS `:hover` only works where the OS cursor
   is live (main menu, load screen, build picker).
@@ -74,6 +89,13 @@ From the editor MCP (no input simulation): `run_csharp` finds the local
 opens the build picker after `equip build_hammer`, `GameMainMenu.Page = …; StateHasChanged()` flips the
 main menu pages (a frame later), and `camera_screenshot` at 1280×720 / 1920×1080 / 2560×1440 with UI
 shows the same layout at every size — that is the windowed-vs-fullscreen check.
+
+`Tools/ui_theme/ui_text_audit.cs` is a `run_csharp` script that lists clipped, wrapped and overlapping
+labels on the open page; pair it with screenshots, and select the longest recipe / quest / augment first.
+
+Checked 2026-11-10 (build 0.8.3113): every menu page, all six settings sub-pages, an open chest, the
+workbench Craft and Upgrade tabs with gear, the longest recipe and description, the augment station,
+build picker, time trial and arena menus. Not opened: hoe / wire pickers, the load screen.
 
 Checked 2026-11-09 (build 0.8.3083): HUD, inventory + equipment, crafting, quests, skills, map, settings,
 augments page, build picker, main menu (main + load pages), three render sizes. Not opened: hoe / wire

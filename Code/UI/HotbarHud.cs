@@ -16,6 +16,8 @@ namespace Survival;
 public sealed class HotbarHud
 {
 	public const float Scale = 1.1f;
+	/// <summary>Above the menu backdrop (PlayerScreenHud.ZMenuBackdrop), below the menu overlay and its cursor.</summary>
+	public const int ZIndex = 2000;
 	public const float SlotSize = 52f * Scale;
 	public const float SlotGap = 4f * Scale;
 	public const float CountFontSize = 13f * Scale;
@@ -54,7 +56,7 @@ public sealed class HotbarHud
 		_host.Style.Set( "align-items", "flex-end" );
 		_host.Style.Set( "justify-content", "center" );
 		_host.Style.Set( "pointer-events", "none" );
-		_host.Style.Set( "z-index", "2000" );
+		_host.Style.Set( "z-index", ZIndex.ToString() );
 
 		// Bank dots: top dot = bank 1, bottom dot = bank 0, matching the stacked rows.
 		var dotsHost = new HotbarHostPanel { Parent = _host };

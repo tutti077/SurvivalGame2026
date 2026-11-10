@@ -118,15 +118,38 @@ public sealed class CraftingRecipeListPanel : Panel
 		// Last row carries no bottom margin.
 		var rowsHeight = rowCount * stride - CraftingMenuSection.RecipeRowGap;
 
-		// One wheel-notch of empty space under the last recipe so a final scroll can
-		// fully reveal it (shows blank slots where there is no recipe).
-		return rowsHeight + CraftingMenuSection.WheelItemsPerNotch * stride;
+		// Half a row of slack under the last recipe: the scroll range is clamped, so the final scroll
+		// always reveals it, and the slack only covers pixel rounding of the measured row pitch. (This
+		// was a whole wheel notch, which left the end of the list more than half empty.)
+		return rowsHeight + EndSlackRows * stride;
 	}
+
+	/// <summary>Empty space under the last row, in rows.</summary>
+	const float EndSlackRows = 0.5f;
 
 	/// <summary>Measured row pitch when the rows have laid out, else the nominal stride.</summary>
 	float EffectiveStride => _measuredStride > 1f ? _measuredStride : GetRowStride();
 
-	float EffectiveNotchStep => CraftingMenuSection.WheelItemsPerNotch * EffectiveStride;
+	/// <summary>
+	/// Rows one wheel notch moves: half of the whole rows the viewport shows, so two notches turn
+	/// exactly one page and no row is ever jumped over, capped at <see cref="CraftingMenuSection.WheelItemsPerNotch"/>.
+	/// The viewport is shorter at a workbench (tab row above, action button below), so a fixed 4.5 rows
+	/// there was three quarters of a page per notch.
+	/// </summary>
+	float EffectiveNotchRows
+	{
+		get
+		{
+			var stride = EffectiveStride;
+			if ( stride <= 1f )
+				return CraftingMenuSection.WheelItemsPerNotch;
+
+			var visibleRows = MathF.Floor( GetViewHeight() / stride );
+			return Math.Clamp( visibleRows * 0.5f, 1f, CraftingMenuSection.WheelItemsPerNotch );
+		}
+	}
+
+	float EffectiveNotchStep => EffectiveNotchRows * EffectiveStride;
 
 	/// <summary>Read the real row pitch off the first rows; content height + scroll range follow it.</summary>
 	void RefreshMeasuredStride()

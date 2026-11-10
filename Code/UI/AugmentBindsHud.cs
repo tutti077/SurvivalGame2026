@@ -36,6 +36,8 @@ public sealed class AugmentBindsHud
 		_host.Style.Set( "align-items", "center" );
 		_host.Style.Set( "justify-content", "center" );
 		_host.Style.Set( "pointer-events", "none" );
+		// Same layer as the hotbar it sits above: lit while a menu is open, under the menu's cursor.
+		_host.Style.Set( "z-index", HotbarHud.ZIndex.ToString() );
 
 		for ( var i = 0; i < _slots.Length; i++ )
 		{

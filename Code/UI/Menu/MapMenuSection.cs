@@ -29,7 +29,10 @@ public sealed class MapMenuSection : IPlayerMenuSection
 	const float BodyFontSize = 17f;
 	const float RadioSize = 20f;
 	const float ShareRowHeight = 30f;
-	const int CrewPinRows = 5;
+	/// <summary>One row per crew mate: a full crew is the local player plus this many others.</summary>
+	const int CrewPinRows = CrewRegistry.MaxCrewSize - 1;
+	/// <summary>Gap above each tool column header after the first. The column has a fixed height budget (the page height).</summary>
+	const float ToolHeaderGap = 12f;
 	const float DoubleClickSeconds = 0.4f;
 	const float DoubleClickPixels = 12f;
 	/// <summary>Wheel notch = this many +/- steps (ScaleStep each) so a flick actually moves the map.</summary>
@@ -203,7 +206,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		column.Style.Set( "align-items", "center" );
 		column.Style.Width = Length.Pixels( ToolColumnWidth );
 		column.Style.PaddingLeft = Length.Pixels( 10f );
-		column.Style.PaddingTop = Length.Pixels( 24f );
+		column.Style.PaddingTop = Length.Pixels( 4f );
 		column.Style.Set( "pointer-events", "none" );
 
 		AddSectionHeader( column, "Pins" );
@@ -239,7 +242,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		}
 
 		var markupHeader = AddSectionHeader( column, "Markup" );
-		markupHeader.Style.MarginTop = Length.Pixels( 18f );
+		markupHeader.Style.MarginTop = Length.Pixels( ToolHeaderGap );
 
 		var markupRow = new Panel { Parent = column };
 		markupRow.Style.Set( "flex-direction", "row" );
@@ -264,7 +267,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		}) );
 
 		var controlsHeader = AddSectionHeader( column, "Controls" );
-		controlsHeader.Style.MarginTop = Length.Pixels( 18f );
+		controlsHeader.Style.MarginTop = Length.Pixels( ToolHeaderGap );
 
 		var controls = new Panel { Parent = column };
 		controls.Style.Set( "flex-direction", "column" );
@@ -290,7 +293,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 
 		// Coop sharing: my location to the crew, and which crew mates' pins land on my map.
 		var sharingHeader = AddSectionHeader( column, "Sharing" );
-		sharingHeader.Style.MarginTop = Length.Pixels( 18f );
+		sharingHeader.Style.MarginTop = Length.Pixels( ToolHeaderGap );
 
 		var shareRow = MakeRadioRow( column, "Show location to crew", out _shareLocationRadio );
 		shareRow.Style.MarginTop = Length.Pixels( 6f );
@@ -302,11 +305,11 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		}) );
 
 		var crewPinsHeader = AddSectionHeader( column, "Crew Pins" );
-		crewPinsHeader.Style.MarginTop = Length.Pixels( 18f );
+		crewPinsHeader.Style.MarginTop = Length.Pixels( ToolHeaderGap );
 
-		// Fixed-height box: rows never move the column around when the crew changes. It is the one
-		// block allowed to shrink (down to two rows) on a short window, so the controls text above
-		// never collapses into itself.
+		// Fixed-height box, one row per possible crew mate: rows never move the column around when
+		// the crew changes. It is the one block allowed to shrink (down to two rows) on a short
+		// window, so the controls text above never collapses into itself.
 		_crewPinsBox = new Panel { Parent = column };
 		_crewPinsBox.Style.Set( "flex-direction", "column" );
 		_crewPinsBox.Style.Set( "flex-shrink", "1" );
@@ -464,7 +467,7 @@ public sealed class MapMenuSection : IPlayerMenuSection
 		var label = new Label { Parent = parent, Text = text };
 		label.Style.Set( "flex-shrink", "0" );
 		UiStyle.Text( label, UiText.Body, BodyFontSize );
-		label.Style.MarginTop = Length.Pixels( 4f );
+		label.Style.MarginTop = Length.Pixels( 2f );
 		label.Style.Set( "white-space", "nowrap" );
 		label.Style.Set( "pointer-events", "none" );
 	}

@@ -39,6 +39,12 @@ public sealed class PlayerScreenHud : PanelComponent
 	const float CraftingMenuColumnWidth = 470f;
 	const string DefaultHarvestPromptText = "Harvest";
 	const int ZGameMenu = 2500;
+	/// <summary>
+	/// The dim + vignette behind the menus. Above the world HUD (crosshair, nameplates, minimap 1600) and
+	/// below the hotbar / augment binds (<see cref="HotbarHud.ZIndex"/>), which stay lit beside the
+	/// vitals while a menu is open (Mark 2026-11-10: the hotbar was greyed out under the inventory).
+	/// </summary>
+	const int ZMenuBackdrop = 1900;
 
 	PlayerVitals _vitals;
 	PlayerFood _food;
@@ -107,6 +113,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	double _timeTrialLbUntil;
 
 	Panel _menuRoot;
+	Panel _menuBackdrop;
 	Panel _menuLeftRoot;
 	Panel _menuRightRoot;
 	Panel _menuSkillsCenterRoot;
@@ -1069,6 +1076,19 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		_inventoryInteraction?.BindMenu( _menuController );
 
+		// Its own panel under the hotbar, not a background on the menu overlay: the overlay (and the
+		// soft cursor / dragged stack inside it) has to stay above the hotbar, the dim below it.
+		_menuBackdrop = new Panel { Parent = Panel };
+		_menuBackdrop.Style.Set( "position", "absolute" );
+		_menuBackdrop.Style.Set( "left", "0" );
+		_menuBackdrop.Style.Set( "top", "0" );
+		_menuBackdrop.Style.Set( "width", "100%" );
+		_menuBackdrop.Style.Set( "height", "100%" );
+		_menuBackdrop.Style.Set( "pointer-events", "none" );
+		_menuBackdrop.Style.Set( "display", "none" );
+		_menuBackdrop.Style.Set( "z-index", ZMenuBackdrop.ToString() );
+		UiStyle.Backdrop( _menuBackdrop );
+
 		_menuInputOverlay = new InventoryMenuInputOverlay { Parent = Panel };
 		_menuInputOverlay.BindMenuController( _menuController );
 		_menuInputOverlay.BindInventoryInteraction( _inventoryInteraction );
@@ -1093,8 +1113,6 @@ public sealed class PlayerScreenHud : PanelComponent
 		_menuRoot.Style.Set( "bottom", "0" );
 		_menuRoot.Style.Set( "pointer-events", "none" );
 		_menuRoot.Style.Set( "display", "none" );
-		// Dim + vignette behind every menu page so the panels sit on a stage, not over raw gameplay.
-		UiStyle.Backdrop( _menuRoot );
 
 		_menuMapRoot = CreateMapCenterAnchor( _menuRoot );
 		_menuAugmentRoot = CreateMapCenterAnchor( _menuRoot );
@@ -1211,7 +1229,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		anchor.Style.Set( "left", "7%" );
 		anchor.Style.Set( "right", "26%" );
 		anchor.Style.Set( "top", "9%" );
-		anchor.Style.Set( "bottom", "7%" );
+		// The skills page keeps the vitals and hotbar on screen, so it ends above that strip like the side columns.
+		anchor.Style.Set( "bottom", $"{MenuColumnBottomInset}px" );
 		anchor.Style.Set( "display", "none" );
 		anchor.Style.Set( "flex-direction", "column" );
 		anchor.Style.Set( "align-items", "stretch" );
@@ -1227,7 +1246,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		anchor.Style.Set( "position", "absolute" );
 		anchor.Style.Set( "right", "2%" );
 		anchor.Style.Set( "top", "9%" );
-		anchor.Style.Set( "bottom", "7%" );
+		anchor.Style.Set( "bottom", $"{MenuColumnBottomInset}px" );
 		anchor.Style.Set( "width", "22%" );
 		anchor.Style.Set( "display", "none" );
 		anchor.Style.Set( "flex-direction", "column" );
@@ -1508,6 +1527,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_pageNavigator?.SetMenuOpen( isOpen );
 
 		_menuRoot.Style.Set( "display", isOpen ? "flex" : "none" );
+		_menuBackdrop?.Style.Set( "display", isOpen ? "flex" : "none" );
 		// Keep none so empty areas don't eat wheel/clicks; interactive children still use pointer-events: auto.
 		_menuRoot.Style.Set( "pointer-events", "none" );
 
