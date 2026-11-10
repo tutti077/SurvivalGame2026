@@ -6,18 +6,33 @@ namespace Survival;
 
 /// <summary>
 /// Client-only visuals while the wire stripper is out: a coloured sphere inside every
-/// circuit-enabled object in range (kind colour, 10% bigger under the crosshair), a line per wire in
-/// its cable colour, and the wire being dragged. Sphere objects are pooled locally and never networked.
+/// circuit-enabled object in range (kind colour, unlit - full brightness in any scene light - 10%
+/// bigger under the crosshair), a wire per link in its cable colour (<see cref="CircuitWireVfx"/>), and
+/// the wire being dragged. A link that appears while the tool is out plays a connect pulse: the two
+/// spheres pop and a white spark runs down the new wire, which then stays as the coloured line.
+/// Sphere objects are pooled locally and never networked.
 /// </summary>
 public sealed class CircuitWireOverlay
 {
 	const string SphereModelPath = "models/dev/sphere.vmdl";
 	const string SphereTag = "circuitoverlay";
 
+	/// <summary>How long the connect pulse plays after a new wire shows up.</summary>
+	const float ConnectPulseSeconds = 0.7f;
+	/// <summary>Wire strip width in world units (50 u/m build scale: ~3 cm).</summary>
+	const float WireWidthUnits = 2.2f;
+
 	readonly Dictionary<CircuitNode, GameObject> _spheres = new();
 	readonly List<CircuitNode> _scratchRemove = new();
+	/// <summary>Link targets seen per node, so a NEW link can be told from the ones that were already there.</summary>
+	readonly Dictionary<CircuitNode, HashSet<Guid>> _knownLinks = new();
+	/// <summary>Connect pulses in flight: (source node id, target id) -> started at.</summary>
+	readonly Dictionary<(Guid, Guid), double> _pulses = new();
+	readonly List<(Guid, Guid)> _scratchPulseRemove = new();
+	/// <summary>Per node, the strongest pulse touching it this tick (sphere pop).</summary>
+	readonly Dictionary<CircuitNode, float> _spherePulse = new();
 	Scene _scene;
-	DebugOverlaySystem _debug;
+	CircuitWireVfx _wireVfx;
 	float _sphereUnitScale = -1f;
 
 	/// <summary>Nodes drawn on the last tick (debug readout).</summary>
@@ -33,8 +48,11 @@ public sealed class CircuitWireOverlay
 			return;
 		}
 
-		// Static DebugOverlay is only reachable from inside a Component; plain classes go through the scene system.
-		_debug ??= scene.GetSystem<DebugOverlaySystem>();
+		if ( _wireVfx is null )
+			_wireVfx = scene.SceneWorld is { } world ? new CircuitWireVfx( world ) : null;
+		_wireVfx?.Begin();
+		ExpirePulses();
+		_spherePulse.Clear();
 
 		var rangeSq = showRangeUnits * showRangeUnits;
 		var nodes = CircuitNode.All;
@@ -72,22 +90,98 @@ public sealed class CircuitWireOverlay
 
 			var isHovered = ReferenceEquals( node, hovered );
 			var isSource = ReferenceEquals( node, dragSource );
-			ShowSphere( node, center, isHovered || isSource );
 			VisibleCount++;
 
 			var links = node.Links;
+			var known = GetKnownLinks( node, out var firstSight );
 			for ( var l = 0; l < links.Count; l++ )
 			{
-				var target = CircuitNode.FindById( scene, links[l].TargetId );
+				var targetId = links[l].TargetId;
+				// A link not seen before on a node already shown = just connected: start its pulse.
+				if ( known.Add( targetId ) && !firstSight )
+					_pulses[(node.GameObject.Id, targetId)] = Time.NowDouble;
+
+				var target = CircuitNode.FindById( scene, targetId );
 				if ( target is null || !target.IsValid() )
 					continue;
 
-				_debug?.Line( center, target.SphereWorldPosition, links[l].Cable.ToColor(), 0f );
+				var pulse = GetPulse01( node.GameObject.Id, targetId );
+				if ( pulse > 0f )
+				{
+					NotePulseOnSphere( node, pulse );
+					NotePulseOnSphere( target, pulse );
+				}
+
+				_wireVfx?.AddWire( center, target.SphereWorldPosition, links[l].Cable.ToColor(), WireWidthUnits, pulse );
 			}
+
+			ShowSphere( node, center, isHovered || isSource );
+		}
+
+		// Spheres of pulse targets drawn before their source got the pulse: apply after the pass.
+		foreach ( var pair in _spherePulse )
+		{
+			if ( pair.Key is { IsValid: true } && _spheres.TryGetValue( pair.Key, out var go ) && go.IsValid() && go.Enabled )
+				ApplySpherePop( go, pair.Key, pair.Value );
 		}
 
 		if ( dragSource is { IsValid: true } )
-			_debug?.Line( dragSource.SphereWorldPosition, dragEnd, dragCable.ToColor().WithAlpha( 0.8f ), 0f );
+			_wireVfx?.AddWire( dragSource.SphereWorldPosition, dragEnd, dragCable.ToColor().WithAlpha( 0.8f ), WireWidthUnits, 0f );
+
+		_wireVfx?.End();
+	}
+
+	HashSet<Guid> GetKnownLinks( CircuitNode node, out bool firstSight )
+	{
+		if ( _knownLinks.TryGetValue( node, out var set ) )
+		{
+			firstSight = false;
+			return set;
+		}
+
+		set = new HashSet<Guid>();
+		_knownLinks[node] = set;
+		firstSight = true;
+		return set;
+	}
+
+	float GetPulse01( Guid sourceId, Guid targetId )
+	{
+		if ( !_pulses.TryGetValue( (sourceId, targetId), out var startedAt ) )
+			return 0f;
+
+		var age = (float)(Time.NowDouble - startedAt);
+		return Math.Clamp( 1f - age / ConnectPulseSeconds, 0f, 1f );
+	}
+
+	void ExpirePulses()
+	{
+		_scratchPulseRemove.Clear();
+		foreach ( var pair in _pulses )
+		{
+			if ( Time.NowDouble - pair.Value > ConnectPulseSeconds )
+				_scratchPulseRemove.Add( pair.Key );
+		}
+
+		for ( var i = 0; i < _scratchPulseRemove.Count; i++ )
+			_pulses.Remove( _scratchPulseRemove[i] );
+	}
+
+	void NotePulseOnSphere( CircuitNode node, float pulse01 )
+	{
+		if ( !_spherePulse.TryGetValue( node, out var current ) || pulse01 > current )
+			_spherePulse[node] = pulse01;
+	}
+
+	/// <summary>The sphere pops to 1.6x as the wire lands and settles back over the pulse.</summary>
+	void ApplySpherePop( GameObject sphere, CircuitNode node, float pulse01 )
+	{
+		var baseScale = sphere.WorldScale.x;
+		var pop = 1f + 0.6f * pulse01 * pulse01;
+		sphere.WorldScale = new Vector3( baseScale * pop, baseScale * pop, baseScale * pop );
+		var renderer = sphere.Components.Get<ModelRenderer>();
+		if ( renderer is { IsValid: true } )
+			renderer.Tint = Color.Lerp( node.Kind.SphereColor(), Color.White, pulse01 * 0.7f );
 	}
 
 	void ShowSphere( CircuitNode node, Vector3 center, bool enlarged )
@@ -133,6 +227,8 @@ public sealed class CircuitWireOverlay
 		var renderer = go.Components.Create<ModelRenderer>();
 		renderer.Model = Model.Load( SphereModelPath );
 		renderer.RenderType = ModelRenderer.ShadowRenderType.Off;
+		// Unlit: the kind colour at full brightness whatever the scene light (Mark 2026-11-02).
+		renderer.MaterialOverride = UnlitVfxGeometry.TintMaterial;
 		// The sphere sits inside the piece's own mesh ("a little sphere inside them") - on the game
 		// layer the bulb's box would hide it. Overlay draws above everything, which is the point.
 		renderer.RenderOptions.Game = false;
@@ -159,6 +255,8 @@ public sealed class CircuitWireOverlay
 			if ( pair.Value.IsValid() )
 				pair.Value.Enabled = false;
 		}
+
+		_wireVfx?.Hide();
 	}
 
 	public void Dispose()
@@ -170,5 +268,9 @@ public sealed class CircuitWireOverlay
 		}
 
 		_spheres.Clear();
+		_knownLinks.Clear();
+		_pulses.Clear();
+		_wireVfx?.Delete();
+		_wireVfx = null;
 	}
 }
