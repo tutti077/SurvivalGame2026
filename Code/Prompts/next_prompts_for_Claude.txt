@@ -33,7 +33,7 @@ Tamed creatures can be pet by hitting e, named by holding E to open the menu. Ot
 20. Can you have opus make a beehive model? I want fable to then randomly scatter them throughout the clover hills biome. they should be connected to trees and sit on a low tree limb and dangle kinda so it can catch players attention. Opus makes the model and you figure out the math on how many and how frequently they should spawn. I want players to find them in like one in every 50 trees lets say. 
 21. Can you have opus make a blue jay model with flapping wings animation and sitting still animation? you can then have them scattered throughout clover hills, they randomly land on rocks and stuff and then the player can kill them as long as they dont scare them away! when they get scared away they fly up into the air and go away. 
 22. For the next few tasks you should follow the same setup, opus makes the model, and you (fable) figure out the math on how often these should spawn, their random frequency if you will
-	Add some random patches of Wheat seeds to Cloverhills
+	Add some random patches of Wheat seeds to Cloverhills(needs to spawn on tilled soil)
 	Add some random patches of Night Crawlers to Cloverhills
 	Add some random amounts of Daisy to Cloverhills
 	Add some random patches of Hobbit's Leaf to Cloverhills

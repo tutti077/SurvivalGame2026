@@ -27,3 +27,10 @@ code/Properties/*
 
 # Exported / standalone games
 Exports/
+
+# Python bytecode and Blender backup saves
+__pycache__/
+*.blend1
+
+# Local recordings
+*.mp4

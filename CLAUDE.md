@@ -13,7 +13,7 @@ touching player pawn gameplay, movement, pools or combat) and in subsystem docs:
 
 ---
 
-## The five commandments
+## The six commandments
 
 ### 1. Player feature umbrellas
 
@@ -96,6 +96,15 @@ The build kit's old 50 u/m was retired 2026-11-08 (Valheim scale: a 2 m wall is 
 72-unit pawn). A floor meets other pieces at its **face**, never its mid-plane
 (`BuildSnapPlacement.ApplyFloorFaceOffset`), so a 0.25 m deck does not eat the room's headroom.
 
+### 6. One prompt at a time on the editor — never steal the MCP
+
+The s&box editor serves **one prompt at a time**. Before any editor call (play start / stop, open
+scene, `run_csharp`, console commands, screenshots), check that no other session is using it
+(`list_sessions`: nothing running; a play session you did not start belongs to someone else). If it
+is busy, do the work that needs no editor and **wait** for it to go idle. Never stop, restart or
+re-scene another prompt's play session, never open a second editor, and never retry a denied
+`play_start` more than once. Mark 2026-11-09: "One prompt can't stop on another and steal the MCP."
+
 ---
 
 ## Working rules
@@ -139,6 +148,7 @@ If you cannot say what cheat or boundary failure a check stops, it does not belo
   on the project if no editor is running (check `sbox-cli --list` first so you never open a second one).
 - **Only if that still fails, pause and tell Mark what is blocked.** Never branch the work off or land
   it untested. Work that needs no editor (docs, JSON, Blender) can continue meanwhile.
+- Autonomous never means grabbing a busy editor: commandment 6 — wait until the other prompt is done.
 
 ### Shared main, several sessions
 
@@ -230,7 +240,7 @@ Targets: `lakePatchCount` ≤ 24 · `medianLakeDiameterMeters` ≥ 600 · `lakeA
 ### Art style
 
 - **Lighting is the Valheim recipe** (2026-10-02): the pixel look is asset-side — low-res textures
-  (256×256 for routine work, 64 px ground tiles), point filtering, faceted normals baked in the mesh
+  (256×256 for routine work; terrain ground tiles 512 px over 4 m = 128 texels / m, Mark 2026-11-03), point filtering, faceted normals baked in the mesh
   or `PixelFlatShading` on `pixel_lit.shader` — then the engine's normal sun, shadows, SSAO, fog,
   bloom and tonemap. **Never** a screen-space pixelation, dither or cel / toon filter (all tried and
   rejected). Local lights (fires, torches, lanterns) are steppy (`PixelLightSteps`); the sun stays
@@ -312,8 +322,10 @@ Code/
   Crew/ Arena/ Camps/ Boss/ Raids/ Farming/ Circuits/ Map/ TimeTrial/   one system each (see AGENTS.md)
   Dungeon/         BoxDungeonGenerator + DungeonLayout / Geometry / MapModel; CaveDungeonGenerator + CaveLayout / CaveGeometry
   Vehicles/        Vehicle (+ .Physics / .Seats / .Fuel / .Health / .Hover), VehicleSeat, VehicleDevCommands
-  Environment/     WindSystem, grass, ChopableTree, FireLightFlicker, BearTrap, traps   (docs/ENVIRONMENT.md)
-  World/Environment/  EnvironmentDayNightCycle, SkyDome, SkyPresetCatalog, SunShadowDistance
+  Props/           StasisPod (arrival flight, landing sequence, lamps / screens / light, serial plates), StasisPodSpawner (first-spawn arrivals within 25 m of the spawn centre, pod_test),
+                   StasisPodSerials (per-world counter from 885922), StasisPodPuff, StasisPodDevCommands (pod_spawn / pod_door / pod_test); the pawn's side is PlayerMovement.StasisPod.cs
+  Environment/     WindSystem, grass, ChopableTree, MineableRock, FireLightFlicker, BearTrap, traps   (docs/ENVIRONMENT.md)
+  World/Environment/  EnvironmentDayNightCycle, SkyDome, AerialPerspective (distance desaturation + haze pass), CalderaRing (the far mountain wall), SkyPresetCatalog, SunShadowDistance
   World/Terrain/   streaming, chunk mesh, biome population, sea, rivers, grass, world save IO, TerrainPerfBench
   World/TerrainPreview/  offline world generation pipeline + settings   (docs/TERRAIN_PREVIEW.md)
   World/Voxel/     voxel digging: field, mesher, chunk set, edit log; prototype scene + live-world columns (TerrainWorldManager.Voxel.cs)   (docs/VOXEL.md)
@@ -325,7 +337,7 @@ Code/
 Editor/            Terrain Noise Preview tool, world manager widget
 Assets/
   data/            catalog JSON (*Catalog.EnsureLoaded) — adding content is usually a JSON edit
-  prefabs/         player/basicplayer · entity/scavT1 · build/* (incl. vehicle_*) · environment/*
+  prefabs/         player/basicplayer · entity/scavT1 · build/* (incl. vehicle_*) · environment/* · props/stasis_pod
   models/player/   human_male_sword.vmdl (pawn body: engine human + sword clips + animgraphs/human_sword.vanmgrph),
                    animations/human@sword_*.fbx (Blender/scripts/create_sword_anims.py)
   {models,materials,prefabs}/environment/<biome>/<category>/
@@ -340,7 +352,7 @@ Assets/
 Tools/             make_human_sword_assets.py (regenerates the sword model + graph from the engine's citizen_human sources)
                    item_models/ (generate_item_models.py: the 51 inventory item models - resources, tools, weapons, armor, food, seeds, trophies -
                    built from faceted primitives in plain Python, OBJ + vmdl + 256 px texture per item under Assets/models/<category>/<name>/; README there)
-Blender/scripts/   create_* / split_* generators; create_sword_anims.py (human-rig sword clips); import_artist_pack.py for Rumple's Tripo packs
+Blender/scripts/   create_* / split_* generators; create_stasis_pod.py (spawn pod: models, textures, vmdls, prefab, previews); create_sword_anims.py (human-rig sword clips); create_mineable_rocks.py (stone drops, breakable rocks, sectioned boulders + spires: models, LODs, prefabs); import_artist_pack.py for Rumple's Tripo packs
                    (Blender X → engine Y, weapons origin at the butt, build pieces bbox-centred + SizesMeters row)
                    Blender 5.1: "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe" -b --python <script>
 combat_timings.csv · VERIFY.md · IDEAS.md · AGENTS.md · .claude/ROUTINES.md · .claude/skills/
