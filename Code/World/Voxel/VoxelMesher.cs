@@ -56,7 +56,9 @@ public static class VoxelMesher
 	/// <summary>
 	/// Rock share (0..1) of the ground at a point - the ONE rule the mesher paints the rock tile with and the pickaxe's yield
 	/// reads (Mark 2026-11-02: "when i destroy rock i should get stone"): the style's mountain weight or rock from 4–8 m under
-	/// the original surface, washed out by the hoe's grass / soil paint, and cobblestone paint is rock outright.
+	/// the original surface, washed out by the hoe's grass / soil paint, and cobblestone paint is rock outright. In the live
+	/// world the depth part is replaced by the underground's layers and pockets (<see cref="Underground"/>, Mark 2026-11-18:
+	/// "some rock scattered around"): callers pass 0 for the depth there.
 	/// </summary>
 	public static float RockShare( float styleRock, float underMeters, float grass, float soil, float cobble )
 	{
@@ -75,7 +77,26 @@ public static class VoxelMesher
 		var weights = new Color( 1f, 0f, 0f, 0f );
 		style?.Invoke( pointMeters.x, pointMeters.y, out weights, out _ );
 		field.PaintAt( sx, sy, out var bare, out var grass, out var tilled, out var cobble );
-		return RockShare( weights.a, under, grass, MathF.Max( bare, tilled ), cobble );
+		var styleRock = MathF.Max( weights.a, CliffRock( field, sx, sy, pointMeters.z ) );
+		// With an underground the "rock from 4–8 m down" depth rule is off: rock is where the layers and pockets put it
+		var rock = RockShare( styleRock, field.UndergroundSeed is null ? under : 0f, grass, MathF.Max( bare, tilled ), cobble );
+		// Under the ground: a stone pocket or a rock layer is rock, a sand or ore pocket is not (the same rule the mesher paints)
+		return field.UndergroundAt( pointMeters ).Look switch
+		{
+			UndergroundLook.Rock => MathF.Max( rock, UndergroundBlend( under ) ),
+			UndergroundLook.Sand or UndergroundLook.Ore => rock * (1f - UndergroundBlend( under )),
+			_ => rock,
+		};
+	}
+
+	/// <summary>How much the underground's look counts at a depth under the surface: nothing on the surface itself (the top metre is the biome's ground and the hoe's paint), all of it from 1.5 m down.</summary>
+	static float UndergroundBlend( float underMeters ) => Math.Clamp( (underMeters - 0.75f) / 0.75f, 0f, 1f );
+
+	/// <summary>Rock share from a generated cliff's body (<see cref="VoxelField.RockFloorZ"/>): 1 half a metre under its floor.</summary>
+	static float CliffRock( VoxelField field, float sx, float sy, float zMeters )
+	{
+		var floor = field.RockFloorZ( sx, sy );
+		return float.IsNegativeInfinity( floor ) ? 0f : Math.Clamp( (floor - zMeters) / 0.5f, 0f, 1f );
 	}
 
 	public static MeshData Build( VoxelField field, int cx, int cy, int cz, VoxelSurfaceStyle style = null, Clip clip = default )
@@ -159,9 +180,37 @@ public static class VoxelMesher
 					// columns, so a circle's rim reads round): grass = the biome ground, clean; bare = the soil tile
 					field.PaintAt( p.x, p.y, out var bare, out var grass, out var tilled, out var cobble );
 					var cover = MathF.Max( bare, tilled );   // soil of either kind; tilled is the same soil darkened to earth brown
-					var sandHere = MathF.Max( splat.x, sandDug );
+					// A generated cliff's body is rock: no soil on a cut into it (the steep cut shows the cliff tile by its slope, a
+					// flat floor the ground's own tile — the mountain tile read as snow there), and the pickaxe gets stone (RockAt)
+					var cliffRock = CliffRock( field, p.x, p.y, worldMeters.z );
+					var sandHere = MathF.Max( splat.x, sandDug ) * (1f - cliffRock);
 					sandHere = ((sandHere * (1f - grass) * (1f - cover)) + cover) * (1f - cobble);
-					var rockHere = RockShare( weights.a, under, grass, cover, cobble );   // cobblestone = the rock tile
+					// (with an underground the depth rule is off - Underground.Sample below says where the rock is)
+					var rockHere = RockShare( weights.a, field.UndergroundSeed is null ? under : 0f, grass, cover, cobble );   // cobblestone = the rock tile
+					// The underground (Underground.Sample): a pocket or a rock layer shows on the dug face - stone as the rock
+					// tile, sand as the soil tile, scrap ore as the soil tile darkened to rust-brown (the tilled channel)
+					var ore = 0f;
+					if ( under > 0.75f && field.UndergroundSeed is not null )
+					{
+						var blend = UndergroundBlend( under ) * (1f - cobble);
+						switch ( field.UndergroundAt( worldMeters ).Look )
+						{
+							case UndergroundLook.Rock:
+								rockHere = MathF.Max( rockHere, blend );
+								sandHere *= 1f - blend;
+								break;
+							case UndergroundLook.Sand:
+								sandHere = MathF.Max( sandHere, blend );
+								rockHere *= 1f - blend;
+								break;
+							case UndergroundLook.Ore:
+								sandHere = MathF.Max( sandHere, blend );
+								rockHere *= 1f - blend;
+								ore = blend;
+								break;
+						}
+					}
+					tilled = MathF.Max( tilled, ore );
 					splat = new Vector2( sandHere, splat.y );
 					weights = new Color( weights.r, weights.g, weights.b, rockHere );
 					sandDug = 0f;
@@ -243,15 +292,70 @@ public static class VoxelMesher
 			}
 		}
 
+		var positionList = new List<Vector3>( positions );
+		AddClipSkirt( vmap, outside, positionList, normals, colors, extras, tilledOut, indices );
+
 		return new MeshData
 		{
-			Positions = positions,
+			Positions = positionList.ToArray(),
 			Normals = normals.ToArray(),
 			Colors = colors.ToArray(),
 			Extras = extras.ToArray(),
 			Tilled = tilledOut.ToArray(),
 			Indices = indices.ToArray(),
 		};
+	}
+
+	/// <summary>Depth of the skirt hung from a clipped column's edge (m).</summary>
+	const float ClipSkirtMeters = 1.5f;
+
+	/// <summary>
+	/// A strip hanging <see cref="ClipSkirtMeters"/> down from every triangle edge that lies on the clip square (both windings),
+	/// the heightfield chunks' own trick. Where a voxel column meets a chunk that is still heightfield, the two edges are the
+	/// same line only to within the 0.5 m cells' rounding; the heightfield's skirt covered a voxel edge lower than its own but
+	/// not a higher one, and the sky showed through as a dotted hairline (2026-11-16, the cliff columns made many such borders).
+	/// </summary>
+	static void AddClipSkirt( int[] vmap, byte[] outside, List<Vector3> positions, List<Vector3> normals, List<Color> colors,
+		List<Vector2> extras, List<float> tilled, List<int> indices )
+	{
+		// Which outside side each vertex was clipped onto (0 = inside)
+		var side = new byte[positions.Count];
+		for ( var li = 0; li < vmap.Length; li++ )
+		{
+			if ( vmap[li] >= 0 )
+				side[vmap[li]] = outside[li];
+		}
+		var drop = new Vector3( 0f, 0f, ClipSkirtMeters * TerrainWorldUnits.UnitsPerMeter );
+		var seen = new HashSet<long>();
+		var count = indices.Count;
+		for ( var t = 0; t < count; t += 3 )
+		{
+			for ( var e = 0; e < 3; e++ )
+			{
+				var a = indices[t + e];
+				var b = indices[t + ((e + 1) % 3)];
+				var shared = side[a] & side[b];
+				if ( shared == 0 )
+					continue;   // not both on one face of the square
+				var key = ((long)Math.Min( a, b ) << 32) | (uint)Math.Max( a, b );
+				if ( !seen.Add( key ) )
+					continue;
+				var a2 = positions.Count;
+				foreach ( var v in new[] { a, b } )
+				{
+					positions.Add( positions[v] - drop );
+					normals.Add( normals[v] );
+					colors.Add( colors[v] );
+					extras.Add( extras[v] );
+					tilled.Add( tilled[v] );
+				}
+				var b2 = a2 + 1;
+				indices.Add( a ); indices.Add( b ); indices.Add( a2 );
+				indices.Add( b ); indices.Add( b2 ); indices.Add( a2 );
+				indices.Add( a ); indices.Add( a2 ); indices.Add( b );
+				indices.Add( b ); indices.Add( a2 ); indices.Add( b2 );
+			}
+		}
 	}
 
 	/// <summary>Move an outside vertex onto the clip plane along one axis, interpolating toward the inside neighbour's vertex when it has one.</summary>

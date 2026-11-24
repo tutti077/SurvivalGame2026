@@ -24,7 +24,7 @@ public sealed class VoxelChunkSet
 	const int BuildsInFlight = 6;
 	const int ModelsPerFrame = 3;
 
-	public VoxelField Field { get; }
+	public VoxelField Field { get; private set; }
 	/// <summary>What the ground is made of per xy (the live world's biome splat); null = Clover everywhere.</summary>
 	public VoxelSurfaceStyle Style { get; init; }
 	/// <summary>The cells the meshes may cover (a world column meshes only its own square).</summary>
@@ -91,6 +91,41 @@ public sealed class VoxelChunkSet
 		chunk.Collider.Enabled = false;
 		_chunks[coord] = chunk;
 		MarkDirty( chunk );
+	}
+
+	/// <summary>
+	/// The field grew downward by whole chunks (<see cref="VoxelField.Deepened"/>): every existing chunk keeps its object and
+	/// its mesh under a z index <paramref name="extraChunks"/> higher, the new rows under them get objects, and the old bottom
+	/// row is meshed again (it now has ground below it to stitch to). Builds in flight land on their chunk as before.
+	/// </summary>
+	public void AdoptDeepened( VoxelField deeper, int extraChunks )
+	{
+		var moved = new Dictionary<(int, int, int), Chunk>( _chunks.Count );
+		foreach ( var chunk in _chunks.Values )
+		{
+			chunk.Coord = (chunk.Coord.X, chunk.Coord.Y, chunk.Coord.Z + extraChunks);
+			moved[chunk.Coord] = chunk;
+		}
+		_chunks.Clear();
+		foreach ( var (coord, chunk) in moved )
+			_chunks[coord] = chunk;
+		Field = deeper;
+		for ( var z = 0; z < extraChunks; z++ )
+		{
+			for ( var y = 0; y < deeper.ChunksY; y++ )
+			{
+				for ( var x = 0; x < deeper.ChunksX; x++ )
+					CreateChunk( (x, y, z) );
+			}
+		}
+		for ( var y = 0; y < deeper.ChunksY; y++ )
+		{
+			for ( var x = 0; x < deeper.ChunksX; x++ )
+			{
+				if ( _chunks.TryGetValue( (x, y, extraChunks), out var chunk ) )
+					MarkDirty( chunk );
+			}
+		}
 	}
 
 	public void MarkDirty( IEnumerable<(int X, int Y, int Z)> coords )

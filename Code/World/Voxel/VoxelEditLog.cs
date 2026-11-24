@@ -168,6 +168,8 @@ public interface IVoxelBrushTarget
 	float TilledAt( Vector3 pointEngine );
 	/// <summary>Rock share (0..1) of the ground at a world point (engine units) - what the surface there is painted as (<see cref="VoxelMesher.RockShare"/>). The pickaxe yields stone from 0.5 up, dirt below.</summary>
 	float RockAt( Vector3 pointEngine );
+	/// <summary>What the ground is at a world point (engine units): its layer, the pickaxe tier it needs, a pocket's resource, or bedrock (<see cref="Underground"/>). The surface answer where there is no underground.</summary>
+	UndergroundPoint UndergroundAt( Vector3 pointEngine );
 	/// <summary>Client intent: the pickaxe's disc at a surface point with its normal (engine units / direction), radius and depth in metres. Same return as <see cref="RequestBrush"/>.</summary>
 	bool RequestChip( Vector3 centerEngine, Vector3 normal, float radiusMeters, float depthMeters );
 	/// <summary>One line for <c>voxel_info</c>.</summary>

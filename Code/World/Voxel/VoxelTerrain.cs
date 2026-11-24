@@ -176,6 +176,9 @@ public sealed class VoxelTerrain : Component, IVoxelBrushTarget
 	public float RockAt( Vector3 pointEngine )
 		=> IsReady ? VoxelMesher.RockAt( _set.Field, _set.Style, TerrainWorldUnits.EngineToMeters( pointEngine ) ) : 0f;
 
+	/// <summary>The prototype has no underground: every point is plain surface ground.</summary>
+	public UndergroundPoint UndergroundAt( Vector3 pointEngine ) => UndergroundPoint.Surface;
+
 	public bool RequestChip( Vector3 centerEngine, Vector3 normal, float radiusMeters, float depthMeters )
 		=> Request( VoxelEdit.Chip( TerrainWorldUnits.EngineToMeters( centerEngine ), normal, radiusMeters, depthMeters ) );
 

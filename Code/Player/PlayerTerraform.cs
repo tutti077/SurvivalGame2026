@@ -25,6 +25,7 @@ public sealed partial class PlayerTerraform : Component
 	[Property, Group( "Materials" ), Title( "Raise Dirt Cost" ), Range( 0, 20 ), Description( "Dirt one Raise layer costs (Mark 2026-11-02: \"make it cost some dirt\")." )] public int RaiseDirtCost { get; set; } = 1;
 	[Property, Group( "Materials" ), Title( "Chip Dirt Yield" ), Range( 0, 20 ), Description( "Dirt one pickaxe chip of soil hands back - what the Raise layer is paid with." )] public int ChipDirtYield { get; set; } = 1;
 	[Property, Group( "Materials" ), Title( "Chip Stone Yield" ), Range( 0, 20 ), Description( "Stone one pickaxe chip of rock hands back (rock tile: mountain, 4-8 m down, cobblestone) instead of dirt." )] public int ChipStoneYield { get; set; } = 1;
+	[Property, Group( "Materials" ), Title( "Chip Pocket Yield" ), Range( 0, 20 ), Description( "What one chip of an underground pocket hands back (scrap, sand, stone: data/underground.json says which)." )] public int ChipPocketYield { get; set; } = 1;
 	[Property, Group( "Materials" ), Title( "Stone Resource Id" )] public string StoneResourceId { get; set; } = "resource_stone";
 	[Property, Group( "Materials" ), Title( "Cobble Stone Cost" ), Range( 0, 20 ), Description( "Stone one Cobblestone stroke costs (Mark 2026-11-02: \"should require 1 rock per action\")." )] public int CobbleStoneCost { get; set; } = 1;
 	[Property, Group( "Debug" )] public bool LogTerraform { get; set; }
@@ -106,6 +107,46 @@ public sealed partial class PlayerTerraform : Component
 		return true;
 	}
 
+	/// <summary>The pickaxe tier in the pawn's active hotbar slot (data/underground.json <c>pickaxeTiers</c>; 1 for anything not listed).</summary>
+	public int HeldPickaxeTier
+	{
+		get
+		{
+			var hotbar = Components.Get<PlayerHotbar>();
+			if ( hotbar is null )
+				return 1;
+			var slot = hotbar.GetSlot( hotbar.ActiveSlotIndex );
+			return slot.IsEmpty ? 1 : Underground.PickaxeTier( slot.ResourceId );
+		}
+	}
+
+	/// <summary>
+	/// Can the held pickaxe chip the ground at this surface point (Mark 2026-11-18: deeper rock "requires a different level
+	/// pickaxe", the bottom is unbreakable)? Reads the ground just under the hit. The tool asks for its ring, the host asks
+	/// again before the stroke.
+	/// </summary>
+	public bool CanChipGround( Vector3 hitEngine, Vector3 normal, float depthMeters, out UndergroundPoint ground, out string reason )
+	{
+		reason = string.Empty;
+		ground = UndergroundPoint.Surface;
+		var target = Target;
+		if ( target is null || !target.IsReady )
+			return true;
+		ground = target.UndergroundAt( hitEngine - (normal.Normal * TerrainWorldUnits.MetersToEngine( Math.Max( 0.05f, depthMeters ) * 0.5f )) );
+		if ( ground.Bedrock )
+		{
+			reason = "bedrock";
+			return false;
+		}
+		if ( ground.PickaxeTier > HeldPickaxeTier )
+		{
+			var needed = Underground.PickaxeForTier( ground.PickaxeTier );
+			reason = needed is null ? "needs a better pickaxe" : $"needs a {ResourceCatalog.Resolve( needed ).DisplayName}";
+			return false;
+		}
+		return true;
+	}
+
 	bool IsCallerTheOwner()
 	{
 		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
@@ -146,16 +187,25 @@ public sealed partial class PlayerTerraform : Component
 				Log.Info( "[PlayerTerraform] chip rejected: too tired" );
 			return;
 		}
+		// The layer's pickaxe tier and the bedrock (anti-cheat: a client that skips its own ring check stops here)
+		if ( !CanChipGround( hitEngine, normal, depthMeters, out var ground, out var blocked ) )
+		{
+			if ( LogTerraform )
+				Log.Info( $"[PlayerTerraform] chip rejected: {blocked}" );
+			return;
+		}
 		// What the pick is hitting decides the drop (Mark 2026-11-02: "the pickaxe needs to check what its hitting"): read the
-		// surface before the chip takes it away - rock (the shader's rock tile) gives stone, soil gives dirt.
+		// surface before the chip takes it away - rock (the shader's rock tile) gives stone, soil gives dirt, and a pocket
+		// under the ground (scrap, sand, stone: data/underground.json) gives what it is made of.
 		var rock = Target.RockAt( hitEngine - (normal.Normal * TerrainWorldUnits.MetersToEngine( Math.Max( 0.05f, depthMeters ) * 0.5f )) ) >= 0.5f;
 		if ( !Target.RequestChip( hitEngine, normal, radiusMeters, depthMeters ) )
 			return;
 		// The ground changed: the swing is paid for - wear, stamina, and what it loosened goes to the bag
 		ToolDurability.HostAddWearToActiveTool( GameObject );
 		vitals?.TrySpendStamina( stamina );
-		var yieldId = rock ? StoneResourceId : DirtResourceId;
-		var yieldCount = rock ? ChipStoneYield : ChipDirtYield;
+		var pocket = !string.IsNullOrWhiteSpace( ground.ResourceId );
+		var yieldId = pocket ? ground.ResourceId : rock || ground.RockBase ? StoneResourceId : DirtResourceId;
+		var yieldCount = pocket ? ChipPocketYield : rock || ground.RockBase ? ChipStoneYield : ChipDirtYield;
 		if ( yieldCount > 0 && !string.IsNullOrWhiteSpace( yieldId ) )
 			Components.Get<PlayerInventory>()?.HostTryAddResource( yieldId, yieldCount );
 		if ( LogTerraform )

@@ -81,6 +81,9 @@ public sealed class ToolPickaxe : Component
 
 		var normal = tr.Normal.LengthSquared > 1e-6f ? tr.Normal.Normal : Vector3.Up;
 		var affordable = _terraform is null || _terraform.CanAffordStroke( VoxelBrushMode.Chip, out _ );
+		// The ground's own say: a deeper layer needs a better pickaxe, bedrock takes none (red ring, no swing)
+		var chippable = _terraform is null || _terraform.CanChipGround( tr.HitPosition, normal, ChipDepthMeters, out _, out _ );
+		affordable &= chippable;
 		if ( ShowRing )
 			VoxelBrushRings.DrawSurfaceRing( scene, tr.HitPosition, normal, ChipRadiusMeters, affordable ? RingColor : VoxelBrushRings.BlockedColor );
 
@@ -101,7 +104,7 @@ public sealed class ToolPickaxe : Component
 		if ( !affordable )
 		{
 			if ( LogChips )
-				Log.Info( "[ToolPickaxe] swing rejected: too tired." );
+				Log.Info( chippable ? "[ToolPickaxe] swing rejected: too tired." : "[ToolPickaxe] swing rejected: this pickaxe cannot break that ground." );
 			return;
 		}
 		if ( _terraform is null )

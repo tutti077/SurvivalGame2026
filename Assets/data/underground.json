@@ -1,0 +1,71 @@
+{
+  // What is under the ground (Underground.cs). Depth is metres under the ORIGINAL surface at that spot, so a hill and a
+  // valley both have their layers the same distance down.
+  //
+  // layers: top to bottom, each layerThicknessMeters thick. Under the last one the ground is bedrock: nothing breaks it.
+  //   pickaxeTier   the lowest pickaxe tier that chips this layer (pickaxeTiers below).
+  //   base          "soil" = the surface rule (dirt, then stone from 4-8 m down); "rock" = stone all through.
+  //   pockets       bodies of something else inside the layer, first match wins (put the rarest first):
+  //                   resourceId   what one chip of it hands over
+  //                   share        about how much of the layer's volume it fills (0.01 = 1 %)
+  //                   sizeMeters   how big one body is, roughly
+  //                   look         how a dug face shows it: "rock" grey stone, "sand" pale soil, "ore" dark rust-brown
+  //                   minDepthMeters  no pocket nearer the surface than this (default 3)
+  //   roomChance    chance that a 64 m square of this layer holds a loot room (0-1).
+  //   loot          what a room's chest in this layer can hold: stacks rolled from this list, min-max each.
+  //   lootStacks    [min, max] stacks per chest.
+  // rooms: the kinds of loot room, one picked per room: an empty box sizeMeters [x, y, height] with a chest in the middle.
+  // pickaxeTiers: item id -> tier. A pickaxe not listed is tier 1.
+  "layerThicknessMeters": 100,
+  "layers": [
+    {
+      "id": "upper",
+      "displayName": "Upper ground",
+      "pickaxeTier": 1,
+      "base": "soil",
+      "pockets": [
+        { "resourceId": "resource_scrap", "share": 0.008, "sizeMeters": 3,  "look": "ore",  "minDepthMeters": 6 },
+        { "resourceId": "resource_stone", "share": 0.16,  "sizeMeters": 5,  "look": "rock", "minDepthMeters": 1.5 }
+      ],
+      "roomChance": 0.35,
+      "lootStacks": [ 2, 4 ],
+      "loot": [
+        { "resourceId": "resource_goldCoins", "min": 4,  "max": 12 },
+        { "resourceId": "resource_scrap",     "min": 2,  "max": 6 },
+        { "resourceId": "resource_stone",     "min": 6,  "max": 14 },
+        { "resourceId": "resource_silica",    "min": 1,  "max": 3 }
+      ]
+    },
+    {
+      "id": "deep",
+      "displayName": "Deep rock",
+      "pickaxeTier": 2,
+      "base": "rock",
+      "pockets": [
+        { "resourceId": "resource_scrap", "share": 0.05, "sizeMeters": 4, "look": "ore" },
+        { "resourceId": "resource_sand",  "share": 0.12, "sizeMeters": 7, "look": "sand" }
+      ],
+      "roomChance": 0.5,
+      "lootStacks": [ 3, 5 ],
+      "loot": [
+        { "resourceId": "resource_goldCoins",   "min": 10, "max": 30 },
+        { "resourceId": "resource_scrap",       "min": 6,  "max": 16 },
+        { "resourceId": "resource_sand",        "min": 6,  "max": 14 },
+        { "resourceId": "resource_silica",      "min": 2,  "max": 6 },
+        { "resourceId": "resource_augmentCore", "min": 1,  "max": 1 }
+      ]
+    }
+  ],
+  "rooms": [
+    { "id": "cache", "sizeMeters": [ 4, 4, 3 ] },
+    { "id": "hall",  "sizeMeters": [ 8, 5, 3.5 ] },
+    { "id": "vault", "sizeMeters": [ 5, 5, 6 ] }
+  ],
+  "pickaxeTiers": {
+    "pickaxe_scrap": 1,
+    "pickaxe_reforged": 2,
+    "pickaxe_iron": 3,
+    "pickaxe_steel": 4,
+    "pickaxe_titanium": 5
+  }
+}

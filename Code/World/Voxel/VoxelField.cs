@@ -94,7 +94,120 @@ public sealed class VoxelField
 		_grass = new float[SamplesX * SamplesY];
 		_tilled = new float[SamplesX * SamplesY];
 		_cobble = new float[SamplesX * SamplesY];
+		_rockFloorZ = new float[SamplesX * SamplesY];
+		Array.Fill( _rockFloorZ, float.NegativeInfinity );
 	}
+
+	/// <summary>Per sample column: ground below this z is rock whatever its depth (a generated cliff's body); −∞ = none.</summary>
+	readonly float[] _rockFloorZ;
+
+	/// <summary>The world seed the underground's pockets are hashed from (<see cref="Underground.Sample"/>); null = this field has no underground (the prototype's procedural hills).</summary>
+	public int? UndergroundSeed { get; set; }
+
+	/// <summary>Ground this far under the original surface (m) is bedrock: no stroke lowers it. +∞ = none.</summary>
+	public float BedrockDepthMeters { get; set; } = float.PositiveInfinity;
+
+	/// <summary>How far under the original surface a world point (m) lies (negative above it), by the nearest sample column.</summary>
+	public float DepthUnder( Vector3 pointMeters )
+	{
+		var x = Math.Clamp( (int)MathF.Round( (pointMeters.x - OriginMeters.x) / CellMeters ), 0, SamplesX - 1 );
+		var y = Math.Clamp( (int)MathF.Round( (pointMeters.y - OriginMeters.y) / CellMeters ), 0, SamplesY - 1 );
+		return _groundZ[(y * SamplesX) + x] - pointMeters.z;
+	}
+
+	/// <summary>What the ground is at a world point (m): its layer, pocket and the pickaxe tier it needs. The surface answer where the field has no underground.</summary>
+	public UndergroundPoint UndergroundAt( Vector3 pointMeters )
+		=> UndergroundSeed is { } seed ? Underground.Sample( seed, pointMeters.x, pointMeters.y, pointMeters.z, DepthUnder( pointMeters ) ) : UndergroundPoint.Surface;
+
+	/// <summary>Sample (x, y, z) is bedrock: a cut leaves it alone.</summary>
+	bool IsBedrock( int x, int y, int z )
+		=> _groundZ[(y * SamplesX) + x] - (OriginMeters.z + (z * CellMeters)) >= BedrockDepthMeters;
+
+	/// <summary>
+	/// The same ground reaching <paramref name="extraChunks"/> mesh chunks (16 m each) further down: a new field whose samples
+	/// above the old floor are this one's, and below it solid ground. Whole chunks only, so every existing mesh chunk keeps its
+	/// place (its z index grows by <paramref name="extraChunks"/>) and nothing above has to be meshed again. The live world grows
+	/// a dug column this way when a stroke nears its floor (TerrainWorldManager.Underground.cs) - a field deep enough for the
+	/// whole underground from the start would be ~35 MB per touched chunk.
+	/// </summary>
+	public VoxelField Deepened( int extraChunks )
+	{
+		var extra = Math.Max( 1, extraChunks ) * ChunkCells;
+		var deeper = new VoxelField( CellMeters, CellsX, CellsY, CellsZ + extra, new Vector3( OriginMeters.x, OriginMeters.y, OriginMeters.z - (extra * CellMeters) ) )
+		{
+			UndergroundSeed = UndergroundSeed,
+			BedrockDepthMeters = BedrockDepthMeters,
+		};
+		Array.Copy( _groundZ, deeper._groundZ, _groundZ.Length );
+		Array.Copy( _bare, deeper._bare, _bare.Length );
+		Array.Copy( _grass, deeper._grass, _grass.Length );
+		Array.Copy( _tilled, deeper._tilled, _tilled.Length );
+		Array.Copy( _cobble, deeper._cobble, _cobble.Length );
+		Array.Copy( _rockFloorZ, deeper._rockFloorZ, _rockFloorZ.Length );
+		var layer = SamplesX * SamplesY;
+		// Old samples keep their values, shifted up by the new layers
+		Array.Copy( _f, 0, deeper._f, extra * layer, _f.Length );
+		// New layers: the seed's own rule (ground − z, clamped) - deep under the surface that is solid all through
+		for ( var z = 0; z < extra; z++ )
+		{
+			var pz = deeper.OriginMeters.z + (z * CellMeters);
+			var row = z * layer;
+			for ( var i = 0; i < layer; i++ )
+				deeper._f[row + i] = Math.Clamp( _groundZ[i] - pz, -ClampMeters, ClampMeters );
+		}
+		return deeper;
+	}
+
+	/// <summary>
+	/// Generator carve: an empty box (a loot room) between two world corners (m). Writes the box's signed distance with
+	/// min( f, d ), like a dig, so the walls mesh flat and a stroke before or after it lands the same ground. Returns the mesh
+	/// chunks that changed; nothing where the box lies outside the field.
+	/// </summary>
+	public HashSet<(int X, int Y, int Z)> CarveBox( Vector3 minMeters, Vector3 maxMeters )
+	{
+		var dirty = new HashSet<(int, int, int)>();
+		var lo = (minMeters - new Vector3( ClampMeters ) - OriginMeters) / CellMeters;
+		var hi = (maxMeters + new Vector3( ClampMeters ) - OriginMeters) / CellMeters;
+		var x0 = Math.Max( 0, (int)MathF.Floor( lo.x ) );
+		var y0 = Math.Max( 0, (int)MathF.Floor( lo.y ) );
+		var z0 = Math.Max( 0, (int)MathF.Floor( lo.z ) );
+		var x1 = Math.Min( SamplesX - 1, (int)MathF.Ceiling( hi.x ) );
+		var y1 = Math.Min( SamplesY - 1, (int)MathF.Ceiling( hi.y ) );
+		var z1 = Math.Min( SamplesZ - 1, (int)MathF.Ceiling( hi.z ) );
+		var centre = (minMeters + maxMeters) * 0.5f;
+		var half = (maxMeters - minMeters) * 0.5f;
+		for ( var z = z0; z <= z1; z++ )
+		{
+			for ( var y = y0; y <= y1; y++ )
+			{
+				for ( var x = x0; x <= x1; x++ )
+				{
+					var q = SamplePositionMeters( x, y, z ) - centre;
+					var qx = MathF.Abs( q.x ) - half.x;
+					var qy = MathF.Abs( q.y ) - half.y;
+					var qz = MathF.Abs( q.z ) - half.z;
+					var ox = MathF.Max( qx, 0f );
+					var oy = MathF.Max( qy, 0f );
+					var oz = MathF.Max( qz, 0f );
+					var d = MathF.Sqrt( (ox * ox) + (oy * oy) + (oz * oz) ) + MathF.Min( MathF.Max( qx, MathF.Max( qy, qz ) ), 0f );
+					if ( d >= ClampMeters )
+						continue;
+					var i = Index( x, y, z );
+					var old = _f[i];
+					var value = Math.Clamp( Math.Min( old, d ), -ClampMeters, ClampMeters );
+					if ( MathF.Abs( value - old ) < 1e-5f )
+						continue;
+					_f[i] = value;
+					MarkDirty( x, y, z, dirty );
+				}
+			}
+		}
+		return dirty;
+	}
+
+	/// <summary>The rock floor at a (fractional) sample column, nearest sample: below it a cut shows no soil and the pickaxe yields stone.</summary>
+	public float RockFloorZ( float sx, float sy )
+		=> _rockFloorZ[(Math.Clamp( (int)MathF.Round( sy ), 0, SamplesY - 1 ) * SamplesX) + Math.Clamp( (int)MathF.Round( sx ), 0, SamplesX - 1 )];
 
 	public int Index( int x, int y, int z ) => (((z * SamplesY) + y) * SamplesX) + x;
 
@@ -215,6 +328,32 @@ public sealed class VoxelField
 		}
 	}
 
+	/// <summary>One sample column's generator rewrite: (old solidness, z metres) → new solidness, and the column's rock floor.</summary>
+	public readonly record struct ColumnRewrite( Func<float, float, float> Solid, float RockFloorZ );
+
+	/// <summary>
+	/// Generator reshaping after the seed (<see cref="TerrainLedgeCliffs.Sculpt"/>): <paramref name="column"/> gets each sample
+	/// column's (x, y) in metres and returns null to keep it, or a rewrite of its solidness (clamped like the seed) and its
+	/// rock floor. The original surface (<see cref="GroundZ"/>, which the depth styling reads) is left as seeded.
+	/// </summary>
+	public void RewriteColumns( Func<float, float, ColumnRewrite?> column )
+	{
+		for ( var y = 0; y < SamplesY; y++ )
+		{
+			for ( var x = 0; x < SamplesX; x++ )
+			{
+				if ( column( OriginMeters.x + (x * CellMeters), OriginMeters.y + (y * CellMeters) ) is not { } rewrite )
+					continue;
+				_rockFloorZ[(y * SamplesX) + x] = rewrite.RockFloorZ;
+				for ( var z = 0; z < SamplesZ; z++ )
+				{
+					var i = Index( x, y, z );
+					_f[i] = Math.Clamp( rewrite.Solid( _f[i], OriginMeters.z + (z * CellMeters) ), -ClampMeters, ClampMeters );
+				}
+			}
+		}
+	}
+
 	/// <summary>
 	/// The dig / fill brush: a rounded puck (Mark 2026-10-29: "it should do it in a circle but not a perfect sphere") — a
 	/// circle of radius r on the ground with a flat floor, edges rounded by a cell, as a true signed distance in metres
@@ -268,7 +407,7 @@ public sealed class VoxelField
 					var i = Index( x, y, z );
 					var old = _f[i];
 					var value = Math.Clamp( dig ? Math.Min( old, d ) : Math.Max( old, -d ), -ClampMeters, ClampMeters );
-					if ( MathF.Abs( value - old ) < 1e-5f )
+					if ( MathF.Abs( value - old ) < 1e-5f || (value < old && IsBedrock( x, y, z )) )
 						continue;
 					_f[i] = value;
 					MarkDirty( x, y, z, dirty );
@@ -332,7 +471,7 @@ public sealed class VoxelField
 					var i = Index( x, y, z );
 					var old = _f[i];
 					var value = Math.Clamp( Math.Min( old, dist ), -ClampMeters, ClampMeters );
-					if ( MathF.Abs( value - old ) < 1e-5f )
+					if ( MathF.Abs( value - old ) < 1e-5f || IsBedrock( x, y, z ) )
 						continue;
 					_f[i] = value;
 					MarkDirty( x, y, z, dirty );
@@ -573,7 +712,7 @@ public sealed class VoxelField
 		var i = Index( x, y, z );
 		var old = _f[i];
 		var value = Math.Clamp( old + ((target - old) * w), -ClampMeters, ClampMeters );
-		if ( MathF.Abs( value - old ) < 1e-5f )
+		if ( MathF.Abs( value - old ) < 1e-5f || (value < old && IsBedrock( x, y, z )) )
 			return;
 		_f[i] = value;
 		MarkDirty( x, y, z, dirty );

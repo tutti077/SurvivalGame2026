@@ -216,6 +216,54 @@ Properties on `TerrainWorldManager` (group **Voxel**): Voxel Digging, Depth Belo
 Brush Radius (m), Brush Flatness, Save Edits, Log Edits. `voxel_info` lists the columns; `voxel_reset` drops them and
 clears the log.
 
+## Generated columns: Redwood cliffs (2026-11-16)
+
+Not every column is dug: a chunk holding a Redwood ledge cliff within 128 m of the camera gets one too, with the cliff carved into the field between the seed and the stroke replay (`TerrainLedgeCliffs.Sculpt` through `VoxelField.RewriteColumns`, which also sets a per-column **rock floor**: below it a cut shows no soil and `RockAt` says stone). Such a column goes again out of range unless strokes touch it. Two changes every column gets from this: the seed's grid sampling runs on the worker (`ChunkGrid` snapshots, `FillSeedSamples`; main thread 6–17 ms → ~3 ms per column), and the mesher hangs a 1.5 m skirt from the clip edge (`AddClipSkirt`) so a column beside a heightfield chunk shows no hairline. Detail: `Code/World/TerrainPreview/docs/TERRAIN_PREVIEW.md`, *Redwood ledge cliffs as voxel ground*.
+
+## The underground (2026-11-18)
+
+Mark: "When players dig underground I want them to be able to find a variety of things. Some rock scattered around, very
+rarely occurring we can have some scrap. We can then have the rock type change to something that requires a different level
+pickaxe ... each layer can be 100 meters and the final layer is to the bottom of the world which can just be unbreakable ...
+Every layer should have varying kinds of loot rooms that can spawn, just a box of empty space with a chest in the middle."
+
+Data: `Assets/data/underground.json`. Rules: `Underground.cs` (pure functions of world seed + position + depth under the
+ORIGINAL surface, so nothing about the ground itself is saved). World side: `TerrainWorldManager.Underground.cs`.
+
+- **Layers** (100 m each, top down): `upper` - any pickaxe, soil with stone pockets (16 %) and rare scrap (0.8 %, from 6 m
+  down); `deep` - `pickaxe_reforged` or better (tier 2), stone all through with scrap (5 %) and sand (12 %) pockets. Under the
+  last layer (200 m) is **bedrock**: `VoxelField.BedrockDepthMeters` makes every cut (dig, chip, rake) leave those samples
+  alone, so it is unbreakable for the console brushes too. Adding a layer = one more object in the JSON; tiers come from
+  `pickaxeTiers` (scrap 1, reforged 2, iron 3, steel 4, titanium 5).
+- **Pockets** are two octaves of 3-D value noise thresholded to the share of the layer they should fill. `Underground.Sample`
+  returns the layer, the tier it needs, the pocket's resource and its look. The mesher paints the look on dug faces with the
+  existing splat channels (no new material): stone = the rock tile, sand = the soil tile, scrap = the soil tile darkened to
+  rust-brown through the tilled channel. **This replaces the old "rock from 4-8 m down" depth rule in the live world** (the
+  prototype scene keeps it): rock is where the pockets and the rock layers are, so the upper 100 m is soil with stone
+  scattered through it.
+- **Pickaxe** (`PlayerTerraform.CanChipGround`, asked by the tool for its ring and again by the host): bedrock or a layer
+  above the held pickaxe's tier = red ring, no swing. The yield is the pocket's resource (**Chip Pocket Yield** 1), else
+  stone in rock / dirt in soil as before.
+- **Depth on demand.** A column still starts **Depth Below Ground (m)** 24 deep. A stroke that comes within 24 m of its floor
+  first grows the field two mesh chunks (32 m) down: `VoxelField.Deepened` copies the samples into a taller field,
+  `VoxelChunkSet.AdoptDeepened` shifts the chunk indices and adds the new rows - nothing above is meshed again. Growth stops
+  8 m under the bedrock line of the column's lowest ground. A column restored from the edit log is built that deep at once
+  (`UndergroundOriginZ`: the same rule on the lowest logged stroke, so the same sample lattice). A column dug to the bottom
+  is ~133 x 133 x 500 samples = 35 MB; plan item 6 (sparse storage) matters more now.
+- **Loot rooms.** `Underground.TryRoom`: each 64 m chunk has, per layer, a `roomChance` (0.35 / 0.5) of one room: `cache`
+  4 x 4 x 3 m, `hall` 8 x 5 x 3.5 m or `vault` 5 x 5 x 6 m, at least 8 m inside the chunk (it never crosses into a
+  neighbour's column) and 12 m inside its layer, walls on the half-metre lattice. It is carved (`VoxelField.CarveBox`, a box
+  signed distance written with min, like a dig) as soon as the column's field reaches 2 m under its floor - always before a
+  digger gets there. The host puts the build system's `chest` piece on the floor and fills it from the layer's `loot` list
+  (the first stack is always the first entry: gold coins). A chest spawns once per session; a room a player has stood within
+  6 m of is written to `WorldSaves/<World>/underground_rooms.json` and gets no chest in later sessions.
+- Console: `underground_info [reload]` - the layers, the rooms of the chunk under the camera, how deep its column reaches.
+- **Pipe systems** (2026-11-19, `AGENTS.md` *Pipe systems*): the buried ends of a pipe - the crushed end ~2-6 m down, the cement cube
+  20 m down - are static props inside the ground, not part of the field. Nothing carves round them; a chip stops on them because
+  the pickaxe only takes `terrain` / `voxel`.
+- **Not there yet:** caves and ravines (Mark: "idk what layers yet"), a distinct rock tile per layer, light underground
+  (bring a torch), nav. Rooms are not found by anything but digging into them.
+
 ## What is left of the plan
 
 The live world is a pure (x, y) sampler (`TerrainPreviewPipeline.Sample`) feeding `TerrainMeshBuilder` and thirteen
@@ -238,7 +286,6 @@ rebake still missing). Next, in order:
 ## Open questions for Mark
 
 - Cell size: 0.5 m (default) or 0.25 m near the player for finer sculpting (4× the memory)?
-- Should digging yield resources (dirt / stone items) and should filling cost them? (Inventory hook in `HostBrush`.)
-- Max dig depth per world (the field's Depth Below Ground) — bedrock at −24 m under the lowest ground for now.
+- Max dig depth per world: answered 2026-11-18 - layers of 100 m, bedrock under the last one (*The underground*).
 - Tool: the pickaxe chips (2026-11-02, durability through `PlayerTerraform`). Still open: a shovel (the big dig / fill puck as an item?), and whether tiers change radius / depth / swing rate.
 - Bare ground per biome: one soil tile today (the sand channel); does each biome want its own bare tile?
