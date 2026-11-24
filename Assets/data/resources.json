@@ -24,6 +24,16 @@
       "fallbackColor": "0.28,0.48,0.22,1"
     },
     {
+      "id": "vehicle_pod_scooter_folded",
+      "displayName": "Pod Scooter",
+      "description": "The folding scooter from your stasis pod. Left click with it in hand to unfold it on the ground ahead; R on the parked scooter folds it back up. Runs on plant fiber.",
+      "icon": "ui/items/vehicle_pod_scooter_folded.png",
+      "maxStack": 1,
+      "weight": 5,
+      "fallbackColor": "0.34,0.38,0.26,1",
+      "deployVehicle": "vehicle_pod_scooter"
+    },
+    {
       "id": "resource_woodBasic",
       "displayName": "Wood",
       "icon": "ui/items/resource_woodBasic.png",

@@ -77,7 +77,6 @@ public sealed partial class Vehicle
 				slot.Count,
 				origin + offset,
 				GameObject,
-				applyDropperSelfPickupDelay: false,
 				wear: slot.Wear,
 				crafterName: slot.CrafterName,
 				tier: slot.Tier );

@@ -99,9 +99,12 @@ public sealed partial class Vehicle
 		if ( IsBroken )
 			return $"{name} (wrecked)";
 		if ( IsFlipped )
-			return $"Flip {name}";
+			return IsBike ? ( CanStow( viewer ) ? $"Stand {name} up  (R: fold up)" : $"Stand {name} up" ) : $"Flip {name}";
 		if ( IsFull )
 			return $"{name} is full";
+		// A foldable vehicle nobody rides: the stow key (R) packs it into its item.
+		if ( CanStow( viewer ) )
+			return $"Drive {name}  (R: fold up)";
 		return HasDriver ? $"Ride in {name}" : $"Drive {name}";
 	}
 

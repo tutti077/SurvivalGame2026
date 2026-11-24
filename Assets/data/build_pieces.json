@@ -601,6 +601,20 @@
       "halfHeight": 80,
       "halfDepth": 30,
       "costs": []
+    },
+    {
+      "id": "vehicle_pod_scooter",
+      "tab": "crafting",
+      "displayName": "Pod Scooter",
+      "icon": "",
+      "prefab": "prefabs/build/vehicle_pod_scooter.prefab",
+      "fallbackColor": "0.34,0.38,0.26,1",
+      "vehicle": true,
+      "hidden": true,
+      "halfWidth": 32,
+      "halfHeight": 12,
+      "halfDepth": 22,
+      "costs": []
     }
   ]
 }

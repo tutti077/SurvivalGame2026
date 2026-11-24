@@ -589,7 +589,7 @@ public static partial class VehicleDevCommands
 		var anim = driver is null ? "no driver" : $"{driver.Components.Get<PlayerAnimation>()?.SeatedPoseDebug} parent={driver.Parent?.Name} seated={driver.Components.Get<PlayerMovement>()?.IsSeated}";
 		Log.Info( $"[Vehicle] driver anim: {anim}" );
 		Log.Info( $"[Vehicle] flipped={vehicle.IsFlipped} lastPush={vehicle.LastFlipPushDebug ?? "-"} lastExit={vehicle.LastExitPlacement ?? "-"}" );
-		Log.Info( $"[Vehicle] {vehicle.DisplayName} pos={vehicle.WorldPosition} speed={vehicle.SyncedSpeedMetersPerSecond:0.0} m/s ({vehicle.SpeedMph:0} mph) fuel={vehicle.FuelUnits} hp={vehicle.Health:0}/{vehicle.MaxHealth:0} mass={body?.Mass:0} dt={vehicle.LastStepDelta:0.####} seats={string.Join( ",", vehicle.SeatOccupants )} owner={vehicle.GameObject.Network?.Owner?.DisplayName ?? "host"} up={vehicle.WorldRotation.Up} vel={body?.Velocity} {vehicle.DebugWheels()}" );
+		Log.Info( $"[Vehicle] {vehicle.DisplayName} pos={vehicle.WorldPosition} speed={vehicle.SyncedSpeedMetersPerSecond:0.0} m/s ({vehicle.SpeedMph:0} mph) fuel={vehicle.FuelUnits} hp={vehicle.Health:0}/{vehicle.MaxHealth:0} mass={body?.Mass:0} dt={vehicle.LastStepDelta:0.####} seats={string.Join( ",", vehicle.SeatOccupants )} owner={vehicle.GameObject.Network?.Owner?.DisplayName ?? "host"} up={vehicle.WorldRotation.Up} vel={body?.Velocity} {vehicle.DebugWheels()}{( vehicle.IsBike ? " " + vehicle.DebugBike() : "" )}" );
 	}
 
 	static GameObject FindLocalPawn()

@@ -99,6 +99,9 @@ public sealed partial class Vehicle
 
 	public float SpeedMph => MathF.Abs( SyncedSpeedMetersPerSecond ) * 2.23694f;
 
+	/// <summary>Wheels on the ground this physics step (simulating machine only).</summary>
+	public int GroundedWheelCount => _groundedWheels;
+
 	/// <summary>Debug: the dt the last simulation step used.</summary>
 	public float LastStepDelta { get; private set; }
 
@@ -107,9 +110,9 @@ public sealed partial class Vehicle
 	{
 		var mass = Math.Max( 1f, _body?.Mass ?? 1f );
 		var omega = 2f * MathF.PI * Math.Max( 0.2f, SuspensionFrequencyHz );
-		var k = mass * 0.25f * omega * omega;
-		var parts = new string[4];
-		for ( var i = 0; i < 4; i++ )
+		var k = mass / WheelCount * omega * omega;
+		var parts = new string[WheelCount];
+		for ( var i = 0; i < WheelCount; i++ )
 			parts[i] = _wheels[i].Grounded ? $"{_wheels[i].Compression:0.0}" : "air";
 		return $"sleeping={_body?.Sleeping} motion={_body?.MotionEnabled} accel={AccelerationMetersPerSecond2} freq={SuspensionFrequencyHz} k={k:0} wheels=[{string.Join( " ", parts )}] grounded={_groundedWheels} spin={MathX.RadianToDegree( _body?.AngularVelocity.Length ?? 0f ):0}°/s steer={_steerDegrees:0.0} grav={Scene.PhysicsWorld.Gravity}";
 	}
@@ -131,6 +134,10 @@ public sealed partial class Vehicle
 	}
 
 	static readonly string[] WheelVisualNames = { "WheelFL", "WheelFR", "WheelRL", "WheelRR" };
+	static readonly string[] BikeWheelVisualNames = { "WheelF", "WheelR" };
+
+	/// <summary>Four on a car, two on a bike (front = 0, rear = 1).</summary>
+	int WheelCount => IsBike ? 2 : 4;
 
 	Rigidbody _body;
 	float _steerDegrees;
@@ -140,31 +147,39 @@ public sealed partial class Vehicle
 
 	void CollectWheelVisuals()
 	{
-		for ( var i = 0; i < WheelVisualNames.Length; i++ )
-		{
-			_wheelVisuals[i] = null;
-			foreach ( var child in GameObject.Children )
-			{
-				if ( child.IsValid() && string.Equals( child.Name, WheelVisualNames[i], StringComparison.OrdinalIgnoreCase ) )
-				{
-					_wheelVisuals[i] = child;
-					break;
-				}
-			}
-		}
+		var names = IsBike ? BikeWheelVisualNames : WheelVisualNames;
+		for ( var i = 0; i < _wheelVisuals.Length; i++ )
+			_wheelVisuals[i] = i < names.Length ? FindChildByName( names[i] ) : null;
+
+		if ( IsBike )
+			CollectBikeVisuals();
 	}
 
-	/// <summary>Mount point of wheel i in chassis space: 0/1 front (left/right), 2/3 rear.</summary>
+	GameObject FindChildByName( string name )
+	{
+		foreach ( var child in GameObject.Children )
+		{
+			if ( child.IsValid() && string.Equals( child.Name, name, StringComparison.OrdinalIgnoreCase ) )
+				return child;
+		}
+
+		return null;
+	}
+
+	/// <summary>Mount point of wheel i in chassis space: 0/1 front (left/right), 2/3 rear. A bike: 0 front, 1 rear, both on the centre line.</summary>
 	Vector3 WheelMountLocal( int i )
 	{
 		var halfBase = TerrainWorldUnits.MetersToEngine( WheelBaseMeters ) * 0.5f;
+		if ( IsBike )
+			return new Vector3( i == 0 ? halfBase : -halfBase, 0f, 0f );
+
 		var halfTrack = TerrainWorldUnits.MetersToEngine( TrackWidthMeters ) * 0.5f;
 		var x = i < 2 ? halfBase : -halfBase;
 		var y = ( i % 2 == 0 ) ? halfTrack : -halfTrack;
 		return new Vector3( x, y, 0f );
 	}
 
-	bool IsFrontWheel( int i ) => i < 2;
+	bool IsFrontWheel( int i ) => IsBike ? i == 0 : i < 2;
 
 	protected override void OnFixedUpdate()
 	{
@@ -216,6 +231,11 @@ public sealed partial class Vehicle
 		UpdateFlippedState();
 		SimulateSteering( steer, dt );
 		SimulateDrive( throttle, dt );
+		if ( IsBike )
+		{
+			SimulateBikeBalance( dt );
+			SimulateBikeAirControl( throttle, steer, dt );
+		}
 
 		SyncedSpeedMetersPerSecond = TerrainWorldUnits.EngineToMeters( Vector3.Dot( _body.Velocity, WorldRotation.Forward ) );
 		TickFuelBurn( dt, throttleHeld );
@@ -286,7 +306,7 @@ public sealed partial class Vehicle
 	{
 		var up = WorldRotation.Up;
 		var mass = Math.Max( 1f, _body.Mass );
-		var sprung = mass * 0.25f;
+		var sprung = mass / WheelCount;
 		var omega = 2f * MathF.PI * Math.Max( 0.2f, SuspensionFrequencyHz );
 		var k = sprung * omega * omega;
 		var c = 2f * Math.Max( 0f, SuspensionDampingRatio ) * MathF.Sqrt( k * sprung );
@@ -297,18 +317,25 @@ public sealed partial class Vehicle
 		var gravityUnits = Math.Max( 1f, Scene.PhysicsWorld.Gravity.Length );
 
 		_groundedWheels = 0;
-		for ( var i = 0; i < 4; i++ )
+		for ( var i = 0; i < WheelCount; i++ )
 		{
 			ref var wheel = ref _wheels[i];
 			var mount = WorldTransform.PointToWorld( WheelMountLocal( i ) );
-			var tr = Scene.Trace.Ray( mount, mount - up * rayLength )
-				.IgnoreGameObjectHierarchy( GameObject )
-				.WithoutTags( "player", "trigger", "worlddrop" )
-				.Run();
+			var tr = IsBike
+				? TraceBikeWheel( mount, up, radius, springLength, out rayLength )
+				: Scene.Trace.Ray( mount, mount - up * rayLength )
+					.IgnoreGameObjectHierarchy( GameObject )
+					.WithoutTags( "player", "trigger", "worlddrop" )
+					.Run();
 
 			// A ray that starts inside the ground or grazes it sideways is a buggy lying on its side, not a
 			// wheel on the floor: counting it read as full compression and the spring shoved the chassis upright.
-			if ( !tr.Hit || tr.StartedSolid || Vector3.Dot( tr.Normal, up ) < 0.35f )
+			// A bike wheel whose sweep starts inside the ground while the bike is still more upright than not is a
+			// wheel pushed past its travel (a hard landing, a bump met while leaned over), not a bike on its side:
+			// it stays a grounded, fully compressed wheel. Dropping it switched the balance off mid-corner and the
+			// scooter fell over on rough ground (terrainTest film, 2026-11-19).
+			var bottomed = IsBike && tr.StartedSolid && up.z > 0.5f;
+			if ( !bottomed && ( !tr.Hit || tr.StartedSolid || Vector3.Dot( tr.Normal, up ) < 0.35f ) )
 			{
 				wheel.Grounded = false;
 				wheel.Compression = 0f;
@@ -316,7 +343,7 @@ public sealed partial class Vehicle
 				continue;
 			}
 
-			var compression = rayLength - tr.Distance;
+			var compression = bottomed ? rayLength : rayLength - tr.Distance;
 			var velocityAtMount = _body.GetVelocityAtPoint( mount );
 			var upwardSpeed = Vector3.Dot( velocityAtMount, up );
 			var force = k * compression - c * upwardSpeed;
@@ -336,8 +363,8 @@ public sealed partial class Vehicle
 			wheel.Grounded = true;
 			wheel.Compression = compression;
 			wheel.Load = force;
-			wheel.ContactNormal = tr.Normal.LengthSquared > 0.01f ? tr.Normal.Normal : Vector3.Up;
-			wheel.ContactPoint = tr.HitPosition;
+			wheel.ContactNormal = bottomed ? up : tr.Normal.LengthSquared > 0.01f ? tr.Normal.Normal : Vector3.Up;
+			wheel.ContactPoint = bottomed ? mount - up * radius : tr.HitPosition;
 			_groundedWheels++;
 		}
 	}
@@ -432,10 +459,10 @@ public sealed partial class Vehicle
 
 		var accelUnits = TerrainWorldUnits.MetersToEngine( accel );
 		var perWheelDrive = mass * accelUnits / _groundedWheels;
-		var perWheelMass = mass * 0.25f;
+		var perWheelMass = mass / WheelCount;
 		var bias = Math.Clamp( TyreGripBiasFront, 0.01f, 0.99f );
 
-		for ( var i = 0; i < 4; i++ )
+		for ( var i = 0; i < WheelCount; i++ )
 		{
 			ref var wheel = ref _wheels[i];
 			if ( !wheel.Grounded )
@@ -456,7 +483,9 @@ public sealed partial class Vehicle
 			var slipDegrees = MathX.RadianToDegree( MathF.Atan2( MathF.Abs( lateral ), rolling ) );
 			var axleGrip = 2f * ( IsFrontWheel( i ) ? bias : 1f - bias );
 			var mu = TractionCurve( slipDegrees ) * axleGrip;
-			var cancelForce = perWheelMass * MathF.Abs( lateral ) / dt;
+			// (A bike's two contacts sit far from its mass centre along one line: half the wheel's mass share is
+			// already enough to stop the slip there, the full share overshoots and the frame shimmies.)
+			var cancelForce = perWheelMass * ( IsBike ? 0.5f : 1f ) * MathF.Abs( lateral ) / dt;
 			var sideForce = -MathF.Sign( lateral ) * Math.Min( cancelForce, mu * wheel.Load );
 
 			// Friction circle with the side force first: drive / brake get the grip the corner leaves over, so
@@ -469,6 +498,15 @@ public sealed partial class Vehicle
 			sideForce = Math.Clamp( sideForce, -limit, limit );
 			var driveRoom = MathF.Sqrt( Math.Max( 0f, limit * limit - sideForce * sideForce ) );
 			var driveForce = Math.Clamp( perWheelDrive, -driveRoom, driveRoom );
+
+			if ( IsBike )
+			{
+				// A bike corners by leaning, which this model does with the balance torque (Vehicle.Bike.cs):
+				// the side force acts level with the mass centre so it turns the bike without levering it over.
+				_body.ApplyForceAt( wheel.ContactPoint, wheelForward * driveForce );
+				_body.ApplyForceAt( BikeSideForcePoint( wheel.ContactPoint ), wheelRight * sideForce );
+				continue;
+			}
 
 			_body.ApplyForceAt( wheel.ContactPoint, wheelForward * driveForce + wheelRight * sideForce );
 		}
@@ -517,7 +555,10 @@ public sealed partial class Vehicle
 		var travelUnits = TerrainWorldUnits.MetersToEngine( SyncedSpeedMetersPerSecond ) * dt;
 		var spinStep = circumference > 0.01f ? travelUnits / circumference * 360f : 0f;
 
-		for ( var i = 0; i < 4; i++ )
+		if ( IsBike )
+			UpdateBikeVisuals( springLength );
+
+		for ( var i = 0; i < WheelCount; i++ )
 		{
 			var go = _wheelVisuals[i];
 			if ( go is null || !go.IsValid() )

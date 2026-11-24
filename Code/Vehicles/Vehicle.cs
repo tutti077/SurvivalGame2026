@@ -4,11 +4,12 @@ using Sandbox;
 
 namespace Survival;
 
-/// <summary>How a <see cref="Vehicle"/> moves: four raycast wheels (dune buggy) or a hover cushion (platform).</summary>
+/// <summary>How a <see cref="Vehicle"/> moves: four raycast wheels (dune buggy), a hover cushion (platform) or two swept wheels held upright (pod scooter).</summary>
 public enum VehicleDriveModel
 {
 	Wheels,
 	Hover,
+	Bike,
 }
 
 /// <summary>
@@ -42,6 +43,8 @@ public sealed partial class Vehicle : Component
 	public string MapPinIcon { get; set; } = string.Empty;
 
 	public bool IsHover => DriveModel == VehicleDriveModel.Hover;
+	/// <summary>Two wheels on the centre line, balanced by <c>Vehicle.Bike.cs</c>.</summary>
+	public bool IsBike => DriveModel == VehicleDriveModel.Bike;
 	public bool ShowsMapPin => !string.IsNullOrWhiteSpace( MapPinIcon );
 
 	/// <summary>How close a pawn must stand to press E (meters).</summary>

@@ -44,7 +44,8 @@ public sealed partial class Vehicle
 
 	void UpdateFlippedState()
 	{
-		var flipped = _groundedWheels < 2 && WorldRotation.Up.z < 0.7f;
+		// A bike is down when neither wheel stands on anything; one wheel up is a wheelie or a crest.
+		var flipped = ( IsBike ? _groundedWheels == 0 : _groundedWheels < 2 ) && WorldRotation.Up.z < 0.7f;
 		if ( flipped != IsFlipped )
 			IsFlipped = flipped;
 	}
@@ -79,6 +80,13 @@ public sealed partial class Vehicle
 		_body ??= Components.Get<Rigidbody>();
 		if ( _body is null || !_body.IsValid() )
 			return;
+
+		// A bike is light enough to stand back up: the balance torque runs for a moment with no wheel down.
+		if ( IsBike )
+		{
+			StartBikeRighting();
+			return;
+		}
 
 		var bounds = GameObject.GetBounds();
 		var centre = bounds.Center;

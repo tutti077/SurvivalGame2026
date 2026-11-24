@@ -10,7 +10,10 @@ namespace Survival;
 /// the owner parents its root under the seat object (the pawn then rides the vehicle's synced
 /// transform with no lag on any machine), turns the physics body keyframed, disables its colliders and
 /// the controller's input, and re-pins to the seat each frame. On exit the owner is put down beside the
-/// vehicle where the host said. No move / jump / roll / grapple / augment while seated; the driver also
+/// vehicle where the host said. The owner RPC is sent at once and the synced id only goes out with the
+/// next network tick, so on a remote owner the RPC lands first: the owner applies the RPC and waits for
+/// the synced id to agree (<see cref="_seatAwaitingSync"/>) instead of reading the stale id as "the host
+/// cleared my seat". No move / jump / roll / grapple / augment while seated; the driver also
 /// loses Attack1 / Attack2 (passengers keep them — <see cref="PlayerCombat"/> gates the driver too).
 /// Same shape as the bear-trap hold (<see cref="TrapLocked"/>).
 /// </summary>
@@ -32,6 +35,10 @@ public sealed partial class PlayerMovement
 	Guid _seatedVehicleCacheId;
 
 	bool _seatAppliedLocal;
+	/// <summary>Owner: the vehicle this pawn is parented into right now (<see cref="Guid.Empty"/> = on foot).</summary>
+	Guid _seatAppliedVehicleId;
+	/// <summary>Owner: an owner RPC was applied and <see cref="SeatedVehicleId"/> has not caught up with it yet.</summary>
+	bool _seatAwaitingSync;
 	readonly List<Collider> _seatDisabledColliders = new();
 	GameObject _seatDisabledColliderObject;
 	bool _seatSavedGravity = true;
@@ -86,23 +93,27 @@ public sealed partial class PlayerMovement
 		if ( vehicleId == Guid.Empty )
 		{
 			ExitSeatLocal( exitWorldPos );
-			return;
+		}
+		else
+		{
+			var vehicle = Scene.Directory.FindByGuid( vehicleId )?.Components.Get<Vehicle>();
+			var seatGo = vehicle?.GetSeatObject( seatIndex );
+			if ( seatGo is not null && seatGo.IsValid() )
+				EnterSeatLocal( seatGo, vehicleId );
 		}
 
-		var vehicle = Scene.Directory.FindByGuid( vehicleId )?.Components.Get<Vehicle>();
-		var seatGo = vehicle?.GetSeatObject( seatIndex );
-		if ( seatGo is null || !seatGo.IsValid() )
-			return;
-
-		EnterSeatLocal( seatGo );
+		// Applied what was asked while the synced id still shows the state before it: the sync is in flight.
+		// (A failed enter does not wait - TickSeatedPin retries it from the synced id once that arrives.)
+		_seatAwaitingSync = _seatAppliedVehicleId == vehicleId && SeatedVehicleId != _seatAppliedVehicleId;
 	}
 
-	void EnterSeatLocal( GameObject seatGo )
+	void EnterSeatLocal( GameObject seatGo, Guid vehicleId )
 	{
 		if ( _seatAppliedLocal )
 			return;
 
 		_seatAppliedLocal = true;
+		_seatAppliedVehicleId = vehicleId;
 		_controller ??= Components.Get<PlayerController>();
 		var body = _controller?.Body ?? Components.Get<Rigidbody>();
 
@@ -173,6 +184,7 @@ public sealed partial class PlayerMovement
 			return;
 
 		_seatAppliedLocal = false;
+		_seatAppliedVehicleId = Guid.Empty;
 		_controller ??= Components.Get<PlayerController>();
 		var body = _controller?.Body ?? Components.Get<Rigidbody>();
 
@@ -216,24 +228,35 @@ public sealed partial class PlayerMovement
 		GameObject.Network?.ClearInterpolation();
 	}
 
-	/// <summary>Owner, every frame while seated: stay glued to the seat; the driver cannot swing or shoot.</summary>
+	/// <summary>Owner, every frame: keep the local seat in step with the host's synced one, and stay glued to the seat while in it.</summary>
 	void TickSeatedPin()
 	{
+		if ( SeatedVehicleId == _seatAppliedVehicleId )
+		{
+			_seatAwaitingSync = false;
+		}
+		else if ( !_seatAwaitingSync )
+		{
+			// The synced seat changed with no owner RPC applied here: the host cleared it (vehicle wrecked /
+			// despawned) before an exit position reached us, or the enter RPC could not find the vehicle yet.
+			if ( _seatAppliedLocal )
+				ExitSeatLocal( GameObject.WorldPosition );
+			if ( IsSeated )
+				ApplySeatedLocal( SeatedVehicleId, SeatedSeatIndex, default );
+		}
+
 		if ( !_seatAppliedLocal )
 			return;
 
-		if ( !IsSeated )
+		// While the sync is in flight SeatedVehicle still answers for the state before the RPC.
+		if ( !_seatAwaitingSync )
 		{
-			// Host cleared the seat (vehicle wrecked / despawned) before any exit position reached us.
-			ExitSeatLocal( GameObject.WorldPosition );
-			return;
-		}
-
-		var vehicle = SeatedVehicle;
-		if ( vehicle is null || !vehicle.IsValid() )
-		{
-			ExitSeatLocal( GameObject.WorldPosition );
-			return;
+			var vehicle = SeatedVehicle;
+			if ( vehicle is null || !vehicle.IsValid() )
+			{
+				ExitSeatLocal( GameObject.WorldPosition );
+				return;
+			}
 		}
 
 		if ( GameObject.LocalPosition.LengthSquared > 0.0001f )

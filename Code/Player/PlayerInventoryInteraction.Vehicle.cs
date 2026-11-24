@@ -45,18 +45,26 @@ public sealed partial class PlayerInventoryInteraction
 		if ( IsSeatedInVehicle )
 		{
 			SetFocusedVehicle( null );
+			SetFocusedPodScooter( null );
 			if ( pressed )
 				OwnerExitVehicle();
 			return;
 		}
 
 		TickVehicleFocusPrompt( menuOpen, force: pressed );
+		TickVehicleStowAndDeploy( menuOpen );
 
 		if ( !pressed )
 			return;
 
 		if ( IsBuildHammerPreviewing() || IsGrappleRetractActive() )
 			return;
+
+		if ( FocusedPodScooter is { IsValid: true } pod )
+		{
+			OwnerTakePodScooter( pod );
+			return;
+		}
 
 		if ( FocusedVehicle is null || !FocusedVehicle.IsValid() )
 			return;
@@ -79,6 +87,7 @@ public sealed partial class PlayerInventoryInteraction
 		if ( menuOpen || IsBuildHammerPreviewing() )
 		{
 			SetFocusedVehicle( null );
+			SetFocusedPodScooter( null );
 			return;
 		}
 
@@ -92,6 +101,7 @@ public sealed partial class PlayerInventoryInteraction
 		     || FocusedCampfire is not null || FocusedDoor is not null || FocusedTrap is not null )
 		{
 			SetFocusedVehicle( null );
+			SetFocusedPodScooter( null );
 			return;
 		}
 
@@ -100,6 +110,9 @@ public sealed partial class PlayerInventoryInteraction
 			SetFocusedVehicle( vehicle );
 		else
 			SetFocusedVehicle( null );
+
+		// The folded scooter docked in a stasis pod (only looked for while a pod stands in the scene).
+		SetFocusedPodScooter( FocusedVehicle is null && StasisPod.TryFindFocusedScooter( GameObject, 3f, out var scooterPod ) ? scooterPod : null );
 	}
 
 	void SetFocusedVehicle( Vehicle vehicle )

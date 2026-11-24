@@ -155,7 +155,7 @@ public static class ConsoleHelp
 		new( "Map", "map_ping_test", "", "Ping your own position without the map or the middle mouse.", "map_ping_test" ),
 
 		// ---- vehicles
-		new( "Vehicles", "vehicle_spawn", "[pieceId] [metersAhead]", "Host spawns a vehicle ahead of you (vehicle_dune_buggy, vehicle_hover_platform).", "vehicle_spawn vehicle_hover_platform 6" ),
+		new( "Vehicles", "vehicle_spawn", "[pieceId] [metersAhead]", "Host spawns a vehicle ahead of you (vehicle_dune_buggy, vehicle_hover_platform, vehicle_pod_scooter).", "vehicle_spawn vehicle_hover_platform 6" ),
 		new( "Vehicles", "vehicle_enter", "", "Enter the nearest vehicle.", "vehicle_enter" ),
 		new( "Vehicles", "vehicle_exit", "", "Leave the vehicle.", "vehicle_exit" ),
 		new( "Vehicles", "vehicle_fuel", "[units]", "Put fuel in the nearest vehicle (default 5).", "vehicle_fuel 10" ),
@@ -170,11 +170,15 @@ public static class ConsoleHelp
 		new( "Vehicles", "vehicle_flip", "[roof|wheels|front|back]", "Press Flip on the nearest vehicle (optionally stand on a side first).", "vehicle_flip" ),
 		new( "Vehicles", "vehicle_test", "", "Timed throttle / brake / reverse / turn / fuel script with logged numbers.", "vehicle_test" ),
 		new( "Vehicles", "vehicle_demo", "", "Scripted showcase run with a chase camera (vehicle_spawn + vehicle_fuel first).", "vehicle_demo" ),
+		new( "Vehicles", "scooter_demo", "[rampDegrees]", "Filmed pod scooter run from where it stands: kerb strip, kicker ramp with S held in the air, sweeps, brake; logs air time and tip. Needs ~70 m of open ground ahead.", "scooter_demo 20" ),
+		new( "Vehicles", "vehicle_stow", "", "Fold the nearest foldable vehicle (the pod scooter) into its item in your bag.", "vehicle_stow" ),
+		new( "Vehicles", "vehicle_deploy", "[itemId] [metersAhead]", "Unfold a folded-vehicle item from your bag onto the ground ahead (default the pod scooter; give it first).", "vehicle_deploy vehicle_pod_scooter_folded 2" ),
 		new( "Vehicles", "vehicle_rolltest", "[mph] [turnSeconds] [steer]", "Full throttle to a speed, then a held steer; logs whether it rolled.", "vehicle_rolltest 60 2 1" ),
 
 		// ---- props
 		new( "Props", "pod_spawn", "[metersAhead]", "Host stands a stasis pod on the ground ahead of you (default 4 m), door facing you - no flight.", "pod_spawn 3" ),
 		new( "Props", "pod_door", "[open|close|toggle]", "Host swings the nearest stasis pod's door (default toggle).", "pod_door open" ),
+		new( "Props", "pod_scooter", "[take|restock]", "Host takes the folded scooter out of the nearest stasis pod into your bag, or puts it back in the cradle.", "pod_scooter restock" ),
 		new( "Props", "pod_test", "[count] [here]", "Host crash-lands this many empty stasis pods (default 10) around the spawn centre - or around you with here. Needs a StasisPodSpawner in the scene (terrainTest has one).", "pod_test 10 here" ),
 		new( "Props", "pod_arrivals", "[0|1]", "Players arrive by crash-landing pod on their first spawn of the session (default 1). No argument prints it.", "pod_arrivals 0" ),
 		new( "Tests", "combat_test", "", "Automated melee regression suite (play mode, testscene1): scripted fights, PASS/FAIL per case.", "combat_test" ),

@@ -324,7 +324,7 @@ Code/
   Crafting/ Food/ Quests/ Skills/ Augments/   JSON-backed catalogs
   Crew/ Arena/ Camps/ Boss/ Raids/ Farming/ Circuits/ Map/ TimeTrial/   one system each (see AGENTS.md)
   Dungeon/         BoxDungeonGenerator + DungeonLayout / Geometry / MapModel; CaveDungeonGenerator + CaveLayout / CaveGeometry
-  Vehicles/        Vehicle (+ .Physics / .Seats / .Fuel / .Health / .Hover), VehicleSeat, VehicleDevCommands
+  Vehicles/        Vehicle (+ .Physics / .Seats / .Fuel / .Health / .Hover / .Bike: two-wheel pod scooter / .Stow: fold into an item), VehicleSeat, VehicleDevCommands
   Props/           StasisPod (arrival flight, landing sequence, lamps / screens / light, serial plates), StasisPodSpawner (first-spawn arrivals within 25 m of the spawn centre, pod_test),
                    StasisPodSerials (per-world counter from 885922), StasisPodPuff, StasisPodDevCommands (pod_spawn / pod_door / pod_test); the pawn's side is PlayerMovement.StasisPod.cs
   Environment/     WindSystem, grass, ChopableTree, MineableRock, FireLightFlicker, BearTrap, traps   (docs/ENVIRONMENT.md)
