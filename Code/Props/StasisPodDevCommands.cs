@@ -150,6 +150,33 @@ public static class StasisPodDevCommands
 		return best;
 	}
 
+	[ConCmd( "pod_scooter" )]
+	public static void ConCmdScooter( string how = "take" )
+	{
+		if ( Networking.IsActive && !Networking.IsHost )
+		{
+			Log.Warning( "[StasisPod] pod_scooter: host only." );
+			return;
+		}
+
+		var pod = FindNearestPod();
+		if ( pod is null )
+		{
+			Log.Warning( "[StasisPod] pod_scooter: no stasis pod in the scene (pod_spawn first)." );
+			return;
+		}
+
+		if ( string.Equals( how, "restock", StringComparison.OrdinalIgnoreCase ) )
+		{
+			pod.HostRestockScooter();
+			Log.Info( "[StasisPod] scooter back in the cradle." );
+			return;
+		}
+
+		var ok = pod.HostTryTakeScooter( FindLocalPawn() );
+		Log.Info( ok ? $"[StasisPod] took {pod.ScooterItemId}." : $"[StasisPod] pod_scooter: nothing taken (hasScooter={pod.HasScooter} landed={pod.HasLanded}; stand within {pod.ScooterTakeReachMeters:0.#} m)." );
+	}
+
 	static GameObject FindLocalPawn()
 	{
 		var scene = Sandbox.Game.ActiveScene;

@@ -14,7 +14,7 @@ namespace Survival;
 public static class StasisPodSerials
 {
 	public const long FirstSerial = 885922;
-	const string FileName = "pod_serials.json";
+	public const string FileName = "pod_serials.json";
 
 	sealed class SerialFile
 	{

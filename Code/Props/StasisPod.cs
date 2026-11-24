@@ -17,8 +17,8 @@ namespace Survival;
 /// over <see cref="FlightSeconds"/>, blending upright for the last stretch; impact thumps the pod 14 cm into
 /// the ground and back with a dust ring; <c>Unlatch</c> pops the door 4 deg (kachunk), <c>Vent</c> blows air
 /// puffs out of the seam (pssshhh), <c>Opening</c> eases the leaf to <see cref="DoorOpenDegrees"/>, <c>Open</c>
-/// releases the occupant. The occupant's view is black until the door is open (<see cref="PlayerMovement"/>
-/// pod lock), so the flight never shows the map. Once the occupant has walked clear (or, for an empty pod,
+/// releases the occupant. The occupant rides in first person and watches the flight through the door window
+/// (<see cref="PlayerMovement"/> pod lock: the view fades in from black, the map stays locked). Once the occupant has walked clear (or, for an empty pod,
 /// after <see cref="EmptyPowerDownSeconds"/>) the lamps, screens and interior light power down.
 /// </para>
 /// <para>
@@ -30,7 +30,7 @@ namespace Survival;
 /// </para>
 /// </summary>
 [Title( "Stasis Pod" )]
-public sealed class StasisPod : Component
+public sealed partial class StasisPod : Component
 {
 	const string LampChildPrefix = "Lamp_";
 	const string ScreenChildPrefix = "Screen_";
@@ -185,6 +185,7 @@ public sealed class StasisPod : Component
 	protected override void OnDisabled()
 	{
 		base.OnDisabled();
+		Registered.Remove( this );
 		if ( _lightCaptured && InteriorLight is { IsValid: true } )
 			InteriorLight.LightColor = _lightBaseColor;
 	}
@@ -199,6 +200,7 @@ public sealed class StasisPod : Component
 		UpdateInteriorLight();
 		UpdateSerialPlates();
 		UpdateEffects();
+		UpdateScooter();
 		if ( HasHostAuthority )
 			HostTick();
 	}

@@ -7,11 +7,14 @@ namespace Survival;
 /// <summary>
 /// Riding in a <see cref="StasisPod"/> (the arrival flight). Same shape as the vehicle seat: the host writes
 /// <see cref="PodLockId"/>, the owner parents its root under the pod's occupant anchor, turns the body keyframed,
-/// switches its colliders and input off, and the pawn flies with the pod's synced transform. The owner's view is
-/// black the whole time (<see cref="PodBlackout01"/>, drawn by <see cref="PlayerScreenHud"/>), and fades in over
-/// <see cref="PodBlackoutFadeSeconds"/> once the door is open and the pod has let go. Map discovery is locked while
-/// the view is dark (<see cref="MapDiscoveryLocked"/>): the map page will not open and the minimap hides, so the
-/// flight never gives the world away (Mark 2026-11-09).
+/// switches its colliders and input off, and the pawn flies with the pod's synced transform. The owner rides in
+/// first person, the camera glued inside the pod at eye height so the flight is seen through the door window, mouse
+/// look relative to the pod (Mark 2026-11-10: "put us in first person mode so we can see out the pod but when it lands
+/// you can swap to third person"); the view toggle is held off until the pod lets go, and the release puts the camera
+/// back to the mode the pawn had before the ride (third person on basicplayer). The view starts black (a fresh
+/// pawn waiting for the host's lock, <see cref="PodBlackout01"/>, drawn by <see cref="PlayerScreenHud"/>) and fades
+/// in over <see cref="PodBlackoutFadeSeconds"/> once the pawn is in the pod - waking from the coma. Map discovery stays
+/// locked while riding (<see cref="MapDiscoveryLocked"/>): the map page will not open and the minimap hides.
 /// </summary>
 public sealed partial class PlayerMovement
 {
@@ -38,6 +41,11 @@ public sealed partial class PlayerMovement
 	bool _podSavedUseInput = true;
 	float _podSpawnGraceUntil = -1f;
 	bool _podGraceDecided;
+	StasisPod _podRidden;
+	/// <summary>World yaw the camera faces when looking straight out of the pod once it stands upright (the occupant anchor's).</summary>
+	float _podRestYaw;
+	/// <summary>The camera mode the pawn had before the ride; the release puts it back (third person on the prefab).</summary>
+	bool _podSavedThirdPerson = true;
 
 	/// <summary>Host: lock this pawn into the pod (it rides the pod's transform until <see cref="HostReleasePod"/>).</summary>
 	public void HostSetPodLocked( StasisPod pod )
@@ -51,6 +59,14 @@ public sealed partial class PlayerMovement
 		ApplyPodLockLocal( PodLockId, default, 0f );
 		if ( GameObject.Network is { Active: true } )
 			RpcOwnerApplyPodLock( PodLockId, default, 0f );
+	}
+
+	/// <summary>Owner, before the first tick: this pawn does not arrive by pod (main.scene restoring a saved position) - no dark spawn grace.</summary>
+	public void SkipPodSpawnGrace()
+	{
+		_podGraceDecided = true;
+		_podSpawnGraceUntil = -1f;
+		PodBlackout01 = 0f;
 	}
 
 	/// <summary>Host: let the pawn out at <paramref name="exitWorldPos"/>, facing <paramref name="exitYaw"/>.</summary>
@@ -88,10 +104,10 @@ public sealed partial class PlayerMovement
 			return;
 
 		var anchor = pod.OccupantAnchor is { IsValid: true } ? pod.OccupantAnchor : pod.GameObject;
-		EnterPodLocal( anchor );
+		EnterPodLocal( pod, anchor );
 	}
 
-	void EnterPodLocal( GameObject anchor )
+	void EnterPodLocal( StasisPod pod, GameObject anchor )
 	{
 		if ( _podAppliedLocal )
 			return;
@@ -99,6 +115,16 @@ public sealed partial class PlayerMovement
 		_podAppliedLocal = true;
 		PodBlackout01 = 1f;
 		_controller ??= Components.Get<PlayerController>();
+
+		// First person, looking straight out of the door: the anchor's yaw once the pod has landed upright.
+		_podRidden = pod;
+		_podRestYaw = pod.LandYaw + (pod.WorldRotation.Inverse * anchor.WorldRotation).Yaw();
+		if ( _controller is not null )
+		{
+			_podSavedThirdPerson = _controller.ThirdPerson;
+			_controller.ThirdPerson = false;
+			_controller.EyeAngles = new Angles( 0f, _podRestYaw, 0f );
+		}
 		var body = _controller?.Body ?? Components.Get<Rigidbody>();
 
 		if ( GrappleAttached )
@@ -150,6 +176,7 @@ public sealed partial class PlayerMovement
 			return;
 
 		_podAppliedLocal = false;
+		_podRidden = null;
 		_controller ??= Components.Get<PlayerController>();
 		var body = _controller?.Body ?? Components.Get<Rigidbody>();
 
@@ -180,7 +207,11 @@ public sealed partial class PlayerMovement
 		}
 
 		if ( _controller is not null )
+		{
 			_controller.UseInputControls = _podSavedUseInput;
+			// Out of the pod: back to the camera the pawn had before the ride (Mark 2026-11-11: "after the pod opens it doesnt go in third person").
+			_controller.ThirdPerson = _podSavedThirdPerson;
+		}
 
 		GameObject.Transform.ClearInterpolation();
 		GameObject.Network?.ClearInterpolation();
@@ -209,7 +240,11 @@ public sealed partial class PlayerMovement
 				ApplyPodLockLocal( PodLockId, default, 0f );
 			else if ( GameObject.LocalPosition.LengthSquared > 0.0001f )
 				GameObject.LocalPosition = Vector3.Zero;
-			PodBlackout01 = 1f;
+			// First person until the pod lets go (the controller's view toggle would flip it back).
+			if ( _podAppliedLocal && _controller is { ThirdPerson: true } )
+				_controller.ThirdPerson = false;
+			if ( _podAppliedLocal && PodBlackout01 > 0f )
+				PodBlackout01 = MathF.Max( 0f, PodBlackout01 - Time.Delta / PodBlackoutFadeSeconds );
 			return;
 		}
 
@@ -227,5 +262,31 @@ public sealed partial class PlayerMovement
 
 		if ( PodBlackout01 > 0f )
 			PodBlackout01 = MathF.Max( 0f, PodBlackout01 - Time.Delta / PodBlackoutFadeSeconds );
+	}
+
+	/// <summary>
+	/// Owner, from <c>PostCameraSetup</c>: while riding, the eye sits inside the pod at the occupant's eye height and
+	/// turns with the pod (tumbling through the flight, upright after landing); mouse look is relative to the pod,
+	/// zero = straight out of the door. Once landed the result equals the plain first-person view, so the release
+	/// does not jump. False when not riding.
+	/// </summary>
+	bool PlacePodCamera( CameraComponent camera )
+	{
+		if ( !_podAppliedLocal || GameObject.Parent is not { IsValid: true } anchor )
+			return false;
+
+		_controller ??= Components.Get<PlayerController>();
+		if ( _controller is null || !_controller.IsValid() )
+			return false;
+
+		var eyeHeight = _controller.BodyHeight - _controller.EyeDistanceFromTop;
+		var look = _controller.EyeAngles;
+		var podRest = Rotation.FromYaw( _podRestYaw );
+		var podNow = _podRidden is { IsValid: true } ? anchor.WorldRotation : podRest;
+		// The anchor's rotation relative to its landed pose, applied to the world-space look.
+		var tumble = podNow * podRest.Inverse;
+		camera.WorldPosition = anchor.WorldPosition + podNow.Up * eyeHeight;
+		camera.WorldRotation = tumble * Rotation.From( look.pitch, look.yaw, 0f );
+		return true;
 	}
 }

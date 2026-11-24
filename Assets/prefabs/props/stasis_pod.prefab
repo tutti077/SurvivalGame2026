@@ -80,6 +80,12 @@
           "_type": "gameobject",
           "go": "b8fb3763-8049-5e25-8fb4-3195088411c3"
         },
+        "Scooter": {
+          "_type": "gameobject",
+          "go": "602e640a-10d7-5132-b11a-112ec37b0bb5"
+        },
+        "ScooterItemId": "vehicle_pod_scooter_folded",
+        "ScooterTakeReachMeters": 3.5,
         "DoorOpenDegrees": 115,
         "DoorSwingSeconds": 1.8,
         "InteriorLight": {
@@ -219,6 +225,78 @@
         "NetworkTransmit": true,
         "OwnerTransfer": 1,
         "Components": [],
+        "Children": []
+      },
+      {
+        "__guid": "602e640a-10d7-5132-b11a-112ec37b0bb5",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "Scooter",
+        "Position": "-14.920,0.000,6.400",
+        "Rotation": "0,0,0.707107,0.707107",
+        "Scale": "1,1,1",
+        "Tags": "",
+        "Enabled": true,
+        "NetworkMode": 2,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "c682fb9c-f950-55e0-b728-1307164727ee",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": null,
+            "Materials": null,
+            "Model": "models/vehicles/pod_scooter/pod_scooter_folded.vmdl",
+            "OnComponentDestroy": null,
+            "OnComponentDisabled": null,
+            "OnComponentEnabled": null,
+            "OnComponentFixedUpdate": null,
+            "OnComponentStart": null,
+            "OnComponentUpdate": null,
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          },
+          {
+            "__type": "Sandbox.BoxCollider",
+            "__guid": "25ec27f3-d1b6-5527-833b-11487a7a96e9",
+            "__enabled": true,
+            "Flags": 0,
+            "Center": "0,0,9.200",
+            "ColliderFlags": 0,
+            "Elasticity": null,
+            "Friction": null,
+            "IsTrigger": false,
+            "OnComponentDestroy": null,
+            "OnComponentDisabled": null,
+            "OnComponentEnabled": null,
+            "OnComponentFixedUpdate": null,
+            "OnComponentStart": null,
+            "OnComponentUpdate": null,
+            "OnObjectTriggerEnter": null,
+            "OnObjectTriggerExit": null,
+            "OnTriggerEnter": null,
+            "OnTriggerExit": null,
+            "RollingResistance": null,
+            "Scale": "21.600,8.800,18.400",
+            "Static": false,
+            "Surface": null,
+            "SurfaceVelocity": "0,0,0"
+          }
+        ],
         "Children": []
       },
       {

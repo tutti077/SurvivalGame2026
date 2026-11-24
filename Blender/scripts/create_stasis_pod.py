@@ -7,7 +7,10 @@ player's body like when Neo wakes up").
 
 Writes Assets/models/props/stasis_pod/:
     stasis_pod.fbx / .vmdl          the upright pod: plinth, hollow C-shell (open at the front), roof cap, padded
-                                    interior (back pad, headrest, seat, armrests), dangling body tubes, side lamp
+                                    interior (back pad, headrest, seat perch, armrests), the scooter dock under the
+                                    seat (two clamp posts + a striped sill; the folded scooter itself is the prefab's
+                                    `Scooter` child, pod_scooter_folded.vmdl from create_pod_scooter.py, so it can be
+                                    taken - Mark 2026-11-19), dangling body tubes, side lamp
                                     panels, rear conduit. `stasis_pod_phys` = coarse hollow shell for a concave
                                     PhysicsMeshFile, so the pawn can stand inside and walk out.
     stasis_pod_door.fbx / .vmdl     the door leaf with the window hole + a glass pane (shaders/glass.shader) and a
@@ -63,6 +66,12 @@ SUPER_N = 4.0
 PROFILE = [(0.14, 0.57, 0.50), (0.60, 0.60, 0.56), (1.00, 0.62, 0.60), (1.45, 0.63, 0.62), (1.90, 0.60, 0.58), (2.30, 0.54, 0.50)]
 PAWN_ANCHOR_X = 0.15      # where the occupant stands (pod local, metres) - also the release point
 SEAT_DEPTH = 0.20
+SEAT_Z = 0.70             # seat perch centre: lifted clear of the folded scooter docked under it
+# the folded pod scooter (Blender/scripts/create_pod_scooter.py, pod_scooter_folded.vmdl): 0.54 long x 0.26 thick x 0.46
+# tall, stood across the pod under the seat with its back to the shell. A prefab child, so it can be taken.
+SCOOTER_X = -0.373        # its centre: back face 1 cm off the shell's inner wall at the floor, front at -0.24
+SCOOTER_BOX = (0.54, 0.22, 0.46)   # its collider (long, thick, tall): the fork tubes stand proud of it, clear of the pawn
+SCOOTER_MODEL = "models/vehicles/pod_scooter/pod_scooter_folded.vmdl"
 SCREEN = "stasis_pod_screen"
 PUFF = "stasis_pod_puff"
 SCREEN_Z = 1.62
@@ -626,10 +635,11 @@ RIB = "stasis_pod_trim"
 
 
 def add_interior(mesh, body_t, pad):
-	"""Back pad, shoulder wings, headrest, seat + pedestal, armrests. Called for the render mesh AND the physics mesh
+	"""Back pad, shoulder wings, headrest, seat perch, scooter dock posts, armrests. Called for the render mesh AND the physics mesh
 	so the pawn cannot push into any of it (Mark 2026-11-09: "the seat is mushing ... make it a hard rigid model")."""
 	back_t = [t for t in body_t if math.radians(120) - 1e-6 <= t <= math.radians(240) + 1e-6]
-	pad_rows = [0.34, 0.70, 1.05, 1.40, 1.75, 2.12]
+	# (the back pad starts above the scooter dock: below it the bare shell wall backs the folded scooter)
+	pad_rows = [0.64, 0.85, 1.05, 1.40, 1.75, 2.12]
 	arc = arc_length_table(back_t, 1.45)
 	# (pads start 1 cm inside the wall so their hidden back face never shares a plane with the shell's inner face)
 	thick_grid(mesh, back_t, pad_rows, SHELL_T - 0.01, PAD_T + 0.01, pad, pad, pad,
@@ -643,10 +653,14 @@ def add_interior(mesh, body_t, pad):
 	# headrest: a soft wedge at head height (nose 16 cm off the pad)
 	a_back = profile_at(1.70)[0] - SHELL_T - PAD_T
 	tapered_box(mesh, (-a_back + 0.08, 0.0, 1.70), (0.16, 0.30, 0.26), (0.12, 0.24, 0.20), pad, uv_mode="planar")
-	# seat: a perch cantilevered from the back pad on a steel pedestal, nose tapered
-	a_seat = profile_at(0.56)[0] - SHELL_T - PAD_T
-	tapered_box(mesh, (-a_seat + SEAT_DEPTH * 0.5, 0.0, 0.56), (SEAT_DEPTH, 0.56, 0.13), (SEAT_DEPTH - 0.05, 0.50, 0.13), pad, uv_mode="planar")
-	box(mesh, (-a_seat + 0.08, 0.0, (SHELL_Z0 + 0.5) * 0.5 + 0.02), (0.14, 0.30, 0.5 - SHELL_Z0 - 0.02), "steel_dark")
+	# seat: a perch cantilevered from the back pad, nose tapered. Nothing stands under it but the scooter dock:
+	# two clamp posts either side of the folded scooter (a prefab child, see write_prefab) and a striped sill.
+	a_seat = profile_at(SEAT_Z)[0] - SHELL_T - PAD_T
+	tapered_box(mesh, (-a_seat + SEAT_DEPTH * 0.5, 0.0, SEAT_Z), (SEAT_DEPTH, 0.56, 0.13), (SEAT_DEPTH - 0.05, 0.50, 0.13), pad, uv_mode="planar")
+	floor = SHELL_Z0 + 0.02
+	for sy in (1, -1):
+		box(mesh, (SCOOTER_X - 0.02, sy * (SCOOTER_BOX[0] * 0.5 + 0.035), floor + 0.235), (0.16, 0.03, 0.47), "steel_dark")
+		box(mesh, (SCOOTER_X + 0.062, sy * (SCOOTER_BOX[0] * 0.5 + 0.035), floor + 0.30), (0.006, 0.03, 0.10), "warning", uv_mode="cell")
 	# armrests: short pads off the side walls (10 cm proud, clear of the pawn's capsule)
 	for sy in (1, -1):
 		b_arm = profile_at(0.92)[1] - SHELL_T
@@ -731,9 +745,8 @@ def build_pod(mats):
 
 	# --- interior padding and furniture (shared with the physics mesh: every one of these is rigid)
 	add_interior(mesh, body_t, pad)
-	a_seat = profile_at(0.56)[0] - SHELL_T - PAD_T
-	# lumbar nameplate on the seat pedestal
-	box(mesh, (-a_seat + 0.145, 0.0, 0.30), (0.01, 0.16, 0.08), "label", uv_mode="cell")
+	# dock sill on the floor in front of the folded scooter (render only: 1 cm, nothing to stand on)
+	box(mesh, (SCOOTER_X + SCOOTER_BOX[1] * 0.5 + 0.02, 0.0, SHELL_Z0 + 0.025), (0.016, SCOOTER_BOX[0], 0.01), "warning", uv_mode="cell")
 
 	# --- body tubes: wall port, ribbed hose along a sagging bezier, brass cuff + dark plug at the loose end
 	def tube(port, ctrl, end, r=0.028):
@@ -815,7 +828,7 @@ def build_pod(mats):
 
 def build_pod_phys(mats):
 	"""Hollow shell for the concave PhysicsMeshFile: plinth block, C-shell walls, roof slab, the floor plate and every
-	rigid interior solid (pads, headrest, seat, pedestal, armrests). No door - the door leaf has its own hull. The
+	rigid interior solid (pads, headrest, seat, dock posts, armrests). No door - the door leaf has its own hull. The
 	tubes stay out (they hang where the pawn stands)."""
 	mesh = Mesh(SHELL_MATS)
 	door_t, body_t = ring_thetas()
@@ -1167,6 +1180,7 @@ def write_prefab(hinge):
 	door_guid = guid("door")
 	light_guid = guid("light")
 	occupant_guid = guid("occupant")
+	scooter_guid = guid("scooter")
 	# serial plate on the door's outer face above the window, in door-local (hinge-relative) coordinates
 	plate = ring_point(0.0, 2.17, -0.02) - hinge
 	children = [
@@ -1175,6 +1189,19 @@ def write_prefab(hinge):
 			model_collider(guid("door/collider"), f"{ASSET_REL}/{DOOR}.vmdl", static=False),
 		], tags="doorleaf"),
 		child(occupant_guid, "Occupant", eng(Vector((PAWN_ANCHOR_X, 0.0, SHELL_Z0 + 0.02))), "0,0,0,1", []),
+		# the folded pod scooter in its dock under the seat: model long axis across the pod (yaw 90). StasisPod disables
+		# this child once a player has taken it; the box keeps the pawn out of it until then.
+		child(scooter_guid, "Scooter", eng(Vector((SCOOTER_X, 0.0, SHELL_Z0 + 0.02))), quat_yaw(90.0), [
+			model_renderer(guid("scooter/renderer"), SCOOTER_MODEL),
+			{
+				"__type": "Sandbox.BoxCollider", "__guid": guid("scooter/box"), "__enabled": True, "Flags": 0,
+				"Center": f"0,0,{SCOOTER_BOX[2] * 0.5 * UNITS_PER_M:.3f}", "ColliderFlags": 0, "Elasticity": None, "Friction": None, "IsTrigger": False,
+				"OnComponentDestroy": None, "OnComponentDisabled": None, "OnComponentEnabled": None,
+				"OnComponentFixedUpdate": None, "OnComponentStart": None, "OnComponentUpdate": None,
+				"OnObjectTriggerEnter": None, "OnObjectTriggerExit": None, "OnTriggerEnter": None, "OnTriggerExit": None,
+				"RollingResistance": None, "Scale": eng(Vector(SCOOTER_BOX)), "Static": False, "Surface": None, "SurfaceVelocity": "0,0,0",
+			},
+		]),
 	]
 	# TextRenderer text reads correctly from the object's -X side, so both plates turn their back (+X) to the reader
 	children[0]["Children"].append(child(guid("door/plate"), "SerialPlate", eng(plate), quat_yaw(180.0), [text_renderer(guid("door/plate/text"), 0.09)]))
@@ -1210,6 +1237,8 @@ def write_prefab(hinge):
 					"__type": "Survival.StasisPod", "__guid": guid("root/stasispod"), "__enabled": True, "Flags": 0,
 					"Door": {"_type": "gameobject", "go": door_guid},
 					"OccupantAnchor": {"_type": "gameobject", "go": occupant_guid},
+					"Scooter": {"_type": "gameobject", "go": scooter_guid},
+					"ScooterItemId": "vehicle_pod_scooter_folded", "ScooterTakeReachMeters": 3.5,
 					"DoorOpenDegrees": 115, "DoorSwingSeconds": 1.8,
 					"InteriorLight": {"_type": "component", "component_id": guid("light/point"), "go": light_guid, "component_type": "PointLight"},
 					"LightPulseHz": 0.35, "BlinkSeed": 0,

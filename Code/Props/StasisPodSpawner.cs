@@ -34,7 +34,8 @@ public sealed class StasisPodSpawner : Component
 
 	readonly HashSet<Guid> _handledConnections = new();
 	readonly HashSet<Guid> _handledPawns = new();
-	static bool _localPawnHandledThisSession;
+	/// <summary>The offline player (no connection) already came down once in this scene load.</summary>
+	bool _localPawnHandled;
 	readonly List<Vector3> _landings = new();
 	float _scanClock;
 
@@ -73,19 +74,19 @@ public sealed class StasisPodSpawner : Component
 			if ( _handledPawns.Contains( pawn.Id ) )
 				continue;
 
-			// Only real players arrive by pod: a connection's own pawn, or the one the L key spawned in an offline
-			// terrainTest. Scripted clones (combat_test / anim_test pawns, camp dummies) spawn where they are put.
+			// Only real players arrive by pod: a connection's own pawn, the one the L key spawned in an offline
+			// terrainTest, or main.scene's player on their first visit to the save. Scripted clones (combat_test / anim_test pawns, camp dummies) spawn where they are put.
 			var connection = pawn.Network?.Owner?.Id ?? Guid.Empty;
-			if ( connection == Guid.Empty && pawn != TerrainTestPlayerSpawn.ActivePlayable )
+			if ( connection == Guid.Empty && pawn != TerrainTestPlayerSpawn.ActivePlayable && pawn != WorldPlayerSpawn.PodPassenger )
 				continue;
 
 			var movement = pawn.Components.Get<PlayerMovement>();
 			if ( movement is null || movement.PodLocked )
 				continue;
 
-			var firstForThisPlayer = connection != Guid.Empty ? _handledConnections.Add( connection ) : !_localPawnHandledThisSession;
+			var firstForThisPlayer = connection != Guid.Empty ? _handledConnections.Add( connection ) : !_localPawnHandled;
 			if ( connection == Guid.Empty )
-				_localPawnHandledThisSession = true;
+				_localPawnHandled = true;
 			_handledPawns.Add( pawn.Id );
 			if ( FirstSpawnOnly && !firstForThisPlayer )
 				continue;
