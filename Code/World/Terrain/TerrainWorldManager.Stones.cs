@@ -58,6 +58,15 @@ public sealed partial class TerrainWorldManager
 		CloverRockFolder + "rock_break4_v1.prefab",
 	];
 
+	/// <summary>The stones a hand picks up (no pickaxe): the pebble clusters in the open and the stones round the trees.</summary>
+	static readonly string[] CloverPebblePrefabs =
+	[
+		CloverRockFolder + "environment_cloverhills_pebble1.prefab",
+		CloverRockFolder + "environment_cloverhills_pebble2.prefab",
+		CloverRockFolder + "environment_cloverhills_pebble3.prefab",
+		CloverRockFolder + "environment_rockpickup1.prefab",
+	];
+
 	[Property, Group( "Vegetation" ), Title( "Clover — Rock Prefabs" ), Description( "Stones in the rock clusters; each member picks one by hash. Empty = the built-in pebble1–3 + rockpickup1 (hand harvest) and rock_break1–4 (pickaxe)." )]
 	public List<string> VegetationCloverRockPrefabs { get; set; } = [];
 
@@ -75,6 +84,13 @@ public sealed partial class TerrainWorldManager
 			var forest = TerrainVegetationScatter.ForestPatchField.ForBiome( _loadSettings, BuildVegetationOptions(), TerrainPreviewBiomeId.CloverHills );
 			foreach ( var site in EnemyCampSites.PlanSitesNear( _loadSettings, _backend, _loadSettings.WorldSeed, forest, xMeters, yMeters, radiusMeters ) )
 				result.Add( new Vector3( site.X, site.Y, site.HeightMeters ) );
+			return result;
+		}
+		if ( string.Equals( kind, "poi", StringComparison.OrdinalIgnoreCase ) )
+			return DevFindPoiStructures( xMeters, yMeters, radiusMeters );
+		if ( string.Equals( kind, "pipe", StringComparison.OrdinalIgnoreCase ) )
+		{
+			DevFindPipes( xMeters, yMeters, radiusMeters, result );
 			return result;
 		}
 		TerrainVegetationScatter.FindClusterCenters( _loadSettings, _backend, BuildVegetationOptions(), kind.Trim(), xMeters, yMeters, radiusMeters, ChunkSizeMeters, result );

@@ -37,6 +37,18 @@ public sealed class ChopableTree : Component
 	[Property, Group( "Loot" ), Title( "Wood Drop Max" ), Range( 1, 50 )]
 	public int WoodDropMax { get; set; } = 10;
 
+	/// <summary>Plant fiber from the leaves (Mark 2026-11-19: felling a tree drops plant fiber too), dropped once when the
+	/// standing tree comes down: with the crown's wood where a crown tree lands, round the trunk for a felled elm or a
+	/// sapling. The stump, logs and log halves drop none (0 on their prefabs; <see cref="BecomeStump"/> clears it).</summary>
+	[Property, Group( "Loot" ), Title( "Fiber Resource Id" )]
+	public string FiberResourceId { get; set; } = "resource_plantFiber";
+
+	[Property, Group( "Loot" ), Title( "Fiber Drop Min" ), Range( 0, 50 )]
+	public int FiberDropMin { get; set; }
+
+	[Property, Group( "Loot" ), Title( "Fiber Drop Max" ), Range( 0, 50 )]
+	public int FiberDropMax { get; set; }
+
 	[Property, Group( "Chop" ), Title( "Require Axe" )]
 	public bool RequireAxe { get; set; } = true;
 
@@ -104,6 +116,7 @@ public sealed class ChopableTree : Component
 	bool _isStump;
 	bool _crownReleased;
 	int _crownWood;
+	int _crownFiber;
 	GameObject _crown;
 	readonly List<GameObject> _pieces = new();
 
@@ -181,9 +194,14 @@ public sealed class ChopableTree : Component
 	/// <summary>Host: the tree becomes its stump and a physics log is stood on the stump top.</summary>
 	void FellToStump( Component attacker )
 	{
+		BirdNest.HostNotifyTreeDown( GameObject );   // nests in this tree spill their eggs (prompt 28)
+		var standingBounds = GameObject.GetBounds();
+		var fiber = RollCount( FiberDropMin, FiberDropMax );   // the leaves come down round the trunk; the log carries the wood
 		BecomeStump();
+		DropLootAt( WorldPosition, FiberResourceId, fiber, attacker );
 
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+		BuildStructuralIntegrity.HostOnWorldAnchorChanged( scene, standingBounds );   // builds anchored above the stump let go
 		var log = string.IsNullOrWhiteSpace( FelledLogPrefab ) ? null : BuildPrefabUtility.GetTemplate( FelledLogPrefab )?.Clone();
 		if ( log is not null && log.IsValid() )
 		{
@@ -219,10 +237,14 @@ public sealed class ChopableTree : Component
 	/// <summary>Host: the tree becomes its stump and the crown tips over; the wood lands when the crown does.</summary>
 	void FellCrown( Component attacker )
 	{
-		_crownWood = RollWoodCount();
+		BirdNest.HostNotifyTreeDown( GameObject );   // nests in this tree spill their eggs (prompt 28)
+		_crownWood = RollCount( WoodDropMin, WoodDropMax );
+		_crownFiber = RollCount( FiberDropMin, FiberDropMax );
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
-		var from = attacker is not null && attacker.IsValid() ? attacker.WorldPosition : WorldPosition;
+		var from =attacker is not null && attacker.IsValid() ? attacker.WorldPosition : WorldPosition;
+		var standingBounds = GameObject.GetBounds();
 		ReleaseCrown( (WorldPosition - from).WithZ( 0f ) );
+		BuildStructuralIntegrity.HostOnWorldAnchorChanged( scene, standingBounds );   // re-probed next tick, after the stump swap below
 
 		if ( StumpModel is not null )
 			BecomeStump();
@@ -234,7 +256,7 @@ public sealed class ChopableTree : Component
 		}
 
 		if ( LogChop )
-			Log.Info( $"[ChopableTree] {GameObject.Name}: crown released, {_crownWood}x wood on landing." );
+			Log.Info( $"[ChopableTree] {GameObject.Name}: crown released, {_crownWood}x wood + {_crownFiber}x fiber on landing." );
 
 		PlayerQuests.FindOnAttacker( attacker )?.HostReport( QuestEventIds.TreeChopped );
 		BroadcastStage( StumpModel is not null ? StageStump : StageGone );
@@ -310,14 +332,17 @@ public sealed class ChopableTree : Component
 
 		if ( IsHostAuthority )
 		{
-			DropWoodAt( landing, _crownWood, null );
+			DropLootAt( landing, WoodResourceId, _crownWood, null );
+			DropLootAt( landing, FiberResourceId, _crownFiber, null );
 			_crownWood = 0;
+			_crownFiber = 0;
 		}
 	}
 
 	/// <summary>Host: replace this (networked) object with two pieces along its long axis.</summary>
 	void SplitIntoPieces( Component attacker )
 	{
+		BirdNest.HostNotifyTreeDown( GameObject );   // nests in this tree spill their eggs (prompt 28)
 		_broken = true;
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
 		var offset = TerrainWorldUnits.MetersToEngine( SplitPieceOffsetMeters );
@@ -369,6 +394,8 @@ public sealed class ChopableTree : Component
 		CurrentHealth = MaxHealth;
 		WoodDropMin = StumpWoodMin;
 		WoodDropMax = StumpWoodMax;
+		FiberDropMin = 0;
+		FiberDropMax = 0;
 	}
 
 	void BroadcastStage( int stage )
@@ -382,20 +409,25 @@ public sealed class ChopableTree : Component
 
 	void BreakAndDrop( Component attacker )
 	{
+		BirdNest.HostNotifyTreeDown( GameObject );   // nests in this tree spill their eggs (prompt 28)
 		if ( _broken )
 			return;
 
 		_broken = true;
 		CurrentHealth = 0f;
+		var anchorBounds = GameObject.GetBounds();
 		ApplyBrokenVisual();
 
-		var count = RollWoodCount();
+		var count = RollCount( WoodDropMin, WoodDropMax );
+		var fiber = RollCount( FiberDropMin, FiberDropMax );
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+		BuildStructuralIntegrity.HostOnWorldAnchorChanged( scene, anchorBounds );   // the tree / stump no longer anchors builds
 		var ignore = NoiseIgnore( attacker );
-		DropWood( count, attacker );
+		DropLootAt( GameObject.WorldPosition, WoodResourceId, count, attacker );
+		DropLootAt( GameObject.WorldPosition, FiberResourceId, fiber, attacker );
 
 		if ( LogChop )
-			Log.Info( $"[ChopableTree] {GameObject.Name}: broken — dropped {count}x wood." );
+			Log.Info( $"[ChopableTree] {GameObject.Name}: broken — dropped {count}x wood, {fiber}x fiber." );
 
 		// tree-chopped fires once per tree: on felling, not again for its stump
 		if ( !_isStump )
@@ -406,22 +438,21 @@ public sealed class ChopableTree : Component
 		EntityNoiseBus.Emit( scene, GameObject.WorldPosition, EntityNoiseKind.ChopTree, ignore );
 	}
 
-	int RollWoodCount()
+	static int RollCount( int dropMin, int dropMax )
 	{
-		var min = Math.Max( 0, Math.Min( WoodDropMin, WoodDropMax ) );
-		var max = Math.Max( min, WoodDropMax );
+		var min = Math.Max( 0, Math.Min( dropMin, dropMax ) );
+		var max = Math.Max( min, dropMax );
 		if ( max <= min )
 			return min;
 		return min + (int)MathF.Floor( Sandbox.Game.Random.Float( 0f, max - min + 0.999f ) );
 	}
 
-	/// <summary>Host: scatter <paramref name="count"/> wood pickups around the trunk.</summary>
-	void DropWood( int count, Component attacker ) => DropWoodAt( GameObject.WorldPosition, count, attacker );
-
-	/// <summary>Host: scatter <paramref name="count"/> wood pickups around <paramref name="origin"/>.</summary>
-	void DropWoodAt( Vector3 origin, int count, Component attacker )
+	/// <summary>Host: scatter <paramref name="count"/> single pickups of <paramref name="resourceId"/> around <paramref name="origin"/>.</summary>
+	void DropLootAt( Vector3 origin, string resourceId, int count, Component attacker )
 	{
-		var resourceId = string.IsNullOrWhiteSpace( WoodResourceId ) ? "resource_woodBasic" : WoodResourceId;
+		if ( count <= 0 || string.IsNullOrWhiteSpace( resourceId ) )
+			return;
+
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
 		var ignore = NoiseIgnore( attacker );
 
@@ -436,8 +467,7 @@ public sealed class ChopableTree : Component
 				resourceId,
 				1,
 				origin + offset,
-				ignore,
-				applyDropperSelfPickupDelay: false );
+				ignore );
 			if ( instance is not null && instance.IsValid() )
 				HeldStackWorldDrop.ApplyScatterBurst( instance, outward );
 		}

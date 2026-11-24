@@ -74,6 +74,8 @@
         "StumpHealth": 12,
         "StumpWoodMin": 3,
         "StumpWoodMax": 4,
+        "FiberDropMin": 4,
+        "FiberDropMax": 6,
         "WoodDropMin": 0,
         "WoodDropMax": 0
       }

@@ -46,6 +46,9 @@ public static class BiomePopulationScatter
 					ScatterEntry( chunkRoot, coord, settings, backend, chunkSize, chunkMinX, chunkMinY, worldSeed, biome, entry );
 			}
 		}
+
+		// The structure points of interest (data/pois.json) are stamped on the same pass: host, collider up
+		PoiSites.ScatterChunk( chunkRoot, settings, backend, chunkSize, chunkMinX, chunkMinY, worldSeed, forest );
 	}
 
 	static int ScatterEntry(

@@ -16,7 +16,7 @@ What it builds (in-world size — oversized on purpose so they read at distance)
   daisy2                   one daisy plant with two heads at different heights             ~0.40 m
   daisy3                   one daisy, stem bent, head tipped                               ~0.38 m
   hobbits_leaf1 / 2        broad-leaved rosette herb (pipe-weed look) + one pale spike     ~0.45 m
-  blueberry_bush1 / 2      low woody shrub, folded alpha leaf cards, blue berry clusters   ~0.80 m x 0.90 m
+  blueberry_bush1 / 2      low woody shrub, folded alpha leaf cards, blue berry clusters   ~1.00 m x 1.13 m (waist high, Mark 2026-11-17)
   mushroom_red1 / 2 / 3    single all-red field mushroom (cap + stem), caps of different size + tilt ~0.22-0.29 m
 
 Texture: ONE 256 x 256 sheet, materials/environment/shared/forage_palette.png (+ its cutout mask
@@ -944,12 +944,12 @@ MODELS = [
 TARGET_HEIGHT = {
 	"daisy2": 0.40, "daisy3": 0.36,
 	"hobbits_leaf1": 0.45, "hobbits_leaf2": 0.43,
-	"blueberry_bush1": 0.80, "blueberry_bush2": 0.78,
+	"blueberry_bush1": 1.00, "blueberry_bush2": 0.975,
 	"mushroom_red1": 0.25, "mushroom_red2": 0.28, "mushroom_red3": 0.22,
 }
 
 # The bushes' widest footprint is pulled in to this (x / y only, after the height fit).
-TARGET_WIDTH = { "blueberry_bush1": 0.90, "blueberry_bush2": 0.90 }
+TARGET_WIDTH = { "blueberry_bush1": 1.125, "blueberry_bush2": 1.125 }
 
 # --- Blender plumbing ----------------------------------------------------------------------------
 

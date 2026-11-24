@@ -47,7 +47,7 @@
         "__guid": "d4c440a9-0bca-4a92-8565-655be7313150",
         "__enabled": true,
         "Flags": 0,
-        "AutoEnsureTraceCollider": true,
+        "AutoEnsureTraceCollider": false,
         "BaseYieldPerTickHigh": 1,
         "BaseYieldPerTickLow": 1,
         "DisplayName": "Feathers",

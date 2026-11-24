@@ -1,0 +1,112 @@
+{
+  "RootObject": {
+    "__guid": "66462409-a999-4355-90c9-cdab26b09dbc",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "leafy_bush4_v1",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "",
+    "Enabled": true,
+    "NetworkMode": 1,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 1,
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "763dee27-8377-474b-9dc4-571937ac797c",
+        "__enabled": true,
+        "Flags": 0,
+        "BodyGroups": 18446744073709551615,
+        "CreateAttachments": false,
+        "LodOverride": null,
+        "MaterialGroup": null,
+        "MaterialOverride": null,
+        "Materials": null,
+        "Model": "models/environment/cloverHills/groundFoliage/leafy_bush4_v1.vmdl",
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "RenderOptions": {
+          "GameLayer": true,
+          "OverlayLayer": false,
+          "BloomLayer": false,
+          "AfterUILayer": false
+        },
+        "RenderType": "On",
+        "Tint": "1,1,1,1"
+      },
+      {
+        "__type": "Survival.ResourceItemDefinition",
+        "__guid": "413a499d-da46-4dac-9fda-dd3e84b2e367",
+        "__enabled": true,
+        "Flags": 0,
+        "AutoEnsureTraceCollider": true,
+        "BaseYieldPerTickHigh": 1,
+        "BaseYieldPerTickLow": 1,
+        "HarvestYields": [
+          {
+            "AmountHigh": 3,
+            "AmountLow": 2,
+            "ChancePercent": 100,
+            "ResourceId": "resource_plantFiber"
+          }
+        ],
+        "DisplayName": "Leafy Bush",
+        "FallbackColor": "0.3,0.5,0.22,1",
+        "HandHarvestRange": 80,
+        "Harvestable": true,
+        "HarvestTicksUntilGone": 3,
+        "HideModelWhenDepleted": false,
+        "Icon": "ui/items/resource_plantFiber.png",
+        "LogHarvest": false,
+        "MaxStack": 20,
+        "MinimumToolTier": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "ResourceId": "world_leafybush",
+        "RespawnRateSeconds": 600,
+        "ToolTypeRequired": "Hand"
+      }
+    ],
+    "Children": [],
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

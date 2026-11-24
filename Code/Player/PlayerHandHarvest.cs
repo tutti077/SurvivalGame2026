@@ -6,8 +6,9 @@ namespace Survival;
 
 /// <summary>
 /// Local pawn: hand harvest on <see cref="ResourceItemDefinition"/> within range while looking at it.
-/// Press <see cref="HandHarvestInputAction"/> (default E) while the harvest prompt is shown.
-/// World drops magnetize toward the pawn in range, then pick up on contact.
+/// Press <see cref="HandHarvestInputAction"/> (default E) while the harvest prompt is shown; the yield drops to the ground.
+/// World drops magnetize toward the pawn in range, then pick up on contact — run by the host for every pawn,
+/// so a client's pawn vacuums too (the drop's synced transform shows the flight).
 /// </summary>
 [Title( "Player Hand Harvest" )]
 public sealed class PlayerHandHarvest : Component
@@ -58,6 +59,10 @@ public sealed class PlayerHandHarvest : Component
 	{
 		base.OnUpdate();
 
+		// Loot magnet is a background behavior — keep it running even while the menu is open.
+		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
+			TickWorldDropMagnet();
+
 		if ( _vitals is null )
 			_vitals = Components.Get<PlayerVitals>();
 
@@ -66,9 +71,6 @@ public sealed class PlayerHandHarvest : Component
 			SetFocusedNode( null );
 			return;
 		}
-
-		// Loot magnet is a background behavior — keep it running even while the menu is open.
-		TickWorldDropMagnet();
 
 		var menu = Components.Get<PlayerGameMenuController>();
 		if ( menu is not null && menu.IsMenuOpen )
@@ -116,6 +118,7 @@ public sealed class PlayerHandHarvest : Component
 		return farming is not null && farming.OwnsUseKey;
 	}
 
+	/// <summary>Host: pull ready drops in range toward this pawn and bank them on contact.</summary>
 	void TickWorldDropMagnet()
 	{
 		var inventory = Components.Get<PlayerInventory>();
@@ -146,7 +149,8 @@ public sealed class PlayerHandHarvest : Component
 
 			if ( dist <= contactRadius )
 			{
-				RequestWorldDropPickup( candidate );
+				if ( !candidate.TryPickup( inventory ) && LogHandHarvest )
+					Log.Info( $"[PlayerHandHarvest] {GameObject.Name}: world pickup rejected — inventory full or blocked." );
 				continue;
 			}
 
@@ -222,72 +226,6 @@ public sealed class PlayerHandHarvest : Component
 
 		FocusedNode = node;
 		FocusedNodeChanged?.Invoke();
-	}
-
-	void RequestWorldDropPickup( WorldDroppedResource drop )
-	{
-		if ( drop is null || !drop.GameObject.IsValid() )
-			return;
-
-		var dropId = drop.GameObject.Id;
-
-		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
-		{
-			ServerTryWorldDropPickup( dropId );
-			return;
-		}
-
-		RpcRequestWorldDropPickup( dropId );
-	}
-
-	[Rpc.Host]
-	void RpcRequestWorldDropPickup( Guid dropRootId )
-	{
-		if ( !Networking.IsHost || !GameObject.IsValid() )
-			return;
-
-		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
-		     && !ConnectionIdentity.SameClient( caller, owner ) )
-			return;
-
-		ServerTryWorldDropPickup( dropRootId );
-	}
-
-	void ServerTryWorldDropPickup( Guid dropRootId )
-	{
-		if ( !TryResolveWorldDrop( dropRootId, out var drop ) )
-		{
-			if ( LogHandHarvest )
-				Log.Warning( $"[PlayerHandHarvest] {GameObject.Name}: world drop {dropRootId} not found." );
-			return;
-		}
-
-		var inventory = Components.Get<PlayerInventory>();
-		if ( inventory is null )
-		{
-			if ( LogHandHarvest )
-				Log.Info( $"[PlayerHandHarvest] {GameObject.Name}: world pickup rejected — no inventory." );
-			return;
-		}
-
-		if ( !drop.TryPickup( inventory ) && LogHandHarvest )
-			Log.Info( $"[PlayerHandHarvest] {GameObject.Name}: world pickup rejected — inventory full or blocked." );
-	}
-
-	static bool TryResolveWorldDrop( Guid dropRootId, out WorldDroppedResource drop )
-	{
-		drop = null;
-
-		foreach ( var candidate in WorldDroppedResourceRegistry.Drops )
-		{
-			if ( candidate is null || !candidate.GameObject.IsValid() || candidate.GameObject.Id != dropRootId )
-				continue;
-
-			drop = candidate;
-			return true;
-		}
-
-		return false;
 	}
 
 	bool TryFindFocusedNodeFromRay( Scene scene, Vector3 eye, Vector3 dir, out ResourceItemDefinition node )
@@ -401,7 +339,11 @@ public sealed class PlayerHandHarvest : Component
 		var result = node.TryPerformHarvestTick( HarvestToolType.Hand, 0 );
 		if ( result.Success )
 		{
-			TryDepositHarvest( result );
+			var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+			// The plant's own model and size go with the drop, so what lands is what was standing there
+			var plant = node.GameObject.Components.Get<ModelRenderer>( FindMode.EnabledInSelfAndDescendants );
+			HeldStackWorldDrop.SpawnLootBurst( scene, result.Loot, node.GameObject.WorldPosition + Vector3.Up * TerrainWorldUnits.MetersToEngine( 0.4f ), node.GameObject,
+				sourceModelPath: plant?.Model?.ResourcePath, sourceScale: node.GameObject.WorldScale.x );
 			EmitHarvestNoise( node );
 		}
 
@@ -447,23 +389,6 @@ public sealed class PlayerHandHarvest : Component
 			parts[i] = $"+{loot[i].Amount} {loot[i].ResourceId}";
 
 		return string.Join( ", ", parts );
-	}
-
-	void TryDepositHarvest( HarvestTickResult result )
-	{
-		if ( result.Loot is null || result.Loot.Length == 0 )
-			return;
-
-		var inventory = Components.Get<PlayerInventory>();
-		if ( inventory is null )
-		{
-			if ( LogHandHarvest )
-				Log.Warning( $"[PlayerHandHarvest] {GameObject.Name}: no PlayerInventory to receive harvest loot." );
-			return;
-		}
-
-		if ( !inventory.HostTryAddHarvestLoot( result.Loot ) && LogHandHarvest )
-			Log.Warning( $"[PlayerHandHarvest] {GameObject.Name}: inventory full — lost {FormatLootLog( result.Loot )}." );
 	}
 
 	bool TryResolveHarvestNode( string nodeKey, out ResourceItemDefinition node )

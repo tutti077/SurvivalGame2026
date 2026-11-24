@@ -945,6 +945,15 @@
       "fallbackColor": "0.87,0.64,0.22,1"
     },
     {
+      "id": "resource_beehive",
+      "displayName": "Wild Beehive",
+      "description": "A whole hive cut from a clover tree limb, bees and all. With some wood it becomes a hive box at the build hammer.",
+      "icon": "ui/items/resource_beehive.png",
+      "maxStack": 5,
+      "weight": 2,
+      "fallbackColor": "0.78,0.62,0.3,1"
+    },
+    {
       "id": "resource_wheat",
       "displayName": "Wheat",
       "icon": "ui/items/resource_wheat.png",

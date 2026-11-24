@@ -16,9 +16,6 @@ Clover Hills
   weed_dandelion       rosette + one yellow dandelion head                   ~0.16 m
   weed_broadleaf       plantain-style broad leaves                           ~0.08 m
 Redwood Forest
-  fern_fiddlehead      one curled young shoot, oversized coil + stalk        ~0.80 m  (2.5x)
-  fern_young           four short fronds                                     ~0.74 m  (2x)
-  fern_full            twelve arching sword-fern fronds from one crown       ~1.26 m
   redwood_sorrel       one oxalis (purple-backed clover leaf)                ~0.32 m  (4.5x)
   mushroom             one red-capped mushroom                               ~0.28 m  (2.5x)
 Amber Dunes
@@ -84,7 +81,9 @@ MATERIAL_NAME = "plants"
 ROOT_SINK = 0.01          # metres stems / roots sit below Z=0 so uneven ground never shows a gap
 
 # --- Palette -------------------------------------------------------------------------------
-# 4 x 4 swatches of 4 x 4 texels = 16 x 16 texture. sRGB 0..255.
+# 4 x 4 swatches of 32 x 32 texels = 128 x 128 texture. sRGB 0..255. Each swatch is its colour with grain (mottle,
+# texel noise, a few darker veins), and a face's UVs are spread over its swatch (see to_object), so no face is one flat
+# colour. Mark 2026-11-23: no environment texture under 128 px, and no solid colours (it was 16 x 16, one texel per face).
 PALETTE = {
 	"leaf_dark":    ( 50, 92, 34 ),
 	"leaf":         ( 78, 130, 46 ),
@@ -104,7 +103,9 @@ PALETTE = {
 	"sorrel_back":  ( 112, 70, 96 ),
 }
 PALETTE_KEYS = list( PALETTE.keys() )
-SWATCH_TEXELS = 4
+SWATCH_TEXELS = 32
+SWATCH_MARGIN = 2          # texels kept clear at each swatch edge (the neighbour never bleeds in)
+TEXELS_PER_METER = 256.0   # texel size on the plant, in the model's final metres
 PALETTE_GRID = 4
 PALETTE_SIZE = SWATCH_TEXELS * PALETTE_GRID
 
@@ -118,13 +119,43 @@ def _swatch_uv( key: str ) -> tuple:
 	return ( u, v )
 
 
+def _swatch_texel( key: str, x: int, y: int, noise ) -> tuple:
+	"""One texel of a swatch: the colour, mottled in soft patches, with texel noise and a few darker veins."""
+	r, g, b = PALETTE[key]
+	gx, gy = x / 8.0, y / 8.0
+	x0, y0 = int( gx ) % 4, int( gy ) % 4
+	fx, fy = gx - int( gx ), gy - int( gy )
+	fx, fy = fx * fx * ( 3 - 2 * fx ), fy * fy * ( 3 - 2 * fy )
+	x1, y1 = ( x0 + 1 ) % 4, ( y0 + 1 ) % 4
+	patch = ( noise["grid"][y0][x0] * ( 1 - fx ) + noise["grid"][y0][x1] * fx ) * ( 1 - fy ) 		+ ( noise["grid"][y1][x0] * ( 1 - fx ) + noise["grid"][y1][x1] * fx ) * fy
+	k = 1.0 + ( patch - 0.5 ) * 0.22 + ( noise["texel"][y][x] - 0.5 ) * 0.10
+	if ( x, y ) in noise["vein"]:
+		k *= 0.84
+	return ( max( 0, min( 255, int( round( r * k ) ) ) ), max( 0, min( 255, int( round( g * k ) ) ) ), max( 0, min( 255, int( round( b * k ) ) ) ) )
+
+
 def write_palette_png( path: str ) -> None:
+	rng = random.Random( 808 )
+	swatches = {}
+	for key in PALETTE_KEYS:
+		vein = set()
+		for _ in range( 5 ):
+			vx, vy = rng.randrange( SWATCH_TEXELS ), rng.randrange( SWATCH_TEXELS )
+			for _ in range( rng.randint( 4, 10 ) ):
+				vein.add( ( vx % SWATCH_TEXELS, vy % SWATCH_TEXELS ) )
+				vx += rng.choice( ( 0, 1 ) )
+				vy += 1
+		swatches[key] = {
+			"grid": [ [ rng.random() for _ in range( 4 ) ] for _ in range( 4 ) ],
+			"texel": [ [ rng.random() for _ in range( SWATCH_TEXELS ) ] for _ in range( SWATCH_TEXELS ) ],
+			"vein": vein,
+		}
 	rows = []
 	for y in range( PALETTE_SIZE ):
 		row = bytearray( [ 0 ] )      # filter: none
 		for x in range( PALETTE_SIZE ):
 			key = PALETTE_KEYS[( y // SWATCH_TEXELS ) * PALETTE_GRID + x // SWATCH_TEXELS]
-			row.extend( PALETTE[key] )
+			row.extend( _swatch_texel( key, x % SWATCH_TEXELS, y % SWATCH_TEXELS, swatches[key] ) )
 		rows.append( bytes( row ) )
 
 	def chunk( tag: bytes, data: bytes ) -> bytes:
@@ -137,6 +168,18 @@ def write_palette_png( path: str ) -> None:
 	with open( path, "wb" ) as f:
 		f.write( png )
 	print( f"[plants] wrote {path}" )
+
+
+def _spread_uv( centre: tuple, a: float, b: float ) -> tuple:
+	"""A face point (a, b = metres along the face's two axes) inside its swatch: mirrored back and forth across the
+	swatch's inner texels, so a face larger than the swatch never reaches a neighbour and never shows a seam."""
+	inner = SWATCH_TEXELS - 2 * SWATCH_MARGIN
+
+	def fold( metres: float ) -> float:
+		t = ( metres * TEXELS_PER_METER ) % ( 2 * inner )
+		return ( inner - abs( t - inner ) ) - inner * 0.5      # -inner/2 .. +inner/2 texels from the centre
+
+	return ( centre[0] + fold( a ) / PALETTE_SIZE, centre[1] + fold( b ) / PALETTE_SIZE )
 
 
 # --- Mesh builder ----------------------------------------------------------------------------
@@ -325,60 +368,6 @@ def leaf_rosette( m: PlantMesh, root: Vector, count: int, length: tuple, width: 
 			  m.rng.choice( swatch_choices ), droop=droop, segments=segments, jagged=jagged )
 
 
-def fern_frond( m: PlantMesh, root: Vector, yaw: float, length: float, rise: float, pinna_pairs: int,
-				pinna_len: float, swatch: str ) -> None:
-	"""Arching frond: a quadratic rachis that rises then bends out and down, paired triangular pinnae."""
-	out = Vector( ( math.cos( yaw ), math.sin( yaw ), 0 ) )
-	p0 = root - Vector( ( 0, 0, ROOT_SINK ) )
-	p1 = root + out * ( length * 0.35 ) + Vector( ( 0, 0, length * rise ) )
-	p2 = root + out * ( length * 0.85 ) + Vector( ( 0, 0, length * rise * 0.35 ) )
-	segments = 5
-	tube( m, curve_points( p0, p1, p2, segments ), [ 0.006, 0.005, 0.004, 0.003, 0.002, 0.001 ], "fern_dark", sides=3, cap=False )
-
-	m.new_part()
-	start_t = 0.18
-	for i in range( pinna_pairs ):
-		t = start_t + ( 1.0 - start_t ) * ( i / max( 1, pinna_pairs - 1 ) ) * 0.97
-		p = _bezier( p0, p1, p2, t )
-		tangent = ( _bezier( p0, p1, p2, min( 1.0, t + 0.02 ) ) - _bezier( p0, p1, p2, max( 0.0, t - 0.02 ) ) ).normalized()
-		side = tangent.cross( Vector( ( 0, 0, 1 ) ) ).normalized()
-		# Longest in the lower-middle, tapering to the tip — the sword-fern outline.
-		taper = math.sin( math.pi * min( 1.0, ( t - start_t ) / ( 1.0 - start_t ) * 0.92 + 0.08 ) ) ** 0.7
-		plen = pinna_len * taper
-		pw = plen * 0.5
-		for sgn in ( 1.0, -1.0 ):
-			dir_out = ( side * sgn + tangent * 0.45 ).normalized()
-			dir_out.z -= 0.15     # pinnae droop off the rachis
-			tip = p + dir_out * plen
-			back = p - tangent * pw * 0.5
-			fwd = p + tangent * pw
-			swatch_here = swatch if ( i + ( sgn > 0 ) ) % 3 else "fern_dark"
-			m.add_poly( ( back, tip, fwd ) if sgn > 0 else ( fwd, tip, back ), swatch_here )
-	# Tip spear.
-	tip_dir = ( p2 - _bezier( p0, p1, p2, 0.95 ) ).normalized()
-	side = tip_dir.cross( Vector( ( 0, 0, 1 ) ) ).normalized()
-	w = pinna_len * 0.12
-	m.add_poly( ( p2 - side * w, p2 + tip_dir * pinna_len * 0.6, p2 + side * w ), swatch )
-
-
-def fiddlehead( m: PlantMesh, root: Vector, height: float, coil_r: float, yaw: float, stem_r: float ) -> None:
-	"""Young frond: a stalk rising into a flattened spiral coil. The coil starts a little thicker than the stalk."""
-	out = Vector( ( math.cos( yaw ), math.sin( yaw ), 0 ) )
-	pts = [ root - Vector( ( 0, 0, ROOT_SINK ) ), root + Vector( ( 0, 0, height * 0.5 ) ) + out * coil_r * 0.2 ]
-	top = root + Vector( ( 0, 0, height - coil_r ) ) + out * coil_r * 0.6
-	pts.append( top )
-	turns = 1.4
-	steps = 14
-	c = top + out * coil_r
-	for i in range( 1, steps + 1 ):
-		t = i / steps
-		theta = t * turns * math.tau      # 0 = the stalk top, then up, over toward `out`, down and back under
-		r = coil_r * ( 1.0 - 0.75 * t )
-		pts.append( c + ( -out * math.cos( theta ) + Vector( ( 0, 0, 1 ) ) * math.sin( theta ) ) * r )
-	radii = [ stem_r * 1.15, stem_r, stem_r ] + [ stem_r * ( 1.4 - 0.9 * ( i / steps ) ) for i in range( 1, steps + 1 ) ]
-	tube( m, pts, radii, "leaf", sides=6 )
-
-
 def mushroom( m: PlantMesh, root: Vector, height: float, cap_r: float ) -> None:
 	lean = Vector( ( m.rng.uniform( -1, 1 ), m.rng.uniform( -1, 1 ), 0 ) ) * height * 0.15
 	top = root + Vector( ( 0, 0, height ) ) + lean
@@ -533,29 +522,6 @@ def build_weed_broadleaf( m ):
 	leaf_rosette( m, Vector(), 5, ( 0.06, 0.09 ), ( 0.035, 0.05 ), ( 25, 45 ), ( "leaf", "leaf_light", "leaf_dark" ), droop=0.45, segments=4 )
 
 
-def build_fern_fiddlehead( m ):
-	fiddlehead( m, Vector(), 0.32, 0.05, 0.0, 0.012 )
-
-
-def build_fern_young( m ):
-	phase = m.rng.uniform( 0, math.tau )
-	for i in range( 4 ):
-		fern_frond( m, Vector(), phase + i / 4 * math.tau + m.rng.uniform( -0.3, 0.3 ), m.rng.uniform( 0.38, 0.5 ),
-					m.rng.uniform( 1.3, 1.6 ), 9, 0.075, m.rng.choice( ( "fern", "leaf" ) ) )
-
-
-def build_fern_full( m ):
-	phase = m.rng.uniform( 0, math.tau )
-	count = 12
-	for i in range( count ):
-		upright = i % 3 == 0
-		fern_frond( m, Vector( ( m.rng.uniform( -0.03, 0.03 ), m.rng.uniform( -0.03, 0.03 ), 0 ) ),
-					phase + i / count * math.tau + m.rng.uniform( -0.2, 0.2 ),
-					m.rng.uniform( 0.95, 1.2 ) if upright else m.rng.uniform( 0.8, 1.05 ),
-					m.rng.uniform( 1.5, 1.8 ) if upright else m.rng.uniform( 0.95, 1.3 ),
-					15, 0.14, m.rng.choice( ( "fern", "fern", "leaf" ) ) )
-
-
 def build_redwood_sorrel( m ):
 	clover( m, Vector(), 0.07, 0.03, back_swatch="sorrel_back", lean_amount=0.0 )
 
@@ -593,9 +559,6 @@ MODELS = [
 	( "weed_rosette", "cloverHills", 106, build_weed_rosette ),
 	( "weed_dandelion", "cloverHills", 107, build_weed_dandelion ),
 	( "weed_broadleaf", "cloverHills", 108, build_weed_broadleaf ),
-	( "fern_fiddlehead", "redwoodForest", 201, build_fern_fiddlehead, 2.5 ),
-	( "fern_young", "redwoodForest", 202, build_fern_young, 2.0 ),
-	( "fern_full", "redwoodForest", 203, build_fern_full ),
 	( "redwood_sorrel", "redwoodForest", 204, build_redwood_sorrel, 4.5 ),
 	( "mushroom", "redwoodForest", 205, build_mushroom, 2.5 ),
 	( "tumbleweed_small", "amberDunes", 301, build_tumbleweed_small ),
@@ -648,9 +611,16 @@ def to_object( name: str, m: PlantMesh, material ) -> bpy.types.Object:
 	for poly in mesh.polygons:
 		uv = _swatch_uv( m.face_swatch[poly.index] )
 		phase = m.face_phase[poly.index]
+		# the face's own two axes: its texels lie flat on it at TEXELS_PER_METER
+		n = poly.normal
+		ax = Vector( ( 0, 0, 1 ) ) if abs( n.z ) < 0.7 else Vector( ( 1, 0, 0 ) )
+		ay = n.cross( ax )
+		ay = ay.normalized() if ay.length > 1e-6 else Vector( ( 0, 1, 0 ) )
+		ax = ay.cross( n ).normalized() if n.length > 1e-6 else ax
 		for li in poly.loop_indices:
-			uv_layer.data[li].uv = uv
-			z = mesh.vertices[mesh.loops[li].vertex_index].co.z
+			co = mesh.vertices[mesh.loops[li].vertex_index].co
+			uv_layer.data[li].uv = _spread_uv( uv, co.dot( ax ), co.dot( ay ) )
+			z = co.z
 			color_attr.data[li].color = ( max( 0.0, z / z_top ), phase, m.model_random, 1.0 )
 
 	mesh.materials.append( material )

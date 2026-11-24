@@ -68,8 +68,10 @@
         "LogChop": false,
         "MaxHealth": 12,
         "CurrentHealth": 12,
-        "WoodDropMin": 2,
-        "WoodDropMax": 4
+        "FiberDropMin": 1,
+        "FiberDropMax": 2,
+        "WoodDropMin": 1,
+        "WoodDropMax": 2
       }
     ],
     "Children": []

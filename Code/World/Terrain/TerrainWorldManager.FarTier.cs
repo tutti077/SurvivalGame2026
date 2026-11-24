@@ -280,7 +280,7 @@ public sealed partial class TerrainWorldManager
 		ApplyFarCanopyTint( g, settings, options, tint );
 		var cards = impostors
 			? PlanFarCards( settings, backend, coord, size, nearChunkSize, options, impostorHeightMeters )
-			: Array.Empty<Transform>();
+			: Array.Empty<FarCard>();
 		BuildFarCardGeometry( cards, out var cardVertices, out var cardIndices );
 		return new FarSample { Geometry = g, CardVertices = cardVertices, CardIndices = cardIndices, CardCount = cards.Length };
 	}
@@ -333,6 +333,9 @@ public sealed partial class TerrainWorldManager
 	/// canopy green, so the 2-8 km band shows forests without a single tree drawn. Same patch noise as the
 	/// tree planner (<see cref="TerrainVegetationScatter.SampleForestCover01"/>), evaluated at the far vertices.
 	/// </summary>
+	/// <summary>Share of the far Redwood floor that reads as lying in tree shade (the canopy channel's floor there).</summary>
+	const float FarRedwoodFloorShade01 = 0.7f;
+
 	static void ApplyFarCanopyTint( TerrainMeshBuilder.ChunkGeometry g, TerrainPreviewSettings settings, TerrainVegetationScatter.Options options, float tint01 )
 	{
 		var tint = Math.Clamp( tint01, 0f, 1f );
@@ -353,8 +356,10 @@ public sealed partial class TerrainWorldManager
 			if ( cover <= 0.01f )
 				continue;
 
-			// The splat's canopy channel: pixel_lit darkens toward Splat Canopy Color by it
-			g.Splat[i].z = cover * tint;
+			// The splat's canopy channel: pixel_lit darkens toward Splat Canopy Color by it. Redwood floor is shaded by
+			// its trees however few they are (the near floor lies in their shadow; far trees cast none), so it takes a fixed
+			// share of the shader's Redwood shade instead of following the tree count (see pixel_lit SplatRedwoodShade).
+			g.Splat[i].z = biome == TerrainPreviewBiomeId.RedwoodForest ? Math.Max( cover * tint, FarRedwoodFloorShade01 ) : cover * tint;
 		}
 	}
 

@@ -128,7 +128,7 @@
         "__guid": "094877b6-2259-46d5-a06b-9d3dced05163",
         "__enabled": true,
         "Flags": 0,
-        "AutoEnsureTraceCollider": true,
+        "AutoEnsureTraceCollider": false,
         "BaseYieldPerTickHigh": 1,
         "BaseYieldPerTickLow": 1,
         "DisplayName": "Femur",

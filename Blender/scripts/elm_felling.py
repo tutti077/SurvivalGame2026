@@ -36,6 +36,7 @@ LOG_FRICTION, LOG_ELASTICITY = 0.9, 0.35
 LOG_MASS, HALF_MASS = 3000.0, 1500.0  # kg; the tow scales by mass so this only sets how hard a body shove moves it (Mark: pushing was easier than towing)
 HALF_WOOD = (8, 10)
 STUMP_WOOD = (3, 4)
+TREE_FIBER = (4, 6)  # plant fiber from the leaves when the standing tree is felled (Mark 2026-11-19)
 
 ENDGRAIN_RAMP = [(88, 62, 40), (118, 86, 56), (146, 110, 72), (170, 132, 88), (190, 152, 104), (208, 172, 122), (224, 192, 142)]
 

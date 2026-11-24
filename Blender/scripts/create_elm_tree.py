@@ -70,7 +70,8 @@ TEX = 64
 PIXEL_BLOCK = 1
 # Bark is a 256 x 256 design on the same 3.2 m tile (Mark, 2026-10-02: picked "D3" from 256 px options):
 # 4x the texels of the old 64 px bark, ridges 44 per tile (~7 cm, real elm plate width) instead of 11.
-# End grain stays at TEX.
+# End grain: 128 px (no environment texture under 128 px, Mark 2026-11-23; it was TEX = 64).
+GRAIN_TEX = 128
 BARK_TEX = 256
 # v76 bark relief (Mark, 2026-10-02 "make it gorgeous"): the crack net is carved into a CONTINUOUS height field
 # (rolling ridges + grooves with sloped walls), and colour, normal map and roughness all come from that one field.
@@ -2172,7 +2173,7 @@ def main():
 	bark = blender_material(BARK, bark_png, False)
 	leaves_mat = blender_material(LEAVES, leaf_png, True)
 	grain_png = os.path.join(MAT_DIR, GRAIN + ".png")
-	write_png(grain_png, fell.make_endgrain_texture(TEX))
+	write_png(grain_png, fell.make_endgrain_texture(GRAIN_TEX))
 	with open(os.path.join(MAT_DIR, GRAIN + ".vmat"), "w", newline="\n") as f:
 		f.write(VMAT_BARK.replace("elm_bark", GRAIN))
 	grain = blender_material(GRAIN, grain_png, False)
@@ -2274,7 +2275,8 @@ def main():
 						   "StumpModel": f"{ASSET_DIR}/{sname}.vmdl", "StumpTopMeters": fell.STUMP_H,
 						   "FelledLogPrefab": f"{PREFAB_REL}/{LOG}.prefab", "StumpHealth": fell.STUMP_HP,
 						   "StumpWoodMin": fell.STUMP_WOOD[0], "StumpWoodMax": fell.STUMP_WOOD[1],
-						   "WoodDropMin": 0, "WoodDropMax": 0}, False)
+						   "WoodDropMin": 0, "WoodDropMax": 0,
+						   "FiberDropMin": fell.TREE_FIBER[0], "FiberDropMax": fell.TREE_FIBER[1]}, False)
 		pieces.append(stump)
 
 	for o in pieces:

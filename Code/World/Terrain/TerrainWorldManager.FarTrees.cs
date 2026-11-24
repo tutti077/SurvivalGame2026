@@ -101,6 +101,8 @@ public sealed partial class TerrainWorldManager
 	/// </summary>
 	const int FarFadeBands = 8;
 	RenderAttributes[] _farBandAttributes;
+	/// <summary>Whether the last built list carried fog: a switch of the fog rebuilds the list.</summary>
+	bool _farFogOn;
 	readonly Dictionary<TerrainChunkCoord, float> _farShownSince = new();
 	readonly Dictionary<TerrainChunkCoord, float> _farLeavingSince = new();
 
@@ -178,7 +180,9 @@ public sealed partial class TerrainWorldManager
 		var chunkQuarter = Math.Max( 32f, ChunkSizeMeters ) * 0.25f;
 		if ( !_farDirty )
 		{
-			if ( _frameIndex - _farLastBuildFrame >= FarRebuildMaxFrames )
+			if ( AerialPerspective.TryGetFog( out _, out _, out _, out _, out _, out _, out _, out _ ) != _farFogOn )
+				_farDirty = true;
+			else if ( _frameIndex - _farLastBuildFrame >= FarRebuildMaxFrames )
 				_farDirty = true;
 			else if ( (_farCameraMeters - _farBuildCamMeters).LengthSquared > chunkQuarter * chunkQuarter )
 				_farDirty = true;
@@ -274,6 +278,8 @@ public sealed partial class TerrainWorldManager
 				_farLeavingSince.Remove( coord );
 				continue;
 			}
+			if ( dSq <= rangeSq )
+				WantFarSmoke( coord );
 
 			float fade;
 			if ( dSq <= rangeSq )
@@ -326,6 +332,8 @@ public sealed partial class TerrainWorldManager
 			}
 		}
 
+		SyncFarSmoke();
+
 		if ( _farBandAttributes is null || _farBandAttributes.Length != FarFadeBands )
 		{
 			_farBandAttributes = new RenderAttributes[FarFadeBands];
@@ -334,6 +342,29 @@ public sealed partial class TerrainWorldManager
 				_farBandAttributes[b] = new RenderAttributes();
 				_farBandAttributes[b].Set( "TreeFade", (b + 1) / (float)FarFadeBands );
 			}
+		}
+
+		// The ring is not in the scene depth the fog pass reads, so it draws after that pass and fogs itself
+		// (pixel_lit.shader RingFog) with the pass's numbers. Refreshed on every rebuild (at least every
+		// FarRebuildMaxFrames; the sky moves slowly) and at once when the fog is switched.
+		var fogOn = AerialPerspective.TryGetFog( out var fogShape, out var fogZenith, out var fogHorizon, out var fogSunGlow, out var fogSunDirection, out var fogMist, out var fogMistShape, out var fogMistSun );
+		_farFogOn = fogOn;
+		for ( var b = 0; b < FarFadeBands; b++ )
+		{
+			_farBandAttributes[b].Set( "RingFogShape", fogOn ? fogShape : Vector4.Zero );
+			_farBandAttributes[b].Set( "RingFogZenith", fogZenith );
+			_farBandAttributes[b].Set( "RingFogHorizon", fogHorizon );
+			_farBandAttributes[b].Set( "RingFogSunGlow", fogSunGlow );
+			_farBandAttributes[b].Set( "RingFogSunDirection", fogSunDirection );
+			_farBandAttributes[b].Set( "RingFogMistTint", new Vector3( fogMist.x, fogMist.y, fogMist.z ) );
+			_farBandAttributes[b].Set( "RingFogMistInverse", fogMistShape.w );
+			_farBandAttributes[b].Set( "RingFogMistStart", fogMistShape.x );
+			_farBandAttributes[b].Set( "RingFogMistMax", fogMistShape.y );
+			_farBandAttributes[b].Set( "RingFogMistFloor", fogOn ? AerialPerspective.BiomeMistFloor : 0f );
+			_farBandAttributes[b].Set( "RingFogMistSunTint", fogMistSun );
+			_farBandAttributes[b].Set( "RingFogColorHold", fogMistShape.z );
+			_farBandAttributes[b].Set( "RingFogMax", fogOn ? fogMist.w : 1f );
+			_farBandAttributes[b].Set( "RingFogTint", BiomeAtmosphereCatalog.FogTint );
 		}
 
 		Stats.FarGatherMs = Math.Max( Stats.FarGatherMs, (float)swGather.Elapsed.TotalMilliseconds );
@@ -443,14 +474,25 @@ public sealed partial class TerrainWorldManager
 	}
 
 	/// <summary>A landed plan becomes per-model transform arrays (engine units), ready for the hook. Main thread, once per chunk.</summary>
-	FarDrawBatch[] BuildFarBatches( TerrainVegetationScatter.FarTree[] trees )
+	FarDrawBatch[] BuildFarBatches( TerrainVegetationScatter.FarTree[] trees, out List<FarSmokeSite> smokeSites )
 	{
+		smokeSites = null;
 		if ( trees.Length == 0 )
 			return Array.Empty<FarDrawBatch>();
 
 		var groups = new Dictionary<Model, List<Transform>>();
 		foreach ( var tree in trees )
 		{
+			// A landmark under a smoke column (the crashed pod) is not a model in the ring: its column stands instead
+			if ( IsFarSmokePrefab( tree.PrefabPath ) )
+			{
+				smokeSites ??= new List<FarSmokeSite>();
+				smokeSites.Add( new FarSmokeSite( tree.PrefabPath, new Transform(
+					TerrainWorldUnits.MetersToEngine( new Vector3( tree.X, tree.Y, tree.HeightMeters ) ),
+					tree.Rotation ?? Rotation.FromYaw( tree.YawDegrees ) ) ) );
+				continue;
+			}
+
 			var model = _farFallbackModel;
 			if ( tree.PrefabPath is not null && _farModelsByPrefab is not null && _farModelsByPrefab.TryGetValue( tree.PrefabPath, out var own ) )
 				model = own;
@@ -499,7 +541,8 @@ public sealed partial class TerrainWorldManager
 			{
 				_farPlanInFlight.Remove( coord );
 				_farPlans[coord] = trees;
-				_farBatches[coord] = BuildFarBatches( trees );
+				_farBatches[coord] = BuildFarBatches( trees, out var smokeSites );
+				SetFarSmokeSites( coord, smokeSites );
 				_farDirty = true;
 			}
 		}
@@ -621,6 +664,7 @@ public sealed partial class TerrainWorldManager
 		{
 			_farPlans.Remove( coord );
 			_farBatches.Remove( coord );
+			SetFarSmokeSites( coord, null );
 			_farShownSince.Remove( coord );
 			_farLeavingSince.Remove( coord );
 		}
@@ -643,6 +687,7 @@ public sealed partial class TerrainWorldManager
 		_farActive = false;
 		_farPlans.Clear();
 		_farBatches.Clear();
+		ClearFarSmoke();
 		_farPlanInFlight.Clear();
 		_farPlanWanted.Clear();
 		_farPlanTasks.Clear();

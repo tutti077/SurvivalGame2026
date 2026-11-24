@@ -42,13 +42,14 @@ PREVIEW_DIR = os.path.join(elm.ROOT, "Blender", "blenderprojects", "elm_sapling_
 BLEND_OUT = os.path.join(elm.ROOT, "Blender", "blenderprojects", f"environment_elmsapling{TAG}.blend")
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 
-BARK_TILE = 1.0      # m per 64 px tile = ~1.6 cm per texel on a thin stem
+BARK_TILE = 1.0      # m per tile = ~0.8 cm per texel on a thin stem
+SAPLING_TEX = 128    # bark + leaf card; no environment texture under 128 px (Mark 2026-11-23; they were 64)
 VOXEL = 0.004
 WOOD_TRIS = 2200
 CARD_LEN = 0.55
 STICK_R = 0.02       # every branch and the trunk above its base: one thickness (before height scaling)
 BASE_R = 0.032       # slightly thicker at the very bottom of the trunk
-HP, WOOD = 12, (2, 4)
+HP, WOOD, FIBER = 12, (1, 2), (1, 2)   # half wood, half plant fiber (Mark 2026-11-19)
 # LOD chain, same format as create_elm_tree.TREE_LODS: (switch_threshold, wood tris, cards kept, card scale)
 SAPLING_LODS = [
 	(0.0, None, 1.0, 1.0),
@@ -78,7 +79,7 @@ def make_leaf_texture():
 	the cards): each leaf is one flat tone with a little per-leaf variation, a paler midrib and faint
 	darker lateral veins; small serration teeth."""
 	rng = random.Random(9)
-	TEX = elm.TEX
+	TEX = SAPLING_TEX
 	px, py = np.meshgrid((np.arange(TEX) + 0.5) / TEX, 1.0 - (np.arange(TEX) + 0.5) / TEX)
 	tone = np.full((TEX, TEX), -1)
 	leaves = []
@@ -121,14 +122,14 @@ def make_sapling_bark():
 	"""Smooth young-elm bark: pale grey in faint vertical tonal streaks, with scattered tiny dark
 	vertical dashes (lenticels, 1 px wide, 2-4 px tall), each with a lighter pixel above it."""
 	rng = np.random.default_rng(17)
-	T = elm.TEX
+	T = SAPLING_TEX
 	x = np.arange(T)
 	streak = np.zeros((T, T))
 	for k in range(3):                                       # tile-safe vertical streaks
 		streak += np.sin(2 * math.pi * ((k + 2) * x / T + rng.random()))[None, :] / (k + 1)
 	idx = np.clip(np.round(2 + streak * 0.9 + rng.normal(0, 0.35, (T, T))), 0, 4).astype(int)
 	rgb = np.array(SAPLING_BARK, float)[idx]
-	for _ in range(46):
+	for _ in range(46 * (T // 64) ** 2):
 		cx, cy, h = rng.integers(0, T), rng.integers(0, T), rng.integers(2, 5)
 		for dy in range(h):
 			rgb[(cy + dy) % T, cx] = DASH[0] if 0 < dy < h - 1 or h == 2 else DASH[1]
@@ -460,7 +461,8 @@ def main():
 			o.hide_render = True
 			o.hide_set(True)
 		fell.write_prefab(os.path.join(PREFAB_DIR, name + ".prefab"), name, f"{ASSET_DIR}/{name}.vmdl",
-						  {"MaxHealth": HP, "CurrentHealth": HP, "WoodDropMin": WOOD[0], "WoodDropMax": WOOD[1]},
+						  {"MaxHealth": HP, "CurrentHealth": HP, "WoodDropMin": WOOD[0], "WoodDropMax": WOOD[1],
+						   "FiberDropMin": FIBER[0], "FiberDropMax": FIBER[1]},
 						  False)
 	for i, (w, l) in enumerate(made.values()):
 		w.location.x = l.location.x = (i - 2) * 2.5

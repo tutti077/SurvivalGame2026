@@ -17,20 +17,22 @@ public sealed partial class TerrainWorldManager
 	[Property, Group( "Vegetation" ), Title( "Grass — Scatter Grass" )]
 	public bool VegetationGrassEnabled { get; set; } = true;
 
-	/// <summary>The four blade fans from Blender/scripts/create_grass_clump.py — used when the scene lists none.</summary>
+	/// <summary>The six low-poly tufts from Blender/scripts/create_grass_clump.py — used when the scene lists none.</summary>
 	static readonly string[] DefaultGrassClumpModels =
 	[
-		"models/environment/cloverHills/groundFoliage/grass/grass_clump1.vmdl",
-		"models/environment/cloverHills/groundFoliage/grass/grass_clump2.vmdl",
-		"models/environment/cloverHills/groundFoliage/grass/grass_clump3.vmdl",
-		"models/environment/cloverHills/groundFoliage/grass/grass_clump4.vmdl",
+		"models/environment/cloverHills/groundFoliage/grass/grass_clump1_v2.vmdl",
+		"models/environment/cloverHills/groundFoliage/grass/grass_clump2_v2.vmdl",
+		"models/environment/cloverHills/groundFoliage/grass/grass_clump3_v2.vmdl",
+		"models/environment/cloverHills/groundFoliage/grass/grass_clump4_v2.vmdl",
+		"models/environment/cloverHills/groundFoliage/grass/grass_clump5_v2.vmdl",
+		"models/environment/cloverHills/groundFoliage/grass/grass_clump6_v2.vmdl",
 	];
 
-	[Property, Group( "Vegetation" ), Title( "Grass — Clump Models" ), Description( "Picked at random per clump. Empty = the built-in grass_clump1–4 (a scene saved before this property existed loads it as empty)." )]
+	[Property, Group( "Vegetation" ), Title( "Grass — Clump Models" ), Description( "Picked at random per clump. Empty = the built-in grass_clump1–6_v2 (a scene saved before this property existed loads it as empty)." )]
 	public List<string> VegetationGrassClumpModels { get; set; } = [.. DefaultGrassClumpModels];
 
-	[Property, Group( "Vegetation" ), Title( "Grass — Range (m)" ), Range( 0f, 600f ), Step( 8f ), Description( "Radius of the grass ring the engine streams around the camera. The engine's infinite mode always keeps 12 tiles around the camera, so this picks the clutter tile size (snapped to the engine's options: 77 / 153 / 307 / 614 m). Every clump in the ring costs vertex work even when the shader has culled it, so the ring is the grass GPU cost." )]
-	public float VegetationGrassRangeMeters { get; set; } = 150f;
+	[Property, Group( "Vegetation" ), Title( "Grass — Range (m)" ), Range( 0f, 600f ), Step( 8f ), Description( "Radius of the grass ring the engine streams around the camera. The engine's infinite mode always keeps 12 tiles around the camera, so this picks the clutter tile size (snapped to the engine's options: 77 / 153 / 307 / 614 m). Every clump in the ring costs vertex work even when the shader has culled it, so the ring is the grass GPU cost. 77 m since 2026-11-19; the grass_blade material's Thin Cull Range must stay inside it." )]
+	public float VegetationGrassRangeMeters { get; set; } = 77f;
 
 	[Property, Group( "Vegetation" ), Title( "Grass — Clumps Per m²" ), Range( 0.1f, 8f ), Step( 0.1f )]
 	public float VegetationGrassClumpsPerSquareMeter { get; set; } = 1.5f;

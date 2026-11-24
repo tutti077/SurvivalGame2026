@@ -47,7 +47,7 @@
         "__guid": "f8788f13-da90-4d4e-ace1-ba98ba0fb4ea",
         "__enabled": true,
         "Flags": 0,
-        "AutoEnsureTraceCollider": true,
+        "AutoEnsureTraceCollider": false,
         "BaseYieldPerTickHigh": 1,
         "BaseYieldPerTickLow": 1,
         "HarvestYields": [

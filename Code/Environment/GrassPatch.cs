@@ -26,7 +26,7 @@ public sealed class GrassPatch : Component
 	[Property, Group( "Patch" ), Title( "Seed" )]
 	public int Seed { get; set; } = 1;
 
-	[Property, Group( "Clumps" ), Title( "Clump Models" ), Description( "Picked at random per clump. grass_clump1–4 (7/5/9/3 blades) are the single-plane blade fans from Blender/scripts/create_grass_clump.py." )]
+	[Property, Group( "Clumps" ), Title( "Clump Models" ), Description( "Picked at random per clump. grass_clump1–6_v2 are the low-poly tufts from Blender/scripts/create_grass_clump.py." )]
 	public List<Model> ClumpModels { get; set; } = new();
 
 	[Property, Group( "Clumps" ), Title( "Clumps Per m²" ), Range( 0.1f, 12f ), Step( 0.1f )]

@@ -73,6 +73,8 @@
         "StumpHealth": 12,
         "StumpWoodMin": 3,
         "StumpWoodMax": 4,
+        "FiberDropMin": 4,
+        "FiberDropMax": 6,
         "WoodDropMin": 16,
         "WoodDropMax": 20,
         "FellTipSpeedMeters": 0.6,

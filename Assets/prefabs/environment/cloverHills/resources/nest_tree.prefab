@@ -1,0 +1,113 @@
+{
+  "RootObject": {
+    "__guid": "d838cdf6-3020-583e-822b-bfaed295a284",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "nest_tree",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "",
+    "Enabled": true,
+    "NetworkMode": 1,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 1,
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "df1818c7-d12e-52c1-b42a-567f8a84be4a",
+        "__enabled": true,
+        "Flags": 0,
+        "BodyGroups": 18446744073709551615,
+        "CreateAttachments": false,
+        "LodOverride": null,
+        "MaterialGroup": null,
+        "MaterialOverride": null,
+        "Materials": null,
+        "Model": "models/environment/cloverHills/resources/nest_tree.vmdl",
+        "RenderOptions": {
+          "GameLayer": true,
+          "OverlayLayer": false,
+          "BloomLayer": false,
+          "AfterUILayer": false
+        },
+        "RenderType": "On",
+        "Tint": "1,1,1,1"
+      },
+      {
+        "__type": "Survival.ResourceItemDefinition",
+        "__guid": "a45e5fd0-32b1-5d88-afad-68b5096dd3b2",
+        "__enabled": true,
+        "Flags": 0,
+        "AutoEnsureTraceCollider": true,
+        "BaseYieldPerTickHigh": 1,
+        "BaseYieldPerTickLow": 1,
+        "HarvestYields": [
+          {
+            "AmountHigh": 2,
+            "AmountLow": 0,
+            "ChancePercent": 100,
+            "ResourceId": "food_egg"
+          },
+          {
+            "AmountHigh": 4,
+            "AmountLow": 0,
+            "ChancePercent": 100,
+            "ResourceId": "resource_feathers"
+          }
+        ],
+        "DisplayName": "Bird Nest",
+        "FallbackColor": "0.6,0.5,0.32,1",
+        "HandHarvestRange": 150,
+        "Harvestable": true,
+        "HarvestTicksUntilGone": 1,
+        "HideModelWhenDepleted": true,
+        "Icon": "ui/items/food_egg.png",
+        "LogHarvest": false,
+        "MaxStack": 10,
+        "MinimumToolTier": 0,
+        "ResourceId": "world_bird_nest",
+        "RespawnRateSeconds": 900,
+        "ToolTypeRequired": "Hand"
+      },
+      {
+        "__type": "Survival.BirdNest",
+        "__guid": "7b94cc11-753d-5080-9854-139d05fef305",
+        "__enabled": true,
+        "Flags": 0,
+        "TreeReachMeters": 4.0
+      }
+    ],
+    "Children": [],
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

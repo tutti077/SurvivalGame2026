@@ -150,7 +150,7 @@ public sealed partial class TerrainWorldManager
 		Stats.SpawnGateBlocked = _unloadingChunks.Count;
 	}
 
-	/// <summary>A small pickup (rock, stick, forage): drawn only within Pickup Visible Range (m). Trees, beehives and the landmark boulders / spires are not.</summary>
+	/// <summary>A small pickup (rock, stick, forage): drawn only within Pickup Visible Range (m). Trees, beehives, tree nests, the landmark boulders / spires and the landmark points of interest (pois.json: the crashed pod and its smoke) are not.</summary>
 	static bool IsPickupPlan( in TerrainVegetationScatter.SpawnPlan plan )
-		=> !plan.Sapling && plan.Kind is not ("tree" or "beehive" or "boulder" or "spire");
+		=> !plan.Sapling && plan.Kind is not ("tree" or "beehive" or "treenest" or "boulder" or "spire") && !PoiCatalog.IsLandmark( plan.Kind );
 }

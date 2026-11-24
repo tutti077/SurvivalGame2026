@@ -170,8 +170,23 @@ public sealed class MineableRock : Component
 		var mask = BrokenMask | (1 << index) | UnsupportedAfter( BrokenMask | (1 << index) );
 		if ( LogMining )
 			Log.Info( $"[MineableRock] {GameObject.Name} section {index} broke, mask {Convert.ToString( BrokenMask, 2 )} -> {Convert.ToString( mask, 2 )}" );
+		// builds anchored to the sections about to go let go of them (bounds taken while they still stand)
+		var fresh = mask & ~BrokenMask;
+		BBox goneBounds = default;
+		var any = false;
+		for ( var i = 0; i < Sections.Count; i++ )
+		{
+			var renderer = (fresh & (1 << i)) != 0 ? Sections[i].Components.Get<ModelRenderer>() : null;
+			if ( renderer is null )
+				continue;
+			goneBounds = any ? goneBounds.AddBBox( renderer.Bounds ) : renderer.Bounds;
+			any = true;
+		}
+
 		ApplyBroken( mask, true, s => s == index ? Roll( StoneMin, StoneMax ) : Roll( CollapseStoneMin, CollapseStoneMax ), miner );
 		Broadcast( mask );
+		if ( any )
+			BuildStructuralIntegrity.HostOnWorldAnchorChanged( Scene, goneBounds );
 		return true;
 	}
 

@@ -52,6 +52,12 @@
         "BaseYieldPerTickLow": 1,
         "HarvestYields": [
           {
+            "AmountHigh": 1,
+            "AmountLow": 1,
+            "ChancePercent": 100,
+            "ResourceId": "resource_beehive"
+          },
+          {
             "AmountHigh": 3,
             "AmountLow": 1,
             "ChancePercent": 100,

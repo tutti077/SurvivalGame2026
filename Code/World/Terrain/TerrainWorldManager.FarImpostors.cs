@@ -103,7 +103,7 @@ public sealed partial class TerrainWorldManager
 	}
 
 	/// <summary>One card in local units (1 m = 40 u, origin at the ground): 20 vertices, 30 indices.</summary>
-	static readonly Vertex[] FarCardTemplate = BuildFarCardTemplate();
+	// Built per far chunk, not cached in a static: a hot-reload keeps static values, so an edited card kept its old shape until the editor restarted (2026-11-23)
 	static readonly int[] FarCardTemplateIndices = BuildFarCardTemplateIndices();
 
 	static Vertex[] BuildFarCardTemplate()
@@ -112,7 +112,8 @@ public sealed partial class TerrainWorldManager
 		var u = TerrainWorldUnits.MetersToEngine( 1f );
 		float cw = 7.5f * u, c0 = 6f * u, c1 = 21f * u, tw = 0.7f * u, t1 = 8f * u, cz = 15f * u;
 
-		// The card is textured (Blender/scripts/create_far_card_textures.py → far_tree_card_{color,mask,normal}.png):
+		// The card is textured (Blender/scripts/create_far_card_textures.py → far_tree_card_{color,mask,normal}.png, the
+		// left half of far_tree_cards_atlas_*.png):
 		// rows 0-191 (v 0 .. 0.75) a ragged round crown with a SPHERE normal map, rows 205-255 (v 0.8 .. 1) a bark strip
 		// with a cylinder normal map. Vertex colour is white / alpha 1 (pure texture); each quad's tangent runs along its
 		// own U axis and its normal is the face normal, so the normal map — not the plate — decides how the sun hits it
@@ -122,10 +123,11 @@ public sealed partial class TerrainWorldManager
 		void Quad( Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 normal, Vector3 tangentU, float v0, float v1 )
 		{
 			var tangent = new Vector4( tangentU.x, tangentU.y, tangentU.z, 1f );
-			verts.Add( new Vertex { Position = a, Normal = normal, Tangent = tangent, TexCoord0 = new Vector2( 0f, v0 ), Color = white } );
-			verts.Add( new Vertex { Position = b, Normal = normal, Tangent = tangent, TexCoord0 = new Vector2( 1f, v0 ), Color = white } );
-			verts.Add( new Vertex { Position = c, Normal = normal, Tangent = tangent, TexCoord0 = new Vector2( 1f, v1 ), Color = white } );
-			verts.Add( new Vertex { Position = d, Normal = normal, Tangent = tangent, TexCoord0 = new Vector2( 0f, v1 ), Color = white } );
+			// u 0.002-0.498: the elm is the left half of the atlas (create_far_card_atlas.py), inset a texel off the seam
+			verts.Add( new Vertex { Position = a, Normal = normal, Tangent = tangent, TexCoord0 = new Vector2( 0.002f, v0 ), Color = white } );
+			verts.Add( new Vertex { Position = b, Normal = normal, Tangent = tangent, TexCoord0 = new Vector2( 0.498f, v0 ), Color = white } );
+			verts.Add( new Vertex { Position = c, Normal = normal, Tangent = tangent, TexCoord0 = new Vector2( 0.498f, v1 ), Color = white } );
+			verts.Add( new Vertex { Position = d, Normal = normal, Tangent = tangent, TexCoord0 = new Vector2( 0.002f, v1 ), Color = white } );
 		}
 
 		const float crownBottom = 0.75f, crownTop = 0f, trunkBottom = 1f, trunkTop = 0.8f;
@@ -138,6 +140,65 @@ public sealed partial class TerrainWorldManager
 		Quad( new Vector3( -tw, 0f, 0f ), new Vector3( tw, 0f, 0f ), new Vector3( tw, 0f, t1 ), new Vector3( -tw, 0f, t1 ), Vector3.Forward.Cross( Vector3.Up ).Normal, Vector3.Forward, trunkBottom, trunkTop );
 		Quad( new Vector3( 0f, -tw, 0f ), new Vector3( 0f, tw, 0f ), new Vector3( 0f, tw, t1 ), new Vector3( 0f, -tw, t1 ), Vector3.Forward, Vector3.Left, trunkBottom, trunkTop );
 		return verts.ToArray();
+	}
+
+	/// <summary>
+	/// The conifer card (Redwood Forest: redwoods and firs), 1 m tall at scale 1 so a card's scale is the tree's height in
+	/// metres. Mark 2026-11-23: "the LOD of the redwood trees resembles the trees in clover hills", then "the LOD redwood
+	/// needs to very closely resemble the real redwoods because we can visibly see it change, the goal is to change it
+	/// without players even noticing". Every far tree used to be the elm's round 22 m card. Same vertex / index count and
+	/// the same material as the elm card (<see cref="BuildFarCardTemplate"/>): three crossed full-height quads, 0.24 x the
+	/// height wide, showing the right half of the atlas - a whole redwood drawn from the real tree's bark and needle
+	/// colours (Blender/scripts/create_far_card_atlas.py: red trunk bare for the lowest third, tiers of drooping boughs
+	/// narrowing to the tip). The other two quads of the count are empty.
+	/// </summary>
+
+	static Vertex[] BuildFarConiferCardTemplate()
+	{
+		var verts = new List<Vertex>( 20 );
+		var u = TerrainWorldUnits.MetersToEngine( 1f );
+		float half = 0.12f * u, top = 1f * u;
+		var white = new Color( 1f, 1f, 1f, 1f );
+
+		void Quad( Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 normal, Vector3 tangentU )
+		{
+			var tangent = new Vector4( tangentU.x, tangentU.y, tangentU.z, 1f );
+			// u 0.502-0.998: the right half of the atlas; v 1 = the ground, 0 = the tip
+			verts.Add( new Vertex { Position = a, Normal = normal, Tangent = tangent, TexCoord0 = new Vector2( 0.502f, 1f ), Color = white } );
+			verts.Add( new Vertex { Position = b, Normal = normal, Tangent = tangent, TexCoord0 = new Vector2( 0.998f, 1f ), Color = white } );
+			verts.Add( new Vertex { Position = c, Normal = normal, Tangent = tangent, TexCoord0 = new Vector2( 0.998f, 0f ), Color = white } );
+			verts.Add( new Vertex { Position = d, Normal = normal, Tangent = tangent, TexCoord0 = new Vector2( 0.502f, 0f ), Color = white } );
+		}
+
+		// Three planes through the trunk line, 60 degrees apart: the tree reads the same from every side
+		for ( var k = 0; k < 3; k++ )
+		{
+			var along = Rotation.FromYaw( k * 60f ) * Vector3.Forward;
+			Quad( (-along * half).WithZ( 0f ), (along * half).WithZ( 0f ), (along * half).WithZ( top ), (-along * half).WithZ( top ), along.Cross( Vector3.Up ).Normal, along );
+		}
+		// The template is 20 vertices like the elm's (one shared index list): the last two quads have no area
+		while ( verts.Count < 20 )
+			verts.Add( new Vertex { Position = Vector3.Zero, Normal = Vector3.Up, Tangent = new Vector4( 1f, 0f, 0f, 1f ), TexCoord0 = new Vector2( 0.75f, 0.5f ), Color = white } );
+		return verts.ToArray();
+	}
+
+	/// <summary>One planted far card: where, and which of the two templates.</summary>
+	readonly record struct FarCard( Transform Transform, bool Conifer );
+
+	/// <summary>
+	/// A conifer of Redwood Forest and its height at scale 1 in metres (Blender/scripts/create_redwood_trees.py: redwoods
+	/// 81-101 m, Douglas firs 18-29 m), by the prefab's name.
+	/// </summary>
+	static bool TryGetConiferHeight( string prefabPath, out float heightMeters )
+	{
+		heightMeters = 0f;
+		if ( string.IsNullOrEmpty( prefabPath ) )
+			return false;
+		if ( prefabPath.Contains( "environment_redwood", StringComparison.OrdinalIgnoreCase ) )
+			heightMeters = 90f;
+		else if ( prefabPath.Contains( "environment_fir", StringComparison.OrdinalIgnoreCase ) )
+			heightMeters = 24f;
+		return heightMeters > 0f;
 	}
 
 	static int[] BuildFarCardTemplateIndices()
@@ -159,7 +220,7 @@ public sealed partial class TerrainWorldManager
 	/// card stands exactly where the tree will stand when you fly to it (Mark 2026-10-20: "pick out a tree from 3 km
 	/// away and fly toward it"). Chunk-local engine units; the card is the elm's 22 m at scale 1, times the tree's own scale.
 	/// </summary>
-	static Transform[] PlanFarCards( TerrainPreviewSettings settings, ITerrainPreviewBackend backend, TerrainChunkCoord coord, float size, float nearChunkSize, TerrainVegetationScatter.Options options, float heightMeters )
+	static FarCard[] PlanFarCards( TerrainPreviewSettings settings, ITerrainPreviewBackend backend, TerrainChunkCoord coord, float size, float nearChunkSize, TerrainVegetationScatter.Options options, float heightMeters )
 	{
 		var perSide = Math.Max( 1, (int)MathF.Round( size / nearChunkSize ) );
 		var worldRadius = settings.TotalWorldRadiusMeters;
@@ -167,7 +228,7 @@ public sealed partial class TerrainWorldManager
 		var minY = -worldRadius + (coord.Y * size);
 		var scaleUnits = heightMeters / 22f;
 		var scratch = new List<TerrainVegetationScatter.FarTree>();
-		var result = new List<Transform>( 64 );
+		var result = new List<FarCard>( 64 );
 		for ( var iy = 0; iy < perSide; iy++ )
 		{
 			for ( var ix = 0; ix < perSide; ix++ )
@@ -177,8 +238,12 @@ public sealed partial class TerrainWorldManager
 				TerrainVegetationScatter.EnumerateTrees( settings, backend, near, nearChunkSize, options, scratch );
 				foreach ( var tree in scratch )
 				{
+					// Trees only: the planner also lists the far-ring landmarks (spires, crashed pods), which are no tree
+					if ( tree.PrefabPath is null || !tree.PrefabPath.Contains( "/trees/", StringComparison.OrdinalIgnoreCase ) )
+						continue;
 					var pos = TerrainWorldUnits.MetersToEngine( new Vector3( tree.X - minX, tree.Y - minY, tree.HeightMeters ) );
-					result.Add( new Transform( pos, Rotation.FromYaw( tree.YawDegrees ), tree.ScaleMul * scaleUnits ) );
+					var conifer = TryGetConiferHeight( tree.PrefabPath, out var coniferHeight );
+					result.Add( new FarCard( new Transform( pos, Rotation.FromYaw( tree.YawDegrees ), conifer ? tree.ScaleMul * coniferHeight : tree.ScaleMul * scaleUnits ), conifer ) );
 				}
 			}
 		}
@@ -186,7 +251,7 @@ public sealed partial class TerrainWorldManager
 	}
 
 	/// <summary>Worker: the planted cards as one vertex / index array pair in chunk-local units (the far chunk's second mesh).</summary>
-	static void BuildFarCardGeometry( Transform[] cards, out Vertex[] vertices, out int[] indices )
+	static void BuildFarCardGeometry( FarCard[] cards, out Vertex[] vertices, out int[] indices )
 	{
 		if ( cards is null || cards.Length == 0 )
 		{
@@ -195,13 +260,16 @@ public sealed partial class TerrainWorldManager
 			return;
 		}
 
-		var template = FarCardTemplate;
 		var templateIndices = FarCardTemplateIndices;
+		var elmTemplate = BuildFarCardTemplate();
+		var coniferTemplate = BuildFarConiferCardTemplate();
+		var template = elmTemplate;
 		vertices = new Vertex[cards.Length * template.Length];
 		indices = new int[cards.Length * templateIndices.Length];
 		for ( var c = 0; c < cards.Length; c++ )
 		{
-			var t = cards[c];
+			var t = cards[c].Transform;
+			template = cards[c].Conifer ? coniferTemplate : elmTemplate;   // both 20 vertices, the same index list
 			var vBase = c * template.Length;
 			for ( var v = 0; v < template.Length; v++ )
 			{
