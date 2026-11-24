@@ -1,0 +1,175 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:modeldoc30:version{8c2d7a91-9c42-4bf0-883a-5a3b1762d4f1} -->
+// crushed, pinched-off pipe end - Blender/scripts/create_pipe_kit.py
+{
+	rootNode =
+	{
+		_class = "RootNode"
+		children =
+		[
+			{
+				_class = "MaterialGroupList"
+				children =
+				[
+					{
+						_class = "DefaultMaterialGroup"
+						remaps =
+						[
+						{
+							from = "pipe_metal.vmat"
+							to = "materials/environment/cyber/pipes/pipe_metal.vmat"
+						},
+						{
+							from = "pipe_band.vmat"
+							to = "materials/environment/cyber/pipes/pipe_band.vmat"
+						},
+						{
+							from = "pipe_steel.vmat"
+							to = "materials/environment/cyber/pipes/pipe_steel.vmat"
+						},
+						{
+							from = "pipe_concrete.vmat"
+							to = "materials/environment/cyber/pipes/pipe_concrete.vmat"
+						},
+						]
+						use_global_default = false
+						global_default_material = "materials/environment/cyber/pipes/pipe_metal.vmat"
+					},
+				]
+			},
+			{
+				_class = "PhysicsShapeList"
+				children =
+				[
+					{
+						_class = "PhysicsMeshFile"
+						name = "pipe_crushed_end_v1_lod1_physics"
+						surface_prop = "metal"
+						collision_tags = "solid"
+						recenter_on_parent_bone = false
+						offset_origin = [ 0.0, 0.0, 0.0 ]
+						offset_angles = [ 0.0, 0.0, 0.0 ]
+						maxMeshVertices = 0
+						qemError = 0.0
+						filename = "models/environment/cyber/pipes/pipe_crushed_end_v1.fbx"
+						import_translation = [ 0.0, 0.0, 0.0 ]
+						import_rotation = [ 0.0, 0.0, 0.0 ]
+						import_scale = 0.4
+						align_origin_x_type = "None"
+						align_origin_y_type = "None"
+						align_origin_z_type = "None"
+						parent_bone = ""
+						import_filter =
+						{
+							exclude_by_default = true
+							exception_list = [ "pipe_crushed_end_v1_lod1" ]
+						}
+					},
+				]
+			},
+			{
+				_class = "RenderMeshList"
+				children =
+				[
+					{
+						_class = "RenderMeshFile"
+						name = "pipe_crushed_end_v1_lod0"
+						filename = "models/environment/cyber/pipes/pipe_crushed_end_v1.fbx"
+						import_translation = [ 0.0, 0.0, 0.0 ]
+						import_rotation = [ 0.0, 0.0, 0.0 ]
+						import_scale = 0.4
+						align_origin_x_type = "None"
+						align_origin_y_type = "None"
+						align_origin_z_type = "None"
+						parent_bone = ""
+						import_filter =
+						{
+							exclude_by_default = true
+							exception_list = [ "pipe_crushed_end_v1_lod0" ]
+						}
+					},
+					{
+						_class = "RenderMeshFile"
+						name = "pipe_crushed_end_v1_lod1"
+						filename = "models/environment/cyber/pipes/pipe_crushed_end_v1.fbx"
+						import_translation = [ 0.0, 0.0, 0.0 ]
+						import_rotation = [ 0.0, 0.0, 0.0 ]
+						import_scale = 0.4
+						align_origin_x_type = "None"
+						align_origin_y_type = "None"
+						align_origin_z_type = "None"
+						parent_bone = ""
+						import_filter =
+						{
+							exclude_by_default = true
+							exception_list = [ "pipe_crushed_end_v1_lod1" ]
+						}
+					},
+					{
+						_class = "RenderMeshFile"
+						name = "pipe_crushed_end_v1_lod2"
+						filename = "models/environment/cyber/pipes/pipe_crushed_end_v1.fbx"
+						import_translation = [ 0.0, 0.0, 0.0 ]
+						import_rotation = [ 0.0, 0.0, 0.0 ]
+						import_scale = 0.4
+						align_origin_x_type = "None"
+						align_origin_y_type = "None"
+						align_origin_z_type = "None"
+						parent_bone = ""
+						import_filter =
+						{
+							exclude_by_default = true
+							exception_list = [ "pipe_crushed_end_v1_lod2" ]
+						}
+					},
+					{
+						_class = "RenderMeshFile"
+						name = "pipe_crushed_end_v1_lod3"
+						filename = "models/environment/cyber/pipes/pipe_crushed_end_v1.fbx"
+						import_translation = [ 0.0, 0.0, 0.0 ]
+						import_rotation = [ 0.0, 0.0, 0.0 ]
+						import_scale = 0.4
+						align_origin_x_type = "None"
+						align_origin_y_type = "None"
+						align_origin_z_type = "None"
+						parent_bone = ""
+						import_filter =
+						{
+							exclude_by_default = true
+							exception_list = [ "pipe_crushed_end_v1_lod3" ]
+						}
+					},
+				]
+			},
+			{
+				_class = "LODGroupList"
+				children =
+				[
+					{
+						_class = "LODGroup"
+						switch_threshold = 0.0
+						meshes = [ "pipe_crushed_end_v1_lod0" ]
+					},
+					{
+						_class = "LODGroup"
+						switch_threshold = 400.0
+						meshes = [ "pipe_crushed_end_v1_lod1" ]
+					},
+					{
+						_class = "LODGroup"
+						switch_threshold = 800.0
+						meshes = [ "pipe_crushed_end_v1_lod2" ]
+					},
+					{
+						_class = "LODGroup"
+						switch_threshold = 1200.0
+						meshes = [ "pipe_crushed_end_v1_lod3" ]
+					},
+				]
+			},
+		]
+		model_archetype = ""
+		primary_associated_entity = ""
+		anim_graph_name = ""
+		base_model_name = ""
+	}
+}

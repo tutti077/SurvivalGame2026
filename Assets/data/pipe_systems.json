@@ -1,0 +1,40 @@
+{
+  // Pipe systems (Mark 2026-11-19): scarce metal pipelines over the wilderness. Code/World/Pipes/. Metres everywhere.
+  // The world is cut into cells of cellMeters; each cell rolls `chance` for ONE system, then tries candidatesPerCell
+  // seeded routes and keeps the first that fits the ground. Fewer / more systems = cellMeters and chance.
+  "enabled": true,
+  "cellMeters": 2000,
+  "chance": 0.5,
+  "candidatesPerCell": 8,
+  "spawnClearanceMeters": 150,
+
+  // The run above ground
+  "lengthMinMeters": 90,
+  "lengthMaxMeters": 220,
+  "clearanceMeters": 4.0,       // pipe axis over the ground the planner aims for
+  "clearanceMinMeters": 2.8,    // a route whose axis comes closer to the ground than this is thrown away
+  "clearanceMaxMeters": 5.6,
+  "maxTurnDegrees": 30,         // total heading change over the run
+  "maxJointDegrees": 8,         // pitch change per 8 m joint (the collar hides it)
+  "maxPitchDegrees": 22,
+  "supportEverySegments": 2,    // a support trestle every N 8 m pieces
+
+  // The buried ends
+  "crushedJointDepthMeters": 1.8,   // the crushed end starts at least this deep; its pinched tip ends ~4 m deeper
+  "deepEndDepthMeters": 20,         // the pipe axis where it meets the cement cube
+
+  "vegetationClearanceMeters": 3.0, // no tree trunk / rock cluster centre this close to the pipe's centre line
+
+  "biomes": [ "CloverHills", "RedwoodForest", "AmberDunes", "Mountain", "AzureCoast", "Blackwater" ],
+
+  "prefabs": {
+    "straight8": "prefabs/environment/cyber/pipes/pipe_straight_8m_v1.prefab",
+    "straight4": "prefabs/environment/cyber/pipes/pipe_straight_4m_v1.prefab",
+    "bend": "prefabs/environment/cyber/pipes/pipe_bend_45_v1.prefab",
+    "support": "prefabs/environment/cyber/pipes/pipe_support_v1.prefab",
+    "footing": "prefabs/environment/cyber/pipes/pipe_footing_v1.prefab",
+    "groundEntry": "prefabs/environment/cyber/pipes/pipe_ground_entry_v1.prefab",
+    "crushedEnd": "prefabs/environment/cyber/pipes/pipe_crushed_end_v1.prefab",
+    "cementCube": "prefabs/environment/cyber/pipes/pipe_cement_cube_v1.prefab"
+  }
+}

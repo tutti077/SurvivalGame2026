@@ -1,0 +1,10 @@
+// Pipe systems kit (Blender/scripts/create_pipe_kit.py): 256 px point-filtered, faceted, UVs authored at 2 m per tile.
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.750"
+	PixelSpecular "0.350"
+	PixelFlatShading "1.000"
+	TextureColor "materials/environment/cyber/pipes/pipe_steel.png"
+}
