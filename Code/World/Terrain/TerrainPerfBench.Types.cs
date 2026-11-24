@@ -32,6 +32,12 @@ public sealed partial class TerrainPerfBench
 		var scene = Sandbox.Game.ActiveScene;
 		if ( scene is null )
 			return;
+		if ( scene.GetAllComponents<PlayerVitals>().Any( v => v.IsValid() && v.IsLocalInputOwnedPawn() ) )
+		{
+			// Switching colliders and controllers off under a pawn drops it through the world (it did, 2026-11-19).
+			Log.Warning( "[PerfBench] perf_types: fly camera only - switch off the pawn first (L / pawn_toggle)." );
+			return;
+		}
 
 		var byType = new Dictionary<Type, List<Component>>();
 		foreach ( var go in scene.GetAllObjects( true ) )

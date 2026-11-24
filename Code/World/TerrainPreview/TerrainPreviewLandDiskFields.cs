@@ -38,6 +38,7 @@ public static class TerrainPreviewLandDiskFields
 	static bool[] _displayLakeWater = Array.Empty<bool>();
 	static float[] _distanceToDisplayLakeMeters = Array.Empty<float>();
 	static bool[] _oceanWater = Array.Empty<bool>();   // open water joined to the rim ring (flood fill)
+	static float[] _oceanness01 = Array.Empty<float>();   // 1 over that ocean (and outside the land disc), 0 over enclosed water; land cells carry the water round them
 	static float[] _distanceToOceanMeters = Array.Empty<float>();
 	static float[] _waterLevelMeters = Array.Empty<float>();     // nearest water's level per cell (TerrainPreviewMountainLakes)
 	static float[] _waterSurfaceMeters = Array.Empty<float>();   // the sheet the sea shader lifts to: tarns + ring, sea elsewhere
@@ -76,6 +77,7 @@ public static class TerrainPreviewLandDiskFields
 		_displayLakeWater = Array.Empty<bool>();
 		_distanceToDisplayLakeMeters = Array.Empty<float>();
 		_oceanWater = Array.Empty<bool>();
+		_oceanness01 = Array.Empty<float>();
 		_waterLevelMeters = Array.Empty<float>();
 		_waterSurfaceMeters = Array.Empty<float>();
 		_footLakeNear = Array.Empty<bool>();
@@ -103,6 +105,7 @@ public static class TerrainPreviewLandDiskFields
 		_displayLakeWater = Array.Empty<bool>();
 		_distanceToDisplayLakeMeters = Array.Empty<float>();
 		_oceanWater = Array.Empty<bool>();
+		_oceanness01 = Array.Empty<float>();
 		_waterLevelMeters = Array.Empty<float>();
 		_waterSurfaceMeters = Array.Empty<float>();
 		_footLakeNear = Array.Empty<bool>();
@@ -719,8 +722,24 @@ public static class TerrainPreviewLandDiskFields
 
 		EnsureWaterDistanceFields( settings, res, metersPerPixel, lakeMaskGrid );
 
+		// Past the land disc is sea (Mark 2026-11-18: "tiny fragments of land" along the edge of the playable area). The
+		// mask stopped at the disc, so an ocean inside it had a shoreline running along the circle: its bed rose to the
+		// surface there, the rim ocean's bed rose to meet it from the other side, and a ridge at sea level ringed the
+		// world, breaking the surface in slivers. Outside cells now read as open water for the mask and the shoreline, so
+		// an ocean runs through the circle without a shore; real land that reaches the circle still gets its coast there.
+		var count = lakeMaskGrid.Length;
+		var shoreWater = new bool[count];
+		Array.Copy( _openWater, shoreWater, Math.Min( count, _openWater.Length ) );
+		for ( var i = 0; i < count; i++ )
+		{
+			if ( _landDisk[i] )
+				continue;
+			lakeMaskGrid[i] = 1f;
+			shoreWater[i] = true;
+		}
+
 		TerrainPreviewGenerateProgress.SetStage( "Lake shore distance" );
-		TerrainPreviewLakeShoreDistance.Build( lakeMaskGrid, _openWater, res, settings.WorldRadiusMeters, settings.WorldDiameterMeters, _openWaterThreshold01 );
+		TerrainPreviewLakeShoreDistance.Build( lakeMaskGrid, shoreWater, res, settings.WorldRadiusMeters, settings.WorldDiameterMeters, _openWaterThreshold01 );
 
 		_lakeMaskGrid = lakeMaskGrid;
 		_waterFingerprint = fingerprint;
@@ -758,6 +777,7 @@ public static class TerrainPreviewLandDiskFields
 		if ( _distanceToOpenWaterMeters.Length == count
 			&& _distanceToDisplayLakeMeters.Length == count
 			&& _distanceToOceanMeters.Length == count
+			&& _oceanness01.Length == count
 			&& _waterFingerprint != int.MinValue )
 			return;
 
@@ -818,6 +838,49 @@ public static class TerrainPreviewLandDiskFields
 			TryFloodOcean( py < res - 1 ? i + res : -1, oceanQueue );
 		}
 
+		// Ocean or enclosed, as a raster the depth rule can read smoothly (Mark 2026-11-18: an ocean is the water between
+		// a biome and the caldera wall and goes to 1000 m; water "totally encircled with land" stops at 50 m). Water
+		// cells are 1 or 0 by the flood above; a land cell takes the mean of the water round it, so a bilinear read right
+		// at a shore never mixes in a made-up value.
+		var ocean01 = new float[count];
+		for ( var i = 0; i < count; i++ )
+			ocean01[i] = !_landDisk[i] ? 1f : _openWater[i] ? (_oceanWater[i] ? 1f : 0f) : -1f;
+		for ( var pass = 0; pass < 3; pass++ )
+		{
+			var before = new float[count];
+			Array.Copy( ocean01, before, count );
+			for ( var i = 0; i < count; i++ )
+			{
+				if ( before[i] >= 0f )
+					continue;
+				var px = i % res;
+				var py = i / res;
+				var sum = 0f;
+				var n = 0;
+				for ( var dy = -1; dy <= 1; dy++ )
+				for ( var dx = -1; dx <= 1; dx++ )
+				{
+					var qx = px + dx;
+					var qy = py + dy;
+					if ( qx < 0 || qy < 0 || qx >= res || qy >= res )
+						continue;
+					var v = before[(qy * res) + qx];
+					if ( v < 0f )
+						continue;
+					sum += v;
+					n++;
+				}
+				if ( n > 0 )
+					ocean01[i] = sum / n;
+			}
+		}
+		for ( var i = 0; i < count; i++ )
+		{
+			if ( ocean01[i] < 0f )
+				ocean01[i] = 0f;
+		}
+		_oceanness01 = ocean01;
+
 		_distanceToOceanMeters = new float[count];
 		TerrainPreviewOpenWaterDistance.BuildDistanceMeters(
 			_landDisk,
@@ -825,6 +888,40 @@ public static class TerrainPreviewLandDiskFields
 			res,
 			metersPerPixel,
 			_distanceToOceanMeters );
+	}
+
+	/// <summary>
+	/// How much the water at a point is ocean: 1 on water joined to the rim (and outside the land disc), 0 on water wholly
+	/// inside the land, bilinear between raster cells. <see cref="TerrainPreviewPipeline.WaterDepthMeters"/> turns it into
+	/// the depth the bed may reach.
+	/// </summary>
+	public static float SampleOceanness01( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters )
+	{
+		if ( !_isBuilding )
+			EnsureBuilt( settings );
+		var field = _oceanness01;
+		var res = _fieldResolution;
+		if ( res < 2 || field.Length != RasterCellCount( res ) || settings.WorldDiameterMeters <= 0f )
+			return 0f;
+		WorldMetersToRasterFloat( worldXMeters, worldYMeters, settings.WorldRadiusMeters, settings.WorldDiameterMeters, res, out var fx, out var fy );
+		fx = Math.Clamp( fx, 0f, res - 1.001f );
+		fy = Math.Clamp( fy, 0f, res - 1.001f );
+		var x0 = (int)fx;
+		var y0 = (int)fy;
+		var tx = fx - x0;
+		var ty = fy - y0;
+		var i = (y0 * res) + x0;
+		var a = field[i] + ((field[i + 1] - field[i]) * tx);
+		var b = field[i + res] + ((field[i + res + 1] - field[i + res]) * tx);
+		return a + ((b - a) * ty);
+	}
+
+	/// <summary>The oceanness raster (res², x mirrored like the lake mask) for the sea shader; false until built.</summary>
+	public static bool TryGetOceannessRaster( out float[] grid, out int resolution )
+	{
+		grid = _oceanness01;
+		resolution = _fieldResolution;
+		return resolution > 1 && grid.Length == RasterCellCount( resolution );
 	}
 
 	static void TryFloodOcean( int idx, Queue<int> queue )
@@ -1337,6 +1434,7 @@ public static class TerrainPreviewLandDiskFields
 	static int ComputeWaterFingerprint( TerrainPreviewSettings settings )
 	{
 		var hash = new HashCode();
+		hash.Add( 2 );   // water raster version: 2 = sea past the land disc, oceanness raster (a hotload keeps the old statics otherwise)
 		hash.Add( settings.ClampedResolution );
 		hash.Add( settings.WorldDiameterMeters );
 		hash.Add( settings.WorldSeed );

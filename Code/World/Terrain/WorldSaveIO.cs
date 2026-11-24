@@ -10,6 +10,12 @@ public sealed class WorldSaveRecipe
 {
 	public string GameVersion { get; set; } = GameBuildLabel.Display;
 	public string WorldName { get; set; } = "DefaultWorld";
+	/// <summary>
+	/// The save's permanent game ID: made when the world is created, kept through renames, new for a copy. Player-side
+	/// data that belongs to one world (map pins) is filed under it, so a rename never orphans it. Blank in older saves
+	/// until their next write (<see cref="WorldSaveIO.WriteRecipe"/> fills it).
+	/// </summary>
+	public string WorldId { get; set; } = "";
 	public int WorldSeed { get; set; } = 1337;
 	public float WorldDiameterMeters { get; set; } = 40000f;
 	public float OceanRingWidthMeters { get; set; } = 2500f;
@@ -64,22 +70,40 @@ public static class WorldSaveIO
 	public static void EnsureWorldDirectory( string worldName )
 		=> FileSystem.Data.CreateDirectory( GetWorldFolder( worldName ) );
 
+	/// <summary>
+	/// terrainTest's world. Its recipe holds the tuned terrain settings (the Terrain Noise Preview tool's Apply To World
+	/// Recipe writes here), so a world created from the main menu starts as a copy of it with the chosen seed.
+	/// </summary>
+	public const string TemplateWorldName = "TestWorld";
+
 	public static void WriteNewWorld( string worldName, int worldSeed )
 	{
 		var sanitized = SanitizeWorldName( worldName );
 		var now = UtcNowString();
+		var template = sanitized == TemplateWorldName ? null : TryReadRecipe( TemplateWorldName );
+		// No TestWorld recipe (deleted, fresh machine): the latest Generate Preview bundle, as terrainTest itself would fall back to.
+		var settings = template?.PreviewSettings?.CloneForGenerate( false )
+			?? (TerrainPreviewBundleIO.TryLoadLatestGenerationSettings( out var bundleSettings, out _, out _ ) ? bundleSettings.CloneForGenerate( false ) : null)
+			?? new TerrainPreviewSettings();
+		settings.WorldSeed = worldSeed;
 		var recipe = new WorldSaveRecipe
 		{
 			WorldName = sanitized,
+			WorldId = NewWorldId(),
 			WorldSeed = worldSeed,
 			FirstGeneratedUtc = now,
 			LastLoadedUtc = now,
 			DayNumber = 1,
-			PreviewSettings = new TerrainPreviewSettings
-			{
-				WorldSeed = worldSeed,
-			},
+			PreviewSettings = settings,
 		};
+		recipe.WorldDiameterMeters = settings.WorldDiameterMeters;
+		recipe.OceanRingWidthMeters = settings.OceanRingWidthMeters;
+		recipe.MaxTerrainHeightMeters = settings.MaxTerrainHeightMeters;
+		if ( template is not null )
+		{
+			recipe.ChunkSizeMeters = template.ChunkSizeMeters;
+			recipe.BiomePreviewMetersPerPixel = template.BiomePreviewMetersPerPixel;
+		}
 
 		WriteRecipe( recipe );
 		WriteSeedText( sanitized, worldSeed );
@@ -92,6 +116,8 @@ public static class WorldSaveIO
 			return;
 
 		recipe.WorldName = SanitizeWorldName( recipe.WorldName );
+		if ( string.IsNullOrWhiteSpace( recipe.WorldId ) )
+			recipe.WorldId = NewWorldId();
 		recipe.DayNumber = NormalizeDayNumber( recipe.DayNumber );
 		var path = GetRecipeRelativePath( recipe.WorldName );
 		EnsureWorldDirectory( recipe.WorldName );
@@ -99,6 +125,19 @@ public static class WorldSaveIO
 		FileSystem.Data.WriteAllText( path, json );
 		WriteSeedText( recipe.WorldName, recipe.WorldSeed );
 		RegisterWorldInIndex( recipe.WorldName );
+	}
+
+	public static string NewWorldId() => Guid.NewGuid().ToString( "N" );
+
+	/// <summary>The save's game ID, giving an older save one now (written back). Blank when the world has no world.json.</summary>
+	public static string GetOrCreateWorldId( string worldName )
+	{
+		var recipe = TryReadRecipe( SanitizeWorldName( worldName ) );
+		if ( recipe is null )
+			return "";
+		if ( string.IsNullOrWhiteSpace( recipe.WorldId ) )
+			WriteRecipe( recipe );
+		return recipe.WorldId;
 	}
 
 	/// <summary>Calendar day from <c>world.json</c> (defaults to 1 for missing/legacy saves).</summary>
@@ -360,12 +399,23 @@ public static class WorldSaveIO
 			|| FileSystem.Data.FileExists( GetSeedRelativePath( sanitized ) );
 	}
 
+	/// <summary>Menu Delete: the world folder, its index row and every player's pins and position for it.</summary>
 	public static bool TryDeleteWorld( string worldName )
 	{
 		var sanitized = SanitizeWorldName( worldName );
 		if ( !WorldExists( sanitized ) )
 			return false;
 
+		var recipe = TryReadRecipe( sanitized );
+		MapMarkupSaveStore.DeleteForAllPlayers( recipe?.WorldId, recipe is null ? null : MapMarkupSaveStore.LegacyWorldKey( sanitized, recipe.WorldSeed ) );
+		PlayerWorldSave.DeleteForAllPlayers( recipe?.WorldId );
+		DeleteWorldFiles( sanitized );
+		return true;
+	}
+
+	/// <summary>The folder + index row only (rename keeps the game ID, so the pins stay).</summary>
+	static void DeleteWorldFiles( string sanitized )
+	{
 		var folder = GetWorldFolder( sanitized );
 		if ( FileSystem.Data.DirectoryExists( folder ) )
 			FileSystem.Data.DeleteDirectory( folder, true );
@@ -377,7 +427,27 @@ public static class WorldSaveIO
 		}
 
 		RemoveFromIndex( sanitized );
-		return true;
+	}
+
+	/// <summary>
+	/// Scratch worlds (terrainTest): drop what play wrote into the save — voxel digs, the pod serial counter, every
+	/// player's map markup and saved position for this world — and put the calendar back to day 1. The recipe (world.json settings),
+	/// seed and biome map stay, so the terrain itself is unchanged.
+	/// </summary>
+	public static void WipePlayState( string worldName, int worldSeed )
+	{
+		var folder = GetWorldFolder( worldName );
+		DeleteFileIfExists( $"{folder}/{VoxelEditLog.FileName}" );
+		DeleteFileIfExists( $"{folder}/{StasisPodSerials.FileName}" );
+		var recipe = TryReadRecipe( SanitizeWorldName( worldName ) );
+		MapMarkupSaveStore.DeleteForAllPlayers( recipe?.WorldId, MapMarkupSaveStore.LegacyWorldKey( worldName, worldSeed ) );
+		PlayerWorldSave.DeleteForAllPlayers( recipe?.WorldId );
+
+		if ( recipe is not null && recipe.DayNumber != 1 )
+		{
+			recipe.DayNumber = 1;
+			WriteRecipe( recipe );
+		}
 	}
 
 	public static bool TryCopyWorld( string sourceName, string destName, out string sanitizedDest )
@@ -399,6 +469,7 @@ public static class WorldSaveIO
 		if ( recipe is not null )
 		{
 			recipe.WorldName = sanitizedDest;
+			recipe.WorldId = NewWorldId();
 			WriteRecipe( recipe );
 		}
 		else
@@ -437,16 +508,24 @@ public static class WorldSaveIO
 			RegisterWorldInIndex( sanitizedDest );
 		}
 
-		TryDeleteWorld( source );
+		DeleteWorldFiles( source );
 		return true;
 	}
 
+	/// <summary>Every file of the save (voxel digs, pod serials … not just the recipe) so a copy / rename keeps the world as played.</summary>
 	static void CopyWorldFolder( string sourceName, string destName )
 	{
 		EnsureWorldDirectory( destName );
-		CopyFileIfExists( GetRecipeRelativePath( sourceName ), GetRecipeRelativePath( destName ) );
-		CopyFileIfExists( GetSeedRelativePath( sourceName ), GetSeedRelativePath( destName ) );
-		CopyFileIfExists( GetBiomeMapRelativePath( sourceName ), GetBiomeMapRelativePath( destName ) );
+		var sourceFolder = GetWorldFolder( sourceName );
+		var destFolder = GetWorldFolder( destName );
+		foreach ( var file in FileSystem.Data.FindFile( sourceFolder, "*", recursive: true ) )
+		{
+			var relative = file.Replace( '\\', '/' ).TrimStart( '/' );
+			var slash = relative.LastIndexOf( '/' );
+			if ( slash > 0 )
+				FileSystem.Data.CreateDirectory( $"{destFolder}/{relative[..slash]}" );
+			CopyFileIfExists( $"{sourceFolder}/{relative}", $"{destFolder}/{relative}" );
+		}
 	}
 
 	static void CopyFileIfExists( string sourcePath, string destPath )

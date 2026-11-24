@@ -66,7 +66,7 @@ public static class ConsoleHelp
 
 		// ---- terrain
 		new( "Terrain", "terrain_cam", "<x> <y> <z> [pitch] [yaw]", "Park the fly camera at world metres looking along pitch / yaw (pitch + = down).", "terrain_cam 0 0 300 10 0" ),
-		new( "Terrain", "world_find", "<kind> [radius m] [park]", "Nearest generated wheat / spire / boulder / rock / any forage kind, or camp sites, from the camera (the scatter's own planner, read-only); park = fly camera to the nearest.", "world_find spire 1500 park" ),
+		new( "Terrain", "world_find", "<kind> [radius m] [park]", "Nearest generated wheat / spire / boulder / rock / any forage kind, camp sites, poi (the structures of data/pois.json) or crashed_pod, from the camera (the scatter's own planner, read-only); park = fly camera to the nearest.", "world_find spire 1500 park" ),
 		new( "Terrain", "terrain_fly", "[m/s] [seconds]", "Fly the fly camera level along its heading at a fixed speed (default 55 m/s ≈ 120 mph for 20 s) — perf runs; terrain_fly 0 stops.", "terrain_fly 55 30" ),
 		new( "Nav", "nav_stream_request", "0|1", "Streamed terrain chunk nav bakes: 1 = incremental RequestTilesGeneration (default, no hitch), 0 = synchronous GenerateTiles from physics (A/B).", "nav_stream_request 0" ),
 		new( "Terrain", "terrain_horizon", "0|1", "Hide / show the horizon tier (the whole-world coarse terrain past Far View Distance).", "terrain_horizon 0" ),

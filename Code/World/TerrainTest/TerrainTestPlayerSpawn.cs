@@ -257,7 +257,7 @@ public sealed class TerrainTestPlayerSpawn : Component
 				? DefaultGrappleResourceId
 				: GrappleResourceId.Trim();
 
-			if ( !equipment.HostAcceptClientGrappleEquip( grappleId ) )
+			if ( !equipment.HostEquipGrappleDirect( grappleId ) )
 				Log.Warning( $"[TerrainTestPlayerSpawn] Failed to equip '{grappleId}' on playable." );
 			else
 				Log.Info( $"[TerrainTestPlayerSpawn] Equipped '{grappleId}' in Grapple slot." );
@@ -269,7 +269,7 @@ public sealed class TerrainTestPlayerSpawn : Component
 				? DefaultWingsuitResourceId
 				: WingsuitResourceId.Trim();
 
-			if ( !equipment.HostAcceptClientWingsuitEquip( wingsuitId ) )
+			if ( !equipment.HostEquipWingsuitDirect( wingsuitId ) )
 				Log.Warning( $"[TerrainTestPlayerSpawn] Failed to equip '{wingsuitId}' on playable." );
 			else
 				Log.Info( $"[TerrainTestPlayerSpawn] Equipped '{wingsuitId}' in Wingsuit slot." );

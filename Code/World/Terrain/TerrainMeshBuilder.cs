@@ -23,6 +23,8 @@ public static class TerrainMeshBuilder
 		public Vector4[] Splat { get; init; }
 		/// <summary>Generated tilled soil reaching this chunk (<see cref="ChunkGeometry.GroundPatches"/>): grass, farming and a voxel column read it.</summary>
 		public TerrainGroundPatch[] GroundPatches { get; init; }
+		/// <summary><see cref="ChunkGeometry.CliffMask"/>: near the player such a chunk becomes voxel ground with the cliff carved in.</summary>
+		public int CliffMask { get; init; }
 	}
 
 	/// <summary>Everything a chunk mesh is made of, in chunk-local metres — shared by <see cref="BuildChunk"/> and the dev dump command.</summary>
@@ -52,6 +54,8 @@ public static class TerrainMeshBuilder
 		/// the edge drew every chunk border as a seam when looking down (Mark 2026-10-20).
 		/// </summary>
 		public float[] EdgeRing { get; init; }
+		/// <summary>Redwood cliff on this chunk (<see cref="TerrainLedgeCliffs.Scan"/>): <see cref="TerrainLedgeCliffs.HasCliff"/> plus the borders it runs over; 0 = none.</summary>
+		public int CliffMask { get; init; }
 	}
 
 	public static BuildResult BuildChunk(
@@ -212,6 +216,7 @@ public static class TerrainMeshBuilder
 			Colors = colors,
 			Splat = splat,
 			GroundPatches = g.GroundPatches,
+			CliffMask = g.CliffMask,
 		};
 	}
 
@@ -291,7 +296,8 @@ public static class TerrainMeshBuilder
 			edgeRing[(3 * verticesPerSide) + k] = RingHeight( settings, backend, chunkMinX + along, chunkMinY + span + step );
 		}
 
-		SnapBordersToCoarseLattice( heights, verticesPerSide, borderLatticeVerticesPerSide, fineBorderSides );
+		SnapBordersToCoarseLattice( heights, verticesPerSide, borderLatticeVerticesPerSide, fineBorderSides,
+			Math.Clamp( (int)MathF.Round( BorderFeatherMeters / step ), 1, Math.Max( 1, ((verticesPerSide - 1) / 2) - 1 ) ) );
 
 		TerrainPreviewChunkHeightSmooth.ApplyInteriorGrid(
 			heights, verticesPerSide, heightSmoothPasses, heightSmoothStrength01 );
@@ -300,6 +306,7 @@ public static class TerrainMeshBuilder
 		var offsetY = new float[vertexCount];
 		// Ledge faces are plain heightfield rows now (face width >= height / tan(Face Slope)); the vertex snapping that
 		// made 1 m faces vertical is gone with it — it was the source of every fin and spike along a ledge (2026-10-07).
+		// The vertical / overhanging Redwood cliffs are voxel ground carved over this first pass (TerrainLedgeCliffs).
 
 		TerrainGroundSplat.Fill( settings, samples, chunkMinX, chunkMinY, step, verticesPerSide, colors, splat );
 		TerrainGroundSplat.ApplyTilledPatches( groundPatches, chunkMinX, chunkMinY, step, verticesPerSide, splat );
@@ -366,6 +373,7 @@ public static class TerrainMeshBuilder
 			Indices = indices,
 			RawHeights = rawHeights,
 			EdgeRing = edgeRing,
+			CliffMask = TerrainLedgeCliffs.Scan( samples, verticesPerSide, step ),
 		};
 	}
 
@@ -383,7 +391,13 @@ public static class TerrainMeshBuilder
 	/// their neighbours), so the raw samples already match — and snapping flattened a river channel crossing the border
 	/// into a ridge with the skirt showing under it (Mark 2026-10-25: "weird seams between the chunks").
 	/// </summary>
-	static void SnapBordersToCoarseLattice( float[] heights, int verticesPerSide, int latticeVerticesPerSide, int fineBorderSides )
+	/// <summary>
+	/// Width of ground behind a snapped border over which the snap's shift fades out. The same physical width in every
+	/// chunk, whatever its detail, so the ground on both sides of a border bends alike.
+	/// </summary>
+	const float BorderFeatherMeters = 12f;
+
+	static void SnapBordersToCoarseLattice( float[] heights, int verticesPerSide, int latticeVerticesPerSide, int fineBorderSides, int featherRows )
 	{
 		if ( latticeVerticesPerSide <= 1 || latticeVerticesPerSide >= verticesPerSide )
 			return;
@@ -393,16 +407,27 @@ public static class TerrainMeshBuilder
 
 		var ratio = (verticesPerSide - 1) / (latticeVerticesPerSide - 1);
 		if ( (fineBorderSides & BorderMinY) == 0 )
-			SnapBorderLine( heights, verticesPerSide, ratio, startIndex: 0, stride: 1 );
+			SnapBorderLine( heights, verticesPerSide, ratio, startIndex: 0, stride: 1, inward: verticesPerSide, featherRows );
 		if ( (fineBorderSides & BorderMaxY) == 0 )
-			SnapBorderLine( heights, verticesPerSide, ratio, startIndex: (verticesPerSide - 1) * verticesPerSide, stride: 1 );
+			SnapBorderLine( heights, verticesPerSide, ratio, startIndex: (verticesPerSide - 1) * verticesPerSide, stride: 1, inward: -verticesPerSide, featherRows );
 		if ( (fineBorderSides & BorderMinX) == 0 )
-			SnapBorderLine( heights, verticesPerSide, ratio, startIndex: 0, stride: verticesPerSide );
+			SnapBorderLine( heights, verticesPerSide, ratio, startIndex: 0, stride: verticesPerSide, inward: 1, featherRows );
 		if ( (fineBorderSides & BorderMaxX) == 0 )
-			SnapBorderLine( heights, verticesPerSide, ratio, startIndex: verticesPerSide - 1, stride: verticesPerSide );
+			SnapBorderLine( heights, verticesPerSide, ratio, startIndex: verticesPerSide - 1, stride: verticesPerSide, inward: -1, featherRows );
 	}
 
-	static void SnapBorderLine( float[] heights, int count, int ratio, int startIndex, int stride )
+	/// <summary>
+	/// Snap one border line onto the coarse lattice, and feather what the snap moved into the chunk: the rows behind the
+	/// border take the border vertex's shift, easing to nothing over <paramref name="featherRows"/> rows
+	/// (<see cref="BorderFeatherMeters"/>). Moving the border row alone left one row of quads bent down (or up) to the
+	/// snapped line wherever the ground curves - 0.65 m in 2 m on a lake-bed ridge. The mesh was right and textured, but
+	/// that row faces another way than the ground round it, so it took the light differently: a thin dark strip along
+	/// the chunk border behind every ridge, near-black under water (Mark 2026-11-23: "these weird black lines appear on
+	/// the peaks of the terrain, in every biome", "it actually seems to be a lighting issue"). Spread over 12 m the
+	/// same shift is a slope of a few degrees. <paramref name="inward"/> is the index step from a border vertex to the
+	/// one behind it.
+	/// </summary>
+	static void SnapBorderLine( float[] heights, int count, int ratio, int startIndex, int stride, int inward, int featherRows )
 	{
 		// Lattice verts (offset 0) are never written, so reading them mid-loop stays canonical.
 		for ( var i = 1; i < count - 1; i++ )
@@ -416,7 +441,14 @@ public static class TerrainMeshBuilder
 			var t = offset / (float)ratio;
 			var h0 = heights[startIndex + (i0 * stride)];
 			var h1 = heights[startIndex + (i1 * stride)];
-			heights[startIndex + (i * stride)] = h0 + ((h1 - h0) * t);
+			var index = startIndex + (i * stride);
+			var shift = (h0 + ((h1 - h0) * t)) - heights[index];
+			heights[index] += shift;
+			for ( var row = 1; row <= featherRows; row++ )
+			{
+				var fade = 1f - (row / (float)(featherRows + 1));
+				heights[index + (row * inward)] += shift * fade * fade * (3f - (2f * fade));
+			}
 		}
 	}
 

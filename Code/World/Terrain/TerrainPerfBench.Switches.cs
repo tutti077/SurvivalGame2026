@@ -28,10 +28,33 @@ public sealed partial class TerrainPerfBench
 			return;
 		var enabled = ParseOn( on );
 		var count = 0;
-		foreach ( var panel in scene.GetAllComponents<ScreenPanel>() )
-		{ panel.Enabled = enabled; count++; }
+		if ( enabled )
+		{
+			// Re-enable exactly what "off" disabled: GetAllComponents skips disabled panels, so a second search found none.
+			foreach ( var panel in _uiDisabledByBench )
+			{
+				if ( panel is null || !panel.IsValid() )
+					continue;
+				panel.Enabled = true;
+				count++;
+			}
+			_uiDisabledByBench.Clear();
+		}
+		else
+		{
+			foreach ( var panel in scene.GetAllComponents<ScreenPanel>() )
+			{
+				if ( !panel.Enabled )
+					continue;
+				panel.Enabled = false;
+				_uiDisabledByBench.Add( panel );
+				count++;
+			}
+		}
 		Log.Info( $"[PerfBench] Screen UI {(enabled ? "on" : "OFF")} ({count} screen panels)." );
 	}
+
+	static readonly System.Collections.Generic.List<ScreenPanel> _uiDisabledByBench = new();
 
 	/// <summary><c>perf_entity_anim 0|1</c>: the animgraph of every skinned body that is not the local pawn's (entities freeze in pose, keep moving).</summary>
 	[ConCmd( "perf_entity_anim" )]

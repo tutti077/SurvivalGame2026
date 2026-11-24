@@ -59,6 +59,8 @@ public sealed partial class TerrainWorldManager : Component
 		public bool VegetationNear;
 		/// <summary>The voxel ground standing in for this chunk once dug (TerrainWorldManager.Voxel.cs); null = plain heightfield.</summary>
 		public VoxelColumn Voxel;
+		/// <summary>Redwood cliff on this chunk (<see cref="TerrainLedgeCliffs.Scan"/>); near the camera it becomes a voxel column with the cliff carved in.</summary>
+		public int CliffMask;
 		/// <summary>Large-tree positions (world meters) — sapling trunk clearance on promotion.</summary>
 		public readonly List<Vector2> Trunks = new();
 		/// <summary>Scatter planned for this chunk and not yet cloned (TerrainWorldManager.VegetationQueue.cs).</summary>
@@ -94,6 +96,10 @@ public sealed partial class TerrainWorldManager : Component
 	}
 
 	[Property, Group( "World" )] public string WorldName { get; set; } = "TestWorld";
+	/// <summary>The save's permanent game ID (world.json <c>worldId</c>): read on the host after the recipe is written, synced to clients by <see cref="WorldNetworkSession"/>. Map pins are filed under it.</summary>
+	public string WorldId { get; private set; } = "";
+	[Property, Group( "World" ), Title( "Scratch World (wipe save on play)" ), Description( "terrainTest: every play starts clean — voxel digs, pod serials, day number and map markup in WorldSaves/<name>/ are wiped (terrain settings stay). Off in main.scene, where the save is the player's world. Skipped when the world came from the main menu." )]
+	public bool ScratchWorld { get; set; }
 	[Property, Group( "World" )] public float WorldDiameterMeters { get; set; } = 40000f;
 	[Property, Group( "World" ), Title( "Ocean Ring Width (m)" ), Description( "Flat water band outside land disk. Total world = land + 2× ring (default 25 km)." )]
 	public float OceanRingWidthMeters { get; set; } = 2500f;
@@ -139,14 +145,14 @@ public sealed partial class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Sapling Visible Range (m)" ), Range( 10f, 300f ), Step( 5f ), Description( "A sapling is drawn only while the camera is within this distance of it — the same distance in and out, no hysteresis (Mark 2026-10-20). Checked every frame per sapling on the nearby chunks. Saplings are planted on every chunk within this range + ¾ chunk that has its large trees (they cluster on the trunks), whatever its mesh detail (2026-10-22: 80 → 200, Mark: 2-3x as far; → 150 the same day: way too many seen from above)." )]
 	public float VegetationSaplingVisibleMeters { get; set; } = 150f;
 
-	[Property, Group( "Vegetation" ), Title( "Pickup Visible Range (m)" ), Range( 20f, 300f ), Step( 5f ), Description( "Small pickups — rocks, sticks, forage (worms, mushrooms, berries, flowers, wheat) — are drawn only while the camera is within this distance, fading in and out like saplings (Mark 2026-11-03: 100 m). They are planted out to Prop Objects Range and stayed drawn until their chunk unloaded: ~200 of them past 150 m on a still camera. Boulders and spires are landmarks and stay." )]
-	public float VegetationPickupVisibleMeters { get; set; } = 100f;
+	[Property, Group( "Vegetation" ), Title( "Pickup Visible Range (m)" ), Range( 20f, 300f ), Step( 5f ), Description( "Small pickups — rocks, sticks, forage (worms, mushrooms, berries, flowers, wheat) — are drawn only while the camera is within this distance, fading in and out like saplings (Mark 2026-11-03: 100 m; 2026-11-19: 60 m, less on the ground). They are planted out to Prop Objects Range and stayed drawn until their chunk unloaded: ~200 of them past 150 m on a still camera. Boulders and spires are landmarks and stay." )]
+	public float VegetationPickupVisibleMeters { get; set; } = 60f;
 
 	[Property, Group( "Vegetation" ), Title( "Prop Objects Range (m)" ), Range( 50f, 600f ), Step( 10f ), Description( "Rocks and sticks are planted only once their chunk is within this distance (they are pickups: a chunk keeps them until it unloads)." )]
-	public float VegetationPropRangeMeters { get; set; } = 192f;
+	public float VegetationPropRangeMeters { get; set; } = 128f;
 
-	[Property, Group( "Vegetation" ), Title( "Tree Shadow Range (m)" ), Range( 25f, 600f ), Step( 5f ), Description( "Trees cast shadows only on chunks within this distance (Mark 2026-10-14: LOD bands 100 / 500 / 2 km / 8 km). Colliders follow Collision Range separately." )]
-	public float VegetationShadowRangeMeters { get; set; } = 100f;
+	[Property, Group( "Vegetation" ), Title( "Tree Shadow Range (m)" ), Range( 25f, 600f ), Step( 5f ), Description( "Trees cast shadows only on chunks within this distance. 330 = every tree object casts one (Tree Objects Range), with the Sun's Sun Shadow Distance scale 8 so the cascades reach them (Mark 2026-11-23: 'shadows arent rendering unless I'm right on top of the area'; was 100). Colliders follow Collision Range separately." )]
+	public float VegetationShadowRangeMeters { get; set; } = 330f;
 	[Property, Group( "Chunks" ), Title( "Max Chunks Per Frame" ), Range( 1, 12 ), Step( 1 ), Description( "Hard cap on chunk mesh builds per frame (initial load + streaming)." )]
 	public int ChunksPerFrame { get; set; } = 3;
 	[Property, Group( "Chunks" ), Title( "Stream Build Budget (ms)" ), Range( 4f, 32f ), Step( 1f ), Description( "Milliseconds of mesh work per frame while streaming. Spreads cost without one-chunk-per-frame crawl." )]
@@ -231,16 +237,16 @@ public sealed partial class TerrainWorldManager : Component
 	public bool VegetationCloverRocksEnabled { get; set; } = true;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Rock Cluster Spacing (m)" ), Range( 8f, 64f ), Step( 1f ), Description( "Average distance between rock cluster centers. Strong random jitter so it does not look gridded." )]
-	public float VegetationCloverRockSpacingMeters { get; set; } = 50f;
+	public float VegetationCloverRockSpacingMeters { get; set; } = 30f;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Rock Cluster Chance (0–1)" ), Range( 0.1f, 1f ), Step( 0.05f ), Description( "Chance a spacing cell becomes a cluster (lower = scarcer / more irregular)." )]
 	public float VegetationCloverRockChance01 { get; set; } = 0.7f;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Rocks Per Cluster Min" ), Range( 1, 8 ), Step( 1 )]
-	public int VegetationCloverRockClusterMin { get; set; } = 2;
+	public int VegetationCloverRockClusterMin { get; set; } = 3;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Rocks Per Cluster Max" ), Range( 1, 8 ), Step( 1 )]
-	public int VegetationCloverRockClusterMax { get; set; } = 5;
+	public int VegetationCloverRockClusterMax { get; set; } = 7;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Rock Cluster Radius (m)" ), Range( 0.5f, 8f ), Step( 0.25f )]
 	public float VegetationCloverRockClusterRadiusMeters { get; set; } = 3f;
@@ -252,25 +258,25 @@ public sealed partial class TerrainWorldManager : Component
 	public bool VegetationCloverSticksEnabled { get; set; } = true;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Stick Cluster Spacing (m)" ), Range( 8f, 64f ), Step( 1f )]
-	public float VegetationCloverStickSpacingMeters { get; set; } = 50f;
+	public float VegetationCloverStickSpacingMeters { get; set; } = 15f;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Stick Cluster Chance (0–1)" ), Range( 0.1f, 1f ), Step( 0.05f )]
 	public float VegetationCloverStickChance01 { get; set; } = 0.7f;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Sticks Per Cluster Min" ), Range( 1, 4 ), Step( 1 )]
-	public int VegetationCloverStickClusterMin { get; set; } = 1;
+	public int VegetationCloverStickClusterMin { get; set; } = 2;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Sticks Per Cluster Max" ), Range( 1, 4 ), Step( 1 )]
-	public int VegetationCloverStickClusterMax { get; set; } = 2;
+	public int VegetationCloverStickClusterMax { get; set; } = 4;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Stick Cluster Radius (m)" ), Range( 0.25f, 4f ), Step( 0.25f )]
-	public float VegetationCloverStickClusterRadiusMeters { get; set; } = 1.5f;
+	public float VegetationCloverStickClusterRadiusMeters { get; set; } = 2.2f;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Stick Near Large Tree" ), Description( "Extra sticks beside large Clover trees (not saplings)." )]
 	public bool VegetationCloverStickNearLargeTreeEnabled { get; set; } = true;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Stick Near Large Tree Chance (0–1)" ), Range( 0f, 1f ), Step( 0.01f ), Description( "Chance per large tree to place one stick in open ground beside the trunk." )]
-	public float VegetationCloverStickNearLargeTreeChance01 { get; set; } = 0.05f;
+	public float VegetationCloverStickNearLargeTreeChance01 { get; set; } = 0.5f;
 
 	[Property, Group( "Vegetation" ), Title( "Clover — Stick Near Large Tree Min Radius (m)" ), Range( 1f, 12f ), Step( 0.25f )]
 	public float VegetationCloverStickNearLargeTreeMinRadiusMeters { get; set; } = 2.5f;
@@ -278,14 +284,11 @@ public sealed partial class TerrainWorldManager : Component
 	[Property, Group( "Vegetation" ), Title( "Clover — Stick Near Large Tree Max Radius (m)" ), Range( 1.5f, 16f ), Step( 0.25f )]
 	public float VegetationCloverStickNearLargeTreeMaxRadiusMeters { get; set; } = 6f;
 
-	[Property, Group( "Vegetation" ), Title( "Redwood — Tree Prefab A" )]
-	public string VegetationRedwoodPrefab { get; set; } = "prefabs/environment/cloverHills/trees/elm/environment_elm3_v76.prefab";
+	[Property, Group( "Vegetation" ), Title( "Redwood — Tree Prefabs" ), Description( "Large trees; each spawn picks one at random (list one twice to make it twice as common). Empty = the built-in redwood1–5 (twice) + fir1–4." )]
+	public List<string> VegetationRedwoodTreePrefabs { get; set; } = [];
 
-	[Property, Group( "Vegetation" ), Title( "Redwood — Tree Prefab B" )]
-	public string VegetationRedwoodPrefabB { get; set; } = "prefabs/environment/cloverHills/trees/elm/environment_elm6_v76.prefab";
-
-	[Property, Group( "Vegetation" ), Title( "Redwood — Density (0–1)" ), Range( 0.05f, 1f ), Step( 0.05f ), Description( "Fraction of shared forest density for Redwood only. Redwood ignores hard forest patches, so low values still cover the whole biome sparsely." )]
-	public float VegetationRedwoodDensity01 { get; set; } = 0.1f;
+	[Property, Group( "Vegetation" ), Title( "Redwood — Density (0–1)" ), Range( 0.05f, 1f ), Step( 0.05f ), Description( "Chance a Redwood 15 m block (3 x 3 shared cells) holds a large tree, before the clump noise (Redwood clump floor 0.85). 0.225 ≈ one tree per ~32 m (Mark 2026-11-23, twice: 'remove like 50% of the redwood trees, far far too many', then 'get rid of another 50% of the big trees'; was 0.9); the dark under the trees comes from the biome air (data/biome_atmosphere.json), not from the tree count." )]
+	public float VegetationRedwoodDensity01 { get; set; } = 0.225f;
 
 	[Property, Group( "Vegetation" ), Title( "Forest Patch Wavelength (m)" ), Range( 64f, 1200f ), Step( 16f ), Description( "Shared forest/clearing noise for Clover Hills and Redwood Forest." )]
 	public float VegetationPatchWavelengthMeters { get; set; } = 380f;
@@ -443,6 +446,21 @@ public sealed partial class TerrainWorldManager : Component
 	bool _waitingForHostWorld;
 	bool _autoMapGenStarted;
 
+	/// <summary>Awake, not Start: the day cycle and voxel log read the save in their own OnStart, after every OnAwake.</summary>
+	protected override void OnAwake()
+	{
+		base.OnAwake();
+		if ( ScratchWorld && !Scene.IsEditor && !WorldSessionState.HasPendingWorld && (!Networking.IsActive || Networking.IsHost) )
+			WipeScratchSave();
+	}
+
+	void WipeScratchSave()
+	{
+		WorldSaveIO.WipePlayState( WorldName, WorldSeed );
+		WorldScatterIdentity.ClearRemembered();
+		Log.Info( $"[TerrainWorld] scratch world '{WorldName}': save wiped for a clean test (voxel digs, pod serials, day, map markup)" );
+	}
+
 	protected override void OnStart()
 	{
 		base.OnStart();
@@ -462,10 +480,11 @@ public sealed partial class TerrainWorldManager : Component
 		// Offline / host: start immediately and publish seed for joiners.
 		if ( !Networking.IsActive || Networking.IsHost )
 		{
-			WorldNetworkSession.Instance?.HostPublish( WorldName, WorldSeed );
 			BeginWorldLoad();
 			_worldLoadStarted = true;
 			TryWriteWorldRecipe();
+			WorldId = WorldSaveIO.GetOrCreateWorldId( WorldName );
+			WorldNetworkSession.Instance?.HostPublish( WorldName, WorldSeed, WorldId );
 			return;
 		}
 
@@ -574,6 +593,7 @@ public sealed partial class TerrainWorldManager : Component
 		WorldSeed = session.WorldSeed;
 		if ( !string.IsNullOrWhiteSpace( session.WorldName ) )
 			WorldName = session.WorldName;
+		WorldId = session.WorldId ?? "";
 
 		BeginClientWorldFromHost();
 	}
@@ -1222,6 +1242,8 @@ public sealed partial class TerrainWorldManager : Component
 		// hotloads, so without this a biome_population.json / enemy_camps.json edit never reached the next play
 		BiomePopulationCatalog.Reload();
 		EnemyCampCatalog.Reload();
+		PoiCatalog.Reload();
+		PipeSystemCatalog.Reload();   // also drops the planned routes: the settings of this load decide them
 
 		SetStreamerInputEnabled( false );
 
@@ -1285,6 +1307,8 @@ public sealed partial class TerrainWorldManager : Component
 
 	TerrainPreviewSettings _loadGroundSettings;
 	float _loadGroundZMeters;
+	/// <summary>Where the initial load streams around (metres): the world origin, or where main.scene's player last stood (<see cref="WorldPlayerSpawn"/>).</summary>
+	Vector2 _loadCentreMeters;
 
 	void ResolveLoadStreamTransform()
 	{
@@ -1292,11 +1316,13 @@ public sealed partial class TerrainWorldManager : Component
 		// Called every load frame; the centre sample only changes with the settings.
 		if ( !ReferenceEquals( _loadGroundSettings, settings ) )
 		{
-			var sample = _backend.Sample( settings, 0f, 0f );
+			_loadCentreMeters = Scene.GetAllComponents<WorldPlayerSpawn>().FirstOrDefault() is { IsValid: true } spawn
+				&& spawn.TryGetStartMeters( this, out var start ) ? start : Vector2.Zero;
+			var sample = _backend.Sample( settings, _loadCentreMeters.x, _loadCentreMeters.y );
 			_loadGroundZMeters = sample.IsInsideWorld ? sample.HeightMeters : 0f;
 			_loadGroundSettings = settings;
 		}
-		_loadStreamPos = new Vector3( 0f, 0f, _loadGroundZMeters );
+		_loadStreamPos = new Vector3( _loadCentreMeters.x, _loadCentreMeters.y, _loadGroundZMeters );
 		_loadViewRotation = TryGetStreamTransform( out _, out var viewRotation )
 			? viewRotation
 			: Rotation.Identity;
@@ -1970,6 +1996,7 @@ public sealed partial class TerrainWorldManager : Component
 		entry.SplatWeights = built.Colors;
 		entry.SplatExtras = built.Splat;
 		entry.GroundPatches = built.GroundPatches;
+		entry.CliffMask = built.CliffMask;
 
 		entry.VerticesPerSide = verticesPerSide;
 		// A LOD remesh must NOT regenerate the grass tiles over this chunk: chunks promote at 128 m and demote
@@ -2170,6 +2197,7 @@ public sealed partial class TerrainWorldManager : Component
 			SplatWeights = built.Colors,
 			SplatExtras = built.Splat,
 			GroundPatches = built.GroundPatches,
+			CliffMask = built.CliffMask,
 			VegetationNear = collider.Enabled,
 			GrassMask = grassMask,
 			GrassMaskBuilt = grassMaskBuilt,
@@ -2185,6 +2213,7 @@ public sealed partial class TerrainWorldManager : Component
 		NotifyGrassChunkChanged( entry );
 		MarkPhase( ref Stats.FinishGrassMs, tail );
 		TryRestoreVoxelColumn( entry );
+		SpawnPipesOnChunk( entry, settings, chunkMinX, chunkMinY );
 		MarkPhase( ref Stats.FinishVoxelMs, tail );
 
 		// Nav + scavs only when collision is live — far render chunks must not schedule Recast.
@@ -2560,11 +2589,16 @@ public sealed partial class TerrainWorldManager : Component
 				new TerrainVegetationScatter.BiomeScatterProfile
 				{
 					BiomeId = TerrainPreviewBiomeId.RedwoodForest,
-					Prefabs = [VegetationRedwoodPrefab, VegetationRedwoodPrefabB],
+					Prefabs = RedwoodTreePrefabs(),
 					NoiseSeedSalt = 5000,
 					InstancePrefix = "veg_redwood",
 					Density01 = VegetationRedwoodDensity01,
 					IgnoreForestPatches = true,
+					// Redwood trunks are 5–6 m thick and crowns ~30 m wide: their own 12.8 m grid (5 per chunk), a dense stand whose crowns overlap (Mark 2026-11-16: "should feel like a dense ass forest")
+					CellSpacingMeters = 12.8f,
+					// Straight trunks and an even stand (the dark under them is the biome air, data/biome_atmosphere.json)
+					Upright = true,
+					ClumpFloor01 = 0.85f,
 				},
 			],
 			PatchWavelengthMeters = VegetationPatchWavelengthMeters,
@@ -2583,8 +2617,18 @@ public sealed partial class TerrainWorldManager : Component
 			NearLargeTreeStickChance01 = VegetationCloverStickNearLargeTreeChance01,
 			NearLargeTreeStickMinRadiusMeters = VegetationCloverStickNearLargeTreeMinRadiusMeters,
 			NearLargeTreeStickMaxRadiusMeters = VegetationCloverStickNearLargeTreeMaxRadiusMeters,
+			NearLargeTreeStickMax = 2,
+			NearLargeTreeRockPrefabs = VegetationCloverRocksEnabled ? CloverPebblePrefabs : null,
+			NearLargeTreeRockChance01 = 0.5f,
+			NearLargeTreeRockMax = 3,
 			BeehivePrefabs = VegetationCloverBeehivePrefabs?.ToArray(),
 			BeehiveChance01 = VegetationCloverBeehiveChance01,
+			NestPrefabs = VegetationCloverNestPrefabs?.ToArray(),
+			NestChance01 = VegetationCloverNestChance01,
+			NestHangMinMeters = VegetationCloverNestHangMinMeters,
+			NestHangMaxMeters = VegetationCloverNestHangMaxMeters,
+			NestReachMinMeters = VegetationCloverNestReachMinMeters,
+			NestReachMaxMeters = VegetationCloverNestReachMaxMeters,
 			BeehiveHangMinMeters = VegetationCloverBeehiveHangMinMeters,
 			BeehiveHangMaxMeters = VegetationCloverBeehiveHangMaxMeters,
 			BeehiveReachMinMeters = VegetationCloverBeehiveReachMinMeters,
@@ -2605,9 +2649,31 @@ public sealed partial class TerrainWorldManager : Component
 					ClusterSizeMin = VegetationCloverRockClusterMin,
 					ClusterSizeMax = VegetationCloverRockClusterMax,
 					ClusterRadiusMeters = VegetationCloverRockClusterRadiusMeters,
-					ScaleMin = 0.85f,
-					ScaleMax = 1.2f,
-					MaxPerChunk = 48,
+					// Big and small together (Mark 2026-11-18: "bigger and smaller put together. Right now its just like one on their own")
+					ScaleMin = 0.55f,
+					ScaleMax = 1.7f,
+					MaxPerChunk = 64,
+				},
+				// Loose stones to pick up by hand, everywhere - the middle of a field as much as under the trees (Mark
+				// 2026-11-18: "little hand-harvestable rocks can spawn in the middle of fields too ... far more of them")
+				new TerrainVegetationScatter.PropClusterOptions
+				{
+					Enabled = VegetationCloverRocksEnabled,
+					BiomeId = TerrainPreviewBiomeId.CloverHills,
+					Prefabs = CloverPebblePrefabs,
+					Prefab = CloverPebblePrefabs[0],
+					InstancePrefix = "veg_pebble",
+					KindLabel = "pebble",
+					NoiseSeedSalt = 7400,
+					ClusterSpacingMeters = 11f,
+					ClusterChance01 = 0.7f,
+					ClusterSizeMin = 2,
+					ClusterSizeMax = 5,
+					ClusterRadiusMeters = 1.6f,
+					// Well over life size, like the small plants: a pebble at 1x is lost under the grass tufts
+					ScaleMin = 1.3f,
+					ScaleMax = 2.6f,
+					MaxPerChunk = 110,
 				},
 				new TerrainVegetationScatter.PropClusterOptions
 				{
@@ -2622,11 +2688,13 @@ public sealed partial class TerrainWorldManager : Component
 					ClusterSizeMin = VegetationCloverStickClusterMin,
 					ClusterSizeMax = VegetationCloverStickClusterMax,
 					ClusterRadiusMeters = VegetationCloverStickClusterRadiusMeters,
-					ScaleMin = 0.85f,
-					ScaleMax = 1.15f,
-					MaxPerChunk = 24,
+					// Fallen branches belong under trees: forest patches keep the full chance, open ground half
+					ClearingChanceMul01 = 0.5f,
+					ScaleMin = 0.8f,
+					ScaleMax = 1.25f,
+					MaxPerChunk = 40,
 				},
-			], ConcatClusters( BuildStoneClusters(), BuildForageClusters() ) ),
+			], ConcatClusters( ConcatClusters( ConcatClusters( BuildStoneClusters(), BuildForageClusters() ), BuildRedwoodClusters() ), BuildPoiClusters() ) ),
 		};
 
 	bool ShouldScatterVegetation( int verticesPerSide )
@@ -2869,6 +2937,8 @@ public sealed partial class TerrainWorldManager : Component
 		BiomePopulationRegistry.Clear();
 		BiomePopulationRespawnQueue.Clear();
 		EnemyCampSites.ClearWorldCamps();
+		PoiSites.ClearWorldPois();
+		PipeRoutePlanner.ClearCache();
 		EntityChunkMemory.Get( Scene )?.Clear();
 		InvalidateMinimapHostCache();
 	}
@@ -2903,6 +2973,7 @@ public sealed partial class TerrainWorldManager : Component
 			OceanRingWidthMeters = OceanRingWidthMeters,
 			ChunkSizeMeters = ChunkSizeMeters,
 			BiomePreviewMetersPerPixel = BiomePreviewMetersPerPixel,
+			WorldId = existing?.WorldId ?? "",
 			FirstGeneratedUtc = existing?.FirstGeneratedUtc ?? "",
 			LastLoadedUtc = existing?.LastLoadedUtc ?? "",
 			DayNumber = existing is not null
@@ -2928,7 +2999,8 @@ public sealed partial class TerrainWorldManager : Component
 			return;
 
 		var settings = BuildGenerationSettings();
-		var sample = _backend.Sample( settings, 0f, 0f );
+		var centre = _loadCentreMeters;
+		var sample = _backend.Sample( settings, centre.x, centre.y );
 		var groundZMeters = sample.IsInsideWorld ? sample.HeightMeters : 0f;
 		var viewHeight = Math.Max( ChunkSizeMeters * 0.75f, 128f );
 		var lookAhead = Math.Max( ChunkSizeMeters * 0.5f, 64f );
@@ -2943,14 +3015,18 @@ public sealed partial class TerrainWorldManager : Component
 		var groundEngine = TerrainWorldUnits.MetersToEngine( groundZMeters );
 		var viewHeightEngine = TerrainWorldUnits.MetersToEngine( viewHeight );
 		var lookAheadEngine = TerrainWorldUnits.MetersToEngine( lookAhead );
-		cam.WorldPosition = new Vector3( 0f, -lookAheadEngine * 0.35f, groundEngine + viewHeightEngine );
-		var lookTarget = new Vector3( 0f, lookAheadEngine, groundEngine );
+		var cx = TerrainWorldUnits.MetersToEngine( centre.x );
+		var cy = TerrainWorldUnits.MetersToEngine( centre.y );
+		cam.WorldPosition = new Vector3( cx, cy - lookAheadEngine * 0.35f, groundEngine + viewHeightEngine );
+		var lookTarget = new Vector3( cx, cy + lookAheadEngine, groundEngine );
 		cam.WorldRotation = Rotation.LookAt( (lookTarget - cam.WorldPosition).Normal, Vector3.Up );
 	}
 
 	bool _settling;
 	/// <summary>True while the world load screen is up (generating, then settling). The day / night cycle holds its clock meanwhile.</summary>
 	public bool IsLoadScreenUp => IsWorldLoading || _settling;
+	/// <summary>The world has loaded and settled and the load screen is gone (main.scene spawns the player then).</summary>
+	public bool IsWorldReady => _worldLoadStarted && !IsLoadScreenUp;
 	float _settleStartedAt;
 	int _settleGoodFrames;
 	/// <summary>A frame slower than this breaks the streak (16.7 ms = 60 fps; the engine's idle throttles still pass).</summary>

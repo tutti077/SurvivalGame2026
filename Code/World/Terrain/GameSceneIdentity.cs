@@ -4,7 +4,8 @@ namespace Survival;
 public static class GameSceneIdentity
 {
 	public const string MainMenuScenePath = "scenes/mainmenu.scene";
-	public const string GameScenePath = "scenes/terrainTest.scene";
+	/// <summary>The world the main menu's New / Load opens (terrainTest is the scratch copy for testing).</summary>
+	public const string GameScenePath = "scenes/main.scene";
 
 	public static bool IsMainMenu( Scene scene )
 		=> TryGetSceneTitle( scene, out var title )

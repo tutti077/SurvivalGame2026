@@ -353,23 +353,29 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Water" ), Title( "Beach Width (m)" ), Range( 0f, 40f ), Step( 0.5f ), Description( "Land within this distance of a lake or sea shore blends from the sand of the bed into the biome ground (Mark 2026-10-22: a nice blend, not a zigzag where the ground paint switched between two 2 m vertices). 0 = no beach." )]
 	public float BeachWidthMeters { get; set; } = 10f;
 
-	[Property, Group( "Water" ), Title( "Ocean Max Depth (m)" ), Range( 0f, 1000f ), Step( 5f ), Description( "The deep ocean floor, below sea level, past the shelf and its drop-off (Mark 2026-10-22: 300 m). 0 = flat at sea level." )]
-	public float OceanMaxDepthMeters { get; set; } = 300f;
+	[Property, Group( "Water" ), Title( "Ocean Max Depth (m)" ), Range( 0f, 2000f ), Step( 5f ), Description( "The deep ocean floor, below sea level: the rim ocean past its shelf, and every sea inside the land that is joined to the rim (Mark 2026-11-18: 1000 m, for the ocean life down in the depths). Water wholly enclosed by land stops at Lake Max Depth. 0 = flat at sea level." )]
+	public float OceanMaxDepthMeters { get; set; } = 1000f;
 
 	[Property, Group( "Water" ), Title( "Ocean Shelf Depth (m)" ), Range( 0f, 200f ), Step( 1f ), Description( "Depth at the outer edge of the continental shelf: the floor falls gently from the beach to this over Ocean Shelf Width, then drops off to Ocean Max Depth over Ocean Drop-off Width." )]
 	public float OceanShelfDepthMeters { get; set; } = 30f;
 
-	[Property, Group( "Water" ), Title( "Ocean Shelf Width (m)" ), Range( 20f, 2500f ), Step( 10f ), Description( "Distance past the land edge over which the floor falls from the beach to Ocean Shelf Depth — steepest at the shore (900 m and 30 m: about 1:15 at the beach), level by the shelf edge." )]
-	public float OceanShelfWidthMeters { get; set; } = 900f;
+	[Property, Group( "Water" ), Title( "Ocean Shelf Width (m)" ), Range( 20f, 2500f ), Step( 10f ), Description( "Distance past the land edge over which the floor falls from the beach to Ocean Shelf Depth — steepest at the shore (300 m and 30 m: about 1:5 at the beach), level by the shelf edge. 200 m: the floor slowly descends, then really drops off (Mark 2026-11-18)." )]
+	public float OceanShelfWidthMeters { get; set; } = 200f;
 
-	[Property, Group( "Water" ), Title( "Ocean Drop-off Width (m)" ), Range( 20f, 2500f ), Step( 10f ), Description( "Past the shelf the floor falls from Ocean Shelf Depth to Ocean Max Depth over this distance." )]
-	public float OceanDropOffWidthMeters { get; set; } = 700f;
+	[Property, Group( "Water" ), Title( "Ocean Drop-off Width (m)" ), Range( 20f, 2500f ), Step( 10f ), Description( "Past the shelf the floor falls from Ocean Shelf Depth to Ocean Max Depth over this distance, steepest right at the shelf edge (1500 m and a 1000 m floor: about 50 degrees there). The rim ocean only; a sea inside the land falls 1.5 m of run per metre of depth." )]
+	public float OceanDropOffWidthMeters { get; set; } = 1500f;
 
-	[Property, Group( "Water" ), Title( "Lake Max Depth (m)" ), Range( 0f, 60f ), Step( 0.5f ), Description( "Lakes are carved as bowls sloping down toward their middle, to this depth below sea level. 0 = flat at sea level." )]
-	public float LakeMaxDepthMeters { get; set; } = 8f;
+	[Property, Group( "Water" ), Title( "Lake Max Depth (m)" ), Range( 0f, 400f ), Step( 1f ), Description( "The deepest a body of water wholly enclosed by land gets (Mark 2026-11-18: 50 m); water joined to the rim is ocean and goes to Ocean Max Depth. Past the shelf the bed tips down toward this, unevenly - benches, mounds, knolls. Only water wide enough reaches it; a pond stays on its shelf. 0 = flat at the water level." )]
+	public float LakeMaxDepthMeters { get; set; } = 50f;
 
-	[Property, Group( "Water" ), Title( "Lake Shelf Width (m)" ), Range( 5f, 1000f ), Step( 5f ), Description( "Distance from a lake's shore over which its floor falls to Lake Max Depth — steepest at the shore (100 m and 8 m: about 1:6). Measured from the shoreline itself, so a lake is as deep in the middle however its mask is shaped (the old mask-based ramp left most lakes under a metre deep)." )]
-	public float LakeShelfWidthMeters { get; set; } = 100f;
+	[Property, Group( "Water" ), Title( "Lake Shelf Depth (m)" ), Range( 0f, 100f ), Step( 0.5f ), Description( "Depth at the outer edge of a lake shelf: the floor falls gently from the shore to this over Lake Shelf Width, then drops off to Lake Max Depth." )]
+	public float LakeShelfDepthMeters { get; set; } = 15f;
+
+	[Property, Group( "Water" ), Title( "Lake Drop-off Width (m)" ), Range( 20f, 2000f ), Step( 10f ), Description( "Past the shelf the bed falls to its full depth over at least this distance (an ocean takes longer: 1.5 m of run per metre of depth), steepest right at the shelf edge." )]
+	public float LakeDropOffWidthMeters { get; set; } = 300f;
+
+	[Property, Group( "Water" ), Title( "Lake Shelf Width (m)" ), Range( 5f, 1000f ), Step( 5f ), Description( "Distance from a lake's shore over which its floor falls to Lake Shelf Depth — steepest at the shore (200 m and 15 m: about 1:7). Measured from the shoreline itself, so a lake is as deep in the middle however its mask is shaped (the old mask-based ramp left most lakes under a metre deep)." )]
+	public float LakeShelfWidthMeters { get; set; } = 200f;
 
 	[Property, Group( "Coast" ), Title( "Beach Blend Band (m)" ), Range( 100f, 3000f ), Step( 50f ), Description( "Width from land edge where height eases toward sea for beach coasts." )]
 	public float CoastalBeachBlendBandMeters { get; set; } = 800f;
@@ -479,8 +485,8 @@ public sealed partial class TerrainPreviewSettings
 	[Property, Group( "Biome Terrain" ), Title( "Redwood Ledge Face Slope (deg)" ), Range( 45f, 89f ), Step( 1f ), Description( "Steepest a ledge face may be. The face width is the larger of Face Width and height ÷ tan(this), so a tall ledge spreads over several grid rows and the 2 m mesh can follow it without fins (2026-10-07: 1 m faces on 30 m ledges were spiky). 70° is still a cliff (pawn limit 50°)." )]
 	public float BiomeRedwoodLedgeFaceSlopeDegrees { get; set; } = 70f;
 
-	[Property, Group( "Biome Terrain" ), Title( "Redwood Ledge Ramp Spacing (m)" ), Range( 10f, 120f ), Step( 2f ), Description( "Grid spacing of the walk-up notches for a 5 m ledge; taller ledges get wider, further-apart notches (up to 2.5×). Any ledge has a notch within ~1.4× its spacing (28 m → within ~40 m for 5 m ledges, ~100 m for 15 m ledges; typically 10 m)." )]
-	public float BiomeRedwoodLedgeRampSpacingMeters { get; set; } = 28f;
+	[Property, Group( "Biome Terrain" ), Title( "Redwood Ledge Ramp Spacing (m)" ), Range( 10f, 120f ), Step( 2f ), Description( "Grid spacing of the walk-up notches for a 5 m ledge; taller ledges get wider, further-apart notches (up to 2.5×). Any ledge has a notch within ~1.4× its spacing (64 m → within ~90 m; Mark 2026-11-16: at 28 m the notches every few metres read as teeth along each shelf)." )]
+	public float BiomeRedwoodLedgeRampSpacingMeters { get; set; } = 64f;
 
 	[Property, Group( "Biome Terrain" ), Title( "Redwood Ledge Ramp Width (m)" ), Range( 2f, 40f ), Step( 1f ), Description( "Width of each walk-up notch along the ledge (varies 0.6–1.4× per notch)." )]
 	public float BiomeRedwoodLedgeRampWidthMeters { get; set; } = 6f;

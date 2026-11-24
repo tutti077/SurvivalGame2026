@@ -10,6 +10,9 @@ public static class WorldSessionState
 	static int _worldSeed = 1337;
 	static TerrainWorldSettingsSource _settingsSource = TerrainWorldSettingsSource.WorldRecipeFirst;
 
+	/// <summary>A world was picked in the main menu and not yet handed to the scene's <see cref="TerrainWorldManager"/>.</summary>
+	public static bool HasPendingWorld => _hasPendingWorld;
+
 	/// <summary>Last world chosen from the menu (survives after <see cref="ApplyTo"/>).</summary>
 	public static string ActiveWorldName
 		=> string.IsNullOrWhiteSpace( _worldName ) ? "TestWorld" : _worldName;

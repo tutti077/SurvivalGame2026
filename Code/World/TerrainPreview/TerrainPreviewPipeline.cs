@@ -132,7 +132,7 @@ public static class TerrainPreviewPipeline
 		// coast wherever a chunk vertex landed on the circle (x = ±20 000 m on the axes, 2026-10-22)
 		if ( distMeters >= landRadius )
 		{
-			var ocean = SampleRimOcean( settings, distMeters - landRadius );
+			var ocean = SampleRimOcean( settings, worldXMeters, worldYMeters, distMeters );
 			if ( !applyRivers || !settings.EnableRivers )
 				return ocean;
 			var weights = TerrainPreviewBiomeResolver.SamplePlacementWeights( settings, worldXMeters, worldYMeters, 0f );
@@ -365,15 +365,38 @@ public static class TerrainPreviewPipeline
 	/// The rim ocean, carved (Mark 2026-10-22: "carve out the ocean … a cheap bowl"): the floor eases from the beach (sea
 	/// level at the land edge) down to Ocean Max Depth over Ocean Shelf Width.
 	/// </summary>
-	static TerrainPreviewSample SampleRimOcean( TerrainPreviewSettings settings, float metersPastLandEdge )
+	static TerrainPreviewSample SampleRimOcean( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters, float distMeters )
 	{
-		return BuildOpenWaterSample( settings, Math.Max( 50f, settings.MaxTerrainHeightMeters ), 0f, settings.SeaLevelMeters - OceanDepthMeters( settings, metersPastLandEdge ) );
+		return BuildOpenWaterSample( settings, Math.Max( 50f, settings.MaxTerrainHeightMeters ), 0f, settings.SeaLevelMeters - RimOceanDepthMeters( settings, worldXMeters, worldYMeters, distMeters, relief: true ) );
+	}
+
+	/// <summary>
+	/// Depth (m) of the rim ocean at a point past the land edge: the radial profile off a coast (<see cref="OceanDepthMeters"/>),
+	/// but never shallower than the sea inside the land disc is where this point's radius crosses the edge - an ocean
+	/// that reaches the edge carries on outward at the depth it has there instead of rising to a ridge on the circle.
+	/// </summary>
+	public static float RimOceanDepthMeters( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters, float distMeters, bool relief )
+	{
+		var radial = OceanDepthMeters( settings, distMeters - settings.LandRadiusMeters );
+		var pull = (settings.LandRadiusMeters - 1f) / Math.Max( 1f, distMeters );
+		return Math.Max( radial, InteriorWaterDepthMeters( settings, worldXMeters * pull, worldYMeters * pull, relief ) );
+	}
+
+	/// <summary>Depth (m) of the lake / interior sea over a point inside the land disc; 0 on dry land.</summary>
+	public static float InteriorWaterDepthMeters( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters, bool relief )
+	{
+		if ( !settings.EnableInteriorWaterLayer || !TerrainPreviewLandDiskFields.TrySampleLakeMask01AtWorld( settings, worldXMeters, worldYMeters, out var mask ) )
+			return 0f;
+		if ( !TerrainPreviewLakeShoreHeight.IsSubmergedByLakeMask( settings, mask, worldXMeters, worldYMeters ) )
+			return 0f;
+		return WaterDepthMeters( settings, worldXMeters, worldYMeters, MetersIntoLake( settings, worldXMeters, worldYMeters, mask ), relief );
 	}
 
 	/// <summary>
 	/// Rim ocean depth (m) at a distance past the land edge: the continental shelf falls from the beach to Ocean Shelf
-	/// Depth on <see cref="BowlProfile"/> over Ocean Shelf Width, then the drop-off eases down to Ocean Max Depth over
-	/// Ocean Drop-off Width (Mark 2026-10-22: a 300 m deep ocean). seawater.shader, water_common.hlsl and
+	/// Depth on <see cref="BowlProfile"/> over Ocean Shelf Width, then the drop-off falls to Ocean Max Depth over
+	/// Ocean Drop-off Width on the same profile - steepest right at the shelf edge, levelling out in the deep (Mark 2026-11-18:
+	/// "when it hits 200m it starts REALLY dropping off"; a smoothstep started flat and read as one long ramp). seawater.shader, water_common.hlsl and
 	/// <see cref="SeaWaves"/> repeat it.
 	/// </summary>
 	public static float OceanDepthMeters( TerrainPreviewSettings settings, float metersPastLandEdge )
@@ -383,7 +406,7 @@ public static class TerrainPreviewPipeline
 		var shelfWidth = Math.Max( 1f, settings.OceanShelfWidthMeters );
 		var shelf = shelfDepth * BowlProfile( Math.Clamp( metersPastLandEdge / shelfWidth, 0f, 1f ) );
 		var d = Math.Clamp( (metersPastLandEdge - shelfWidth) / Math.Max( 1f, settings.OceanDropOffWidthMeters ), 0f, 1f );
-		return shelf + ((maxDepth - shelfDepth) * d * d * (3f - (2f * d)));
+		return shelf + ((maxDepth - shelfDepth) * BowlProfile( d ));
 	}
 
 	/// <summary>
@@ -480,11 +503,60 @@ public static class TerrainPreviewPipeline
 
 	/// <summary>Lake floor under a submerged point: a bowl from the shore down to Lake Max Depth under the lake's water level toward the middle.</summary>
 	static float LakeFloorMeters( TerrainPreviewSettings settings, float rawLakeMask, float worldXMeters, float worldYMeters, float waterLevelMeters )
-		=> waterLevelMeters - LakeDepthMeters( settings, MetersIntoLake( settings, worldXMeters, worldYMeters, rawLakeMask ) );
+		=> waterLevelMeters - WaterDepthMeters( settings, worldXMeters, worldYMeters, MetersIntoLake( settings, worldXMeters, worldYMeters, rawLakeMask ), relief: true );
 
-	/// <summary>Lake depth at a distance in from the shore: <see cref="BowlProfile"/> over Lake Shelf Width.</summary>
-	public static float LakeDepthMeters( TerrainPreviewSettings settings, float metersFromShore )
-		=> Math.Max( 0f, settings.LakeMaxDepthMeters ) * BowlProfile( Math.Clamp( metersFromShore / Math.Max( 1f, settings.LakeShelfWidthMeters ), 0f, 1f ) );
+	/// <summary>Metres of run the deep bed takes per metre it falls past the shelf (1.5: a 1000 m ocean reaches its floor ~1.5 km past the shelf).</summary>
+	public const float DeepRunPerMeter = 1.5f;
+
+	/// <summary>
+	/// Depth (m) of the water inside the land disc at a distance in from the shore. Two kinds of water, one shape
+	/// (Mark 2026-11-18): water "totally encircled with land" goes down to Lake Max Depth (50 m), an ocean - water joined
+	/// to the rim, "between a biome and the caldera wall" - to Ocean Max Depth (1000 m)
+	/// (<see cref="TerrainPreviewLandDiskFields.SampleOceanness01"/>). Both: a shelf to Lake Shelf Depth over Lake Shelf
+	/// Width, then the bed tips down and keeps falling, <see cref="DeepRunPerMeter"/> of run per metre of depth (never
+	/// less than Lake Drop-off Width), on <see cref="BowlProfile"/>.
+	/// <para>
+	/// With <paramref name="relief"/> (the carved bed) nothing about it is regular - "never a perfectly sloped piece of
+	/// terrain": the distance is stretched and squeezed by a slow noise, so the drop starts nearer the shore here and
+	/// further out there; the fall is terraced, steep runs between flatter benches; and reef relief - mounds, hollows and
+	/// knolls a few metres high - covers the lot, scaled by the depth so the waterline stays where it is. Without it:
+	/// the smooth shape, which sea_waves.hlsl repeats for the waves (the GPU never needs the bumps).
+	/// </para>
+	/// </summary>
+	public static float WaterDepthMeters( TerrainPreviewSettings settings, float worldXMeters, float worldYMeters, float metersFromShore, bool relief )
+	{
+		var lakeMax = Math.Max( 0f, settings.LakeMaxDepthMeters );
+		var oceanMax = Math.Max( lakeMax, settings.OceanMaxDepthMeters );
+		var ocean = Math.Clamp( TerrainPreviewLandDiskFields.SampleOceanness01( settings, worldXMeters, worldYMeters ), 0f, 1f );
+		var maxDepth = lakeMax + ((oceanMax - lakeMax) * ocean * ocean * (3f - (2f * ocean)));
+		var shelfDepth = Math.Clamp( settings.LakeShelfDepthMeters, 0f, maxDepth );
+		var shelfWidth = Math.Max( 1f, settings.LakeShelfWidthMeters );
+		var dropWidth = Math.Max( Math.Max( 1f, settings.LakeDropOffWidthMeters ), (maxDepth - shelfDepth) * DeepRunPerMeter );
+		var seed = settings.WorldSeed;
+		var from = Math.Max( 0f, metersFromShore );
+		if ( relief )
+			from *= 0.65f + (0.7f * TerrainPreviewNoise.Fbm( seed + 9101, worldXMeters / 420f, worldYMeters / 420f, 2 ));
+		var d = Math.Clamp( (from - shelfWidth) / dropWidth, 0f, 1f );
+		if ( relief && d > 0f )
+		{
+			// Benches: five along the fall, their phase drifting across the sea so no two stretches of coast step alike
+			const float benches = 5f;
+			var phase = MathF.Tau * ((d * benches) + (2f * TerrainPreviewNoise.Fbm( seed + 9203, worldXMeters / 900f, worldYMeters / 900f, 2 )));
+			d = Math.Clamp( d + (0.75f * (MathF.Sin( phase ) - MathF.Sin( phase - (MathF.Tau * d * benches) )) / (MathF.Tau * benches)), 0f, 1f );
+		}
+		var depth = (shelfDepth * BowlProfile( Math.Clamp( from / shelfWidth, 0f, 1f ) )) + ((maxDepth - shelfDepth) * BowlProfile( d ));
+		if ( !relief || depth <= 0f )
+			return depth;
+		// Reef relief: broad mounds and hollows, and knolls standing up off the bed. Never more than 30 % of the depth, so
+		// nothing breaks the surface and the first metres off the beach stay a beach.
+		var amp = Math.Min( depth * 0.3f, 6f );
+		var mounds = (TerrainPreviewNoise.Fbm( seed + 9307, worldXMeters / 55f, worldYMeters / 55f, 3 ) - 0.5f) * 2f;
+		var knolls = Math.Max( 0f, TerrainPreviewNoise.RidgedFbm( seed + 9411, worldXMeters / 28f, worldYMeters / 28f, 2 ) - 0.62f ) * 2.6f;
+		// ...and the deep is country of its own: rises and basins hundreds of metres across, up to an eighth of the depth
+		// (±125 m on the 1000 m floor), so the ocean bed is never a plain
+		var swells = (TerrainPreviewNoise.Fbm( seed + 9517, worldXMeters / 700f, worldYMeters / 700f, 3 ) - 0.5f) * 2f * depth * 0.125f;
+		return Math.Max( depth * 0.5f, depth + swells + (amp * ((mounds * 0.7f) - knolls)) );
+	}
 
 	/// <summary>
 	/// Distance (m) in from a lake's shore: the traced shoreline's signed distance (<see cref="TerrainPreviewLakeShoreDistance"/>),

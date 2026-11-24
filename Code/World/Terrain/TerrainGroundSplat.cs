@@ -73,7 +73,7 @@ public static class TerrainGroundSplat
 		var count = verticesPerSide * verticesPerSide;
 		for ( var i = 0; i < count; i++ )
 		{
-			var c = TerrainGroundPatch.CoverageAt( patches, chunkMinX + ((i % verticesPerSide) * step), chunkMinY + ((i / verticesPerSide) * step) );
+			var c = TerrainGroundPatch.TilledCoverageAt( patches, chunkMinX + ((i % verticesPerSide) * step), chunkMinY + ((i / verticesPerSide) * step) );
 			if ( c <= 0f )
 				continue;
 			var s = splat[i];

@@ -368,10 +368,42 @@ PS
 	// The hoe's tilled soil (voxel ground, TerrainWorldManager.Voxel / VoxelMesher): the same darkening channel as the far
 	// canopy, but over sand it darkens to this earth brown instead (Mark 2026-11-02: "Tilled ground ... just be dark brown")
 	float3 SplatTilledColor < UiType( Color ); Default3( 0.26, 0.16, 0.08 ); UiGroup( "Splat,40/105" ); >;
+	// Far Redwood floor in the trees' shade, as a share of its own lit colour (the far tier's canopy channel blends to it)
+	float SplatRedwoodShade < Default( 0.3 ); Range( 0.0, 1.0 ); UiGroup( "Splat,40/106" ); >;
+	// Near-tier Redwood floor beyond the trees' real shadows: its brightness there (the far tier's shaded floor is 0.51),
+	// eased in between Start and End metres from the camera (End = Tree Shadow Range plus the cascade's fade)
+	float SplatRedwoodFarFloor < Default( 0.51 ); Range( 0.0, 1.0 ); UiGroup( "Splat,40/107" ); >;
+	float SplatRedwoodShadeStartMeters < Default( 270.0 ); Range( 0.0, 2000.0 ); UiGroup( "Splat,40/108" ); >;
+	float SplatRedwoodShadeEndMeters < Default( 370.0 ); Range( 1.0, 2000.0 ); UiGroup( "Splat,40/109" ); >;
 	float SplatMacroVariation < Default( 0.22 ); Range( 0.0, 1.0 ); UiGroup( "Splat,40/110" ); >;
 	// Dry / lush hue drift on top of the brightness (Mark 2026-11-03: "everything looks cartoony from afar" — every biome
 	// was one flat colour across a whole hillside): 0 = off, 1 = about ±8 % red and ±12 % blue between patches
 	float SplatMacroHue < Default( 1.0 ); Range( 0.0, 2.0 ); UiGroup( "Splat,40/120" ); >;
+
+	// Redwood far tile (Mark 2026-11-16: "a more advanced ground texture ... with a LOD version we use at a distance"): a
+	// second Redwood texture tiled every Far Meters carries the large patterns a 4 m tile cannot hold (moss carpets, bare
+	// earth, sorrel); the 4 m tile fades into it between Fade Start and Fade End (camera distance, metres). Its mean colour
+	// matches the near tile's, so the fade never shifts the ground's colour.
+	CreateInputTexture2D( TextureSplatRedwoodFar, Srgb, 8, "", "_color", "Splat,40/15", Default3( 0.35, 0.16, 0.13 ) );
+	Texture2D g_tSplatRedwoodFar < Channel( RGB, Box( TextureSplatRedwoodFar ), Srgb ); OutputFormat( RGBA8888 ); SrgbRead( true ); >;
+	float SplatRedwoodFarMeters < Default( 32.0 ); Range( 4.0, 256.0 ); UiGroup( "Splat,40/130" ); >;
+	float SplatRedwoodFarStartMeters < Default( 25.0 ); Range( 0.0, 500.0 ); UiGroup( "Splat,40/140" ); >;
+	float SplatRedwoodFarEndMeters < Default( 90.0 ); Range( 1.0, 1000.0 ); UiGroup( "Splat,40/150" ); >;
+
+	// Slope texturing (Mark 2026-11-16: "maybe 30 degrees or more is rock ... at the max height we can walk we should have a
+	// steep rock texture"), every biome, ground only: rocky soil from Rock Start to Rock Full degrees, a cliff face from
+	// Cliff Start to Cliff Full — Cliff Full is the pawn's walkable limit (PlayerMovement.WalkableGroundAngleDegrees, 50°).
+	// The slope comes from the interpolated vertex normal (continuous, like the triplanar weights), and the thresholds
+	// wander by the edge noise so the rock sprinkles in as patches, never as a contour line. Beaches / beds keep their sand.
+	CreateInputTexture2D( TextureSplatSlopeRock, Srgb, 8, "", "_color", "Splat,40/45", Default3( 0.42, 0.39, 0.35 ) );
+	CreateInputTexture2D( TextureSplatCliff, Srgb, 8, "", "_color", "Splat,40/47", Default3( 0.36, 0.36, 0.37 ) );
+	Texture2D g_tSplatSlopeRock < Channel( RGB, Box( TextureSplatSlopeRock ), Srgb ); OutputFormat( RGBA8888 ); SrgbRead( true ); >;
+	Texture2D g_tSplatCliff < Channel( RGB, Box( TextureSplatCliff ), Srgb ); OutputFormat( RGBA8888 ); SrgbRead( true ); >;
+	float SlopeRockStartDegrees < Default( 30.0 ); Range( 0.0, 90.0 ); UiGroup( "Slope,45/10" ); >;
+	float SlopeRockFullDegrees < Default( 38.0 ); Range( 0.0, 90.0 ); UiGroup( "Slope,45/20" ); >;
+	float SlopeCliffStartDegrees < Default( 47.0 ); Range( 0.0, 90.0 ); UiGroup( "Slope,45/30" ); >;
+	float SlopeCliffFullDegrees < Default( 50.0 ); Range( 0.0, 90.0 ); UiGroup( "Slope,45/40" ); >;
+	float SlopeEdgeWanderDegrees < Default( 5.0 ); Range( 0.0, 20.0 ); UiGroup( "Slope,45/50" ); >;
 
 	// One ground layer at this pixel: point-sampled up close, its filtered colour once a texel is under a pixel. No
 	// visible repeat: a second copy of the tile, turned and shifted, takes over in noise patches (pick 0..1) — a hard
@@ -399,6 +431,10 @@ PS
 	float4 g_vSeaFoamRect < Attribute( "SeaFoamRect" ); Default4( 0.0, 0.0, 1.0, 0.0 ); >;
 	// x = sea level (engine units)
 	float4 g_vSeaFoamInfo < Attribute( "SeaFoamInfo" ); Default4( 0.0, 0.0, 0.0, 0.0 ); >;
+	// x = sea level (engine units), w = 1 while the sea is drawn (TerrainWorldManager.SeaWater, scene attribute)
+	float4 g_vSeaLightPlane < Attribute( "SeaFogPlane" ); Default4( 0.0, 0.0, 0.0, 0.0 ); >;
+	// How far the sun's light is scattered under water (0 = lit like dry land, 1 = fully wrapped): see the sun loop
+	float PixelUnderwaterScatter < Default( 0.85 ); Range( 0.0, 1.0 ); UiGroup( "Lighting,20/90" ); >;
 
 	float SeaWetMemory( float3 vPositionWs )
 	{
@@ -415,8 +451,9 @@ PS
 
 	// The five ground tiles at one projection, added in with weight w. Every derivative is taken by the caller, outside
 	// any branch, so a projection that carries no weight can be skipped without undefined ddx / ddy.
-	void SplatProjection( float2 uv, float2 dUvX, float2 dUvY, float pick, float w,
-		inout float3 grass, inout float3 redwood, inout float3 amber, inout float3 rock, inout float3 sand )
+	void SplatProjection( float2 uv, float2 dUvX, float2 dUvY, float pick, float w, float slopeAny,
+		inout float3 grass, inout float3 redwood, inout float3 amber, inout float3 rock, inout float3 sand,
+		inout float3 slopeRock, inout float3 cliff )
 	{
 		float2 vSize;
 		g_tColor.GetDimensions( vSize.x, vSize.y );
@@ -428,6 +465,12 @@ PS
 		amber += SplatLayer( g_tSplatAmber, uv, dUvX, dUvY, smooth, p ) * w;
 		rock += SplatLayer( g_tSplatMountain, uv, dUvX, dUvY, smooth, p ) * w;
 		sand += SplatLayer( g_tSplatSand, uv, dUvX, dUvY, smooth, p ) * w;
+		// Flat ground (the most of it) never pays for the slope layers
+		if ( slopeAny > 0.0 )
+		{
+			slopeRock += SplatLayer( g_tSplatSlopeRock, uv, dUvX, dUvY, smooth, p ) * w;
+			cliff += SplatLayer( g_tSplatCliff, uv, dUvX, dUvY, smooth, p ) * w;
+		}
 	}
 
 	// Triplanar (Mark 2026-10-29, voxel pit walls: "the rendering issue with the vertical lines" — the tiles were projected
@@ -452,6 +495,10 @@ PS
 		float2 dUvYx = ddx( vUvY );
 		float2 dUvYy = ddy( vUvY );
 		float3 vGeoN = abs( normalize( vNormalWs ) );
+		// Redwood far tile coordinates (derivatives here, before any branch)
+		float2 vFarUv = vPositionWs.xy / (max( SplatRedwoodFarMeters, 1.0 ) * 40.0);
+		float2 dFarX = ddx( vFarUv );
+		float2 dFarY = ddy( vFarUv );
 		float3 vTri = pow( vGeoN, 8.0 );
 		vTri /= max( vTri.x + vTri.y + vTri.z, 1e-5 );
 
@@ -475,18 +522,45 @@ PS
 		// Which copy of the tile shows here: patches a few metres across, hard-edged up close
 		float pickN = g_tSplatNoise.SampleLevel( g_sSplatNoiseSampler, m / 9.0 + float2( 0.11, 0.83 ), 0 ).g;
 
-		float3 grass = 0, redwood = 0, amber = 0, rock = 0, sand = 0;
+		// Slope in degrees from the vertex normal, pushed about by the edge noise so the rock comes in as patches
+		float slopeRaw = degrees( acos( saturate( vGeoN.z ) ) );
+		float slopeWander = (n1.g * 0.5 + n2.r * 0.5 - 0.5) * 2.0 * SlopeEdgeWanderDegrees;
+		float slopeDeg = slopeRaw + slopeWander;
+		float slopeRockAmt = smoothstep( SlopeRockStartDegrees, max( SlopeRockFullDegrees, SlopeRockStartDegrees + 0.1 ), slopeDeg );
+		// The cliff only wanders a little: with the full ±wander, broad 45° hillsides (Redwood swells) caught cliff patches
+		// that read as blue-grey puddles (Mark 2026-11-16, the shelves pass)
+		float cliffAmt = smoothstep( SlopeCliffStartDegrees, max( SlopeCliffFullDegrees, SlopeCliffStartDegrees + 0.1 ), slopeRaw + slopeWander * 0.3 );
+
+		float3 grass = 0, redwood = 0, amber = 0, rock = 0, sand = 0, slopeRock = 0, cliff = 0;
 		if ( vTri.z > 0.002 )
-			SplatProjection( vUv, dUvX, dUvY, pickN, vTri.z, grass, redwood, amber, rock, sand );
+			SplatProjection( vUv, dUvX, dUvY, pickN, vTri.z, slopeRockAmt, grass, redwood, amber, rock, sand, slopeRock, cliff );
 		if ( vTri.x > 0.002 )
-			SplatProjection( vUvX, dUvXx, dUvXy, pickN, vTri.x, grass, redwood, amber, rock, sand );
+			SplatProjection( vUvX, dUvXx, dUvXy, pickN, vTri.x, slopeRockAmt, grass, redwood, amber, rock, sand, slopeRock, cliff );
 		if ( vTri.y > 0.002 )
-			SplatProjection( vUvY, dUvYx, dUvYy, pickN, vTri.y, grass, redwood, amber, rock, sand );
+			SplatProjection( vUvY, dUvYx, dUvYy, pickN, vTri.y, slopeRockAmt, grass, redwood, amber, rock, sand, slopeRock, cliff );
+
+		// Redwood: the 4 m tile fades into the 32 m far tile with distance (top projection; point-sampled while its texels
+		// are still bigger than a pixel, filtered once they are not, like the near layers)
+		float2 vFarSize;
+		g_tSplatRedwoodFar.GetDimensions( vFarSize.x, vFarSize.y );
+		float farSmooth = smoothstep( 0.6, 2.0, max( length( dFarX ), length( dFarY ) ) * vFarSize.x );
+		float3 redwoodFar = SplatLayerOnce( g_tSplatRedwoodFar, vFarUv, dFarX, dFarY, farSmooth );
+		float farAmt = smoothstep( SplatRedwoodFarStartMeters * 40.0, max( SplatRedwoodFarEndMeters, SplatRedwoodFarStartMeters + 1.0 ) * 40.0,
+			distance( vPositionWs, g_vCameraPositionWs ) );
+		redwood = lerp( redwood, redwoodFar, farAmt );
 
 		float3 albedo = grass * e.r + redwood * e.g + amber * e.b;
 		// Mountain from 0.5 (TerrainPreviewBiomeResolver), the edge wandering like the others
 		float mountain = smoothstep( 0.47, 0.53, vWeights.a + (n2.r * 0.5 + n1.g * 0.5 - 0.5) * SplatEdgeWander * 0.6 );
 		albedo = lerp( albedo, rock, mountain );
+		// Slopes: rocky soil from ~30°, the cliff face at the walkable limit. On the dark Redwood floor (sRGB ~71/49/34) the
+		// shared gravel (~103/95/82) ringed every drop in a bright halo (Mark 2026-11-16, the shelves pass): there both
+		// layers darken toward a duff-stained brown rock (gravel ~76/62/48, cliff ~83/75/67), off the mountain weight.
+		float redwoodRock = e.g * (1.0 - mountain);
+		slopeRock *= lerp( float3( 1.0, 1.0, 1.0 ), float3( 0.52, 0.40, 0.32 ), redwoodRock );
+		cliff *= lerp( float3( 1.0, 1.0, 1.0 ), float3( 0.80, 0.72, 0.66 ), redwoodRock );
+		albedo = lerp( albedo, slopeRock, slopeRockAmt );
+		albedo = lerp( albedo, cliff, cliffAmt );
 		// Beaches and beds: sand, the band's edge broken into patches
 		float sandAmt = smoothstep( 0.3, 0.7, vSplat.x + (n2.g * 0.6 + n1.r * 0.4 - 0.5) * 0.5 );
 		albedo = lerp( albedo, sand, sandAmt );
@@ -496,8 +570,22 @@ PS
 		// Wet, far canopy, macro variation
 		albedo *= 1.0 - SplatWetDarken * max( saturate( vSplat.y ), SeaWetMemory( vPositionWs ) );
 		// z darkens: toward the far canopy colour on land, toward the tilled earth where the ground is sand under it
-		float3 darkTarget = lerp( pow( SplatCanopyColor, 2.2 ), pow( SplatTilledColor, 2.2 ), step( 0.5, vSplat.x ) );
+		// Redwood ground darkens toward ITSELF in shade, not toward the canopy green: far Redwood floor stood bright orange
+		// in full sun beside the near floor, which lies in the trees' shadow (Mark 2026-11-23: "the LOD terrain of redwood ...
+		// feels like a different color"). vWeights.g = the Redwood share.
+		float3 canopyTarget = lerp( pow( SplatCanopyColor, 2.2 ), albedo * SplatRedwoodShade, saturate( vWeights.g ) );
+		// Tilled earth keeps the grain of the soil texture under it: the plain colour was one flat brown from rim to rim
+		// (Mark 2026-11-23: "solid colors are also not allowed"). The sand tile's brightness against its own average.
+		float flSoilGrain = dot( sand, float3( 0.333, 0.333, 0.333 ) ) / max( dot( g_tSplatSand.SampleLevel( g_sSplatSmooth, vUv, 12.0 ).rgb, float3( 0.333, 0.333, 0.333 ) ), 1e-4 );
+		float3 darkTarget = lerp( canopyTarget, pow( SplatTilledColor, 2.2 ) * clamp( flSoilGrain, 0.55, 1.6 ), step( 0.5, vSplat.x ) );
 		albedo = lerp( albedo, darkTarget, saturate( vSplat.z ) );
+		// Past the range where trees cast real shadows (Vegetation - Tree Shadow Range, 330 m) the Redwood floor stood in
+		// full sun and the shadows appeared out of nowhere as the player walked up (Mark 2026-11-23: "i can see light on
+		// areas that shouldnt have light cast on them ... this shadow comes outa nowhere"). The far trees cannot cast, so
+		// the floor out there takes the forest's average shade instead, eased in across the last of the real shadows; the
+		// far tier already carries it in its canopy channel (z), so it is not applied twice.
+		float flFarShade = smoothstep( SplatRedwoodShadeStartMeters * 40.0, SplatRedwoodShadeEndMeters * 40.0, distance( vPositionWs, g_vCameraPositionWs ) );
+		albedo *= lerp( 1.0, SplatRedwoodFarFloor, saturate( vWeights.g ) * flFarShade * ( 1.0 - saturate( vSplat.z ) ) );
 		// Macro variation at two scales (~360 m and ~30 m): brightness, and a warm-dry / cool-lush drift
 		float4 n4 = g_tSplatNoise.SampleLevel( g_sSplatNoiseSampler, m / 30.0 + float2( 0.53, 0.29 ), 0 );
 		albedo *= 1.0 + ((n3.r - 0.5) + (n4.r - 0.5) * 0.6) * SplatMacroVariation;
@@ -525,6 +613,76 @@ PS
 	// sets this by night (ambient-led), apply direct by day.
 	float FarCardAmbient < Attribute( "FarCardAmbient" ); Default( 1.0 ); >;
 	float PixelFarCard < Default( 0.0 ); Range( 0.0, 1.0 ); UiGroup( "Material,10/90" ); >;
+
+	// Ring fog: the same fog as shaders/environment/aerial_perspective.shader, applied here for draws that come AFTER
+	// that full-screen pass because they are not in the scene depth it reads - the FarTrees ring (a command list, never
+	// in the depth prepass). Set per draw by TerrainWorldManager.FarTrees from AerialPerspective.TryGetFog; the default
+	// z = 0 leaves every other draw untouched (those are fogged by the pass). Keep the maths in step with that shader.
+	//   RingFogShape  x = 1 / fog distance, y = 1 / scale height (1 / engine units), z = strength (0 = off),
+	//                 w = clear distance (engine units): no fog closer than this
+	float4 g_vRingFogShape < Attribute( "RingFogShape" ); Default4( 0.0, 0.0, 0.0, 0.0 ); >;
+	float3 g_vRingFogZenith < Attribute( "RingFogZenith" ); Default3( 0.25, 0.45, 0.85 ); >;
+	float3 g_vRingFogHorizon < Attribute( "RingFogHorizon" ); Default3( 0.72, 0.76, 0.84 ); >;
+	float4 g_vRingFogSunGlow < Attribute( "RingFogSunGlow" ); Default4( 1.0, 0.9, 0.7, 0.0 ); >;
+	float3 g_vRingFogSunDirection < Attribute( "RingFogSunDirection" ); Default3( 0.0, 0.0, 1.0 ); >;
+	//   RingFogMistTint / SunTint / Inverse / Start / Max, RingFogColorHold   the camera's biome air, the pass's FogMist* values, each its own
+	//                 scalar attribute (the density first rode in a float4 alpha and did not arrive as set: ring trees at the mist cap,
+	//                 2026-11-23)
+	float3 g_vRingFogMistTint < Attribute( "RingFogMistTint" ); Default3( 1.0, 1.0, 1.0 ); >;
+	float g_flRingFogMistInverse < Attribute( "RingFogMistInverse" ); Default( 0.0 ); >;
+	float g_flRingFogMistStart < Attribute( "RingFogMistStart" ); Default( 0.0 ); >;
+	float g_flRingFogMistMax < Attribute( "RingFogMistMax" ); Default( 1.0 ); >;
+	float g_flRingFogMistFloor < Attribute( "RingFogMistFloor" ); Default( 0.0 ); >;
+	float3 g_vRingFogMistSunTint < Attribute( "RingFogMistSunTint" ); Default3( 0.0, 0.0, 0.0 ); >;
+	// How much of their own hue the ring's trees keep in the fog (lower than the ground's: Mark 2026-11-23, "the earth
+	// material itself should hold more color than trees")
+	float g_flRingFogColorHold < Attribute( "RingFogColorHold" ); Default( 0.0 ); >;
+	float g_flRingFogMax < Attribute( "RingFogMax" ); Default( 1.0 ); >;
+	float3 g_vRingFogTint < Attribute( "RingFogTint" ); Default3( 1.0, 1.0, 1.0 ); >;
+
+	float3 RingFog( float3 vColor, float3 vPositionWs )
+	{
+		float flStrength = g_vRingFogShape.z;
+		if ( flStrength <= 0.0 )
+			return vColor;
+
+		float3 vRay = vPositionWs - g_vCameraPositionWs;
+		float flDist = length( vRay );
+		float3 dir = vRay / max( flDist, 1e-3 );
+		float flFogDist = max( flDist - g_vRingFogShape.w, 0.0 );
+		float3 vFrom = g_vCameraPositionWs + dir * g_vRingFogShape.w;
+
+		float k = g_vRingFogShape.y;
+		float h0 = max( vFrom.z, 0.0 ) * k;
+		float h1 = max( vPositionWs.z, 0.0 ) * k;
+		float dh = h1 - h0;
+		float flDensity = abs( dh ) > 1e-3 ? ( exp( -h0 ) - exp( -h1 ) ) / dh : exp( -h0 );
+		float flFog = min( 1.0 - exp( -flFogDist * flDensity * g_vRingFogShape.x ), g_flRingFogMax );
+
+		float h = saturate( dir.z );
+		float3 vSky = lerp( g_vRingFogHorizon, g_vRingFogZenith, pow( h, 0.5 ) );
+		float3 vSunDir = normalize( g_vRingFogSunDirection );
+		float2 vFlatDir = normalize( dir.xy + 1e-4 );
+		float2 vFlatSun = normalize( vSunDir.xy + 1e-4 );
+		float flSunSide = pow( saturate( dot( vFlatDir, vFlatSun ) * 0.5 + 0.5 ), 4.0 );
+		float flBand = 1.0 - saturate( h * 4.0 );
+		vSky = lerp( vSky, g_vRingFogSunGlow.rgb, saturate( g_vRingFogSunGlow.a * flSunSide * flBand ) );
+		float flSunDot = saturate( dot( normalize( float3( dir.xy, max( dir.z, 0.0 ) ) + float3( 0, 0, 1e-4 ) ), vSunDir ) );
+		vSky += g_vRingFogSunGlow.rgb * g_vRingFogSunGlow.a * ( pow( flSunDot, 48.0 ) * 0.8 + pow( flSunDot, 6.0 ) * 0.15 );
+
+		// The camera's biome air, as in the pass (MistColour / HoldColour there): the biome's mist - sky colour x tint, the
+		// sun's colour toward the sun - then the world fog toward the misted sky; only the world fog keeps part of the tree's own hue
+		float flLuma = dot( vColor, float3( 0.299, 0.587, 0.114 ) );
+		float3 vHold = lerp( float3( 1.0, 1.0, 1.0 ), clamp( vColor / max( flLuma, 1e-3 ), 0.35, 1.9 ), g_flRingFogColorHold );
+		float flPhase = pow( saturate( dot( dir, vSunDir ) * 0.5 + 0.5 ), 4.0 ) * saturate( vSunDir.z * 4.0 + 0.2 );
+		float3 vMistColour = lerp( vSky * g_vRingFogMistTint, g_vRingFogSunGlow.rgb * g_vRingFogMistSunTint, flPhase * step( 1e-4, dot( g_vRingFogMistSunTint, float3( 1.0, 1.0, 1.0 ) ) ) );
+		float flMistFloor = g_flRingFogMistFloor * smoothstep( g_flRingFogMistStart, g_flRingFogMistStart + 1600.0, flDist );
+		float flMist = min( flMistFloor + ( 1.0 - flMistFloor ) * ( 1.0 - exp( -max( flDist - g_flRingFogMistStart, 0.0 ) * g_flRingFogMistInverse ) ), g_flRingFogMistMax );
+		flMist *= step( 1e-9, g_flRingFogMistInverse );
+		float3 vMisted = lerp( vColor, vMistColour, flMist );
+		float3 vFogged = lerp( vMisted, lerp( vSky * g_vRingFogTint * vHold, vMistColour, flMist ), flFog );
+		return lerp( vColor, vFogged, flStrength );
+	}
 
 	float PixelRoughness < Default( 0.9 ); Range( 0.0, 1.0 ); UiGroup( "Material,10/30" ); >;
 	// 0 = no specular at all: no highlight from any light and no reflected sky / probe (the surface is pure diffuse —
@@ -624,8 +782,13 @@ PS
 		}
 
 		// Shadow maps / depth prepass: nothing below matters, only the cut-out shape (and the normal for the prepass).
+		// Opacity 1: under S_ALPHA_TEST this alpha is alpha-to-coverage, and the clip() above already made the cutout.
+		// Passing the raw mask alpha (0.5..1 inside the card, softer still in the mips) wrote depth to only part of each
+		// pixel's samples, and the colour pass (EQUAL against this depth) drew only those: canopies came out partly
+		// see-through — the caldera ring and anything behind a tree showed through the leaves, and the fog read the
+		// background's distance on them (Mark 2026-11-10).
 		if ( DepthNormals::WantsDepthNormals() )
-			return DepthNormals::Output( normalize( i.vNormalWs ), PixelRoughness, tex.a );
+			return DepthNormals::Output( normalize( i.vNormalWs ), PixelRoughness, 1.0 );
 
 		Material m = Material::Init( i );
 
@@ -637,10 +800,16 @@ PS
 		float3 vFlatNormal = normalize( cross( ddy( vPositionWs ), ddx( vPositionWs ) ) );
 		if ( dot( vFlatNormal, vNormal ) < 0.0 )
 			vFlatNormal = -vFlatNormal;
-		vNormal = normalize( lerp( vNormal, vFlatNormal, saturate( PixelFlatShading ) ) );
-
+		// Back of a double-sided card: turn the normal to the camera so it is lit like its front. Only when the FACE
+		// itself looks away (the flat normal, signed like the vertex normal), not merely the smoothed vertex normal: on
+		// the near side of a terrain crest seen edge-on the vertex normal leans over the crest and away from the camera
+		// while the triangle still faces it, and flipping it there pointed the normal into the ground - no sun or moon
+		// on those pixels, a dark slit along every crest, on land and on the sea bed (Mark 2026-11-23: "weird black
+		// lines appear on the peaks of the terrain", "the slits still appear on ground textures as well").
 		float3 vToCamera = g_vCameraPositionWs - vPositionWs;
-		if ( dot( vNormal, vToCamera ) < 0.0 )
+		bool bBackFace = dot( vNormal, vToCamera ) < 0.0 && dot( vFlatNormal, vToCamera ) < 0.0;
+		vNormal = normalize( lerp( vNormal, vFlatNormal, saturate( PixelFlatShading ) ) );
+		if ( bBackFace )
 			vNormal = -vNormal;
 
 		// Per-texel tilt from the normal map, in the tangent frame of the (possibly flattened) face normal.
@@ -712,7 +881,14 @@ PS
 			if ( g_DirectionalLightCascadeCount > 0 )
 				flVis = DirectionalLightShadow::GetVisibility( vShadePosWs, vReceiverNormalWs, i.vPositionSs );
 
-			float f = QuantizeLight( flNdotL * flVis, PixelSunSteps, 0.0 );
+			// Under water the sun (or moon) does not arrive as a beam: the surface and the water scatter it, so a face
+			// turned away still gets most of what a face turned toward it gets, and shadows are soft. Lit like dry land,
+			// every far slope of a lake or sea bed that faced away from the light was near-black beside its lit
+			// neighbours - a black slit behind each ridge of the bed (Mark 2026-11-23: "ocean terrain still has that black
+			// slit", "it actually seems to be a lighting issue"). Eased in over the first 2 m of depth.
+			float flSubmerged = g_vSeaLightPlane.w > 0.5 ? saturate( ( g_vSeaLightPlane.x - m.WorldPosition.z ) / 80.0 ) * PixelUnderwaterScatter : 0.0;
+			float flLit = lerp( flNdotL * flVis, 0.42 + 0.4 * flNdotL, flSubmerged );
+			float f = QuantizeLight( flLit, PixelSunSteps, 0.0 );
 			vDirectDiffuse += g_DirectionalLightColor.rgb * f;
 			float3 H = normalize( L + V );
 			vDirectSpecular += g_DirectionalLightColor.rgb * ( pow( saturate( dot( N, H ) ), flGloss ) * flSpecWeight * f );
@@ -776,6 +952,8 @@ PS
 		              + vDirectSpecular + lt.vIndirectSpecular.rgb + ci.vEmissive.rgb;
 
 
-		return DoAtmospherics( m.WorldPosition, m.ScreenPosition.xy, float4( vColor, 1.0 ) );
+		float4 vOut = DoAtmospherics( m.WorldPosition, m.ScreenPosition.xy, float4( vColor, 1.0 ) );
+		vOut.rgb = RingFog( vOut.rgb, m.WorldPosition );
+		return vOut;
 	}
 }

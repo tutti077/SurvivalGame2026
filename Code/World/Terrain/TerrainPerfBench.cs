@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System;
 using System.Diagnostics;
 using System.Text;
@@ -201,6 +202,8 @@ public sealed partial class TerrainPerfBench : GameObjectSystem
 	/// CitizenAnimationHelper; the body freezes). Diagnostic only — gameplay may misbehave while a part
 	/// is off; flip it back with 1 or respawn.
 	/// </summary>
+	static readonly System.Collections.Generic.List<ModelRenderer> _bodyDisabledByBench = new();
+
 	[ConCmd( "perf_player" )]
 	public static void ConCmdPlayer( string part = "", string on = "1", string except = "" )
 	{
@@ -223,8 +226,27 @@ public sealed partial class TerrainPerfBench : GameObjectSystem
 				{ c.Enabled = enabled; count++; }
 				break;
 			case "body":
-				foreach ( var c in pawn.Components.GetAll<ModelRenderer>( FindMode.EverythingInSelfAndDescendants ) )
-				{ c.Enabled = enabled; count++; }
+				// Off = only the renderers that are drawing; on = exactly those again (never a renderer the prefab keeps disabled).
+				if ( enabled )
+				{
+					foreach ( var c in _bodyDisabledByBench )
+					{
+						if ( c is null || !c.IsValid() )
+							continue;
+						c.Enabled = true;
+						count++;
+					}
+					_bodyDisabledByBench.Clear();
+				}
+				else
+				{
+					foreach ( var c in pawn.Components.GetAll<ModelRenderer>( FindMode.EnabledInSelfAndDescendants ) )
+					{
+						c.Enabled = false;
+						_bodyDisabledByBench.Add( c );
+						count++;
+					}
+				}
 				break;
 			case "anim":
 				foreach ( var c in pawn.Components.GetAll<PlayerAnimation>( FindMode.EverythingInSelfAndDescendants ) )
@@ -309,17 +331,45 @@ public sealed partial class TerrainPerfBench : GameObjectSystem
 
 		var enabled = ParseOn( on );
 		var count = 0;
-		foreach ( var c in scene.GetAllComponents<EntityBrain>() )
-		{ c.Enabled = enabled; count++; }
-		foreach ( var c in scene.GetAllComponents<AnimalBrain>() )
-		{ c.Enabled = enabled; count++; }
-		foreach ( var c in scene.GetAllComponents<EntityLocomotion>() )
-		{ c.Enabled = enabled; count++; }
-		foreach ( var c in scene.GetAllComponents<NavMeshAgent>() )
-		{ c.Enabled = enabled; count++; }
+		if ( enabled )
+		{
+			// GetAllComponents only finds ENABLED components, so "on" re-enables exactly the list "off" disabled
+			// (it used to search again, find nothing and leave every brain off for the rest of the session).
+			foreach ( var c in _aiDisabledByBench )
+			{
+				if ( c is null || !c.IsValid() )
+					continue;
+				c.Enabled = true;
+				count++;
+			}
+			_aiDisabledByBench.Clear();
+		}
+		else
+		{
+			void Off( Component c )
+			{
+				if ( !c.Enabled )
+					return;
+				c.Enabled = false;
+				_aiDisabledByBench.Add( c );
+				count++;
+			}
+
+			foreach ( var c in scene.GetAllComponents<EntityBrain>() )
+				Off( c );
+			foreach ( var c in scene.GetAllComponents<AnimalBrain>() )
+				Off( c );
+			foreach ( var c in scene.GetAllComponents<EntityLocomotion>() )
+				Off( c );
+			foreach ( var c in scene.GetAllComponents<NavMeshAgent>() )
+				Off( c );
+		}
 
 		Log.Info( $"[PerfBench] Entity AI {(enabled ? "on" : "OFF")} ({count} components)." );
 	}
+
+	/// <summary>What <c>perf_ai 0</c> switched off, so <c>perf_ai 1</c> turns back on exactly those.</summary>
+	static readonly List<Component> _aiDisabledByBench = new();
 
 	/// <summary>
 	/// <c>perf_fov &lt;degrees|0&gt;</c>: force the pawn camera's field of view (0 = back to the user's

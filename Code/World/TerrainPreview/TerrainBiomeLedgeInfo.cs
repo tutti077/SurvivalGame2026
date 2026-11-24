@@ -23,4 +23,7 @@ public readonly struct TerrainBiomeLedgeInfo
 
 	/// <summary>Half the horizontal width of the drop in the sampled field: sampling this far past the line lands on the full upper / lower height.</summary>
 	public float HalfFaceWidthMeters { get; init; }
+
+	/// <summary>Half the scarp's own width before a ramp notch widens it: the band the voxel cliff sculpt (<see cref="TerrainLedgeCliffs"/>) cuts and rebuilds.</summary>
+	public float HalfScarpWidthMeters { get; init; }
 }

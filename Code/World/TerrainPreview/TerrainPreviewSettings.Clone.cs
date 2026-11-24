@@ -183,6 +183,8 @@ public sealed partial class TerrainPreviewSettings
 		OceanDropOffWidthMeters = OceanDropOffWidthMeters,
 		LakeMaxDepthMeters = LakeMaxDepthMeters,
 		LakeShelfWidthMeters = LakeShelfWidthMeters,
+		LakeShelfDepthMeters = LakeShelfDepthMeters,
+		LakeDropOffWidthMeters = LakeDropOffWidthMeters,
 		SeaLevelSubmergeDepthMeters = SeaLevelSubmergeDepthMeters,
 		SeaLevelHeight01 = SeaLevelHeight01,
 		CoastalBeachBlendBandMeters = CoastalBeachBlendBandMeters,

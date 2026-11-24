@@ -21,6 +21,12 @@ public readonly struct TerrainGroundPatch
 	public float RadiusMeters { get; init; }
 	/// <summary>Rim wobble phase (radians), hashed per patch so no two patches share an outline.</summary>
 	public float Phase { get; init; }
+	/// <summary>
+	/// Bare ground rather than tilled soil: grass stays off it, but the terrain is not painted, seeds do not sow there and a
+	/// voxel column gets no tilled paint. A landmark that brings its own ground model (the crashed pod's crater) uses it
+	/// (Mark 2026-11-23: the vertex-painted soil under the pod was a jagged tan and orange shape, "looks horrible").
+	/// </summary>
+	public bool Bare { get; init; }
 
 	/// <summary>Soft edge: coverage eases 1 → 0 across this width at the rim.</summary>
 	public const float EdgeMeters = 0.75f;
@@ -43,14 +49,22 @@ public readonly struct TerrainGroundPatch
 		return Math.Clamp( (rim + (EdgeMeters * 0.5f) - d) / EdgeMeters, 0f, 1f );
 	}
 
-	/// <summary>The strongest coverage of any patch at a world point (m). Null / empty = 0.</summary>
-	public static float CoverageAt( TerrainGroundPatch[] patches, float x, float y )
+	/// <summary>The strongest coverage of any patch at a world point (m), tilled or bare: where grass stays off. Null / empty = 0.</summary>
+	public static float CoverageAt( TerrainGroundPatch[] patches, float x, float y ) => CoverageAt( patches, x, y, true );
+
+	/// <summary>The strongest coverage of the TILLED patches at a world point (m): the splat paint, farming and voxel tilled paint.</summary>
+	public static float TilledCoverageAt( TerrainGroundPatch[] patches, float x, float y ) => CoverageAt( patches, x, y, false );
+
+	static float CoverageAt( TerrainGroundPatch[] patches, float x, float y, bool withBare )
 	{
 		if ( patches is null )
 			return 0f;
 		var best = 0f;
 		for ( var i = 0; i < patches.Length && best < 1f; i++ )
-			best = MathF.Max( best, patches[i].Coverage( x, y ) );
+		{
+			if ( withBare || !patches[i].Bare )
+				best = MathF.Max( best, patches[i].Coverage( x, y ) );
+		}
 		return best;
 	}
 }
