@@ -57,6 +57,28 @@ public sealed partial class PlayerVitals : Component
 	/// <summary>combat_test pawns: real stamina costs whatever the dev setting says.</summary>
 	internal bool DrainStaminaForTests { get; set; }
 
+	/// <summary>
+	/// Exhaustion (Mark 2026-11-14 melee spec): once the bar runs empty the pawn cannot start stamina-costing combat
+	/// actions (swing, feint, guard) until it has refilled to this much. Movement stays free.
+	/// </summary>
+	[Property, Group( "Stamina" ), Title( "Exhaustion recovers at" ), Range( 0f, 100f ), Step( 1f )]
+	public float ExhaustionRecoverStamina { get; set; } = 20f;
+
+	bool _exhausted;
+
+	/// <summary>The bar ran empty and has not refilled to <see cref="ExhaustionRecoverStamina"/> yet (every peer tracks the synced value).</summary>
+	public bool IsExhausted => _exhausted && !InfiniteStamina;
+
+	void TickExhaustion()
+	{
+		if ( InfiniteStamina )
+			_exhausted = false;
+		else if ( CurrentStamina <= 0.05f )
+			_exhausted = true;
+		else if ( CurrentStamina >= Math.Min( ExhaustionRecoverStamina, Math.Max( 1f, CurrentStaminaMax ) ) )
+			_exhausted = false;
+	}
+
 	/// <summary>Optional spawn root; if unset, the first enabled <see cref="SpawnPoint"/> in this scene is used.</summary>
 	[Property, Group( "Death / Respawn" )] public GameObject RespawnPointOverride { get; set; }
 
@@ -154,6 +176,7 @@ public sealed partial class PlayerVitals : Component
 			TryRunHostDeathRespawn();
 
 		MaintainInfiniteStaminaDisplay();
+		TickExhaustion();
 		TickStatusEffects( Time.Delta );
 		TickComfort();
 		TickWetStatus();
@@ -398,6 +421,17 @@ public sealed partial class PlayerVitals : Component
 		LastStaminaDrainArmedAtRealtime = RealTime.GlobalNow;
 	}
 
+	/// <summary>Host-synced: no damage reaches this pawn while an event says so (the hub's arena cameraman).</summary>
+	[Sync( SyncFlags.FromHost )]
+	public bool EventInvulnerable { get; private set; }
+
+	public void HostSetEventInvulnerable( bool on )
+	{
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
+			return;
+		EventInvulnerable = on;
+	}
+
 	/// <summary>
 	/// Host / offline: physical damage through <see cref="ArmorMitigation"/> with the pawn's worn armor, then health.
 	/// Networked clients should not hit this for real hits. World hazards that bypass armor use
@@ -418,16 +452,23 @@ public sealed partial class PlayerVitals : Component
 		if ( Components.Get<PlayerMovement>() is { IsDodgeRollInvulnerable: true } )
 			return 0f;
 
+		// An event made this pawn untouchable (the hub's arena cameraman).
+		if ( EventInvulnerable )
+			return 0f;
+
 		// Armor Plating augment: a chance to shrug off the whole hit, then its cooldown.
 		if ( Components.Get<PlayerAugments>() is { } plating && plating.HostTryArmorPlatingBlock() )
 			return 0f;
+
+		// Any hit taken (arrow, animal, a blade past the guard) breaks a raised guard - it needs a fresh press (PlayerCombat.Block).
+		Components.Get<PlayerCombat>()?.HostBreakGuard();
 
 		var auth = VitalsAuthority.Instance;
 		if ( auth is not null )
 		{
 			auth.TryApplyDeltas( GameObject, -afterArmor, 0f, this, damageSource: attacker );
 			if ( afterArmor > 0f )
-				Components.Get<PlayerMovement>()?.NotifyGrappleDamaged( afterArmor );
+				NotifyMovementDamaged( afterArmor );
 			return afterArmor;
 		}
 
@@ -435,8 +476,19 @@ public sealed partial class PlayerVitals : Component
 		ApplyLocalSnapshot( new VitalsSnapshot( newHealth, CurrentHealthMax, CurrentStamina, CurrentStaminaMax ) );
 		LogDamageApplied( attacker, afterArmor, CurrentHealth, CurrentHealthMax );
 		if ( afterArmor > 0f )
-			Components.Get<PlayerMovement>()?.NotifyGrappleDamaged( afterArmor );
+			NotifyMovementDamaged( afterArmor );
 		return afterArmor;
+	}
+
+	/// <summary>Host: a hit landed — the grapple rope takes it, and a sleeper is knocked out of bed.</summary>
+	void NotifyMovementDamaged( float damage )
+	{
+		var movement = Components.Get<PlayerMovement>();
+		if ( movement is null )
+			return;
+
+		movement.NotifyGrappleDamaged( damage );
+		movement.HostLeaveBed();
 	}
 
 	/// <summary>Owner / host: ask host to change health / stamina by delta (e.g. stamina drain). Combat damage uses <see cref="ApplyDamageAfterArmor"/> on the host.</summary>
@@ -605,9 +657,10 @@ public sealed partial class PlayerVitals : Component
 
 		_pendingDeathRespawnHost = false;
 		HostClearStatusEffects();
-		// A bear trap does not follow you to the spawn point, and neither does a vehicle seat.
+		// A bear trap does not follow you to the spawn point, and neither does a vehicle seat or the bed you lay in.
 		Components.Get<PlayerMovement>()?.HostSetTrapped( false );
 		Vehicle.HostEjectIfSeated( GameObject );
+		Components.Get<PlayerMovement>()?.HostLeaveBed( placeBeside: false );
 
 		// Death loot: droppable resources leave the pawn here, at the death spot (equipment stays).
 		DeathLootBag.HostSpawnForDeath( GameObject );
@@ -688,6 +741,35 @@ public sealed partial class PlayerVitals : Component
 			Log.Info( $"{VitalsLogPrefix()} Arena restore for {GameObject.Name} at {worldPosition} (HP/ST full)." );
 	}
 
+	/// <summary>
+	/// Host dev respawn (Settings → Dev tools → Players, <see cref="DevPlayerControls"/>): back to the claimed bed or
+	/// the scene spawn with full pools and no status effects, as a death would — but it is not a death: no loot bag,
+	/// no death count. False on a client or when there is no spawn to go to.
+	/// </summary>
+	public bool HostDevRespawn()
+	{
+		if ( !IsHostOrOffline )
+			return false;
+
+		if ( !TryResolveSpawnTransform( out var spawnPos, out var spawnRot ) )
+		{
+			Log.Warning( $"{VitalsLogPrefix()} {GameObject.Name}: dev respawn — no claimed bed, SpawnPoint or RespawnPointOverride." );
+			return false;
+		}
+
+		_pendingDeathRespawnHost = false;
+		HostClearStatusEffects();
+		var movement = Components.Get<PlayerMovement>();
+		movement?.HostSetTrapped( false );
+		movement?.DetachGrappleForWorldTeleport();
+		Vehicle.HostEjectIfSeated( GameObject );
+		movement?.HostLeaveBed( placeBeside: false );
+
+		HostArenaRestoreAndTeleport( spawnPos, spawnRot );
+		_jumpStaminaChargedThisAirborne = false;
+		return true;
+	}
+
 	/// <summary>Host/offline: one-line damage log (attacker → victim, rounded damage, HP left).</summary>
 	internal void LogDamageApplied( Component damageSource, float damageDealt, float healthRemaining, float healthMax )
 	{
@@ -729,10 +811,10 @@ public sealed partial class PlayerVitals : Component
 	}
 
 	/// <summary>
-	/// Spawn transform: the pawn's claimed <see cref="BuildBed"/> while it stands, else the scene
-	/// spawn — never the pawn itself (host cannot move client-owned proxies).
+	/// Spawn transform: standing beside the pawn's claimed <see cref="BuildBed"/> while it stands (on the mattress
+	/// when no side has room), else the scene spawn — never the pawn itself (host cannot move client-owned proxies).
 	/// </summary>
-	bool TryResolveSpawnTransform( out Vector3 position, out Rotation rotation )
+	public bool TryResolveSpawnTransform( out Vector3 position, out Rotation rotation )
 	{
 		position = GameObject.WorldPosition;
 		rotation = GameObject.WorldRotation;

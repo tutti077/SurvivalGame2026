@@ -22,12 +22,10 @@ internal abstract class HostPoolRegenDelayGateBase
 
 	/// <summary>
 	/// When no deadline exists and <paramref name="armFullDelayIfMissing"/>, arms from <paramref name="nowSeconds"/> so regen waits a full delay (synced / seeded pool below max).
-	/// When allowed, <paramref name="rampOriginUtc"/> is the instant the delay window ended (use for stamina ramp t=0).
 	/// </summary>
-	public bool MayRegenAfterDelay( Guid id, double nowSeconds, float delaySeconds, bool armFullDelayIfMissing, out double rampOriginUtc )
+	public bool MayRegenAfterDelay( Guid id, double nowSeconds, float delaySeconds, bool armFullDelayIfMissing )
 	{
 		var d = Math.Max( 0.0, delaySeconds );
-		rampOriginUtc = 0;
 
 		if ( !NotBeforeUtc.TryGetValue( id, out var notBefore ) )
 		{
@@ -38,11 +36,7 @@ internal abstract class HostPoolRegenDelayGateBase
 			return false;
 		}
 
-		if ( nowSeconds + 1e-4 < notBefore )
-			return false;
-
-		rampOriginUtc = notBefore;
-		return true;
+		return nowSeconds + 1e-4 >= notBefore;
 	}
 }
 

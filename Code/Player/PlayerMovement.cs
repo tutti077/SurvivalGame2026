@@ -51,21 +51,11 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	[Property, Group( "Stamina - Regen" )] public float StaminaRegenDelayOverrideSeconds { get; set; } = -1f;
 
 	/// <summary>
-	/// Valheim-style facing: with no attack/block held (third person), orbiting the camera leaves the
-	/// body facing where it was. Holding Attack1/Attack2 restores stock look-follow so guard and aim
-	/// turn with the camera (a blocker must physically turn — no free 360° guard). First person keeps
-	/// the prefab behavior. Implemented by runtime-driving <see cref="PlayerController.RotationAngleLimit"/>.
+	/// First person shows the pawn's arms (<see cref="PlayerAnimation"/>, FirstPerson.cs); the camera sits this far ahead of
+	/// the eyes along the view's yaw, clear of the shoulders.
 	/// </summary>
-	[Property, Group( "Camera" ), Title( "Free look orbit (third person)" )]
-	public bool FreeLookOrbitEnabled { get; set; } = true;
-
-	/// <summary>
-	/// Time constant the body yaw eases toward the WASD travel direction with while
-	/// <see cref="DevToolsSettings.WasdBodyFacing"/> is on (Settings → Dev tools → Body turns with WASD).
-	/// </summary>
-	[Property, Group( "Camera" ), Title( "WASD facing turn time (s)" ), Range( 0.02f, 0.5f ),
-	 Description( "Body turns with WASD (dev tools): seconds for the body to ease round to the new travel direction." )]
-	public float WasdFacingTurnSeconds { get; set; } = 0.12f;
+	[Property, Group( "Camera" ), Title( "First person: camera forward (m)" ), Range( 0f, 0.4f ), Step( 0.01f )]
+	public float FirstPersonCameraForwardMeters { get; set; } = 0.14f;
 
 	[Property, Group( "Camera" ), Title( "Scroll wheel zoom" ), Description( "Off by default — scroll selects hotbar. Use +/- for zoom." )]
 	public bool CameraScrollZoomEnabled { get; set; } = false;
@@ -124,21 +114,112 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	bool _grappleSteerSampled;
 
 	/// <summary>Prefab walk/run (not temporary melee/grapple overrides) for overspeed clamps.</summary>
-	float _designWalkSpeed = 110f;
-	float _designRunSpeed = 320f;
+	float _designWalkSpeed = 160f;
+	float _designRunSpeed = 280f;
 
-	/// <summary>Walk + run scale with a full set of light armor worn (each piece carries 1/6 of the penalty).</summary>
-	[Property, Group( "Armor" ), Title( "Light armor speed scale (full set)" ), Range( 0.5f, 1f ), Step( 0.01f )]
-	public float LightArmorSpeedScale { get; set; } = 0.95f;
+	/// <summary>
+	/// Ground speeds (Mark 2026-11-14, Last Oasis): W walks at <see cref="WalkSpeedMetersPerSecond"/> (4.5 m/s) and runs
+	/// with Shift at <see cref="RunSpeedMetersPerSecond"/> (5.85 m/s = walk +30 %; 2026-11-17, Mark: "increase walk speed
+	/// and make run speed like barely faster than walk speed", then "make run 20% faster instead of 10%", 2026-11-18 "make run
+	/// speed 30% faster than walk" - was 3.5 / 6.8, then 4.5 / 5.4); A / D strafe at <see cref="StrafeSpeedScale"/> (80 %)
+	/// of that and S walks backwards at <see cref="BackwardSpeedScale"/> (70 %). The body faces the camera while moving.
+	/// Meters per second, converted once at the pawn scale (BodyHeight / 1.8) into the controller's WalkSpeed / RunSpeed.
+	/// </summary>
+	[Property, Group( "Ground Speed" ), Title( "Walk forward (m/s)" ), Range( 0.5f, 10f ), Step( 0.1f )]
+	public float WalkSpeedMetersPerSecond { get; set; } = 4.5f;
 
-	[Property, Group( "Armor" ), Title( "Medium armor speed scale (full set)" ), Range( 0.5f, 1f ), Step( 0.01f )]
-	public float MediumArmorSpeedScale { get; set; } = 0.85f;
+	[Property, Group( "Ground Speed" ), Title( "Run forward (m/s)" ), Range( 0.5f, 15f ), Step( 0.05f )]
+	public float RunSpeedMetersPerSecond { get; set; } = 5.85f;
 
-	[Property, Group( "Armor" ), Title( "Heavy armor speed scale (full set)" ), Range( 0.5f, 1f ), Step( 0.01f )]
-	public float HeavyArmorSpeedScale { get; set; } = 0.75f;
+	[Property, Group( "Ground Speed" ), Title( "Strafe (x forward)" ), Description( "A / D move at this share of the forward speed." ), Range( 0.1f, 1f ), Step( 0.05f )]
+	public float StrafeSpeedScale { get; set; } = 0.8f;
 
-	/// <summary>Current walk/run multiplier from worn armor weight (1 = unarmoured). Applied to the controller by <see cref="ApplyArmorLocomotionScale"/>.</summary>
-	public float ArmorSpeedScale { get; private set; } = 1f;
+	[Property, Group( "Ground Speed" ), Title( "Backward (x forward)" ), Description( "S walks backwards at this share of the forward speed." ), Range( 0.1f, 1f ), Step( 0.05f )]
+	public float BackwardSpeedScale { get; set; } = 0.7f;
+
+	/// <summary>
+	/// Combat footwork (Mark 2026-11-14 melee spec): ground speed while a melee action runs, as a share of the speed the
+	/// pawn would have otherwise. The state comes from <see cref="PlayerCombat.CurrentFootworkState"/>.
+	/// </summary>
+	[Property, Group( "Combat Footwork" ), Title( "Light windup (x)" ), Range( 0.1f, 1f ), Step( 0.05f )]
+	public float FootworkLightWindupScale { get; set; } = 0.95f;
+
+	[Property, Group( "Combat Footwork" ), Title( "Light release (x)" ), Range( 0.1f, 1f ), Step( 0.05f )]
+	public float FootworkLightReleaseScale { get; set; } = 0.9f;
+
+	[Property, Group( "Combat Footwork" ), Title( "Attack recovery (x)" ), Range( 0.1f, 1f ), Step( 0.05f )]
+	public float FootworkRecoveryScale { get; set; } = 0.95f;
+
+	[Property, Group( "Combat Footwork" ), Title( "Blocking (x)" ), Range( 0.1f, 1f ), Step( 0.05f )]
+	public float FootworkBlockingScale { get; set; } = 0.85f;
+
+	[Property, Group( "Combat Footwork" ), Title( "Heavy windup (x)" ), Range( 0.1f, 1f ), Step( 0.05f )]
+	public float FootworkHeavyWindupScale { get; set; } = 0.8f;
+
+	[Property, Group( "Combat Footwork" ), Title( "Heavy release (x)" ), Range( 0.1f, 1f ), Step( 0.05f )]
+	public float FootworkHeavyReleaseScale { get; set; } = 0.75f;
+
+	[Property, Group( "Combat Footwork" ), Title( "Staggered (x)" ), Range( 0.1f, 1f ), Step( 0.05f )]
+	public float FootworkStaggeredScale { get; set; } = 0.4f;
+
+	/// <summary>The combat footwork share for the pawn's current melee state (1 outside combat).</summary>
+	public float GetCombatFootworkScale()
+	{
+		var combat = Components.Get<PlayerCombat>();
+		if ( combat is null || !combat.Enabled )
+			return 1f;
+
+		return combat.CurrentFootworkState switch
+		{
+			CombatFootworkState.LightWindup => FootworkLightWindupScale,
+			CombatFootworkState.LightRelease => FootworkLightReleaseScale,
+			CombatFootworkState.Recovery => FootworkRecoveryScale,
+			CombatFootworkState.Blocking => FootworkBlockingScale,
+			CombatFootworkState.HeavyWindup => FootworkHeavyWindupScale,
+			CombatFootworkState.HeavyRelease => FootworkHeavyReleaseScale,
+			CombatFootworkState.Staggered => FootworkStaggeredScale,
+			_ => 1f
+		};
+	}
+
+	/// <summary>
+	/// W = 1, A / D = <see cref="StrafeSpeedScale"/>, S = <see cref="BackwardSpeedScale"/>; diagonals blend by how much of
+	/// the stick points each way. Read from the driver's own move input (the controller moves on the driver).
+	/// </summary>
+	public float GetDirectionalSpeedScale()
+	{
+		if ( !IsLocalMovementDriver() )
+			return 1f;
+
+		var move = Input.AnalogMove;
+		var forward = move.x;
+		var side = MathF.Abs( move.y );
+		var along = MathF.Abs( forward );
+		var total = along + side;
+		if ( total < 1e-3f )
+			return 1f;
+
+		var forwardShare = forward >= 0f ? 1f : Math.Clamp( BackwardSpeedScale, 0.1f, 1f );
+		return (along * forwardShare + side * Math.Clamp( StrafeSpeedScale, 0.1f, 1f )) / total;
+	}
+
+	/// <summary>Walk toggle: the default move drops to this slow walk (1.6 m/s, the walk clip pace).</summary>
+	[Property, Group( "Walk Toggle" ), Title( "Walk speed (m/s)" ), Range( 0.5f, 4f ), Step( 0.05f )]
+	public float WalkToggleMetersPerSecond { get; set; } = 1.6f;
+
+	[Property, Group( "Walk Toggle" ), Title( "Walk toggle input" )]
+	public string WalkInputAction { get; set; } = "Walk";
+
+	/// <summary>Owner: the walk toggle is on (the default move is the slow walk instead of the jog).</summary>
+	public bool IsWalkToggled { get; private set; }
+
+	/// <summary>
+	/// Aiming a bow (an arrow drawn, or ADS) takes this share off walk and run - an action, like the melee footwork.
+	/// Carrying gear costs nothing (Mark 2026-11-17: "players should not be slowed down when they equip armor or weapons";
+	/// the 2026-11-12 10 % penalties for a weapon / shield out and worn chest / feet armor are deleted).
+	/// </summary>
+	[Property, Group( "Gear Speed" ), Title( "Bow aiming penalty (0-1)" ), Description( "Walk and run lose this share while an arrow is drawn or the bow is aimed." ), Range( 0f, 0.5f ), Step( 0.01f )]
+	public float BowAimSpeedPenalty { get; set; } = 0.2f;
 
 	/// <summary>
 	/// Physics can redirect impact into horizontal for a few steps after <see cref="OnLanded"/> —
@@ -279,6 +360,53 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		if ( _controller is not null )
 			_controller.EyeAngles = worldRot.Angles();
+		SnapBodyYawToLook();
+	}
+
+	/// <summary>
+	/// Host dev teleport (Settings → Dev tools → Players, <see cref="DevPlayerControls"/>): position only — the
+	/// camera and the root yaw stay the player's own. Lets go of whatever would drag the pawn back first (bear trap,
+	/// vehicle seat, bed, grapple rope). False on a client, or while the pawn still rides its stasis pod.
+	/// </summary>
+	public bool HostDevTeleport( Vector3 worldPos )
+	{
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
+			return false;
+		if ( PodLocked )
+			return false;
+
+		HostSetTrapped( false );
+		Vehicle.HostEjectIfSeated( GameObject );
+		HostLeaveBed( placeBeside: false );
+		DetachGrappleForWorldTeleport();
+
+		ApplyDevTeleportLocal( worldPos );
+		if ( GameObject.Network is { Active: true } )
+			RpcOwnerApplyDevTeleport( worldPos );
+		return true;
+	}
+
+	/// <summary>The pawn's transform is owner-simulated: the owning client places itself.</summary>
+	[Rpc.Owner]
+	void RpcOwnerApplyDevTeleport( Vector3 worldPos )
+	{
+		ApplyDevTeleportLocal( worldPos );
+	}
+
+	void ApplyDevTeleportLocal( Vector3 worldPos )
+	{
+		GameObject.WorldPosition = worldPos;
+		Transform.ClearInterpolation();
+		if ( GameObject.Network is { Active: true } )
+			Network.ClearInterpolation();
+
+		_controller ??= Components.Get<PlayerController>();
+		var body = _controller?.Body ?? Components.Get<Rigidbody>();
+		if ( body is not null && body.IsValid() )
+		{
+			body.Velocity = Vector3.Zero;
+			body.Sleeping = false;
+		}
 	}
 
 	protected override void OnStart()
@@ -289,25 +417,28 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		CacheDesignLocomotionSpeeds();
 		ApplyWalkableGroundAngle();
 		InitializeGrapple();
+		InitializeCarryWeight();
 		if ( _vitals is null )
 			Log.Warning( $"[PlayerMovement|{PlayerVitals.GetVitalsProcessRoleTag( GameObject )}] {GameObject.Name}: add PlayerVitals on this pawn — movement stamina hooks disabled." );
 	}
 
+	/// <summary>The forward walk / run speeds in engine units: the meters properties converted once at the pawn scale.</summary>
 	void CacheDesignLocomotionSpeeds()
 	{
 		if ( _controller is null || !_controller.IsValid() )
 			return;
 
-		if ( _controller.WalkSpeed > 1f )
-			_designWalkSpeed = _controller.WalkSpeed;
-		if ( _controller.RunSpeed > 1f )
-			_designRunSpeed = _controller.RunSpeed;
+		var unitsPerMeter = Math.Max( 1f, _controller.BodyHeight ) / 1.8f;
+		_designWalkSpeed = WalkSpeedMetersPerSecond > 0f ? WalkSpeedMetersPerSecond * unitsPerMeter
+			: _controller.WalkSpeed > 1f ? _controller.WalkSpeed : _designWalkSpeed;
+		_designRunSpeed = RunSpeedMetersPerSecond > 0f ? RunSpeedMetersPerSecond * unitsPerMeter
+			: _controller.RunSpeed > 1f ? _controller.RunSpeed : _designRunSpeed;
 	}
 
 	float DesignGroundMaxSpeed()
 	{
 		var max = Math.Max( _designWalkSpeed, _designRunSpeed );
-		return max > 1f ? max : 320f;
+		return max > 1f ? max : 280f;
 	}
 
 	void ApplyWalkableGroundAngle()
@@ -435,7 +566,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( _controller is null || !_controller.IsOnGround )
 			return false;
 
-		if ( IsMeleeAttackWalkOnlyOnGround() )
+		if ( ShouldSuppressSprintInput() )
 			return false;
 
 		if ( !Input.Down( SprintInputAction ) || _vitals.IsStaminaExhausted( ExhaustedStaminaEpsilon ) )
@@ -445,17 +576,19 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	}
 
 	/// <summary>
-	/// Clear held Run only for grounded melee walk-lock — never while airborne, so sprint can stay
-	/// held through jumps. Airborne wish still won't invent sprint accel (controller air control);
-	/// takeoff speed is kept until land.
+	/// Clear held Run for the bola walk-lock and the bow-aim walk cap. Airborne wish still
+	/// won't invent sprint accel (controller air control); takeoff speed is kept until land.
 	/// </summary>
-	bool ShouldSuppressSprintInput() => IsMeleeAttackWalkOnlyOnGround();
+	bool ShouldSuppressSprintInput() => IsMeleeAttackWalkOnlyOnGround() || IsCombatWalkCapActive();
 
 	bool IsMeleeAttackWalkOnlyOnGround()
 	{
 		var combat = Components.Get<PlayerCombat>();
 		return combat is not null && combat.IsMeleeAttackWalkOnlyActive;
 	}
+
+	/// <summary>Regular walking speed, no sprint: an aimed bow (<see cref="PlayerCombat.IsAttackWalkCapActive"/>).</summary>
+	bool IsCombatWalkCapActive() => Components.Get<PlayerCombat>() is { IsAttackWalkCapActive: true };
 
 	/// <summary>
 	/// True while this pawn is in its "just got hit" window (no jump, no rope). Read from
@@ -467,7 +600,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	/// <summary>Hit reaction start: the rope always drops, on every machine that knows about this pawn.</summary>
 	internal void OnHitReactionBegan() => DetachGrappleForHitReaction();
 
-	/// <summary>Soft-clear Run / AltMove during grounded melee walk-lock only.</summary>
+	/// <summary>Soft-clear Run / AltMove during the melee walk-lock and the combat walk cap.</summary>
 	void SuppressBlockedSprintInput()
 	{
 		if ( !ShouldSuppressSprintInput() )
@@ -505,9 +638,10 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		// Rope or wingsuit owns your speed up here. Walk/Run stay at 0 so held Shift cannot raise
 		// the air-control target and add swing speed — sprint is a walking thing, not a swinging one.
-		// Holding a player is not a swing: the attacker keeps full ground/air locomotion.
-		// A trap mutes the same way: zero wish so WASD cannot creep the pawn off the plate.
-		if ( WingsuitDeployed || TrapLocked || IsSeated || PodLocked || (GrappleAttached && !IsMovingTargetAttach && !_controller.IsOnGround) )
+		// A trap mutes the same way: zero wish so WASD cannot creep the pawn off the plate. A hook on a player or a
+		// tow log mutes nothing: the shooter keeps normal ground locomotion (PlayerMovement.GrapplePlayer.cs).
+		if ( WingsuitDeployed || TrapLocked || IsSeated || PodLocked
+		     || (GrappleAttached && !IsMovingTargetAttach && !_controller.IsOnGround) )
 		{
 			if ( !_walkSpeedMuteActive )
 			{
@@ -539,41 +673,34 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	}
 
 	/// <summary>
-	/// Worn armor weight → walk/run. Each worn piece carries one <see cref="PlayerEquipment.ArmorSlotCount"/>th of
-	/// its band's penalty, so a full light set is exactly <see cref="LightArmorSpeedScale"/> and three heavy
-	/// pieces cost half the heavy penalty. Written only in the plain-locomotion branch: the melee slow and the
-	/// grapple / wingsuit mute snapshot whatever is current, so they scale with it and restore to it.
+	/// Walk / run share kept while aiming a bow (<see cref="BowAimSpeedPenalty"/>); 1 otherwise. Written only in the
+	/// plain-locomotion branch: the melee slow and the grapple / wingsuit mute snapshot whatever is current, so they
+	/// scale with it and restore to it.
 	/// </summary>
-	public float ComputeArmorSpeedScale()
-	{
-		if ( _equipment is null || !_equipment.IsValid() )
-			_equipment = Components.Get<PlayerEquipment>();
-
-		if ( _equipment is null )
-			return 1f;
-
-		var penalty =
-			_equipment.LightArmorPieces * (1f - LightArmorSpeedScale)
-			+ _equipment.MediumArmorPieces * (1f - MediumArmorSpeedScale)
-			+ _equipment.HeavyArmorPieces * (1f - HeavyArmorSpeedScale);
-
-		return Math.Clamp( 1f - penalty / PlayerEquipment.ArmorSlotCount, 0.1f, 1f );
-	}
+	float ComputeBowAimSpeedScale() =>
+		Components.Get<PlayerCombat>() is { IsBowAiming: true } ? Math.Clamp( 1f - BowAimSpeedPenalty, 0.1f, 1f ) : 1f;
 
 	void ApplyArmorLocomotionScale()
 	{
 		if ( _controller is null || !_controller.IsValid() )
 			return;
 
-		ArmorSpeedScale = ComputeArmorSpeedScale();
 		var tow = ComputeTowSpeedScale();   // dragging a log on a taut rope slows the holder
-		_controller.WalkSpeed = _designWalkSpeed * ArmorSpeedScale * tow;
-		_controller.RunSpeed = _designRunSpeed * ArmorSpeedScale * tow;
+		// W / A / D / S direction and the combat footwork share. Carried weight slows nothing (Mark 2026-11-16).
+		// On someone's grapple hook: HookedSpeedScale (PlayerMovement.GrapplePlayer.cs).
+		var scale = ComputeBowAimSpeedScale() * tow * HookedSpeedScale() * GetDirectionalSpeedScale() * GetCombatFootworkScale();
+		// Walk toggle: the default move drops from the jog to the slow walk (0 / unset falls back to the jog).
+		var baseWalk = IsWalkToggled && WalkToggleMetersPerSecond > 0f
+			? WalkToggleMetersPerSecond * Math.Max( 1f, _controller.BodyHeight ) / 1.8f
+			: _designWalkSpeed;
+		_controller.WalkSpeed = baseWalk * scale;
+		// An aimed bow: Shift adds nothing — run is pulled down to walk.
+		_controller.RunSpeed = IsCombatWalkCapActive() ? _controller.WalkSpeed : _designRunSpeed * scale;
 	}
 
 	/// <summary>
-	/// Committed melee: scale Walk+Run to <see cref="PlayerCombat.MeleeAttackMoveSpeedScale"/> (default 10%)
-	/// and force Run=Walk so sprint cannot bypass. Returns true when the override is active.
+	/// Bola charge: scale Walk+Run to <see cref="PlayerCombat.MeleeAttackMoveSpeedScale"/> and force Run=Walk so sprint
+	/// cannot bypass. Melee swings, guard and stagger use the combat footwork shares instead. True when active.
 	/// </summary>
 	bool ApplyMeleeAttackLocomotionSlow()
 	{
@@ -588,8 +715,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		if ( !_meleeLocomotionSlowActive )
 		{
-			_savedWalkForMelee = _controller.WalkSpeed > 1f ? _controller.WalkSpeed : 110f;
-			_savedRunForMelee = _controller.RunSpeed > 1f ? _controller.RunSpeed : 320f;
+			_savedWalkForMelee = _controller.WalkSpeed > 1f ? _controller.WalkSpeed : _designWalkSpeed;
+			_savedRunForMelee = _controller.RunSpeed > 1f ? _controller.RunSpeed : _designRunSpeed;
 			_meleeLocomotionSlowActive = true;
 		}
 
@@ -606,8 +733,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		if ( _controller is not null )
 		{
-			_controller.WalkSpeed = _savedWalkForMelee > 1f ? _savedWalkForMelee : 110f;
-			_controller.RunSpeed = _savedRunForMelee > 1f ? _savedRunForMelee : 320f;
+			_controller.WalkSpeed = _savedWalkForMelee > 1f ? _savedWalkForMelee : _designWalkSpeed;
+			_controller.RunSpeed = _savedRunForMelee > 1f ? _savedRunForMelee : _designRunSpeed;
 		}
 
 		_meleeLocomotionSlowActive = false;
@@ -624,7 +751,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		if ( _walkSpeedMuteActive && _controller is not null )
 		{
-			_controller.WalkSpeed = _savedWalkSpeed > 1f ? _savedWalkSpeed : 110f;
+			_controller.WalkSpeed = _savedWalkSpeed > 1f ? _savedWalkSpeed : _designWalkSpeed;
 			_walkSpeedMuteActive = false;
 		}
 
@@ -632,7 +759,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			return;
 
 		if ( _controller is not null )
-			_controller.RunSpeed = _savedRunSpeed > 1f ? _savedRunSpeed : 320f;
+			_controller.RunSpeed = _savedRunSpeed > 1f ? _savedRunSpeed : _designRunSpeed;
 
 		_runSpeedOverrideActive = false;
 		_savedRunSpeed = 0f;
@@ -672,6 +799,16 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() || _vitals is null )
 			return;
 
+		if ( GameHacks.ConsumeSimulatedJumpPress() && !string.IsNullOrWhiteSpace( JumpInputAction ) )
+			Input.SetAction( JumpInputAction, true );
+
+		if ( !string.IsNullOrWhiteSpace( WalkInputAction ) && Input.Pressed( WalkInputAction ) )
+			IsWalkToggled = !IsWalkToggled;
+
+		// The sneak hack holds the crouch key itself, before the controller reads input, so it ducks like a real press.
+		if ( GameHacks.SimulatedSneakHeld && !string.IsNullOrWhiteSpace( SneakInputAction ) )
+			Input.SetAction( SneakInputAction, true );
+
 		if ( PreInputArenaSpectate() )
 			return;
 
@@ -680,6 +817,10 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			PreInputSeated();
 			return;
 		}
+
+		// Lying in a bed: rest on the mattress; Use / Jump / a move key gets up (PlayerMovement.Bed.cs).
+		if ( PreInputBed() )
+			return;
 
 		TickPodLock();
 		if ( EventInputLocked || TrapLocked || PodLocked )
@@ -710,6 +851,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// Dodge roll and the augment air hop must see Jump before stamina or wingsuit clear it;
 		// roll first so Block/Crouch (+A/D) + Space is a roll, never a jump.
 		TickDodgeRollGate();
+		// Airborne Space with a build-piece / static-object lip in reach is a ledge grab — before the air hop / wingsuit.
+		TryStartJumpLedgeGrabFromJumpPress();
 		TickAugmentJumpGates();
 		TickAugmentSlideMotion();
 
@@ -727,7 +870,6 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			ClearActionIfPressed( JumpInputAction );
 
 		// Jump while grappled: no mid-air hop off the rope (both schemes).
-		// Holding a player: normal jumping stays, and there is no ledge to mantle onto.
 		if ( GrappleAttached && !IsMovingTargetAttach )
 		{
 			if ( _controller is null )
@@ -746,7 +888,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		}
 
 		// Mid ledge pull: Space is already spent, no hop on arrival.
-		if ( IsGrappleLedgePulling )
+		if ( IsLedgePulling )
 			ClearActionIfPressed( JumpInputAction );
 
 		TickWingsuitJumpGate();
@@ -850,9 +992,15 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			CompleteWingsuitLand();
 
 		_wingsuitAirborneSeconds = 0f;
-		// Slope redirect often lands after this callback — scrub for several physics steps.
-		_sanitizeLandFrames = 20;
-		SanitizeHorizontalToDesignRun( keepUpwardZ: false );
+		// Let go of a grapple in the air and came down fast: skip along instead (PlayerMovement.GrappleSkip.cs).
+		if ( TryGrappleLandingSkip( impactVelocity ) )
+			_sanitizeLandFrames = 0;
+		else
+		{
+			// Slope redirect often lands after this callback — scrub for several physics steps.
+			_sanitizeLandFrames = 20;
+			SanitizeHorizontalToDesignRun( keepUpwardZ: false );
+		}
 		_vitals.OnControllerLandedForJumpStaminaFromMovement( distance, impactVelocity );
 		OnAugmentLanded();
 	}
@@ -869,6 +1017,9 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( !IsLocalMovementDriver() || !camera.IsValid() )
 			return;
 
+		if ( PlacePodCamera( camera ) )
+			return;
+
 		// Metres on the prefab, engine units on the camera (this line used to assign metres as units: 50 000 "m" was 1 250 m of view).
 		camera.ZFar = Math.Max( TerrainWorldUnits.MetersToEngine( Math.Max( 100f, CameraFarClipMeters ) ), camera.ZFar );
 		if ( PerfFovOverride > 0f )
@@ -880,9 +1031,15 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		var combat = Components.Get<PlayerCombat>();
 
-		// First-person: FOV zoom (no CameraOffset pull).
+		// First-person: the eyes nudged forward over the shown body, FOV zoom (no CameraOffset pull).
 		if ( !_controller.ThirdPerson )
 		{
+			var unitsPerMeter = MathF.Max( 1f, _controller.BodyHeight ) / 1.8f;
+			camera.WorldPosition += Rotation.FromYaw( _controller.EyeAngles.yaw ).Forward * (FirstPersonCameraForwardMeters * unitsPerMeter);
+			// The controller tags the pawn's renderers "viewer" in first person and the pawn camera leaves that tag out: draw
+			// them - the body and worn pieces are shadow-only there and an arms-only renderer stands in (PlayerAnimation,
+			// FirstPerson.cs). Nothing else on the pawn carries the tag.
+			camera.RenderExcludeTags.Remove( "viewer" );
 			if ( combat?.IsBowAdsActive == true )
 				camera.FieldOfView = Math.Clamp( camera.FieldOfView * 0.82f, 35f, 110f );
 			return;
@@ -934,13 +1091,13 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		TickFootstepNoiseForEntities();
 		TickPlayerActionDebug();
 		TickGrappleUpdate();
+		TickControllerBodyRotationOff();
 
 		if ( !IsLocalMovementDriver() )
 			return;
 
 		TickSeatedPin();
 		PollCameraScrollZoom();
-		TickFreeLookBodyRotationMode();
 
 		// Melee walk-lock / grapple-air mute (do not clear held sprint while jumping).
 		SuppressBlockedSprintInput();
@@ -950,85 +1107,6 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		// Only catch large over-length desync after MoveModeWalk moves us.
 		ApplyGrappleOverLengthCatchup();
 		TickWingsuitDebugDraw();
-	}
-
-	float _designRotationAngleLimit = -1f;
-	float _designRotationSpeed = -1f;
-
-	/// <summary>See <see cref="FreeLookOrbitEnabled"/> — swaps the controller's rotation catch-up limit per frame.</summary>
-	void TickFreeLookBodyRotationMode()
-	{
-		_controller ??= Components.Get<PlayerController>();
-		if ( _controller is null || !_controller.IsValid() )
-			return;
-
-		if ( _designRotationAngleLimit < 0f )
-			_designRotationAngleLimit = _controller.RotationAngleLimit;
-		if ( _designRotationSpeed < 0f )
-			_designRotationSpeed = _controller.RotationSpeed;
-
-		var combat = Components.Get<PlayerCombat>();
-		var combatHold = Input.Down( combat?.PrimaryAttackAction ?? "Attack1" )
-		                 || Input.Down( combat?.BlockAction ?? "Attack2" );
-
-		var freeOrbit = FreeLookOrbitEnabled && _controller.ThirdPerson && !combatHold;
-
-		// Body turns with WASD (dev tools): PlayerAnimation turns the Body child toward the travel direction, so
-		// the controller must not keep pulling it toward the camera yaw while moving (same near-zero speed trick
-		// as a swing in flight - never exactly 0).
-		var wasdFacing = freeOrbit && WasdFacingAllowed();
-
-		// While a swing is IN FLIGHT, near-stop the controller rotating the ROOT: walking mid-swing
-		// kept turning the root toward movement, which wobbled the pinned renderer child and fed
-		// turn params that blended the attack clip out early (overheads visibly died halfway).
-		// NEVER exactly 0 — stock controllers commonly special-case RotationSpeed <= 0 as "turn
-		// instantly", which spun the model toward the walk direction during lateral swings.
-		var swingInFlight = combat is not null && combat.Enabled && combat.IsSwingFacingPinned;
-
-		// 180° = the yaw difference can never exceed the limit, so the body never turns from look
-		// alone. Swings need this too: the controller HARD-corrects past RotationAngleLimit no
-		// matter how low RotationSpeed is, which is what still spun the model when strafing with
-		// WASD mid-swing. No model rotation during a swing, ever.
-		_controller.RotationAngleLimit = freeOrbit || swingInFlight ? 180f : _designRotationAngleLimit;
-		_controller.RotationSpeed = swingInFlight || wasdFacing ? 0.001f : _designRotationSpeed;
-	}
-
-	/// <summary>The WASD facing mode may own the body on this pawn: setting on, third person, on foot, not flying.</summary>
-	bool WasdFacingAllowed()
-	{
-		if ( !DevToolsSettings.WasdBodyFacing || !FreeLookOrbitEnabled || IsSeated || IsWingsuitDeployed )
-			return false;
-
-		_controller ??= Components.Get<PlayerController>();
-		return _controller is not null && _controller.IsValid() && _controller.ThirdPerson;
-	}
-
-	/// <summary>
-	/// Valheim walk-facing (Settings → Dev tools → Body turns with WASD, <see cref="DevToolsSettings.WasdBodyFacing"/>):
-	/// the yaw of the travel direction the Body renderer should turn toward this frame, read from the controller's
-	/// wish velocity (synced, so every peer computes the same thing), while moving with no attack / block held.
-	/// Pure data - <see cref="PlayerAnimation"/> eases the Body child onto it after the combat facing sources, which
-	/// always win. False when standing still, in first person, seated, in the wingsuit or with the mode off.
-	/// </summary>
-	internal bool TryGetWasdFacingTargetYaw( out float yawDegrees )
-	{
-		yawDegrees = 0f;
-		if ( !WasdFacingAllowed() )
-			return false;
-
-		if ( IsLocalMovementDriver() )
-		{
-			var combat = Components.Get<PlayerCombat>();
-			if ( Input.Down( combat?.PrimaryAttackAction ?? "Attack1" ) || Input.Down( combat?.BlockAction ?? "Attack2" ) )
-				return false;
-		}
-
-		var wish = _controller.WishVelocity.WithZ( 0f );
-		if ( wish.Length < 10f )
-			return false;
-
-		yawDegrees = Rotation.LookAt( wish.Normal, Vector3.Up ).Angles().yaw;
-		return true;
 	}
 
 	void PollCameraScrollZoom()
@@ -1334,6 +1412,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		TickGrappledByValidity();
 		TickGrappleTowValidity();
 		TickGrappleRideValidity();
+		HostTickGrappleGearSync();
 		TickGrappleTowPull( Time.Delta );   // host drives the towed log, whoever holds the rope
 
 		if ( !IsLocalMovementDriver() )
@@ -1351,7 +1430,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 		TickGrappleFixedUpdate();
 		ApplyGrappleRopeConstraint( Time.Delta );
-		TickGrappleLedgePull( Time.Delta );
+		TickLedgePull( Time.Delta );
 		TickWingsuitAirborneTimer( Time.Delta );
 		TickWingsuitFlight( Time.Delta );
 		TickWingsuitFreefallHandoff();
@@ -1368,6 +1447,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			_grappleBlockedByWall = false;
 			_grappleRopeShrinkRate = 0f;
 			ResetGrappleSwingLog();
+			ArmGrappleSkipOnRopeEdge( attached: true );
 			ApplyGrappleAttachVelocityScale( AttachVelocityScale );
 			if ( WingsuitDeployed )
 				StowWingsuit( keepMomentum: true );
@@ -1376,6 +1456,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( _grappleWasAttached && !GrappleAttached )
 		{
 			_grappleReleaseAir = true;
+			ArmGrappleSkipOnRopeEdge( attached: false );
 			WakePawnAfterGrappleDetach();
 		}
 
@@ -1417,7 +1498,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 
 	void ApplyGrappleOverLengthCatchup()
 	{
-		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f || IsMovingTargetAttach )
+		// A ridden body tows through rope tension, never a position snap (PlayerMovement.GrappleRide.cs).
+		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f || IsMovingTargetAttach || GrappleAttachRideId != Guid.Empty )
 			return;
 
 		var attach = ResolveGrappleAttachWorldPoint();
@@ -1436,12 +1518,13 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	void ApplyGrappleRopeConstraint( float dt )
 	{
 		// Ledge mantle broke the rope this instant — never fight the pull while the detach lands.
-		// Player attach: the VICTIM is reeled (PlayerMovement.GrapplePlayer.cs); the attacker is
-		// never constrained, so a hooked player can't drag the rope holder around.
-		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f || IsGrappleLedgePulling || IsMovingTargetAttach )
+		// Player attach: nobody is constrained — the rope stretches for the short tether
+		// (PlayerMovement.GrapplePlayer.cs).
+		if ( !GrappleAttached || GrappleRopeLengthEngine <= 1e-3f || IsLedgePulling || IsMovingTargetAttach )
 		{
 			_grapplePrevRopeLength = 0f;
 			_grappleRopeTaut = false;
+			ResetGrappleRideTowState();
 			return;
 		}
 
@@ -1450,6 +1533,15 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 			return;
 
 		dt = Math.Max( 1e-4f, dt );
+
+		// A hook on a moving body is a tow rope: solved against the anchor's velocity (PlayerMovement.GrappleRide.cs).
+		if ( GrappleAttachRideId != Guid.Empty )
+		{
+			ApplyGrappleRideRopeConstraint( body, dt );
+			return;
+		}
+
+		ResetGrappleRideTowState();
 
 		var attach = ResolveGrappleAttachWorldPoint();
 		var maxLen = Math.Max( 1f, GrappleRopeLengthEngine );
@@ -1896,7 +1988,8 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 	void TryKillGrappleOnCollision( Collision collision )
 	{
 		// Player / tow attach: walking into things while dragging something must not break the rope.
-		if ( !GrappleAttached || IsMovingTargetAttach || !IsLocalMovementDriver() )
+		// Towed behind a moving body: scraping terrain and rocks is part of the ride, the rope keeps pulling.
+		if ( !GrappleAttached || IsMovingTargetAttach || IsGrappleRideAnchorMoving || !IsLocalMovementDriver() )
 			return;
 
 		var other = collision.Other.GameObject;
@@ -2158,6 +2251,7 @@ public sealed partial class PlayerMovement : Component, PlayerController.IEvents
 		if ( _vitals is not null && ( _sneakWasDown || _sneakDebtPending > 1e-6f ) )
 			FlushSneakStaminaDebt( "destroyed" );
 		RestoreBlockedSprintRunSpeed();
+		ShutdownCarryWeight();
 		base.OnDestroy();
 	}
 }

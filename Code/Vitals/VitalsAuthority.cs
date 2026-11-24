@@ -7,7 +7,7 @@ namespace Survival;
 /// <summary>
 /// Regen delays use <see cref="RealTime.GlobalNow"/> so "wait N seconds" matches wall clock (unlike scaled <see cref="Time.NowDouble"/>).
 /// Host-only source of truth for player health / stamina. Place on your network manager; <see cref="PlayerVitals"/> forwards changes here.
-/// After each stamina <b>drain</b> (negative delta), regen is blocked until either <see cref="PlayerVitals.StaminaRegenDelayOverrideSeconds"/> (when &gt;= 0), <see cref="PlayerMovement.StaminaRegenDelayOverrideSeconds"/> (when &gt;= 0), or <see cref="StaminaRegenDelaySeconds"/> real seconds (<see cref="RealTime.GlobalNow"/>) have passed; then the rate ramps linearly from <see cref="StaminaRegenMinPerSecond"/> to <see cref="StaminaRegenMaxPerSecond"/> over <see cref="StaminaRegenRampSeconds"/>. Positive deltas do not move the deadline.
+/// After each stamina <b>drain</b> (negative delta), regen is blocked until either <see cref="PlayerVitals.StaminaRegenDelayOverrideSeconds"/> (when &gt;= 0), <see cref="PlayerMovement.StaminaRegenDelayOverrideSeconds"/> (when &gt;= 0), or <see cref="StaminaRegenDelaySeconds"/> real seconds (<see cref="RealTime.GlobalNow"/>) have passed — combat drains pass their own delay (<see cref="StaminaRegenDelayAfterAttackSeconds"/> 0.5 s, <see cref="StaminaRegenDelayAfterBlockSeconds"/> 0.3 s). Then stamina refills at <see cref="StaminaRegenIdlePerSecond"/> (20/s) standing and <see cref="StaminaRegenMovingPerSecond"/> (15/s) moving (Mark 2026-11-14 melee spec). Positive deltas do not move the deadline.
 /// After each damaging health delta, regen is blocked until <see cref="HealthRegenDelayAfterDamageSeconds"/> real seconds (<see cref="RealTime.GlobalNow"/>) have passed; then HP refills at <see cref="HealthRegenPerSecond"/> up to max.
 /// </summary>
 [Title( "Vitals Authority" )]
@@ -16,16 +16,20 @@ public sealed class VitalsAuthority : Component
 	public static VitalsAuthority Instance { get; private set; }
 
 	/// <summary>Default seconds after the last time stamina was <b>reduced</b> (negative stamina delta in <see cref="TryApplyDeltas"/>) before regen begins, in real time (<see cref="RealTime.GlobalNow"/>). Non-negative per-pawn overrides take precedence.</summary>
-	[Property, Group( "Stamina regen" )] public float StaminaRegenDelaySeconds { get; set; } = 4f;
+	[Property, Group( "Stamina regen" )] public float StaminaRegenDelaySeconds { get; set; } = 1f;
 
-	/// <summary>Stamina restored per second at the start of the regen ramp (right after <see cref="StaminaRegenDelaySeconds"/>). When equal to <see cref="StaminaRegenMaxPerSecond"/>, regen rate stays flat.</summary>
-	[Property, Group( "Stamina regen" )] public float StaminaRegenMinPerSecond { get; set; } = 20f;
+	/// <summary>Stamina restored per second while the pawn stands still.</summary>
+	[Property, Group( "Stamina regen" ), Title( "Regen standing (/s)" )] public float StaminaRegenIdlePerSecond { get; set; } = 20f;
 
-	/// <summary>Stamina restored per second once the ramp has been active for <see cref="StaminaRegenRampSeconds"/> (clamped &gt;= min).</summary>
-	[Property, Group( "Stamina regen" )] public float StaminaRegenMaxPerSecond { get; set; } = 20f;
+	/// <summary>Stamina restored per second while the pawn moves on the ground.</summary>
+	[Property, Group( "Stamina regen" ), Title( "Regen moving (/s)" )] public float StaminaRegenMovingPerSecond { get; set; } = 15f;
 
-	/// <summary>Seconds for the regen rate to lerp from <see cref="StaminaRegenMinPerSecond"/> up to <see cref="StaminaRegenMaxPerSecond"/> after regen becomes eligible (no effect when min equals max).</summary>
-	[Property, Group( "Stamina regen" )] public float StaminaRegenRampSeconds { get; set; } = 5f;
+	/// <summary>Regen delay after a swing's stamina (light, heavy, hold, feint). Keep it longer than the light windup
+	/// (oneHanded 0.55 s): a swing held heavy pays the rest of its cost as the windup ends, and no regen may slip in before.</summary>
+	[Property, Group( "Stamina regen" ), Title( "Delay after an attack (s)" )] public float StaminaRegenDelayAfterAttackSeconds { get; set; } = 0.75f;
+
+	/// <summary>Regen delay after a block's stamina.</summary>
+	[Property, Group( "Stamina regen" ), Title( "Delay after a block (s)" )] public float StaminaRegenDelayAfterBlockSeconds { get; set; } = 0.4f;
 
 	[Property, Group( "Stamina regen" )] public bool LogStaminaRegenDebug { get; set; }
 
@@ -92,9 +96,6 @@ public sealed class VitalsAuthority : Component
 			return;
 
 		var now = RealTime.GlobalNow;
-		var minRate = Math.Max( 0f, StaminaRegenMinPerSecond );
-		var maxRate = Math.Max( minRate, StaminaRegenMaxPerSecond );
-		var rampSeconds = Math.Max( 1e-3f, StaminaRegenRampSeconds );
 
 		foreach ( var id in _players.Keys.ToArray() )
 		{
@@ -113,18 +114,20 @@ public sealed class VitalsAuthority : Component
 			if ( r.Stamina < r.StaminaMax - 1e-4f )
 			{
 				var staminaDelaySeconds = Math.Max( 0f, ResolveStaminaRegenDelaySeconds( vitals ) );
-				var blockStaminaRegen = vitals.GameObject.Components.Get<PlayerMovement>() is { } moveBlock
-				                        && moveBlock.ShouldBlockStaminaRegenForAuthority();
+				// Sprinting / sneaking, or a raised guard (Mark 2026-11-16: "Raised guard blocks regen") - no regen at all,
+				// not even the Parry Recharge boost.
+				var blockStaminaRegen = (vitals.GameObject.Components.Get<PlayerMovement>() is { } moveBlock
+				                         && moveBlock.ShouldBlockStaminaRegenForAuthority())
+				                        || vitals.GameObject.Components.Get<PlayerCombat>() is { IsAuthoritativeMeleeBlocking: true };
 
-				var rampOriginUtc = 0.0;
 				var mayRegen = !blockStaminaRegen
-				               && _staminaRegenGate.MayRegenAfterDelay( id, now, staminaDelaySeconds, armFullDelayIfMissing: true, out rampOriginUtc );
-				// Parry Recharge augment window: full-ramp rate × multiplier, and the post-drain delay does not apply.
+				               && _staminaRegenGate.MayRegenAfterDelay( id, now, staminaDelaySeconds, armFullDelayIfMissing: true );
+				// Parry Recharge augment window: curve rate × multiplier, and the post-drain delay does not apply.
 				var regenBoost = vitals.StaminaRegenBoostForAuthority( now );
 				if ( mayRegen || ( !blockStaminaRegen && regenBoost > 1f ) )
 				{
-					var rampT = mayRegen ? (float)Math.Clamp( ( now - rampOriginUtc ) / rampSeconds, 0.0, 1.0 ) : 1f;
-					var stRegenPerSec = ( minRate + ( maxRate - minRate ) * rampT ) * regenBoost;
+					var moving = vitals.GameObject.Components.Get<PlayerController>() is { } pc && pc.Velocity.WithZ( 0f ).Length > 10f;
+					var stRegenPerSec = Math.Max( 0f, moving ? StaminaRegenMovingPerSecond : StaminaRegenIdlePerSecond ) * regenBoost;
 					var addSt = MathF.Min( stRegenPerSec * dt, r.StaminaMax - r.Stamina );
 					if ( addSt > 1e-5f )
 					{
@@ -134,7 +137,7 @@ public sealed class VitalsAuthority : Component
 						     && ( !_lastStaminaRegenDebugLogTime.TryGetValue( id, out var lastLog ) || now - lastLog >= 1.0 ) )
 						{
 							_lastStaminaRegenDebugLogTime[id] = now;
-							Log.Info( $"[VitalsAuthority|{AuthorityLogRoleTag()}|StaminaRegen] {vitals.GameObject.Name} ramp={rampT * 100f:0}% stRegen/s={stRegenPerSec:0.##}/s (min={minRate:0.#} max={maxRate:0.#} over {rampSeconds:0.##}s, tSinceEligible={(now - rampOriginUtc):0.###}s) +st={addSt:0.###} → {vitals.CurrentStamina:0.#}/{vitals.CurrentStaminaMax:0.#}" );
+							Log.Info( $"[VitalsAuthority|{AuthorityLogRoleTag()}|StaminaRegen] {vitals.GameObject.Name} moving={moving} stRegen/s={stRegenPerSec:0.##}/s +st={addSt:0.###} → {vitals.CurrentStamina:0.#}/{vitals.CurrentStaminaMax:0.#}" );
 						}
 					}
 				}
@@ -154,7 +157,7 @@ public sealed class VitalsAuthority : Component
 				continue;
 
 			var hpDelay = Math.Max( 0f, HealthRegenDelayAfterDamageSeconds );
-			if ( !_healthRegenGate.MayRegenAfterDelay( id, now, hpDelay, armFullDelayIfMissing: true, out _ ) )
+			if ( !_healthRegenGate.MayRegenAfterDelay( id, now, hpDelay, armFullDelayIfMissing: true ) )
 				continue;
 
 			var healthRegenRate = HealthRegenPerSecond;
@@ -262,7 +265,8 @@ public sealed class VitalsAuthority : Component
 	/// <summary>Host: apply deltas (negative = damage / stamina cost). Updates <paramref name="vitals"/> and syncs to owner.</summary>
 	/// <param name="mergePendingSprintDebtForNegativeStamina">When true and stamina delta is negative, pull <see cref="PlayerMovement.TakePendingSprintStaminaDebt"/> into the spend. Set false when the caller already merged (e.g. client Rpc payload).</param>
 	/// <param name="clientAuthorityStaminaBeforeSpend">Optional owner baseline (≈ displayed stamina + unsynced sprint debt) for negative stamina deltas — rejects cheats/large desync vs <see cref="VitalsRecord.Stamina"/>.</param>
-	public bool TryApplyDeltas( GameObject playerRoot, float healthDelta, float staminaDelta, PlayerVitals vitals, bool mergePendingSprintDebtForNegativeStamina = true, float? clientAuthorityStaminaBeforeSpend = null, Component damageSource = null )
+	/// <param name="regenDelaySeconds">Combat drains: the regen delay this drain arms (after an attack / a block); null = the pawn's default.</param>
+	public bool TryApplyDeltas( GameObject playerRoot, float healthDelta, float staminaDelta, PlayerVitals vitals, bool mergePendingSprintDebtForNegativeStamina = true, float? clientAuthorityStaminaBeforeSpend = null, Component damageSource = null, float? regenDelaySeconds = null )
 	{
 		if ( !IsHostContext() || vitals is null || !vitals.GameObject.IsValid() )
 			return false;
@@ -342,7 +346,7 @@ public sealed class VitalsAuthority : Component
 			}
 
 			r.Stamina = Math.Clamp( r.Stamina + staminaDelta, 0f, r.StaminaMax );
-			var resolvedDelay = Math.Max( 0f, ResolveStaminaRegenDelaySeconds( vitals ) );
+			var resolvedDelay = Math.Max( 0f, regenDelaySeconds ?? ResolveStaminaRegenDelaySeconds( vitals ) );
 			_staminaRegenGate.ArmNoRegenBefore( id, nowT, resolvedDelay );
 			vitals.RecordStaminaDrainForAuthority( drain, resolvedDelay );
 			if ( LogStaminaRegenDebug )
