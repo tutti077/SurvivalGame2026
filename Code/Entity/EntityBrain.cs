@@ -642,6 +642,9 @@ public sealed partial class EntityBrain : Component
 		if ( IsPetrified )
 			IsPetrified = false;
 
+		if ( BrawlTeam != 0 && TickBrawlTarget() )
+			return;
+
 		if ( _state is EnemyAiState.Idle or EnemyAiState.Wander or EnemyAiState.Searching
 		     or EnemyAiState.Chasing or EnemyAiState.Retreating or EnemyAiState.Breaching )
 			TickAmbientAlert( Time.Delta );
@@ -1627,10 +1630,18 @@ public sealed partial class EntityBrain : Component
 			return;
 		}
 
-		// Telegraph: keep stepping in at a walk so the swing lands where the player is now, not where they stood.
-		if ( EntityCombat.IsTelegraphing )
+		// Windup: keep stepping in at a walk so the swing lands where the player is now, not where they stood.
+		if ( EntityCombat.IsWindingUp )
 		{
 			StepInToRing( dist, StrikeRingFraction, run: false );
+			EntityCombat.TickCombat( _target );
+			return;
+		}
+
+		// Backing off (EntityCombat: dodging a swing, spacing between its attacks, catching its breath): out of reach, facing in.
+		if ( EntityCombat.IsBackingOff )
+		{
+			BackOffFromTarget( dist );
 			EntityCombat.TickCombat( _target );
 			return;
 		}
@@ -1654,6 +1665,28 @@ public sealed partial class EntityBrain : Component
 		EntityCombat.AttackPermitted = hasToken;
 		StepInToRing( dist, hasToken ? StrikeRingFraction : WaitRingFraction, run: true );
 		EntityCombat.TickCombat( _target );
+	}
+
+	/// <summary>Attacking: run straight away from the target until <see cref="EntityCombat.BackstepDistanceUnits"/> (the combat turns the body to face it).</summary>
+	void BackOffFromTarget( float dist )
+	{
+		ApplyAgentSpeed( true );
+		var want = EntityCombat.BackstepDistanceUnits + TargetBodyRadiusUnits;
+		if ( dist >= want )
+		{
+			if ( Agent is { IsNavigating: true } )
+				Agent.Stop();
+			return;
+		}
+
+		if ( Time.NowDouble < _nextStepInAt || !IsNavAgentReady() )
+			return;
+
+		_nextStepInAt = Time.NowDouble + 0.15;
+		var away = (GameObject.WorldPosition - _target.WorldPosition).WithZ( 0f );
+		if ( away.LengthSquared < 1f )
+			away = -GameObject.WorldRotation.Forward.WithZ( 0f );
+		Agent.MoveTo( ProjectSearchPointToNav( _target.WorldPosition + away.Normal * (want + 16f) ) );
 	}
 
 	/// <summary>Attacking: walk to this attacker's ring slot (<paramref name="ringFraction"/> × reach) and plant there.</summary>
@@ -1805,7 +1838,7 @@ public sealed partial class EntityBrain : Component
 
 	bool CanStartRetreat()
 	{
-		if ( _state == EnemyAiState.Retreating )
+		if ( _state == EnemyAiState.Retreating || BrawlTeam != 0 )
 			return false;
 
 		// Raiders fight to the death.
@@ -2710,6 +2743,9 @@ public sealed partial class EntityBrain : Component
 	{
 		if ( go is null || !go.IsValid() || go == GameObject )
 			return false;
+
+		if ( BrawlTeam != 0 )
+			return IsBrawlFoe( go );
 
 		if ( go.Components.Get<PlayerController>() is null )
 			return false;

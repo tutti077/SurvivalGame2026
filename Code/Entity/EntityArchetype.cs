@@ -19,9 +19,6 @@ public static class EntityArchetype
 		public float MaxHealth { get; init; }
 		public float ArmorFlat { get; init; }
 		public float MoveSpeed { get; init; }
-		public float TelegraphSeconds { get; init; }
-		public float RecoverySeconds { get; init; }
-		public float AttackHoldSeconds { get; init; }
 		/// <summary>Which foot traps hold this type (<see cref="BearTrap"/>). Boneback is the heavy one.</summary>
 		public TrapSize TrapSize { get; init; }
 	}
@@ -33,9 +30,6 @@ public static class EntityArchetype
 			MaxHealth = 160f,
 			ArmorFlat = 6f,
 			MoveSpeed = 180f,
-			TelegraphSeconds = 1.0f,
-			RecoverySeconds = 1f,
-			AttackHoldSeconds = 0.14f,
 			TrapSize = TrapSize.Large
 		},
 		// Patrol bot: the scav's numbers with a robot's insides.
@@ -45,9 +39,6 @@ public static class EntityArchetype
 			MaxHealth = 80f,
 			ArmorFlat = 0f,
 			MoveSpeed = 220f,
-			TelegraphSeconds = 0.85f,
-			RecoverySeconds = 1f,
-			AttackHoldSeconds = 0.12f,
 			TrapSize = TrapSize.Small
 		},
 		EnemyType.Howler => new Profile
@@ -55,9 +46,6 @@ public static class EntityArchetype
 			MaxHealth = 95f,
 			ArmorFlat = 1f,
 			MoveSpeed = 260f,
-			TelegraphSeconds = 0.7f,
-			RecoverySeconds = 0.75f,
-			AttackHoldSeconds = 0.1f,
 			TrapSize = TrapSize.Small
 		},
 		_ => new Profile
@@ -65,9 +53,6 @@ public static class EntityArchetype
 			MaxHealth = 80f,
 			ArmorFlat = 0f,
 			MoveSpeed = 220f,
-			TelegraphSeconds = 0.85f,
-			RecoverySeconds = 1f,
-			AttackHoldSeconds = 0.12f,
 			TrapSize = TrapSize.Small
 		}
 	};
@@ -84,17 +69,6 @@ public static class EntityArchetype
 		vitals.Tier = Math.Max( 1, tier );
 		vitals.MaxHealth = profile.MaxHealth * tierScale;
 		vitals.ArmorFlat = profile.ArmorFlat;
-	}
-
-	public static void ApplyToCombat( EntityCombat combat, EnemyType type )
-	{
-		if ( combat is null )
-			return;
-
-		var profile = Get( type );
-		combat.TelegraphSeconds = profile.TelegraphSeconds;
-		combat.RecoverySeconds = profile.RecoverySeconds;
-		combat.HoldSeconds = profile.AttackHoldSeconds;
 	}
 
 	public static void ApplyToBrain( EntityBrain brain, EnemyType type )

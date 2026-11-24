@@ -59,6 +59,8 @@ public static class EnemyCampSpawner
 			{
 				placed++;
 				pieces.Add( spawnedPiece );
+				if ( spawnedPiece.IsValid() && spawnedPiece.Components.Get<BuildPiece>() is { } campPiece )
+					campPiece.WorldCampPiece = true;
 			}
 			else
 				Log.Warning( $"[EnemyCampSpawner] Camp '{camp.Id}': failed to place piece '{piece.PieceId}'." );

@@ -14,6 +14,7 @@ namespace Survival;
 /// Collision Range, like every scav); each guard is its own population slot <c>{entityId}:c:{cx}:{cy}:{i}</c>, so the guards
 /// respawn after <c>respawnDelaySeconds</c>, sleep into <see cref="EntityChunkMemory"/> with their camp leash and come back
 /// through the existing systems. A chunk reload re-spawns only the guards whose slot is free; the pieces stay for the session.
+/// The cell planner itself (<see cref="TryPlanCell"/>) is shared with the points of interest (<see cref="PoiSites"/>).
 ///
 /// Site rules (metres): inside the land disc, at least <see cref="SpawnClearanceMeters"/> from the world spawn (the origin);
 /// the centre on land, not a river, beach or wet ground; 8 points at <see cref="FlatRadiusMeters"/> within
@@ -113,11 +114,28 @@ public static class EnemyCampSites
 		int cx,
 		int cy,
 		out Site site )
+		=> TryPlanCell( settings, backend, worldSeed + 4700, entry.SpacingMeters, entry.SpawnWeight, biome, forest, cx, cy, out site );
+
+	/// <summary>
+	/// One cell of a site grid (camps and points of interest alike): the <paramref name="weight01"/> roll, then up to
+	/// <see cref="CandidatesPerCell"/> seeded points tried against the site rules. <paramref name="salt"/> seeds every hash,
+	/// so two grids with different salts never roll the same cells and points.
+	/// </summary>
+	public static bool TryPlanCell(
+		TerrainPreviewSettings settings,
+		ITerrainPreviewBackend backend,
+		int salt,
+		float spacingMeters,
+		float weight01,
+		TerrainPreviewBiomeId biome,
+		in TerrainVegetationScatter.ForestPatchField forest,
+		int cx,
+		int cy,
+		out Site site )
 	{
 		site = default;
-		var spacing = Math.Clamp( entry.SpacingMeters, 64f, 4000f );
-		var salt = worldSeed + 4700;
-		if ( TerrainPreviewNoise.Hash01( salt, cx, cy ) > Math.Clamp( entry.SpawnWeight, 0f, 1f ) )
+		var spacing = Math.Clamp( spacingMeters, 64f, 4000f );
+		if ( TerrainPreviewNoise.Hash01( salt, cx, cy ) > Math.Clamp( weight01, 0f, 1f ) )
 			return false;
 
 		var landRadius = settings.LandRadiusMeters;

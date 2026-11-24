@@ -1,5 +1,5 @@
 {
-  // Enemy camp layouts. Offsets are camp-local meters in the build kit's space (50 u/m, same as
+  // Enemy camp layouts. Offsets are camp-local meters in the build kit's space (40 u/m, same as
   // build pieces) so entity positions line up with piece footprints: a 2 m floor is one tile.
   // X = camp forward, Y = camp left, Z = up from the ground at the camp origin. yawDegrees is
   // relative to the camp's facing. wanderDistanceMeters / maxTravelDistanceMeters are two rings
@@ -30,26 +30,42 @@
       ]
     },
     {
-      // The world's generated camps (biome_population.json camp rows, EnemyCampSites). Placeholder structure from the
-      // build kit until the camp models exist (Mark prompt 13: falling-apart fence + rope + tiny thatch huts): a 2 x 2
-      // floor platform beside a campfire, five guards round it.
+      // The world's generated camps (biome_population.json camp rows, EnemyCampSites). Feral layout (Mark prompt 26):
+      // a campfire in the middle, three thatch huts facing it, a ramshackle fence ring at 9.5 m with gaps, six scavs
+      // round the fire. Hut doors are the hut's local +X; the fence segment runs along its local X.
       "id": "scav_camp_clover",
       "displayName": "Scav Camp",
       "wanderDistanceMeters": 20,
       "maxTravelDistanceMeters": 70,
       "pieces": [
-        { "pieceId": "build_wood_floor", "x": -4, "y": -1 },
-        { "pieceId": "build_wood_floor", "x": -4, "y": 1 },
-        { "pieceId": "build_wood_floor", "x": -2, "y": -1 },
-        { "pieceId": "build_wood_floor", "x": -2, "y": 1 },
-        { "pieceId": "furniture_campfire", "x": 2, "y": 0 }
+        { "pieceId": "furniture_campfire", "x": 0, "y": 0 },
+        { "pieceId": "camp_hut_a", "x": -6.5, "y": 0.5, "yawDegrees": -4.4 },
+        { "pieceId": "camp_hut_b", "x": 4.2, "y": 5.6, "yawDegrees": -126.9 },
+        { "pieceId": "camp_hut_b", "x": 3.6, "y": -5.9, "yawDegrees": 121.4 },
+        { "pieceId": "camp_fence_a", "x": 7.99, "y": 5.14, "yawDegrees": 122.7 },
+        { "pieceId": "camp_fence_b", "x": 6.22, "y": 7.18, "yawDegrees": 139.1 },
+        { "pieceId": "camp_fence_a", "x": 3.95, "y": 8.64, "yawDegrees": 155.5 },
+        { "pieceId": "camp_fence_a", "x": 1.35, "y": 9.4, "yawDegrees": 171.8 },
+        { "pieceId": "camp_fence_b", "x": -1.35, "y": 9.4, "yawDegrees": 188.2 },
+        { "pieceId": "camp_fence_a", "x": -3.95, "y": 8.64, "yawDegrees": 204.5 },
+        { "pieceId": "camp_fence_b", "x": -7.99, "y": 5.14, "yawDegrees": 237.3 },
+        { "pieceId": "camp_fence_a", "x": -9.12, "y": 2.68, "yawDegrees": 253.6 },
+        { "pieceId": "camp_fence_a", "x": -9.5, "y": 0.0, "yawDegrees": 270.0 },
+        { "pieceId": "camp_fence_a", "x": -6.22, "y": -7.18, "yawDegrees": 319.1 },
+        { "pieceId": "camp_fence_b", "x": -3.95, "y": -8.64, "yawDegrees": 335.5 },
+        { "pieceId": "camp_fence_a", "x": -1.35, "y": -9.4, "yawDegrees": 351.8 },
+        { "pieceId": "camp_fence_a", "x": 1.35, "y": -9.4, "yawDegrees": 368.2 },
+        { "pieceId": "camp_fence_b", "x": 3.95, "y": -8.64, "yawDegrees": 384.5 },
+        { "pieceId": "camp_fence_a", "x": 7.99, "y": -5.14, "yawDegrees": 417.3 },
+        { "pieceId": "camp_fence_b", "x": 9.12, "y": -2.68, "yawDegrees": 433.6 }
       ],
       "entities": [
-        { "archetype": "Scav", "tier": 1, "x": 5, "y": 0, "yawDegrees": 180 },
-        { "archetype": "Scav", "tier": 1, "x": 2, "y": 3, "yawDegrees": -90 },
-        { "archetype": "Scav", "tier": 1, "x": 2, "y": -3, "yawDegrees": 90 },
-        { "archetype": "Scav", "tier": 1, "x": -7, "y": 0, "yawDegrees": 0 },
-        { "archetype": "Scav", "tier": 1, "x": -1, "y": 4, "yawDegrees": -45 }
+        { "archetype": "Scav", "tier": 1, "x": 3.0, "y": 0.8, "yawDegrees": -165.1 },
+        { "archetype": "Scav", "tier": 1, "x": -2.6, "y": 2.4, "yawDegrees": -42.7 },
+        { "archetype": "Scav", "tier": 1, "x": -1.2, "y": -3.3, "yawDegrees": 70.0 },
+        { "archetype": "Scav", "tier": 1, "x": 1.8, "y": -2.6, "yawDegrees": 124.7 },
+        { "archetype": "Scav", "tier": 1, "x": -3.4, "y": -0.6, "yawDegrees": 10.0 },
+        { "archetype": "Scav", "tier": 1, "x": 0.6, "y": 3.6, "yawDegrees": -99.5 }
       ]
     }
   ]

@@ -12,7 +12,10 @@ namespace Survival;
 /// <see cref="SlotSpacingDegrees"/> from every other attacker's — so the close-range chase goal is a point on a ring
 /// around the player instead of the player's own position;</item>
 /// <item>at most <see cref="MaxActiveAttackers"/> <b>attack tokens</b> — only a token holder may start a telegraph; the
-/// others hold their slot and face the player until a token frees up.</item>
+/// others hold their slot and face the player until a token frees up. A freed token waits the returner's
+/// <see cref="ScavCombatStyle.TakeoverPauseMinSeconds"/> before another attacker may take it (Mark 2026-11-15 brawl: a
+/// waiting scav swung the instant a token came back, so five kept ~1.8 swings / s on one target); the returner itself may
+/// re-take it at once (its own think pause already paces it).</item>
 /// </list>
 /// Every brain runs on the host, so this static table is the whole check (same pattern as <see cref="BreachClaims"/>).
 /// Entries are released on leaving the melee states and on death / destroy; invalid brains are pruned on every query.
@@ -26,6 +29,9 @@ public static class EntityAttackSlots
 	{
 		public readonly Dictionary<EntityBrain, float> Bearings = new();
 		public readonly List<EntityBrain> Tokens = new();
+		/// <summary>A freed token opens to the other attackers at this host time.</summary>
+		public double OpenAt;
+		public EntityBrain LastReturner;
 	}
 
 	static readonly Dictionary<GameObject, Ring> _rings = new();
@@ -69,6 +75,8 @@ public static class EntityAttackSlots
 			return true;
 		if ( ring.Tokens.Count >= MaxActiveAttackers )
 			return false;
+		if ( brain != ring.LastReturner && Time.NowDouble < ring.OpenAt )
+			return false;
 
 		ring.Tokens.Add( brain );
 		return true;
@@ -80,7 +88,11 @@ public static class EntityAttackSlots
 		if ( brain is null || !_targetOf.TryGetValue( brain, out var target ) || !_rings.TryGetValue( target, out var ring ) )
 			return;
 
-		ring.Tokens.Remove( brain );
+		if ( ring.Tokens.Remove( brain ) )
+		{
+			ring.LastReturner = brain;
+			ring.OpenAt = Time.NowDouble + (brain.EntityCombat?.RollTakeoverPause() ?? 0f);
+		}
 	}
 
 	/// <summary>Leave the ring entirely (left the melee states, died, destroyed).</summary>

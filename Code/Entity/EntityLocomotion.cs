@@ -6,7 +6,7 @@ namespace Survival;
 
 /// <summary>Drives citizen walk/run anims, build wall clips, and gravity falls when support is lost.</summary>
 [Title( "Entity Locomotion" )]
-public sealed class EntityLocomotion : Component
+public sealed partial class EntityLocomotion : Component
 {
 	const float BodyTraceRadius = 14f;
 	const float BodyTraceHeight = 48f;
@@ -422,8 +422,14 @@ public sealed class EntityLocomotion : Component
 
 	protected override void OnUpdate()
 	{
-		if ( !Active || !GameObject.IsValid() || GameObject.IsProxy )
+		if ( !Active || !GameObject.IsValid() )
 			return;
+
+		if ( GameObject.IsProxy )
+		{
+			TickProxyAnim();
+			return;
+		}
 
 		Agent ??= Components.Get<NavMeshAgent>();
 
@@ -480,10 +486,14 @@ public sealed class EntityLocomotion : Component
 			: !_isFalling && Agent is not null && Agent.IsValid()
 				? Agent.WishVelocity.WithZ( 0f )
 				: velocity.WithZ( 0f );
-		AnimHelper.WithVelocity( velocity );
-		AnimHelper.WithWishVelocity( animWish );
-		AnimHelper.IsGrounded = !_isFalling;
-		AnimHelper.LookAtEnabled = false;
+		TickAnimLod( animWish.Length > 1f ? animWish : velocity );
+		if ( !_animLod )
+		{
+			AnimHelper.WithVelocity( velocity );
+			AnimHelper.WithWishVelocity( animWish );
+			AnimHelper.IsGrounded = !_isFalling;
+			AnimHelper.LookAtEnabled = false;
+		}
 
 		UpdateBodyFacing( velocity );
 	}
@@ -537,6 +547,40 @@ public sealed class EntityLocomotion : Component
 		return !frustum.IsInside( bounds, true );
 	}
 
+	Vector3 _proxyPrevPosition;
+	Vector3 _proxyVelocity;
+	bool _hasProxyPrev;
+
+	/// <summary>
+	/// Clients: the host steps the body and feeds its animgraph; a proxy only receives the synced transform, so on
+	/// its own its body slid around in the idle pose (Mark 2026-11-12, MP playtest). Feed the citizen helper the
+	/// velocity this peer sees the root move at, eased so network steps do not flicker walk / idle. Facing is the
+	/// synced root rotation; falls are not synced, so a proxy always animates grounded.
+	/// </summary>
+	void TickProxyAnim()
+	{
+		if ( AnimHelper is null || !AnimHelper.IsValid() )
+			return;
+
+		var dt = Time.Delta;
+		var position = GameObject.WorldPosition;
+		if ( !_hasProxyPrev || dt <= 1e-5f )
+		{
+			_proxyPrevPosition = position;
+			_hasProxyPrev = true;
+			return;
+		}
+
+		var seen = (position - _proxyPrevPosition) / dt;
+		_proxyPrevPosition = position;
+		_proxyVelocity = Vector3.Lerp( _proxyVelocity, seen, 1f - MathF.Exp( -12f * dt ) );
+
+		AnimHelper.WithVelocity( _proxyVelocity );
+		AnimHelper.WithWishVelocity( _proxyVelocity.WithZ( 0f ) );
+		AnimHelper.IsGrounded = true;
+		AnimHelper.LookAtEnabled = false;
+	}
+
 	void EnsureAnimHelper()
 	{
 		Body ??= FindBodyRenderer();
@@ -554,7 +598,7 @@ public sealed class EntityLocomotion : Component
 			AnimHelper.Target = Body;
 
 		AnimHelper.LookAtEnabled = false;
-		AnimHelper.Enabled = true;
+		AnimHelper.Enabled = !_animLod;   // the far-clip LOD (EntityLocomotion.AnimLod.cs) owns the body while it is on
 	}
 
 	void UpdateBodyFacing( Vector3 velocity )

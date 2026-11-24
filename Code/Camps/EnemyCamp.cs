@@ -11,7 +11,7 @@ namespace Survival;
 public sealed class EnemyCamp : Component
 {
 	/// <summary>Console-toggled debug rings (`campRings true|false`). On while camps are being built out.</summary>
-	public static bool DebugRings { get; private set; } = true;
+	public static bool DebugRings { get; private set; }
 
 	[Property] public string CampId { get; set; } = string.Empty;
 	[Property, Title( "Wander distance (units)" )] public float WanderDistance { get; set; }

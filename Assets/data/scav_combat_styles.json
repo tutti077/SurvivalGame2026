@@ -1,0 +1,273 @@
+{
+  // How scavs fight (EntityCombat, host only): a difficulty ladder, easiest first. The host picks the level on
+  // Settings > Dev tools > Scav difficulty (DevToolsSettings.ScavDifficulty, console scav_difficulty 1-7); level 1 is
+  // the scav's real difficulty and the default (Mark 2026-11-15: "a sliding scale ... where the actual Scav difficulty
+  // should be, at the bottom as the dumbest combat guy"). The same ladder is meant to scale other melee fighters later.
+  //  1    Scav - matched to a basic Last Oasis Rupu (Mark 2026-11-15): rarely guards a fresh swing, but once hit it turns
+  //       defensive and guards most swings until it runs out or you raise your guard. Fight 3-5 at once with the bait.
+  //  2-3  between Scav and Medium
+  //  4    Medium - the 2026-11-14 "standard" style: easy one at a time, 2-4 at once is the challenge once the mechanics
+  //       click. No deliberate chambers, rare and slow guards, single swings, steps back out of reach to make swings whiff.
+  //  5-6  steps toward God
+  //  7    God - the 2026-11-14 "sparring" style, a stand-in for a human opponent ("very close to fighting rumple"): human
+  //       reaction times from the opponent's click, mostly one or two swings then a reset, guards most swings, steps
+  //       out to catch its breath, chambers only when a human could have reacted in time.
+  // Chances are 0-1 per opportunity, seconds are wall-clock, meters are meters.
+  // Every seconds value x1.25 on 2026-11-17 with the weapon class timings (Mark: attacks "dont telegraph long enough ... keep
+  // all the other numbers aligned so combat has the same overall feel"), so the scavs keep their pace relative to the swings (kept when the classes went to the square set the same day).
+  //   name                    shown on the Dev tools button
+  //   reactionMin/MaxSeconds  opponent's click -> its guard press (the guard needs 0.1 s more to stand) / chamber read
+  //   blockChance             an opponent swing aimed at it is answered with the guard
+  //   wrongGuardChance        share of those guards raised on a side the blade does not come from
+  //   defensiveSeconds        after a landed hit (and its stagger) it turns defensive this long - the Rupu pattern players
+  //                           report from Last Oasis: no openers, it guards a held charge on the matching side; if the
+  //                           opponent raises a guard it walks in and swings (step back, it whiffs, punish). 0 = off
+  //   defensiveBlockChance    guard chance while defensive (the higher of this and blockChance)
+  //   defensiveReactionMin/MaxSeconds  reaction while defensive (it is watching you: a light's 0.69 s windup needs <= 0.59)
+  //   chamberChance           a light is answered with a same-side swing timed to meet it (only when its own windup
+  //                           still fits after the reaction - with equal windups that is only in its counter window)
+  //   backstepChance          an opponent swing it does not guard: it steps back out of reach instead
+  //   backstepReactionMin/MaxSeconds  opponent's click -> the backstep starts (no side to read, so quicker than a guard)
+  //   backstepMeters          how far past the opponent's reach it steps; backstepSeconds how long it keeps going
+  //   spacingChance           after its own attack sequence: step out of reach, then come back in
+  //   counterChance           after blocking a light: drop the guard and swing back in the counter window
+  //                           (Mark 2026-11-16: "make them like 2/3 likely to use the initiative" - 0.67 is the floor)
+  //   afterBlockSwingMin/MaxSeconds  no counter rolled: it still takes the initiative, an opener this long after the
+  //                           block (Mark 2026-11-15: "they dont use their block initiative when they block the overhead")
+  //   heavyChance             an opener held into a heavy (x2 against a raised guard)
+  //   feintChance             an opener cancelled at 30-60 % of its windup, then a swing from another side
+  //   secondHitChance / thirdHitChance   chain the 2nd / 3rd swing of a combo (each needs the one before)
+  //   thinkMin/MaxSeconds     pause after its own attack sequence before the next opener
+  //   guardLingerSeconds      the guard stays up this long (+-40 %) after the opponent's swing ends
+  //   staminaReserve          below this it does not open (it steps out until it has this + 25 back); 0 = ignore stamina
+  //   breachSwingGapSeconds   gap between single swings on a target that does not fight back (a wall), +-40 %
+  //   takeoverPauseMin/MaxSeconds  a group pacing its turns: an attack token it hands back stays shut to the other
+  //                           attackers of the same target this long (max 2 attack at once; without it the waiting
+  //                           ones swung the instant a token came back)
+  "levels": [
+    {
+      "name": "Scav",
+      "reactionMinSeconds": 0.44,
+      "reactionMaxSeconds": 0.69,
+      "blockChance": 0.1,
+      "wrongGuardChance": 0.35,
+      "defensiveSeconds": 1.75,
+      "defensiveBlockChance": 0.75,
+      "defensiveReactionMinSeconds": 0.25,
+      "defensiveReactionMaxSeconds": 0.43,
+      "chamberChance": 0,
+      "backstepChance": 0.1,
+      "backstepReactionMinSeconds": 0.2,
+      "backstepReactionMaxSeconds": 0.4,
+      "backstepMeters": 0.5,
+      "backstepSeconds": 0.56,
+      "spacingChance": 0.1,
+      "counterChance": 0.67,
+      "heavyChance": 0.05,
+      "feintChance": 0,
+      "secondHitChance": 0.08,
+      "thirdHitChance": 0,
+      "thinkMinSeconds": 1.63,
+      "thinkMaxSeconds": 3.25,
+      "guardLingerSeconds": 0.25,
+      "staminaReserve": 0,
+      "breachSwingGapSeconds": 0.75,
+      "takeoverPauseMinSeconds": 0.75,
+      "takeoverPauseMaxSeconds": 1.5,
+      "afterBlockSwingMinSeconds": 0.63,
+      "afterBlockSwingMaxSeconds": 1.13
+    },
+    {
+      "name": "Novice",
+      "reactionMinSeconds": 0.41,
+      "reactionMaxSeconds": 0.66,
+      "blockChance": 0.12,
+      "wrongGuardChance": 0.33,
+      "defensiveSeconds": 1.75,
+      "defensiveBlockChance": 0.78,
+      "defensiveReactionMinSeconds": 0.25,
+      "defensiveReactionMaxSeconds": 0.41,
+      "chamberChance": 0,
+      "backstepChance": 0.18,
+      "backstepReactionMinSeconds": 0.18,
+      "backstepReactionMaxSeconds": 0.35,
+      "backstepMeters": 0.55,
+      "backstepSeconds": 0.63,
+      "spacingChance": 0.15,
+      "counterChance": 0.67,
+      "heavyChance": 0.06,
+      "feintChance": 0,
+      "secondHitChance": 0.12,
+      "thirdHitChance": 0,
+      "thinkMinSeconds": 1.44,
+      "thinkMaxSeconds": 3,
+      "guardLingerSeconds": 0.25,
+      "staminaReserve": 0,
+      "breachSwingGapSeconds": 0.75,
+      "takeoverPauseMinSeconds": 0.69,
+      "takeoverPauseMaxSeconds": 1.38,
+      "afterBlockSwingMinSeconds": 0.56,
+      "afterBlockSwingMaxSeconds": 1.06
+    },
+    {
+      "name": "Easy",
+      "reactionMinSeconds": 0.39,
+      "reactionMaxSeconds": 0.64,
+      "blockChance": 0.14,
+      "wrongGuardChance": 0.31,
+      "defensiveSeconds": 1.75,
+      "defensiveBlockChance": 0.8,
+      "defensiveReactionMinSeconds": 0.24,
+      "defensiveReactionMaxSeconds": 0.4,
+      "chamberChance": 0,
+      "backstepChance": 0.27,
+      "backstepReactionMinSeconds": 0.15,
+      "backstepReactionMaxSeconds": 0.31,
+      "backstepMeters": 0.6,
+      "backstepSeconds": 0.63,
+      "spacingChance": 0.2,
+      "counterChance": 0.67,
+      "heavyChance": 0.07,
+      "feintChance": 0,
+      "secondHitChance": 0.16,
+      "thirdHitChance": 0,
+      "thinkMinSeconds": 1.25,
+      "thinkMaxSeconds": 2.75,
+      "guardLingerSeconds": 0.25,
+      "staminaReserve": 0,
+      "breachSwingGapSeconds": 0.75,
+      "takeoverPauseMinSeconds": 0.63,
+      "takeoverPauseMaxSeconds": 1.25,
+      "afterBlockSwingMinSeconds": 0.5,
+      "afterBlockSwingMaxSeconds": 1
+    },
+    {
+      "name": "Medium",
+      "reactionMinSeconds": 0.38,
+      "reactionMaxSeconds": 0.63,
+      "blockChance": 0.15,
+      "wrongGuardChance": 0.3,
+      "defensiveSeconds": 1.75,
+      "defensiveBlockChance": 0.82,
+      "defensiveReactionMinSeconds": 0.24,
+      "defensiveReactionMaxSeconds": 0.39,
+      "chamberChance": 0,
+      "backstepChance": 0.35,
+      "backstepReactionMinSeconds": 0.13,
+      "backstepReactionMaxSeconds": 0.28,
+      "backstepMeters": 0.6,
+      "backstepSeconds": 0.63,
+      "spacingChance": 0.25,
+      "counterChance": 0.67,
+      "heavyChance": 0.08,
+      "feintChance": 0,
+      "secondHitChance": 0.2,
+      "thirdHitChance": 0,
+      "thinkMinSeconds": 1.13,
+      "thinkMaxSeconds": 2.5,
+      "guardLingerSeconds": 0.25,
+      "staminaReserve": 0,
+      "breachSwingGapSeconds": 0.75,
+      "takeoverPauseMinSeconds": 0.56,
+      "takeoverPauseMaxSeconds": 1.13,
+      "afterBlockSwingMinSeconds": 0.44,
+      "afterBlockSwingMaxSeconds": 0.88
+    },
+    {
+      "name": "Hard",
+      "reactionMinSeconds": 0.28,
+      "reactionMaxSeconds": 0.45,
+      "blockChance": 0.82,
+      "wrongGuardChance": 0.08,
+      "defensiveSeconds": 1.25,
+      "defensiveBlockChance": 0.9,
+      "defensiveReactionMinSeconds": 0.23,
+      "defensiveReactionMaxSeconds": 0.38,
+      "chamberChance": 0.06,
+      "backstepChance": 0.3,
+      "backstepReactionMinSeconds": 0.15,
+      "backstepReactionMaxSeconds": 0.31,
+      "backstepMeters": 0.55,
+      "backstepSeconds": 0.6,
+      "spacingChance": 0.3,
+      "counterChance": 0.67,
+      "heavyChance": 0.1,
+      "feintChance": 0.03,
+      "secondHitChance": 0.26,
+      "thirdHitChance": 0.03,
+      "thinkMinSeconds": 0.88,
+      "thinkMaxSeconds": 2.13,
+      "guardLingerSeconds": 0.25,
+      "staminaReserve": 10,
+      "breachSwingGapSeconds": 0.75,
+      "takeoverPauseMinSeconds": 0.5,
+      "takeoverPauseMaxSeconds": 1,
+      "afterBlockSwingMinSeconds": 0.38,
+      "afterBlockSwingMaxSeconds": 0.75
+    },
+    {
+      "name": "Expert",
+      "reactionMinSeconds": 0.25,
+      "reactionMaxSeconds": 0.41,
+      "blockChance": 0.88,
+      "wrongGuardChance": 0.05,
+      "defensiveSeconds": 1,
+      "defensiveBlockChance": 0.93,
+      "defensiveReactionMinSeconds": 0.21,
+      "defensiveReactionMaxSeconds": 0.35,
+      "chamberChance": 0.16,
+      "backstepChance": 0.25,
+      "backstepReactionMinSeconds": 0.18,
+      "backstepReactionMaxSeconds": 0.35,
+      "backstepMeters": 0.5,
+      "backstepSeconds": 0.58,
+      "spacingChance": 0.33,
+      "counterChance": 0.67,
+      "heavyChance": 0.11,
+      "feintChance": 0.06,
+      "secondHitChance": 0.31,
+      "thirdHitChance": 0.06,
+      "thinkMinSeconds": 0.69,
+      "thinkMaxSeconds": 1.81,
+      "guardLingerSeconds": 0.25,
+      "staminaReserve": 18,
+      "breachSwingGapSeconds": 0.75,
+      "takeoverPauseMinSeconds": 0.44,
+      "takeoverPauseMaxSeconds": 0.88,
+      "afterBlockSwingMinSeconds": 0.31,
+      "afterBlockSwingMaxSeconds": 0.63
+    },
+    {
+      "name": "God",
+      "reactionMinSeconds": 0.23,
+      "reactionMaxSeconds": 0.38,
+      "blockChance": 0.94,
+      "wrongGuardChance": 0.03,
+      "defensiveSeconds": 0,
+      "defensiveBlockChance": 0.96,
+      "defensiveReactionMinSeconds": 0.2,
+      "defensiveReactionMaxSeconds": 0.33,
+      "chamberChance": 0.3,
+      "backstepChance": 0.2,
+      "backstepReactionMinSeconds": 0.19,
+      "backstepReactionMaxSeconds": 0.38,
+      "backstepMeters": 0.5,
+      "backstepSeconds": 0.56,
+      "spacingChance": 0.35,
+      "counterChance": 0.75,
+      "heavyChance": 0.12,
+      "feintChance": 0.1,
+      "secondHitChance": 0.35,
+      "thirdHitChance": 0.1,
+      "thinkMinSeconds": 0.5,
+      "thinkMaxSeconds": 1.5,
+      "guardLingerSeconds": 0.25,
+      "staminaReserve": 25,
+      "breachSwingGapSeconds": 0.75,
+      "takeoverPauseMinSeconds": 0.38,
+      "takeoverPauseMaxSeconds": 0.75,
+      "afterBlockSwingMinSeconds": 0.25,
+      "afterBlockSwingMaxSeconds": 0.5
+    }
+  ]
+}

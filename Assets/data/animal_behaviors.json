@@ -168,7 +168,11 @@
       "fleeHealthFraction": 0.25,
       "reengageRangeMeters": 20,
       "alertSeconds": 0.8,
-      "trapSize": "small"
+      "trapSize": "small",
+      "loot": [
+        { "resourceId": "resource_lynxPelt", "min": 2, "max": 2 },
+        { "resourceId": "rawmeat_lynx", "min": 2, "max": 2 }
+      ]
     },
     "wolf": {
       "threatResponse": "predator",
@@ -229,7 +233,11 @@
       "attackCooldownSeconds": 2.0,
       "fleeHealthFraction": 0.15,
       "reengageRangeMeters": 15,
-      "alertSeconds": 1.2
+      "alertSeconds": 1.2,
+      "loot": [
+        { "resourceId": "resource_blackBearFur", "min": 2, "max": 2 },
+        { "resourceId": "rawmeat_blackBear", "min": 3, "max": 4 }
+      ]
     },
     "dunewyrm": {
       "threatResponse": "predator",
@@ -535,6 +543,40 @@
       "fleeDistanceMeters": 20,
       "calmRangeMeters": 15,
       "trapSize": "small"
+    },
+    "giantSpider": {
+      "threatResponse": "predator",
+      "maxHealth": 110,
+      "walkSpeedMps": 1.2,
+      "runSpeedMps": 7.0,
+      "sneakSpeedMps": 1.4,
+      "idleMinSeconds": 2,
+      "idleMaxSeconds": 5,
+      "grazeMinSeconds": 4,
+      "grazeMaxSeconds": 8,
+      "grazeChance": 0.4,
+      "wanderRadiusMeters": 20,
+      "sightRangeMeters": 50,
+      "sightFovDegrees": 210,
+      "eyeHeightMeters": 0.5,
+      "hearRangeMeters": 45,
+      "sneakHearFraction": 0.35,
+      "fleeDistanceMeters": 65,
+      "calmRangeMeters": 50,
+      "trackStartRangeMeters": 30,
+      "trackRangeMeters": 75,
+      "lungeRangeMeters": 15,
+      "attackRangeMeters": 1.7,
+      "attackDamage": 15,
+      "attackWindupSeconds": 0.35,
+      "attackCooldownSeconds": 1.1,
+      "fleeHealthFraction": 0.25,
+      "reengageRangeMeters": 22,
+      "alertSeconds": 0.8,
+      "trapSize": "small",
+      "loot": [
+        { "resourceId": "resource_spiderSilk", "min": 2, "max": 3 }
+      ]
     }
   }
 }
