@@ -1,0 +1,7 @@
+// Hub big screen: the coliseum camera feed (Code/Hub/HubArenaScreen.cs)
+Layer0
+{
+	shader "shaders/hub_screen.shader"
+
+	HubScreenBrightness "0.800"
+}

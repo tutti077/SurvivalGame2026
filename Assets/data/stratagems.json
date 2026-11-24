@@ -1,0 +1,17 @@
+{
+  "_comment": "Stratagem Hero codes for the hub arcade cabinet (Code/Hub/StratagemCatalog.cs). U D L R = up down left right; WASD and the arrow keys both work. Each code acts out its name (approved by Mark 2026-11-10).",
+  "codes": [
+    { "id": "grapple_hook", "name": "Grapple Hook", "code": "UUR", "why": "Shoot up, swing over" },
+    { "id": "bear_trap", "name": "Bear Trap", "code": "DDU", "why": "Step in, it snaps shut" },
+    { "id": "bow_shot", "name": "Bow Shot", "code": "LLR", "why": "Draw back, release" },
+    { "id": "shield_up", "name": "Shield Up", "code": "UUD", "why": "Raise, brace" },
+    { "id": "dodge_roll", "name": "Dodge Roll", "code": "LDR", "why": "Roll under" },
+    { "id": "build_wall", "name": "Build Wall", "code": "UUU", "why": "Stack the walls" },
+    { "id": "campfire", "name": "Campfire", "code": "DUDU", "why": "Stoke the flames" },
+    { "id": "mine_rock", "name": "Mine Rock", "code": "DDDD", "why": "Pickaxe strikes" },
+    { "id": "purple_portal", "name": "Purple Portal", "code": "URDL", "why": "Full circle" },
+    { "id": "chop_tree", "name": "Chop Tree", "code": "LRLRD", "why": "Axe both sides, tree falls" },
+    { "id": "stasis_pod", "name": "Stasis Pod", "code": "DDDRR", "why": "Crash down, doors swing open" },
+    { "id": "wingsuit", "name": "Wingsuit", "code": "UULRLR", "why": "Climb, then glide side to side" }
+  ]
+}

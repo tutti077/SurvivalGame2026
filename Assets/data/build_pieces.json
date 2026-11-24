@@ -537,6 +537,20 @@
       ]
     },
     {
+      // The purple portal to the hub (Code/Hub/HubPortal.cs, prefab from Tools/hub/generate_hub.py): free for now.
+      "id": "hub_portal",
+      "tab": "furniture",
+      "displayName": "Hub Portal",
+      "icon": "",
+      "prefab": "prefabs/build/hub_portal.prefab",
+      "fallbackColor": "0.62,0.3,1,1",
+      "materialId": "wood",
+      "halfWidth": 68,
+      "halfHeight": 24,
+      "halfDepth": 68,
+      "costs": []
+    },
+    {
       "id": "circuit_light",
       "tab": "furniture",
       "displayName": "Light Bulb",

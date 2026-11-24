@@ -512,6 +512,79 @@ the grapple travel accumulator over pawns whose rope is attached, plus a 2 s `vi
 (`PlaytestLogSystem`, a GameObjectSystem - no scene or prefab component needed). Entity labels: animal species, else
 `EntityVitals` display name + tier; players by connection display name (`player_join` carries the Steam id).
 
+### The hub (Mark 2026-11-10: the game's grand exchange)
+
+A community space reached through a purple portal: time trials, the coliseum, a bar that watches the fights and
+takes bets, and a games wing. **For now it lives inside the host's own world**, 3 km above the map at hub-local origin
+`(0, 0, 3000 m)`, so the world keeps running and guests can follow or stay; later the same prefab moves onto company
+servers (only `HubStore` and the spawn path change). Every hub record is keyed by Steam ID.
+
+- **Assets** from `Tools/hub/generate_hub.py` (run it, never hand-edit the outputs): `prefabs/hub/hub.prefab` (~960
+  dev boxes + build-kit wall models, every one a static `BoxCollider`), the buildable `prefabs/build/hub_portal.prefab`
+  (bbox-centred like every build piece), `materials/hub/*` and `models/hub/barrel/`. Authored in metres, converted once on
+  write. Surfaces use `shaders/hub_surface.shader` (box UVs stretch with scale, so it projects the texture on the world
+  plane each face looks along, point sampled up close and faded over one mip level to an anisotropic mip-mapped
+  sample once a texel is smaller than a screen pixel — the far walls / roof / grazing floor were breaking the thin neon
+  lines into moire — plus `TextureGlow` emission); `hub_glass.shader` is the alpha-blended
+  window (the engine glass needs a framebuffer copy offscreen captures lack); `hub_screen.shader` shows the feed.
+  Only the hall is black + neon (10 m tiles, no lamps — lamps washed the panels grey); the coliseum is pale stone / dark
+  metal / warm light strips (futuristic Roman), the trial cube is plain grey grid (Mark: "doesn't really matter for now").
+  Building floors sit 5 cm above the hall floor (`FLOOR_LIFT`; coplanar floors z-fought).
+- **Layout** (Mark 2026-11-10, second pass: "MASSIVE wide open space but fully enclosed"; metres, fountain at the
+  origin, +Y north; `HALL` / `COL_C` / `CUBE` in the generator): one enclosed 1000 x 1000 m tron hall
+  (`x -620..380, y -420..580`, roof at 140 m) that every building stands inside, free to walk round. Arrivals land 10 m
+  south of the fountain. Coliseum: 150 x 100 m sand floor centred 270 m north, 5 m podium, six tiers of stands and a
+  28 m three-storey arcade facade on three sides, one fort per side at `x ±50` (6 x 6 m tower six kit walls = 12 m with
+  eight switchback ramps inside, battlement walls with a 4.5 m walkway and back ramps), team spawns at `x ±65`, three
+  barrel piles, six high floodlights. Lobby against its south side (120 x 20 m, 12 m tall): hall with the fish-tank window
+  and the arena kiosk, bar wing west (16 x 9 m screen, bookie, benches, commend button), games wing east (stratagem
+  cabinet). Trial cube 500 x 500 m (`x -600..-100, y -400..100`, 100 m walls, open top): start platform by the east wall,
+  a straight line of grapple bars (every 3 m, 30 m up, on hangers from a top beam) ~470 m west to the end platform,
+  rings 10-15 spread along it; the queue building is on the cube's east face, door toward the fountain.
+- **Sun indoors**: the sun's shadow cascades do not take the 1000 m roof, so it lit a hard disc of floor round the
+  camera. `HubWorld.OnPreRender` zeroes the sun / moon direct light and shadows for any frame whose camera is inside the
+  hub (the day/night cycle sets them again every update; ambient fill stays). Nothing changes for players in the world.
+- **Portals** (`Code/Hub/HubPortal.cs`): `ToHub` (the build piece `hub_portal`, free, furniture tab — spawns the hub on
+  first use via `HubWorld.HostEnsureSpawned`, remembers a return 2 m in front of the portal), `ToWorld` (the fountain —
+  back to that return; else bed / SpawnPoint; else the ground straight below the hub), `Teleport` (the trial cube's exit
+  pads → the trial building). The local pawn checks the short static portal list 10x a second
+  (`PlayerInventoryInteraction.Hub.cs`) and sends `RpcHostUsePortal`; the host re-checks the distance once.
+  `HubWorld` (prefab root) also puts anyone more than 20 m under the hub floor (within 700 m of the fountain) back at it
+  (1 Hz host check).
+- **Kiosks** (`HubKiosk`, look + E, static list, no scene scans): `Bets` on the bookie (`HubBetBoard`), `Stratagem`
+  on the cabinet (`StratagemMachine`) — both open `HubMenuPanel` — and `Commend` by the big screen (acts, no menu) (fixed 760 x 560 card, rebuilt only on data change).
+  While it is open the hub menu owns E, the cursor and WASD (`UseInputControls` off) and the other interaction ticks
+  stand down.
+- **Arena betting window**: `ArenaSession.BettingWindowSeconds` (30 in the hub, 0 = old behaviour elsewhere) — a filled
+  match goes to `ArenaPhase.Announced`, nobody moves until the window ends; a team emptied meanwhile voids it.
+  `ArenaSession.HostMatchResolved` (winner, or -1 for void) is what `HubBetBoard` listens to: it records every fighter's
+  fight / win in `HubStore` and pays the pool out pari-mutuel (winners split all stakes by stake; void or nobody on the
+  winner = refund all). One side per bettor per match, fighters cannot bet on their own match. The board publishes
+  `BoardBlob` (current match teams / pools / fighter records, queue, bets) once a second.
+- **Stratagem Hero** (`StratagemGame`, local to the player; codes in `data/stratagems.json`, 12 approved by Mark
+  2026-11-10, each acting out its name): rounds of 4 + round codes (max 12), clock 10 s refilled each round, +1 s per
+  code (max 12), wrong arrow restarts the code; 5 pts per arrow, round bonus 50 + 25·round, time bonus 10 / s left,
+  perfect +100. The host takes the final score through `RpcHostSubmitStratagem`, rejects impossible runs (> 2.5 codes / s
+  or more than `MaxScoreFor(codes)`), keeps the best per Steam ID and publishes `ScoresBlob` — players present in the
+  session only, rebuilt every 3 s. WASD and the arrow keys (`ArrowUp/Down/Left/Right` input actions) both work.
+- **Big screen + cameraman** (`HubArenaScreen` on the bar, Mark 2026-11-10): one feed camera, a 480 px render target
+  shown by `hub_screen.shader`, rendering only while the local view is within 60 m of the screen. The host cycles
+  `AngleIndex` through eight fixed `Angles` (south high, north / west / east stands, a low corner, each fort, overhead)
+  every 10 s. A player can volunteer at the arena kiosk ("Be the Cameraman", first come, one per fight —
+  `ArenaSession.CameramanId`): when the fight starts they go in at `CameramanSpawn`, with `PlayerVitals.EventInvulnerable`,
+  `PlayerCombat.EventNoCombat` (no melee, bow, bola or shove) and `PlayerAnimation.EventOutfit = "referee"` (white polo +
+  `hub_referee_stripes` + black trackies, replacing the worn clothing), and every other shot is their own eye view
+  (index -1). The `Commend` kiosk by the screen: any one press (Mark) locks the screen on the cameraman until the fight
+  ends; its prompt follows the state. Fight over → cameraman restored to the lobby, flags and outfit off, role free.
+- **Grapple loan**: the trial cube needs a grapple, so `TimeTrialSession.LendGrapple` (on in the hub) sets
+  `PlayerMovement.EventGrappleLoan` for racers from countdown to reset; with an empty Grapple slot the pawn grapples with
+  `LoanGrappleResourceId` (`basic_hook`). Nothing enters the inventory. The trial menu lists only races whose rings exist
+  in the scene (`TimeTrialCheckpoint.HasRoute`); the hub race is `hub_grapple_bars` (orders 10-15).
+- **Store** (`HubStore`, the company-database stand-in): `FileSystem.Data/2Tgames/hub/players/<steamid>.json` — tokens
+  (100 free per UTC day on hub entry), arena fights / wins, stratagem best; cached, written through. Synced to the pawn
+  as `PlayerInventoryInteraction.HubTokens` / `HubStratagemBest`.
+- Console: `hub` (go there as if through a portal), `hub_tokens [n]`, `stratagem_reload`.
+
 ## Commandment #2 — End every assistant reply with “what you need to do”
 
 When the assistant sends a **final** message in this repo, it must end with a short **“What’s needed from you”** section: concrete follow-ups (prefab/scene steps, testing to run, settings to verify, decisions only you can make). If there is genuinely nothing, say **Nothing required on your side for this change.**

@@ -1,0 +1,12 @@
+// Hub surface (Tools/hub/generate_hub.py)
+Layer0
+{
+	shader "shaders/hub_surface.shader"
+
+	HubTileMeters "10.000"
+	HubGlow "3.000"
+	HubRoughness "0.350"
+	HubMetalness "0.200"
+	TextureColor "materials/hub/hub_neon.png"
+	TextureGlow "materials/hub/hub_neon_glow.png"
+}

@@ -181,8 +181,15 @@ public static class ConsoleHelp
 		new( "Props", "pod_scooter", "[take|restock]", "Host takes the folded scooter out of the nearest stasis pod into your bag, or puts it back in the cradle.", "pod_scooter restock" ),
 		new( "Props", "pod_test", "[count] [here]", "Host crash-lands this many empty stasis pods (default 10) around the spawn centre - or around you with here. Needs a StasisPodSpawner in the scene (terrainTest has one).", "pod_test 10 here" ),
 		new( "Props", "pod_arrivals", "[0|1]", "Players arrive by crash-landing pod on their first spawn of the session (default 1). No argument prints it.", "pod_arrivals 0" ),
-		new( "Tests", "combat_test", "", "Automated melee regression suite (play mode, testscene1): scripted fights, PASS/FAIL per case.", "combat_test" ),
-		new( "Tests", "anim_test", "", "Sword animation anatomy suite (play mode): rests, shoulder swaps, look sweep, every attack; PASS/FAIL per scenario.", "anim_test" ),
+		new( "Hub", "hub", "", "Host: go to the hub (spawned 3 km above the world the first time) as if through a portal where you stand; the fountain brings you back here.", "hub" ),
+		new( "Hub", "hub_tokens", "[amount]", "Host: set your hub tokens (the betting currency); no argument prints your tokens, arena record and stratagem best.", "hub_tokens 500" ),
+		new( "Hub", "stratagem_reload", "", "Re-read data/stratagems.json (the Stratagem Hero codes).", "stratagem_reload" ),
+
+		new( "Tests", "combat_test","", "Automated melee regression suite (play mode, testscene1): scripted fights, PASS/FAIL per case.", "combat_test" ),
+		new( "Tests", "anim_test", "[scenario text]", "Sword animation anatomy suite (play mode): rests, shoulder swaps, look sweep, every attack; PASS/FAIL per scenario. With a text: logs every frame of the scenarios whose name contains it.", "anim_test" ),
+		new( "Tests", "inventory_test", "", "Item authority suite (play mode, any scene): drives the host side of bag / hotbar / chest / paperdoll / augment drag-and-drop and checks nothing is created, copied or overwritten; PASS/FAIL per case.", "inventory_test" ),
+		new( "Vehicles", "grapple_tow", "[off]", "Hook the local pawn to the nearest vehicle through the host attach (lends a grapple when the slot is empty) so a tow behind vehicle_drive can be filmed from the editor; off lets go. Host / offline.", "grapple_tow" ),
+		new( "Tests", "grapple_test", "", "Grapple on players + landing skip + vehicle tow suite (play mode, any scene): two scripted pawns on a floor high above the scene - 1 s tether, half speed while hooked, grappler keeps full speed, rope stretches; skips after a rope release vs a plain landing; a pawn hooked to a driven body rides at its speed on the ground, slings outside a turn and stands again when it stops. PASS/FAIL per case.", "grapple_test" ),
 
 		// ---- playtest logger
 		new( "Playtest", "playtest_log", "[0|1]", "Host: the playtest logger on (a new <steam name>_<date_time>_v<build>.jsonl under data/2Tgames/playtest/) or off. Hits, kills with time-to-kill and the killer's pools, player damage and deaths, stamina empties, 2 s vitals samples, blocks, grapple attach / detach with speed and distance, crafts, builds, item gains, pawn positions, joins / leaves, each client's fps and menu time. No argument prints the state. Tools/playtest_report.py reads the file.", "playtest_log 1" ),

@@ -1,0 +1,9 @@
+// Hub fish-tank window (Tools/hub/generate_hub.py)
+Layer0
+{
+	shader "shaders/hub_glass.shader"
+
+	HubGlassTint "[0.700000 0.900000 1.000000 0.000000]"
+	HubGlassOpacity "0.080"
+	HubGlassEdgeOpacity "0.450"
+}

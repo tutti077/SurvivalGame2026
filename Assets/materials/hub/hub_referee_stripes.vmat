@@ -1,0 +1,9 @@
+// Referee shirt stripes for the hub arena cameraman (Tools/hub/generate_hub.py)
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.900"
+	PixelSpecular "0.000"
+	TextureColor "materials/hub/hub_referee_stripes.png"
+}
