@@ -465,6 +465,94 @@
       ]
     },
     {
+      // Scav camp dressing (Blender/scripts/create_camp_props.py): stamped by enemy_camps.json, never offered in the menu.
+      "id": "camp_hut_a",
+      "displayName": "Thatch Hut",
+      "icon": "",
+      "prefab": "prefabs/build/camp_hut_a.prefab",
+      "fallbackColor": "0.62,0.52,0.3,1",
+      "tab": "building",
+      "hidden": true,
+      "halfWidth": 86,
+      "halfHeight": 86,
+      "halfDepth": 62,
+      "costs": []
+    },
+    {
+      "id": "camp_hut_b",
+      "displayName": "Thatch Hut",
+      "icon": "",
+      "prefab": "prefabs/build/camp_hut_b.prefab",
+      "fallbackColor": "0.62,0.52,0.3,1",
+      "tab": "building",
+      "hidden": true,
+      "halfWidth": 76,
+      "halfHeight": 76,
+      "halfDepth": 56,
+      "costs": []
+    },
+    {
+      "id": "camp_fence_a",
+      "displayName": "Camp Fence",
+      "icon": "",
+      "prefab": "prefabs/build/camp_fence_a.prefab",
+      "fallbackColor": "0.47,0.42,0.35,1",
+      "tab": "building",
+      "hidden": true,
+      "halfWidth": 44,
+      "halfHeight": 5,
+      "halfDepth": 27,
+      "costs": []
+    },
+    {
+      "id": "camp_fence_b",
+      "displayName": "Camp Fence (broken)",
+      "icon": "",
+      "prefab": "prefabs/build/camp_fence_b.prefab",
+      "fallbackColor": "0.47,0.42,0.35,1",
+      "tab": "building",
+      "hidden": true,
+      "halfWidth": 44,
+      "halfHeight": 5,
+      "halfDepth": 27,
+      "costs": []
+    },
+    {
+      // Roasting spit (create_camp_props.py): stands over a campfire. Free in the Furniture tab, no cooking function yet (Mark 2026-11-19); the abandoned structures stamp it too.
+      "id": "roasting_spit",
+      "displayName": "Roasting Spit",
+      "icon": "",
+      "prefab": "prefabs/build/roasting_spit.prefab",
+      "fallbackColor": "0.47,0.42,0.35,1",
+      "tab": "furniture",
+      "halfWidth": 40,
+      "halfHeight": 6,
+      "halfDepth": 24,
+      "costs": []
+    },
+    {
+      // Prompt 29: a wild beehive plus wood makes a hive box (Crafting tab).
+      "id": "beehive_box",
+      "displayName": "Beehive",
+      "icon": "ui/items/resource_beehive.png",
+      "prefab": "prefabs/build/beehive_box.prefab",
+      "fallbackColor": "0.6,0.56,0.48,1",
+      "tab": "crafting",
+      "halfWidth": 13,
+      "halfHeight": 10,
+      "halfDepth": 20,
+      "costs": [
+        {
+          "resourceId": "resource_beehive",
+          "amount": 1
+        },
+        {
+          "resourceId": "resource_woodBasic",
+          "amount": 6
+        }
+      ]
+    },
+    {
       "id": "furniture_campfire",
       "tab": "furniture",
       "displayName": "Campfire",
