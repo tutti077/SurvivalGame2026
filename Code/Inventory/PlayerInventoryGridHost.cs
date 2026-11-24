@@ -36,17 +36,6 @@ public sealed class PlayerInventoryGridHost : IInventoryGridHost
 		return Inventory is not null && Inventory.OwnerTryPlaceHeld( slotIndex, ref held );
 	}
 
-	public bool OwnerTryReturnStack( ref InventoryCursorStack held )
-	{
-		if ( Inventory is null || held.IsEmpty )
-			return false;
-
-		if ( Inventory.HasHostAuthority )
-			return Inventory.HostTryReturnStack( held );
-
-		return false;
-	}
-
 	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken )
 	{
 		taken = InventorySlot.Empty;

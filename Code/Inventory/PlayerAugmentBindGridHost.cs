@@ -41,8 +41,6 @@ public sealed class PlayerAugmentBindGridHost : IInventoryGridHost
 
 	public bool OwnerTryPlaceHeld( int slotIndex, ref InventoryCursorStack held ) => false;
 
-	public bool OwnerTryReturnStack( ref InventoryCursorStack held ) => false;
-
 	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken )
 	{
 		taken = InventorySlot.Empty;

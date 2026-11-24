@@ -1,5 +1,11 @@
 {
   "profiles": [
+    // Hit arc = the weapon (Mark 2026-11-23: "the club's arc is far too large, make it the same length as the weapon").
+    // meleeOverrides reach puts the arc on the held blade. Measured from the baked strike clips (create_sword_anims.py -- path):
+    // the fist travels ~0.31 m out from the swing pivot, the hand sits 12 % up the handle (basicplayer MeleeDemoStickGripAlongLength),
+    // so reach = (0.53 + 0.88 x model length) / 1.14. club 0.68 m -> 0.99, bone sword 0.83 m -> 1.1, scrap sword 0.94 m -> 1.19,
+    // reforged sword 1.0 m -> 1.24, stone axe 0.72 m -> 1.02, reforged axe 1.01 m -> 1.25 (class value 1.54).
+    // Axes swing and block like the swords for now (Mark 2026-11-23); they stay harvest tools.
     {
       "resourceId": "club_wood",
       "displayName": "Wooden Club",
@@ -10,6 +16,7 @@
       "twoHanded": false,
       "hotbarEquipable": true,
       "heldModel": "models/weapons/wooden_club/wooden_club.vmdl",
+      "meleeOverrides": { "reachForwardMeters": 0.99, "reachLateralMeters": 0.99 },
       "durabilityMax": 100,
       "statModifiers": { "armor": 0, "damage": 8, "speed": 0 }
     },
@@ -53,6 +60,7 @@
     {
       "resourceId": "basic_hook",
       "displayName": "Basic Grapple",
+      "heldModel": "models/tools/grapple_gear/grapple_gauntlet.vmdl",
       "slot": "grapple",
       "allowedSlots": ["grapple"],
       "actions": ["Grapple"],
@@ -80,13 +88,14 @@
       "displayName": "Stone Axe",
       "slot": "mainHand",
       "allowedSlots": ["mainHand"],
-      "actions": ["PrimaryMelee"],
+      "actions": ["PrimaryMelee", "Block"],
       "weaponClass": "oneHanded",
       "twoHanded": false,
       "hotbarEquipable": true,
       "harvestToolType": "Axe",
       "harvestToolTier": 0,
       "heldModel": "models/tools/stone_axe/stone_axe.vmdl",
+      "meleeOverrides": { "reachForwardMeters": 1.02, "reachLateralMeters": 1.02 },
       "durabilityMax": 100,
       "statModifiers": { "armor": 0, "damage": 4, "speed": 0 }
     },
@@ -102,6 +111,36 @@
       "twoHanded": false,
       "hotbarEquipable": true,
       "heldModel": "models/weapons/sword_reforged.vmdl",
+      "meleeOverrides": { "reachForwardMeters": 1.24, "reachLateralMeters": 1.24 },
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 8, "speed": 0 }
+    },
+    // Bone and scrap swords: same sword rig as the reforged one (stats mirror the wooden club until the tiers are tuned).
+    {
+      "resourceId": "sword_bone",
+      "displayName": "Bone Sword",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": ["PrimaryMelee", "Block"],
+      "weaponClass": "oneHanded",
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "heldModel": "models/weapons/bone_sword/bone_sword.vmdl",
+      "meleeOverrides": { "reachForwardMeters": 1.1, "reachLateralMeters": 1.1 },
+      "durabilityMax": 100,
+      "statModifiers": { "armor": 0, "damage": 8, "speed": 0 }
+    },
+    {
+      "resourceId": "sword_scrap",
+      "displayName": "Scrap Sword",
+      "slot": "mainHand",
+      "allowedSlots": ["mainHand"],
+      "actions": ["PrimaryMelee", "Block"],
+      "weaponClass": "oneHanded",
+      "twoHanded": false,
+      "hotbarEquipable": true,
+      "heldModel": "models/weapons/sword_scrap/sword_scrap.vmdl",
+      "meleeOverrides": { "reachForwardMeters": 1.19, "reachLateralMeters": 1.19 },
       "durabilityMax": 100,
       "statModifiers": { "armor": 0, "damage": 8, "speed": 0 }
     },
@@ -110,13 +149,14 @@
       "displayName": "Reforged Axe",
       "slot": "mainHand",
       "allowedSlots": ["mainHand"],
-      "actions": ["PrimaryMelee"],
+      "actions": ["PrimaryMelee", "Block"],
       "weaponClass": "oneHanded",
       "twoHanded": false,
       "hotbarEquipable": true,
       "harvestToolType": "Axe",
       "harvestToolTier": 0,
       "heldModel": "models/weapons/axe_reforged.vmdl",
+      "meleeOverrides": { "reachForwardMeters": 1.25, "reachLateralMeters": 1.25 },
       "durabilityMax": 100,
       "statModifiers": { "armor": 0, "damage": 4, "speed": 0 }
     },

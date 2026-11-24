@@ -36,6 +36,12 @@ public sealed class PlayerHotbar : Component
 	string[] _bindings = PlayerHotbarBindingsStore.CreateEmpty();
 	bool _pushedBindingsToHost;
 
+	/// <summary>
+	/// False on scripted pawns (the automated suites' clones). They count as local pawns, so with this on
+	/// their slot bindings would load from, and overwrite, the player's saved <c>hotbar_bindings.json</c>.
+	/// </summary>
+	public bool UsesSavedBindings { get; set; } = true;
+
 	public bool HasHostAuthority =>
 		GameObject.Network is not { Active: true } || Networking.IsHost;
 
@@ -58,7 +64,7 @@ public sealed class PlayerHotbar : Component
 	protected override void OnStart()
 	{
 		base.OnStart();
-		if ( IsLocalManagingClient() )
+		if ( UsesSavedBindings && IsLocalManagingClient() )
 		{
 			_bindings = PlayerHotbarBindingsStore.Load();
 			TryPushBindingsToHost();
@@ -587,6 +593,33 @@ public sealed class PlayerHotbar : Component
 		return amount - add;
 	}
 
+	/// <summary>
+	/// The hotbar slots a stack of <paramref name="resourceId"/> shift-clicked out of a chest or other storage fills, in
+	/// order - the same ones a pickup fills: stacks of it with room, then the empty slots bound to it (Mark 2026-11-17: a
+	/// weapon with an assigned slot "just gets put in the 0th slot of my inventory"). Null when none; the rest goes to the bag.
+	/// </summary>
+	public List<int> SlotsTakingFromStorage( string resourceId )
+	{
+		if ( string.IsNullOrWhiteSpace( resourceId ) )
+			return null;
+
+		List<int> slots = null;
+		var max = ResourceCatalog.GetMaxStack( resourceId );
+		for ( var i = 0; i < SlotCount; i++ )
+		{
+			if ( !_slots[i].IsEmpty && ResourceCatalog.ResourceIdsMatch( _slots[i].ResourceId, resourceId ) && _slots[i].Count < max )
+				(slots ??= new List<int>()).Add( i );
+		}
+
+		for ( var i = 0; i < SlotCount; i++ )
+		{
+			if ( _slots[i].IsEmpty && BindingMatches( i, resourceId ) )
+				(slots ??= new List<int>()).Add( i );
+		}
+
+		return slots;
+	}
+
 	bool BindingMatches( int slotIndex, string resourceId )
 	{
 		var binding = GetBinding( slotIndex );
@@ -681,7 +714,7 @@ public sealed class PlayerHotbar : Component
 
 	void PersistBindingsLocal()
 	{
-		if ( IsLocalManagingClient() )
+		if ( UsesSavedBindings && IsLocalManagingClient() )
 			PlayerHotbarBindingsStore.Save( _bindings );
 	}
 
@@ -796,7 +829,7 @@ public sealed class PlayerHotbar : Component
 		if ( !InventoryStackRules.DropOne( _slots, slotIndex, held, out placedCount ) )
 			return false;
 
-		RpcHostDropOne( slotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, held.Tier );
+		RpcHostDropOne( slotIndex );
 		UpdateBindingFromSlot( slotIndex );
 		NotifyChanged();
 		return true;
@@ -836,16 +869,10 @@ public sealed class PlayerHotbar : Component
 		if ( HasHostAuthority )
 			return HostTryPlaceHalf( slotIndex, ref held );
 
-		var heldResourceId = held.ResourceId;
-		var heldCount = held.Count;
-		var heldWear = held.Wear;
-		var heldCrafter = held.CrafterName ?? string.Empty;
-		var heldTier = held.Tier;
-
 		if ( !InventoryStackRules.PlaceHalf( _slots, slotIndex, ref held ) )
 			return false;
 
-		RpcHostPlaceHalf( slotIndex, heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
+		RpcHostPlaceHalf( slotIndex );
 		UpdateBindingFromSlot( slotIndex );
 		NotifyChanged();
 		return true;
@@ -911,17 +938,12 @@ public sealed class PlayerHotbar : Component
 		if ( HasHostAuthority )
 			return HostTryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
 
-		var heldResourceId = held.ResourceId;
-		var heldCount = held.Count;
-		var heldWear = held.Wear;
-		var heldCrafter = held.CrafterName ?? string.Empty;
-		var heldTier = held.Tier;
 		var sourceBefore = GetSlot( sourceSlotIndex );
 
 		if ( !InventoryStackRules.FinishDragDrop( _slots, sourceSlotIndex, targetSlotIndex, ref held ) )
 			return false;
 
-		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
+		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex );
 		UpdateBindingFromSlot( targetSlotIndex );
 		if ( SlotChangedFrom( sourceSlotIndex, sourceBefore ) )
 			UpdateBindingFromSlot( sourceSlotIndex );
@@ -957,40 +979,6 @@ public sealed class PlayerHotbar : Component
 		return true;
 	}
 
-	public bool HostTrySwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
-	{
-		if ( !HasHostAuthority || !InventoryStackRules.SwapDragToSlot( _slots, sourceSlotIndex, targetSlotIndex, ref held ) )
-			return false;
-
-		UpdateBindingFromSlot( targetSlotIndex );
-		UpdateBindingFromSlot( sourceSlotIndex );
-		NotifyChanged();
-		return true;
-	}
-
-	/// <summary>Host: absorb a cursor stack into matching stacks, then empties. Returns true when fully absorbed.</summary>
-	public bool HostTryReturnStack( ref InventoryCursorStack held )
-	{
-		if ( !HasHostAuthority )
-			return false;
-
-		Span<bool> wasEmpty = stackalloc bool[SlotCount];
-		for ( var i = 0; i < SlotCount; i++ )
-			wasEmpty[i] = _slots[i].IsEmpty;
-
-		if ( !InventoryStackRules.AbsorbStack( _slots, ref held ) )
-			return false;
-
-		for ( var i = 0; i < SlotCount; i++ )
-		{
-			if ( wasEmpty[i] && !_slots[i].IsEmpty )
-				UpdateBindingFromSlot( i );
-		}
-
-		NotifyChanged();
-		return held.IsEmpty;
-	}
-
 	/// <summary>Whether a slot differs from a snapshot (used to re-bind the source slot after a drag swap).</summary>
 	bool SlotChangedFrom( int slotIndex, in InventorySlot before )
 	{
@@ -1021,7 +1009,12 @@ public sealed class PlayerHotbar : Component
 	void NotifyChanged()
 	{
 		HotbarChanged?.Invoke();
+		PushSlotsToOwner();
+	}
 
+	/// <summary>Host: send the real slots to a remote owner (after a change, or to undo a prediction the host refused).</summary>
+	void PushSlotsToOwner()
+	{
 		if ( GameObject.Network is not { Active: true } || !Networking.IsHost )
 			return;
 
@@ -1073,64 +1066,128 @@ public sealed class PlayerHotbar : Component
 		HotbarChanged?.Invoke();
 	}
 
-	[Rpc.Host]
-	void RpcHostPickupAll( int slotIndex )
+	// ── Remote owner intent: slots acted on with the pawn's host cursor (PlayerInventory.HostCursor.cs) ──
+
+	PlayerInventory _cursorInventory;
+
+	PlayerInventory CursorInventory => _cursorInventory ??= Components.Get<PlayerInventory>();
+
+	/// <summary>Host, inside an RPC: it came from the client that owns this pawn.</summary>
+	bool AcceptsOwnerRpc()
 	{
-		if ( !Networking.IsHost )
+		if ( !Networking.IsHost || !GameObject.IsValid() )
+			return false;
+
+		if ( GameObject.Network is not { Active: true, Owner: { } owner } || Rpc.Caller is not { } caller )
+			return true;
+
+		return ConnectionIdentity.SameClient( caller, owner );
+	}
+
+	public void HostCursorPickupAll( int slotIndex )
+	{
+		if ( CursorInventory is not { } cursor )
 			return;
 
-		HostTryPickupAll( slotIndex, out _ );
+		cursor.HostCursorMakeRoomFor( GetSlot( slotIndex ).ResourceId );
+		if ( HostTryPickupAll( slotIndex, out var picked ) )
+			cursor.HostCursorCredit( picked );
+		else
+			PushSlotsToOwner();
+	}
+
+	public void HostCursorTakeOne( int slotIndex ) => HostCursorTake( slotIndex, half: false );
+
+	public void HostCursorTakeHalf( int slotIndex ) => HostCursorTake( slotIndex, half: true );
+
+	void HostCursorTake( int slotIndex, bool half )
+	{
+		if ( CursorInventory is not { } cursor )
+			return;
+
+		var source = GetSlot( slotIndex );
+		cursor.HostCursorMakeRoomFor( source.ResourceId );
+
+		var count = half ? source.Count / 2 : 1;
+		var taken = !source.IsEmpty && ( half ? HostTryTakeHalf( slotIndex ) : HostTryTakeOne( slotIndex ) );
+		if ( !taken )
+		{
+			PushSlotsToOwner();
+			return;
+		}
+
+		cursor.HostCursorCredit( new InventorySlot { ResourceId = source.ResourceId, Count = count, Wear = source.Wear, CrafterName = source.CrafterName, Tier = source.Tier } );
+	}
+
+	public void HostCursorFinishDragDrop( int sourceSlotIndex, int targetSlotIndex )
+	{
+		if ( CursorInventory is not { } cursor )
+			return;
+
+		if ( !HostTryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref cursor.HostCursor ) )
+			PushSlotsToOwner();
+	}
+
+	public void HostCursorDropOne( int slotIndex )
+	{
+		if ( CursorInventory is not { } cursor )
+			return;
+
+		if ( HostTryDropOne( slotIndex, cursor.HostCursor ) )
+			cursor.HostCursorSpend( 1 );
+		else
+			PushSlotsToOwner();
+	}
+
+	public void HostCursorPlaceHalf( int slotIndex )
+	{
+		if ( CursorInventory is not { } cursor )
+			return;
+
+		if ( !HostTryPlaceHalf( slotIndex, ref cursor.HostCursor ) )
+			PushSlotsToOwner();
 	}
 
 	[Rpc.Host]
-	void RpcHostFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count, int wear, string crafter, int tier )
+	void RpcHostPickupAll( int slotIndex )
 	{
-		if ( !Networking.IsHost )
-			return;
+		if ( AcceptsOwnerRpc() )
+			HostCursorPickupAll( slotIndex );
+	}
 
-		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear, crafter, tier );
-		HostTryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
+	[Rpc.Host]
+	void RpcHostFinishDragDrop( int sourceSlotIndex, int targetSlotIndex )
+	{
+		if ( AcceptsOwnerRpc() )
+			HostCursorFinishDragDrop( sourceSlotIndex, targetSlotIndex );
 	}
 
 	[Rpc.Host]
 	void RpcHostTakeOne( int slotIndex )
 	{
-		if ( !Networking.IsHost )
-			return;
-
-		HostTryTakeOne( slotIndex );
+		if ( AcceptsOwnerRpc() )
+			HostCursorTakeOne( slotIndex );
 	}
 
 	[Rpc.Host]
-	void RpcHostDropOne( int slotIndex, string heldResourceId, int heldCount, int heldWear, string heldCrafter, int heldTier )
+	void RpcHostDropOne( int slotIndex )
 	{
-		if ( !Networking.IsHost )
-			return;
-
-		var held = new InventoryCursorStack();
-		held.Set( heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
-		HostTryDropOne( slotIndex, held );
+		if ( AcceptsOwnerRpc() )
+			HostCursorDropOne( slotIndex );
 	}
 
 	[Rpc.Host]
 	void RpcHostTakeHalf( int slotIndex )
 	{
-		if ( !Networking.IsHost )
-			return;
-
-		HostTryTakeHalf( slotIndex );
+		if ( AcceptsOwnerRpc() )
+			HostCursorTakeHalf( slotIndex );
 	}
 
 	[Rpc.Host]
-	void RpcHostPlaceHalf( int slotIndex, string heldResourceId, int heldCount, int heldWear, string heldCrafter, int heldTier )
+	void RpcHostPlaceHalf( int slotIndex )
 	{
-		if ( !Networking.IsHost )
-			return;
-
-		var held = new InventoryCursorStack();
-		held.Set( heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
-		HostTryPlaceHalf( slotIndex, ref held );
+		if ( AcceptsOwnerRpc() )
+			HostCursorPlaceHalf( slotIndex );
 	}
 
 	/// <summary>Host: add durability wear to one hotbar slot (clamped to the item's max). Returns new wear.</summary>

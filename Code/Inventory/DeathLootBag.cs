@@ -5,19 +5,17 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Death loot drop: when a pawn dies on the host, its droppable stacks move into a pitch-black
-/// sphere spawned at the death spot. Current death rule is "resources only" — anything with an
+/// Death loot drop: when a pawn dies on the host, its droppable stacks move into the player's corpse bag - a burlap
+/// sack tied with black string (<see cref="CorpseBag"/>: model, the owner's map pin and 30 m beacon) - spawned at the
+/// death spot. Current death rule is "resources only" — anything with an
 /// equipment profile (tools, wingsuit, grapple, armor) stays on the pawn. Augments stay unless
-/// <see cref="PlayerAugments.DropAugmentsOnDeath"/> is enabled. The sphere carries a take-only
+/// <see cref="PlayerAugments.DropAugmentsOnDeath"/> is enabled. The sack carries a take-only
 /// <see cref="ContainerInventory"/> ("&lt;name&gt;'s Loot") that opens with the standard Use/E
 /// container flow and destroys itself once emptied.
 /// </summary>
 public static class DeathLootBag
 {
-	/// <summary>Comfortably larger than a dropped-item pickup (~0.2 m) so it reads from a distance.</summary>
-	const float SphereDiameterMeters = 0.5f;
-
-	/// <summary>Host/offline only: move droppable stacks off the pawn into a loot disk at its position.</summary>
+	/// <summary>Host/offline only: move droppable stacks off the pawn into a corpse bag at its position.</summary>
 	public static void HostSpawnForDeath( GameObject pawn )
 	{
 		if ( pawn is null || !pawn.IsValid() )
@@ -27,6 +25,9 @@ public static class DeathLootBag
 		var hotbar = pawn.Components.Get<PlayerHotbar>();
 		if ( inventory is null || !inventory.HasHostAuthority )
 			return;
+
+		// An item still on a remote owner's cursor is part of what they carried: back to the bag before the tally.
+		inventory.HostSettleCursor();
 
 		var augments = pawn.Components.Get<PlayerAugments>();
 		var stacks = CollectDroppableStacks( inventory, hotbar, augments );
@@ -166,34 +167,30 @@ public static class DeathLootBag
 		augments?.HostClearAllForDeathDrop();
 	}
 
-	/// <summary>Pitch-black sphere with a static collider (Use-key look trace) and the loot container.</summary>
+	/// <summary>The burlap sack (model + its physics hull as a static collider for the Use-key look trace), the loot container and the owner's <see cref="CorpseBag"/>.</summary>
 	static GameObject SpawnBagObject( GameObject pawn, int slotCount )
 	{
 		var scene = pawn.Scene.IsValid() ? pawn.Scene : Sandbox.Game.ActiveScene;
 		if ( !scene.IsValid() )
 			return null;
 
-		var ownerName = ResolveOwnerName( pawn );
+		var owner = pawn.Network is { Active: true, Owner: { } netOwner } ? netOwner : Connection.Local;
+		var ownerName = string.IsNullOrWhiteSpace( owner?.DisplayName ) ? "Player" : owner.DisplayName;
 
 		var go = new GameObject( true, "death_loot_bag" );
 		go.NetworkMode = NetworkMode.Object;
 		go.Parent = scene;
 		go.WorldPosition = SnapToGround( scene, pawn, pawn.WorldPosition );
+		go.WorldRotation = Rotation.FromYaw( Random.Shared.Float( 0f, 360f ) );
 
+		// The model is authored at world size (0.62 m across, 0.55 m tall, origin on the ground): no scale here.
+		var model = Model.Load( CorpseBag.ModelPath );
 		var renderer = go.Components.Create<ModelRenderer>();
-		renderer.Model = Model.Load( "models/dev/sphere.vmdl" );
-		renderer.Tint = Color.Black;
+		renderer.Model = model;
 
-		// Uniform-scale the dev sphere to the target diameter regardless of model bounds.
-		var bounds = renderer.Model?.Bounds.Size ?? new Vector3( 32f );
-		var modelDiameter = Math.Max( 1f, Math.Max( bounds.x, Math.Max( bounds.y, bounds.z ) ) );
-		var diameter = TerrainWorldUnits.MetersToEngine( SphereDiameterMeters );
-		go.LocalScale = new Vector3( diameter / modelDiameter );
-
-		// Collider radius is pre-LocalScale, so half the model diameter matches the visual.
-		var collider = go.Components.Create<SphereCollider>();
+		var collider = go.Components.Create<ModelCollider>();
+		collider.Model = model;
 		collider.Static = true;
-		collider.Radius = modelDiameter * 0.5f;
 
 		var container = go.Components.Create<ContainerInventory>();
 		container.SlotCount = Math.Max( 1, slotCount );
@@ -202,18 +199,13 @@ public static class DeathLootBag
 		container.TakeOnly = true;
 		container.DestroyWhenEmpty = true;
 
+		var bag = go.Components.Create<CorpseBag>();
+		bag.OwnerName = ownerName;
+		bag.OwnerConnectionId = owner?.Id ?? Guid.Empty;
+		bag.OwnerSteamId = owner?.SteamId.ValueUnsigned ?? 0UL;
+
 		HostNetworkSpawn.TrySpawn( go );
 		return go;
-	}
-
-	/// <summary>Steam display name of the owning connection ("Tutti" → "Tutti's Loot"); offline uses the local connection.</summary>
-	static string ResolveOwnerName( GameObject pawn )
-	{
-		var name = pawn.Network is { Active: true, Owner: { } owner }
-			? owner.DisplayName
-			: Connection.Local?.DisplayName;
-
-		return string.IsNullOrWhiteSpace( name ) ? "Player" : name;
 	}
 
 	static Vector3 SnapToGround( Scene scene, GameObject ignore, Vector3 desired )
@@ -224,7 +216,7 @@ public static class DeathLootBag
 		if ( !trace.Hit )
 			return desired;
 
-		// Rest on the surface, slightly sunk so it doesn't look like it floats on slopes.
-		return trace.HitPosition + Vector3.Up * TerrainWorldUnits.MetersToEngine( SphereDiameterMeters * 0.4f );
+		// The sack's origin is its underside: rest on the surface, sunk 3 cm so it doesn't look like it floats on slopes.
+		return trace.HitPosition - Vector3.Up * TerrainWorldUnits.MetersToEngine( 0.03f );
 	}
 }

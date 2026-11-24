@@ -58,28 +58,17 @@ public sealed class PlayerEquipmentPaperdollGridHost : IInventoryGridHost
 		return _equipment.OwnerTryPlaceIntoSlot( (EquipmentSlot)slotIndex, ref held );
 	}
 
-	public bool OwnerTryReturnStack( ref InventoryCursorStack held ) => false;
-
-	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken )
-	{
-		taken = InventorySlot.Empty;
-		if ( _equipment is null || slotIndex < 0 || slotIndex >= SlotCount )
-			return false;
-
-		var slot = _equipment.GetSlot( (EquipmentSlot)slotIndex );
-		if ( slot.IsEmpty )
-			return false;
-
-		taken = new InventorySlot { ResourceId = slot.ResourceId, Count = 1 };
-		if ( slot.Count <= 1 )
-			_equipment.OwnerTryPickupFromSlot( (EquipmentSlot)slotIndex, out _ );
-		return true;
-	}
+	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken ) =>
+		OwnerTryPickupAll( slotIndex, out taken );
 
 	public bool OwnerTryDropOne( int slotIndex, in InventoryCursorStack held, out int placedCount )
 	{
 		placedCount = 0;
 		if ( _equipment is null || held.IsEmpty || slotIndex < 0 || slotIndex >= SlotCount )
+			return false;
+
+		// One unit onto an empty slot only: a swap is a left-click place, where the cursor takes the old piece.
+		if ( !GetSlot( slotIndex ).IsEmpty )
 			return false;
 
 		var heldCopy = held;

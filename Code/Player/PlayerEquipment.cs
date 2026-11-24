@@ -6,6 +6,8 @@ namespace Survival;
 /// <summary>
 /// Orchestrates paperdoll slots, aggregated stats, and tool prefab spawning.
 /// Paperdoll slots are host-authoritative (same pattern as bag/hotbar) so remote clients' Hook equip reaches grapple validation.
+/// A remote owner sends intent only (pick up / place / swap a slot, which hotbar item is in a hand): the item itself comes
+/// from the pawn's host cursor (<c>PlayerInventory.HostCursor.cs</c>) or the host's own hotbar, never from the client.
 /// </summary>
 [Title( "Player Equipment" )]
 public sealed partial class PlayerEquipment : Component
@@ -74,6 +76,7 @@ public sealed partial class PlayerEquipment : Component
 	protected override void OnUpdate()
 	{
 		base.OnUpdate();
+		TickHandDraw();
 		TickRemoteMainHandPresentation();
 	}
 
@@ -130,24 +133,24 @@ public sealed partial class PlayerEquipment : Component
 		if ( _hotbar is null || !CanSyncFromHotbar() )
 			return;
 
-		EquipHandFromHotbar( EquipmentSlot.MainHand, _hotbar.PrimarySlotIndex );
-		EquipHandFromHotbar( EquipmentSlot.OffHand, _hotbar.OffHandSlotIndex );
+		EquipHandFromHotbar( EquipmentSlot.MainHand, _hotbar.PrimarySlotIndex, instant: false );
+		EquipHandFromHotbar( EquipmentSlot.OffHand, _hotbar.OffHandSlotIndex, instant: false );
 	}
 
 	/// <summary>Scroll hotbar: equip active hotbar stack to MainHand only.</summary>
 	public void EquipMainHandFromActiveHotbar() => SyncEquipFromActiveHotbar();
 
-	/// <summary>Tests / hacks: equip one hotbar stack straight into MainHand.</summary>
-	public void EquipFromHotbarSlot( int hotbarIndex ) => EquipHandFromHotbar( EquipmentSlot.MainHand, hotbarIndex );
+	/// <summary>Tests / hacks: equip one hotbar stack straight into MainHand (no draw time).</summary>
+	public void EquipFromHotbarSlot( int hotbarIndex ) => EquipHandFromHotbar( EquipmentSlot.MainHand, hotbarIndex, instant: true );
 
-	void EquipHandFromHotbar( EquipmentSlot hand, int hotbarIndex )
+	void EquipHandFromHotbar( EquipmentSlot hand, int hotbarIndex, bool instant )
 	{
 		if ( _hotbar is null )
 			return;
 
 		if ( hotbarIndex < 0 || !TryResolveHotbarEquipResourceId( hotbarIndex, out var resourceId ) )
 		{
-			OwnerSetSlot( hand, InventorySlot.Empty );
+			OwnerDrawIntoHand( hand, InventorySlot.Empty );
 			return;
 		}
 
@@ -157,12 +160,12 @@ public sealed partial class PlayerEquipment : Component
 			           : EquipmentCatalog.IsHotbarMainHandItem( profile ));
 		if ( !fits )
 		{
-			OwnerSetSlot( hand, InventorySlot.Empty );
+			OwnerDrawIntoHand( hand, InventorySlot.Empty );
 			return;
 		}
 
 		var hotbarStack = _hotbar.GetSlot( hotbarIndex );
-		OwnerSetSlot( hand, CreateEquippedStack( resourceId, hotbarStack.Wear, hotbarStack.CrafterName, hotbarStack.Tier ) );
+		OwnerDrawIntoHand( hand, CreateEquippedStack( resourceId, hotbarStack.Wear, hotbarStack.CrafterName, hotbarStack.Tier ), instant );
 	}
 
 	/// <summary>MainHand and OffHand mirror the hotbar — never paperdoll storage.</summary>
@@ -206,10 +209,44 @@ public sealed partial class PlayerEquipment : Component
 	public bool OwnerTryPickupFromSlot( EquipmentSlot slot, out InventorySlot picked )
 	{
 		picked = InventorySlot.Empty;
-		if ( !IsLocalManagingClient() )
+		if ( !IsLocalManagingClient() || !PickupFromSlot( slot, out picked ) )
 			return false;
 
-		// MainHand / OffHand are hotbar-driven display only — never inventory storage.
+		if ( !HasHostAuthority )
+			RpcHostPickupFromSlot( (int)slot );
+		return true;
+	}
+
+	public bool OwnerTryPlaceIntoSlot( EquipmentSlot slot, ref InventoryCursorStack held )
+	{
+		if ( !IsLocalManagingClient() || !PlaceIntoSlot( slot, ref held ) )
+			return false;
+
+		if ( !HasHostAuthority )
+			RpcHostPlaceIntoSlot( (int)slot );
+		return true;
+	}
+
+	public bool OwnerTryFinishDragDrop( EquipmentSlot sourceSlot, EquipmentSlot targetSlot, ref InventoryCursorStack held )
+	{
+		if ( !IsLocalManagingClient() || sourceSlot == targetSlot )
+			return false;
+
+		if ( !held.IsEmpty )
+			return OwnerTryPlaceIntoSlot( targetSlot, ref held );
+
+		if ( !SwapSlots( sourceSlot, targetSlot ) )
+			return false;
+
+		if ( !HasHostAuthority )
+			RpcHostSwapSlots( (int)sourceSlot, (int)targetSlot );
+		return true;
+	}
+
+	/// <summary>Rule: the stack leaves a storage slot. MainHand / OffHand are hotbar-driven display only, never storage.</summary>
+	bool PickupFromSlot( EquipmentSlot slot, out InventorySlot picked )
+	{
+		picked = InventorySlot.Empty;
 		if ( IsHotbarDrivenSlot( slot ) )
 			return false;
 
@@ -218,16 +255,17 @@ public sealed partial class PlayerEquipment : Component
 			return false;
 
 		picked = current;
-		OwnerSetSlot( slot, InventorySlot.Empty );
+		ApplySlotLocal( slot, InventorySlot.Empty );
 		return true;
 	}
 
-	public bool OwnerTryPlaceIntoSlot( EquipmentSlot slot, ref InventoryCursorStack held )
+	/// <summary>
+	/// Rule: one unit of <paramref name="held"/> is worn in <paramref name="slot"/>; a piece already there
+	/// swaps onto the cursor, which is only possible when that unit was the whole stack.
+	/// </summary>
+	bool PlaceIntoSlot( EquipmentSlot slot, ref InventoryCursorStack held )
 	{
-		if ( held.IsEmpty || !IsLocalManagingClient() )
-			return false;
-
-		if ( IsHotbarDrivenSlot( slot ) )
+		if ( held.IsEmpty || IsHotbarDrivenSlot( slot ) )
 			return false;
 
 		if ( !EquipmentCatalog.TryGet( held.ResourceId, out var profile ) )
@@ -240,55 +278,38 @@ public sealed partial class PlayerEquipment : Component
 		if ( !EquipmentCatalog.IsSlotAllowed( profile, slot ) )
 			return false;
 
-		var incoming = CreateEquippedStack( held.ResourceId, held.Wear, held.CrafterName, held.Tier );
 		var previous = GetSlot( slot );
-		OwnerSetSlot( slot, incoming );
+		if ( !previous.IsEmpty && held.Count > 1 )
+			return false;
+
+		ApplySlotLocal( slot, CreateEquippedStack( held.ResourceId, held.Wear, held.CrafterName, held.Tier ) );
 
 		held.Count--;
 		if ( held.Count <= 0 )
 			held.Clear();
 
 		if ( !previous.IsEmpty )
-		{
-			if ( held.IsEmpty )
-				held.Set( previous.ResourceId, previous.Count, previous.Wear, previous.CrafterName, previous.Tier );
-			else
-				return false;
-		}
+			held.Set( previous.ResourceId, previous.Count, previous.Wear, previous.CrafterName, previous.Tier );
 
 		return true;
 	}
 
-	public bool OwnerTryFinishDragDrop( EquipmentSlot sourceSlot, EquipmentSlot targetSlot, ref InventoryCursorStack held )
+	/// <summary>Rule: two storage slots trade places (the moved piece must fit its new slot).</summary>
+	bool SwapSlots( EquipmentSlot sourceSlot, EquipmentSlot targetSlot )
 	{
-		if ( !IsLocalManagingClient() )
-			return false;
-
-		if ( sourceSlot == targetSlot )
-			return false;
-
-		if ( IsHotbarDrivenSlot( sourceSlot ) || IsHotbarDrivenSlot( targetSlot ) )
+		if ( sourceSlot == targetSlot || IsHotbarDrivenSlot( sourceSlot ) || IsHotbarDrivenSlot( targetSlot ) )
 			return false;
 
 		var sourceStack = GetSlot( sourceSlot );
-		if ( !held.IsEmpty )
-			return OwnerTryPlaceIntoSlot( targetSlot, ref held );
-
-		if ( sourceStack.IsEmpty )
+		if ( sourceStack.IsEmpty || !EquipmentCatalog.TryGet( sourceStack.ResourceId, out var profile ) )
 			return false;
 
-		if ( !EquipmentCatalog.TryGet( sourceStack.ResourceId, out var profile ) )
-			return false;
-
-		if ( EquipmentCatalog.IsHotbarHandItem( profile ) )
-			return false;
-
-		if ( !EquipmentCatalog.IsSlotAllowed( profile, targetSlot ) )
+		if ( EquipmentCatalog.IsHotbarHandItem( profile ) || !EquipmentCatalog.IsSlotAllowed( profile, targetSlot ) )
 			return false;
 
 		var targetStack = GetSlot( targetSlot );
-		OwnerSetSlot( targetSlot, sourceStack );
-		OwnerSetSlot( sourceSlot, targetStack );
+		ApplySlotLocal( targetSlot, sourceStack );
+		ApplySlotLocal( sourceSlot, targetStack );
 		return true;
 	}
 
@@ -324,10 +345,13 @@ public sealed partial class PlayerEquipment : Component
 		return false;
 	}
 
-	/// <summary>Owner/host mutation: apply locally and replicate to host (or owner from host).</summary>
-	void OwnerSetSlot( EquipmentSlot slot, InventorySlot stack )
+	/// <summary>
+	/// A hand mirrors the hotbar: apply locally; a remote owner only tells the host which item it selected
+	/// and the host equips its own hotbar copy of it (<see cref="HostSetHandFromHotbar"/>).
+	/// </summary>
+	void OwnerSetHandSlot( EquipmentSlot hand, InventorySlot stack )
 	{
-		ApplySlotLocal( slot, stack );
+		ApplySlotLocal( hand, stack );
 
 		if ( HasHostAuthority )
 		{
@@ -338,7 +362,7 @@ public sealed partial class PlayerEquipment : Component
 		if ( !IsLocalManagingClient() )
 			return;
 
-		RpcHostSetEquipmentSlot( (int)slot, stack.ResourceId ?? string.Empty, stack.Count, stack.Wear, stack.CrafterName ?? string.Empty, stack.Tier );
+		RpcHostSetHandSlot( (int)hand, stack.ResourceId ?? string.Empty );
 	}
 
 	void ApplySlotLocal( EquipmentSlot slot, InventorySlot stack )
@@ -438,44 +462,151 @@ public sealed partial class PlayerEquipment : Component
 		RpcOwnerEquipmentSync( ids, counts, wears, crafters, tiers );
 	}
 
-	[Rpc.Host]
-	void RpcHostSetEquipmentSlot( int slotIndex, string resourceId, int count, int wear, string crafter, int tier )
+	// ── Remote owner intent ─────────────────────────────────────────────────────────────────────────────
+
+	PlayerInventory _cursorInventory;
+
+	PlayerInventory CursorInventory => _cursorInventory ??= Components.Get<PlayerInventory>();
+
+	/// <summary>Host, inside an RPC: it came from the client that owns this pawn and names a real slot.</summary>
+	bool AcceptsOwnerRpc( int slotIndex )
 	{
-		if ( !Networking.IsHost || !GameObject.IsValid() )
+		if ( !Networking.IsHost || !GameObject.IsValid() || slotIndex < 0 || slotIndex >= SlotCount )
+			return false;
+
+		if ( GameObject.Network is not { Active: true, Owner: { } owner } || Rpc.Caller is not { } caller )
+			return true;
+
+		return ConnectionIdentity.SameClient( caller, owner );
+	}
+
+	/// <summary>Host: a storage slot's piece lands on the pawn's host cursor.</summary>
+	public void HostCursorPickupFromSlot( EquipmentSlot slot )
+	{
+		if ( CursorInventory is not { } cursor )
 			return;
 
-		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
-		     && !ConnectionIdentity.SameClient( caller, owner ) )
+		cursor.HostCursorMakeRoomFor( GetSlotResourceId( slot ) );
+		if ( PickupFromSlot( slot, out var picked ) )
+			cursor.HostCursorCredit( picked );
+		else
+			PushEquipmentToOwner();
+	}
+
+	/// <summary>Host: the pawn's host cursor is worn in a storage slot.</summary>
+	public void HostCursorPlaceIntoSlot( EquipmentSlot slot )
+	{
+		if ( CursorInventory is not { } cursor )
 			return;
 
-		if ( slotIndex < 0 || slotIndex >= SlotCount )
-			return;
+		if ( !PlaceIntoSlot( slot, ref cursor.HostCursor ) )
+			PushEquipmentToOwner();
+	}
 
-		var stack = string.IsNullOrWhiteSpace( resourceId ) || count <= 0
-			? InventorySlot.Empty
-			: new InventorySlot
-			{
-				ResourceId = ResourceCatalog.NormalizeResourceId( resourceId ),
-				Count = Math.Max( 1, count ),
-				Wear = Math.Max( 0, wear ),
-				CrafterName = crafter,
-				Tier = tier,
-			};
-
-		ApplySlotLocal( (EquipmentSlot)slotIndex, stack );
+	public void HostSwapSlots( EquipmentSlot sourceSlot, EquipmentSlot targetSlot )
+	{
+		if ( !SwapSlots( sourceSlot, targetSlot ) )
+			PushEquipmentToOwner();
 	}
 
 	/// <summary>
-	/// Host: accept a client-reported Grapple equip during attach validation when paperdoll RPC lagged.
+	/// Host: a remote owner says which hotbar item is in this hand. The host equips its own copy of that
+	/// stack (wear, maker, tier) and refuses an item its hotbar does not hold.
 	/// </summary>
-	public bool HostAcceptClientGrappleEquip( string resourceId )
-		=> HostAcceptClientSlotEquip( resourceId, EquipmentSlot.Grapple, "grapple", "Grapple" );
+	public bool HostSetHandFromHotbar( EquipmentSlot hand, string resourceId )
+	{
+		if ( !IsHotbarDrivenSlot( hand ) )
+			return false;
 
-	/// <summary>Host: equip a wingsuit directly (terrain-test L spawn, debug flows).</summary>
-	public bool HostAcceptClientWingsuitEquip( string resourceId )
-		=> HostAcceptClientSlotEquip( resourceId, EquipmentSlot.Wingsuit, "wingsuit", "Wingsuit" );
+		if ( string.IsNullOrWhiteSpace( resourceId ) )
+		{
+			ApplySlotLocal( hand, InventorySlot.Empty );
+			return true;
+		}
 
-	bool HostAcceptClientSlotEquip( string resourceId, EquipmentSlot slot, string slotName, string actionName )
+		if ( !TryFindHotbarStackForHand( hand, resourceId, out var stack ) )
+		{
+			PushEquipmentToOwner();
+			return false;
+		}
+
+		ApplySlotLocal( hand, CreateEquippedStack( stack.ResourceId, stack.Wear, stack.CrafterName, stack.Tier ) );
+		return true;
+	}
+
+	bool TryFindHotbarStackForHand( EquipmentSlot hand, string resourceId, out InventorySlot stack )
+	{
+		stack = InventorySlot.Empty;
+		_hotbar ??= Components.Get<PlayerHotbar>();
+		if ( _hotbar is null || !EquipmentCatalog.TryGet( resourceId, out var profile ) )
+			return false;
+
+		var fits = hand == EquipmentSlot.OffHand
+			? EquipmentCatalog.IsHotbarOffHandItem( profile )
+			: EquipmentCatalog.IsHotbarMainHandItem( profile );
+		if ( !fits )
+			return false;
+
+		// The selected slot first (its wear is the one in use), then any slot holding the item: the
+		// selection index is owner-synced and can land a tick after this RPC.
+		var selected = hand == EquipmentSlot.OffHand ? _hotbar.OffHandSlotIndex : _hotbar.PrimarySlotIndex;
+		if ( IsUsableHotbarStack( selected, resourceId, out stack ) )
+			return true;
+
+		for ( var i = 0; i < PlayerHotbar.SlotCount; i++ )
+		{
+			if ( IsUsableHotbarStack( i, resourceId, out stack ) )
+				return true;
+		}
+
+		return false;
+	}
+
+	bool IsUsableHotbarStack( int hotbarIndex, string resourceId, out InventorySlot stack )
+	{
+		stack = hotbarIndex >= 0 && hotbarIndex < PlayerHotbar.SlotCount ? _hotbar.GetSlot( hotbarIndex ) : InventorySlot.Empty;
+		return !stack.IsEmpty
+		       && !ToolDurability.IsBroken( stack )
+		       && ResourceCatalog.ResourceIdsMatch( stack.ResourceId, resourceId );
+	}
+
+	[Rpc.Host]
+	void RpcHostPickupFromSlot( int slotIndex )
+	{
+		if ( AcceptsOwnerRpc( slotIndex ) )
+			HostCursorPickupFromSlot( (EquipmentSlot)slotIndex );
+	}
+
+	[Rpc.Host]
+	void RpcHostPlaceIntoSlot( int slotIndex )
+	{
+		if ( AcceptsOwnerRpc( slotIndex ) )
+			HostCursorPlaceIntoSlot( (EquipmentSlot)slotIndex );
+	}
+
+	[Rpc.Host]
+	void RpcHostSwapSlots( int sourceSlotIndex, int targetSlotIndex )
+	{
+		if ( AcceptsOwnerRpc( sourceSlotIndex ) && AcceptsOwnerRpc( targetSlotIndex ) )
+			HostSwapSlots( (EquipmentSlot)sourceSlotIndex, (EquipmentSlot)targetSlotIndex );
+	}
+
+	[Rpc.Host]
+	void RpcHostSetHandSlot( int slotIndex, string resourceId )
+	{
+		if ( AcceptsOwnerRpc( slotIndex ) )
+			HostSetHandFromHotbar( (EquipmentSlot)slotIndex, resourceId );
+	}
+
+	/// <summary>Host: put a hook straight into the Grapple slot (terrain-test kit spawn, debug flows) - a host decision, never a client claim.</summary>
+	public bool HostEquipGrappleDirect( string resourceId )
+		=> HostEquipSlotDirect( resourceId, EquipmentSlot.Grapple, "grapple", "Grapple" );
+
+	/// <summary>Host: put a wingsuit straight into the Wingsuit slot (terrain-test kit spawn, debug flows).</summary>
+	public bool HostEquipWingsuitDirect( string resourceId )
+		=> HostEquipSlotDirect( resourceId, EquipmentSlot.Wingsuit, "wingsuit", "Wingsuit" );
+
+	bool HostEquipSlotDirect( string resourceId, EquipmentSlot slot, string slotName, string actionName )
 	{
 		if ( !HasHostAuthority )
 			return false;
@@ -491,6 +622,7 @@ public sealed partial class PlayerEquipment : Component
 			return false;
 
 		ApplySlotLocal( slot, CreateEquippedStack( resourceId ) );
+		PushEquipmentToOwner();
 		return true;
 	}
 

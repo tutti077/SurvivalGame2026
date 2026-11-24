@@ -1,9 +1,8 @@
 namespace Survival;
 
 /// <summary>
-/// Weight band of a worn piece (<c>armorWeight</c> in <c>equipment_profiles.json</c>). Each worn piece
-/// carries one sixth of its band's run-speed penalty (<see cref="PlayerMovement.ArmorSpeedScale"/>),
-/// so a full set of one band lands exactly on that band's scale.
+/// Weight band of a worn piece (<c>armorWeight</c> in <c>equipment_profiles.json</c>), shown in the item tooltip.
+/// It costs no speed: worn gear never slows the pawn (Mark 2026-11-17).
 /// </summary>
 public enum ArmorWeightClass
 {

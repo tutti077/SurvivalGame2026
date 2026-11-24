@@ -135,9 +135,8 @@ public sealed class EquipmentPaperdollSection : IPlayerMenuSection
 		if ( _armorSummary is null )
 			return;
 
-		var movement = _equipment.Components.Get<PlayerMovement>();
-		var speed = movement?.ComputeArmorSpeedScale() ?? 1f;
-		var text = $"Armor {_equipment.TotalArmor:0.#}  ·  Speed {speed * 100f:0}%";
+		// Gear costs no speed (2026-11-17), so the summary is the armor alone.
+		var text = $"Armor {_equipment.TotalArmor:0.#}";
 		if ( _equipment.HasArmorSetBonus )
 			text += $"  ·  {_equipment.ArmorSetId} set";
 

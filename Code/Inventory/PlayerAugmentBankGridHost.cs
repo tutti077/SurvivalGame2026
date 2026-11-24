@@ -54,8 +54,6 @@ public sealed class PlayerAugmentBankGridHost : IInventoryGridHost
 		return _augments.OwnerTryPlaceHeldBank( slotIndex, ref held );
 	}
 
-	public bool OwnerTryReturnStack( ref InventoryCursorStack held ) => false;
-
 	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken ) =>
 		OwnerTryPickupAll( slotIndex, out taken );
 
@@ -63,6 +61,11 @@ public sealed class PlayerAugmentBankGridHost : IInventoryGridHost
 	{
 		placedCount = 0;
 		if ( _augments is null || held.IsEmpty )
+			return false;
+
+		// Fill or merge only: a swap is a left-click place, where the cursor takes the old stack.
+		var existing = GetSlot( slotIndex );
+		if ( !existing.IsEmpty && !ResourceCatalog.ResourceIdsMatch( existing.ResourceId, held.ResourceId ) )
 			return false;
 
 		var copy = held;

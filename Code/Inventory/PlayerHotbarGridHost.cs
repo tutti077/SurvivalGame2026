@@ -43,17 +43,6 @@ public sealed class PlayerHotbarGridHost : IInventoryGridHost
 		return true;
 	}
 
-	public bool OwnerTryReturnStack( ref InventoryCursorStack held )
-	{
-		if ( Hotbar is null || held.IsEmpty )
-			return false;
-
-		if ( Hotbar.HasHostAuthority )
-			return Hotbar.HostTryReturnStack( ref held );
-
-		return false;
-	}
-
 	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken )
 	{
 		taken = InventorySlot.Empty;

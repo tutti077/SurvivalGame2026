@@ -5,10 +5,9 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Worn-equipment aggregate: armor points, weight-band piece counts, set membership and the clothing
+/// Worn-equipment aggregate: armor points, set membership and the clothing
 /// the pawn should be dressed in. Recomputed once per paperdoll change (never per hit / per frame).
-/// Consumers: <see cref="PlayerVitals.ApplyDamageAfterArmor"/> (host), <see cref="PlayerMovement.ArmorSpeedScale"/>
-/// (movement driver), <see cref="PlayerAnimation"/> (clothing on every peer via <see cref="NetworkedWornClothing"/>).
+/// Consumers: <see cref="PlayerVitals.ApplyDamageAfterArmor"/> (host), <see cref="PlayerAnimation"/> (clothing on every peer via <see cref="NetworkedWornClothing"/>).
 /// </summary>
 public sealed partial class PlayerEquipment
 {
@@ -24,10 +23,6 @@ public sealed partial class PlayerEquipment
 
 	/// <summary>Sum of <c>statModifiers.armor</c> over every worn slot (MainHand excluded — it mirrors the hotbar, it is not worn).</summary>
 	public float TotalArmor { get; private set; }
-
-	public int LightArmorPieces { get; private set; }
-	public int MediumArmorPieces { get; private set; }
-	public int HeavyArmorPieces { get; private set; }
 
 	/// <summary>Set id with the most worn pieces (empty when nothing worn belongs to a set).</summary>
 	public string ArmorSetId { get; private set; } = string.Empty;
@@ -75,7 +70,6 @@ public sealed partial class PlayerEquipment
 	void RefreshArmorState()
 	{
 		var armor = 0f;
-		int light = 0, medium = 0, heavy = 0;
 		List<(string SetId, int Count)> sets = null;
 		List<string> clothing = null;
 
@@ -90,19 +84,6 @@ public sealed partial class PlayerEquipment
 				continue;
 
 			armor += EquipmentUpgrade.GetArmor( profile, stack.Tier );
-
-			switch ( EquipmentCatalog.ParseArmorWeight( profile.ArmorWeight ) )
-			{
-				case ArmorWeightClass.Light:
-					light++;
-					break;
-				case ArmorWeightClass.Medium:
-					medium++;
-					break;
-				case ArmorWeightClass.Heavy:
-					heavy++;
-					break;
-			}
 
 			if ( !string.IsNullOrWhiteSpace( profile.ArmorSet ) )
 			{
@@ -130,9 +111,6 @@ public sealed partial class PlayerEquipment
 		}
 
 		TotalArmor = armor;
-		LightArmorPieces = light;
-		MediumArmorPieces = medium;
-		HeavyArmorPieces = heavy;
 
 		var bestSet = string.Empty;
 		var bestCount = 0;

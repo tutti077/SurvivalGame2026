@@ -42,6 +42,22 @@ public static class ItemWorldModelCatalog
 		return true;
 	}
 
+	/// <summary>Is this model one of the id's listed world models? (A harvested plant drops as the very model that stood there when it is.)</summary>
+	public static bool HasVariant( string resourceId, string modelPath )
+	{
+		if ( string.IsNullOrWhiteSpace( resourceId ) || string.IsNullOrWhiteSpace( modelPath ) )
+			return false;
+		EnsureLoaded();
+		if ( !ByResourceId.TryGetValue( ResourceCatalog.NormalizeResourceId( resourceId ), out var paths ) )
+			return false;
+		foreach ( var path in paths )
+		{
+			if ( string.Equals( path, modelPath, StringComparison.OrdinalIgnoreCase ) )
+				return true;
+		}
+		return false;
+	}
+
 	/// <summary>The file is re-read for edits at most this often (a burst of drops reads it once).</summary>
 	const float ChangeCheckSeconds = 2f;
 	static float _lastCheck = float.NegativeInfinity;

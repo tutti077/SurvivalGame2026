@@ -241,6 +241,25 @@ public sealed partial class PlayerInventoryInteraction : Component
 			return;
 		}
 
+		// Lying in a bed: E is "get up" (PlayerMovement.Bed.cs); nothing else in the world is reachable from it.
+		if ( IsLyingInBed )
+		{
+			_lastLyingInBedAt = RealTime.GlobalNow;
+			SetFocusedBed( null );
+			if ( FocusedContainer is not null )
+				CloseContainer();
+			TickItemTooltip();
+			return;
+		}
+
+		// Hub portals + kiosks. The hub's menu owns E and the cursor while open, so nothing below runs then.
+		TickHubAccess();
+		if ( IsHubMenuOpen )
+		{
+			TickItemTooltip();
+			return;
+		}
+
 		TickDevSupplyAccess();
 		TickBlueprintAccess();
 		TickContainerAccess();
@@ -790,7 +809,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
 			return HeldStackWorldDrop.TryDropAtPlayer( GameObject, ref held, dropCount );
 
-		RpcRequestPlayerWorldDrop( sourceHost?.GridId ?? string.Empty, sourceSlot, held.ResourceId, dropCount, held.Wear, held.CrafterName ?? string.Empty, held.Tier );
+		RpcRequestPlayerWorldDrop( sourceHost?.GridId ?? string.Empty, sourceSlot, dropCount );
 		held.Count -= dropCount;
 		if ( held.Count <= 0 )
 			held.Clear();
@@ -798,41 +817,57 @@ public sealed partial class PlayerInventoryInteraction : Component
 	}
 
 	[Rpc.Host]
-	void RpcRequestPlayerWorldDrop( string sourceGridId, int sourceSlot, string resourceId, int count, int wear, string crafter, int tier )
+	void RpcRequestPlayerWorldDrop( string sourceGridId, int sourceSlot, int count )
 	{
-		if ( !Networking.IsHost )
+		if ( !Networking.IsHost || !GameObject.IsValid() )
 			return;
 
-		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear, crafter, tier );
-		if ( HeldStackWorldDrop.TryDropAtPlayer( GameObject, ref held, count ) )
+		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
+		     && !ConnectionIdentity.SameClient( caller, owner ) )
 			return;
 
-		RestoreHeldAfterFailedDrop( sourceGridId, sourceSlot, ref held );
+		HostCursorDropAtPlayer( sourceGridId, sourceSlot, count );
 	}
 
+	/// <summary>
+	/// Host: toss <paramref name="count"/> units off the pawn's host cursor (<c>PlayerInventory.HostCursor.cs</c>)
+	/// at its feet. A refused spawn puts those units back in the slot they came from, else the bag.
+	/// </summary>
+	public void HostCursorDropAtPlayer( string sourceGridId, int sourceSlot, int count )
+	{
+		var inventory = Components.Get<PlayerInventory>();
+		if ( inventory is null || count <= 0 )
+			return;
+
+		ref var cursor = ref inventory.HostCursor;
+		if ( cursor.IsEmpty )
+			return;
+
+		count = Math.Min( count, cursor.Count );
+		if ( HeldStackWorldDrop.TryDropAtPlayer( GameObject, ref cursor, count ) )
+			return;
+
+		var back = new InventoryCursorStack();
+		back.Set( cursor.ResourceId, count, cursor.Wear, cursor.CrafterName, cursor.Tier );
+		inventory.HostCursorSpend( count );
+
+		RestoreHeldAfterFailedDrop( sourceGridId, sourceSlot, ref back );
+		if ( !back.IsEmpty )
+			inventory.HostTryAbsorbCursorStackIntoBag( ref back );
+		if ( !back.IsEmpty )
+			inventory.HostCursorCredit( new InventorySlot { ResourceId = back.ResourceId, Count = back.Count, Wear = back.Wear, CrafterName = back.CrafterName, Tier = back.Tier } );
+	}
+
+	/// <summary>Host: a stack whose world drop was refused goes back to its source slot (what does not fit stays in <paramref name="held"/>).</summary>
 	void RestoreHeldAfterFailedDrop( string sourceGridId, int sourceSlot, ref InventoryCursorStack held )
 	{
-		if ( held.IsEmpty )
+		if ( held.IsEmpty || sourceSlot < 0 )
 			return;
 
 		if ( string.Equals( sourceGridId, "hotbar", StringComparison.OrdinalIgnoreCase ) )
-		{
-			var hotbar = Components.Get<PlayerHotbar>();
-			if ( hotbar is not null && sourceSlot >= 0 )
-				hotbar.HostTryPlaceHeld( sourceSlot, ref held );
-			return;
-		}
-
-		if ( string.Equals( sourceGridId, "player", StringComparison.OrdinalIgnoreCase ) )
-		{
-			var inventory = Components.Get<PlayerInventory>();
-			if ( inventory is not null && sourceSlot >= 0 )
-			{
-				var host = new PlayerInventoryGridHost( "player", inventory );
-				host.OwnerTryPlaceHeld( sourceSlot, ref held );
-			}
-		}
+			Components.Get<PlayerHotbar>()?.HostTryPlaceHeld( sourceSlot, ref held );
+		else if ( string.Equals( sourceGridId, "player", StringComparison.OrdinalIgnoreCase ) )
+			Components.Get<PlayerInventory>()?.HostTryPlaceHeld( sourceSlot, ref held );
 	}
 
 	void UpdatePlayerDropZone()
@@ -868,23 +903,40 @@ public sealed partial class PlayerInventoryInteraction : Component
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
 			return HeldStackWorldDrop.TryDrop( GameObject, ref held, GetDropProbeScreenPosition() );
 
-		RpcRequestHotbarWorldDrop( sourceSlot, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, held.Tier, GetDropProbeScreenPosition() );
+		RpcRequestHotbarWorldDrop( sourceSlot, GetDropProbeScreenPosition() );
 		held.Clear();
 		return true;
 	}
 
 	[Rpc.Host]
-	void RpcRequestHotbarWorldDrop( int sourceSlot, string resourceId, int count, int wear, string crafter, int tier, Vector2 screenPosition )
+	void RpcRequestHotbarWorldDrop( int sourceSlot, Vector2 screenPosition )
 	{
-		if ( !Networking.IsHost )
+		if ( !Networking.IsHost || !GameObject.IsValid() )
 			return;
 
-		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear, crafter, tier );
-		if ( HeldStackWorldDrop.TryDrop( GameObject, ref held, screenPosition ) )
+		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller
+		     && !ConnectionIdentity.SameClient( caller, owner ) )
 			return;
 
-		RestoreHeldAfterFailedDrop( "hotbar", sourceSlot, ref held );
+		HostCursorDropInWorld( sourceSlot, screenPosition );
+	}
+
+	/// <summary>
+	/// Host: toss the whole host cursor into the world (a hotbar stack dragged off the bar). A refused spawn
+	/// puts it back in its hotbar slot, else the bag.
+	/// </summary>
+	public void HostCursorDropInWorld( int sourceSlot, Vector2 screenPosition )
+	{
+		var inventory = Components.Get<PlayerInventory>();
+		if ( inventory is null )
+			return;
+
+		ref var cursor = ref inventory.HostCursor;
+		if ( cursor.IsEmpty || HeldStackWorldDrop.TryDrop( GameObject, ref cursor, screenPosition ) )
+			return;
+
+		RestoreHeldAfterFailedDrop( "hotbar", sourceSlot, ref cursor );
+		inventory.HostSettleCursor();
 	}
 
 	void FinishBindingDrag()
@@ -1139,7 +1191,8 @@ public sealed partial class PlayerInventoryInteraction : Component
 		{
 			if ( ReferenceEquals( fromHost, _containerGrid ) )
 			{
-				TryQuickMoveToPlayerBag( fromHost, fromIndex );
+				// Bound / matching hotbar slots first (PlayerHotbar.SlotsTakingFromStorage), the rest to the bag.
+				TryQuickMoveToPlayerBag( fromHost, fromIndex, _hotbar?.SlotsTakingFromStorage( source.ResourceId ) );
 				return;
 			}
 
@@ -1204,7 +1257,7 @@ public sealed partial class PlayerInventoryInteraction : Component
 		return true;
 	}
 
-	bool TryQuickMoveToPlayerBag( IInventoryGridHost fromHost, int fromIndex )
+	bool TryQuickMoveToPlayerBag( IInventoryGridHost fromHost, int fromIndex, List<int> hotbarFirst = null )
 	{
 		for ( var i = 0; i < _grids.Count; i++ )
 		{
@@ -1212,12 +1265,24 @@ public sealed partial class PlayerInventoryInteraction : Component
 			if ( grid is null || grid.GridId is not "player" )
 				continue;
 
-			if ( TryCrossGridQuickMove( fromHost, fromIndex, grid ) )
+			if ( TryCrossGridQuickMove( fromHost, fromIndex, grid, hotbarFirst ) )
 				return true;
 		}
 
 		return false;
 	}
+
+	IInventoryGridHost FindGrid( string gridId )
+	{
+		for ( var i = 0; i < _grids.Count; i++ )
+		{
+			if ( _grids[i]?.GridId == gridId )
+				return _grids[i];
+		}
+
+		return null;
+	}
+
 
 	void TryQuickMoveHotbarEquipable( IInventoryGridHost fromHost, int fromIndex )
 	{
@@ -1253,14 +1318,21 @@ public sealed partial class PlayerInventoryInteraction : Component
 	static bool IsExternalStorageGrid( IInventoryGridHost grid ) =>
 		grid is not null && grid.GridId is not "player" and not "hotbar";
 
-	bool TryCrossGridQuickMove( IInventoryGridHost fromHost, int fromIndex, IInventoryGridHost toHost )
+	/// <param name="hotbarFirst">
+	/// Hotbar slots to fill before <paramref name="toHost"/> (<see cref="PlayerHotbar.SlotsTakingFromStorage"/>): a stack shift-clicked
+	/// out of a chest goes where a pickup would.
+	/// </param>
+	bool TryCrossGridQuickMove( IInventoryGridHost fromHost, int fromIndex, IInventoryGridHost toHost,
+		List<int> hotbarFirst = null )
 	{
 		var source = fromHost.GetSlot( fromIndex );
 		if ( source.IsEmpty || toHost is null )
 			return false;
 
+		var hotbarGrid = hotbarFirst is { Count: > 0 } ? FindGrid( "hotbar" ) : null;
+
 		// -1: the source index belongs to the other grid — never exclude a destination slot.
-		if ( !toHost.TryFindQuickMoveTarget( source, -1, out _ ) )
+		if ( hotbarGrid is null && !toHost.TryFindQuickMoveTarget( source, -1, out _ ) )
 			return false;
 
 		if ( !fromHost.OwnerTryPickupAll( fromIndex, out var picked ) || picked.IsEmpty )
@@ -1269,6 +1341,19 @@ public sealed partial class PlayerInventoryInteraction : Component
 		var held = new InventoryCursorStack();
 		held.Set( picked.ResourceId, picked.Count, picked.Wear, picked.CrafterName, picked.Tier );
 		var movedAny = false;
+
+		if ( hotbarGrid is not null )
+		{
+			foreach ( var slotIndex in hotbarFirst )
+			{
+				if ( held.IsEmpty )
+					break;
+
+				var beforeCount = held.Count;
+				if ( hotbarGrid.OwnerTryPlaceHeld( slotIndex, ref held ) && (held.IsEmpty || held.Count < beforeCount) )
+					movedAny = true;
+			}
+		}
 
 		// Distribute across merge targets, then empties (finders only return slots with room).
 		for ( var guard = 0; guard <= toHost.SlotCount && !held.IsEmpty; guard++ )
@@ -1290,7 +1375,11 @@ public sealed partial class PlayerInventoryInteraction : Component
 
 		// The dev supply refills itself — whatever did not fit is simply not taken.
 		if ( fromHost is ContainerInventoryGridHost { Container: var fromContainer } && IsDevSupply( fromContainer ) )
+		{
+			if ( !held.IsEmpty )
+				_inventory?.OwnerDiscardCursor();
 			return movedAny;
+		}
 
 		if ( !held.IsEmpty )
 			fromHost.OwnerTryPlaceHeld( fromIndex, ref held );

@@ -458,6 +458,47 @@ def raspberry(rng):
 	return ground(m), cells
 
 
+def _fiddlehead_shoot(rng, stalk_len, coil_r, stem_r, turns):
+	"""One picked crosier: a short cut stalk along +X curling up into a tight spiral (in the XZ plane), the stalk
+	end a paler cut face. Built standing on its side so a bunch lies on the ground."""
+	pts = [(-stalk_len, 0.0, 0.0), (-stalk_len * 0.5, 0.0, 0.004), (0.0, 0.0, 0.0)]
+	cx, cz = 0.0, coil_r
+	steps = 16
+	for i in range(1, steps + 1):
+		t = i / steps
+		th = -math.pi / 2 + t * turns * 2 * math.pi       # start under the centre, heading +X, curl up and back over
+		r = coil_r * (1.0 - 0.75 * t)
+		pts.append((cx + r * math.cos(th), 0.0, cz + r * math.sin(th)))
+	n = len(pts)
+	m = path_tube(rng, np.array(pts), radius=stem_r, segs=6, jitter=0.12, mat=0, cap_mat=2,
+				  radius_fn=lambda t: 1.0 if t * (n - 1) < 3 else 1.55 - 0.9 * (t * (n - 1) - 3) / (n - 4))
+	# rolled pinnae: a pale ridge on each side of the coil
+	for sgn in (-1, 1):
+		for i in range(4, n - 3, 2):
+			p = np.array(pts[i])
+			b = blob(rng, stem_r * 0.75, subdiv=0, jitter=0.25, noise=0.1, scale=(1.3, 0.7, 1.0), mat=1)
+			m.add(b.translate(p[0], sgn * stem_r * 1.1, p[2]))
+	return m
+
+
+@item("fiddlehead", "food", roughness=0.7)
+def fiddlehead(rng):
+	cells = [C((96, 146, 52)), C((126, 170, 66)), C((176, 196, 120), d=8), C((132, 94, 56), d=10)]
+	# a little bunch of picked ostrich-fern fiddleheads (~2.5x life size): three coiled shoots lying together, cut
+	# stalks pale at the ends, a few papery brown scales caught on them
+	m = Mesh()
+	for (x, y, rot, L, R) in ((0.0, 0.0, 0, 0.09, 0.034), (0.012, 0.038, 18, 0.075, 0.03), (-0.01, -0.04, -14, 0.1, 0.031)):
+		s = _fiddlehead_shoot(rng, L, R, 0.0075, 1.75 + rng.random() * 0.2)
+		s.rotate("x", (rng.random() - 0.5) * 30).rotate("z", rot).translate(x, y, 0.0)
+		m.add(s)
+	for k in range(5):
+		sc = leaf(rng, 0.016, 0.009, mat=3, bend=0.1, segments=2)
+		sc.rotate("x", rng.random() * 60).rotate("z", rng.random() * 360)
+		sc.translate(-0.06 + rng.random() * 0.1, -0.04 + rng.random() * 0.08, 0.008 + rng.random() * 0.03)
+		m.add(sc)
+	return ground(m), cells
+
+
 # ---------------------------------------------------------------- seed pouches
 
 

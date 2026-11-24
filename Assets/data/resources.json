@@ -5,6 +5,7 @@
       "displayName": "Stone",
       "icon": "ui/items/resource_stone.jpg",
       "maxStack": 50,
+      "weight": 2,
       "fallbackColor": "0.58,0.5,0.42,1"
     },
     {
@@ -27,6 +28,7 @@
       "displayName": "Wood",
       "icon": "ui/items/resource_woodBasic.png",
       "maxStack": 50,
+      "weight": 1,
       "fallbackColor": "0.45,0.32,0.18,1"
     },
     {
@@ -504,6 +506,13 @@
       "fallbackColor": "0.85,0.2,0.35,1"
     },
     {
+      "id": "food_fiddlehead",
+      "displayName": "Fiddlehead",
+      "icon": "ui/items/food_fiddlehead.png",
+      "maxStack": 20,
+      "fallbackColor": "0.45,0.62,0.22,1"
+    },
+    {
       "id": "seed_radish",
       "displayName": "Radish Seeds",
       "description": "Sow on tilled soil. Quick to mature.",
@@ -606,6 +615,14 @@
       "fallbackColor": "0.55,0.42,0.28,1"
     },
     {
+      "id": "food_egg",
+      "displayName": "Egg",
+      "description": "Lifted from a bird nest. Raw.",
+      "icon": "ui/items/food_egg.png",
+      "maxStack": 10,
+      "fallbackColor": "0.92,0.88,0.78,1"
+    },
+    {
       "id": "rawmeat_bird",
       "displayName": "Wings",
       "icon": "ui/items/rawmeat_bird.png",
@@ -688,6 +705,7 @@
       "displayName": "Hardwood",
       "icon": "ui/items/resource_hardwood.png",
       "maxStack": 20,
+      "weight": 1,
       "fallbackColor": "0.50,0.24,0.17,1"
     },
     {

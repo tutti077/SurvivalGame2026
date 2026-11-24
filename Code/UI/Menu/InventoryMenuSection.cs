@@ -23,6 +23,8 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 
 	Panel _sectionRoot;
 	Panel _grid;
+	Label _weightLabel;
+	string _weightText = string.Empty;
 	bool _menuOpen;
 
 	public InventoryMenuSection( PlayerInventory inventory, PlayerInventoryInteraction interaction )
@@ -44,6 +46,11 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 		_sectionRoot.Style.Width = Length.Percent( 100 );
 
 		UiStyle.AddTitle( _sectionRoot, "Inventory", TitleFontSize );
+
+		// Carry weight readout: fixed height so the grid never reflows when the number changes.
+		_weightLabel = UiStyle.AddLabel( _sectionRoot, string.Empty, UiText.Secondary, CountFontSize );
+		_weightLabel.Style.Height = Length.Pixels( CountFontSize * 1.4f );
+		_weightLabel.Style.Set( "text-shadow", UiStyle.TextShadowCss );
 
 		_grid = new Panel { Parent = _sectionRoot };
 		_grid.Style.Set( "flex-direction", "column" );
@@ -117,6 +124,26 @@ public sealed class InventoryMenuSection : IPlayerMenuSection
 
 		for ( var i = 0; i < _slotUi.Count; i++ )
 			ApplySlot( _slotUi[i], _inventory.GetSlot( i ) );
+
+		RefreshWeight();
+	}
+
+	/// <summary>Reads the cached <see cref="PlayerMovement.CarryWeight"/> — no per-frame summing.</summary>
+	void RefreshWeight()
+	{
+		if ( _weightLabel is null )
+			return;
+
+		var movement = _inventory.Components.Get<PlayerMovement>();
+		var text = movement is null
+			? string.Empty
+			: $"Weight {movement.CarryWeight:0.#}";
+		if ( text == _weightText )
+			return;
+
+		_weightText = text;
+		_weightLabel.Text = text;
+		UiStyle.Text( _weightLabel, UiText.Secondary, CountFontSize );
 	}
 
 	public void SetMenuOpen( bool isOpen )

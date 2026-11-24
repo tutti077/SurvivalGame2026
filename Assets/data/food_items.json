@@ -25,6 +25,18 @@
       "fallbackColor": "0.85,0.2,0.35,1"
     },
     {
+      "resourceId": "food_fiddlehead",
+      "displayName": "Fiddlehead",
+      "edible": true,
+      "maxHealth": 7,
+      "maxStamina": 7,
+      "healthRegenPerSecond": 1,
+      "durationSeconds": 300,
+      "restoreHealth": 10,
+      "restoreStamina": 0,
+      "fallbackColor": "0.45,0.62,0.22,1"
+    },
+    {
       "resourceId": "food_radish",
       "displayName": "Radish",
       "edible": true,

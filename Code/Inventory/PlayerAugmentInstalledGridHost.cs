@@ -64,8 +64,6 @@ public sealed class PlayerAugmentInstalledGridHost : IInventoryGridHost
 		return _augments.OwnerTryPlaceIntoInstalled( (AugmentSlot)slotIndex, ref held );
 	}
 
-	public bool OwnerTryReturnStack( ref InventoryCursorStack held ) => false;
-
 	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken ) =>
 		OwnerTryPickupAll( slotIndex, out taken );
 
@@ -73,6 +71,10 @@ public sealed class PlayerAugmentInstalledGridHost : IInventoryGridHost
 	{
 		placedCount = 0;
 		if ( _readOnly || _augments is null || held.IsEmpty )
+			return false;
+
+		// One unit onto an empty socket only: a swap is a left-click place, where the cursor takes the old augment.
+		if ( !GetSlot( slotIndex ).IsEmpty )
 			return false;
 
 		var copy = held;

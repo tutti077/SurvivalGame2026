@@ -105,6 +105,10 @@ public static class InventoryStackRules
 		if ( target.IsEmpty || string.Equals( target.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
 			return false;
 
+		// The displaced stack lands on the source slot: only when that slot is still empty, never over an item.
+		if ( !slots[sourceSlotIndex].IsEmpty )
+			return false;
+
 		var displaced = target;
 		target = new InventorySlot { ResourceId = held.ResourceId, Count = held.Count, Wear = held.Wear, CrafterName = held.CrafterName, Tier = held.Tier };
 		slots[sourceSlotIndex] = displaced;

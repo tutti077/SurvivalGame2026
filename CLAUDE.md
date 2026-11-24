@@ -202,6 +202,8 @@ never fails it, broken behaviour does), and logs `[Tag] PASS|FAIL <case>` then o
 |-------|---------|------|--------------------------------------|
 | Combat | `combat_test` | `Code/Combat/Tests/CombatTest.cs` | `Code/Combat/**`, `PlayerCombat*.cs`, `Melee*.cs`, combat types, `PlayerAnimation.HitReaction.cs`, `VitalsAuthority` / `ArmorMitigation`, `melee_weapon_classes.json`, `melee_block_stagger.json`, `combat_timings.csv` |
 | Sword animation | `anim_test` + offline `create_sword_anims.py -- check` | `Code/Player/Tests/AnimTest.cs`, `Blender/scripts/create_sword_anims.py` | `PlayerAnimation*.cs`, `Code/Player/Tests/AnimTest.cs`, `Assets/models/player/{animations,animgraphs}/**`, `human_male_sword.vmdl`, `create_sword_anims.py`, `sword_pose_tuning.json`, `make_human_sword_assets.py` (gate `.claude/hooks/anim_test_gate.py`) |
+| Grapple on players + vehicle tow | `grapple_test` | `Code/Player/Tests/GrappleTest.cs` | `PlayerMovement.Grapple*.cs`, `Code/Player/Tests/GrappleTest.cs` (gate `.claude/hooks/grapple_test_gate.py`) |
+| Item authority | `inventory_test` | `Code/Inventory/Tests/InventoryTest.cs` | `Code/Inventory/{PlayerInventory*,PlayerHotbar*,ContainerInventory*,InventoryStackRules,InventoryCursorStack,IInventoryGridHost,HeldStackWorldDrop,DeathLootBag,*GridHost}.cs`, `Code/Inventory/Tests/**`, `PlayerEquipment.cs`, `PlayerAugments.cs`, `PlayerInventoryInteraction.cs` (gate `.claude/hooks/inventory_test_gate.py`) |
 
 The gate is `.claude/hooks/combat_test_gate.py`, wired in `.claude/settings.json`: an edit in scope
 marks the test owed for that session (and runs the offline `combat_timings.csv` ↔ JSON mirror check);
@@ -317,7 +319,8 @@ Code/
   Entity/          EntityBrain (+ .Breach / .Raid / .Dormancy), EntityLocomotion, EntityCombat, EntityEnemySetup, Animals/
   Building/        catalog, snap layout / placement (BuildSnapPlacement, BuildColliderSnap, BuildModuleDimensions),
                    BuildAuthority, piece health, BuildStructuralIntegrity, ShelterProbe, BuildBed, BuildDoor, nav bake
-  Inventory/       PlayerInventory, PlayerHotbar, containers, resource + equipment catalogs
+  Inventory/       PlayerInventory (+ .HostCursor: the host's copy of a remote owner's cursor stack), PlayerHotbar, containers,
+                   resource + equipment catalogs, Tests/InventoryTest (inventory_test)
   Crafting/ Food/ Quests/ Skills/ Augments/   JSON-backed catalogs
   Crew/ Arena/ Camps/ Boss/ Raids/ Farming/ Circuits/ Map/ TimeTrial/   one system each (see AGENTS.md)
   Dungeon/         BoxDungeonGenerator + DungeonLayout / Geometry / MapModel; CaveDungeonGenerator + CaveLayout / CaveGeometry

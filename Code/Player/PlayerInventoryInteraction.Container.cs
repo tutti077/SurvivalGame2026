@@ -129,8 +129,12 @@ public sealed partial class PlayerInventoryInteraction
 		if ( ReferenceEquals( _containerGrid.Container, container ) )
 			return;
 
+		// Swapping straight from one chest to another: the first lid closes.
+		ChestLid.FindFor( _containerGrid.Container )?.SetViewing( false );
+
 		_containerGrid.Container = container;
 		ContainerChanged?.Invoke();
+		ChestLid.FindFor( container )?.SetViewing( true );
 
 		if ( _menu is null )
 			_menu = Components.Get<PlayerGameMenuController>();
@@ -143,6 +147,7 @@ public sealed partial class PlayerInventoryInteraction
 		if ( _containerGrid?.Container is null )
 			return;
 
+		ChestLid.FindFor( _containerGrid.Container )?.SetViewing( false );
 		_containerGrid.Container = null;
 		ContainerChanged?.Invoke();
 	}

@@ -31,12 +31,11 @@ public static class HeldStackWorldDrop
 
 		spawnPos = SnapSpawnAboveGround( scene, owner, spawnPos );
 
-		var instance = TrySpawnWorldDrop( scene, held.ResourceId, dropCount, spawnPos, owner, applyDropperSelfPickupDelay: true, wear: held.Wear, crafterName: held.CrafterName, tier: held.Tier );
-		if ( instance is null || !instance.IsValid() )
+		var spawned = SpawnInventorySingles( scene, owner, held.ResourceId, dropCount, spawnPos, forward, toss: false, held.Wear, held.CrafterName, held.Tier );
+		if ( spawned <= 0 )
 			return false;
 
-		ApplyPlayerRelease( instance, forward );
-		held.Count -= dropCount;
+		held.Count -= spawned;
 		if ( held.Count <= 0 )
 			held.Clear();
 		return true;
@@ -62,19 +61,50 @@ public static class HeldStackWorldDrop
 
 		spawnPos = SnapSpawnAboveGround( scene, owner, spawnPos );
 
-		var instance = TrySpawnWorldDrop( scene, held.ResourceId, held.Count, spawnPos, owner, applyDropperSelfPickupDelay: true, wear: held.Wear, crafterName: held.CrafterName, tier: held.Tier );
-		if ( instance is null || !instance.IsValid() )
+		var spawned = SpawnInventorySingles( scene, owner, held.ResourceId, held.Count, spawnPos, direction, toss: true, held.Wear, held.CrafterName, held.Tier );
+		if ( spawned <= 0 )
 			return false;
 
-		ApplyToss( instance, direction );
-		held.Clear();
+		held.Count -= spawned;
+		if ( held.Count <= 0 )
+			held.Clear();
 		return true;
 	}
 
 	/// <summary>
-	/// Spawn a physics world pickup pile (inventory walk-over / magnet pickup).
-	/// Pass <paramref name="applyDropperSelfPickupDelay"/> only for player inventory drops so the dropper
-	/// cannot immediately re-scoop their own toss; loot/harvest should leave it false.
+	/// A stack dumped out of an inventory lands as one pickup per unit, fanned out, and never clumps back together
+	/// (Mark 2026-11-19: a dumped pile has to be easy to find, not "a tiny stick in the grass"). Returns how many spawned.
+	/// </summary>
+	static int SpawnInventorySingles( Scene scene, GameObject owner, string resourceId, int count, Vector3 spawnPos, Vector3 direction, bool toss, int wear, string crafterName, int tier )
+	{
+		var spreadUnits = TerrainWorldUnits.MetersToEngine( 0.2f );
+		var spawned = 0;
+		for ( var i = 0; i < count; i++ )
+		{
+			var outward = Rotation.FromYaw( Sandbox.Game.Random.Float( 0f, 360f ) ).Forward;
+			var at = count > 1 ? spawnPos + outward * Sandbox.Game.Random.Float( 0f, spreadUnits ) : spawnPos;
+			var instance = TrySpawnWorldDrop( scene, resourceId, 1, at, owner, inventoryDrop: true, wear: wear, crafterName: crafterName, tier: tier );
+			if ( instance is null || !instance.IsValid() )
+				break;
+
+			if ( toss )
+				ApplyToss( instance, direction );
+			else
+				ApplyPlayerRelease( instance, direction );
+
+			if ( count > 1 && instance.Components.Get<Rigidbody>() is { } body && body.IsValid() )
+				body.Velocity += outward * Sandbox.Game.Random.Float( 10f, 45f ) + Vector3.Up * Sandbox.Game.Random.Float( 0f, 20f );
+
+			spawned++;
+		}
+
+		return spawned;
+	}
+
+	/// <summary>
+	/// Spawn a physics world pickup pile (magnet pickup once it has lain on the ground 1 s).
+	/// Pass <paramref name="inventoryDrop"/> only for a stack dropped out of an inventory: it waits 5 s on the
+	/// ground instead, so a toss is not scooped straight back up; loot / harvest leave it false.
 	/// </summary>
 	public static GameObject TrySpawnWorldDrop(
 		Scene scene,
@@ -82,17 +112,19 @@ public static class HeldStackWorldDrop
 		int count,
 		Vector3 worldPosition,
 		GameObject ignoreHierarchy = null,
-		bool applyDropperSelfPickupDelay = false,
+		bool inventoryDrop = false,
 		int wear = 0,
 		string crafterName = null,
-		int tier = 0 )
+		int tier = 0,
+		string sourceModelPath = null,
+		float sourceScale = 1f )
 	{
 		if ( !scene.IsValid() || string.IsNullOrWhiteSpace( resourceId ) || count <= 0 )
 			return null;
 
 		worldPosition = SnapSpawnAboveGround( scene, ignoreHierarchy, worldPosition );
 
-		var instance = SpawnDropPrefab( scene, resourceId, count, worldPosition, ignoreHierarchy, applyDropperSelfPickupDelay, wear, crafterName, tier );
+		var instance = SpawnDropPrefab( scene, resourceId, count, worldPosition, ignoreHierarchy, inventoryDrop, wear, crafterName, tier, sourceModelPath, sourceScale );
 		return instance is not null && instance.IsValid() ? instance : null;
 	}
 
@@ -102,10 +134,12 @@ public static class HeldStackWorldDrop
 		int count,
 		Vector3 worldPosition,
 		GameObject ignoreHierarchy,
-		bool applyDropperSelfPickupDelay,
+		bool inventoryDrop,
 		int wear = 0,
 		string crafterName = null,
-		int tier = 0 )
+		int tier = 0,
+		string sourceModelPath = null,
+		float sourceScale = 1f )
 	{
 		var instance = BuildPrefabUtility.GetTemplate( DropPrefabPath )?.Clone();
 		if ( instance is null || !instance.IsValid() )
@@ -126,7 +160,7 @@ public static class HeldStackWorldDrop
 		var scale = 0.24f + Sandbox.Game.Random.Float( 0f, 0.1f );
 		instance.LocalScale = new Vector3( scale, scale, scale );
 
-		PrepareSpawnedDrop( instance, resourceId, count, ignoreHierarchy, applyDropperSelfPickupDelay, wear, crafterName, tier );
+		PrepareSpawnedDrop( instance, resourceId, count, inventoryDrop, wear, crafterName, tier, sourceModelPath, sourceScale );
 		instance.Enabled = true;
 		HostNetworkSpawn.TrySpawn( instance );
 		return instance;
@@ -147,31 +181,45 @@ public static class HeldStackWorldDrop
 		GameObject instance,
 		string resourceId,
 		int count,
-		GameObject ignoreHierarchy,
-		bool applyDropperSelfPickupDelay,
+		bool inventoryDrop,
 		int wear = 0,
 		string crafterName = null,
-		int tier = 0 )
+		int tier = 0,
+		string sourceModelPath = null,
+		float sourceScale = 1f )
 	{
 		foreach ( var definition in instance.Components.GetAll<ResourceItemDefinition>( FindMode.EverythingInSelf ) )
 			definition?.Destroy();
 
 		var drop = instance.Components.Get<WorldDroppedResource>() ?? instance.Components.Create<WorldDroppedResource>();
 		drop.Configure( resourceId, count, wear, crafterName, tier );
-		if ( applyDropperSelfPickupDelay )
-			drop.SetDropper( ignoreHierarchy );
+		if ( inventoryDrop )
+			drop.MarkInventoryDrop();
 
-		ApplyResourceVisual( instance, resourceId );
+		ApplyResourceVisual( instance, resourceId, sourceModelPath, sourceScale );
 		EnsurePhysics( instance );
 		instance.Tags.Add( "worlddrop" );
-		WorldDroppedResourceMerge.TryMergeCluster( drop );
+		if ( !inventoryDrop )
+			WorldDroppedResourceMerge.TryMergeCluster( drop );
 	}
 
-	static void ApplyResourceVisual( GameObject instance, string resourceId )
+	static void ApplyResourceVisual( GameObject instance, string resourceId, string sourceModelPath = null, float sourceScale = 1f )
 	{
 		var renderer = instance.Components.Get<ModelRenderer>();
 		if ( renderer is null )
 			return;
+
+		// A plant picked by hand drops as the plant that stood there (Mark 2026-11-18: "a 1:1 placed model vs physics model
+		// after you harvest it"): the same model at the same size, when that model is one of the item's listed world models
+		// (a mushroom's cap drops as that mushroom; the daisy seed that comes with a daisy keeps its own model).
+		if ( ItemWorldModelCatalog.HasVariant( resourceId, sourceModelPath ) && Model.Load( sourceModelPath ) is { IsError: false } source )
+		{
+			renderer.Model = source;
+			renderer.MaterialOverride = null;
+			renderer.Tint = Color.White;
+			instance.LocalScale = Vector3.One * Math.Clamp( sourceScale, 0.25f, 4f );
+			return;
+		}
 
 		// The item's own model when it has one (40 u/m: drawn at scale 1, untinted; an id with variants picks one per drop); else the tinted dev rock
 		if ( ItemWorldModelCatalog.TryGetModelPath( resourceId, out var modelPath, Sandbox.Game.Random.Int( 0, 1 << 20 ) ) && Model.Load( modelPath ) is { IsError: false } model )
@@ -287,6 +335,31 @@ public static class HeldStackWorldDrop
 		body.Velocity = dir * Sandbox.Game.Random.Float( 6f, 18f )
 		                + Vector3.Up * Sandbox.Game.Random.Float( -4f, 10f );
 		body.AngularVelocity = Vector3.Zero;
+	}
+
+	/// <summary>
+	/// Host: harvest loot as single pickups tossed out around <paramref name="origin"/> (hand picking, nests):
+	/// it lands, and every pawn's magnet takes it 1 s later.
+	/// </summary>
+	public static void SpawnLootBurst( Scene scene, HarvestLootItem[] loot, Vector3 origin, GameObject ignoreHierarchy, float minRadius = 6f, float maxRadius = 20f, string sourceModelPath = null, float sourceScale = 1f )
+	{
+		if ( !scene.IsValid() || loot is null )
+			return;
+
+		foreach ( var item in loot )
+		{
+			if ( item.Amount <= 0 || string.IsNullOrWhiteSpace( item.ResourceId ) )
+				continue;
+
+			for ( var i = 0; i < item.Amount; i++ )
+			{
+				var outward = Rotation.FromYaw( Sandbox.Game.Random.Float( 0f, 360f ) ).Forward;
+				var at = origin + outward * Sandbox.Game.Random.Float( minRadius, maxRadius );
+				var instance = TrySpawnWorldDrop( scene, item.ResourceId, 1, at, ignoreHierarchy, sourceModelPath: sourceModelPath, sourceScale: sourceScale );
+				if ( instance is not null && instance.IsValid() )
+					ApplyScatterBurst( instance, outward );
+			}
+		}
 	}
 
 	/// <summary>Give loot singles a short outward toss so a burst doesn’t land as one pile.</summary>

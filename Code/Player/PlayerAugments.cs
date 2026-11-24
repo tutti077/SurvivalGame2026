@@ -545,7 +545,51 @@ public sealed partial class PlayerAugments : Component
 	public bool OwnerTryPickupBank( int index, out InventorySlot picked )
 	{
 		picked = InventorySlot.Empty;
-		if ( !IsLocalManagingClient() || index < 0 || index >= BankSlotCount )
+		if ( !IsLocalManagingClient() || !PickupBank( index, out picked ) )
+			return false;
+
+		if ( HasHostAuthority )
+			NotifyChanged();
+		else
+			RpcHostPickupBank( index );
+		return true;
+	}
+
+	public bool OwnerTryPlaceHeldBank( int index, ref InventoryCursorStack held )
+	{
+		if ( !IsLocalManagingClient() || !PlaceHeldBank( index, ref held ) )
+			return false;
+
+		if ( HasHostAuthority )
+			NotifyChanged();
+		else
+			RpcHostPlaceHeldBank( index );
+		return true;
+	}
+
+	public bool OwnerTryFinishBankDrag( int source, int target, ref InventoryCursorStack held )
+	{
+		if ( !IsLocalManagingClient() || source == target )
+			return false;
+
+		if ( !held.IsEmpty )
+			return OwnerTryPlaceHeldBank( target, ref held );
+
+		if ( !SwapBank( source, target ) )
+			return false;
+
+		if ( HasHostAuthority )
+			NotifyChanged();
+		else
+			RpcHostSwapBank( source, target );
+		return true;
+	}
+
+	/// <summary>Rule: the stack leaves a bank slot.</summary>
+	bool PickupBank( int index, out InventorySlot picked )
+	{
+		picked = InventorySlot.Empty;
+		if ( index < 0 || index >= BankSlotCount )
 			return false;
 
 		var current = _bank[index];
@@ -553,13 +597,14 @@ public sealed partial class PlayerAugments : Component
 			return false;
 
 		picked = current;
-		OwnerSetBank( index, InventorySlot.Empty );
+		ApplyBankLocal( index, InventorySlot.Empty );
 		return true;
 	}
 
-	public bool OwnerTryPlaceHeldBank( int index, ref InventoryCursorStack held )
+	/// <summary>Rule: augments on the cursor go into a bank slot (fill, merge, or swap one for one).</summary>
+	bool PlaceHeldBank( int index, ref InventoryCursorStack held )
 	{
-		if ( held.IsEmpty || !IsLocalManagingClient() || index < 0 || index >= BankSlotCount )
+		if ( held.IsEmpty || index < 0 || index >= BankSlotCount )
 			return false;
 
 		if ( !AugmentCatalog.IsAugment( held.ResourceId ) )
@@ -572,7 +617,7 @@ public sealed partial class PlayerAugments : Component
 		if ( existing.IsEmpty )
 		{
 			var take = Math.Min( held.Count, maxStack );
-			OwnerSetBank( index, new InventorySlot { ResourceId = id, Count = take } );
+			ApplyBankLocal( index, new InventorySlot { ResourceId = id, Count = take } );
 			held.Count -= take;
 			if ( held.Count <= 0 )
 				held.Clear();
@@ -585,7 +630,7 @@ public sealed partial class PlayerAugments : Component
 			if ( held.Count != 1 || existing.Count != 1 )
 				return false;
 
-			OwnerSetBank( index, new InventorySlot { ResourceId = id, Count = 1 } );
+			ApplyBankLocal( index, new InventorySlot { ResourceId = id, Count = 1 } );
 			held.Set( existing.ResourceId, existing.Count );
 			return true;
 		}
@@ -594,28 +639,23 @@ public sealed partial class PlayerAugments : Component
 		if ( add <= 0 )
 			return false;
 
-		OwnerSetBank( index, new InventorySlot { ResourceId = id, Count = existing.Count + add } );
+		ApplyBankLocal( index, new InventorySlot { ResourceId = id, Count = existing.Count + add } );
 		held.Count -= add;
 		if ( held.Count <= 0 )
 			held.Clear();
 		return true;
 	}
 
-	public bool OwnerTryFinishBankDrag( int source, int target, ref InventoryCursorStack held )
+	/// <summary>Rule: two bank slots trade places.</summary>
+	bool SwapBank( int source, int target )
 	{
-		if ( !IsLocalManagingClient() || source == target )
-			return false;
-
-		if ( !held.IsEmpty )
-			return OwnerTryPlaceHeldBank( target, ref held );
-
-		if ( source < 0 || source >= BankSlotCount || target < 0 || target >= BankSlotCount )
+		if ( source == target || source < 0 || source >= BankSlotCount || target < 0 || target >= BankSlotCount )
 			return false;
 
 		var a = _bank[source];
 		var b = _bank[target];
-		OwnerSetBank( target, a );
-		OwnerSetBank( source, b );
+		ApplyBankLocal( target, a );
+		ApplyBankLocal( source, b );
 		return true;
 	}
 
@@ -639,49 +679,25 @@ public sealed partial class PlayerAugments : Component
 	public bool OwnerTryPickupInstalled( AugmentSlot slot, out InventorySlot picked )
 	{
 		picked = InventorySlot.Empty;
-		if ( !IsLocalManagingClient() )
+		if ( !IsLocalManagingClient() || !PickupInstalled( slot, out picked ) )
 			return false;
 
-		var current = GetInstalled( slot );
-		if ( current.IsEmpty )
-			return false;
-
-		picked = current;
-		OwnerSetInstalled( slot, InventorySlot.Empty );
+		if ( HasHostAuthority )
+			NotifyChanged();
+		else
+			RpcHostPickupInstalled( (int)slot );
 		return true;
 	}
 
 	public bool OwnerTryPlaceIntoInstalled( AugmentSlot slot, ref InventoryCursorStack held )
 	{
-		if ( held.IsEmpty || !IsLocalManagingClient() )
+		if ( !IsLocalManagingClient() || !PlaceIntoInstalled( slot, ref held ) )
 			return false;
 
-		if ( !IsSlotUnlocked( slot ) )
-			return false;
-
-		if ( !AugmentCatalog.TryGet( held.ResourceId, out var def ) || !def.AllowsSlot( slot ) )
-			return false;
-
-		var incoming = new InventorySlot
-		{
-			ResourceId = ResourceCatalog.NormalizeResourceId( held.ResourceId ),
-			Count = 1,
-		};
-		var previous = GetInstalled( slot );
-		OwnerSetInstalled( slot, incoming );
-
-		held.Count--;
-		if ( held.Count <= 0 )
-			held.Clear();
-
-		if ( !previous.IsEmpty )
-		{
-			if ( held.IsEmpty )
-				held.Set( previous.ResourceId, previous.Count );
-			else
-				return false;
-		}
-
+		if ( HasHostAuthority )
+			NotifyChanged();
+		else
+			RpcHostPlaceIntoInstalled( (int)slot );
 		return true;
 	}
 
@@ -692,6 +708,65 @@ public sealed partial class PlayerAugments : Component
 
 		if ( !held.IsEmpty )
 			return OwnerTryPlaceIntoInstalled( target, ref held );
+
+		if ( !SwapInstalled( source, target ) )
+			return false;
+
+		if ( HasHostAuthority )
+			NotifyChanged();
+		else
+			RpcHostSwapInstalled( (int)source, (int)target );
+		return true;
+	}
+
+	/// <summary>Rule: the augment leaves its socket.</summary>
+	bool PickupInstalled( AugmentSlot slot, out InventorySlot picked )
+	{
+		picked = GetInstalled( slot );
+		if ( picked.IsEmpty )
+			return false;
+
+		ApplyInstalledLocal( slot, InventorySlot.Empty );
+		return true;
+	}
+
+	/// <summary>
+	/// Rule: one augment from the cursor goes into an open socket it fits; an augment already there swaps
+	/// onto the cursor, which is only possible when that one was the whole stack.
+	/// </summary>
+	bool PlaceIntoInstalled( AugmentSlot slot, ref InventoryCursorStack held )
+	{
+		if ( held.IsEmpty || !IsSlotUnlocked( slot ) )
+			return false;
+
+		if ( !AugmentCatalog.TryGet( held.ResourceId, out var def ) || !def.AllowsSlot( slot ) )
+			return false;
+
+		var previous = GetInstalled( slot );
+		if ( !previous.IsEmpty && held.Count > 1 )
+			return false;
+
+		ApplyInstalledLocal( slot, new InventorySlot
+		{
+			ResourceId = ResourceCatalog.NormalizeResourceId( held.ResourceId ),
+			Count = 1,
+		} );
+
+		held.Count--;
+		if ( held.Count <= 0 )
+			held.Clear();
+
+		if ( !previous.IsEmpty )
+			held.Set( previous.ResourceId, previous.Count );
+
+		return true;
+	}
+
+	/// <summary>Rule: two sockets trade augments (each must fit where it lands).</summary>
+	bool SwapInstalled( AugmentSlot source, AugmentSlot target )
+	{
+		if ( source == target )
+			return false;
 
 		var sourceStack = GetInstalled( source );
 		if ( sourceStack.IsEmpty || !AugmentCatalog.TryGet( sourceStack.ResourceId, out var def ) )
@@ -708,8 +783,8 @@ public sealed partial class PlayerAugments : Component
 				return false;
 		}
 
-		OwnerSetInstalled( target, sourceStack );
-		OwnerSetInstalled( source, targetStack );
+		ApplyInstalledLocal( target, sourceStack );
+		ApplyInstalledLocal( source, targetStack );
 		return true;
 	}
 
@@ -773,41 +848,9 @@ public sealed partial class PlayerAugments : Component
 		NotifyChanged();
 	}
 
-	// ── Local apply + owner → host intent ───────────────────────────────────────────────────
+	// ── Local apply ─────────────────────────────────────────────────────────────────────────
 
 	PlayerInventory ResolveInventory() => _inventory ??= Components.Get<PlayerInventory>();
-
-	void OwnerSetInstalled( AugmentSlot slot, InventorySlot stack )
-	{
-		ApplyInstalledLocal( slot, stack );
-
-		if ( HasHostAuthority )
-		{
-			NotifyChanged();
-			return;
-		}
-
-		if ( !IsLocalManagingClient() )
-			return;
-
-		RpcHostSetInstalled( (int)slot, stack.ResourceId ?? string.Empty, stack.Count );
-	}
-
-	void OwnerSetBank( int index, InventorySlot stack )
-	{
-		ApplyBankLocal( index, stack );
-
-		if ( HasHostAuthority )
-		{
-			NotifyChanged();
-			return;
-		}
-
-		if ( !IsLocalManagingClient() )
-			return;
-
-		RpcHostSetBank( index, stack.ResourceId ?? string.Empty, stack.Count );
-	}
 
 	void ApplyInstalledLocal( AugmentSlot slot, InventorySlot stack )
 	{
@@ -908,58 +951,106 @@ public sealed partial class PlayerAugments : Component
 		HostTryCommitAugments();
 	}
 
-	[Rpc.Host]
-	void RpcHostSetInstalled( int slotIndex, string resourceId, int count )
+	// ── Remote owner intent: bank and sockets acted on with the pawn's host cursor (PlayerInventory.HostCursor.cs) ──
+
+	/// <summary>Host: a bank stack lands on the pawn's host cursor.</summary>
+	public void HostCursorPickupBank( int index )
 	{
-		if ( !Networking.IsHost || !GameObject.IsValid() || !IsCallerOwner() )
-			return;
-
-		if ( slotIndex < 0 || slotIndex >= AugmentSlots.Count )
-			return;
-
-		var stack = string.IsNullOrWhiteSpace( resourceId ) || count <= 0
-			? InventorySlot.Empty
-			: new InventorySlot
-			{
-				ResourceId = ResourceCatalog.NormalizeResourceId( resourceId ),
-				Count = Math.Max( 1, count ),
-			};
-
-		if ( !stack.IsEmpty )
+		if ( ResolveInventory() is { } cursor )
 		{
-			var slot = (AugmentSlot)slotIndex;
-			if ( !IsSlotUnlocked( slot )
-			     || !AugmentCatalog.TryGet( stack.ResourceId, out var def )
-			     || !def.AllowsSlot( slot ) )
-				return;
+			cursor.HostCursorMakeRoomFor( GetBankSlot( index ).ResourceId );
+			if ( PickupBank( index, out var picked ) )
+				cursor.HostCursorCredit( picked );
 		}
 
-		ApplyInstalledLocal( (AugmentSlot)slotIndex, stack );
 		PushFullStateToOwner();
 	}
 
-	[Rpc.Host]
-	void RpcHostSetBank( int index, string resourceId, int count )
+	/// <summary>Host: the pawn's host cursor goes into a bank slot.</summary>
+	public void HostCursorPlaceHeldBank( int index )
 	{
-		if ( !Networking.IsHost || !GameObject.IsValid() || !IsCallerOwner() )
-			return;
+		if ( ResolveInventory() is { } cursor )
+			PlaceHeldBank( index, ref cursor.HostCursor );
 
-		if ( index < 0 || index >= BankSlotCount )
-			return;
-
-		var stack = string.IsNullOrWhiteSpace( resourceId ) || count <= 0
-			? InventorySlot.Empty
-			: new InventorySlot
-			{
-				ResourceId = ResourceCatalog.NormalizeResourceId( resourceId ),
-				Count = Math.Max( 1, count ),
-			};
-
-		if ( !stack.IsEmpty && !AugmentCatalog.IsAugment( stack.ResourceId ) )
-			return;
-
-		ApplyBankLocal( index, stack );
 		PushFullStateToOwner();
+	}
+
+	public void HostSwapBank( int source, int target )
+	{
+		SwapBank( source, target );
+		PushFullStateToOwner();
+	}
+
+	/// <summary>Host: a socketed augment lands on the pawn's host cursor.</summary>
+	public void HostCursorPickupInstalled( AugmentSlot slot )
+	{
+		if ( ResolveInventory() is { } cursor )
+		{
+			cursor.HostCursorMakeRoomFor( GetInstalled( slot ).ResourceId );
+			if ( PickupInstalled( slot, out var picked ) )
+				cursor.HostCursorCredit( picked );
+		}
+
+		PushFullStateToOwner();
+	}
+
+	/// <summary>Host: one augment from the pawn's host cursor goes into a socket.</summary>
+	public void HostCursorPlaceIntoInstalled( AugmentSlot slot )
+	{
+		if ( ResolveInventory() is { } cursor )
+			PlaceIntoInstalled( slot, ref cursor.HostCursor );
+
+		PushFullStateToOwner();
+	}
+
+	public void HostSwapInstalled( AugmentSlot source, AugmentSlot target )
+	{
+		SwapInstalled( source, target );
+		PushFullStateToOwner();
+	}
+
+	bool AcceptsOwnerRpc() => Networking.IsHost && GameObject.IsValid() && IsCallerOwner();
+
+	[Rpc.Host]
+	void RpcHostPickupBank( int index )
+	{
+		if ( AcceptsOwnerRpc() )
+			HostCursorPickupBank( index );
+	}
+
+	[Rpc.Host]
+	void RpcHostPlaceHeldBank( int index )
+	{
+		if ( AcceptsOwnerRpc() )
+			HostCursorPlaceHeldBank( index );
+	}
+
+	[Rpc.Host]
+	void RpcHostSwapBank( int source, int target )
+	{
+		if ( AcceptsOwnerRpc() )
+			HostSwapBank( source, target );
+	}
+
+	[Rpc.Host]
+	void RpcHostPickupInstalled( int slotIndex )
+	{
+		if ( AcceptsOwnerRpc() )
+			HostCursorPickupInstalled( (AugmentSlot)slotIndex );
+	}
+
+	[Rpc.Host]
+	void RpcHostPlaceIntoInstalled( int slotIndex )
+	{
+		if ( AcceptsOwnerRpc() )
+			HostCursorPlaceIntoInstalled( (AugmentSlot)slotIndex );
+	}
+
+	[Rpc.Host]
+	void RpcHostSwapInstalled( int source, int target )
+	{
+		if ( AcceptsOwnerRpc() )
+			HostSwapInstalled( (AugmentSlot)source, (AugmentSlot)target );
 	}
 
 	[Rpc.Owner]

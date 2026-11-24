@@ -86,6 +86,10 @@ public sealed class EquipmentProfileData
 
 	public EquipmentStatModifiersData StatModifiers { get; set; } = new();
 
+	/// <summary>Carry weight of the item (0.1 steps). Unset (negative) = <see cref="InventoryWeight.DefaultGearWeight"/> (5 for every tool, weapon and armor piece).</summary>
+	[JsonPropertyName( "weight" )]
+	public float Weight { get; set; } = -1f;
+
 	/// <summary>Weight band for worn pieces: <c>light</c> / <c>medium</c> / <c>heavy</c>. Empty = weightless (no run-speed cost).</summary>
 	[JsonPropertyName( "armorWeight" )]
 	public string ArmorWeight { get; set; } = string.Empty;

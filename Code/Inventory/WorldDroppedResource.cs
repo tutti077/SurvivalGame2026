@@ -3,11 +3,19 @@ using Sandbox;
 
 namespace Survival;
 
-/// <summary>Physics world pickup spawned when the player drops a stack from the hotbar.</summary>
+/// <summary>
+/// World pickup: an inventory drop, harvest / chop / mining loot, animal loot, a stuck arrow.
+/// Nobody can vacuum it until the host flags <see cref="PickupReady"/>: 1 s after it first touches the ground,
+/// 5 s for a stack dropped out of an inventory (Mark 2026-11-16).
+/// It has a collider and a body only while it falls: once it lies still (<see cref="Settled"/>) both are switched
+/// off on every machine, so a loose item never blocks or bumps anything (Mark 2026-11-23). Pickup is the registry
+/// magnet (<see cref="PlayerHandHarvest"/>), never a trace.
+/// </summary>
 [Title( "World Dropped Resource" )]
-public sealed class WorldDroppedResource : Component
+public sealed class WorldDroppedResource : Component, Component.ICollisionListener
 {
-	const float DropperSelfPickupDelaySeconds = 5f;
+	const float LandedPickupDelaySeconds = 1f;
+	const float InventoryDropPickupDelaySeconds = 5f;
 	const float MergeReadyDelaySeconds = 5f;
 
 	[Sync, Property, Group( "Pickup" )]
@@ -36,6 +44,14 @@ public sealed class WorldDroppedResource : Component
 	[Property, Group( "Pickup" ), Title( "Despawn after (s)" )]
 	public float DespawnAfterSeconds { get; set; }
 
+	/// <summary>Host sets this once the drop has lain on the ground for its pickup delay; every pawn's magnet waits for it.</summary>
+	[Sync]
+	public bool PickupReady { get; set; }
+
+	/// <summary>Host sets this when the drop has come to rest (or the magnet takes it): its colliders and body go off everywhere.</summary>
+	[Sync, Change( nameof( OnSettledChanged ) )]
+	public bool Settled { get; set; }
+
 	public bool IsAvailable => Count > 0 && Active && GameObject.IsValid() && GameObject.Enabled;
 
 	double _despawnAt = -1;
@@ -52,10 +68,10 @@ public sealed class WorldDroppedResource : Component
 		&& _spawnedAt >= 0
 		&& Time.NowDouble - _spawnedAt >= MergeReadyDelaySeconds;
 
-	double _droppedAt = -1;
 	double _spawnedAt = -1;
 	double _mergeEligibleAt = -1;
-	Guid _dropperConnectionId = Guid.Empty;
+	double _landedAt = -1;
+	bool _inventoryDrop;
 
 	Rigidbody _body;
 	double _settledSince = -1;
@@ -103,10 +119,36 @@ public sealed class WorldDroppedResource : Component
 		_despawnAt = Time.NowDouble + DespawnAfterSeconds;
 	}
 
-	public void SetDropper( GameObject dropper )
+	/// <summary>
+	/// Host: a unit dropped out of an inventory waits <see cref="InventoryDropPickupDelaySeconds"/> on the ground, not 1 s,
+	/// and never clumps with its neighbours (a dumped stack stays a visible spread of singles).
+	/// </summary>
+	public void MarkInventoryDrop()
 	{
-		_droppedAt = Time.NowDouble;
-		_dropperConnectionId = ResolveConnection( dropper )?.Id ?? Guid.Empty;
+		_inventoryDrop = true;
+		PreventMerge = true;
+	}
+
+	public void OnCollisionStart( Collision collision ) => MarkLanded();
+
+	void MarkLanded()
+	{
+		if ( _landedAt < 0 && IsHostAuthority )
+			_landedAt = Time.NowDouble;
+	}
+
+	void TickPickupReady()
+	{
+		// No moving body (stuck arrow, frozen pile) = already lying where it will be picked up.
+		if ( _landedAt < 0 && (_body is null || !_body.IsValid() || !_body.MotionEnabled) )
+			MarkLanded();
+
+		if ( PickupReady || _landedAt < 0 )
+			return;
+
+		var delay = _inventoryDrop ? InventoryDropPickupDelaySeconds : LandedPickupDelaySeconds;
+		if ( Time.NowDouble - _landedAt >= delay )
+			PickupReady = true;
 	}
 
 	public int StackCount => Math.Max( 0, Count );
@@ -116,6 +158,8 @@ public sealed class WorldDroppedResource : Component
 		base.OnStart();
 		_body = Components.Get<Rigidbody>();
 		MarkSpawnedIfNeeded();
+		if ( Settled )
+			DisablePhysics();   // joined after it landed
 	}
 
 	void MarkSpawnedIfNeeded()
@@ -150,6 +194,8 @@ public sealed class WorldDroppedResource : Component
 
 		if ( _body is null || !_body.IsValid() )
 			_body = Components.Get<Rigidbody>();
+
+		TickPickupReady();
 
 		if ( _body is null || !_body.IsValid() || !_body.MotionEnabled )
 			return;
@@ -186,30 +232,39 @@ public sealed class WorldDroppedResource : Component
 		_body.AngularVelocity = Vector3.Zero;
 		_body.MotionEnabled = false;
 		_settledSince = -1;
+		MarkLanded();
+		Settle();
 		WorldDroppedResourceMerge.TryMergeCluster( this );
 	}
 
-	public static bool TryFindOnHierarchy( GameObject hitObject, out WorldDroppedResource drop )
+	/// <summary>Host: the fall is over - from here the drop is a model with no collider and no body.</summary>
+	void Settle()
 	{
-		drop = null;
-		if ( hitObject is null || !hitObject.IsValid() )
-			return false;
+		Settled = true;
+		DisablePhysics();
+	}
 
-		for ( var current = hitObject; current.IsValid(); current = current.Parent )
+	void OnSettledChanged( bool oldValue, bool newValue )
+	{
+		if ( newValue )
+			DisablePhysics();
+	}
+
+	void DisablePhysics()
+	{
+		foreach ( var collider in Components.GetAll<Collider>( FindMode.EverythingInSelf ) )
 		{
-			var candidate = current.Components.Get<WorldDroppedResource>();
-			if ( candidate is null || !candidate.IsAvailable )
-				continue;
-
-			drop = candidate;
-			return true;
+			if ( collider is not null && collider.IsValid() )
+				collider.Enabled = false;
 		}
 
-		return false;
+		var body = Components.Get<Rigidbody>( FindMode.EverythingInSelf );
+		if ( body is not null && body.IsValid() )
+			body.Enabled = false;
 	}
 
 	/// <summary>
-	/// Disable physics and move toward a magnet target (loot vacuum). Safe to call every frame.
+	/// Host: stop the fall and move toward a magnet target (loot vacuum). Safe to call every frame.
 	/// </summary>
 	public void AttractToward( Vector3 worldTarget, float maxStep, float shrinkStartDistance )
 	{
@@ -219,11 +274,16 @@ public sealed class WorldDroppedResource : Component
 		if ( _body is null || !_body.IsValid() )
 			_body = Components.Get<Rigidbody>();
 
-		if ( _body is not null && _body.IsValid() )
+		if ( !Settled )
 		{
-			_body.Velocity = Vector3.Zero;
-			_body.AngularVelocity = Vector3.Zero;
-			_body.MotionEnabled = false;
+			if ( _body is not null && _body.IsValid() )
+			{
+				_body.Velocity = Vector3.Zero;
+				_body.AngularVelocity = Vector3.Zero;
+				_body.MotionEnabled = false;
+			}
+
+			Settle();
 		}
 
 		if ( !_magnetBaseScaleCached )
@@ -251,28 +311,10 @@ public sealed class WorldDroppedResource : Component
 		}
 	}
 
-	public bool CanPickupFor( GameObject picker )
-	{
-		if ( !IsAvailable || picker is null || !picker.IsValid() )
-			return false;
-
-		if ( _droppedAt < 0 || _dropperConnectionId == Guid.Empty )
-			return true;
-
-		if ( Time.NowDouble - _droppedAt < DropperSelfPickupDelaySeconds )
-		{
-			var pickerConn = ResolveConnection( picker );
-			if ( pickerConn is not null && pickerConn.Id == _dropperConnectionId )
-				return false;
-		}
-
-		return true;
-	}
-
 	public bool CanPickupInto( PlayerInventory inventory ) =>
-		IsAvailable
+		PickupReady
+		&& IsAvailable
 		&& inventory is not null
-		&& CanPickupFor( inventory.GameObject )
 		&& inventory.CanAcceptResource( ResourceId, StackCount );
 
 	public bool TryPickup( PlayerInventory inventory )
@@ -286,16 +328,5 @@ public sealed class WorldDroppedResource : Component
 		Count = 0;
 		GameObject.Destroy();
 		return true;
-	}
-
-	static Connection ResolveConnection( GameObject go )
-	{
-		if ( go is null || !go.IsValid() )
-			return Connection.Local;
-
-		if ( go.Network is { Active: true, Owner: { } owner } )
-			return owner;
-
-		return Connection.Local;
 	}
 }

@@ -37,9 +37,6 @@ public sealed class ContainerInventoryGridHost : IInventoryGridHost
 	public bool OwnerTryPlaceHeld( int slotIndex, ref InventoryCursorStack held ) =>
 		IsActive && Container.OwnerTryPlaceHeld( slotIndex, ref held );
 
-	public bool OwnerTryReturnStack( ref InventoryCursorStack held ) =>
-		IsActive && Container.OwnerTryAbsorbStack( ref held );
-
 	public bool OwnerTryTakeOne( int slotIndex, out InventorySlot taken )
 	{
 		taken = InventorySlot.Empty;

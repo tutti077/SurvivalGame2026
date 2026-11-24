@@ -1,6 +1,10 @@
 namespace Survival;
 
-/// <summary>Client-side stack held on the cursor while the inventory menu is open.</summary>
+/// <summary>
+/// Stack held on the cursor while the inventory menu is open. The local player's lives on
+/// <c>PlayerInventoryInteraction</c>; for a remote owner the host keeps its own copy on
+/// <c>PlayerInventory.HostCursor</c> and never accepts one sent by the client.
+/// </summary>
 public struct InventoryCursorStack
 {
 	public string ResourceId { get; private set; }

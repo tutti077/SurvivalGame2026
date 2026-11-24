@@ -5,9 +5,10 @@ namespace Survival;
 
 /// <summary>
 /// Per-pawn item storage (host-authoritative). Slots fill row-major from top-left; same resource stacks when already present.
+/// A remote owner's drag-and-drop goes through the host cursor in <c>PlayerInventory.HostCursor.cs</c>.
 /// </summary>
 [Title( "Player Inventory" )]
-public sealed class PlayerInventory : Component
+public sealed partial class PlayerInventory : Component
 {
 	[Property] public int SlotCount { get; set; } = InventoryDefaults.DefaultSlotCount;
 
@@ -222,28 +223,6 @@ public sealed class PlayerInventory : Component
 		return true;
 	}
 
-	/// <summary>Host/offline: deposit multiple harvest loot lines (guaranteed lines should be pre-checked).</summary>
-	public bool HostTryAddHarvestLoot( HarvestLootItem[] loot )
-	{
-		if ( loot is null || loot.Length == 0 )
-			return false;
-
-		if ( !HasHostAuthority )
-			return false;
-
-		var addedAny = false;
-		foreach ( var item in loot )
-		{
-			if ( item.Amount <= 0 || string.IsNullOrWhiteSpace( item.ResourceId ) )
-				continue;
-
-			if ( HostTryAddResource( item.ResourceId, item.Amount ) )
-				addedAny = true;
-		}
-
-		return addedAny;
-	}
-
 	/// <summary>How much of <paramref name="amount"/> can fit (hotbar stacks + binding ghosts, then inventory).</summary>
 	public int PeekAcceptAmount( string resourceId, int amount )
 	{
@@ -424,7 +403,12 @@ public sealed class PlayerInventory : Component
 	void NotifyInventoryChanged()
 	{
 		InventoryChanged?.Invoke();
+		PushSlotsToOwner();
+	}
 
+	/// <summary>Host: send the real slots to a remote owner (after a change, or to undo a prediction the host refused).</summary>
+	void PushSlotsToOwner()
+	{
 		if ( GameObject.Network is not { Active: true } || !Networking.IsHost )
 			return;
 
@@ -514,27 +498,8 @@ public sealed class PlayerInventory : Component
 		if ( !TryGetSlotRef( slotIndex, out _ ) )
 			return false;
 
-		RpcHostPlaceHeld( slotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, held.Tier );
+		RpcHostPlaceHeld( slotIndex );
 		return ClientTryApplyPlaceHeld( slotIndex, ref held );
-	}
-
-	/// <summary>Drag-drop swap: held stack goes to <paramref name="targetSlotIndex"/>, displaced stack returns to <paramref name="sourceSlotIndex"/>.</summary>
-	public bool OwnerTrySwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
-	{
-		if ( held.IsEmpty || !IsLocalManagingClient() || sourceSlotIndex == targetSlotIndex )
-			return false;
-
-		if ( HasHostAuthority )
-			return HostTrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref held );
-
-		if ( !TryGetSlotRef( targetSlotIndex, out var target ) || target.IsEmpty )
-			return false;
-
-		if ( string.Equals( target.ResourceId, held.ResourceId, StringComparison.OrdinalIgnoreCase ) )
-			return false;
-
-		RpcHostSwapDragToSlot( sourceSlotIndex, targetSlotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, held.Tier );
-		return ClientTryApplySwapDrag( sourceSlotIndex, targetSlotIndex, ref held );
 	}
 
 	/// <summary>Completes a left-drag onto <paramref name="targetSlotIndex"/> (swap when occupied by a different item).</summary>
@@ -549,7 +514,7 @@ public sealed class PlayerInventory : Component
 		if ( !TryGetSlotRef( targetSlotIndex, out _ ) )
 			return false;
 
-		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, held.Tier );
+		RpcHostFinishDragDrop( sourceSlotIndex, targetSlotIndex );
 		return ClientTryApplyFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
 	}
 
@@ -611,7 +576,7 @@ public sealed class PlayerInventory : Component
 		if ( !InventoryStackRules.DropOne( _slots, slotIndex, held, out placedCount ) )
 			return false;
 
-		RpcHostDropOne( slotIndex, held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, held.Tier );
+		RpcHostDropOne( slotIndex );
 		NotifyInventoryChanged();
 		return true;
 	}
@@ -651,17 +616,11 @@ public sealed class PlayerInventory : Component
 		if ( HasHostAuthority )
 			return HostTryPlaceHalf( slotIndex, ref held );
 
-		var heldResourceId = held.ResourceId;
-		var heldCount = held.Count;
-		var heldWear = held.Wear;
-		var heldCrafter = held.CrafterName ?? string.Empty;
-		var heldTier = held.Tier;
-
 		EnsureSlotArray();
 		if ( !InventoryStackRules.PlaceHalf( _slots, slotIndex, ref held ) )
 			return false;
 
-		RpcHostPlaceHalf( slotIndex, heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
+		RpcHostPlaceHalf( slotIndex );
 		NotifyInventoryChanged();
 		return true;
 	}
@@ -699,20 +658,6 @@ public sealed class PlayerInventory : Component
 
 		EnsureSlotArray();
 		if ( !InventoryStackRules.PlaceHeld( _slots, slotIndex, ref held ) )
-			return false;
-
-		NotifyInventoryChanged();
-		return true;
-	}
-
-	/// <summary>Drag-drop swap between slots (source was emptied when the drag started).</summary>
-	public bool HostTrySwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
-	{
-		if ( !HasHostAuthority )
-			return false;
-
-		EnsureSlotArray();
-		if ( !InventoryStackRules.SwapDragToSlot( _slots, sourceSlotIndex, targetSlotIndex, ref held ) )
 			return false;
 
 		NotifyInventoryChanged();
@@ -822,13 +767,11 @@ public sealed class PlayerInventory : Component
 		return false;
 	}
 
-	public bool HostTryReturnStack( in InventoryCursorStack held )
-	{
-		var copy = held;
-		return HostTryAbsorbCursorStackIntoBag( ref copy );
-	}
-
-	/// <summary>Merges held stack into bag slots (matching stacks, then empties). Returns true if fully absorbed.</summary>
+	/// <summary>
+	/// Merges held stack into bag slots (matching stacks, then empties). Returns true if fully absorbed.
+	/// A remote owner only predicts: the host returns its own cursor to the bag and drops what does not fit
+	/// at the pawn's feet, so <paramref name="held"/> always comes back empty there.
+	/// </summary>
 	public bool OwnerTryAbsorbCursorStackIntoBag( ref InventoryCursorStack held )
 	{
 		if ( held.IsEmpty || !IsLocalManagingClient() )
@@ -837,23 +780,16 @@ public sealed class PlayerInventory : Component
 		if ( HasHostAuthority )
 			return HostTryAbsorbCursorStackIntoBag( ref held );
 
-		RpcHostAbsorbCursorStackIntoBag( held.ResourceId, held.Count, held.Wear, held.CrafterName ?? string.Empty, held.Tier );
-		return ClientTryApplyAbsorbCursorStackIntoBag( ref held );
+		RpcHostSettleCursor();
+		AbsorbCursorStackIntoBagSlots( ref held, notify: true );
+		held.Clear();
+		return true;
 	}
 
 	public bool HostTryAbsorbCursorStackIntoBag( ref InventoryCursorStack held )
 	{
 		if ( held.IsEmpty || !HasHostAuthority )
 			return false;
-
-		AbsorbCursorStackIntoBagSlots( ref held, notify: true );
-		return held.IsEmpty;
-	}
-
-	bool ClientTryApplyAbsorbCursorStackIntoBag( ref InventoryCursorStack held )
-	{
-		if ( HasHostAuthority )
-			return HostTryAbsorbCursorStackIntoBag( ref held );
 
 		AbsorbCursorStackIntoBagSlots( ref held, notify: true );
 		return held.IsEmpty;
@@ -927,19 +863,6 @@ public sealed class PlayerInventory : Component
 		return true;
 	}
 
-	bool ClientTryApplySwapDrag( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
-	{
-		if ( HasHostAuthority )
-			return HostTrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref held );
-
-		EnsureSlotArray();
-		if ( !InventoryStackRules.SwapDragToSlot( _slots, sourceSlotIndex, targetSlotIndex, ref held ) )
-			return false;
-
-		NotifyInventoryChanged();
-		return true;
-	}
-
 	bool ClientTryApplyFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, ref InventoryCursorStack held )
 	{
 		if ( HasHostAuthority )
@@ -967,105 +890,9 @@ public sealed class PlayerInventory : Component
 	}
 
 	[Rpc.Host]
-	void RpcHostPickupAll( int slotIndex )
-	{
-		if ( !Networking.IsHost )
-			return;
-
-		HostTryPickupAll( slotIndex, out _ );
-	}
-
-	[Rpc.Host]
-	void RpcHostAbsorbCursorStackIntoBag( string resourceId, int count, int wear, string crafter, int tier )
-	{
-		if ( !Networking.IsHost )
-			return;
-
-		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear, crafter, tier );
-		HostTryAbsorbCursorStackIntoBag( ref held );
-
-		if ( !held.IsEmpty )
-			HeldStackWorldDrop.TryDrop( GameObject, ref held );
-	}
-
-	[Rpc.Host]
-	void RpcHostPlaceHeld( int slotIndex, string resourceId, int count, int wear, string crafter, int tier )
-	{
-		if ( !Networking.IsHost )
-			return;
-
-		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear, crafter, tier );
-		HostTryPlaceHeld( slotIndex, ref held );
-	}
-
-	[Rpc.Host]
-	void RpcHostSwapDragToSlot( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count, int wear, string crafter, int tier )
-	{
-		if ( !Networking.IsHost )
-			return;
-
-		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear, crafter, tier );
-		HostTrySwapDragToSlot( sourceSlotIndex, targetSlotIndex, ref held );
-	}
-
-	[Rpc.Host]
-	void RpcHostFinishDragDrop( int sourceSlotIndex, int targetSlotIndex, string resourceId, int count, int wear, string crafter, int tier )
-	{
-		if ( !Networking.IsHost )
-			return;
-
-		var held = new InventoryCursorStack();
-		held.Set( resourceId, count, wear, crafter, tier );
-		HostTryFinishDragDrop( sourceSlotIndex, targetSlotIndex, ref held );
-	}
-
-	[Rpc.Host]
-	void RpcHostTakeOne( int slotIndex )
-	{
-		if ( !Networking.IsHost )
-			return;
-
-		HostTryTakeOne( slotIndex );
-	}
-
-	[Rpc.Host]
-	void RpcHostDropOne( int slotIndex, string heldResourceId, int heldCount, int heldWear, string heldCrafter, int heldTier )
-	{
-		if ( !Networking.IsHost )
-			return;
-
-		var held = new InventoryCursorStack();
-		held.Set( heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
-		HostTryDropOne( slotIndex, held );
-	}
-
-	[Rpc.Host]
-	void RpcHostTakeHalf( int slotIndex )
-	{
-		if ( !Networking.IsHost )
-			return;
-
-		HostTryTakeHalf( slotIndex );
-	}
-
-	[Rpc.Host]
-	void RpcHostPlaceHalf( int slotIndex, string heldResourceId, int heldCount, int heldWear, string heldCrafter, int heldTier )
-	{
-		if ( !Networking.IsHost )
-			return;
-
-		var held = new InventoryCursorStack();
-		held.Set( heldResourceId, heldCount, heldWear, heldCrafter, heldTier );
-		HostTryPlaceHalf( slotIndex, ref held );
-	}
-
-	[Rpc.Host]
 	void RpcHostQuickMove( int fromSlotIndex, string targetGridId )
 	{
-		if ( !Networking.IsHost || string.IsNullOrWhiteSpace( targetGridId ) )
+		if ( !AcceptsOwnerRpc() || string.IsNullOrWhiteSpace( targetGridId ) )
 			return;
 
 		var grid = new PlayerInventoryGridHost( targetGridId, this );
@@ -1133,7 +960,7 @@ public sealed class PlayerInventory : Component
 	[Rpc.Host]
 	void RpcHostCraftRecipe( string recipeId )
 	{
-		if ( !Networking.IsHost )
+		if ( !AcceptsOwnerRpc() )
 			return;
 
 		TryCraftRecipeOnHost( recipeId );
