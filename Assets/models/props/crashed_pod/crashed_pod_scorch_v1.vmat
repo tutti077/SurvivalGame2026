@@ -1,0 +1,12 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+	F_ALPHA_TEST 1
+	PixelAlphaCutoff "0.500"
+	TextureTranslucency "models/props/crashed_pod/crashed_pod_scorch_v1_mask.png"
+
+	PixelRoughness "1.000"
+	PixelSpecular "0.000"
+	PixelFlatShading "1.000"
+	TextureColor "models/props/crashed_pod/crashed_pod_scorch_v1.png"
+}

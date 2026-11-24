@@ -1,0 +1,9 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.950"
+	PixelSpecular "0.000"
+	PixelFlatShading "1.000"
+	TextureColor "models/props/crashed_pod/crashed_pod_pad_v1.png"
+}

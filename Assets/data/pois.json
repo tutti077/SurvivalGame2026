@@ -1,0 +1,132 @@
+{
+  // Points of interest (Code/Pois, Mark 2026-11-19). Two kinds:
+  //   structures  discoverable: generated with the world, found by walking into them. Each row is a grid of world cells
+  //               spacingMeters wide; a cell rolls chance, then needs open, flat, dry ground in its biome (the scav camps'
+  //               site rules) and builds one of its layouts, picked by hash. seedSalt keeps two rows off the same cells.
+  //   landmarks   distant + visible: a prefab scattered with the large trees (it exists out to Tree Objects Range, so the
+  //               smoke over it shows from far off). chancePerChunk = chance one 64 m chunk of the biome holds it;
+  //               clearingRadiusMeters keeps it out of the trees; bareGroundRadiusMeters = no grass clumps within this radius (the terrain itself is not painted: the prefab brings its own ground).
+  "structures": [
+    {
+      // Abandoned, seemingly player-built shelters: a chest, an unlit campfire, a roasting spit, a bed nobody owns.
+      "id": "abandoned_structure",
+      "displayName": "Abandoned Structure",
+      "biome": "CloverHills",
+      "spacingMeters": 450,
+      "chance": 0.85,
+      "seedSalt": 900,
+      "layouts": [ "abandoned_shack", "abandoned_cabin", "abandoned_leanto" ]
+    }
+  ],
+  "landmarks": [
+    {
+      // Crashed stasis pod under a smoke column (prefabs/props/crashed_pod_v1.prefab: MineableRock -> scrap, SmokeColumn).
+      "id": "crashed_pod",
+      "displayName": "Crashed Stasis Pod",
+      "biome": "CloverHills",
+      "prefab": "prefabs/props/crashed_pod_v1.prefab",
+      "chancePerChunk": 0.02,
+      "seedSalt": 0,
+      "clearingRadiusMeters": 7,
+      "bareGroundRadiusMeters": 3.85
+    }
+  ],
+  // Layouts: build pieces as offsets from the structure's origin, in metres at the build kit's scale (a 2 m floor is one
+  // tile). X = forward, Y = left, z = height of the piece's underside above the ground at the origin. Pieces are listed
+  // bottom-up (floors, walls, roof, furniture) so each stands on what is already there. "loot" on a container piece
+  // names a table below. Piece frames at yawDegrees 0: a wall stands across X (it runs along Y); a 45 roof is low on -X.
+  "layouts": [
+    {
+      "id": "abandoned_shack",
+      "displayName": "Abandoned Shack",
+      "pieces": [
+        { "pieceId": "build_wood_floor", "x": -1, "y": -1 },
+        { "pieceId": "build_wood_floor", "x": -1, "y": 1 },
+        { "pieceId": "build_wood_floor", "x": 1, "y": -1 },
+        { "pieceId": "build_wood_floor", "x": 1, "y": 1 },
+        { "pieceId": "build_wood_wall", "x": -2, "y": -1, "z": 0.25 },
+        { "pieceId": "build_wood_wall", "x": -2, "y": 1, "z": 0.25 },
+        { "pieceId": "build_wood_wall", "x": 2, "y": -1, "z": 0.25 },
+        { "pieceId": "build_wood_wall", "x": 2, "y": 1, "z": 0.25 },
+        { "pieceId": "build_wood_wall", "x": -1, "y": 2, "z": 0.25, "yawDegrees": 90 },
+        { "pieceId": "build_wood_wall", "x": -1, "y": -2, "z": 0.25, "yawDegrees": 90 },
+        { "pieceId": "build_wood_door", "x": 1, "y": -2, "z": 0.25, "yawDegrees": 90 },
+        { "pieceId": "build_wood_45roof", "x": -1, "y": -1, "z": 2.25 },
+        { "pieceId": "build_wood_45roof", "x": -1, "y": 1, "z": 2.25 },
+        { "pieceId": "build_wood_45roof", "x": 1, "y": -1, "z": 2.25, "yawDegrees": 180 },
+        { "pieceId": "bed", "x": -1.2, "y": 0.6, "z": 0.25 },
+        { "pieceId": "chest", "x": 1.3, "y": 1.3, "z": 0.25, "loot": "abandoned_shelter" },
+        { "pieceId": "furniture_campfire", "x": 0.6, "y": -0.5, "z": 0.25 },
+        { "pieceId": "roasting_spit", "x": 0.6, "y": -0.5, "z": 0.25, "yawDegrees": 30 }
+      ]
+    },
+    {
+      "id": "abandoned_cabin",
+      "displayName": "Abandoned Cabin",
+      "pieces": [
+        { "pieceId": "build_wood_floor", "x": -2, "y": -1 },
+        { "pieceId": "build_wood_floor", "x": -2, "y": 1 },
+        { "pieceId": "build_wood_floor", "x": 0, "y": -1 },
+        { "pieceId": "build_wood_floor", "x": 0, "y": 1 },
+        { "pieceId": "build_wood_floor", "x": 2, "y": -1 },
+        { "pieceId": "build_wood_floor", "x": 2, "y": 1 },
+        { "pieceId": "build_wood_wall", "x": -3, "y": -1, "z": 0.25 },
+        { "pieceId": "build_wood_wall", "x": -3, "y": 1, "z": 0.25 },
+        { "pieceId": "build_wood_wall", "x": 3, "y": -1, "z": 0.25 },
+        { "pieceId": "build_wood_wall_2m1m", "x": 3, "y": 1, "z": 0.25 },
+        { "pieceId": "build_wood_wall", "x": -2, "y": 2, "z": 0.25, "yawDegrees": 90 },
+        { "pieceId": "build_wood_wall", "x": 0, "y": 2, "z": 0.25, "yawDegrees": 90 },
+        { "pieceId": "build_wood_wall", "x": -2, "y": -2, "z": 0.25, "yawDegrees": 90 },
+        { "pieceId": "build_wood_door", "x": 0, "y": -2, "z": 0.25, "yawDegrees": 90 },
+        { "pieceId": "build_wood_wall", "x": 2, "y": -2, "z": 0.25, "yawDegrees": 90 },
+        { "pieceId": "build_wood_45roof", "x": -2, "y": -1, "z": 2.25, "yawDegrees": 90 },
+        { "pieceId": "build_wood_45roof", "x": 0, "y": -1, "z": 2.25, "yawDegrees": 90 },
+        { "pieceId": "build_wood_45roof", "x": -2, "y": 1, "z": 2.25, "yawDegrees": -90 },
+        { "pieceId": "build_wood_45roof", "x": 0, "y": 1, "z": 2.25, "yawDegrees": -90 },
+        { "pieceId": "bed", "x": -1.9, "y": 1.2, "z": 0.25, "yawDegrees": 90 },
+        { "pieceId": "chest", "x": -2.3, "y": -1.2, "z": 0.25, "loot": "abandoned_shelter" },
+        { "pieceId": "furniture_campfire", "x": 1.4, "y": 0.2, "z": 0.25 },
+        { "pieceId": "roasting_spit", "x": 1.4, "y": 0.2, "z": 0.25, "yawDegrees": 70 }
+      ]
+    },
+    {
+      "id": "abandoned_leanto",
+      "displayName": "Abandoned Lean-to",
+      "pieces": [
+        { "pieceId": "build_wood_floor", "x": 0, "y": -1 },
+        { "pieceId": "build_wood_floor", "x": 0, "y": 1 },
+        { "pieceId": "build_wood_wall", "x": -1, "y": -1, "z": 0.25 },
+        { "pieceId": "build_wood_wall", "x": -1, "y": 1, "z": 0.25 },
+        { "pieceId": "build_wood_wall", "x": 0, "y": 2, "z": 0.25, "yawDegrees": 90 },
+        { "pieceId": "build_wood_wall", "x": 0, "y": -2, "z": 0.25, "yawDegrees": 90 },
+        { "pieceId": "build_wood_verticalBeam_2m", "x": 1, "y": -2, "z": 0.25 },
+        { "pieceId": "build_wood_verticalBeam_2m", "x": 1, "y": 2, "z": 0.25 },
+        { "pieceId": "build_wood_verticalBeam_2m", "x": 1, "y": -2, "z": 2.25 },
+        { "pieceId": "build_wood_verticalBeam_2m", "x": 1, "y": 2, "z": 2.25 },
+        { "pieceId": "build_wood_45roof", "x": 0, "y": -1, "z": 2.25 },
+        { "pieceId": "build_wood_45roof", "x": 0, "y": 1, "z": 2.25 },
+        { "pieceId": "bed", "x": -0.3, "y": 0.9, "z": 0.25 },
+        { "pieceId": "chest", "x": -0.35, "y": -1.3, "z": 0.25, "loot": "abandoned_shelter" },
+        { "pieceId": "furniture_campfire", "x": 2.8, "y": 0, "z": 0 },
+        { "pieceId": "roasting_spit", "x": 2.8, "y": 0, "z": 0, "yawDegrees": 90 }
+      ]
+    }
+  ],
+  // What a chest holds: stacks = [min, max] different items per chest, each line min-max of one item,
+  // weight = how often it is picked against the other lines. Rolled once when the structure is built.
+  "lootTables": [
+    {
+      "id": "abandoned_shelter",
+      "stacks": [ 2, 4 ],
+      "items": [
+        { "resourceId": "resource_woodBasic",   "min": 6, "max": 14, "weight": 3 },
+        { "resourceId": "resource_stone",       "min": 4, "max": 10, "weight": 2 },
+        { "resourceId": "resource_plantFiber",  "min": 4, "max": 10, "weight": 2 },
+        { "resourceId": "resource_flint",       "min": 1, "max": 3,  "weight": 1 },
+        { "resourceId": "resource_scrap",       "min": 1, "max": 4,  "weight": 1 },
+        { "resourceId": "resource_goldCoins",   "min": 2, "max": 8,  "weight": 1 },
+        { "resourceId": "food_roasted_mushroom", "min": 1, "max": 2, "weight": 1 }
+      ]
+    }
+  ]
+}

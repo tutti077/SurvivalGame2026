@@ -323,6 +323,8 @@ Code/
                    resource + equipment catalogs, Tests/InventoryTest (inventory_test)
   Crafting/ Food/ Quests/ Skills/ Augments/   JSON-backed catalogs
   Crew/ Arena/ Camps/ Boss/ Raids/ Farming/ Circuits/ Map/ TimeTrial/   one system each (see AGENTS.md)
+  Pois/            points of interest from data/pois.json: PoiCatalog, PoiData (structure rows, layouts, landmark rows, loot tables),
+                   PoiSites (seeded sites for the abandoned structures), PoiSpawner (stamps a layout + chest loot; BuildFarProxy), PoiFarView (render-only far version out to 380 m), PoiDevCommands (poi_spawn)
   Dungeon/         BoxDungeonGenerator + DungeonLayout / Geometry / MapModel; CaveDungeonGenerator + CaveLayout / CaveGeometry
   Vehicles/        Vehicle (+ .Physics / .Seats / .Fuel / .Health / .Hover / .Bike: two-wheel pod scooter / .Stow: fold into an item), VehicleSeat, VehicleDevCommands
   Props/           StasisPod (arrival flight, landing sequence, lamps / screens / light, serial plates), StasisPodSpawner (first-spawn arrivals within 25 m of the spawn centre, pod_test),

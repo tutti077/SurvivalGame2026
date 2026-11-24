@@ -180,6 +180,7 @@ public static class ConsoleHelp
 		new( "Vehicles", "vehicle_rolltest", "[mph] [turnSeconds] [steer]", "Full throttle to a speed, then a held steer; logs whether it rolled.", "vehicle_rolltest 60 2 1" ),
 
 		// ---- props
+		new( "World", "poi_spawn", "<id> [metersAhead] [yaw]", "Host stands one point of interest from data/pois.json ahead of the camera: a layout id (abandoned_shack / abandoned_cabin / abandoned_leanto) or a landmark id (crashed_pod).", "poi_spawn abandoned_cabin 15" ),
 		new( "Props", "pod_spawn", "[metersAhead]", "Host stands a stasis pod on the ground ahead of you (default 4 m), door facing you - no flight.", "pod_spawn 3" ),
 		new( "Props", "pod_door", "[open|close|toggle]", "Host swings the nearest stasis pod's door (default toggle).", "pod_door open" ),
 		new( "Props", "pod_scooter", "[take|restock]", "Host takes the folded scooter out of the nearest stasis pod into your bag, or puts it back in the cradle.", "pod_scooter restock" ),

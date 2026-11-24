@@ -1,0 +1,366 @@
+{
+  "RootObject": {
+    "__guid": "9987b87b-783b-5e8d-8ce3-a16f8e035cee",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "crashed_pod_v1",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "",
+    "Enabled": true,
+    "NetworkMode": 2,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 1,
+    "Components": [
+      {
+        "__type": "Survival.MineableRock",
+        "__guid": "f22612ff-9409-5f39-940e-e39385dffccd",
+        "__enabled": true,
+        "Flags": 0,
+        "HitsPerSection": 5,
+        "RequireMineTool": true,
+        "GroundedSections": [
+          0,
+          2,
+          3
+        ],
+        "SectionLinks": [
+          "1-0"
+        ],
+        "StoneResourceId": "resource_scrap",
+        "StoneMin": 1,
+        "StoneMax": 2,
+        "CollapseStoneMin": 1,
+        "CollapseStoneMax": 2,
+        "PieceModels": [],
+        "BitModels": [
+          "models/props/crashed_pod/crashed_pod_shard1_v1.vmdl",
+          "models/props/crashed_pod/crashed_pod_shard2_v1.vmdl",
+          "models/props/crashed_pod/crashed_pod_shard3_v1.vmdl"
+        ],
+        "ChipModels": [
+          "models/props/crashed_pod/crashed_pod_shard1_v1.vmdl",
+          "models/props/crashed_pod/crashed_pod_shard2_v1.vmdl",
+          "models/props/crashed_pod/crashed_pod_shard3_v1.vmdl"
+        ],
+        "BitsPerSection": 6,
+        "BitScale": 1.0,
+        "DebrisLifetimeSeconds": 3.5,
+        "DebrisScatterMeters": 2.0,
+        "LogMining": false
+      },
+      {
+        "__type": "Survival.SmokeColumn",
+        "__guid": "d90a9c13-fdc1-5da5-8ee4-b5cfd599aa31",
+        "__enabled": true,
+        "Flags": 0,
+        "OriginMeters": "0.35,0,0.9",
+        "PuffModel": "models/props/stasis_pod/stasis_pod_puff.vmdl",
+        "PuffMaterial": "models/props/crashed_pod/crashed_pod_smoke_v1.vmat",
+        "StopWhenMinedOut": true,
+        "HeightMeters": 100.0,
+        "RiseSeconds": 45.0,
+        "PuffCount": 48,
+        "BaseDiameterMeters": 1.8,
+        "TopDiameterMeters": 22.0,
+        "LeanMeters": 22.0,
+        "WanderMeters": 2.5,
+        "FootTint": "0.22,0.21,0.21,1",
+        "TopTint": "0.8,0.8,0.82,1"
+      }
+    ],
+    "Children": [
+      {
+        "__guid": "9742df4b-dc27-5e5f-ad5c-548a5c2b58a1",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "section0",
+        "Position": "0,0,0",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "rock_section",
+        "Enabled": true,
+        "NetworkMode": 2,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "51856b2e-cf2d-5a2c-9113-0c473687e9a3",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": null,
+            "Materials": null,
+            "Model": "models/props/crashed_pod/crashed_pod_v1_s0.vmdl",
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          },
+          {
+            "__type": "Sandbox.ModelCollider",
+            "__guid": "9846a43a-9e9c-54f8-a6c7-a8becf721862",
+            "__enabled": true,
+            "Flags": 0,
+            "ColliderFlags": 0,
+            "Elasticity": null,
+            "Friction": null,
+            "IsTrigger": false,
+            "Model": "models/props/crashed_pod/crashed_pod_v1_s0.vmdl",
+            "RollingResistance": null,
+            "Static": true,
+            "Surface": null,
+            "SurfaceVelocity": "0,0,0"
+          }
+        ],
+        "Children": []
+      },
+      {
+        "__guid": "49f2f52d-ebf0-5122-929c-75f68b3498f0",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "section1",
+        "Position": "0,0,0",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "rock_section",
+        "Enabled": true,
+        "NetworkMode": 2,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "fb56fe17-025c-5358-9265-5e66afa681c2",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": null,
+            "Materials": null,
+            "Model": "models/props/crashed_pod/crashed_pod_v1_s1.vmdl",
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          },
+          {
+            "__type": "Sandbox.ModelCollider",
+            "__guid": "87c947a4-940a-5daa-b3e0-5555bb6a33aa",
+            "__enabled": true,
+            "Flags": 0,
+            "ColliderFlags": 0,
+            "Elasticity": null,
+            "Friction": null,
+            "IsTrigger": false,
+            "Model": "models/props/crashed_pod/crashed_pod_v1_s1.vmdl",
+            "RollingResistance": null,
+            "Static": true,
+            "Surface": null,
+            "SurfaceVelocity": "0,0,0"
+          }
+        ],
+        "Children": []
+      },
+      {
+        "__guid": "a3a301f4-e6b8-583f-8f10-d113d8ad1b4b",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "section2",
+        "Position": "0,0,0",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "rock_section",
+        "Enabled": true,
+        "NetworkMode": 2,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "0ebd710c-8ed9-57d1-9a08-d27dcde2ad9d",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": null,
+            "Materials": null,
+            "Model": "models/props/crashed_pod/crashed_pod_v1_s2.vmdl",
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          },
+          {
+            "__type": "Sandbox.ModelCollider",
+            "__guid": "a3702d1a-fd21-5f46-b7b8-ccec661ee0bd",
+            "__enabled": true,
+            "Flags": 0,
+            "ColliderFlags": 0,
+            "Elasticity": null,
+            "Friction": null,
+            "IsTrigger": false,
+            "Model": "models/props/crashed_pod/crashed_pod_v1_s2.vmdl",
+            "RollingResistance": null,
+            "Static": true,
+            "Surface": null,
+            "SurfaceVelocity": "0,0,0"
+          }
+        ],
+        "Children": []
+      },
+      {
+        "__guid": "20692ee2-4a2e-58dc-968a-b45758823d43",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "section3",
+        "Position": "0,0,0",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "rock_section",
+        "Enabled": true,
+        "NetworkMode": 2,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "26c3bc39-0b99-5c19-b231-ffde0982da5d",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": null,
+            "Materials": null,
+            "Model": "models/props/crashed_pod/crashed_pod_v1_s3.vmdl",
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          },
+          {
+            "__type": "Sandbox.ModelCollider",
+            "__guid": "5d3fc6ab-b938-59d6-9c21-3a2ac42d49f0",
+            "__enabled": true,
+            "Flags": 0,
+            "ColliderFlags": 0,
+            "Elasticity": null,
+            "Friction": null,
+            "IsTrigger": false,
+            "Model": "models/props/crashed_pod/crashed_pod_v1_s3.vmdl",
+            "RollingResistance": null,
+            "Static": true,
+            "Surface": null,
+            "SurfaceVelocity": "0,0,0"
+          }
+        ],
+        "Children": []
+      },
+      {
+        "__guid": "a8d3f6e0-f3ea-5d54-a0fb-3af6ca604d5c",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "Scorch",
+        "Position": "0,0,0",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "",
+        "Enabled": true,
+        "NetworkMode": 2,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "2c07e1f7-be59-50ae-838a-1613e4236645",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": null,
+            "Materials": null,
+            "Model": "models/props/crashed_pod/crashed_pod_v1_scorch.vmdl",
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          }
+        ],
+        "Children": []
+      }
+    ],
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}
