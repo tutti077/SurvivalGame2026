@@ -4,9 +4,10 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Look at a placed <see cref="BuildBed"/>: the prompt says whose bed it is; E claims an unclaimed
-/// (or abandoned) bed as your respawn point. Owner traces and sends intent; the host re-checks reach
-/// once and commits through <see cref="BuildBed.HostClaim"/>.
+/// Look at a placed <see cref="BuildBed"/>: the prompt says whose bed it is; E on an unclaimed (or abandoned)
+/// bed claims it as your respawn point and you climb in, E on your own bed climbs in, someone else's bed does
+/// nothing. Owner traces and sends intent; the host re-checks reach once and commits through
+/// <see cref="BuildBed.HostUse"/>. Lying in the bed and getting up are <c>PlayerMovement.Bed.cs</c>.
 /// </summary>
 public sealed partial class PlayerInventoryInteraction
 {
@@ -16,12 +17,24 @@ public sealed partial class PlayerInventoryInteraction
 	[Property, Group( "Bed" ), Title( "Focus Scan Interval (seconds)" )]
 	public float BedFocusScanIntervalSeconds { get; set; } = 0.15f;
 
-	/// <summary>Bed under the crosshair (drives the "Your Bed" / "Mark's Bed" / "E — Claim Bed" HUD prompt).</summary>
+	/// <summary>Bed under the crosshair (drives the "Sleep in Your Bed" / "Mark's Bed" / "E — Claim Bed and Sleep" HUD prompt).</summary>
 	public BuildBed FocusedBed { get; private set; }
 
 	public event Action FocusedBedChanged;
 
 	double _nextBedFocusScanAt;
+	PlayerMovement _bedMovement;
+	double _lastLyingInBedAt = -1000;
+
+	/// <summary>The local pawn lies in a bed (chests, doors, other beds are not reachable from it).</summary>
+	public bool IsLyingInBed
+	{
+		get
+		{
+			_bedMovement ??= Components.Get<PlayerMovement>();
+			return _bedMovement is { IsInBed: true };
+		}
+	}
 
 	void TickBedAccess()
 	{
@@ -35,10 +48,14 @@ public sealed partial class PlayerInventoryInteraction
 		if ( IsBuildHammerPreviewing() || IsGrappleRetractActive() )
 			return;
 
-		if ( FocusedBed is null || !FocusedBed.IsValid() || !FocusedBed.CanClaim( GameObject ) )
+		// The E that got the pawn up must not put it straight back in.
+		if ( RealTime.GlobalNow - _lastLyingInBedAt < 0.4 )
 			return;
 
-		OwnerClaimBed( FocusedBed );
+		if ( FocusedBed is null || !FocusedBed.IsValid() || !FocusedBed.CanUse( GameObject ) )
+			return;
+
+		OwnerUseBed( FocusedBed );
 	}
 
 	void TickBedFocusPrompt( bool menuOpen, bool force = false )
@@ -81,22 +98,24 @@ public sealed partial class PlayerInventoryInteraction
 		FocusedBedChanged?.Invoke();
 	}
 
-	void OwnerClaimBed( BuildBed bed )
+	/// <summary>Owner: E on <paramref name="bed"/> (also the <c>bed_use</c> console command).</summary>
+	public void OwnerUseBed( BuildBed bed )
 	{
 		if ( bed is null || !bed.IsValid() )
 			return;
 
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
 		{
-			bed.HostClaim( GameObject );
+			if ( bed.IsWithinUseReach( GameObject ) )
+				bed.HostUse( GameObject );
 			return;
 		}
 
-		RpcHostClaimBed( bed.GameObject.Id );
+		RpcHostUseBed( bed.GameObject.Id );
 	}
 
 	[Rpc.Host]
-	void RpcHostClaimBed( Guid bedRootId )
+	void RpcHostUseBed( Guid bedRootId )
 	{
 		if ( !Networking.IsHost )
 			return;
@@ -109,10 +128,10 @@ public sealed partial class PlayerInventoryInteraction
 		if ( bed is null || !bed.IsValid() )
 			return;
 
-		// Client sent intent; the host validates reach once — no claiming beds across the map.
+		// Client sent intent; the host validates reach once — no claiming or climbing into beds across the map.
 		if ( !bed.IsWithinUseReach( GameObject ) )
 			return;
 
-		bed.HostClaim( GameObject );
+		bed.HostUse( GameObject );
 	}
 }

@@ -79,6 +79,8 @@
         "OnComponentFixedUpdate": null,
         "OnComponentStart": null,
         "OnComponentUpdate": null,
+        "SleepDelaySeconds": 5,
+        "SleepFadeSeconds": 3,
         "UseReachMeters": 3
       }
     ],

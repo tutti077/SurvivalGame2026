@@ -107,8 +107,9 @@ public static class BuildSnapLayout
 	};
 
 	/// <summary>
-	/// The four corner positions in metres, piece-local, origin at the 2×2×2 module centre. Each one
-	/// is a real vertex of the authored mesh — verified against the source FBX.
+	/// The four corner positions in metres, piece-local, origin at the 2×2×2 module centre. They lie
+	/// on the thatch slab's mid-plane, like the straight roof panel's corners, so a hip or valley
+	/// meets its neighbouring panels flush (create_build_kit.py roof_corner_parts, 2026-11-16).
 	/// </summary>
 	static readonly Dictionary<string, Vector3[]> FoldSnapLocals = new( StringComparer.OrdinalIgnoreCase )
 	{

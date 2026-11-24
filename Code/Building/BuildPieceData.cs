@@ -28,6 +28,14 @@ public sealed class BuildPieceData
 	/// structural solve. Placement validity and the ghost still come from <see cref="BuildModuleDimensions.SizesMeters"/>.
 	/// </summary>
 	public bool Vehicle { get; set; }
+	/// <summary>
+	/// Build menu tab (<c>"tab"</c>): <c>building</c> (walls, floors, roofs, stairs, beams, doors), <c>crafting</c>
+	/// (stations, machines, vehicles, the beehive) or <c>furniture</c> (chest, bed, campfire, traps, circuit parts).
+	/// The menu's All tab shows every tab; the repair tool shows on all of them.
+	/// </summary>
+	public string Tab { get; set; } = BuildMenuTabs.Building;
+	/// <summary>Not offered in the build menu (<c>"hidden": true</c>): camp dressing the world stamps, never a hammer piece.</summary>
+	public bool Hidden { get; set; }
 	public BuildSnapRole AnchorSnapRole { get; set; } = BuildSnapRole.CornerNorthEast;
 	public float HalfWidth { get; set; } = 30f;
 	public float HalfHeight { get; set; } = 4f;
@@ -39,4 +47,31 @@ public sealed class BuildPieceData
 
 	/// <summary>Participates in structural integrity (has a material).</summary>
 	public bool IsStructural => !string.IsNullOrWhiteSpace( MaterialId );
+}
+
+/// <summary>The build menu's tab ids (<see cref="BuildPieceData.Tab"/>) in display order.</summary>
+public static class BuildMenuTabs
+{
+	public const string All = "all";
+	public const string Crafting = "crafting";
+	public const string Building = "building";
+	public const string Furniture = "furniture";
+
+	public static readonly (string Id, string Title)[] Order =
+	[
+		(All, "All"),
+		(Crafting, "Crafting"),
+		(Building, "Building"),
+		(Furniture, "Furniture"),
+	];
+
+	/// <summary>Does <paramref name="piece"/> belong on <paramref name="tab"/>? The repair tool is on every tab.</summary>
+	public static bool Shows( BuildPieceData piece, string tab )
+	{
+		if ( piece is null || piece.Hidden )
+			return false;
+		if ( string.IsNullOrWhiteSpace( tab ) || tab == All || piece.IsRepairTool )
+			return true;
+		return string.Equals( piece.Tab, tab, System.StringComparison.OrdinalIgnoreCase );
+	}
 }

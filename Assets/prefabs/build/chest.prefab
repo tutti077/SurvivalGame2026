@@ -69,9 +69,94 @@
         "OnComponentStart": null,
         "OnComponentUpdate": null,
         "SlotCount": 16
+      },
+      {
+        "__type": "Survival.ChestLid",
+        "__guid": "b1010004-1111-4111-8111-111111111145",
+        "__enabled": true,
+        "Flags": 0,
+        "CloseSeconds": 0.5,
+        "HingeAxis": "0,1,0",
+        "Lid": {
+          "_type": "gameobject",
+          "go": "b1010004-1111-4111-8111-111111111152"
+        },
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "OpenAngleDegrees": -60,
+        "OpenSeconds": 0.35
       }
     ],
     "Children": [
+      {
+        "__guid": "b1010004-1111-4111-8111-111111111152",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "Lid",
+        "Position": "-10.146,1.781,-3.925",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "",
+        "Enabled": true,
+        "NetworkMode": 1,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [],
+        "Children": [
+          {
+            "__guid": "b1010004-1111-4111-8111-111111111154",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "LidMesh",
+            "Position": "10.146,-1.781,3.925",
+            "Rotation": "0,0,0,1",
+            "Scale": "1,1,1",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "b1010004-1111-4111-8111-111111111153",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": null,
+            "Materials": null,
+            "Model": "models/building/chest_lid.vmdl",
+            "OnComponentDestroy": null,
+            "OnComponentDisabled": null,
+            "OnComponentEnabled": null,
+            "OnComponentFixedUpdate": null,
+            "OnComponentStart": null,
+            "OnComponentUpdate": null,
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          }
+            ],
+            "Children": []
+          }
+        ]
+      },
       {
         "__guid": "b1010004-1111-4111-8111-111111111151",
         "__version": 2,
@@ -99,7 +184,7 @@
             "MaterialGroup": null,
             "MaterialOverride": null,
             "Materials": null,
-            "Model": "models/building/chest.vmdl",
+            "Model": "models/building/chest_body.vmdl",
             "OnComponentDestroy": null,
             "OnComponentDisabled": null,
             "OnComponentEnabled": null,

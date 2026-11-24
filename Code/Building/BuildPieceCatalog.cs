@@ -684,7 +684,7 @@ public static class BuildPieceCatalog
 
 			HalfDepth = floorHalf.z,
 
-			FallbackColor = "0.52,0.48,0.42,1",
+			FallbackColor = "1,1,1,1",
 
 			MaterialId = "wood",
 
@@ -710,7 +710,7 @@ public static class BuildPieceCatalog
 
 			HalfDepth = wallHalf.z,
 
-			FallbackColor = "0.62,0.58,0.52,1",
+			FallbackColor = "1,1,1,1",
 
 			MaterialId = "wood",
 
@@ -736,7 +736,7 @@ public static class BuildPieceCatalog
 
 			HalfDepth = roofHalf.z,
 
-			FallbackColor = "0.48,0.36,0.28,1",
+			FallbackColor = "1,1,1,1",
 
 			MaterialId = "wood",
 

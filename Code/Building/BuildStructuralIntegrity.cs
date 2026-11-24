@@ -24,7 +24,7 @@ public static class BuildStructuralIntegrity
 	/// <summary>
 	/// Every connection costs one full-module hop (2 m + Valheim's 0.1 bias) regardless of the
 	/// pieces' real sizes or separation — support is budgeted in PIECES, not meters travelled, so a
-	/// stack of thin horizontal beams runs out at the same count (8) as a stack of full walls.
+	/// stack of thin horizontal beams runs out at the same count (16) as a stack of full walls.
 	/// </summary>
 	const float HopCostMeters = 2.1f;
 
@@ -36,7 +36,8 @@ public static class BuildStructuralIntegrity
 
 	static bool _initialized;
 
-	// Terrain never changes at runtime, so a piece's grounded state is computed once at placement.
+	// A piece's grounded state is computed once at placement. Terrain never changes at runtime; a tree
+	// or rock that does (felled, mined) drops the entries it touched through HostOnWorldAnchorChanged.
 	static readonly Dictionary<BuildPiece, bool> GroundedCache = new();
 
 	// Per-solve scratch — rebuilt on each place/destroy event, never per frame.
@@ -98,6 +99,53 @@ public static class BuildStructuralIntegrity
 
 		var component = CollectComponent( seeds );
 		SolveAndApply( scene, component );
+	}
+
+	/// <summary>
+	/// Host: a tree or rock changed shape or left the world (felled to a stump, stump chopped, rock
+	/// section mined). Every piece anchored inside <paramref name="formerBounds"/> (the anchor's bounds
+	/// BEFORE the change) forgets its grounded state; the re-probe and re-solve run on the next fixed
+	/// tick, once physics has dropped / swapped the anchor's colliders. A piece that also stands on
+	/// terrain, or still touches the stump, simply grounds again.
+	/// </summary>
+	public static void HostOnWorldAnchorChanged( Scene scene, BBox formerBounds )
+	{
+		if ( !scene.IsValid() || GroundedCache.Count == 0 )
+			return;
+
+		var query = Expand( formerBounds, GroundProbeUnits + ContactToleranceUnits );
+		List<BuildPiece> released = null;
+		foreach ( var entry in GroundedCache )
+		{
+			var piece = entry.Key;
+			if ( !entry.Value || piece is null || !piece.IsValid() )
+				continue;
+
+			if ( BoundsOverlap( BuildPieceGeometry.WorldBounds( piece ), query ) )
+				(released ??= new List<BuildPiece>()).Add( piece );
+		}
+
+		if ( released is null )
+			return;
+
+		foreach ( var piece in released )
+			GroundedCache.Remove( piece );
+
+		GetCollapseRunner( scene )?.RequestResolve( released );
+	}
+
+	/// <summary>Host: re-solve the structures these pieces belong to (the deferred half of <see cref="HostOnWorldAnchorChanged"/>).</summary>
+	public static void HostResolve( Scene scene, List<BuildPiece> seeds )
+	{
+		if ( !scene.IsValid() || seeds is null || EnsureInitialized( scene ) )
+			return;
+
+		BuildSpatialHash( scene );
+		seeds.RemoveAll( p => p is null || !p.IsValid() );
+		if ( seeds.Count == 0 )
+			return;
+
+		SolveAndApply( scene, CollectComponent( seeds ) );
 	}
 
 	/// <summary>
@@ -373,9 +421,44 @@ public static class BuildStructuralIntegrity
 		// The hover platform's deck is the foundation of whatever is built on it: a piece parented under
 		// a buildable deck is grounded wherever the platform flies (a dynamic hull is never a world anchor
 		// for the probe below, and the deck moves anyway).
-		var grounded = Vehicle.IsDeckMounted( piece.GameObject ) || ProbeGrounded( scene, piece );
+		var grounded = Vehicle.IsDeckMounted( piece.GameObject )
+		               || ProbeGrounded( scene, piece )
+		               || TouchesTreeOrRock( scene, piece );
 		GroundedCache[piece] = grounded;
 		return grounded;
+	}
+
+	/// <summary>
+	/// A piece touching a standing tree, a stump or a rock anywhere on its box — a beam butted against
+	/// a trunk, a floor wrapped round it — is anchored by it, not just a piece resting on top. One
+	/// oriented box overlap per piece, at placement (cached with the rest of the grounded state).
+	/// </summary>
+	static bool TouchesTreeOrRock( Scene scene, BuildPiece piece )
+	{
+		var rotation = BuildColliderSnap.GetSnapWorldRotation( piece.GameObject, piece.PieceId );
+		var origin = piece.GameObject.WorldPosition;
+		var half = BuildColliderSnap.GetColliderHalfForPiece( piece.PieceId ) + new Vector3( ContactToleranceUnits );
+
+		var hits = scene.Trace
+			.Box( new BBox( -half, half ), origin, origin + Vector3.Down * 0.5f )
+			.Rotated( rotation )
+			.IgnoreGameObjectHierarchy( piece.GameObject )
+			.RunAll();
+
+		foreach ( var hit in hits )
+		{
+			if ( !hit.Hit || !IsWorldAnchorHit( hit ) )
+				continue;
+
+			var tree = hit.GameObject.Components.Get<ChopableTree>( FindMode.EverythingInSelfAndAncestors );
+			if ( tree is not null && !tree.IsBroken )
+				return true;
+
+			if ( hit.GameObject.Components.Get<MineableRock>( FindMode.EverythingInSelfAndAncestors ) is not null )
+				return true;
+		}
+
+		return false;
 	}
 
 	static bool ProbeGrounded( Scene scene, BuildPiece piece )
@@ -447,6 +530,10 @@ public static class BuildStructuralIntegrity
 		for ( var current = hit; current.IsValid(); current = current.Parent )
 		{
 			if ( current.Components.Get<BuildPiece>() is not null )
+				return false;
+			// A felled log is spawned standing on the stump the same tick the trunk goes; its body can
+			// still read as non-dynamic on that first tick, and it is about to fall over.
+			if ( current.Components.Get<Rigidbody>() is not null )
 				return false;
 			if ( current.Tags.Has( "buildpreview" ) || current.Tags.Has( "player" ) )
 				return false;
@@ -540,8 +627,8 @@ public static class BuildStructuralIntegrity
 		var loss = childMaterial.HorizontalLoss
 		           + (childMaterial.VerticalLoss - childMaterial.HorizontalLoss) * upness;
 
-		// Fixed per-piece hop, not real distance — wood: ×0.7375 per piece straight up (8 total
-		// from a grounded piece), ×0.58 sideways (anchor + 4 out), whatever the pieces' sizes.
+		// Fixed per-piece hop, not real distance — wood: ×0.8589 per piece straight up (16 total
+		// from a grounded piece), ×0.7617 sideways (anchor + 8 out), whatever the pieces' sizes.
 		var carried = parentSupport * (1f - loss * HopCostMeters);
 		return Math.Clamp( carried, 0f, childMaterial.MaxSupport );
 	}

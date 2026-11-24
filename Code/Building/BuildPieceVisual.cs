@@ -103,7 +103,7 @@ static class BuildPieceVisual
 		return go;
 	}
 
-	static void ApplyCatalogTint( ModelRenderer renderer, string pieceId )
+	internal static void ApplyCatalogTint( ModelRenderer renderer, string pieceId )
 	{
 		if ( !BuildPieceCatalog.TryGet( pieceId, out var data ) )
 			return;

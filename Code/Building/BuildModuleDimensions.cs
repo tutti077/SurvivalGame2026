@@ -120,6 +120,7 @@ public static class BuildModuleDimensions
 		["vehicle_dune_buggy"] = new( 4.2f, 2.5f, 1.7f ),   // ghost / placement box only; the prefab authors the real colliders
 		// Hover platform: 3 × 2 build tiles of deck (6 × 4 m, create_hover_platform.py) plus the console; ghost box only.
 		["vehicle_hover_platform"] = new( 6f, 4f, 1.5f ),
+		["vehicle_pod_scooter"] = new( 1.6f, 0.6f, 1.1f ),   // never placed with the hammer (hidden piece): the size is for vehicle_spawn's ground sit
 		["furniture_campfire"] = new( 0.35f, 0.35f, 0.35f ),
 		// Foot traps (BearTrap): flat plates you walk onto. The solid is the thin base; the
 		// catch volume is the trigger child on the prefab.
@@ -136,6 +137,8 @@ public static class BuildModuleDimensions
 		["fabricator"] = new( 1.66f, 0.97f, 1.91f ),
 		["chemistry_station"] = new( 1.62f, 0.74f, 1.65f ),
 		["augment_station"] = new( 1.88f, 1.63f, 1.69f ),
+		// Roasting spit (create_camp_props.py): pole length, depth, height; stands over a campfire.
+		["roasting_spit"] = new( 2f, 0.3f, 1.2f ),
 		// Bed: 2 m long, 1 m wide, 0.5 m tall — claimable respawn point and the base-raid target.
 		["bed"] = new( 2f, 1f, 0.5f ),
 		// Circuit pieces: a 0.3 m bulb cube and a 0.2 x 0.2 x 0.3 m lever box. Gates will be 0.15 m cubes.

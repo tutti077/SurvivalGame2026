@@ -6,7 +6,8 @@ namespace Survival;
 /// <summary>
 /// Host-side timed queue that walks a structural collapse up a structure one piece per wave,
 /// bottom-up, instead of vaporizing every unsupported piece in the same tick. Created on demand by
-/// <see cref="BuildStructuralIntegrity"/>; idle when the queue is empty. Each piece is re-checked
+/// <see cref="BuildStructuralIntegrity"/>; idle when the queue is empty. Also carries the one-tick
+/// deferred re-solve after a tree / rock anchor changed. Each piece is re-checked
 /// when its wave comes due, so rebuilding support mid-collapse genuinely rescues what still stands.
 /// </summary>
 [Title( "Build Collapse Runner" )]
@@ -24,8 +25,26 @@ public sealed class BuildCollapseRunner : Component
 			_queue.Add( pieces[i] );
 	}
 
+	List<BuildPiece> _pendingResolve;
+
+	/// <summary>Re-solve these pieces' structures on the next fixed tick (a tree / rock anchor just changed).</summary>
+	public void RequestResolve( List<BuildPiece> seeds )
+	{
+		if ( _pendingResolve is null )
+			_pendingResolve = seeds;
+		else
+			_pendingResolve.AddRange( seeds );
+	}
+
 	protected override void OnFixedUpdate()
 	{
+		if ( _pendingResolve is not null )
+		{
+			var seeds = _pendingResolve;
+			_pendingResolve = null;
+			BuildStructuralIntegrity.HostResolve( Scene, seeds );
+		}
+
 		if ( _queue.Count == 0 || Time.Now < _nextWaveAt )
 			return;
 

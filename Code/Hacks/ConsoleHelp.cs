@@ -23,6 +23,8 @@ public static class ConsoleHelp
 		new( "World", "cycle_day", "", "Jump the cycle to noon.", "cycle_day" ),
 		new( "World", "cycle_pause", "", "Freeze / resume the day-night cycle where it is (sun and sky stay lit).", "cycle_pause" ),
 		new( "World", "cycle_night", "", "Jump the cycle to midnight.", "cycle_night" ),
+		new( "World", "bed_use", "", "The local pawn uses the nearest standing bed as if E were pressed on it (claims it if it can, lies down; the host refuses past the bed's use reach), or gets up when it is in bed. Works on a client too.", "bed_use" ),
+		new( "World", "bed_info", "", "Every pawn's bed state (claimed bed, in bed, seconds lain, asleep) and the day clock's sleep state (fast-forward, hour, day).", "bed_info" ),
 		new( "World", "pawn_toggle", "", "terrainTest: the same as L — fly camera → playable pawn, pawn → fly camera.", "pawn_toggle" ),
 		new( "World", "nameplates_reload", "", "Re-read data/nameplates.json (overhead nameplate sizes, scale curve, fades, targeting range).", "nameplates_reload" ),
 		new( "UI", "ui_theme", "[id|reload]", "UI theme from data/ui_themes.json: no argument lists them, an id switches (saved per machine; menus restyle on their next build, the main menu live), reload re-reads the JSON.", "ui_theme frost" ),

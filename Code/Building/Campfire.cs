@@ -42,6 +42,13 @@ public sealed class Campfire : Component
 	[Property, Group( "Campfire" ), Title( "Fire light" )]
 	public GameObject FireLight { get; set; }
 
+	/// <summary>
+	/// The ember bed renderer that takes <see cref="LitColor"/> / <see cref="UnlitColor"/> (the campfire model from
+	/// <c>Blender/scripts/create_camp_props.py</c> keeps its stones and logs untinted). Empty = tint the first renderer.
+	/// </summary>
+	[Property, Group( "Campfire" ), Title( "Ember renderer" )]
+	public GameObject Embers { get; set; }
+
 	[Sync] public int FuelUnits { get; private set; }
 	[Sync] public bool IsLit { get; private set; }
 
@@ -138,7 +145,9 @@ public sealed class Campfire : Component
 		if ( FireLight is not null && FireLight.IsValid() && FireLight.Enabled != IsLit )
 			FireLight.Enabled = IsLit;
 
-		_renderer ??= Components.Get<ModelRenderer>( FindMode.EverythingInSelf );
+		_renderer ??= Embers is { IsValid: true }
+			? Embers.Components.Get<ModelRenderer>( FindMode.EverythingInSelf )
+			: Components.Get<ModelRenderer>( FindMode.EverythingInSelf );
 		if ( _renderer is null || !_renderer.IsValid() )
 			return;
 

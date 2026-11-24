@@ -247,6 +247,25 @@ public static class BuildNavMeshSync
 	static readonly Dictionary<Scene, bool> _streamedScene = new();
 	static double _fullRegenStartedAt = -1d;
 
+	/// <summary>
+	/// Drop scenes that have ended from the static per-scene tables. They used to be kept forever: every play session
+	/// stayed alive in the editor, and a later code hotload tripped over their old-assembly components ("Couldn't
+	/// resolve package.local.survivalgamebasics"), which left the cached basicplayer prefab's PlayerMovement with
+	/// 40 zeroed tunings - walk ground angle 0 → 1°, so the pawn never grounded and skated (2026-11-11).
+	/// </summary>
+	static void PruneDeadScenes()
+	{
+		_liveNavScenes.RemoveWhere( s => s is null || !s.IsValid() );
+		foreach ( var dead in _streamedScene.Keys.Where( s => s is null || !s.IsValid() ).ToList() )
+			_streamedScene.Remove( dead );
+		foreach ( var dead in _pendingLocalBakes.Keys.Where( s => s is null || !s.IsValid() ).ToList() )
+			_pendingLocalBakes.Remove( dead );
+		if ( _tileVerifyScene is not null && !_tileVerifyScene.IsValid() )
+			_tileVerifyScene = null;
+		if ( _bakeTickScene is not null && !_bakeTickScene.IsValid() )
+			_bakeTickScene = null;
+	}
+
 	/// <summary>Streamed world (chunks bake their own tiles as they load) vs a hand-built scene.</summary>
 	static bool IsStreamedScene( Scene scene )
 	{
@@ -407,6 +426,7 @@ public static class BuildNavMeshSync
 	/// </summary>
 	public static bool EnsureLiveNavOnce( Scene scene )
 	{
+		PruneDeadScenes();
 		if ( !scene.IsValid() || !IsNavAuthority() )
 			return true;
 

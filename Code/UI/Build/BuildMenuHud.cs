@@ -36,6 +36,9 @@ public sealed class BuildMenuHud
 	ToolBuildHammer _boundHammer;
 	string _hoveredPieceId;
 	int _builtPieceContentVersion = -1;
+	Panel _tabRow;
+	readonly List<(string Id, Panel Button)> _tabButtons = new();
+	string _activeTab = BuildMenuTabs.All;
 
 	public BuildMenuHud( PlayerEquipment equipment ) => _equipment = equipment;
 
@@ -110,6 +113,33 @@ public sealed class BuildMenuHud
 		_panelRoot.Style.Set( "pointer-events", "auto" );
 
 		UiStyle.AddTitle( _panelRoot, "Build", TitleFontSize );
+
+		// Tabs (Mark 2026-11-10, prompt 30): All / Crafting / Building / Furniture, from each piece's "tab".
+		_tabRow = new Panel { Parent = _panelRoot };
+		_tabRow.Style.Set( "flex-direction", "row" );
+		_tabRow.Style.Set( "justify-content", "center" );
+		_tabRow.Style.Set( "gap", $"{6f * Scale}px" );
+		_tabButtons.Clear();
+		foreach ( var (id, title) in BuildMenuTabs.Order )
+		{
+			var button = new Panel { Parent = _tabRow };
+			button.Style.Set( "padding-left", $"{14f * Scale}px" );
+			button.Style.Set( "padding-right", $"{14f * Scale}px" );
+			button.Style.Set( "padding-top", $"{5f * Scale}px" );
+			button.Style.Set( "padding-bottom", $"{5f * Scale}px" );
+			button.Style.Set( "pointer-events", "auto" );
+			button.Style.Set( "cursor", "pointer" );
+			button.Style.Set( "flex-shrink", "0" );
+			UiStyle.Tab( button, false );
+			var label = new Label { Parent = button, Text = title };
+			UiStyle.Text( label, UiText.Value, BodyFontSize );
+			label.Style.Set( "pointer-events", "none" );
+			label.Style.Set( "white-space", "nowrap" );
+			var tabId = id;
+			button.AddEventListener( "onclick", () => SetActiveTab( tabId ) );
+			_tabButtons.Add( (id, button) );
+		}
+		UpdateTabVisual();
 
 		_blueprintToggleRow = new Panel { Parent = _panelRoot };
 		_blueprintToggleRow.Style.Set( "flex-direction", "row" );
@@ -191,6 +221,8 @@ public sealed class BuildMenuHud
 		{
 			if ( piece is null || string.IsNullOrWhiteSpace( piece.Id ) )
 				continue;
+			if ( !BuildMenuTabs.Shows( piece, _activeTab ) )
+				continue;
 
 			var slotPanel = new Panel { Parent = _grid };
 			slotPanel.Style.Width = Length.Pixels( SlotSize );
@@ -239,6 +271,29 @@ public sealed class BuildMenuHud
 		UpdateSlotHighlights( null );
 		UpdateDetailPanel( null );
 		ApplyBlueprintModeUi();
+	}
+
+	void SetActiveTab( string tab )
+	{
+		if ( string.Equals( _activeTab, tab, StringComparison.OrdinalIgnoreCase ) )
+			return;
+
+		_activeTab = tab;
+		UpdateTabVisual();
+		RebuildSlots();
+	}
+
+	void UpdateTabVisual()
+	{
+		for ( var i = 0; i < _tabButtons.Count; i++ )
+		{
+			var (id, button) = _tabButtons[i];
+			if ( button is null || !button.IsValid() )
+				continue;
+			var active = string.Equals( id, _activeTab, StringComparison.OrdinalIgnoreCase );
+			UiStyle.Tab( button, active );
+			button.Style.Set( "opacity", active ? "1" : "0.8" );
+		}
 	}
 
 	void SetHoveredSlot( PieceSlotUi hovered )

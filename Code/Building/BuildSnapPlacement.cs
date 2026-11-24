@@ -1001,6 +1001,15 @@ static class BuildSnapPlacement
 		var floorId = placingIsFloor ? placingPieceId : targetPiece.PieceId;
 		var floorThinHalf = BuildColliderSnap.GetColliderHalfForPiece( floorId ).z;
 		var above = placement.Position.z >= targetPiece.GameObject.WorldPosition.z;
+
+		// A flight always meets a deck at the deck's walking face: its foot stands on the deck, or
+		// its top tread lands flush with it. The flight leading up onto a deck has its centre half a
+		// storey below the deck, which the centre test above read as "hang under" — that is why
+		// stairs only snapped beneath a floor (Mark 2026-11-16). So the flight is always the upper
+		// side of the seam, whichever piece is being placed.
+		var stairsId = placingIsFloor ? targetPiece.PieceId : placingPieceId;
+		if ( BuildPieceFamily.IsStairs( stairsId ) )
+			above = !placingIsFloor;
 		return placement.WithPosition( placement.Position + Vector3.Up * ( above ? floorThinHalf : -floorThinHalf ) );
 	}
 

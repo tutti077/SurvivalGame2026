@@ -32,6 +32,27 @@ public sealed class BuildPiece : Component
 	[Sync] public float Support { get; set; }
 
 	/// <summary>
+	/// Host-set on pieces a world camp stamped (<see cref="EnemyCampSpawner"/>): every machine stops drawing the piece
+	/// (models and lights) past <see cref="CampPieceDistanceCull.HideMeters"/> from its own camera. Colliders, nav and
+	/// health stay, so nothing about the camp changes for the host.
+	/// </summary>
+	[Sync] public bool WorldCampPiece { get; set; }
+
+	/// <summary>
+	/// Host-set on pieces a structure point of interest stamped (<see cref="PoiSpawner"/>): every machine draws the piece only
+	/// within <see cref="PoiFarView.HideMeters"/> of its own camera, the same distance the structure's far version uses.
+	/// </summary>
+	[Sync, Change] public bool WorldPoiPiece { get; set; }
+
+	/// <summary>[Change] callback for <see cref="WorldPoiPiece"/>: the far version of this structure hides the same frame the
+	/// real piece stands, on host and clients, rather than at the far view's next check (a half-second double-up).</summary>
+	void OnWorldPoiPieceChanged( bool oldValue, bool newValue )
+	{
+		if ( newValue )
+			Scene?.GetSystem<PoiFarView>()?.RealPieceStood( WorldPosition );
+	}
+
+	/// <summary>
 	/// Hit points left (host-owned, synced for the hammer hover readout). Seeded from the material's
 	/// <see cref="BuildMaterialData.Health"/> when the piece is placed; furniture without a material
 	/// never takes damage. Only entities damage structures — see <see cref="HostApplyDamage"/>.

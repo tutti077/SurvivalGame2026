@@ -1,0 +1,1315 @@
+{
+  "RootObject": {
+    "__guid": "62de83f4-6c59-514e-aa1c-90026f8108ee",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "hub_portal",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "buildpiece",
+    "Enabled": true,
+    "NetworkMode": 1,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 1,
+    "Components": [
+      {
+        "__type": "Sandbox.BoxCollider",
+        "__guid": "258f89e0-f7b1-574e-9563-6e765b132503",
+        "__enabled": true,
+        "Flags": 0,
+        "Center": "0,0,-62",
+        "IsTrigger": false,
+        "Scale": "48,136,12",
+        "Static": true,
+        "Surface": null
+      },
+      {
+        "__type": "Survival.DamageReceiver",
+        "__guid": "108b3ff5-3463-51b0-89e0-e06dc24cc276",
+        "__enabled": true,
+        "Flags": 0,
+        "DamageMultiplier": 1
+      },
+      {
+        "__type": "Survival.BuildPiece",
+        "__guid": "f6cae92c-ddb4-509c-b6c5-9f660aecb3af",
+        "__enabled": true,
+        "Flags": 0,
+        "IsBlueprint": false,
+        "PieceId": "hub_portal"
+      },
+      {
+        "__type": "Survival.HubPortal",
+        "__guid": "bb0b6269-8d25-5d72-8c93-b47c10d35d44",
+        "__enabled": true,
+        "Flags": 0,
+        "Kind": "ToHub",
+        "RadiusMeters": 1.3,
+        "CentreHeightMeters": 1.8,
+        "HubPrefab": {
+          "_type": "gameobject",
+          "prefab": "prefabs/hub/hub.prefab"
+        },
+        "HubPositionMeters": "0,0,3000"
+      }
+    ],
+    "Children": [
+      {
+        "__guid": "6761cd16-8b5a-5ceb-b892-9b3fb42ae2ef",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "Plinth",
+        "Position": "0,0,-62",
+        "Rotation": "0,0,0,1",
+        "Scale": "0.96,2.72,0.24",
+        "Tags": "",
+        "Enabled": true,
+        "NetworkMode": 1,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "fc17fe14-a957-5dea-ac1b-dda18ccbcad8",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": "materials/hub/hub_neon.vmat",
+            "Materials": null,
+            "Model": "models/dev/box.vmdl",
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          }
+        ],
+        "Children": []
+      },
+      {
+        "__guid": "617fd20a-ff81-5d42-9ad9-9eeb5d43e6f5",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "Ring",
+        "Position": "0,0,4",
+        "Rotation": "0.000000,0.000000,0.000000,1.000000",
+        "Scale": "1,1,1",
+        "Tags": "",
+        "Enabled": true,
+        "NetworkMode": 1,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [],
+        "Children": [
+          {
+            "__guid": "c274ecac-7c42-506a-8c07-0dd4e7600c24",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg00",
+            "Position": "0,58.85,11.71",
+            "Rotation": "0.773010,0.000000,0.000000,0.634393",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "433b110a-8cd9-5688-a80e-c57a2effd1ac",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "02fbca03-2671-5261-8c3c-de6a550ca6fb",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "a9167242-bb6f-5263-ac6c-964fbb493a02",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg01",
+            "Position": "0,49.89,33.33",
+            "Rotation": "0.881921,0.000000,0.000000,0.471397",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "69d55d4d-0aa5-5d91-8434-de4c88682f37",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "f010b8da-d982-5e5d-b55a-d0df22495b60",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "eda443a0-5ddb-54c8-82e9-480c0578f708",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg02",
+            "Position": "0,33.33,49.89",
+            "Rotation": "0.956940,0.000000,0.000000,0.290285",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "385ff57c-5141-5032-b53e-0958287fd802",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "9e030d2a-ea04-5b73-90a5-8c834b436720",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "8d5f3d76-5f03-5d66-8336-da58f45fd3bd",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg03",
+            "Position": "0,11.71,58.85",
+            "Rotation": "0.995185,0.000000,0.000000,0.098017",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "cf966c49-c676-56a8-89e4-27bc993a0f70",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "8a3df235-cc4d-53c4-88a1-245c691ab678",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "cb1edbe4-11ea-565e-b369-400a6f4f2103",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg04",
+            "Position": "0,-11.71,58.85",
+            "Rotation": "0.995185,0.000000,0.000000,-0.098017",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "bfcd7c39-a358-5f1b-81a0-073c068ae58c",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "098623cd-476e-59e2-8c44-e27bfd156f13",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "9e3eaa4a-3105-5634-8c3f-9868815e43ac",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg05",
+            "Position": "0,-33.33,49.89",
+            "Rotation": "0.956940,0.000000,0.000000,-0.290285",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "935fb034-2474-5f65-94cf-fb8347e8ca0e",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "4664ead4-0aa5-50df-b528-cdfbaa63d2af",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "7e9b1895-2ca1-5b08-bcf1-faf43a7b9c93",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg06",
+            "Position": "0,-49.89,33.33",
+            "Rotation": "0.881921,0.000000,0.000000,-0.471397",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "7bc77011-bfca-555d-a4ba-ffc67342f197",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "ca1f0065-a7c4-5f4d-a7b5-d1b47001501e",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "f7fa1454-aa46-5ef8-842f-20fd4fe5cb20",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg07",
+            "Position": "0,-58.85,11.71",
+            "Rotation": "0.773010,0.000000,0.000000,-0.634393",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "c1b97cb9-48a5-56ef-b14d-46f363937731",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "79ee219f-1098-5088-a9bd-ca15f914b035",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "792f8be8-32bc-5390-8a22-0134e926276b",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg08",
+            "Position": "0,-58.85,-11.71",
+            "Rotation": "0.634393,0.000000,0.000000,-0.773010",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "14fcac81-e7c4-519c-962c-a0f2a84af48f",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "29eb94ac-d05d-5224-b140-9b3b9cf6d26e",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "0956eb2a-8058-5357-a2e2-fb8862526233",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg09",
+            "Position": "0,-49.89,-33.33",
+            "Rotation": "0.471397,0.000000,0.000000,-0.881921",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "11e8fa6c-bd9a-54dd-a688-86fe1642306a",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "ee6bf0e9-b71e-5053-8938-3b07c770a8f0",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "43acb5db-dca4-50fd-9f0d-6c1e9ff6314c",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg10",
+            "Position": "0,-33.33,-49.89",
+            "Rotation": "0.290285,0.000000,0.000000,-0.956940",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "05ba1772-fceb-5ce0-bd30-6dd4fb552139",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "15793c05-80f0-5daf-a1ae-1502662bacc8",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "cf638ffb-17b1-588a-9171-600a13b557c6",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg11",
+            "Position": "0,-11.71,-58.85",
+            "Rotation": "0.098017,0.000000,0.000000,-0.995185",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "07ba52c8-dbd5-507a-9885-91160bb5647b",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "982795ca-4fd6-506f-a284-b4a908571697",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "475d28f4-c06c-5c1f-bcf4-2dac22c5522f",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg12",
+            "Position": "0,11.71,-58.85",
+            "Rotation": "-0.098017,0.000000,0.000000,-0.995185",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "e1cc3c35-4fab-5e71-ac58-38869da4f4a2",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "bf033102-4aad-5016-95eb-7b6300f0b154",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "27aa9e49-606a-50d2-99a7-c3b42c6ab853",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg13",
+            "Position": "0,33.33,-49.89",
+            "Rotation": "-0.290285,0.000000,0.000000,-0.956940",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "cd93891a-aaea-5be5-91ad-9bd0cfc40608",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "c9fcbb00-c197-543c-87e8-bd1b456cf405",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "7b166682-3081-526b-aea6-99323417e992",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg14",
+            "Position": "0,49.89,-33.33",
+            "Rotation": "-0.471397,0.000000,0.000000,-0.881921",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "1eef9e58-43f7-5c69-8496-63d163a5be43",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "5c9748f5-0e9e-5f47-a7e7-fb3d947f3046",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "c891fecc-eac9-5b7d-8a2d-ad9620da075d",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Seg15",
+            "Position": "0,58.85,-11.71",
+            "Rotation": "-0.634393,0.000000,0.000000,-0.773010",
+            "Scale": "0.176,0.5089,0.176",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "068c6ae8-0626-571b-9fd5-83c535bbf5d8",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_trim_purple.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              },
+              {
+                "__type": "Sandbox.BoxCollider",
+                "__guid": "bd19c5db-4f07-5e3f-bdee-5cf53ef2b596",
+                "__enabled": true,
+                "Flags": 0,
+                "Center": "0,0,0",
+                "IsTrigger": false,
+                "Scale": "50,50,50",
+                "Static": true,
+                "Surface": null
+              }
+            ],
+            "Children": []
+          }
+        ]
+      },
+      {
+        "__guid": "b53457e3-a9f9-5cd0-b5f6-3bd20266d879",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "Disc",
+        "Position": "0,0,4",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "",
+        "Enabled": true,
+        "NetworkMode": 1,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [],
+        "Children": [
+          {
+            "__guid": "f3973db0-13a0-5269-ab6a-068015f74701",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Disc0",
+            "Position": "0,0,0",
+            "Rotation": "0.000000,0.000000,0.000000,1.000000",
+            "Scale": "0.04,2.32,0.4707",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "4674ec6f-772e-5448-9a98-7c292fd255e6",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_portal.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "ff721d31-7349-5a4e-8826-3e7631eaebb5",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Disc1",
+            "Position": "0,0,0",
+            "Rotation": "0.195090,0.000000,0.000000,0.980785",
+            "Scale": "0.04,2.32,0.4707",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "68c41404-e818-57b3-88fc-449716c69d2c",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_portal.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "55e6a374-240e-5215-915b-5ef18f4ea0ff",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Disc2",
+            "Position": "0,0,0",
+            "Rotation": "0.382683,0.000000,0.000000,0.923880",
+            "Scale": "0.04,2.32,0.4707",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "ec96f55b-bf5a-5581-a657-1ec9387a8560",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_portal.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "07637492-f5a5-57ae-9c99-52916cb80f97",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Disc3",
+            "Position": "0,0,0",
+            "Rotation": "0.555570,0.000000,0.000000,0.831470",
+            "Scale": "0.04,2.32,0.4707",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "73fb285f-6394-58e2-a650-4255d82e99a6",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_portal.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "55390be6-9f7d-5be9-9cc0-792950ebaa93",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Disc4",
+            "Position": "0,0,0",
+            "Rotation": "0.707107,0.000000,0.000000,0.707107",
+            "Scale": "0.04,2.32,0.4707",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "8e243532-ce43-53a9-bb11-5fb10a5c61f3",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_portal.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "661eeefe-93e5-50eb-9de6-c508262948e7",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Disc5",
+            "Position": "0,0,0",
+            "Rotation": "0.831470,0.000000,0.000000,0.555570",
+            "Scale": "0.04,2.32,0.4707",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "44df8c45-8380-5f6c-ad5f-ac4cfe026ef3",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_portal.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "758d3c84-1580-561b-94a1-fa90828a17d6",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Disc6",
+            "Position": "0,0,0",
+            "Rotation": "0.923880,0.000000,0.000000,0.382683",
+            "Scale": "0.04,2.32,0.4707",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "076dece5-176b-5545-a597-e059a4d3dc48",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_portal.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              }
+            ],
+            "Children": []
+          },
+          {
+            "__guid": "5b1b8d95-52f7-5746-9e08-c60fe814a620",
+            "__version": 2,
+            "Flags": 0,
+            "Name": "Disc7",
+            "Position": "0,0,0",
+            "Rotation": "0.980785,0.000000,0.000000,0.195090",
+            "Scale": "0.04,2.32,0.4707",
+            "Tags": "",
+            "Enabled": true,
+            "NetworkMode": 1,
+            "NetworkFlags": 0,
+            "NetworkOrphaned": 0,
+            "NetworkTransmit": true,
+            "OwnerTransfer": 1,
+            "Components": [
+              {
+                "__type": "Sandbox.ModelRenderer",
+                "__guid": "608588b4-63f2-5937-84d4-9d465da4647f",
+                "__enabled": true,
+                "Flags": 0,
+                "BodyGroups": 18446744073709551615,
+                "CreateAttachments": false,
+                "LodOverride": null,
+                "MaterialGroup": null,
+                "MaterialOverride": "materials/hub/hub_portal.vmat",
+                "Materials": null,
+                "Model": "models/dev/box.vmdl",
+                "RenderOptions": {
+                  "GameLayer": true,
+                  "OverlayLayer": false,
+                  "BloomLayer": false,
+                  "AfterUILayer": false
+                },
+                "RenderType": "On",
+                "Tint": "1,1,1,1"
+              }
+            ],
+            "Children": []
+          }
+        ]
+      },
+      {
+        "__guid": "61605749-e1d2-5147-b591-446929868ca1",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "Glow",
+        "Position": "0,0,4",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "",
+        "Enabled": true,
+        "NetworkMode": 1,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.PointLight",
+            "__guid": "89ac2712-b3a4-5099-9db5-ebfe40f77263",
+            "__enabled": true,
+            "Flags": 0,
+            "LightColor": "0.7,0.35,1,1",
+            "Radius": 240.0,
+            "Attenuation": 1.0,
+            "Shadows": false,
+            "FogMode": "Disabled",
+            "FogStrength": 0.0
+          }
+        ],
+        "Children": []
+      }
+    ],
+    "__variables": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

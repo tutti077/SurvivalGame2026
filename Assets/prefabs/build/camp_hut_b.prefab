@@ -1,0 +1,108 @@
+{
+  "RootObject": {
+    "__guid": "0a015090-3f5f-5733-9c2c-27dfed900f1d",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "camp_hut_b",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "buildpiece",
+    "Enabled": true,
+    "NetworkMode": 1,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 1,
+    "Components": [
+      {
+        "__type": "Sandbox.ModelCollider",
+        "__guid": "ae6f2310-4ebf-5ec2-bf84-a395449c8862",
+        "__enabled": true,
+        "Flags": 0,
+        "IsTrigger": false,
+        "Model": "models/environment/camp/camp_hut_b.vmdl",
+        "Static": true,
+        "Surface": null
+      },
+      {
+        "__type": "Survival.BuildPiece",
+        "__guid": "73ad12f1-33fc-5b4e-ada5-c313b605d740",
+        "__enabled": true,
+        "Flags": 0,
+        "IsBlueprint": false,
+        "PieceId": "camp_hut_b"
+      }
+    ],
+    "Children": [
+      {
+        "__guid": "06fd93f1-0b11-5c2a-9a56-9164ec406400",
+        "__version": 2,
+        "Flags": 0,
+        "Name": "Visual",
+        "Position": "0,0,0",
+        "Rotation": "0,0,0,1",
+        "Scale": "1,1,1",
+        "Tags": "",
+        "Enabled": true,
+        "NetworkMode": 1,
+        "NetworkFlags": 0,
+        "NetworkOrphaned": 0,
+        "NetworkTransmit": true,
+        "OwnerTransfer": 1,
+        "Components": [
+          {
+            "__type": "Sandbox.ModelRenderer",
+            "__guid": "d21b0676-6617-5478-b444-248d82fd040e",
+            "__enabled": true,
+            "Flags": 0,
+            "BodyGroups": 18446744073709551615,
+            "CreateAttachments": false,
+            "LodOverride": null,
+            "MaterialGroup": null,
+            "MaterialOverride": null,
+            "Materials": null,
+            "Model": "models/environment/camp/camp_hut_b.vmdl",
+            "RenderOptions": {
+              "GameLayer": true,
+              "OverlayLayer": false,
+              "BloomLayer": false,
+              "AfterUILayer": false
+            },
+            "RenderType": "On",
+            "Tint": "1,1,1,1"
+          }
+        ],
+        "Children": []
+      }
+    ],
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}
