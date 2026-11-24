@@ -362,18 +362,31 @@ public static class GameHacks
 		Log.Info( $"[Hacks] swing: holding attack for {holdSeconds:0.##}s." );
 	}
 
-	/// <summary>Usage: <c>special_attack</c> — press the melee special (Q) for one frame, as the key would (static combo mode, on the ground).</summary>
-	[ConCmd( "special_attack" )]
-	public static void ConCmdSpecialAttack()
+	/// <summary>
+	/// Usage: <c>jump_press</c> — press Space for one frame as the key would, so an airborne ledge grab /
+	/// air hop / wingsuit deploy can be driven from the editor (which cannot press keys).
+	/// <see cref="PlayerMovement"/> consumes it at the top of its owner input tick (<see cref="ConsumeSimulatedJumpPress"/>).
+	/// </summary>
+	[ConCmd( "jump_press" )]
+	public static void ConCmdJumpPress()
 	{
-		_simulatedSpecialPending = true;
-		Log.Info( "[Hacks] special_attack: pressing the special once." );
+		_simulatedJumpPending = true;
+		Log.Info( "[Hacks] jump_press: pressing jump once." );
 	}
 
-	static bool _simulatedSpecialPending;
+	static bool _simulatedJumpPending;
+
+	/// <summary>True once after <c>jump_press</c>; the movement owner then sets the jump action for that frame.</summary>
+	public static bool ConsumeSimulatedJumpPress()
+	{
+		if ( !_simulatedJumpPending )
+			return false;
+		_simulatedJumpPending = false;
+		return true;
+	}
 
 	/// <summary>
-	/// Usage: <c>swing_dir L|R|U|D</c> — sets the local pawn's attack side as mouse movement would (Left / Right swing or the
+	/// Usage: <c>swing_dir L|R|U</c> — sets the local pawn's attack side as mouse movement would (Left / Right swing or the
 	/// Up overhead), so a filmed or scripted <c>swing</c> can pick its direction from the editor. Mouse movement overrides it.
 	/// </summary>
 	/// <summary>Usage: <c>wingsuit_test [meters]</c> — lift the local pawn and open the wingsuit (no gear needed).</summary>
@@ -415,7 +428,6 @@ public static class GameHacks
 		{
 			"L" => MeleeAttackTypes.Left,
 			"U" => MeleeAttackTypes.Forward,
-			"D" => MeleeAttackTypes.Stab,
 			_ => MeleeAttackTypes.Right,
 		};
 		var combat = FindLocalPawnVitals()?.Components.Get<PlayerCombat>();
@@ -425,7 +437,7 @@ public static class GameHacks
 			return;
 		}
 
-		foreach ( var dir in new[] { SwingDirs.Left, SwingDirs.Right, SwingDirs.Up, SwingDirs.Down } )
+		foreach ( var dir in new[] { SwingDirs.Left, SwingDirs.Right, SwingDirs.Up } )
 		{
 			if ( combat.ResolveAttackTypeFromCursorDir( dir ) != want )
 				continue;
@@ -451,14 +463,8 @@ public static class GameHacks
 	public static bool SimulatedSneakHeld => RealTime.GlobalNow < _simulatedSneakUntilGlobal;
 
 	/// <summary>Owner input tick hook: keeps the simulated attack action down until its time is up.</summary>
-	public static void ApplySimulatedInput( string primaryAttackAction, string blockAction = null, string specialAction = null )
+	public static void ApplySimulatedInput( string primaryAttackAction, string blockAction = null )
 	{
-		if ( _simulatedSpecialPending && !string.IsNullOrWhiteSpace( specialAction ) )
-		{
-			_simulatedSpecialPending = false;
-			Input.SetAction( specialAction, true );
-		}
-
 		if ( RealTime.GlobalNow < _simulatedBlockUntilGlobal && !string.IsNullOrWhiteSpace( blockAction ) )
 			Input.SetAction( blockAction, true );
 
