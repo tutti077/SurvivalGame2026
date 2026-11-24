@@ -137,6 +137,22 @@ public static class UiStyle
 		}
 	}
 
+	/// <summary>
+	/// Marks every panel under <paramref name="root"/> for a style rebuild. The engine bakes the screen
+	/// scale into a panel's cached style and skips <c>display: none</c> subtrees when the view resizes,
+	/// so a menu that was closed during the resize kept the old scale until one of its panels happened
+	/// to be restyled (emptied inventory slots grew). Call once when the root's scale changes.
+	/// </summary>
+	public static void RestyleTree( Panel root )
+	{
+		if ( root is null || !root.IsValid() )
+			return;
+
+		root.Style.Dirty();
+		foreach ( var child in root.Children )
+			RestyleTree( child );
+	}
+
 	/// <summary>The theme padding on every side (a scale multiplies it).</summary>
 	public static void Padding( Panel p, float scale = 1f )
 	{

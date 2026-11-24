@@ -541,7 +541,7 @@ public sealed class PlayerGameMenuController : Component, PlayerController.IEven
 		// look controls + hides the mouse over their capture — who wins depended on component
 		// update order, which is why the fight looked machine-specific.
 		_modalInteraction ??= Components.Get<PlayerInventoryInteraction>();
-		if ( _modalInteraction is { IsTimeTrialMenuOpen: true } or { IsArenaMenuOpen: true } )
+		if ( _modalInteraction is { IsTimeTrialMenuOpen: true } or { IsArenaMenuOpen: true } or { IsHubMenuOpen: true } )
 			return;
 
 		// So does the grapple control-scheme prompt (per-machine first-use choice, shown while a

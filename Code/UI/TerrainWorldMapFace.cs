@@ -76,6 +76,7 @@ public sealed class TerrainWorldMapFace
 	readonly Dictionary<Guid, Panel> _crewMarkers = new();
 	readonly Dictionary<Guid, Panel> _vehicleMarkers = new();
 	readonly List<Guid> _staleVehicleKeys = new();
+	readonly Dictionary<Guid, Panel> _corpseBagMarkers = new();
 	Panel _vehicleLayer;
 	readonly List<Guid> _staleCrewKeys = new();
 	int _builtRemotePinKey;
@@ -786,6 +787,7 @@ public sealed class TerrainWorldMapFace
 		UpdateDungeon( stagePixels, span );
 		UpdateCrewMarkers();
 		UpdateVehicleMarkers();
+		UpdateCorpseBagMarkers();
 
 		// Reading Pings prunes expired ones (and bumps the version), so compare afterwards.
 		var pings = MapPingFeed.Pings;
@@ -1209,6 +1211,61 @@ public sealed class TerrainWorldMapFace
 				icon?.Delete( true );
 			}
 			_vehicleMarkers.Remove( _staleVehicleKeys[i] );
+		}
+	}
+
+	/// <summary>
+	/// The local player's corpse bags (<see cref="CorpseBag"/>): a sack pin where each one lies, gone when the bag is
+	/// emptied. Like the vehicle markers it is not a saved pin; unlike them only the bag's owner sees it.
+	/// </summary>
+	void UpdateCorpseBagMarkers()
+	{
+		if ( _vehicleLayer is null || !_vehicleLayer.IsValid() )
+			return;
+
+		_staleVehicleKeys.Clear();
+		foreach ( var key in _corpseBagMarkers.Keys )
+			_staleVehicleKeys.Add( key );
+
+		var half = PinSizePixels * 0.5f;
+		var bags = CorpseBag.Registered;
+		for ( var i = 0; i < bags.Count; i++ )
+		{
+			var bag = bags[i];
+			if ( bag is null || !bag.IsValid() || !bag.IsLocalPlayers )
+				continue;
+
+			var key = bag.GameObject.Id;
+			_staleVehicleKeys.Remove( key );
+
+			if ( !_corpseBagMarkers.TryGetValue( key, out var icon ) || icon is null || !icon.IsValid() )
+			{
+				icon = new Panel { Parent = _vehicleLayer };
+				icon.Style.Set( "position", "absolute" );
+				icon.Style.Width = Length.Pixels( PinSizePixels );
+				icon.Style.Height = Length.Pixels( PinSizePixels );
+				icon.Style.Set( "overflow", "visible" );
+				icon.Style.Set( "pointer-events", "none" );
+				MenuUiTextures.ApplyBackground( icon, CorpseBag.MapPinTexturePath );
+				if ( _showPinNames )
+					AddMarkerLabel( icon, "Your corpse bag", PinSizePixels + 1f, Color.White );
+				_corpseBagMarkers[key] = icon;
+			}
+
+			var meters = TerrainWorldUnits.EngineToMeters( bag.WorldPosition );
+			var uv = WorldToLayerUv( new Vector2( meters.x, meters.y ) );
+			PlaceCenter( icon, uv, -half, -half );
+		}
+
+		for ( var i = 0; i < _staleVehicleKeys.Count; i++ )
+		{
+			if ( _corpseBagMarkers.TryGetValue( _staleVehicleKeys[i], out var icon ) )
+			{
+				if ( icon is not null )
+					_placed.Remove( icon );
+				icon?.Delete( true );
+			}
+			_corpseBagMarkers.Remove( _staleVehicleKeys[i] );
 		}
 	}
 

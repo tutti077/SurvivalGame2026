@@ -24,6 +24,7 @@ public sealed class ArenaMenuPanel : Panel
 	ArenaPhase _lastPhase = (ArenaPhase)(-1);
 	string _lastQueueBlob = "\0";
 	string _lastCrewBlob = "\0";
+	Guid _lastCameraman;
 
 	public ArenaMenuPanel( PlayerInventoryInteraction interaction )
 	{
@@ -66,9 +67,11 @@ public sealed class ArenaMenuPanel : Panel
 		var queueBlob = session?.QueueBlob ?? "";
 		var crewBlob = _interaction?.Components.Get<PlayerCrew>()?.MyCrewBlob ?? "";
 
+		var cameraman = session?.CameramanId ?? default;
 		if ( phase == _lastPhase
 		     && ReferenceEquals( queueBlob, _lastQueueBlob )
-		     && ReferenceEquals( crewBlob, _lastCrewBlob ) )
+		     && ReferenceEquals( crewBlob, _lastCrewBlob )
+		     && cameraman == _lastCameraman )
 			return;
 
 		Rebuild();
@@ -124,6 +127,7 @@ public sealed class ArenaMenuPanel : Panel
 		_lastPhase = session?.Phase ?? ArenaPhase.Idle;
 		_lastQueueBlob = session?.QueueBlob ?? "";
 		_lastCrewBlob = playerCrew?.MyCrewBlob ?? "";
+		_lastCameraman = session?.CameramanId ?? default;
 
 		_modeGrid.DeleteChildren( true );
 		_footer.DeleteChildren( true );
@@ -177,7 +181,34 @@ public sealed class ArenaMenuPanel : Panel
 				disabled: !enabled );
 		}
 
+		AddCameramanButton( session, localKey, queued );
 		MakeButton( _footer, "Close", UiButton.Default, () => _interaction?.SetArenaMenuOpen( false ) );
+	}
+
+	/// <summary>The hub arena's cameraman role: volunteer for the next fight, or step down (one per fight).</summary>
+	void AddCameramanButton( ArenaSession session, Guid localKey, bool queued )
+	{
+		if ( !session.HasCameramanRole )
+			return;
+
+		if ( session.CameramanId == localKey )
+		{
+			if ( !session.CameramanFilming )
+				MakeButton( _footer, "Stop Filming", UiButton.Danger, () =>
+				{
+					_interaction?.OwnerArenaCameraman( false );
+					_nextPollAt = 0;
+				} );
+			return;
+		}
+
+		var free = session.CameramanId == default && !queued;
+		MakeButton( _footer, free ? "Be the Cameraman" : "Cameraman taken", UiButton.Default,
+			free ? () =>
+			{
+				_interaction?.OwnerArenaCameraman( true );
+				_nextPollAt = 0;
+			} : null, disabled: !free );
 	}
 
 	static Panel MakeButton( Panel parent, string text, UiButton kind, Action onClick, bool disabled = false )

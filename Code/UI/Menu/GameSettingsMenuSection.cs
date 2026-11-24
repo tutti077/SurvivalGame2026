@@ -22,7 +22,11 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		( "video", "Video" ),
 		( "player_stats", "Player stats" ),
 		( "dev_tools", "Dev tools" ),
+		( "bug_report", "Report a bug" ),
 	};
+
+	/// <summary>Material icon button size (Mark's menu rule: icon buttons ≈ 52 px).</summary>
+	const float IconButtonSize = 52f;
 
 	Panel _sectionRoot;
 	Panel _rootHeader;
@@ -36,15 +40,28 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 	readonly Dictionary<string, Panel> _subPageById = new();
 	readonly List<SettingsMenuButtonPanel> _rootButtons = new();
 	readonly List<SettingsMenuButtonPanel> _controlSchemeButtons = new();
+	readonly List<SettingsMenuButtonPanel> _gameSettingButtons = new();
 	readonly List<SettingsMenuButtonPanel> _devToolButtons = new();
-	Label _staticComboLabel;
-	Label _wasdFacingLabel;
+	readonly List<SettingsMenuButtonPanel> _audioButtons = new();
+	VolumeSlider _musicSlider;
+	VolumeSlider _sfxSlider;
+	/// <summary>The slider whose track was pressed and is still held (Attack1 down).</summary>
+	VolumeSlider _dragSlider;
+	Label _fluidBlockLabel;
+	Label _sensitivityLabel;
+	Label _damageInfoLabel;
 	Label _allCraftingLabel;
 	Label _staminaLabel;
 	Label _dayLockLabel;
+	Label _resyncLabel;
+	Label _scavDifficultyLabel;
+	Label _scavEasierLabel;
+	Label _scavHarderLabel;
 	SettingsMenuButtonPanel _staminaButton;
 	SettingsMenuButtonPanel _dayLockButton;
 	SettingsMenuBackButtonPanel _backButton;
+	SettingsMenuButtonPanel _bugIconButton;
+	BugReportPage _bugReportPage;
 	string _activeSubPageId;
 
 	bool _menuOpen;
@@ -52,6 +69,9 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 
 	public void Build( Panel menuColumn )
 	{
+		// Saved volumes reach the mixers as soon as the HUD exists, not only when the Audio page opens.
+		AudioVolumeSettings.EnsureLoaded();
+
 		_sectionRoot = new Panel { Parent = menuColumn };
 		_sectionRoot.Style.Set( "position", "relative" );
 		_sectionRoot.Style.Width = Length.Percent( 100 );
@@ -165,12 +185,30 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		for ( var i = 0; i < SubPages.Length; i++ )
 			BuildSubPage( SubPages[i].Id, SubPages[i].Title );
 
+		// Footer: bug report icon bottom-left (every page), build label centred.
 		var footer = new Panel { Parent = _sectionRoot };
+		footer.Style.Set( "position", "relative" );
 		footer.Style.Set( "flex-shrink", "0" );
 		footer.Style.Set( "width", "100%" );
 		footer.Style.Set( "flex-direction", "row" );
 		footer.Style.Set( "justify-content", "center" );
-		footer.Style.PaddingTop = Length.Pixels( 12f );
+		footer.Style.Set( "align-items", "center" );
+		footer.Style.Height = Length.Pixels( IconButtonSize + 8f );
+		footer.Style.PaddingTop = Length.Pixels( 8f );
+
+		_bugIconButton = new SettingsMenuButtonPanel { Parent = footer, Section = this, ActionId = "bug_report" };
+		_bugIconButton.Style.Set( "position", "absolute" );
+		_bugIconButton.Style.Set( "left", "0" );
+		_bugIconButton.Style.Set( "top", "8px" );
+		_bugIconButton.Style.Width = Length.Pixels( IconButtonSize );
+		_bugIconButton.Style.Height = Length.Pixels( IconButtonSize );
+		UiStyle.Button( _bugIconButton, UiButton.Ghost );
+		_bugIconButton.Style.Set( "pointer-events", "none" );
+
+		var bugIcon = new IconPanel { Parent = _bugIconButton, Text = "bug_report" };
+		bugIcon.Style.FontSize = Length.Pixels( 30f );
+		bugIcon.Style.FontColor = UiTheme.Colors.TextPrimaryColor;
+		bugIcon.Style.Set( "pointer-events", "none" );
 
 		_buildLabel = new Label { Parent = footer, Text = $"Build {GameBuildLabel.Display}" };
 		UiStyle.Text( _buildLabel, UiText.Muted, CraftingMenuSection.SectionEntryFontSize );
@@ -215,27 +253,105 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 
 			AddControlSchemeButton( body, "grapple_pro", "Pro (E / Q)" );
 			AddControlSchemeButton( body, "grapple_training", "Training Wheels (Space / Ctrl)" );
+
+			var blockHint = new Label
+			{
+				Parent = body,
+				Text = "Fluid block — ON: flick the mouse to move a held guard to another side; hold attack as well to keep it where it is while you turn. OFF: let go of block and press again to change sides.",
+			};
+			UiStyle.Text( blockHint, UiText.Secondary, CraftingMenuSection.SectionEntryFontSize );
+			blockHint.Style.Set( "text-align", "center" );
+			blockHint.Style.Set( "white-space", "normal" );
+			blockHint.Style.Set( "margin-top", "24px" );
+			blockHint.Style.Set( "margin-bottom", "14px" );
+
+			_fluidBlockLabel = AddControlSchemeButton( body, "fluid_block", "" );
+
+			var sensitivityHint = new Label
+			{
+				Parent = body,
+				Text = "Combat sensitivity — how much mouse movement flips the attack / guard direction (left, right, overhead). 1 is the quickest; 10 needs a long, deliberate movement.",
+			};
+			UiStyle.Text( sensitivityHint, UiText.Secondary, CraftingMenuSection.SectionEntryFontSize );
+			sensitivityHint.Style.Set( "text-align", "center" );
+			sensitivityHint.Style.Set( "white-space", "normal" );
+			sensitivityHint.Style.Set( "margin-top", "24px" );
+			sensitivityHint.Style.Set( "margin-bottom", "14px" );
+
+			// [-] value [+] on one fixed-width row: the label has its own width, so the buttons never move.
+			var sensitivityRow = new Panel { Parent = body };
+			sensitivityRow.Style.Set( "flex-direction", "row" );
+			sensitivityRow.Style.Set( "align-items", "center" );
+			sensitivityRow.Style.Set( "justify-content", "center" );
+			sensitivityRow.Style.Set( "gap", $"{ButtonGap}px" );
+			AddControlStepButton( sensitivityRow, "sensitivity_down", "-" );
+			_sensitivityLabel = new Label { Parent = sensitivityRow, Text = "" };
+			UiStyle.Text( _sensitivityLabel, UiText.Body, CraftingMenuSection.ItemNameFontSize );
+			_sensitivityLabel.Style.Width = Length.Pixels( 260f );
+			_sensitivityLabel.Style.Set( "flex-shrink", "0" );
+			_sensitivityLabel.Style.Set( "text-align", "center" );
+			_sensitivityLabel.Style.Set( "white-space", "nowrap" );
+			AddControlStepButton( sensitivityRow, "sensitivity_up", "+" );
+			RefreshControlLabels();
 		}
-		else if ( string.Equals( pageId, "dev_tools", StringComparison.OrdinalIgnoreCase ) )
+		else if ( string.Equals( pageId, "game_settings", StringComparison.OrdinalIgnoreCase ) )
 		{
-			// Dev toggles (DevToolsSettings): one fixed-width button per flag, its label reads the current state.
 			var column = new Panel { Parent = body };
 			column.Style.Set( "flex-direction", "column" );
 			column.Style.Set( "align-items", "stretch" );
 			column.Style.Set( "gap", $"{ButtonGap}px" );
 			column.Style.Width = Length.Pixels( ButtonWidth + 120f );
 
-			AddDevToolHint( column, "Your player: quick clicks go right, left, overhead; hold for a heavy; Q on the ground stabs." );
-			_staticComboLabel = AddDevToolButton( column, "dev_static_combo", out _ );
-			AddDevToolHint( column, "Your player: W/A/S/D turn the body to walk that way - S walks toward the camera. Off: face the camera, strafe and back-pedal. Guard and swings face the camera either way." );
-			_wasdFacingLabel = AddDevToolButton( column, "dev_wasd_facing", out _ );
+			AddDevToolHint( column, "Practice readout under the crosshair: the damage of your last hit and the bonus or penalty from turning with or against the swing." );
+			var row = new SettingsMenuButtonPanel { Parent = column, Section = this, ActionId = "damage_info" };
+			StyleMenuButton( row, UiButton.Default );
+			_gameSettingButtons.Add( row );
+			_damageInfoLabel = new Label { Parent = row, Text = "" };
+			UiStyle.ButtonLabel( _damageInfoLabel, UiButton.Default, CraftingMenuSection.ItemNameFontSize );
+			RefreshControlLabels();
+		}
+		else if ( string.Equals( pageId, "dev_tools", StringComparison.OrdinalIgnoreCase ) )
+		{
+			// Dev toggles (DevToolsSettings): one fixed-width button per flag, its label reads the current state.
+			// Two fixed-width columns side by side: the flags on the left, the player controls on the right.
+			var columns = new Panel { Parent = body };
+			columns.Style.Set( "flex-direction", "row" );
+			columns.Style.Set( "align-items", "center" );
+			columns.Style.Set( "justify-content", "center" );
+			columns.Style.Set( "gap", "48px" );
+
+			var column = AddDevToolColumn( columns );
+			BuildDevPlayersColumn( AddDevToolColumn( columns ) );
+
 			AddDevToolHint( column, "Crafting menu: every recipe in your pocket and free (dev), or only where it belongs - workbench and stations." );
 			_allCraftingLabel = AddDevToolButton( column, "dev_all_crafting", out _ );
 
 			AddDevToolHint( column, "Everyone on the server (host only):" ).Style.Set( "margin-top", "14px" );
 			_staminaLabel = AddDevToolButton( column, "dev_stamina", out _staminaButton );
 			_dayLockLabel = AddDevToolButton( column, "dev_day_lock", out _dayLockButton );
+			AddScavDifficultyStepper( column );
+
+			AddDevToolHint( column, "Out of sync after a code change: the host sends everything to everyone again." ).Style.Set( "margin-top", "14px" );
+			_resyncLabel = AddDevToolButton( column, "dev_resync", out _ );
 			RefreshDevToolLabels();
+		}
+		else if ( string.Equals( pageId, "audio", StringComparison.OrdinalIgnoreCase ) )
+		{
+			var column = new Panel { Parent = body };
+			column.Style.Set( "flex-direction", "column" );
+			column.Style.Set( "align-items", "stretch" );
+			column.Style.Set( "gap", $"{ButtonGap + 8f}px" );
+			column.Style.Width = Length.Pixels( AudioRowWidth );
+
+			_audioButtons.Clear();
+			_musicSlider = AddVolumeSlider( column, "Music", "audio_music", isMusic: true );
+			_sfxSlider = AddVolumeSlider( column, "Sound effects", "audio_sfx", isMusic: false );
+			RefreshVolumeSliders();
+		}
+		else if ( string.Equals( pageId, "bug_report", StringComparison.OrdinalIgnoreCase ) )
+		{
+			_bugReportPage = new BugReportPage();
+			_bugReportPage.Build( body );
 		}
 		else
 		{
@@ -264,7 +380,34 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		UiStyle.ButtonLabel( label, kind, CraftingMenuSection.ItemNameFontSize );
 	}
 
-	void AddControlSchemeButton( Panel parent, string actionId, string labelText )
+	/// <summary>Controls page: the toggle labels read the saved state.</summary>
+	void RefreshControlLabels()
+	{
+		SetLabel( _fluidBlockLabel, $"Fluid block: {OnOff( CombatControlSettings.FluidBlock )}" );
+		SetLabel( _sensitivityLabel, $"Combat sensitivity: {CombatControlSettings.Sensitivity}" );
+		SetLabel( _damageInfoLabel, $"Show damage information: {OnOff( CombatControlSettings.ShowDamageInfo )}" );
+	}
+
+	/// <summary>A 52 px [-] / [+] button on the controls page (hit-tested with the page's other buttons).</summary>
+	void AddControlStepButton( Panel row, string actionId, string text )
+	{
+		var button = new SettingsMenuButtonPanel { Parent = row, Section = this, ActionId = actionId };
+		StyleMenuButton( button, UiButton.Default );
+		button.Style.Set( "width", $"{IconButtonSize}px" );
+		button.Style.Set( "height", $"{IconButtonSize}px" );
+		button.Style.Set( "flex-shrink", "0" );
+		button.Style.Set( "justify-content", "center" );
+		button.Style.Set( "align-items", "center" );
+		button.Style.PaddingLeft = Length.Pixels( 0f );
+		button.Style.PaddingRight = Length.Pixels( 0f );
+		_controlSchemeButtons.Add( button );
+
+		var label = new Label { Parent = button, Text = text };
+		UiStyle.ButtonLabel( label, UiButton.Default, CraftingMenuSection.ItemNameFontSize );
+		label.Style.Set( "text-align", "center" );
+	}
+
+	Label AddControlSchemeButton( Panel parent, string actionId, string labelText )
 	{
 		var row = new SettingsMenuButtonPanel
 		{
@@ -277,6 +420,7 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 
 		var label = new Label { Parent = row, Text = labelText };
 		UiStyle.ButtonLabel( label, UiButton.Default, CraftingMenuSection.ItemNameFontSize );
+		return label;
 	}
 
 	static Label AddDevToolHint( Panel parent, string text )
@@ -287,6 +431,188 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		hint.Style.Set( "white-space", "normal" );
 		hint.Style.Set( "margin-bottom", "4px" );
 		return hint;
+	}
+
+	static Panel AddDevToolColumn( Panel parent )
+	{
+		var column = new Panel { Parent = parent };
+		column.Style.Set( "flex-direction", "column" );
+		column.Style.Set( "align-items", "stretch" );
+		column.Style.Set( "gap", $"{ButtonGap}px" );
+		column.Style.Set( "flex-shrink", "0" );
+		column.Style.Width = Length.Pixels( ButtonWidth + 120f );
+		return column;
+	}
+
+	// ---- Dev tools: players (DevPlayerControls) — [<] name [>] cycler, then bring / go to / respawn ----
+
+	/// <summary>The scene is scanned for pawns this often while the page is open, never per frame.</summary>
+	const float DevPlayerListRefreshSeconds = 0.5f;
+
+	readonly List<PlayerVitals> _devPlayers = new();
+	RealTimeSince _sinceDevPlayerScan = 999f;
+	/// <summary>The cycler's pick, by pawn id, so it survives players joining and leaving.</summary>
+	Guid _devPlayerId;
+	string _devPlayerStatus = "";
+	Label _devPlayerNameLabel;
+	Label _devPlayerPrevLabel;
+	Label _devPlayerNextLabel;
+	Label _devPlayerBringLabel;
+	Label _devPlayerGoToLabel;
+	Label _devPlayerRespawnLabel;
+	Label _devPlayerStatusLabel;
+
+	void BuildDevPlayersColumn( Panel column )
+	{
+		AddDevToolHint( column, "Players (host only): pick one, then move or respawn them." );
+
+		var row = new Panel { Parent = column };
+		row.Style.Set( "flex-direction", "row" );
+		row.Style.Set( "align-items", "center" );
+		row.Style.Set( "gap", $"{ButtonGap}px" );
+		row.Style.Set( "width", "100%" );
+
+		_devPlayerPrevLabel = AddStepButton( row, "dev_player_prev", "<" );
+		_devPlayerNameLabel = new Label { Parent = row, Text = "" };
+		UiStyle.Text( _devPlayerNameLabel, UiText.Body, CraftingMenuSection.ItemNameFontSize );
+		// Zero basis + hidden overflow: a long name is cut, the arrows never move.
+		_devPlayerNameLabel.Style.Set( "flex-grow", "1" );
+		_devPlayerNameLabel.Style.Set( "flex-basis", "0" );
+		_devPlayerNameLabel.Style.Set( "overflow", "hidden" );
+		_devPlayerNameLabel.Style.Set( "text-align", "center" );
+		_devPlayerNameLabel.Style.Set( "white-space", "nowrap" );
+		_devPlayerNextLabel = AddStepButton( row, "dev_player_next", ">" );
+
+		_devPlayerBringLabel = AddDevToolButton( column, "dev_player_bring", out _ );
+		_devPlayerGoToLabel = AddDevToolButton( column, "dev_player_goto", out _ );
+		_devPlayerRespawnLabel = AddDevToolButton( column, "dev_player_respawn", out _ );
+
+		// What the last press did; a fixed height so the column never reflows.
+		_devPlayerStatusLabel = new Label { Parent = column, Text = "" };
+		UiStyle.Text( _devPlayerStatusLabel, UiText.Secondary, CraftingMenuSection.SectionEntryFontSize );
+		_devPlayerStatusLabel.Style.Set( "text-align", "center" );
+		_devPlayerStatusLabel.Style.Set( "white-space", "nowrap" );
+		_devPlayerStatusLabel.Style.Set( "overflow", "hidden" );
+		_devPlayerStatusLabel.Style.Height = Length.Pixels( 24f );
+	}
+
+	int DevPlayerIndex()
+	{
+		for ( var i = 0; i < _devPlayers.Count; i++ )
+		{
+			if ( _devPlayers[i].IsValid() && _devPlayers[i].GameObject.Id == _devPlayerId )
+				return i;
+		}
+
+		return -1;
+	}
+
+	/// <summary>The picked pawn; a pick that left the game falls back to the first player.</summary>
+	PlayerVitals SelectedDevPlayer( bool rescan = false )
+	{
+		if ( rescan || _sinceDevPlayerScan > DevPlayerListRefreshSeconds )
+		{
+			_sinceDevPlayerScan = 0f;
+			DevPlayerControls.CollectPlayers( _devPlayers );
+		}
+
+		if ( _devPlayers.Count == 0 )
+			return null;
+
+		var index = DevPlayerIndex();
+		if ( index < 0 )
+		{
+			index = 0;
+			_devPlayerId = _devPlayers[0].GameObject.Id;
+		}
+
+		var player = _devPlayers[index];
+		return player.IsValid() ? player : null;
+	}
+
+	void StepDevPlayer( int delta )
+	{
+		if ( SelectedDevPlayer( rescan: true ) is null )
+			return;
+
+		var index = ( DevPlayerIndex() + delta + _devPlayers.Count ) % _devPlayers.Count;
+		_devPlayerId = _devPlayers[index].GameObject.Id;
+		_devPlayerStatus = "";
+	}
+
+	void RefreshDevPlayerLabels()
+	{
+		var host = DevPlayerControls.CanUse;
+		var selected = SelectedDevPlayer();
+		var local = DevPlayerControls.FindLocal();
+		var isSelf = selected is not null && ReferenceEquals( selected, local );
+
+		string name;
+		if ( selected is null )
+			name = "No players";
+		else
+		{
+			name = $"{DevPlayerControls.NameOf( selected, local )}  {DevPlayerIndex() + 1}/{_devPlayers.Count}";
+			if ( isSelf )
+				name += "  (you)";
+			else if ( local is not null )
+				name += $"  {TerrainWorldUnits.EngineToMeters( selected.WorldPosition.Distance( local.WorldPosition ) ):0} m";
+		}
+
+		SetLabel( _devPlayerNameLabel, name );
+		SetLabel( _devPlayerBringLabel, "Bring them to me" );
+		SetLabel( _devPlayerGoToLabel, "Bring me to them" );
+		SetLabel( _devPlayerRespawnLabel, isSelf ? "Respawn me" : "Respawn them" );
+		SetLabel( _devPlayerStatusLabel, host ? _devPlayerStatus : "Host only" );
+
+		// Greyed = a press does nothing: a client, nobody picked, or moving yourself to yourself.
+		var canAct = host && selected is not null;
+		var canMove = canAct && !isSelf && local is not null;
+		TintDevLabel( _devPlayerNameLabel, host );
+		TintDevLabel( _devPlayerPrevLabel, host && _devPlayers.Count > 1 );
+		TintDevLabel( _devPlayerNextLabel, host && _devPlayers.Count > 1 );
+		TintDevLabel( _devPlayerBringLabel, canMove );
+		TintDevLabel( _devPlayerGoToLabel, canMove );
+		TintDevLabel( _devPlayerRespawnLabel, canAct );
+	}
+
+	static void TintDevLabel( Label label, bool active )
+	{
+		if ( label is not null && label.IsValid() )
+			label.Style.FontColor = active ? UiTheme.Colors.TextPrimaryColor : UiTheme.Colors.TextMutedColor;
+	}
+
+	/// <summary>Scav difficulty: [-] level name [+] on one row, the label a fixed width so the row never reflows.</summary>
+	void AddScavDifficultyStepper( Panel parent )
+	{
+		var row = new Panel { Parent = parent };
+		row.Style.Set( "flex-direction", "row" );
+		row.Style.Set( "align-items", "center" );
+		row.Style.Set( "gap", $"{ButtonGap}px" );
+		row.Style.Set( "width", "100%" );
+
+		_scavEasierLabel = AddStepButton( row, "dev_scav_easier", "-" );
+		_scavDifficultyLabel = new Label { Parent = row, Text = "" };
+		UiStyle.Text( _scavDifficultyLabel, UiText.Body, CraftingMenuSection.ItemNameFontSize );
+		_scavDifficultyLabel.Style.Set( "flex-grow", "1" );
+		_scavDifficultyLabel.Style.Set( "text-align", "center" );
+		_scavDifficultyLabel.Style.Set( "white-space", "nowrap" );
+		_scavHarderLabel = AddStepButton( row, "dev_scav_harder", "+" );
+	}
+
+	Label AddStepButton( Panel row, string actionId, string text )
+	{
+		var label = AddDevToolButton( row, actionId, out var button );
+		button.Style.Set( "width", "52px" );
+		button.Style.Set( "height", "52px" );
+		button.Style.Set( "flex-shrink", "0" );
+		button.Style.Set( "justify-content", "center" );
+		button.Style.Set( "align-items", "center" );
+		button.Style.PaddingLeft = Length.Pixels( 0f );
+		button.Style.PaddingRight = Length.Pixels( 0f );
+		label.Text = text;
+		label.Style.Set( "text-align", "center" );
+		return label;
 	}
 
 	Label AddDevToolButton( Panel parent, string actionId, out SettingsMenuButtonPanel button )
@@ -306,15 +632,199 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		return label;
 	}
 
+	// ---- Audio page: [name] [-] [track] [+] [value], every cell a fixed width so nothing reflows ----
+
+	const float AudioRowWidth = 640f;
+	/// <summary>[-] / [+] and a click or drag on the track all land on 5 % steps.</summary>
+	const float VolumeStep = 0.05f;
+
+	sealed class VolumeSlider
+	{
+		public bool IsMusic;
+		public Panel Track;
+		public Panel Fill;
+		public Label Value;
+	}
+
+	VolumeSlider AddVolumeSlider( Panel parent, string title, string actionPrefix, bool isMusic )
+	{
+		var row = new Panel { Parent = parent };
+		row.Style.Set( "flex-direction", "row" );
+		row.Style.Set( "align-items", "center" );
+		row.Style.Set( "gap", $"{ButtonGap}px" );
+		row.Style.Set( "width", "100%" );
+		row.Style.Height = Length.Pixels( IconButtonSize );
+
+		var name = new Label { Parent = row, Text = title };
+		UiStyle.Text( name, UiText.Body, CraftingMenuSection.ItemNameFontSize );
+		name.Style.Width = Length.Pixels( 170f );
+		name.Style.Set( "flex-shrink", "0" );
+		name.Style.Set( "white-space", "nowrap" );
+
+		AddVolumeStepButton( row, $"{actionPrefix}_down", "-" );
+
+		// The whole 52 px tall cell is the hit area; the bar inside is the thin visible part.
+		var track = new Panel { Parent = row };
+		track.Style.Set( "flex-grow", "1" );
+		track.Style.Set( "flex-direction", "row" );
+		track.Style.Set( "align-items", "center" );
+		track.Style.Height = Length.Pixels( IconButtonSize );
+		track.Style.Set( "pointer-events", "none" );
+
+		var bar = new Panel { Parent = track };
+		bar.Style.Set( "width", "100%" );
+		bar.Style.Height = Length.Pixels( 14f );
+		bar.Style.Set( "flex-direction", "row" );
+		bar.Style.Set( "overflow", "hidden" );
+		bar.Style.Set( "border-radius", "4px" );
+		bar.Style.BackgroundColor = UiTheme.Colors.BarTrackColor;
+
+		var fill = new Panel { Parent = bar };
+		fill.Style.Height = Length.Percent( 100 );
+		fill.Style.BackgroundColor = UiTheme.Colors.AccentColor;
+
+		AddVolumeStepButton( row, $"{actionPrefix}_up", "+" );
+
+		var value = new Label { Parent = row, Text = "" };
+		UiStyle.Text( value, UiText.Body, CraftingMenuSection.ItemNameFontSize );
+		value.Style.Width = Length.Pixels( 64f );
+		value.Style.Set( "flex-shrink", "0" );
+		value.Style.Set( "text-align", "right" );
+		value.Style.Set( "white-space", "nowrap" );
+
+		return new VolumeSlider { IsMusic = isMusic, Track = track, Fill = fill, Value = value };
+	}
+
+	void AddVolumeStepButton( Panel row, string actionId, string text )
+	{
+		var button = new SettingsMenuButtonPanel { Parent = row, Section = this, ActionId = actionId };
+		StyleMenuButton( button, UiButton.Default );
+		button.Style.Set( "width", $"{IconButtonSize}px" );
+		button.Style.Set( "height", $"{IconButtonSize}px" );
+		button.Style.Set( "flex-shrink", "0" );
+		button.Style.Set( "justify-content", "center" );
+		button.Style.Set( "align-items", "center" );
+		button.Style.PaddingLeft = Length.Pixels( 0f );
+		button.Style.PaddingRight = Length.Pixels( 0f );
+		_audioButtons.Add( button );
+
+		var label = new Label { Parent = button, Text = text };
+		UiStyle.ButtonLabel( label, UiButton.Default, CraftingMenuSection.ItemNameFontSize );
+		label.Style.Set( "text-align", "center" );
+	}
+
+	static float VolumeOf( VolumeSlider slider ) =>
+		slider.IsMusic ? AudioVolumeSettings.MusicVolume : AudioVolumeSettings.SfxVolume;
+
+	/// <summary>Snaps to the 5 % grid and applies live; the file is written by the caller once the change is final.</summary>
+	void SetVolume( VolumeSlider slider, float value )
+	{
+		value = MathF.Round( Math.Clamp( value, 0f, 1f ) / VolumeStep ) * VolumeStep;
+		if ( MathF.Abs( value - VolumeOf( slider ) ) < 0.001f )
+			return;
+
+		if ( slider.IsMusic )
+			AudioVolumeSettings.SetMusicVolume( value );
+		else
+			AudioVolumeSettings.SetSfxVolume( value );
+
+		RefreshVolumeSliders();
+	}
+
+	void StepVolume( VolumeSlider slider, float delta )
+	{
+		if ( slider is null )
+			return;
+
+		SetVolume( slider, VolumeOf( slider ) + delta );
+		AudioVolumeSettings.Save();
+	}
+
+	void SetVolumeFromPointer( VolumeSlider slider, Vector2 screenPos )
+	{
+		var rect = slider.Track.Box.Rect;
+		if ( rect.Width <= 1f )
+			return;
+
+		SetVolume( slider, ( screenPos.x - rect.Left ) / rect.Width );
+	}
+
+	bool TryBeginVolumeDrag( Vector2 screenPos )
+	{
+		foreach ( var slider in new[] { _musicSlider, _sfxSlider } )
+		{
+			if ( slider is null || !InventoryScreenPointer.PanelBoxContainsScreen( slider.Track, screenPos ) )
+				continue;
+
+			_dragSlider = slider;
+			SetVolumeFromPointer( slider, screenPos );
+			return true;
+		}
+
+		return false;
+	}
+
+	/// <summary>Follows the pointer while Attack1 stays down; letting go (or leaving the page) saves.</summary>
+	void TickVolumeDrag()
+	{
+		if ( _dragSlider is null )
+			return;
+
+		if ( Input.Down( "Attack1" ) )
+			SetVolumeFromPointer( _dragSlider, InventoryScreenPointer.GetMenuOrMousePosition() );
+		else
+			EndVolumeDrag();
+	}
+
+	void EndVolumeDrag()
+	{
+		if ( _dragSlider is null )
+			return;
+
+		_dragSlider = null;
+		AudioVolumeSettings.Save();
+	}
+
+	void RefreshVolumeSliders()
+	{
+		foreach ( var slider in new[] { _musicSlider, _sfxSlider } )
+		{
+			if ( slider is null )
+				continue;
+
+			var percent = MathF.Round( VolumeOf( slider ) * 100f );
+			slider.Fill.Style.Width = Length.Percent( percent );
+			SetLabel( slider.Value, $"{percent:0}%" );
+		}
+	}
+
 	/// <summary>Quit actions are destructive; everything else is a plain menu button.</summary>
 	static UiButton ButtonKindFor( string actionId ) =>
-		actionId is "quit_menu" or "quit_desktop" ? UiButton.Danger : UiButton.Default;
+		actionId switch
+		{
+			"quit_menu" or "quit_desktop" => UiButton.Danger,
+			"bug_report" => UiButton.Ghost,
+			_ => UiButton.Default,
+		};
+
+	bool OnBugReportPage => string.Equals( _activeSubPageId, "bug_report", StringComparison.OrdinalIgnoreCase );
+
+	/// <summary>True while a bug report box has the keyboard — the menu's page hotkeys and hotbar keys stand down.</summary>
+	public bool IsCapturingText => _menuOpen && _panelVisible && OnBugReportPage && ( _bugReportPage?.HasTextFocus ?? false );
+
+	/// <summary>Escape while typing a report only lets go of the keyboard; the next Escape closes the menu.</summary>
+	public bool TryConsumeEscape()
+	{
+		if ( !IsCapturingText )
+			return false;
+
+		_bugReportPage.OnHidden();
+		return true;
+	}
 
 	/// <summary>Button labels read the live state (host-wide ones arrive by sync, so this also runs while the page is open).</summary>
 	void RefreshDevToolLabels()
 	{
-		SetLabel( _staticComboLabel, $"Static 3-hit combo: {OnOff( DevToolsSettings.StaticMeleeCombo )}" );
-		SetLabel( _wasdFacingLabel, $"Body turns with WASD: {OnOff( DevToolsSettings.WasdBodyFacing )}" );
 		SetLabel( _allCraftingLabel, GameHacks.AllCrafting ? "Recipes: all in pocket, free" : "Recipes: stations only" );
 
 		// Clients see the host-wide state greyed out; only the host's click changes it.
@@ -322,11 +832,21 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		var suffix = host ? "" : "  (host only)";
 		SetLabel( _staminaLabel, $"Stamina drain: {OnOff( !DevToolsSettings.InfiniteStamina )}{suffix}" );
 		SetLabel( _dayLockLabel, $"Lock daytime: {OnOff( DevToolsSettings.DayLocked )}{suffix}" );
+		SetLabel( _resyncLabel, "Resync players" );
+		var level = DevToolsSettings.ScavDifficulty;
+		SetLabel( _scavDifficultyLabel, $"Scav difficulty: {level}/{ScavCombatStyleCatalog.LevelCount} {ScavCombatStyleCatalog.Get( level ).Name}{suffix}" );
 		var tint = host ? UiTheme.Colors.TextPrimaryColor : UiTheme.Colors.TextMutedColor;
 		if ( _staminaLabel is not null && _staminaLabel.IsValid() )
 			_staminaLabel.Style.FontColor = tint;
 		if ( _dayLockLabel is not null && _dayLockLabel.IsValid() )
 			_dayLockLabel.Style.FontColor = tint;
+		foreach ( var label in new[] { _scavDifficultyLabel, _scavEasierLabel, _scavHarderLabel } )
+		{
+			if ( label is not null && label.IsValid() )
+				label.Style.FontColor = tint;
+		}
+
+		RefreshDevPlayerLabels();
 	}
 
 	static string OnOff( bool on ) => on ? "ON" : "OFF";
@@ -359,7 +879,9 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		var pos = InventoryScreenPointer.GetMenuOrMousePosition();
 		Panel hit = null;
 
-		if ( string.IsNullOrEmpty( _activeSubPageId ) )
+		if ( !OnBugReportPage && InventoryScreenPointer.PanelBoxContainsScreen( _bugIconButton, pos ) )
+			hit = _bugIconButton;
+		else if ( string.IsNullOrEmpty( _activeSubPageId ) )
 		{
 			hit = FindButtonAt( _rootButtons, pos );
 		}
@@ -369,8 +891,12 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 				hit = _backButton;
 			else if ( string.Equals( _activeSubPageId, "controls", StringComparison.OrdinalIgnoreCase ) )
 				hit = FindButtonAt( _controlSchemeButtons, pos );
+			else if ( string.Equals( _activeSubPageId, "game_settings", StringComparison.OrdinalIgnoreCase ) )
+				hit = FindButtonAt( _gameSettingButtons, pos );
 			else if ( string.Equals( _activeSubPageId, "dev_tools", StringComparison.OrdinalIgnoreCase ) )
 				hit = FindButtonAt( _devToolButtons, pos );
+			else if ( string.Equals( _activeSubPageId, "audio", StringComparison.OrdinalIgnoreCase ) )
+				hit = FindButtonAt( _audioButtons, pos );
 		}
 
 		SetHoveredButton( hit );
@@ -414,6 +940,12 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		if ( !_menuOpen || !_panelVisible )
 			return false;
 
+		if ( !OnBugReportPage && InventoryScreenPointer.PanelBoxContainsScreen( _bugIconButton, screenPos ) )
+		{
+			NavigateToSubPage( "bug_report" );
+			return true;
+		}
+
 		var onRoot = string.IsNullOrEmpty( _activeSubPageId );
 		if ( !onRoot )
 		{
@@ -424,11 +956,20 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 				return true;
 			}
 
+			if ( OnBugReportPage )
+				return _bugReportPage?.TryClick( screenPos ) ?? false;
+
 			if ( string.Equals( _activeSubPageId, "controls", StringComparison.OrdinalIgnoreCase ) )
 				return TryInvokeButtonAt( _controlSchemeButtons, screenPos );
 
+			if ( string.Equals( _activeSubPageId, "game_settings", StringComparison.OrdinalIgnoreCase ) )
+				return TryInvokeButtonAt( _gameSettingButtons, screenPos );
+
 			if ( string.Equals( _activeSubPageId, "dev_tools", StringComparison.OrdinalIgnoreCase ) )
 				return TryInvokeButtonAt( _devToolButtons, screenPos );
+
+			if ( string.Equals( _activeSubPageId, "audio", StringComparison.OrdinalIgnoreCase ) )
+				return TryInvokeButtonAt( _audioButtons, screenPos ) || TryBeginVolumeDrag( screenPos );
 
 			return false;
 		}
@@ -464,18 +1005,11 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 			case "video":
 			case "player_stats":
 			case "dev_tools":
+			case "bug_report":
 				NavigateToSubPage( actionId );
 				break;
 			case "dev_all_crafting":
 				GameHacks.SetAllCrafting( !GameHacks.AllCrafting );
-				RefreshDevToolLabels();
-				break;
-			case "dev_static_combo":
-				DevToolsSettings.StaticMeleeCombo = !DevToolsSettings.StaticMeleeCombo;
-				RefreshDevToolLabels();
-				break;
-			case "dev_wasd_facing":
-				DevToolsSettings.WasdBodyFacing = !DevToolsSettings.WasdBodyFacing;
 				RefreshDevToolLabels();
 				break;
 			case "dev_stamina":
@@ -486,11 +1020,70 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 				DevToolsSettings.HostSetDayLocked( !DevToolsSettings.DayLocked );
 				RefreshDevToolLabels();
 				break;
+			case "dev_resync":
+				DevToolsSettings.RequestResync();
+				break;
+			case "dev_scav_easier":
+				DevToolsSettings.HostSetScavDifficulty( DevToolsSettings.ScavDifficulty - 1 );
+				RefreshDevToolLabels();
+				break;
+			case "dev_scav_harder":
+				DevToolsSettings.HostSetScavDifficulty( DevToolsSettings.ScavDifficulty + 1 );
+				RefreshDevToolLabels();
+				break;
+			case "dev_player_prev":
+				StepDevPlayer( -1 );
+				RefreshDevToolLabels();
+				break;
+			case "dev_player_next":
+				StepDevPlayer( 1 );
+				RefreshDevToolLabels();
+				break;
+			case "dev_player_bring":
+				_devPlayerStatus = DevPlayerControls.BringToMe( SelectedDevPlayer( rescan: true ) );
+				RefreshDevToolLabels();
+				break;
+			case "dev_player_goto":
+				_devPlayerStatus = DevPlayerControls.GoTo( SelectedDevPlayer( rescan: true ) );
+				RefreshDevToolLabels();
+				break;
+			case "dev_player_respawn":
+				_devPlayerStatus = DevPlayerControls.Respawn( SelectedDevPlayer( rescan: true ) );
+				RefreshDevToolLabels();
+				break;
+			case "audio_music_down":
+				StepVolume( _musicSlider, -VolumeStep );
+				break;
+			case "audio_music_up":
+				StepVolume( _musicSlider, VolumeStep );
+				break;
+			case "audio_sfx_down":
+				StepVolume( _sfxSlider, -VolumeStep );
+				break;
+			case "audio_sfx_up":
+				StepVolume( _sfxSlider, VolumeStep );
+				break;
 			case "grapple_pro":
 				GrappleControlSchemeStore.Set( GrappleControlScheme.Pro );
 				break;
 			case "grapple_training":
 				GrappleControlSchemeStore.Set( GrappleControlScheme.TrainingWheels );
+				break;
+			case "fluid_block":
+				CombatControlSettings.SetFluidBlock( !CombatControlSettings.FluidBlock );
+				RefreshControlLabels();
+				break;
+			case "sensitivity_down":
+				CombatControlSettings.SetSensitivity( CombatControlSettings.Sensitivity - 1 );
+				RefreshControlLabels();
+				break;
+			case "sensitivity_up":
+				CombatControlSettings.SetSensitivity( CombatControlSettings.Sensitivity + 1 );
+				RefreshControlLabels();
+				break;
+			case "damage_info":
+				CombatControlSettings.SetShowDamageInfo( !CombatControlSettings.ShowDamageInfo );
+				RefreshControlLabels();
 				break;
 			case "quit_menu":
 				GameSettingsMenuActions.QuitToMainMenu();
@@ -531,6 +1124,17 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 	{
 		var onRoot = string.IsNullOrEmpty( _activeSubPageId );
 
+		EndVolumeDrag();
+		RefreshVolumeSliders();
+
+		if ( _bugReportPage is not null )
+		{
+			if ( OnBugReportPage && _menuOpen && _panelVisible )
+				_bugReportPage.OnShown();
+			else
+				_bugReportPage.OnHidden();
+		}
+
 		if ( _rootHeader is not null )
 			_rootHeader.Style.Set( "display", onRoot ? "flex" : "none" );
 
@@ -565,6 +1169,10 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 			NavigateToRoot();
 			Refresh();
 		}
+		else
+		{
+			_bugReportPage?.OnHidden();
+		}
 
 		UpdateVisibility();
 	}
@@ -574,6 +1182,8 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		_panelVisible = visible;
 		if ( visible )
 			NavigateToRoot();
+		else
+			_bugReportPage?.OnHidden();
 
 		UpdateVisibility();
 	}
@@ -583,13 +1193,17 @@ public sealed class GameSettingsMenuSection : IPlayerMenuSection
 		if ( !menuOpen || !_panelVisible )
 		{
 			SetHoveredButton( null );
+			EndVolumeDrag();
 			return;
 		}
 
 		PollHover();
+		TickVolumeDrag();
 
 		if ( string.Equals( _activeSubPageId, "dev_tools", StringComparison.OrdinalIgnoreCase ) )
 			RefreshDevToolLabels();
+		else if ( OnBugReportPage )
+			_bugReportPage?.Tick( InventoryScreenPointer.GetMenuOrMousePosition() );
 	}
 
 	public void OnMenuGlobalMouseUp() { }

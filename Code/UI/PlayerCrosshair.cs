@@ -15,8 +15,14 @@ namespace Survival;
 ///           <see cref="EquippedItemActions.PrimaryMelee"/> (build hammer shows the plain ring)
 ///   inner — small yellow lock ring when a grapple attach target is valid right now; slides
 ///           with aim assist to the actual attach point (also mid-grapple for re-targeting)
+///   bow   — while an arrow is drawn: the wide aim-cone ring. Through the power phase it stays widest and fills yellow
+///           from the bottom up (<see cref="PlayerCombat.BowPowerFraction"/>); once full it is all yellow and closes in
+///           on the centre over the accuracy phase (<see cref="PlayerCombat.GetBowDrawRingRadiusPixels"/>)
 ///   hit   — a red X round the centre for a moment when one of this pawn's arrows hits a creature or
 ///           player (<see cref="PlayerCombat.ArrowHitConfirm01"/>); overlay lines, only while it shows
+///   threat — a red triangle further out, pointing in from the side the guard has to be on against the wind-up
+///           aimed at this pawn (<see cref="PlayerCombat.TryGetIncomingAttackSide"/>, scavs and players); same left /
+///           right / top frame as the guard teardrop, so guarding toward it blocks; overlay lines, only while one winds up
 /// Hidden while any game menu is open.
 /// <para>
 /// The rings are UI panels (a bordered circle each) under the pawn's <see cref="PlayerScreenHud"/>
@@ -50,10 +56,16 @@ public sealed class PlayerCrosshair : Component
 	static readonly Color GrappleYellow = new( 1f, 0.92f, 0.2f, 0.95f );
 	static readonly Color BorderBlack = Color.Black.WithAlpha( 0.9f );
 	static readonly Color BowDrawRing = Color.White.WithAlpha( 0.35f );
+	/// <summary>The bow ring's power charge, and the whole ring once power is full (the crosshair's one yellow).</summary>
+	static readonly Color BowChargedRing = GrappleYellow;
 	static readonly Color ArrowHitRed = new( 1f, 0.25f, 0.18f, 1f );
 	const float HitTickInner = 9f;
 	const float HitTickOuter = 17f;
 	const float HitTickWidth = 2.5f;
+	/// <summary>Incoming creature attack marker: base this far from the centre, tip pointing in, clear of the guard teardrop.</summary>
+	const float ThreatBaseRadius = 30f;
+	const float ThreatTipLength = 11f;
+	const float ThreatHalfWidth = 7f;
 
 	PlayerMovement _movement;
 	PlayerCombat _combat;
@@ -65,7 +77,11 @@ public sealed class PlayerCrosshair : Component
 	Panel _host;
 	RingUi _base;
 	RingUi _bow;
+	RingFillUi _bowFill;
 	RingUi _lock;
+	/// <summary>Practice readout under the crosshair: the last hit's damage and turn bonus (settings: show damage information).</summary>
+	Label _damageInfo;
+	string _damageInfoShown;
 	bool? _hostShown;
 
 	protected override void OnStart()
@@ -126,9 +142,19 @@ public sealed class PlayerCrosshair : Component
 		}
 
 		if ( bowDrawing )
-			_bow.Apply( true, Math.Max( BaseRadius, _combat.GetBowDrawRingRadiusPixels() ), BaseLineWidth, BowDrawRing, null );
+		{
+			// Power phase: the ring stays widest and fills yellow. Accuracy phase: all yellow, closing in on the centre.
+			var power = _combat.BowPowerFraction( _combat.BowDrawCharge01 );
+			var charged = power >= 1f;
+			var radius = Math.Max( BaseRadius, _combat.GetBowDrawRingRadiusPixels() );
+			_bow.Apply( true, radius, BaseLineWidth, charged ? BowChargedRing : BowDrawRing, null );
+			_bowFill.Apply( !charged, radius, BaseLineWidth, BowChargedRing, power );
+		}
 		else
+		{
 			_bow.Apply( false, 0f, 0f, default, null );
+			_bowFill.Apply( false, 0f, 0f, default, 0f );
+		}
 
 		if ( grappleMode && _movement.HasValidAimTarget )
 			ApplyInnerLockRing();
@@ -139,8 +165,13 @@ public sealed class PlayerCrosshair : Component
 		if ( hit > 0f )
 			DrawArrowHitTick( hit );
 
+		if ( _combat is not null && _combat.TryGetIncomingAttackSide( out var threatSide ) )
+			DrawThreatMarker( threatSide );
+
+		ApplyDamageInfo( _combat is not null && _combat.TryGetDamageInfoText( out var damageText ) ? damageText : null );
+
 		// The attack teardrop is a filled triangle — still overlay lines, only while a melee weapon is out.
-		if ( (weaponOut || shieldGuardUp) && _combat is not null && _combat.ShowsAttackTeardrop )
+		if ( (weaponOut || shieldGuardUp) && _combat is not null )
 		{
 			var cam = BuildViewCamera.Resolve( GameObject );
 			if ( cam.IsValid() )
@@ -167,7 +198,7 @@ public sealed class PlayerCrosshair : Component
 			return false;
 
 		// Cursor-owning modals: only the mouse cursor should show, not the aim ring.
-		if ( _interaction is { IsTimeTrialMenuOpen: true } or { IsArenaMenuOpen: true } )
+		if ( _interaction is { IsTimeTrialMenuOpen: true } or { IsArenaMenuOpen: true } or { IsHubMenuOpen: true } )
 			return false;
 
 		// Grapple control-scheme prompt (per-machine first-use choice).
@@ -213,11 +244,38 @@ public sealed class PlayerCrosshair : Component
 		_host.Style.Set( "pointer-events", "none" );
 		_hostShown = null;
 
-		// Draw order = creation order: base, bow ring, lock ring on top.
+		// Draw order = creation order: base, bow ring, its yellow charge, lock ring on top.
 		_base = new RingUi( _host );
 		_bow = new RingUi( _host );
+		_bowFill = new RingFillUi( _host );
 		_lock = new RingUi( _host );
+
+		// A fixed-width line centred under the crosshair, so its text never moves anything.
+		_damageInfo = new Label { Parent = _host, Text = "" };
+		UiStyle.Text( _damageInfo, UiText.Body, 17f );
+		_damageInfo.Style.Set( "position", "absolute" );
+		_damageInfo.Style.Set( "left", "50%" );
+		_damageInfo.Style.Set( "top", "50%" );
+		_damageInfo.Style.Set( "width", "420px" );
+		_damageInfo.Style.Set( "margin-left", "-210px" );
+		_damageInfo.Style.Set( "margin-top", "56px" );
+		_damageInfo.Style.Set( "text-align", "center" );
+		_damageInfo.Style.Set( "white-space", "nowrap" );
+		_damageInfo.Style.Set( "pointer-events", "none" );
+		_damageInfo.Style.Set( "display", "none" );
+		_damageInfoShown = null;
 		return true;
+	}
+
+	void ApplyDamageInfo( string text )
+	{
+		if ( _damageInfo is null || !_damageInfo.IsValid() || text == _damageInfoShown )
+			return;
+
+		_damageInfoShown = text;
+		_damageInfo.Style.Set( "display", text is null ? "none" : "flex" );
+		if ( text is not null )
+			_damageInfo.Text = text;
 	}
 
 	void DestroyPanels()
@@ -227,7 +285,10 @@ public sealed class PlayerCrosshair : Component
 		_host = null;
 		_base = null;
 		_bow = null;
+		_bowFill = null;
 		_lock = null;
+		_damageInfo = null;
+		_damageInfoShown = null;
 		_hostShown = null;
 	}
 
@@ -333,7 +394,7 @@ public sealed class PlayerCrosshair : Component
 			}
 		}
 
-		static void Shape( Panel p, float radius, float lineWidth, Color color )
+		public static void Shape( Panel p, float radius, float lineWidth, Color color )
 		{
 			var size = 2f * (radius + lineWidth * 0.5f);
 			p.Style.Width = Length.Pixels( size );
@@ -343,10 +404,81 @@ public sealed class PlayerCrosshair : Component
 			p.Style.Set( "border-color", Rgba( color ) );
 		}
 
-		static string Px( float v ) => v.ToString( "0.##", CultureInfo.InvariantCulture ) + "px";
+		public static string Px( float v ) => v.ToString( "0.##", CultureInfo.InvariantCulture ) + "px";
 
 		static string Rgba( Color c ) =>
 			$"rgba({(int)MathF.Round( c.r * 255f )},{(int)MathF.Round( c.g * 255f )},{(int)MathF.Round( c.b * 255f )},{c.a.ToString( "0.###", CultureInfo.InvariantCulture )})";
+	}
+
+	/// <summary>
+	/// A ring that shows only its lower part: a clip box anchored on the ring's bottom edge, as tall as the fill, with the
+	/// full ring inside it. Laid over a <see cref="RingUi"/> of the same radius it reads as that ring filling up
+	/// (the bow's power charge). Styles are written only when a rounded value changes.
+	/// </summary>
+	sealed class RingFillUi
+	{
+		readonly Panel _clip;
+		readonly Panel _ring;
+		bool? _visible;
+		float _radius = -1f;
+		float _lineWidth = -1f;
+		float _height = -1f;
+		Color _tint;
+
+		public RingFillUi( Panel parent )
+		{
+			_clip = new Panel { Parent = parent };
+			_clip.Style.Set( "position", "absolute" );
+			_clip.Style.Set( "left", "50%" );
+			_clip.Style.Set( "top", "50%" );
+			_clip.Style.Set( "overflow", "hidden" );
+			_clip.Style.Set( "background-color", "transparent" );
+			_clip.Style.Set( "pointer-events", "none" );
+			_clip.Style.Set( "display", "none" );
+
+			_ring = new Panel { Parent = _clip };
+			_ring.Style.Set( "position", "absolute" );
+			_ring.Style.Set( "left", "0" );
+			_ring.Style.Set( "top", "0" );
+			_ring.Style.Set( "box-sizing", "border-box" );
+			_ring.Style.Set( "background-color", "transparent" );
+			_ring.Style.Set( "pointer-events", "none" );
+		}
+
+		public void Apply( bool visible, float radius, float lineWidth, Color tint, float fill01 )
+		{
+			if ( _visible != visible )
+			{
+				_visible = visible;
+				_clip.Style.Set( "display", visible ? "flex" : "none" );
+			}
+
+			if ( !visible )
+				return;
+
+			radius = MathF.Round( radius * 4f ) * 0.25f;
+			var size = 2f * (radius + lineWidth * 0.5f);
+			if ( MathF.Abs( radius - _radius ) > 1e-3f || MathF.Abs( lineWidth - _lineWidth ) > 1e-3f || tint != _tint )
+			{
+				_radius = radius;
+				_lineWidth = lineWidth;
+				_tint = tint;
+				_height = -1f;
+				RingUi.Shape( _ring, radius, lineWidth, tint );
+				_clip.Style.Width = Length.Pixels( size );
+				_clip.Style.Set( "margin-left", RingUi.Px( -size * 0.5f ) );
+			}
+
+			// Half a panel pixel per step; the clip's bottom edge stays on the ring's bottom edge.
+			var height = MathF.Round( size * Math.Clamp( fill01, 0f, 1f ) * 2f ) * 0.5f;
+			if ( MathF.Abs( height - _height ) > 1e-3f )
+			{
+				_height = height;
+				_clip.Style.Height = Length.Pixels( height );
+				_clip.Style.Set( "margin-top", RingUi.Px( size * 0.5f - height ) );
+				_ring.Style.Set( "margin-top", RingUi.Px( height - size ) );
+			}
+		}
 	}
 
 	/// <summary>Arrow hit confirm: four short diagonal ticks round the centre, black-edged, fading out.</summary>
@@ -372,6 +504,40 @@ public sealed class PlayerCrosshair : Component
 			hud.DrawLine( p0 - d * BorderWidth, p1 + d * BorderWidth, HitTickWidth + BorderWidth * 2f, black );
 			hud.DrawLine( p0, p1, HitTickWidth, red );
 		}
+	}
+
+	/// <summary>Incoming attack: a red triangle on the side the guard has to be on, pointing at the centre.</summary>
+	void DrawThreatMarker( byte side )
+	{
+		var cam = BuildViewCamera.Resolve( GameObject );
+		if ( !cam.IsValid() )
+			return;
+
+		var rect = cam.ScreenRect;
+		var center = new Vector2( rect.Left + rect.Width * 0.5f, rect.Top + rect.Height * 0.5f );
+		var dir = side switch
+		{
+			SwingDirs.Left => new Vector2( -1f, 0f ),
+			SwingDirs.Right => new Vector2( 1f, 0f ),
+			_ => new Vector2( 0f, -1f )
+		};
+
+		var basePos = center + dir * ThreatBaseRadius;
+		var tipPos = center + dir * (ThreatBaseRadius - ThreatTipLength);
+		DrawTriangleFan( cam, tipPos - dir * BorderWidth * 2f, basePos + dir * BorderWidth, dir, ThreatHalfWidth + BorderWidth * 1.5f, BorderBlack );
+		DrawTriangleFan( cam, tipPos, basePos, dir, ThreatHalfWidth, ArrowHitRed );
+	}
+
+	static void DrawTriangleFan( CameraComponent cam, Vector2 tipPos, Vector2 baseCenter, Vector2 dir, float halfWidth, Color color )
+	{
+		var perp = new Vector2( -dir.y, dir.x );
+		var pLeft = baseCenter + perp * halfWidth;
+		var pRight = baseCenter - perp * halfWidth;
+		const int fanSegments = 10;
+		const float fanLineWidth = 2f;
+		var hud = cam.Overlay;
+		for ( var i = 0; i <= fanSegments; i++ )
+			hud.DrawLine( tipPos, Vector2.Lerp( pLeft, pRight, i / (float)fanSegments ), fanLineWidth, color );
 	}
 
 	// ── Attack teardrop (overlay lines, melee weapon out only) ───────────────────────────────

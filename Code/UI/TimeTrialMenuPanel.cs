@@ -186,9 +186,19 @@ public sealed class TimeTrialMenuPanel : Panel
 	void EnsureVariationDefault()
 	{
 		TimeTrialVariationCatalog.EnsureLoaded();
-		if ( string.IsNullOrWhiteSpace( _selectedVariationId )
-		     && TimeTrialVariationCatalog.All.Count > 0 )
-			_selectedVariationId = TimeTrialVariationCatalog.All[0].Id;
+		// Only races whose rings exist in this scene (the hub's grapple bars and testscene1's races share the catalog).
+		if ( !TimeTrialVariationCatalog.TryGet( _selectedVariationId, out var current )
+		     || !TimeTrialCheckpoint.HasRoute( current.CheckpointOrders ) )
+		{
+			_selectedVariationId = "";
+			foreach ( var v in TimeTrialVariationCatalog.All )
+			{
+				if ( !TimeTrialCheckpoint.HasRoute( v.CheckpointOrders ) )
+					continue;
+				_selectedVariationId = v.Id;
+				break;
+			}
+		}
 
 		var session = _interaction?.FocusedTimeTrialStand ?? TimeTrialSession.Instance;
 		if ( session is { Phase: TimeTrialPhase.WaitingForPlayers }
@@ -244,6 +254,9 @@ public sealed class TimeTrialMenuPanel : Panel
 
 		foreach ( var v in TimeTrialVariationCatalog.All )
 		{
+			if ( !TimeTrialCheckpoint.HasRoute( v.CheckpointOrders ) )
+				continue;
+
 			var row = new TimeTrialClickPanel { Parent = _variationList };
 			row.Style.PaddingLeft = Length.Pixels( 8f );
 			row.Style.PaddingRight = Length.Pixels( 8f );

@@ -73,6 +73,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	PlayerFishing _fishing;
 	FishingMinigameHud _fishingHud;
 	ScreenPanel _hudScreen;
+	float _styledScreenScale;
 	bool _deferScreenPanelCamera;
 	bool _built;
 
@@ -94,6 +95,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	readonly string[] _foodSlotAppliedIds = new string[PlayerFood.MaxFoodSlots];
 	readonly string[] _foodSlotAppliedTimers = new string[PlayerFood.MaxFoodSlots];
 
+
 	Panel _promptRoot;
 	Panel _promptKeyCap;
 	bool _promptKeyCapHidden;
@@ -107,6 +109,7 @@ public sealed class PlayerScreenHud : PanelComponent
 	double _timeTrialBannerUntil;
 	TimeTrialMenuPanel _timeTrialMenu;
 	ArenaMenuPanel _arenaMenu;
+	HubMenuPanel _hubMenu;
 	Panel _timeTrialLbRoot;
 	Label _timeTrialLbTitle;
 	Label _timeTrialLbBody;
@@ -242,6 +245,15 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( !_built )
 			TryBuildHud();
 
+		// View resized: hidden menus missed the engine's rescale pass (UiStyle.RestyleTree).
+		var screenScale = Panel?.ScaleToScreen ?? 0f;
+		if ( _built && screenScale > 0f && MathF.Abs( screenScale - _styledScreenScale ) > 0.0005f )
+		{
+			if ( _styledScreenScale > 0f )
+				UiStyle.RestyleTree( Panel );
+			_styledScreenScale = screenScale;
+		}
+
 		if ( _menuController is not null && _menuController.IsMenuOpen )
 		{
 			_menuInputOverlay?.PollMenuPointer();
@@ -285,8 +297,10 @@ public sealed class PlayerScreenHud : PanelComponent
 	     || _inventoryInteraction?.FocusedLever is not null
 		     || _inventoryInteraction?.FocusedBed is not null
 		     || _inventoryInteraction?.FocusedVehicle is not null
+		     || _inventoryInteraction?.FocusedPodScooter is not null
 		     || _inventoryInteraction?.FocusedTimeTrialStand is not null
-		     || _inventoryInteraction?.FocusedArenaMenuButton is not null )
+		     || _inventoryInteraction?.FocusedArenaMenuButton is not null
+		     || _inventoryInteraction?.FocusedHubKiosk is not null )
 			using ( Prof( "interactionPrompt" ) ) OnInteractionPromptChanged();
 
 		if ( _timeTrialMenu is not null && _inventoryInteraction is { IsTimeTrialMenuOpen: true } )
@@ -294,6 +308,9 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		if ( _arenaMenu is not null && _inventoryInteraction is { IsArenaMenuOpen: true } )
 			_arenaMenu.TickOpen();
+
+		if ( _hubMenu is not null && _inventoryInteraction is { IsHubMenuOpen: true } )
+			_hubMenu.TickOpen();
 
 		using ( Prof( "grapplePrompt" ) ) TickGrappleControlPrompt();
 		ProfileFrameDone();
@@ -350,6 +367,8 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.TimeTrialMenuOpenChanged -= OnTimeTrialMenuOpenChanged;
 			_inventoryInteraction.FocusedArenaButtonChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.ArenaMenuOpenChanged -= OnArenaMenuOpenChanged;
+			_inventoryInteraction.FocusedHubKioskChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.HubMenuOpenChanged -= OnHubMenuOpenChanged;
 			_inventoryInteraction.AugmentStationChanged -= OnAugmentStationChanged;
 			_inventoryInteraction.FocusedWorkbenchChanged -= OnInteractionPromptChanged;
 			_inventoryInteraction.FocusedDryingRackChanged -= OnInteractionPromptChanged;
@@ -795,6 +814,11 @@ public sealed class PlayerScreenHud : PanelComponent
 			_inventoryInteraction.TimeTrialMenuOpenChanged += OnTimeTrialMenuOpenChanged;
 			_arenaMenu = new ArenaMenuPanel( _inventoryInteraction ) { Parent = root };
 			_inventoryInteraction.ArenaMenuOpenChanged += OnArenaMenuOpenChanged;
+			_hubMenu = new HubMenuPanel( _inventoryInteraction ) { Parent = root };
+			_inventoryInteraction.HubMenuOpenChanged -= OnHubMenuOpenChanged;
+			_inventoryInteraction.HubMenuOpenChanged += OnHubMenuOpenChanged;
+			_inventoryInteraction.FocusedHubKioskChanged -= OnInteractionPromptChanged;
+			_inventoryInteraction.FocusedHubKioskChanged += OnInteractionPromptChanged;
 		}
 
 		ArenaSession.LocalArenaTextChanged += OnTimeTrialBanner;
@@ -821,7 +845,7 @@ public sealed class PlayerScreenHud : PanelComponent
 
 		var menuOpen = _menuController is { IsMenuOpen: true };
 		var trialOpen = _inventoryInteraction is { IsTimeTrialMenuOpen: true };
-		var arenaOpen = _inventoryInteraction is { IsArenaMenuOpen: true };
+		var arenaOpen = _inventoryInteraction is { IsArenaMenuOpen: true } or { IsHubMenuOpen: true };
 		var equipped = false;
 		using ( Prof( "gp.equipped" ) ) equipped = _movement is not null && _movement.HasGrappleEquipped();
 		var needs = false;
@@ -876,8 +900,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		if ( _inventoryInteraction is { IsTimeTrialMenuOpen: true } )
 			return;
 
-		// Arena menu owns the cursor the same way the time trial menu does.
-		if ( _inventoryInteraction is { IsArenaMenuOpen: true } )
+		// Arena / hub menus own the cursor the same way the time trial menu does.
+		if ( _inventoryInteraction is { IsArenaMenuOpen: true } or { IsHubMenuOpen: true } )
 			return;
 
 		if ( _grapplePromptController is not null && _grapplePromptController.IsValid() )
@@ -889,6 +913,12 @@ public sealed class PlayerScreenHud : PanelComponent
 	void OnTimeTrialMenuOpenChanged()
 	{
 		_timeTrialMenu?.SetOpen( _inventoryInteraction is { IsTimeTrialMenuOpen: true } );
+		OnInteractionPromptChanged();
+	}
+
+	void OnHubMenuOpenChanged()
+	{
+		_hubMenu?.SetOpen( _inventoryInteraction is { IsHubMenuOpen: true } );
 		OnInteractionPromptChanged();
 	}
 
@@ -1153,8 +1183,8 @@ public sealed class PlayerScreenHud : PanelComponent
 		_menuInputOverlay.BindPageSecondarySelect( TryMenuPageSecondaryAtScreen );
 		_menuInputOverlay.BindPageMiddleSelect( TryMenuPageMiddleAtScreen );
 		_menuInputOverlay.BindPageDrag( OnMenuPageDrag );
-		_menuController.EscapeConsumer = () => _mapSection?.TryConsumeEscape() ?? false;
-		_menuController.TextCaptureProbe = () => _mapSection?.IsCapturingText ?? false;
+		_menuController.EscapeConsumer = () => ( _mapSection?.TryConsumeEscape() ?? false ) || ( _settingsSection?.TryConsumeEscape() ?? false );
+		_menuController.TextCaptureProbe = () => ( _mapSection?.IsCapturingText ?? false ) || ( _settingsSection?.IsCapturingText ?? false );
 		_menuController.MenuMouseWheelSink = OnMenuMouseWheel;
 
 		_augmentStationSection = new AugmentStationMenuSection( _augments, _inventory, _inventoryInteraction );
@@ -1342,13 +1372,21 @@ public sealed class PlayerScreenHud : PanelComponent
 		var focusedBed = _inventoryInteraction?.FocusedBed;
 		var showBed = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && !showDoor && !showTrap && !showLever && focusedBed is not null && focusedBed.IsValid();
 		var focusedVehicle = _inventoryInteraction?.FocusedVehicle;
-		var showVehicle = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && !showDoor && !showTrap && !showLever && !showBed && focusedVehicle is not null && focusedVehicle.IsValid();
+		var focusedPodScooter = _inventoryInteraction?.FocusedPodScooter;
+		var showVehicle = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && !showDoor && !showTrap && !showLever && !showBed
+		                  && ( focusedVehicle is { IsValid: true } || focusedPodScooter is { IsValid: true } );
 		var focusedAnimal = _inventoryInteraction?.FocusedAnimal;
 		var showAnimal = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && !showDoor && !showTrap && !showLever && !showBed && !showVehicle && focusedAnimal is not null && focusedAnimal.IsValid();
 		var farmingPrompt = _farming?.PromptText ?? string.Empty;
 		var showFarming = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && !showDoor && !showTrap && !showLever && !showBed && !showVehicle && !showAnimal && farmingPrompt.Length > 0;
 		var showHarvest = !showOpen && !showTrial && !showArena && !showCampfire && !showRack && !showDoor && !showTrap && !showLever && !showBed && !showVehicle && !showAnimal && !showFarming && _handHarvest?.FocusedNode is not null;
 		var show = showOpen || showTrial || showArena || showCampfire || showRack || showDoor || showTrap || showLever || showBed || showVehicle || showAnimal || showFarming || showHarvest;
+
+		// Hub kiosks (bet NPC, stratagem cabinet) only exist in the hub, where none of the above stand.
+		var focusedKiosk = _inventoryInteraction?.FocusedHubKiosk;
+		var showHub = !showOpen && _inventoryInteraction is { IsHubMenuOpen: false } && focusedKiosk is not null && focusedKiosk.IsValid();
+		if ( showHub )
+			show = true;
 
 		// An unbuilt blueprint under the crosshair only offers "Build" — the door / bed / trap / lever /
 		// campfire prompts stand down for it in their own ticks, so nothing else is showing here.
@@ -1364,7 +1402,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			_promptKeyLabel.Text = showFarming ? (_farming?.PromptKey ?? "E") : "E";
 
 		// Someone else's bed only says whose it is — there is nothing to press.
-		var bedIsInfoOnly = showBed && _inventoryInteraction is { } interaction && !focusedBed.CanClaim( interaction.GameObject );
+		var bedIsInfoOnly = showBed && _inventoryInteraction is { } interaction && !focusedBed.CanUse( interaction.GameObject );
 		var vehicleIsInfoOnly = showVehicle && _inventoryInteraction is { } vInteraction && !focusedVehicle.CanUse( vInteraction.GameObject );
 		var infoOnly = !showBlueprint && ( bedIsInfoOnly || vehicleIsInfoOnly );
 		if ( _promptKeyCap is not null && infoOnly != _promptKeyCapHidden )
@@ -1401,6 +1439,10 @@ public sealed class PlayerScreenHud : PanelComponent
 					? BuildAuthority.DescribeMissingMaterials( bpInteraction.GameObject, focusedBlueprint.PieceId )
 					: string.Empty;
 				_promptLabel.Text = missingMaterials.Length == 0 ? blueprintName : $"{blueprintName}  (needs {missingMaterials})";
+			}
+			else if ( showHub )
+			{
+				_promptLabel.Text = focusedKiosk.PromptText;
 			}
 			else if ( showTrial )
 			{
@@ -1440,7 +1482,9 @@ public sealed class PlayerScreenHud : PanelComponent
 			}
 			else if ( showVehicle )
 			{
-				_promptLabel.Text = focusedVehicle.PromptTextFor( _inventoryInteraction.GameObject );
+				_promptLabel.Text = focusedVehicle is { IsValid: true }
+					? focusedVehicle.PromptTextFor( _inventoryInteraction.GameObject )
+					: focusedPodScooter.ScooterPromptText;
 			}
 			else if ( showAnimal )
 			{
@@ -1669,7 +1713,7 @@ public sealed class PlayerScreenHud : PanelComponent
 		_augmentBindsHud?.SetVisible( !hideForFullscreen );
 	}
 
-	// ---- stasis pod arrival blackout ("coming to out of a coma": black until the pod door is open) ----
+	// ---- screen blackout: the stasis pod arrival ("coming to out of a coma": black until the pod door is open) and sleeping in a bed ----
 
 	Panel _podBlackout;
 	float _podBlackoutApplied = -1f;
@@ -1695,7 +1739,7 @@ public sealed class PlayerScreenHud : PanelComponent
 			return;
 
 		_movement ??= FindOnAncestors<PlayerMovement>();
-		var amount = _movement is { IsValid: true } ? _movement.PodBlackout01 : 0f;
+		var amount = _movement is { IsValid: true } ? MathF.Max( _movement.PodBlackout01, _movement.BedBlackout01 ) : 0f;
 		if ( MathF.Abs( amount - _podBlackoutApplied ) < 0.004f )
 			return;
 

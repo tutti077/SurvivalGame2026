@@ -9,6 +9,14 @@ public sealed class TerrainMinimapScreen : PanelComponent
 {
 	readonly TerrainMinimapHud _hud = new();
 	bool _built;
+	float _sinceVisuals = float.MaxValue;
+
+	/// <summary>
+	/// Map face, button styles and wind arrow refresh rate — the same split as the pawn HUD's passive tick
+	/// (<see cref="PlayerScreenHud"/>): the +/- click edge is polled every frame, the redraw is not. Every frame it
+	/// was ~0.2 ms of UI in the fly camera (2026-11-10 fps routine).
+	/// </summary>
+	const float VisualsTickSeconds = 0.1f;
 
 	protected override void OnTreeFirstBuilt()
 	{
@@ -23,8 +31,14 @@ public sealed class TerrainMinimapScreen : PanelComponent
 		if ( !_built )
 			return;
 
+		_hud.TickInput();
+		_sinceVisuals += Time.Delta;
+		if ( _sinceVisuals < VisualsTickSeconds )
+			return;
+
+		_sinceVisuals = 0f;
 		_hud.SetVisible( !ShouldHideForFullscreenMenu() );
-		_hud.Tick();
+		_hud.TickVisuals();
 	}
 
 	void EnsureBuilt()
