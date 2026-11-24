@@ -11,9 +11,9 @@ namespace Survival;
 /// massifs reach Peak Height and saddles dip to Saddle Height. Ridge arms run down from the crest toward the caldera —
 /// some die early, some reach nearly to the foot — with valleys and sea inlets between them, so the range has depth and
 /// layers instead of one face. Backdrop only — no collider, no streaming, no LOD, no shadows; drawn with
-/// <c>shaders/environment/caldera_ring.shader</c>: lit rock only — the distance haze that pales it comes from the scene-wide
-/// <see cref="AerialPerspective"/> pass like everything else (one atmosphere; the ring was never fogged out because that
-/// haze is capped). Lit each frame from the scene's
+/// <c>shaders/environment/caldera_ring.shader</c>: lit rock only — its distance fog comes from the scene-wide
+/// <see cref="AerialPerspective"/> pass like everything else (one fog): the foot melts into the sky behind it, the high
+/// crests stand out of the thin air. Lit each frame from the scene's
 /// <see cref="EnvironmentDayNightCycle"/> sun / moon lights. It is NOT a child of the cycle group: cycle_toggle switches
 /// that group off and must not take the mountains with it. The <see cref="SkyDome"/> and the cycle's disk orbit must sit
 /// beyond the ring's back edge (terrainTest: dome 80 km, disks 55 km) or they draw in front of it.

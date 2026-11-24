@@ -1,0 +1,60 @@
+{
+  // The air of each biome (Mark 2026-11-23: "it needs to be biome specific ... clover hills a light fogginess, redwood
+  // forest pretty dark under the trees"). AerialPerspective reads the biome the CAMERA stands in and adds this on top of
+  // the world's distance fog; a biome without a row adds nothing. Console: atmosphere (prints the live mix), atmosphere reload.
+  // The look to hit is Research/screenshots/valheimBlackForest*.png: fog coloured by direction (warm toward the sun,
+  // saturated blue away from it), a dark rich foreground, sun glare and shafts.
+  //   biome              CloverHills | RedwoodForest | AmberDunes | Mountain (Mountain = the Ivory Alps). A biome without a row, and open water,
+  //                      take the CloverHills row (Mark 2026-11-23).
+  //   mistDistanceMeters distance at which 63 % of a thing is mist (0 = no mist). Clover Hills has none since 2026-11-23
+  //                      (Mark: "I dont think it should just be a blanket of fog across the whole game. It really dilutes
+  //                      the overall look"): open country is clear air, mist belongs to the places that want a mood.
+  //                      Fog is far brighter than foliage, so even a tenth of it over dark trees reads as a white sheet.
+  //                      Both rows doubled 2026-11-23 (Mark: "see twice as far as our fog currently allows").
+  //   mistStartMeters    clear air: nothing closer than this is misted. Never below 100 (Mark 2026-11-23: "no fog from
+  //                      0-100m away from the player, it can then slowly increase from there"); the world's distance fog
+  //                      starts at 300 m (Fog - Fog Start (m) on the AerialPerspective component).
+  //   mistFloor          what the mist already covers where it begins: it comes in at this over the 40 m past
+  //                      mistStartMeters and builds from there (Mark 2026-11-23: "adding like 10% to the fogs strength
+  //                      when it first starts"; a mist that built from nothing left trees at 300 m untouched).
+  //   mistMax            the most the mist may cover (0-1): below 1, far trunks stay as faint shapes
+  //   mistTint           the mist AWAY from the sun: multiplies the sky's fog colour (it follows the time of day).
+  //   mistSunTint        the mist TOWARD the sun: multiplies the sun glow colour of the sky preset and takes the
+  //                      tint's place on the sun's side, so the air glows warm sunward. 0,0,0 = no sun side.
+  //   shade              share of the sky's ambient light the biome lets through (1 = all of it). Real light, not a
+  //                      screen dim: shadows go dark, the sun's patches stay bright. Half the effect by night.
+  //   snow               falling snow 0-1, drawn by the fog pass in world-anchored layers that drift with the wind
+  //   ceilingMeters      height above the ground where the biome's air ends (0 = no ceiling): fades out over the 30 m
+  //                      above it, so a camera over the canopy sees the world as usual
+  // blendSeconds     how long the air takes to change when the camera's biome changes (a teleport, a border).
+  // groundColorHold  how much of its own hue the land keeps as it fades into fog (0 = fades to plain sky colour, "SO white").
+  // treeColorHold    the same for the far trees: lower, so forests soften before the land does (Mark 2026-11-23:
+  //                  "the earth material itself should hold more color than trees").
+  // sunShafts        strength of the sun shafts (god rays) through gaps toward the sun; 0 = off.
+  // fogMax           the most the world's distance fog may cover anything (0-1). Mark 2026-11-23: "thin out the ambient fog
+  //                  of the whole game ... I want the max foggyness to be decreased" - the same day the mist caps (mistMax)
+  //                  dropped to 0.3 Clover / 0.6 Redwood. Below 1 the far world never melts fully into the sky.
+  // fogTint          colour of the world's distance fog, as a multiple of the sky colour along the ray. The plain sky
+  //                  colour (1,1,1) is ~40x brighter than foliage in the light, so 5 % of it already doubled the
+  //                  brightness of a forest 1 km away: the "blanket" (Mark 2026-11-23). A deep blue haze keeps the land's
+  //                  darks dark and reads as distance instead.
+  "blendSeconds": 4,
+  "groundColorHold": 0.45,
+  "treeColorHold": 0.25,
+  "sunShafts": 0.35,
+  "fogMax": 0.8,
+  "fogTint": [ 0.22, 0.34, 0.56 ],
+  "biomes": [
+    // Clover Hills, the first biome: clear air out to the world's distance fog (Mark 2026-11-23, from Enshrouded: "they
+    // dont use fog until its like thousands of meters away"). No mist of its own. (A ground-fog blanket was tried the same
+    // day and removed: "it looks SO bad. Should be volumetric cloud-like not just like a blanket of white".)
+    { "biome": "CloverHills",   "mistDistanceMeters": 0,    "mistStartMeters": 150, "mistMax": 0.35, "mistFloor": 0.1, "mistTint": [ 0.3, 0.46, 0.72 ],   "mistSunTint": [ 0.4, 0.3, 0.16 ],   "shade": 1.0, "ceilingMeters": 0,  "snow": 0 },
+    // Redwood Forest: dark and mysterious (Valheim's Black Forest). The trees and the hills do the hiding; the mist only
+    // layers the trunks by distance, in a deep blue that is never brighter than the forest floor's light.
+    { "biome": "RedwoodForest", "mistDistanceMeters": 350,  "mistStartMeters": 100, "mistMax": 0.55, "mistFloor": 0.1, "mistTint": [ 0.035, 0.14, 0.26 ], "mistSunTint": [ 0.45, 0.24, 0.1 ],  "shade": 0.6, "ceilingMeters": 95, "snow": 0 },
+    // Amber Dunes: dusty. A tan haze that takes the far dunes without whitening them.
+    { "biome": "AmberDunes",    "mistDistanceMeters": 900,  "mistStartMeters": 100, "mistMax": 0.65, "mistFloor": 0.1, "mistTint": [ 0.7, 0.56, 0.36 ],   "mistSunTint": [ 0.6, 0.42, 0.22 ],  "shade": 1.0, "ceilingMeters": 0,  "snow": 0 },
+    // Ivory Alps (the Mountain biome): a pale fog that closes the view away from the mountain, and snow that never stops.
+    { "biome": "Mountain",      "mistDistanceMeters": 450,  "mistStartMeters": 100, "mistMax": 0.75, "mistFloor": 0.1, "mistTint": [ 0.62, 0.68, 0.8 ],   "mistSunTint": [ 0.5, 0.45, 0.4 ],   "shade": 0.9, "ceilingMeters": 0,  "snow": 1 }
+  ]
+}

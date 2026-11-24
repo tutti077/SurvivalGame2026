@@ -4,6 +4,9 @@ Layer0
 
 	g_flTintColor "[1.000000 1.000000 1.000000 1.000000]"
 	g_flSelfIllumScale "0.000"
+	g_flBrightness "2.200"
+	g_flLimbPower "0.400"
+	g_vLimbTint "[0.500000 0.520000 0.580000 0.000000]"
 
-	TextureColor "textures/environment/moon_albedo.png"
+	TextureColor "textures/environment/moon_albedo_v2.png"
 }

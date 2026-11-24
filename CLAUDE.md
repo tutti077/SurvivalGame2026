@@ -326,9 +326,10 @@ Code/
   Dungeon/         BoxDungeonGenerator + DungeonLayout / Geometry / MapModel; CaveDungeonGenerator + CaveLayout / CaveGeometry
   Vehicles/        Vehicle (+ .Physics / .Seats / .Fuel / .Health / .Hover / .Bike: two-wheel pod scooter / .Stow: fold into an item), VehicleSeat, VehicleDevCommands
   Props/           StasisPod (arrival flight, landing sequence, lamps / screens / light, serial plates), StasisPodSpawner (first-spawn arrivals within 25 m of the spawn centre, pod_test),
-                   StasisPodSerials (per-world counter from 885922), StasisPodPuff, StasisPodDevCommands (pod_spawn / pod_door / pod_test); the pawn's side is PlayerMovement.StasisPod.cs
-  Environment/     WindSystem, grass, ChopableTree, MineableRock, FireLightFlicker, BearTrap, traps   (docs/ENVIRONMENT.md)
-  World/Environment/  EnvironmentDayNightCycle, SkyDome, AerialPerspective (distance desaturation + haze pass), CalderaRing (the far mountain wall), SkyPresetCatalog, SunShadowDistance
+                   StasisPodSerials (per-world counter from 885922), StasisPodPuff, StasisPodDevCommands (pod_spawn / pod_door / pod_test); the pawn's side is PlayerMovement.StasisPod.cs;
+                   SmokeColumn (a far-visible smoke column from puff blobs: the crashed stasis pod POI, prefabs/props/crashed_pod_v1, a landmark row of data/pois.json scattered by World/Terrain/TerrainWorldManager.Pois.cs)
+  Environment/     WindSystem (+ grass gust orbs), grass, ChopableTree, MineableRock, FireLightFlicker, BearTrap, traps   (docs/ENVIRONMENT.md)
+  World/Environment/  WeatherSystem (data/weather.json: wind + sky per state, `weather`), EnvironmentDayNightCycle, SkyDome, AerialPerspective (distance fog pass + the camera biome's mist / shade), BiomeAtmosphere (data/biome_atmosphere.json: per-biome air, `atmosphere`), CalderaRing (the far mountain wall), SkyPresetCatalog, SunShadowDistance
   World/Terrain/   streaming, chunk mesh, biome population, sea, rivers, grass, world save IO, TerrainPerfBench
   World/TerrainPreview/  offline world generation pipeline + settings   (docs/TERRAIN_PREVIEW.md)
   World/Voxel/     voxel digging: field, mesher, chunk set, edit log; prototype scene + live-world columns (TerrainWorldManager.Voxel.cs)   (docs/VOXEL.md)

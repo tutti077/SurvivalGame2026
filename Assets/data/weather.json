@@ -1,0 +1,17 @@
+{
+  // The weather. WeatherSystem (host) holds one state at a time and moves to the next by weight when its time is up.
+  // A state is what the sky and the wind do; everything else follows the wind:
+  //   windBase     the steady wind 0-1 (WindSystem Base Strength). The sea's swell grows taller and longer with it
+  //                (0.25 = the everyday sea, 1 = the biggest swell the sea can raise), grass gust orbs blow harder.
+  //   gustStrength the peak of the gusts on top (trees, sea chop).
+  //   skyPresetId  a look from sky_presets.json; the day / night cycle cross-fades to it.
+  //   weight       how often the state is picked next, relative to the others (0 = never by itself, console only).
+  //   minMinutes / maxMinutes   how long it lasts, real minutes.
+  "transitionSeconds": 60,
+  "states": [
+    { "id": "clear",        "displayName": "Clear",        "skyPresetId": "clear",    "windBase": 0.25, "gustStrength": 0.8, "weight": 6, "minMinutes": 8,  "maxMinutes": 20 },
+    { "id": "breezy",       "displayName": "Breezy",       "skyPresetId": "clear",    "windBase": 0.45, "gustStrength": 0.9, "weight": 3, "minMinutes": 5,  "maxMinutes": 12 },
+    { "id": "overcast",     "displayName": "Overcast",     "skyPresetId": "overcast", "windBase": 0.4,  "gustStrength": 0.8, "weight": 3, "minMinutes": 5,  "maxMinutes": 12 },
+    { "id": "thunderstorm", "displayName": "Thunderstorm", "skyPresetId": "storm",    "windBase": 1.0,  "gustStrength": 1.0, "weight": 1, "minMinutes": 4,  "maxMinutes": 8 }
+  ]
+}

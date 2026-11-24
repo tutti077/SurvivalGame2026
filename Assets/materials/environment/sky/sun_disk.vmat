@@ -2,6 +2,9 @@ Layer0
 {
 	shader "shaders/environment/celestial_unlit.shader"
 
-	g_flTintColor "[1.000000 1.000000 1.000000 1.000000]"
+	g_flTintColor "[1.000000 0.970000 0.900000 1.000000]"
 	g_flSelfIllumScale "0.000"
+	g_flBrightness "14.000"
+	g_flLimbPower "0.550"
+	g_vLimbTint "[1.000000 0.620000 0.300000 0.000000]"
 }

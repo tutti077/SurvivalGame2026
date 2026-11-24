@@ -10,7 +10,16 @@ namespace Survival;
 /// trees and anything else that sways read the same three values, so there is no per-object cost.
 ///
 /// Shader attributes: <c>WindDirection</c> (unit XY vector), <c>WindStrength</c> (host base, 0–1),
-/// <c>WindGust</c> (local gust contribution, 0–1). Shaders add the two strengths.
+/// <c>WindGust</c> (local gust contribution, 0–1: trees and the sea add the two strengths).
+/// <para>
+/// Grass does not read the scene-wide gust (Mark 2026-11-18: "it randomly freaks out all together at once, there should be
+/// like invisible orbs that float through the fields and make the grass wiggle when it hits them"). Its gusts are
+/// <b>orbs</b>: up to <see cref="MaxOrbs"/> discs that appear round the camera, drift downwind and fade, published as
+/// <c>WindOrb0..7</c> (centre xy and radius in engine units, strength); grass_blade.shader leans and shivers the clumps
+/// inside one. The breeze under them is a noise field that slides downwind by <c>WindFieldOffset</c>, accumulated here so
+/// a change of heading only changes where the field goes next (the shader used to multiply the heading by the clock,
+/// which swung the whole field faster the longer the session had run). Orbs are local to each client, like every gust.
+/// </para>
 /// </summary>
 [Title( "Wind System" )]
 [Icon( "air" )]
@@ -21,6 +30,10 @@ public sealed class WindSystem : Component
 	const string AttrDirection = "WindDirection";
 	const string AttrStrength = "WindStrength";
 	const string AttrGust = "WindGust";
+	const string AttrFieldOffset = "WindFieldOffset";
+	static readonly string[] AttrOrbs = { "WindOrb0", "WindOrb1", "WindOrb2", "WindOrb3", "WindOrb4", "WindOrb5", "WindOrb6", "WindOrb7" };
+	/// <summary>Orb slots in grass_blade.shader.</summary>
+	public const int MaxOrbs = 8;
 
 	[Property, Group( "Wind" ), Title( "Wind Enabled" ), Description( "Off = every tree and grass blade stands still (zero published each frame). Flip live in play; console wind_toggle does the same." )]
 	public bool WindEnabled { get; set; } = true;
@@ -52,6 +65,30 @@ public sealed class WindSystem : Component
 	[Property, Group( "Gusts" ), Title( "Gust Variation Period (s)" ), Range( 5f, 300f ), Step( 5f ), Description( "Slow envelope that makes some stretches of gusts weak and others strong." )]
 	public float GustVariationPeriodSeconds { get; set; } = 45f;
 
+	[Property, Group( "Grass Breeze" ), Title( "Breeze Drift (m/s)" ), Range( 0f, 30f ), Step( 0.5f ), Description( "How fast the grass's patchy breeze field slides downwind at the default wind; stronger wind slides it faster." )]
+	public float BreezeDriftMetersPerSecond { get; set; } = 4f;
+
+	[Property, Group( "Gust Orbs" ), Title( "Orb Count" ), Range( 0, MaxOrbs ), Description( "Gust orbs drifting through the grass round the camera at once (0 = none). Each is a patch of wind the grass wiggles in." )]
+	public int OrbCount { get; set; } = 6;
+
+	[Property, Group( "Gust Orbs" ), Title( "Orb Radius Min (m)" ), Range( 1f, 40f ), Step( 0.5f )]
+	public float OrbRadiusMinMeters { get; set; } = 5f;
+
+	[Property, Group( "Gust Orbs" ), Title( "Orb Radius Max (m)" ), Range( 1f, 40f ), Step( 0.5f )]
+	public float OrbRadiusMaxMeters { get; set; } = 12f;
+
+	[Property, Group( "Gust Orbs" ), Title( "Orb Speed (m/s)" ), Range( 0.5f, 40f ), Step( 0.5f ), Description( "How fast an orb travels downwind at the default wind; stronger wind carries it faster." )]
+	public float OrbSpeedMetersPerSecond { get; set; } = 7f;
+
+	[Property, Group( "Gust Orbs" ), Title( "Orb Range (m)" ), Range( 10f, 200f ), Step( 5f ), Description( "Orbs appear within this distance of the camera (a little upwind of it) and are replaced once they drift past 1.4x it." )]
+	public float OrbRangeMeters { get; set; } = 70f;
+
+	[Property, Group( "Gust Orbs" ), Title( "Orb Life (s)" ), Range( 2f, 60f ), Step( 1f ), Description( "How long an orb lasts before it fades and another appears elsewhere (each rolls 0.7 to 1.3x this)." )]
+	public float OrbLifeSeconds { get; set; } = 10f;
+
+	[Property, Group( "Gust Orbs" ), Title( "Orb Strength (0–2)" ), Range( 0f, 2f ), Step( 0.05f ), Description( "How hard the grass leans and shivers at an orb's centre. Scales up with the wind's base strength." )]
+	public float OrbStrength { get; set; } = 1f;
+
 	/// <summary>Host → clients: the heading everyone bends toward.</summary>
 	[Sync( SyncFlags.FromHost )]
 	public float CurrentYawDegrees { get; set; }
@@ -71,6 +108,23 @@ public sealed class WindSystem : Component
 
 	float _sessionYaw;
 	float _gustSeed;
+
+	/// <summary>How far the grass breeze field has slid, engine units.</summary>
+	Vector3 _fieldOffset;
+
+	struct Orb
+	{
+		public Vector2 PositionMeters;
+		public float RadiusMeters;
+		/// <summary>This orb's own share of the strength and speed (0.6–1.2), and how far it veers off the wind (radians).</summary>
+		public float Power, Pace, Veer;
+		public float Age, Life;
+	}
+
+	readonly Orb[] _orbs = new Orb[MaxOrbs];
+	readonly Vector4[] _orbValues = new Vector4[MaxOrbs];
+	const float OrbFadeInSeconds = 1.5f;
+	const float OrbFadeOutSeconds = 2.5f;
 
 	// windtest: a forced gust held on top of the simulated one (local, like every gust); may exceed 1 (hurricane).
 	float _testGustStrength;
@@ -98,6 +152,7 @@ public sealed class WindSystem : Component
 			Current = null;
 		// Leave no wind behind: the attributes outlive the component (play stop, scene unload), and the
 		// tree / grass shaders would keep swaying on whatever was last published.
+		Array.Clear( _orbValues, 0, _orbValues.Length );
 		Publish( Direction, 0f, 0f );
 		base.OnDisabled();
 	}
@@ -108,6 +163,9 @@ public sealed class WindSystem : Component
 		attrs.Set( AttrDirection, direction );
 		attrs.Set( AttrStrength, strength );
 		attrs.Set( AttrGust, gust );
+		attrs.Set( AttrFieldOffset, _fieldOffset );
+		for ( var i = 0; i < MaxOrbs; i++ )
+			attrs.Set( AttrOrbs[i], _orbValues[i] );
 
 		if ( WindMaterials is null )
 			return;
@@ -120,6 +178,72 @@ public sealed class WindSystem : Component
 			material.Set( AttrDirection, direction );
 			material.Set( AttrStrength, strength );
 			material.Set( AttrGust, gust );
+			material.Set( AttrFieldOffset, _fieldOffset );
+			for ( var i = 0; i < MaxOrbs; i++ )
+				material.Set( AttrOrbs[i], _orbValues[i] );
+		}
+	}
+
+	/// <summary>How much harder than the default breeze (0.25) the wind blows: 0.6 in a calm, 1 at the default, 2.2 in a storm. Orbs and the breeze drift scale by it.</summary>
+	float WindVigor => 0.6f + (1.6f * Math.Clamp( CurrentBaseStrength01, 0f, 1f ));
+
+	/// <summary>
+	/// The gust orbs, once per frame: each drifts downwind (veering a little), fades in and out over its life, and is
+	/// replaced round the camera when it dies or leaves the range. Fills <see cref="_orbValues"/> for the shader.
+	/// </summary>
+	void TickOrbs( float now )
+	{
+		var count = WindEnabled ? Math.Clamp( OrbCount, 0, MaxOrbs ) : 0;
+		var camera = Scene?.Camera;
+		if ( count == 0 || !camera.IsValid() )
+		{
+			Array.Clear( _orbValues, 0, _orbValues.Length );
+			return;
+		}
+		var eye = TerrainWorldUnits.EngineToMeters( camera.WorldPosition );
+		var eyeXy = new Vector2( eye.x, eye.y );
+		var wind = new Vector2( Direction.x, Direction.y );
+		var side = new Vector2( -wind.y, wind.x );
+		var range = Math.Max( 10f, OrbRangeMeters );
+		var vigor = WindVigor;
+		// windtest: a forced gust makes every orb bigger and harder
+		var forced = now < _testGustEnd ? _testGustStrength * TestGustEnvelope( now ) : 0f;
+		var dt = Time.Delta;
+		for ( var i = 0; i < MaxOrbs; i++ )
+		{
+			ref var orb = ref _orbs[i];
+			if ( i >= count )
+			{
+				_orbValues[i] = default;
+				continue;
+			}
+			orb.Age += dt;
+			if ( orb.Life <= 0f || orb.Age >= orb.Life || (orb.PositionMeters - eyeXy).Length > range * 1.4f )
+			{
+				var first = orb.Life <= 0f;
+				// A new one somewhere in the range disc, pushed upwind so most of its life is spent crossing the view
+				var angle = Random.Shared.Float( 0f, MathF.PI * 2f );
+				var dist = MathF.Sqrt( Random.Shared.Float( 0f, 1f ) ) * range;
+				orb.PositionMeters = eyeXy + (new Vector2( MathF.Cos( angle ), MathF.Sin( angle ) ) * dist) - (wind * range * 0.3f);
+				orb.RadiusMeters = Random.Shared.Float( Math.Min( OrbRadiusMinMeters, OrbRadiusMaxMeters ), Math.Max( OrbRadiusMinMeters, OrbRadiusMaxMeters ) );
+				orb.Power = Random.Shared.Float( 0.6f, 1.2f );
+				orb.Pace = Random.Shared.Float( 0.7f, 1.3f );
+				orb.Veer = Random.Shared.Float( -0.3f, 0.3f );
+				// The first batch starts part-way through its life so they do not all fade in together
+				orb.Life = Math.Max( 2f, OrbLifeSeconds ) * Random.Shared.Float( 0.7f, 1.3f );
+				orb.Age = first ? Random.Shared.Float( 0f, orb.Life * 0.5f ) : 0f;
+			}
+			var heading = (wind * MathF.Cos( orb.Veer )) + (side * MathF.Sin( orb.Veer ));
+			orb.PositionMeters += heading * (Math.Max( 0.5f, OrbSpeedMetersPerSecond ) * orb.Pace * vigor * dt);
+			var fade = Math.Min( Math.Clamp( orb.Age / OrbFadeInSeconds, 0f, 1f ), Math.Clamp( (orb.Life - orb.Age) / OrbFadeOutSeconds, 0f, 1f ) );
+			fade = fade * fade * (3f - (2f * fade));
+			var strength = Math.Max( 0f, OrbStrength ) * orb.Power * (0.5f + (0.5f * vigor) + forced) * fade;
+			var radius = orb.RadiusMeters * (0.8f + (0.2f * vigor) + (0.5f * forced));
+			_orbValues[i] = new Vector4(
+				TerrainWorldUnits.MetersToEngine( orb.PositionMeters.x ),
+				TerrainWorldUnits.MetersToEngine( orb.PositionMeters.y ),
+				TerrainWorldUnits.MetersToEngine( radius ),
+				strength );
 		}
 	}
 
@@ -144,6 +268,9 @@ public sealed class WindSystem : Component
 		Gust01 = SampleGust( now + _gustSeed ) * Math.Clamp( GustStrength01, 0f, 1f );
 		if ( now < _testGustEnd )
 			Gust01 = Math.Max( Gust01, _testGustStrength * TestGustEnvelope( now ) );
+
+		_fieldOffset += Direction * (TerrainWorldUnits.MetersToEngine( Math.Max( 0f, BreezeDriftMetersPerSecond ) ) * WindVigor * Time.Delta);
+		TickOrbs( now );
 
 		if ( WindEnabled )
 			Publish( Direction, CurrentBaseStrength01, Gust01 );
@@ -207,13 +334,19 @@ public sealed class WindSystem : Component
 	}
 
 	/// <summary>Dev: flip the scene wind on / off (the same as the Wind Enabled checkbox).</summary>
-	/// <summary>Usage: <c>wind_base &lt;0–1&gt;</c> — host: set the steady wind (the weather — 0 calm, 0.25 default, 1 storm; the sea's swell follows it).</summary>
+	/// <summary>Usage: <c>wind_base &lt;0–1&gt;</c> — host: set the steady wind (0 calm, 0.25 default, 1 storm; the sea's swell follows it) where no WeatherSystem owns it.</summary>
 	[ConCmd( "wind_base" )]
 	static void WindBaseCommand( float strength01 = -1f )
 	{
 		if ( !Current.IsValid() )
 		{
 			Log.Info( "[Wind] no WindSystem in the active scene" );
+			return;
+		}
+
+		if ( strength01 >= 0f && WeatherSystem.Current.IsValid() )
+		{
+			Log.Info( "[Wind] the weather owns the wind in this scene: use weather <id> (weather lists the states)" );
 			return;
 		}
 

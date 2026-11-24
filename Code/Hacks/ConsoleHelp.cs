@@ -16,7 +16,11 @@ public static class ConsoleHelp
 	[
 		// ---- wind / grass / sky
 		new( "World", "windtest", "[1-5]", "Hold a forced gust blowing toward the camera's right (face north, it blows east); 1 breeze … 5 hurricane (the max). Plain windtest switches it off.", "windtest 3" ),
-		new( "World", "wind_base", "[0-1]", "Host: the steady wind = the weather (0 calm, 0.25 default, 1 storm); the sea swell grows taller and longer with it. No argument prints it.", "wind_base 1" ),
+		new( "World", "underground_info", "[reload]", "The underground (data/underground.json): the layers and their pickaxe tiers, the loot rooms of the 64 m chunk under the camera, how deep its voxel column reaches and how many rooms were found in this world; reload re-reads the JSON.", "underground_info" ),
+		new( "World", "pipe_info", "[radius m|reload]", "Pipe systems (data/pipe_systems.json): the systems in the cells round the camera, nearest first - where each meets the ground, where its crushed tip and its cement cube are buried, and a terrain_cam line; reload re-reads the JSON. world_find pipe [radius] park flies to the nearest.", "pipe_info 6000" ),
+		new( "World", "weather", "[id|auto|reload]", "The weather (data/weather.json: clear, breezy, overcast, thunderstorm): no argument lists the states, an id makes the host switch now (a thunderstorm = wind 1.0 under the storm sky: the sea's biggest swell), auto flips the automatic cycle, reload re-reads the JSON.", "weather thunderstorm" ),
+		new( "World", "atmosphere", "[reload]", "The air of the biome the camera stands in (data/biome_atmosphere.json: mist + shade per biome, on top of the distance fog): no argument prints the live mix, reload re-reads the file.", "atmosphere reload" ),
+		new( "World", "wind_base", "[0-1]", "Host: the steady wind (0 calm, 0.25 default, 1 storm) in a scene WITHOUT a WeatherSystem; with one the weather owns the wind (use weather). No argument prints it.", "wind_base 1" ),
 		new( "World", "wind_toggle", "", "Scene wind on / off live (trees + grass stand still when off).", "wind_toggle" ),
 		new( "World", "grass_toggle", "", "World grass on / off live (applies as chunks refresh) — the quickest fps bisect.", "grass_toggle" ),
 		new( "World", "cycle_toggle", "", "Day / night cycle group on / off (terrainTest ships it ON since 2026-10-21: cycle + sky dome + disks + moon).", "cycle_toggle" ),

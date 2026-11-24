@@ -1,9 +1,9 @@
 //
 // caldera_ring — the mountain wall round the whole map (Code/World/Environment/CalderaRing.cs).
 //
-// One world-anchored mesh 23–30 km from the centre, 5–6.5 km tall. Lit rock only: the distance haze that pales
-// it is the scene-wide aerial_perspective pass (one atmosphere for ground, sea and ring, capped so the wall never
-// fades away), which reads this mesh's depth like any other. No engine fog. Lit from the cycle's sun / moon lights
+// One world-anchored mesh 23–30 km from the centre, 5–6.5 km tall. Lit rock only: its distance fog is the
+// scene-wide aerial_perspective pass (one fog for ground, sea and ring: the foot fades into the sky behind it, the high
+// crests stand out of the thin air), which reads this mesh's depth like any other. No engine fog. Lit from the cycle's sun / moon lights
 // by C# attributes; faceted from screen derivatives (no shadows at 25 km anyway).
 //
 //   RingSunDirection / RingSunColor     toward the sun, sun DirectionalLight.LightColor
@@ -12,7 +12,7 @@
 //
 HEADER
 {
-	Description = "Caldera ring — far mountain wall, lit by the day/night cycle (haze from the aerial perspective pass).";
+	Description = "Caldera ring — far mountain wall, lit by the day/night cycle (fog from the aerial perspective pass).";
 	DevShader = true;
 }
 

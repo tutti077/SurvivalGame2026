@@ -40,6 +40,19 @@ public sealed class EnvironmentDayNightCycle : Component
 	[Property, Group( "Timing" ), Title( "Paused" )]
 	public bool Paused { get; set; }
 
+	[Property, Group( "Timing" ), Title( "Sleep speed (x)" ), Range( 2f, 60f ), Step( 1f ), Description( "How many times faster the clock runs while every player is asleep in a bed. It stops at 06:00. Default 10." )]
+	public float SleepTimeScale { get; set; } = 10f;
+
+	/// <summary>
+	/// The clock on this machine is running at <see cref="SleepTimeScale"/> because every player sleeps
+	/// (<c>PlayerMovement.Bed.cs</c>). The host decides (<see cref="TickSleepAuthority"/>) and stops it at 06:00; a
+	/// client runs fast alongside, holds just short of 06:00 if its own clock gets there first, and takes the host's
+	/// time when the host stops (<see cref="ClientSetSleepFastForward"/>).
+	/// </summary>
+	public bool SleepFastForward { get; private set; }
+
+	double _nextSleepCheckAt;
+
 	[Property, Group( "Lighting" )]
 	public DirectionalLight SunLight { get; set; }
 
@@ -55,11 +68,11 @@ public sealed class EnvironmentDayNightCycle : Component
 	[Property, Group( "Lighting" ), Title( "Moon color" )]
 	public Color MoonColor { get; set; } = new( 0.74f, 0.86f, 1.15f, 1f );   // cool, slightly desaturated blue (Mark 2026-10-21)
 
-	[Property, Group( "Lighting" ), Title( "Night ambient (vs day)" ), Range( 0.01f, 1f ), Step( 0.01f ), Description( "Base fill when the sun is down — what you see out of the moonlight. Default 0.06." )]
-	public float NightAmbientBrightness { get; set; } = 0.06f;   // dark out of the moonlight (Mark 2026-10-21; was 0.30)
+	[Property, Group( "Lighting" ), Title( "Night ambient (vs day)" ), Range( 0.01f, 1f ), Step( 0.01f ), Description( "Base fill when the sun is down — what you see out of the moonlight. Default 0.6." )]
+	public float NightAmbientBrightness { get; set; } = 0.6f;   // an item at your feet can be seen without a torch, in a tree's moon shadow too (Mark 2026-11-18: 0.06 -> 0.6; 0.28 left the shadow black, 0.8 is the next step up)
 
-	[Property, Group( "Lighting" ), Title( "Moonlight (vs day)" ), Range( 0f, 1f ), Step( 0.01f ), Description( "Extra directional light from the moon on top of night ambient. Default 0.34." )]
-	public float MoonDirectionalBrightness { get; set; } = 0.34f;   // moonlit ground readable, moon shadows dark
+	[Property, Group( "Lighting" ), Title( "Moonlight (vs day)" ), Range( 0f, 1f ), Step( 0.01f ), Description( "Directional light from the moon on top of night ambient, at the moon's highest (a fifth of it at the horizon, like the sun). 0.9 since 2026-11-23, was 0.34." )]
+	public float MoonDirectionalBrightness { get; set; } = 0.9f;   // moonlit ground readable, moon shadows dark
 
 	[Property, Group( "Lighting" ), Title( "Night max exposure" ), Range( 0.25f, 3f ), Step( 0.05f ), Description( "Ceiling for the camera's auto-exposure at night, so the eye cannot brighten the dark back to dusk. Blends to the camera's own Maximum Exposure by day. Default 1 = no night boost." )]
 	public float NightMaxExposure { get; set; } = 1f;
@@ -76,7 +89,7 @@ public sealed class EnvironmentDayNightCycle : Component
 	[Property, Group( "Sky" ), Title( "Sky dome" )]
 	public SkyDome SkyDome { get; set; }
 
-	[Property, Group( "Sky" ), Title( "Aerial perspective" ), Description( "Optional. The scene-wide distance haze; it takes the preset horizon and sun glow each frame so the far world melts into the sky day and night." )]
+	[Property, Group( "Sky" ), Title( "Aerial perspective" ), Description( "Optional. The scene-wide distance fog; it takes the preset sky each frame so the far world fades into the sky day and night." )]
 	public AerialPerspective Haze { get; set; }
 
 	[Property, Group( "Disks" )]
@@ -85,8 +98,11 @@ public sealed class EnvironmentDayNightCycle : Component
 	[Property, Group( "Disks" )]
 	public GameObject MoonDisk { get; set; }
 
-	[Property, Group( "Disks" ), Title( "Disk orbit radius (m)" ), Description( "Shared sun/moon ring distance. Default ~5200 m (old 200 m + 5000 m) — unreachable scenery, not a skybox." )]
+	[Property, Group( "Disks" ), Title( "Disk orbit radius (m)" ), Description( "Sun / moon distance from the camera. Default ~5200 m — unreachable scenery, not a skybox; they ride with the camera since 2026-11-23." )]
 	public float DiskOrbitRadiusMeters { get; set; } = 5200f;
+
+	/// <summary>The disks' distance from the camera in engine units, for the fog pass's sky cut.</summary>
+	public float DiskOrbitRadiusUnits => Math.Max( 1000f, TerrainWorldUnits.MetersToEngine( DiskOrbitRadiusMeters ) );
 
 	[Property, Group( "Disks" ), Title( "Disk scale" ), Description( "World scale of both disks. Leave 0 to auto-match prior angular size at the orbit radius." )]
 	public float DiskScale { get; set; } = 0f;
@@ -176,12 +192,114 @@ public sealed class EnvironmentDayNightCycle : Component
 		else if ( !Paused && !worldLoading )
 		{
 			RecalculateCycleLength();
+			TickSleepAuthority( clockRuns: true );
+			AdvanceClock();
+		}
+
+		if ( SleepFastForward && ( DevToolsSettings.DayLocked || Paused || worldLoading ) )
+			TickSleepAuthority( clockRuns: false );
+
+		ApplyVisuals( force: false );
+	}
+
+	/// <summary>One frame of clock. Asleep, it runs <see cref="SleepTimeScale"/> times faster and never passes 06:00.</summary>
+	void AdvanceClock()
+	{
+		if ( !SleepFastForward )
+		{
 			CycleTimeSeconds += Time.Delta;
 			if ( _cycleLength > 0.01f )
 				CycleTimeSeconds %= _cycleLength;
+			return;
 		}
 
-		ApplyVisuals( force: false );
+		// A scene saved before this property existed loads it as 0.
+		var scale = SleepTimeScale > 1f ? SleepTimeScale : 10f;
+		var next = CycleTimeSeconds + Time.Delta * scale;
+		if ( next < _cycleLength )
+		{
+			CycleTimeSeconds = next;
+			return;
+		}
+
+		if ( !IsSleepAuthority )
+		{
+			// A client whose clock ran ahead of the host's waits at the end of the night for the host's 06:00.
+			CycleTimeSeconds = MathF.Max( 0f, _cycleLength - 0.01f );
+			return;
+		}
+
+		// 06:00: the night is over. Everyone gets up and the clock is back to normal speed.
+		CycleTimeSeconds = 0f;
+		SleepFastForward = false;
+		PlayerMovement.HostSetEveryoneSleeping( Scene, sleeping: false, hostCycle01: 0f, dawn: true );
+		Log.Info( "[EnvironmentDayNight] everyone slept until 06:00." );
+	}
+
+	/// <summary>
+	/// Host: start the fast night once every player is asleep, stop it the moment one of them is not (got up, was
+	/// hit, a new player joined) or the clock cannot run. Checked four times a second while nobody sleeps - behind a
+	/// counter that is zero unless someone lies in a bed - and every frame while the night runs fast.
+	/// </summary>
+	void TickSleepAuthority( bool clockRuns )
+	{
+		if ( !IsSleepAuthority )
+			return;
+
+		if ( !SleepFastForward )
+		{
+			if ( Time.NowDouble < _nextSleepCheckAt )
+				return;
+			_nextSleepCheckAt = Time.NowDouble + 0.25;
+		}
+
+		var everyoneAsleep = clockRuns && PlayerMovement.HostEveryoneAsleep( Scene );
+		if ( everyoneAsleep == SleepFastForward )
+			return;
+
+		SleepFastForward = everyoneAsleep;
+		PlayerMovement.HostSetEveryoneSleeping( Scene, everyoneAsleep, Cycle01, dawn: false );
+	}
+
+	/// <summary>
+	/// This machine decides when the night runs fast: the host, or a game with no network. (Not
+	/// <see cref="IsWorldAuthority"/>: that reads the scene object's own network state, which is not active on a
+	/// client either, so a client passes it.)
+	/// </summary>
+	static bool IsSleepAuthority => !Networking.IsActive || Networking.IsHost;
+
+	/// <summary>Where the clock stands in the day, 0–1 (0 = 06:00, 0.25 = noon, 0.5 = 18:00, 0.75 = midnight).</summary>
+	float Cycle01 => _cycleLength > 0.01f ? Math.Clamp( CycleTimeSeconds / _cycleLength, 0f, 1f ) : 0f;
+
+	/// <summary>
+	/// Client: the host says everyone is asleep (run this machine's clock fast) or that the fast night is over (set
+	/// this machine's clock to the host's <paramref name="hostCycle01"/>; the screen is black while it lands).
+	/// </summary>
+	public static void ClientSetSleepFastForward( bool sleeping, float hostCycle01 )
+	{
+		var cycle = FindActive();
+		if ( cycle is null || IsSleepAuthority )
+			return;
+
+		cycle.SleepFastForward = sleeping;
+		Log.Info( sleeping ? "[EnvironmentDayNight] everyone is asleep: clock running fast with the host." : $"[EnvironmentDayNight] sleep over: clock set to the host (cycle {hostCycle01:0.000})." );
+		if ( sleeping )
+			return;
+
+		cycle.RecalculateCycleLength();
+		cycle.CycleTimeSeconds = cycle._cycleLength * Math.Clamp( hostCycle01, 0f, 0.9999f );
+		cycle.ApplyVisuals( force: true );
+	}
+
+	/// <summary>Dev readout for <c>bed_info</c>.</summary>
+	public static string DescribeSleepState()
+	{
+		var cycle = FindActive();
+		if ( cycle is null )
+			return "no active day / night cycle in this scene (beds still work, the night cannot be slept through)";
+
+		var hour = ( 6f + cycle.Cycle01 * 24f ) % 24f;
+		return $"fastForward={cycle.SleepFastForward} x{cycle.SleepTimeScale:0.#} hour={hour:0.00} day={cycle.DayNumber} paused={cycle.Paused} dayLocked={DevToolsSettings.DayLocked}";
 	}
 
 	/// <summary>Snap to the top of the sun's arc (cycle 0.25). Local to this peer — the cycle is not synced.</summary>
@@ -442,6 +560,9 @@ public sealed class EnvironmentDayNightCycle : Component
 		}
 	}
 
+	/// <summary>Any channel bright enough to shade a pixel at 8 bits after tonemapping.</summary>
+	static bool CastsVisibleLight( Color c ) => Math.Max( c.r, Math.Max( c.g, c.b ) ) > 0.002f;
+
 	Vector3 UpdateCelestial( DirectionalLight light, GameObject disk, float elev01, bool isSun, float dayWeight, float lightScale )
 	{
 		// elev01 on [0,2): full shared ring. Angle 0→2π.
@@ -468,7 +589,6 @@ public sealed class EnvironmentDayNightCycle : Component
 		{
 			light.WorldRotation = Rotation.LookAt( -dir, Vector3.Up );
 			light.FogStrength = 0f;
-			light.Shadows = !TerrainPerfBench.SunShadowsOff;
 			light.Enabled = true;
 
 			if ( isSun )
@@ -476,7 +596,12 @@ public sealed class EnvironmentDayNightCycle : Component
 				// Sun carries the ambient fill so dusk/dawn never go black (SkyColor alpha must be >0).
 				var nightFill = (NightSkyAmbient * NightAmbientBrightness).WithAlpha( 1f );
 				var dayFill = DaySkyAmbient.WithAlpha( 1f );
-				light.SkyColor = Color.Lerp( nightFill, dayFill, dayWeight ).WithAlpha( 1f );
+				// The camera's biome shades the fill (data/biome_atmosphere.json "shade"): under the Redwood canopy the sky
+				// light drops and the sun's patches stay full bright - the dark comes from the light, not from a screen dim
+				// (Mark 2026-11-23: "true directional light ... the shadows need to come from this sun's light"). By day
+				// only: the night fill is already low ("its far too dark at night in clover hills and redwood").
+				var shade = MathX.Lerp( 1f, AerialPerspective.BiomeShade, dayWeight );
+				light.SkyColor = (Color.Lerp( nightFill, dayFill, dayWeight ) * shade).WithAlpha( 1f );
 
 				var sunDir = aboveHorizon ? Math.Clamp( height, 0f, 1f ) : 0f;
 				var color = Color.Lerp( SunHorizonColor, SunPeakColor, sunDir );
@@ -486,16 +611,30 @@ public sealed class EnvironmentDayNightCycle : Component
 			{
 				// Ambient lives on the sun light — moon only adds directional moonlight.
 				light.SkyColor = new Color( 0f, 0f, 0f, 0f );
+				// The moon lights the night the way the sun lights the day (Mark 2026-11-23: "add a moon that provides light at
+				// night the same as the sun"): the sun's own height curve, a fifth of its light already at the horizon and all
+				// of it overhead, where it used to be nothing at the horizon and a third overhead.
 				var moonDir = aboveHorizon ? Math.Clamp( height, 0f, 1f ) : 0f;
-				light.LightColor = MoonColor * (MoonDirectionalBrightness * moonDir);
+				light.LightColor = aboveHorizon ? MoonColor * (MoonDirectionalBrightness * MathX.Lerp( 0.2f, 1f, moonDir )) : Color.Black;
 			}
+
+			// A light whose colour has faded to black (the sun at night — it stays enabled for the ambient fill —
+			// or the moon under the horizon by day) still rendered all its cascades every frame: 4 + 2 shadow
+			// views of nothing (2026-11-10 fps routine). Its shadows are invisible, so they go off with it and come
+			// back the frame it has light again.
+			light.Shadows = !TerrainPerfBench.SunShadowsOff && CastsVisibleLight( light.LightColor );
 		}
 
 		if ( disk is not null && disk.IsValid() )
 		{
 			disk.Enabled = diskVisible;
 			var radius = Math.Max( 1000f, TerrainWorldUnits.MetersToEngine( DiskOrbitRadiusMeters ) );
-			disk.WorldPosition = dir * radius;
+			// Round the camera, not the world's centre: the sun and moon are at no reachable distance, so they must not
+			// slide against the sky as the player crosses the world - and the fog pass can then tell them from terrain by
+			// distance alone (AerialPerspective's sky cut sits just inside this radius; fogged like a far hill, the sun
+			// showed as a dull brown ball, Mark 2026-11-23).
+			var viewer = Scene.Camera is { } diskCamera && diskCamera.IsValid() ? diskCamera.WorldPosition : Vector3.Zero;
+			disk.WorldPosition = viewer + (dir * radius);
 
 			var scale = DiskScale > 0.01f
 				? DiskScale
@@ -565,7 +704,7 @@ public sealed class EnvironmentDayNightCycle : Component
 			SkyDome.Apply( look, sunDir, _preset.CloudScale, _preset.CloudSpeed, starVisibility );
 
 		if ( Haze is not null && Haze.IsValid() )
-			Haze.Apply( look.Horizon, look.SunGlow, sunDir );
+			Haze.Apply( look.Zenith, look.Horizon, look.SunGlow, sunDir );
 
 		// Clear colour = horizon, so anything past the dome (or a scene without one) still matches.
 		var clear = look.Horizon.WithAlpha( 1f );
@@ -593,6 +732,12 @@ public sealed class EnvironmentDayNightCycle : Component
 		if ( _preset is not null && string.Equals( _presetId, id, StringComparison.OrdinalIgnoreCase ) )
 			return;
 
+		// A change of preset while running (the weather): fade from the sky as it is now instead of snapping
+		if ( _preset is not null && _hasLastLook )
+		{
+			_blendFrom = _lastLook;
+			_presetBlend = 0f;
+		}
 		_presetId = id;
 		_preset = SkyPresetCatalog.Resolve( id );
 		_night = SkyLook.From( _preset.Night );
@@ -602,7 +747,29 @@ public sealed class EnvironmentDayNightCycle : Component
 		_dusk = SkyLook.From( _preset.Dusk );
 	}
 
+	/// <summary>Seconds a change of <see cref="SkyPresetId"/> takes to fade in (the weather turning).</summary>
+	[Property, Group( "Sky" ), Title( "Preset Blend (s)" ), Range( 0f, 300f ), Step( 5f )]
+	public float SkyPresetBlendSeconds { get; set; } = 45f;
+
+	SkyLook _lastLook, _blendFrom;
+	bool _hasLastLook;
+	float _presetBlend = 1f;
+
+	/// <summary>The sky right now: the preset's look for this point of the day, cross-faded from the previous preset while the weather turns.</summary>
 	SkyLook SampleSkyLook( CyclePhase phase, float dayWeight, float sunElev01 )
+	{
+		var look = SamplePresetLook( phase, dayWeight, sunElev01 );
+		if ( _presetBlend < 1f )
+		{
+			_presetBlend = SkyPresetBlendSeconds <= 0f ? 1f : Math.Min( 1f, _presetBlend + (Time.Delta / SkyPresetBlendSeconds) );
+			look = SkyLook.Lerp( _blendFrom, look, Smooth01( _presetBlend ) );
+		}
+		_lastLook = look;
+		_hasLastLook = true;
+		return look;
+	}
+
+	SkyLook SamplePresetLook( CyclePhase phase, float dayWeight, float sunElev01 )
 	{
 		EnsurePresetLooks();
 
