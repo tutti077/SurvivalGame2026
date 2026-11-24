@@ -398,7 +398,7 @@
             "go": "a1b2c3d4-e5f6-7890-abcd-ef1234567740",
             "component_type": "DirectionalLight"
           },
-          "NightAmbientBrightness": 0.06,
+          "NightAmbientBrightness": 0.6,
           "NightSeconds": 10,
           "NightSkyAmbient": "0.22,0.28,0.42,1",
           "OnComponentDestroy": null,

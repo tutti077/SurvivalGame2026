@@ -25,7 +25,8 @@ namespace Survival;
 /// Events: <c>session</c>, <c>player_join</c>, <c>vitals</c> (2 s sample per pawn), <c>stamina_empty</c> /
 /// <c>stamina_recovered</c>, <c>hit</c> (player or entity hurt an entity), <c>player_damaged</c>,
 /// <c>player_death</c>, <c>kill</c> (entity died: time-to-kill, hits, damage traded, killer's pools),
-/// <c>block</c>, <c>grapple_attach</c> / <c>grapple_detach</c> / <c>grapple_reject</c>, <c>craft</c>,
+/// <c>block</c>, <c>block_input</c> (each client's block button presses / releases, on its clock and the host's) and
+/// <c>guard_miss</c> (a blow that got past a guard its owner was working, with the reason), <c>grapple_attach</c> / <c>grapple_detach</c> / <c>grapple_reject</c>, <c>craft</c>,
 /// <c>build</c>, <c>gain</c>, <c>player_leave</c>, <c>client_perf</c> (each client's average and 1 % low fps, menu seconds and
 /// resolution every 30 s; the <c>vitals</c> sample carries the pawn position in meters), <c>mark</c>. Hooks: <see cref="VitalsAuthority.TryApplyDeltas"/>
 /// (player pools), <see cref="EntityVitals.ApplyDamage"/>, <see cref="PlayerCombat"/> (block outcome),
@@ -48,6 +49,9 @@ public static class PlaytestLog
 	/// <summary>Stamina at or under this counts as empty (the pool is 0..100).</summary>
 	const float StaminaEmptyThreshold = 0.5f;
 
+	/// <summary>A blow past the guard is logged when the block button changed within this long before it (or is held).</summary>
+	const float GuardMissInputWindowSeconds = 1.5f;
+
 	/// <summary>A fight nobody touched for this long is forgotten (the entity leashed or despawned).</summary>
 	const double FightIdleSeconds = 120.0;
 
@@ -55,6 +59,9 @@ public static class PlaytestLog
 	const double DeathCauseWindowSeconds = 10.0;
 
 	public static bool Enabled { get; private set; }
+
+	/// <summary>Every peer: the host is logging, so this machine reports its own frame times and block button.</summary>
+	public static bool ClientReporting => _clientReporting;
 	public static string CurrentFilePath { get; private set; }
 
 	static readonly StringBuilder _buffer = new();
@@ -521,11 +528,54 @@ public static class PlaytestLog
 			.S( "atk", atk.Label ).S( "atkKind", atk.Kind )
 			.S( "weapon", atk.Kind == "player" ? WeaponOf( atk.Root ) : atk.Label )
 			.S( "outcome", outcome.OutcomeId ?? string.Empty )
-			.B( "parry", outcome.WasPerfectParry )
+			.B( "chamber", outcome.WasChambered )
 			.F( "hpDmg", outcome.HealthDamage ).F( "stCost", outcome.StaminaCost );
 		AppendSwingType( ev, atk );
 		Emit( ev );
 	}
+
+	/// <summary>
+	/// Host (<see cref="MeleeBlockResolution.TryResolve"/>): a blow got past a player's guard. Written only when the
+	/// defender was working the block button (held, or changed within <see cref="GuardMissInputWindowSeconds"/>), so a
+	/// plain hit on an open pawn leaves no line. Carries why the guard failed and the guard's state on the host.
+	/// </summary>
+	internal static void HostGuardMiss( PlayerCombat defender, Component attacker, double hitSandbox, MeleeBlockRejectReason reason, byte incomingSide )
+	{
+		if ( !Enabled || defender is null || !defender.GameObject.IsValid() )
+			return;
+
+		var def = Describe( defender );
+		if ( def.Kind != "player" )
+			return;
+
+		// One line per blow: the sweep asks again for every sample that touches the body.
+		if ( def.Id == _lastGuardMissDefender && Math.Abs( hitSandbox - _lastGuardMissAt ) < 0.25 )
+			return;
+
+		var g = defender.HostGuardTrace( hitSandbox );
+		var recentInput = g.SinceInputSeconds >= 0f && g.SinceInputSeconds <= GuardMissInputWindowSeconds;
+		if ( reason == MeleeBlockRejectReason.NotBlocking && !g.Held && !recentInput )
+			return;
+
+		var atk = Describe( attacker );
+		var ev = Ev( "guard_miss" )
+			.S( "def", def.Label )
+			.S( "atk", atk.Label ).S( "atkKind", atk.Kind )
+			.S( "reason", reason.ToString() )
+			.F( "hostT", (float)hitSandbox )
+			.B( "guardUp", g.GuardUp ).B( "held", g.Held )
+			.F( "guardAgeS", g.GuardAgeSeconds ).F( "needS", g.ActivationSeconds ).F( "creditS", g.LatencyCreditSeconds )
+			.S( "guardDir", SwingDirs.Letter( g.Direction ) ).S( "inSide", SwingDirs.Letter( incomingSide ) )
+			.F( "sinceInputS", g.SinceInputSeconds ).B( "lastInputDown", g.LastInputDown )
+			.B( "usedUp", g.AwaitingRelease ).B( "locked", g.Locked ).B( "exhausted", g.Exhausted ).B( "swinging", g.Swinging );
+		AppendSwingType( ev, atk );
+		Emit( ev );
+		_lastGuardMissDefender = def.Id;
+		_lastGuardMissAt = hitSandbox;
+	}
+
+	static Guid _lastGuardMissDefender;
+	static double _lastGuardMissAt;
 
 	/// <summary>Host (<see cref="PlayerMovement"/> ServerTryAttach): the rope took hold.</summary>
 	internal static void HostGrappleAttached( PlayerMovement movement, string kind, float ropeLengthEngine )
@@ -693,7 +743,7 @@ public static class PlaytestLog
 		var p99 = _frameTimes[Math.Clamp( (int)( _frameTimes.Count * 0.99 ), 0, _frameTimes.Count - 1 )];
 		var lowFps = p99 > 1e-5f ? 1f / p99 : 0f;
 		var size = Screen.Size;
-		RpcClientPerf( avgFps, lowFps, _menuSeconds, (float)window, (int)size.x, (int)size.y );
+		RpcClientPerf( avgFps, lowFps, _menuSeconds, (float)window, (int)size.x, (int)size.y, Time.NowDouble );
 		ResetClientWindow( now );
 	}
 
@@ -740,7 +790,7 @@ public static class PlaytestLog
 
 	/// <summary>Client → host: one report window of frame times and menu time; the host writes a <c>client_perf</c> line for the caller's pawn.</summary>
 	[Rpc.Host]
-	public static void RpcClientPerf( float avgFps, float lowFps, float menuSeconds, float windowSeconds, int width, int height )
+	public static void RpcClientPerf( float avgFps, float lowFps, float menuSeconds, float windowSeconds, int width, int height, double clientSandbox )
 	{
 		if ( !Enabled || !IsHostContext )
 			return;
@@ -750,27 +800,59 @@ public static class PlaytestLog
 			return;
 
 		var caller = Rpc.Caller;
-		GameObject root = null;
+		var state = StateFor( FindCallerPawn( scene, caller ) );
+		Emit( Ev( "client_perf" )
+			.S( "player", state?.Label ?? ( caller is not null ? ConnectionIdentity.Format( caller ) : "host" ) )
+			.F( "avgFps", avgFps ).F( "lowFps", lowFps )
+			.F( "menuS", menuSeconds ).F( "windowS", windowSeconds )
+			.S( "res", $"{width}x{height}" )
+			// The sender's game clock against the host's when the report arrived: latency plus any clock offset (the guard's
+			// rise is timed from a client timestamp, so an offset here moves every block that client makes).
+			.F( "clockLagS", (float)( Time.NowDouble - clientSandbox ) ) );
+	}
+
+	/// <summary>Host: the pawn owned by the connection that sent the RPC being handled (the host's own pawn when it has none).</summary>
+	static GameObject FindCallerPawn( Scene scene, Connection caller )
+	{
 		if ( caller is not null && Networking.IsActive )
 		{
 			foreach ( var vitals in scene.GetAllComponents<PlayerVitals>() )
 			{
 				var owner = vitals.GameObject.Network?.Owner;
 				if ( owner is not null && ConnectionIdentity.SameClient( owner, caller ) )
-				{
-					root = vitals.GameObject;
-					break;
-				}
+					return vitals.GameObject;
 			}
 		}
 
-		root ??= FindLocalPawn( scene );
-		var state = StateFor( root );
-		Emit( Ev( "client_perf" )
+		return FindLocalPawn( scene );
+	}
+
+	/// <summary>
+	/// Client → host: the caller pressed or released the block button (<c>PlayerCombat.PlaytestReportBlockButton</c>). The
+	/// host writes a <c>block_input</c> line: the sender's clock at the press (<c>clientT</c>), the host's clock when it
+	/// arrived (<c>hostT</c>, the same clock <c>guard_miss</c> stamps its blow with), whether the press raised the guard on
+	/// the sender's screen and what held it down if not, and the incoming-attack marker the sender was looking at.
+	/// </summary>
+	[Rpc.Host]
+	public static void RpcClientBlockInput( bool down, bool guardUp, string why, double clientSandbox, byte direction, bool incoming, byte incomingSide )
+	{
+		if ( !Enabled || !IsHostContext )
+			return;
+
+		var scene = Sandbox.Game.ActiveScene;
+		if ( scene is null || !scene.IsValid() )
+			return;
+
+		var caller = Rpc.Caller;
+		var state = StateFor( FindCallerPawn( scene, caller ) );
+		var hostNow = Time.NowDouble;
+		Emit( Ev( "block_input" )
 			.S( "player", state?.Label ?? ( caller is not null ? ConnectionIdentity.Format( caller ) : "host" ) )
-			.F( "avgFps", avgFps ).F( "lowFps", lowFps )
-			.F( "menuS", menuSeconds ).F( "windowS", windowSeconds )
-			.S( "res", $"{width}x{height}" ) );
+			.B( "down", down ).B( "guardUp", guardUp ).S( "why", why ?? string.Empty )
+			.S( "dir", SwingDirs.Letter( direction ) )
+			.S( "marker", incoming ? SwingDirs.Letter( incomingSide ) : string.Empty )
+			.F( "clientT", (float)clientSandbox ).F( "hostT", (float)hostNow )
+			.F( "lagS", (float)( hostNow - clientSandbox ) ) );
 	}
 
 	// ------------------------------------------------------------------ ambient scopes

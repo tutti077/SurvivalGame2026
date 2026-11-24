@@ -90,7 +90,7 @@ public static class QuestSaveStore
 		}
 	}
 
-	static string SanitizeKey( string key )
+	public static string SanitizeKey( string key )
 	{
 		if ( string.IsNullOrWhiteSpace( key ) )
 			return "local";

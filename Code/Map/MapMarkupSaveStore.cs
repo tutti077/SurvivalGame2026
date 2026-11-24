@@ -82,6 +82,60 @@ public static class MapMarkupSaveStore
 		}
 	}
 
+	/// <summary>How pins were keyed before saves had a game ID (2026-11-10): world name + seed.</summary>
+	public static string LegacyWorldKey( string worldName, int worldSeed ) => $"{worldName}_{worldSeed}";
+
+	/// <summary>
+	/// This player's markup for a world, keyed by the save's game ID. A file still under the old name + seed key is
+	/// moved over on first load (written under the ID, the old file deleted).
+	/// </summary>
+	public static MapMarkupSaveFile LoadOrMigrate( string playerKey, string worldKey, string legacyKey )
+	{
+		var file = Load( playerKey, worldKey );
+		if ( file is not null || string.IsNullOrWhiteSpace( legacyKey ) || legacyKey == worldKey )
+			return file;
+
+		file = Load( playerKey, legacyKey );
+		if ( file is null )
+			return null;
+
+		if ( Save( playerKey, worldKey, file ) )
+		{
+			FileSystem.Data.DeleteFile( GetFilePath( playerKey, legacyKey ) );
+			Log.Info( $"[MapMarkupSaveStore] Pins moved from '{legacyKey}' to game ID '{worldKey}' for player '{playerKey}'." );
+		}
+
+		return file;
+	}
+
+	/// <summary>Delete every player's markup for one world — under its game ID and the old name + seed key — and forget the loaded copy.</summary>
+	public static void DeleteForAllPlayers( string worldId, string legacyKey )
+	{
+		try
+		{
+			if ( FileSystem.Data.DirectoryExists( QuestSaveStore.PlayersFolder ) )
+			{
+				foreach ( var player in FileSystem.Data.FindDirectory( QuestSaveStore.PlayersFolder ) )
+				{
+					foreach ( var key in new[] { worldId, legacyKey } )
+					{
+						if ( string.IsNullOrWhiteSpace( key ) )
+							continue;
+						var path = $"{QuestSaveStore.PlayersFolder}/{player}/{MapFolder}/{SanitizeKey( key )}.json";
+						if ( FileSystem.Data.FileExists( path ) )
+							FileSystem.Data.DeleteFile( path );
+					}
+				}
+			}
+		}
+		catch ( Exception ex )
+		{
+			Log.Warning( $"[MapMarkupSaveStore] Failed to delete markup for '{worldId}' / '{legacyKey}': {ex.Message}" );
+		}
+
+		LocalMapMarkup.Forget();
+	}
+
 	static string SanitizeKey( string key )
 	{
 		if ( string.IsNullOrWhiteSpace( key ) )

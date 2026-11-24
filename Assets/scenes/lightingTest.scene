@@ -522,7 +522,7 @@
             "go": "b400f2d5-dfe8-45be-b080-4cad883851e5",
             "component_type": "DirectionalLight"
           },
-          "NightAmbientBrightness": 0.06,
+          "NightAmbientBrightness": 0.6,
           "NightSeconds": 75,
           "NightSkyAmbient": "0.22,0.28,0.42,1",
           "OnComponentDestroy": null,
@@ -566,20 +566,16 @@
           "__guid": "89f55f63-f917-40d0-94c4-e90b47d325cd",
           "__enabled": true,
           "Flags": 0,
-          "DesaturateDistanceMeters": 1500,
-          "HazeColor": "0.72,0.76,0.84,1",
-          "HazeDistanceMeters": 20000,
-          "HazeScaleHeightMeters": 1000,
-          "MaxDesaturation01": 0.85,
-          "MaxHaze01": 0.9,
+          "FogColor": "0.72,0.76,0.84,1",
+          "FogDistanceMeters": 4500,
+          "FogScaleHeightMeters": 1200,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
           "OnComponentFixedUpdate": null,
           "OnComponentStart": null,
           "OnComponentUpdate": null,
-          "Strength01": 1,
-          "SunWarmth01": 0.6
+          "Strength01": 0
         }
       ],
       "Children": []

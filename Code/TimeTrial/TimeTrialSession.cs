@@ -44,6 +44,10 @@ public sealed class TimeTrialSession : Component
 	[Property, Group( "Audio" ), Title( "Go Beep (optional)" )]
 	public SoundEvent GoBeep { get; set; }
 
+	/// <summary>Racers without a grapple of their own grapple with a lent one until the race ends (hub grapple bars).</summary>
+	[Property, Group( "Race" ), Title( "Lend Grapple" )]
+	public bool LendGrapple { get; set; }
+
 	[Property, Group( "Debug" )] public bool LogTimeTrial { get; set; }
 
 	[Sync( SyncFlags.FromHost )] public TimeTrialPhase Phase { get; private set; } = TimeTrialPhase.Idle;
@@ -354,6 +358,8 @@ public sealed class TimeTrialSession : Component
 			_racers[i] = r;
 			HostPlaceRacer( i );
 			HostSetRacerFrozen( r.Root, true );
+			if ( LendGrapple )
+				r.Root?.Components.Get<PlayerMovement>()?.HostSetEventGrappleLoan( true );
 		}
 
 		BroadcastCountdown( "3", playGo: false );
@@ -625,7 +631,11 @@ public sealed class TimeTrialSession : Component
 	void HostResetToIdle()
 	{
 		for ( var i = 0; i < _racers.Count; i++ )
+		{
 			HostSetRacerFrozen( _racers[i].Root, false );
+			if ( LendGrapple && _racers[i].Root is { IsValid: true } racer )
+				racer.Components.Get<PlayerMovement>()?.HostSetEventGrappleLoan( false );
+		}
 
 		_racers.Clear();
 		_activeRouteOrders.Clear();

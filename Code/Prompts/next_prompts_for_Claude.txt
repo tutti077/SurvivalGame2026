@@ -42,4 +42,21 @@ Tamed creatures can be pet by hitting e, named by holding E to open the menu. Ot
 
 The daisies, hobbits leafs and mushrooms should have a chance to spawn and then a chance to spawn 2 or 3 mushrooms with it.
 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+23. We need to add item weights to the game. I think each wood should weigh 1. Rocks can be 2 each. Pretty much all other items will be like 2 for a whole stack or whatever, we need to make it so items can only be .1 of 1. Max weight can be like 200 including all armor and weapons and other inventory weight. Make all tools weigh 5 for now, armor 5 as well. Weight should slow players run speed down drastically, i think their grapple speed should be slowed down too if thats possible. 
+24. Can you clean up the twig model that I have? Its the one that players can just walk up and pick up, not the wood model per se. 
+25. Can you animate rumples chest to be shut by default and open when a player accesses it? should be easy.
+26. Can you add some feral looking camps? right now its just a ring around where they spawn but there should be a couple little thatch huts and a campfire in the middle where they unga bunga if you know what i mean. Disable the rings around them too, thats just for debug.
+27. do some perf fps checking. Get back to 240 as the goal. Its like 40rn. 
+28. ADd bird nests to clover hills, on ground and up in trees. If trees destroyed it should drop the contents on the ground. They will be a "press e to gather" kinda thing and itll give eggs and flowers, up to 2 eggs and 4 feathers. 
+29. can you add a beehive building to the crafting menu? It should require a beehive and some wood to craft, and just be kinda like a box. 
+30. Add some tabs to the build menu. Should be "All", "crafting", building" and "furniture". move the items there as they should be. Beehive is crafting.
+
+
+
+
+
+
+
+
 

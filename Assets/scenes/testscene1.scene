@@ -188,139 +188,131 @@
               "ClassId": "oneHanded",
               "DisplayName": "One-Handed",
               "WindupSeconds": 0.6,
+              "ComboWindupSeconds": 0.5,
               "ActiveSeconds": 0.2,
-              "RecoveryBlockedSeconds": 0.1,
-              "RecoveryParriedSeconds": 0.2,
-              "HeavyWindupSeconds": 0.8,
-              "HeavyDamageMultiplier": 2,
-              "RecoveryParriedHeavySeconds": 0.3,
-              "HeavyGuardBreakSeconds": 0.4,
+              "RecoverySeconds": 0.5,
+              "ComboEndRecoverySeconds": 0.75,
+              "RecoveryBlockedSeconds": 0.2,
+              "HeavyWindupSeconds": 0.9,
+              "HeavyActiveSeconds": 0.25,
+              "HeavyRecoverySeconds": 0.75,
+              "RecoveryBlockedHeavySeconds": 0.4,
+              "HeavyDamageMultiplier": 1.5,
+              "HitStaggerSeconds": 0.4,
+              "HeavyHitStaggerSeconds": 0.75,
+              "HeavyBlockStaggerSeconds": 0.6,
+              "CounterWindupSeconds": 0.5,
               "ReachForwardMeters": 1.54,
               "ReachLateralMeters": 1.54,
-              "StaminaCost": 8,
-              "StaminaHeavyCost": 16,
+              "StaminaCost": 10,
+              "StaminaHeavyCost": 20,
               "LateralArcDegrees": 150,
               "ForwardArcTotalDegrees": 158,
-              "ForwardArcStartDegrees": 146,
-              "ForwardAttackIsThrust": false,
-              "SpecialAttack": "",
-              "SpecialWindupSeconds": 1.2,
-              "SpecialDamageMultiplier": 2
+              "ForwardArcStartDegrees": 146
             },
             {
               "ClassId": "twoHanded",
               "DisplayName": "Two-Handed",
-              "WindupSeconds": 0.32,
-              "ActiveSeconds": 0.14,
+              "WindupSeconds": 0.9,
+              "ComboWindupSeconds": 0.75,
+              "ActiveSeconds": 0.25,
+              "RecoverySeconds": 0.7,
+              "ComboEndRecoverySeconds": 0.95,
               "RecoveryBlockedSeconds": 0.3,
-              "RecoveryParriedSeconds": 0.6,
-              "HeavyWindupSeconds": 0.52,
-              "HeavyDamageMultiplier": 2,
-              "RecoveryParriedHeavySeconds": 0.7,
-              "HeavyGuardBreakSeconds": 0.4,
+              "HeavyWindupSeconds": 1.3,
+              "HeavyActiveSeconds": 0.3,
+              "HeavyRecoverySeconds": 0.95,
+              "RecoveryBlockedHeavySeconds": 0.55,
+              "HeavyDamageMultiplier": 1.5,
+              "HitStaggerSeconds": 0.55,
+              "HeavyHitStaggerSeconds": 0.85,
+              "HeavyBlockStaggerSeconds": 0.7,
+              "CounterWindupSeconds": 0.75,
               "ReachForwardMeters": 1.78,
               "ReachLateralMeters": 1.78,
-              "StaminaCost": 12,
-              "StaminaHeavyCost": 24,
+              "StaminaCost": 14,
+              "StaminaHeavyCost": 28,
               "LateralArcDegrees": 170,
               "ForwardArcTotalDegrees": 165,
-              "ForwardArcStartDegrees": 150,
-              "ForwardAttackIsThrust": false,
-              "SpecialAttack": "",
-              "SpecialWindupSeconds": 1.2,
-              "SpecialDamageMultiplier": 2
+              "ForwardArcStartDegrees": 150
             },
             {
               "ClassId": "spear",
               "DisplayName": "Spear",
-              "WindupSeconds": 0.26,
-              "ActiveSeconds": 0.12,
+              "WindupSeconds": 0.8,
+              "ComboWindupSeconds": 0.65,
+              "ActiveSeconds": 0.2,
+              "RecoverySeconds": 0.6,
+              "ComboEndRecoverySeconds": 0.85,
               "RecoveryBlockedSeconds": 0.25,
-              "RecoveryParriedSeconds": 0.5,
-              "HeavyWindupSeconds": 0.46,
-              "HeavyDamageMultiplier": 2,
-              "RecoveryParriedHeavySeconds": 0.6,
-              "HeavyGuardBreakSeconds": 0.4,
+              "HeavyWindupSeconds": 1.15,
+              "HeavyActiveSeconds": 0.25,
+              "HeavyRecoverySeconds": 0.85,
+              "RecoveryBlockedHeavySeconds": 0.5,
+              "HeavyDamageMultiplier": 1.5,
+              "HitStaggerSeconds": 0.4,
+              "HeavyHitStaggerSeconds": 0.75,
+              "HeavyBlockStaggerSeconds": 0.6,
+              "CounterWindupSeconds": 0.65,
               "ReachForwardMeters": 2.11,
-              "ReachLateralMeters": 1.3,
-              "StaminaCost": 9,
-              "StaminaHeavyCost": 18,
-              "LateralArcDegrees": 70,
+              "ReachLateralMeters": 1.94,
+              "StaminaCost": 12,
+              "StaminaHeavyCost": 24,
+              "LateralArcDegrees": 34,
               "ForwardArcTotalDegrees": 110,
-              "ForwardArcStartDegrees": 125,
-              "ForwardAttackIsThrust": false,
-              "SpecialAttack": "",
-              "SpecialWindupSeconds": 1.2,
-              "SpecialDamageMultiplier": 2
-            },
-            {
-              "ClassId": "dagger",
-              "DisplayName": "Dagger",
-              "WindupSeconds": 0.12,
-              "ActiveSeconds": 0.07,
-              "RecoveryBlockedSeconds": 0.1,
-              "RecoveryParriedSeconds": 0.25,
-              "HeavyWindupSeconds": 0.32,
-              "HeavyDamageMultiplier": 2,
-              "RecoveryParriedHeavySeconds": 0.35,
-              "HeavyGuardBreakSeconds": 0.4,
-              "ReachForwardMeters": 1.05,
-              "ReachLateralMeters": 0.97,
-              "StaminaCost": 5,
-              "StaminaHeavyCost": 10,
-              "LateralArcDegrees": 110,
-              "ForwardArcTotalDegrees": 120,
-              "ForwardArcStartDegrees": 130,
-              "ForwardAttackIsThrust": false,
-              "SpecialAttack": "",
-              "SpecialWindupSeconds": 1.2,
-              "SpecialDamageMultiplier": 2
+              "ForwardArcStartDegrees": 125
             },
             {
               "ClassId": "trainingDummy",
               "DisplayName": "Training Dummy",
-              "WindupSeconds": 0.22,
-              "ActiveSeconds": 0.1,
-              "RecoveryBlockedSeconds": 0.28,
-              "RecoveryParriedSeconds": 0.45,
-              "HeavyWindupSeconds": 0.42,
-              "HeavyDamageMultiplier": 2,
-              "RecoveryParriedHeavySeconds": 0.55,
-              "HeavyGuardBreakSeconds": 0.4,
+              "WindupSeconds": 0.6,
+              "ComboWindupSeconds": 0.5,
+              "ActiveSeconds": 0.2,
+              "RecoverySeconds": 0.5,
+              "ComboEndRecoverySeconds": 0.75,
+              "RecoveryBlockedSeconds": 0.2,
+              "HeavyWindupSeconds": 0.9,
+              "HeavyActiveSeconds": 0.25,
+              "HeavyRecoverySeconds": 0.75,
+              "RecoveryBlockedHeavySeconds": 0.4,
+              "HeavyDamageMultiplier": 1.5,
+              "HitStaggerSeconds": 0.4,
+              "HeavyHitStaggerSeconds": 0.75,
+              "HeavyBlockStaggerSeconds": 0.6,
+              "CounterWindupSeconds": 0.5,
               "ReachForwardMeters": 1.71,
               "ReachLateralMeters": 1.71,
-              "StaminaCost": 8,
-              "StaminaHeavyCost": 16,
+              "StaminaCost": 10,
+              "StaminaHeavyCost": 20,
               "LateralArcDegrees": 150,
               "ForwardArcTotalDegrees": 168,
-              "ForwardArcStartDegrees": 118,
-              "ForwardAttackIsThrust": false,
-              "SpecialAttack": "",
-              "SpecialWindupSeconds": 1.2,
-              "SpecialDamageMultiplier": 2
+              "ForwardArcStartDegrees": 118
             },
             {
-              "ClassId": "scavT1",
-              "DisplayName": "Scav Claws (T1)",
-              "WindupSeconds": 0.35,
-              "ActiveSeconds": 0.22,
-              "RecoveryBlockedSeconds": 0.4,
-              "RecoveryParriedSeconds": 0.55,
-              "HeavyWindupSeconds": 0.55,
-              "HeavyDamageMultiplier": 2,
-              "RecoveryParriedHeavySeconds": 0.65,
-              "HeavyGuardBreakSeconds": 0.4,
-              "ReachForwardMeters": 1.28,
-              "ReachLateralMeters": 1.28,
-              "StaminaCost": 8,
-              "StaminaHeavyCost": 16,
-              "LateralArcDegrees": 150,
-              "ForwardArcTotalDegrees": 158,
-              "ForwardArcStartDegrees": 146,
-              "ForwardAttackIsThrust": false,
-              "SpecialAttack": "",
-              "SpecialWindupSeconds": 1.2,
-              "SpecialDamageMultiplier": 2
+              "ClassId": "dagger",
+              "DisplayName": "Dagger",
+              "WindupSeconds": 0.45,
+              "ComboWindupSeconds": 0.35,
+              "ActiveSeconds": 0.15,
+              "RecoverySeconds": 0.35,
+              "ComboEndRecoverySeconds": 0.55,
+              "RecoveryBlockedSeconds": 0.15,
+              "HeavyWindupSeconds": 0.7,
+              "HeavyActiveSeconds": 0.15,
+              "HeavyRecoverySeconds": 0.55,
+              "RecoveryBlockedHeavySeconds": 0.3,
+              "HeavyDamageMultiplier": 1.5,
+              "HitStaggerSeconds": 0.3,
+              "HeavyHitStaggerSeconds": 0.65,
+              "HeavyBlockStaggerSeconds": 0.5,
+              "CounterWindupSeconds": 0.35,
+              "ReachForwardMeters": 1.05,
+              "ReachLateralMeters": 0.97,
+              "StaminaCost": 7,
+              "StaminaHeavyCost": 14,
+              "LateralArcDegrees": 110,
+              "ForwardArcTotalDegrees": 120,
+              "ForwardArcStartDegrees": 130
             }
           ],
           "OnComponentDestroy": null,
@@ -335,7 +327,6 @@
           "__guid": "fe3045f8-b472-44eb-a3b8-912e0e2299b8",
           "__enabled": true,
           "Flags": 0,
-          "LogMeleeStaminaSettlement": false,
           "MaxCameraPositionDelta": 384,
           "MaxPlayerRootVsServerDelta": 256,
           "OnComponentDestroy": null,
@@ -373,10 +364,11 @@
           "OnComponentFixedUpdate": null,
           "OnComponentStart": null,
           "OnComponentUpdate": null,
-          "StaminaRegenDelaySeconds": 4,
-          "StaminaRegenMaxPerSecond": 40,
-          "StaminaRegenMinPerSecond": 4,
-          "StaminaRegenRampSeconds": 1.5
+          "StaminaRegenDelayAfterAttackSeconds": 0.75,
+          "StaminaRegenDelayAfterBlockSeconds": 0.4,
+          "StaminaRegenDelaySeconds": 3,
+          "StaminaRegenIdlePerSecond": 20,
+          "StaminaRegenMovingPerSecond": 15
         },
         {
           "__type": "Survival.BackgroundMusic",
@@ -419,26 +411,10 @@
           {
             "Target": {
               "Type": "Component",
-              "IdValue": "25dd5bed-58eb-4648-bd3b-0de6ea746503"
+              "IdValue": "970732c0-a058-4701-8a40-c9b9df0da80b"
             },
-            "Property": "BolaFullRangeMeters",
-            "Value": 22
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "25dd5bed-58eb-4648-bd3b-0de6ea746503"
-            },
-            "Property": "BolaLaunchLiftDegrees",
-            "Value": 8
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "25dd5bed-58eb-4648-bd3b-0de6ea746503"
-            },
-            "Property": "BolaMinRangeMeters",
-            "Value": 6
+            "Property": "GrappleRopeThicknessMeters",
+            "Value": 0.035
           }
         ],
         "MovedObjects": []
@@ -483,21 +459,6 @@
         "13b5a6bf-7962-8375-99b1-4790290e5448": "dd5a2d30-69e9-4921-bc78-d134de33dbe5",
         "18ee3cca-7999-85c9-8512-f7d092d15954": "d4386acc-12ea-483d-89dd-8ee5e7ee75c2",
         "22adeaa4-3eff-455e-b0ad-8186e47120c5": "1cc7cf11-08d3-4569-98cf-52316ffbbb1b",
-        "06640ac9-a851-43bf-b35b-42e2be0fdca6": "7e988176-381c-4b28-b795-d818842de280",
-        "db2ec2d8-edd9-4812-b3b7-ad8ddf316d21": "cd38e861-d279-4605-99df-47c63924dcd6",
-        "e1a0945b-44d2-4cc6-a897-c7931851924d": "1b4cf466-c41f-4e3f-a1a0-18a2c70ea241",
-        "ded41f18-ffe7-4185-ab1c-9616122dc6f0": "96cb0a87-b94a-4b98-b34b-4017f9ea80a4",
-        "bce430cc-f569-4381-9ec0-f2d872648efc": "0947ad9a-edf6-4943-bf63-b3d427bce97c",
-        "563539eb-c977-45a3-92f0-e25aa1211547": "1ee801f0-056c-4dda-b169-f264805a30e1",
-        "25dd5bed-58eb-4648-bd3b-0de6ea746503": "816a668c-dbd3-4b5d-8fd1-93df9942de55",
-        "970732c0-a058-4701-8a40-c9b9df0da80b": "d4cc24b2-8f27-8669-b5d3-2f36467941cb",
-        "a334750f-a7f9-4e36-9c2d-563b96bda182": "d6048634-cc6b-4786-9aed-34eccb77e7e7",
-        "52c95d95-b997-44f4-ba0e-3d83d5b458c7": "bc4f4bd6-d8dd-4fc5-9d7d-5f0d278fde70",
-        "4785e803-a655-4137-8dc0-d456a8086f19": "379167ef-6c81-402c-9d8b-9b69adc562ee",
-        "f4c3d2e1-b0a9-8c7d-6e5f-4a3b2c1d0e9f": "071af74b-ec61-407f-a0b8-73fbb4582d98",
-        "c8b5a3d1-3afe-4693-9f5e-57b86c57b6a2": "64c810b2-1b49-4984-9ffd-237657ff590f",
-        "e7a91c42-5d8b-4f36-9a02-3c6b1d84f705": "d2581e37-6230-8c01-bd0d-653d18267032",
-        "d4e5f6a7-b8c9-0123-def4-567890abcdef": "98effff2-8809-4634-8c2d-ded76eecb00f",
         "a1b2c3d4-e5f6-7890-abcd-ef1234567890": "05da9e1a-4e4f-4f76-83fc-bf4e31445c78",
         "c4d5e6f7-a8b9-4012-9c3d-e5f60718293a": "c3e465e7-025b-870e-be46-533fe86ddb75",
         "f1e2d3c4-b5a6-7890-fedc-ba9876543210": "188f4b24-98e9-466d-a3d8-9c23579b82f2",
@@ -517,12 +478,24 @@
         "3b7f2a91-6c44-4e0d-9a12-58f0cbd7e2a1": "c9fb65d7-f664-80fe-a29c-bd062722f5b3",
         "48bb4076-d3c6-455e-99c1-98e9ff82c2c4": "34c148af-c70d-474d-bdc9-21eef62ba70f",
         "b3f1c7e2-9a44-4d18-8c60-71e5a2d4f083": "68beb219-af4d-8849-8020-8a969ccb5c0d",
-        "2a16b84a-ebb6-80b4-8e0b-bee479f86c01": "a0e9968f-0781-432f-96ea-34ffb61566c0",
-        "6508e920-bf49-8c75-948c-aeeef7157a7b": "a1897ba2-ab71-4574-8c1b-da0c2796b15e",
         "889301a1-d209-8049-af16-4c5fc30470a9": "12c04bd3-e3c0-401d-8148-57311f0eaf70",
-        "034bfdf3-add2-827a-a294-72c15e831b6a": "708ddab2-18e6-477a-bb5b-8392df85ac9f",
         "f334590a-a6d7-44af-98bd-14ec93294ec7": "1cc4950f-f097-4d98-85c2-2494123e82e8",
-        "4d8ed045-4f00-411d-9d8e-42b4f855dc9b": "296eb224-d396-4cdb-879a-de5a8b87e8df"
+        "4d8ed045-4f00-411d-9d8e-42b4f855dc9b": "296eb224-d396-4cdb-879a-de5a8b87e8df",
+        "06640ac9-a851-43bf-b35b-42e2be0fdca6": "7e988176-381c-4b28-b795-d818842de280",
+        "db2ec2d8-edd9-4812-b3b7-ad8ddf316d21": "cd38e861-d279-4605-99df-47c63924dcd6",
+        "e1a0945b-44d2-4cc6-a897-c7931851924d": "1b4cf466-c41f-4e3f-a1a0-18a2c70ea241",
+        "ded41f18-ffe7-4185-ab1c-9616122dc6f0": "96cb0a87-b94a-4b98-b34b-4017f9ea80a4",
+        "bce430cc-f569-4381-9ec0-f2d872648efc": "0947ad9a-edf6-4943-bf63-b3d427bce97c",
+        "563539eb-c977-45a3-92f0-e25aa1211547": "1ee801f0-056c-4dda-b169-f264805a30e1",
+        "25dd5bed-58eb-4648-bd3b-0de6ea746503": "816a668c-dbd3-4b5d-8fd1-93df9942de55",
+        "970732c0-a058-4701-8a40-c9b9df0da80b": "d4cc24b2-8f27-8669-b5d3-2f36467941cb",
+        "a334750f-a7f9-4e36-9c2d-563b96bda182": "d6048634-cc6b-4786-9aed-34eccb77e7e7",
+        "52c95d95-b997-44f4-ba0e-3d83d5b458c7": "bc4f4bd6-d8dd-4fc5-9d7d-5f0d278fde70",
+        "4785e803-a655-4137-8dc0-d456a8086f19": "379167ef-6c81-402c-9d8b-9b69adc562ee",
+        "f4c3d2e1-b0a9-8c7d-6e5f-4a3b2c1d0e9f": "071af74b-ec61-407f-a0b8-73fbb4582d98",
+        "c8b5a3d1-3afe-4693-9f5e-57b86c57b6a2": "64c810b2-1b49-4984-9ffd-237657ff590f",
+        "e7a91c42-5d8b-4f36-9a02-3c6b1d84f705": "d2581e37-6230-8c01-bd0d-653d18267032",
+        "d4e5f6a7-b8c9-0123-def4-567890abcdef": "98effff2-8809-4634-8c2d-ded76eecb00f"
       }
     },
     {
@@ -1283,134 +1256,156 @@
           "__guid": "5fffe14d-f909-457e-b915-8bffc822be85",
           "__enabled": true,
           "Flags": 0,
-          "BlockAction": "Attack2",
-          "BlockCooldownAfterRelease": 0.1,
-          "BlockDebugColor": "0.22,0.92,0.38,0.92",
-          "BlockFootprintFillAlpha": 0.09,
-          "BlockGroundArcHeightOffset": 2,
-          "BlockGuardSampleCount": 24,
-          "BlockParryWindowColor": "1,1,1,1",
-          "BlockRaiseSeconds": 0.05,
-          "BlockSampleSphereRadius": 2,
-          "BlockShellHeightPadding": 8,
-          "BlockSparkCount": 4,
-          "BlockSparkLengthMeters": 0.55,
-          "BolaFullChargeSeconds": 3,
-          "BolaFullRangeMeters": 22,
-          "BolaLaunchLiftDegrees": 8,
-          "BolaMinChargeSeconds": 1,
-          "BolaMinRangeMeters": 6,
-          "BolaRootSeconds": 5,
-          "BowAdsCameraDistanceScale": 0.55,
-          "BowFullDrawLevelRangeMeters": 30,
-          "BowFullDrawSeconds": 1,
-          "BowLaunchSpeedMultiplier": 1,
-          "BowMaxAimConePixels": 56,
-          "BowMinDrawPower": 0.35,
-          "BowMinHoldToFireSeconds": 0.2,
-          "BowMinWeaponDamageContribution": 1,
-          "ClientMeleeSwingTraceDebug": true,
-          "ComboChainWindowSeconds": 0.6,
-          "ComboEndPauseSeconds": 0.2,
-          "ComboFinisherDamageMultiplier": 1.25,
-          "EnableServerPrimaryAttackValidation": true,
-          "FallbackWeaponClass": "trainingDummy",
-          "HeavyMaxHoldSeconds": 3,
-          "HeavyReadyFlashSeconds": 0.3,
+          "AttackInputBufferSeconds": 0.15,
+          "BlockAction": null,
+          "BlockActivationSeconds": 0.15,
+          "BlockDebugColor": "0,0,0,0",
+          "BlockedHeavySound": null,
+          "BlockedSound": null,
+          "BlockFootprintFillAlpha": 0,
+          "BlockGroundArcHeightOffset": 0,
+          "BlockGuardSampleCount": 0,
+          "BlockMinHoldSeconds": 0.1,
+          "BlockSampleSphereRadius": 0,
+          "BlockShellHeightPadding": 0,
+          "BlockSparkCount": 0,
+          "BlockSparkLengthMeters": 0,
+          "BlockSwitchSeconds": 0.15,
+          "BolaFullChargeSeconds": 0,
+          "BolaFullRangeMeters": 0,
+          "BolaLaunchLiftDegrees": 0,
+          "BolaMinChargeSeconds": 0,
+          "BolaMinRangeMeters": 0,
+          "BolaRootSeconds": 0,
+          "BowAdsCameraDistanceScale": 0,
+          "BowFullDrawLevelRangeMeters": 0,
+          "BowFullDrawSeconds": 0,
+          "BowLaunchSpeedMultiplier": 0,
+          "BowMaxAimConePixels": 0,
+          "BowMinDrawPower": 0,
+          "BowMinHoldToFireSeconds": 0,
+          "BowMinWeaponDamageContribution": 0,
+          "BowPowerPhaseFraction": 0.5,
+          "ChainInputWindowSeconds": 0.15,
+          "ChamberSound": null,
+          "ChamberToleranceSeconds": 0.075,
+          "ClientMeleeSwingTraceDebug": false,
+          "ComboMaxHits": 3,
+          "CounterWindowSeconds": 0.5,
+          "EnableServerPrimaryAttackValidation": false,
+          "FallbackWeaponClass": null,
+          "FeintCutoffFraction": 0.75,
+          "FeintRecoverySeconds": 0.15,
+          "FeintStaminaCost": 5,
+          "GuardBarBottomMeters": 0.9,
+          "GuardBarForwardMeters": 0.35,
+          "GuardBarOverheadForwardMeters": 0.2,
+          "GuardBarOverheadHalfWidthMeters": 0.45,
+          "GuardBarOverheadHeightMeters": 1.86,
+          "GuardBarSideMeters": 0.3,
+          "GuardBarTopMeters": 1.95,
+          "GuardCatchRadiusMeters": 0.28,
+          "GuardMeetPushMeters": 0.4,
+          "HardStaggerProtectionSeconds": 0.5,
+          "HeavyHoldDrainAfterSeconds": 1,
+          "HeavyHoldDrainPerSecond": 5,
+          "HeavyMorphRearmSeconds": 0.5,
+          "HeavyMorphSettleSeconds": 0.15,
+          "HeavyReadyFlashSeconds": 0,
+          "HitOtherSound": null,
+          "HitPlayerSound": null,
           "HostCombatAuthority": null,
-          "LogAttackStaminaDebug": true,
-          "LogCombatNetworkingToConsole": true,
-          "LogMeleeAttackPhaseDebug": true,
-          "LogMeleeBlockRejectionsToConsole": true,
-          "LogMeleeSweepHitsToConsole": true,
-          "LongBlockStaminaPerSecond": 5,
+          "HostLatencySlackSeconds": 0.15,
+          "LightBlockReactionSeconds": 0.1,
+          "LogAttackStaminaDebug": false,
+          "LogCombatNetworkingToConsole": false,
+          "LogMeleeAttackPhaseDebug": false,
+          "LogMeleeBlockRejectionsToConsole": false,
+          "LogMeleeSweepHitsToConsole": false,
           "MeleeAllowMultipleHitsPerAttack": false,
-          "MeleeAttackArcDegreeStep": 1,
-          "MeleeAttackCommitmentLockEnabled": true,
-          "MeleeAttackForwardArcForwardScale": 0.76,
-          "MeleeAttackForwardArcForwardScaleStart": 0.38,
-          "MeleeAttackForwardArcVerticalScale": 1.12,
-          "MeleeAttackForwardMaxReachFraction": 0.92,
-          "MeleeAttackForwardPathReachScale": 0.94,
-          "MeleeAttackForwardPivotForwardLocal": 8,
-          "MeleeAttackForwardPivotForwardLocalEnd": 10,
+          "MeleeAttackArcDegreeStep": 0,
+          "MeleeAttackForwardArcForwardScale": 0,
+          "MeleeAttackForwardArcForwardScaleStart": 0,
+          "MeleeAttackForwardArcVerticalScale": 0,
+          "MeleeAttackForwardMaxReachFraction": 0,
+          "MeleeAttackForwardPathReachScale": 0,
+          "MeleeAttackForwardPivotForwardLocal": 0,
+          "MeleeAttackForwardPivotForwardLocalEnd": 0,
           "MeleeAttackForwardPivotRightOffset": 0,
           "MeleeAttackForwardPivotUpFromEye": 0,
-          "MeleeAttackForwardPlaneRightOffset": 12,
-          "MeleeAttackForwardReachActiveMultiplier": 1,
-          "MeleeAttackForwardReachEndMultiplier": 0.95,
-          "MeleeAttackForwardReachStartMultiplier": 0.62,
-          "MeleeAttackLookSensitivityScale": 0.4,
-          "MeleeAttackMaxPitchDegrees": 30,
+          "MeleeAttackForwardPlaneRightOffset": 0,
+          "MeleeAttackForwardReachActiveMultiplier": 0,
+          "MeleeAttackForwardReachEndMultiplier": 0,
+          "MeleeAttackForwardReachStartMultiplier": 0,
           "MeleeAttackMoveSpeedScale": 0.1,
-          "MeleeAttackTiltDegreesForward": 10,
-          "MeleeAttackTiltDegreesLeft": 25,
-          "MeleeAttackTiltDegreesRight": 25,
-          "MeleeAttackZaxisStart": -20,
-          "MeleeBaseCombatDamageMultiplier": 1,
+          "MeleeAttackTiltDegreesForward": 0,
+          "MeleeAttackTiltDegreesLeft": 0,
+          "MeleeAttackTiltDegreesRight": 0,
+          "MeleeAttackZaxisStart": 0,
+          "MeleeBaseCombatDamageMultiplier": 0,
           "MeleeBladeHeel": null,
-          "MeleeBladeHeelFraction": 0.22,
+          "MeleeBladeHeelFraction": 0,
           "MeleeBladeTip": null,
-          "MeleeBlockBodyRadius": 18,
-          "MeleeBlockFrontArcDegrees": 270,
-          "MeleeBlockParryWindowSeconds": 0.12,
-          "MeleeDebugDrawEnabled": true,
+          "MeleeBlockBodyRadius": 0,
+          "MeleeBlockFlankDegrees": 15,
+          "MeleeBlockFrontArcDegrees": 0,
+          "MeleeDebugDrawEnabled": false,
           "MeleeDebugDrawRotationSpokes": false,
-          "MeleeDebugDrawSamplePointsEnabled": true,
-          "MeleeDebugOverlayDuration": 1,
-          "MeleeHitReactionSeconds": 0.1,
-          "MeleeHitVolumeThickness": 2,
-          "MeleeMaxTargetsHit": 1,
-          "MeleeSweepSubstepLength": 12,
-          "MeleeSwingForwardOffsetMeters": 0.2,
-          "MeleeSwingMaxPitchDegrees": 60,
-          "MeleeSwingMinPitchDegrees": -60,
-          "MeleeWeaponBaseDamage": 30,
-          "MeleeWindupTelegraphThickness": 6,
+          "MeleeDebugDrawSamplePointsEnabled": false,
+          "MeleeDebugOverlayDuration": 0,
+          "MeleeHitVolumeThickness": 0,
+          "MeleeMaxTargetsHit": 0,
+          "MeleePhysicalGuardEnabled": true,
+          "MeleeSweepSubstepLength": 0,
+          "MeleeSwingForwardOffsetMeters": 0,
+          "MeleeSwingMaxPitchDegrees": 0,
+          "MeleeSwingMinPitchDegrees": 0,
+          "MeleeWeaponBaseDamage": 0,
+          "MeleeWindupTelegraphThickness": 0,
           "OnComponentDestroy": null,
           "OnComponentDisabled": null,
           "OnComponentEnabled": null,
           "OnComponentFixedUpdate": null,
           "OnComponentStart": null,
           "OnComponentUpdate": null,
-          "PrimaryAttackAction": "Attack1",
-          "PunchCooldownSeconds": 1.5,
-          "PunchWindupSeconds": 0.3,
-          "QueuedAttackMaxAgeSeconds": 0.75,
-          "RecoveryDefenderShoveBlockSeconds": 0.4,
-          "RecoveryDefenderShoveSeconds": 0.4,
-          "RecoveryShoveCombatLockSeconds": 0.15,
-          "ServerEyeHeight": 64,
-          "ShoveAction": "Shove",
-          "ShoveDamage": 3,
-          "ShoveHitRadiusMeters": 0.3,
-          "ShoveRangeMeters": 1.2,
-          "ShoveStaminaCost": 10,
-          "ShowBlockFootprintVolume": true,
-          "ShowBlockSparks": true,
-          "ShowBlockVisualization": true,
-          "ShowCombatInputDebug": true,
-          "ShowHeavyReadyFlash": true,
-          "ShowMeleeAttackWindupTelegraph": true,
-          "ShowSwingSlashTrail": true,
+          "OwnerLatencyCompensationMaxSeconds": 0.12,
+          "PrimaryAttackAction": null,
+          "PunchCooldownSeconds": 0,
+          "PunchWindupSeconds": 0,
+          "RecoveryDefenderShoveBlockSeconds": 0,
+          "RecoveryDefenderShoveSeconds": 0,
+          "RecoveryShoveCombatLockSeconds": 0,
+          "ServerEyeHeight": 0,
+          "ShoveAction": null,
+          "ShoveDamage": 0,
+          "ShoveHitRadiusMeters": 0,
+          "ShoveRangeMeters": 0,
+          "ShoveStaminaCost": 0,
+          "ShowBlockFootprintVolume": false,
+          "ShowBlockSparks": false,
+          "ShowBlockVisualization": false,
+          "ShowCombatInputDebug": false,
+          "ShowHeavyReadyFlash": false,
+          "ShowMeleeAttackWindupTelegraph": false,
+          "ShowSwingSlashTrail": false,
           "SouthpawSwing": false,
-          "SpecialAttackAction": "SpecialAttack",
-          "StandardBlockFreeSeconds": 2,
-          "SwingAxisDeadzone": 0.02,
-          "SwingEvidenceDecaySeconds": 0.18,
-          "SwingFlipCommitPixels": 7,
-          "SwingFlipCommitUpFromSideMul": 0.42,
-          "SwingInvertLookYForUp": true,
-          "SwingLateralFlipExtraPixels": 12,
-          "SwingLiveAxisWinRatio": 1.42,
-          "SwingLiveMicroMotionPixels": 0.9,
-          "SwingMinFlipHoldMs": 60,
-          "SwingMouseEvidenceDeadzonePixels": 2.25,
-          "SwingMouseEvidenceMaxStepPixels": 26,
-          "SwingSlashColor": "1,1,1,1",
-          "SwingSlashTrailSeconds": 0.16,
-          "SwingSlashWidthFraction": 0.45,
-          "SwingUpFromSideWinRatio": 1.04
+          "SwingAxisDeadzone": 0,
+          "SwingEvidenceDecaySeconds": 0,
+          "SwingFlipCommitPixels": 0,
+          "SwingFlipCommitUpFromSideMul": 0,
+          "SwingInvertLookYForUp": false,
+          "SwingLateralFlipExtraPixels": 0,
+          "SwingLiveAxisWinRatio": 0,
+          "SwingLiveMicroMotionPixels": 0,
+          "SwingMinFlipHoldMs": 0,
+          "SwingMouseEvidenceDeadzonePixels": 0,
+          "SwingMouseEvidenceMaxStepPixels": 0,
+          "SwingSlashColor": "0,0,0,0",
+          "SwingSlashTrailSeconds": 0,
+          "SwingSlashWidthFraction": 0,
+          "SwingUpFromSideWinRatio": 0,
+          "TurnDamageMaxScale": 1.25,
+          "TurnDamageMinScale": 0.75
         },
         {
           "__type": "Survival.TrainingDummyAttackTelegraph",
@@ -1628,14 +1623,35 @@
             "Value": "Starter Kit"
           }
         ],
-        "MovedObjects": []
+        "MovedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111145"
+            },
+            "NewParent": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "NewContainerProperty": "Components",
+            "IsNewContainerArray": true,
+            "NewPreviousElement": {
+              "Type": "Component",
+              "IdValue": "c8e4f012-3456-7890-abcd-ef1234567806"
+            }
+          }
+        ]
       },
       "__PrefabIdToInstanceId": {
         "b1010004-1111-4111-8111-111111111104": "c8e4f012-3456-7890-abcd-ef1234567801",
+        "b1010004-1111-4111-8111-111111111152": "b1b43e28-6af7-8d9f-92ff-75cfe5299254",
+        "b1010004-1111-4111-8111-111111111154": "cd5bb4ee-d8ef-8546-bb01-4d03b96bbaee",
         "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1eea3",
         "b1010004-1111-4111-8111-111111111142": "c8e4f012-3456-7890-abcd-ef1234567803",
         "b1010004-1111-4111-8111-111111111143": "c8e4f012-3456-7890-abcd-ef1234567804",
         "b1010004-1111-4111-8111-111111111144": "c8e4f012-3456-7890-abcd-ef1234567805",
+        "b1010004-1111-4111-8111-111111111145": "2ccd682d-7f01-8ccf-8845-d9cd367c2810",
+        "b1010004-1111-4111-8111-111111111153": "3066bd9d-2850-8b01-b636-acf5642281ac",
         "b1010004-1111-4111-8111-111111111141": "c8e4f012-3456-7890-abcd-ef1234567802"
       }
     },
@@ -1735,14 +1751,35 @@
             "Value": "Farming Kit"
           }
         ],
-        "MovedObjects": []
+        "MovedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111145"
+            },
+            "NewParent": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "NewContainerProperty": "Components",
+            "IsNewContainerArray": true,
+            "NewPreviousElement": {
+              "Type": "Component",
+              "IdValue": "c8e4fa01-3456-7890-abcd-ef1234567806"
+            }
+          }
+        ]
       },
       "__PrefabIdToInstanceId": {
         "b1010004-1111-4111-8111-111111111104": "c8e4fa01-3456-7890-abcd-ef1234567801",
+        "b1010004-1111-4111-8111-111111111152": "8e76a87b-ea0e-8cc4-9831-50c9d17ccacd",
+        "b1010004-1111-4111-8111-111111111154": "6d0ebf93-9183-8269-b8a0-5460178bf4b8",
         "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa01",
         "b1010004-1111-4111-8111-111111111142": "c8e4fa01-3456-7890-abcd-ef1234567803",
         "b1010004-1111-4111-8111-111111111143": "c8e4fa01-3456-7890-abcd-ef1234567804",
         "b1010004-1111-4111-8111-111111111144": "c8e4fa01-3456-7890-abcd-ef1234567805",
+        "b1010004-1111-4111-8111-111111111145": "04375e80-776d-8ea6-9454-9c89f45c8401",
+        "b1010004-1111-4111-8111-111111111153": "3b0db56c-a67f-8e0a-976a-c44950861eac",
         "b1010004-1111-4111-8111-111111111141": "c8e4fa01-3456-7890-abcd-ef1234567802"
       }
     },
@@ -1834,14 +1871,35 @@
             "Value": "Archery"
           }
         ],
-        "MovedObjects": []
+        "MovedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111145"
+            },
+            "NewParent": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "NewContainerProperty": "Components",
+            "IsNewContainerArray": true,
+            "NewPreviousElement": {
+              "Type": "Component",
+              "IdValue": "c8e4fa02-3456-7890-abcd-ef1234567806"
+            }
+          }
+        ]
       },
       "__PrefabIdToInstanceId": {
         "b1010004-1111-4111-8111-111111111104": "c8e4fa02-3456-7890-abcd-ef1234567801",
+        "b1010004-1111-4111-8111-111111111152": "8d524479-df6e-8fae-81fc-b38fb77ce71b",
+        "b1010004-1111-4111-8111-111111111154": "ddfe4c47-9007-852e-adeb-fcc12d65dc59",
         "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa02",
         "b1010004-1111-4111-8111-111111111142": "c8e4fa02-3456-7890-abcd-ef1234567803",
         "b1010004-1111-4111-8111-111111111143": "c8e4fa02-3456-7890-abcd-ef1234567804",
         "b1010004-1111-4111-8111-111111111144": "c8e4fa02-3456-7890-abcd-ef1234567805",
+        "b1010004-1111-4111-8111-111111111145": "3550c812-e8e3-8078-a808-f73ad85ac80a",
+        "b1010004-1111-4111-8111-111111111153": "3ac94c74-4955-8d9c-b83d-0ad38e17f9ca",
         "b1010004-1111-4111-8111-111111111141": "c8e4fa02-3456-7890-abcd-ef1234567802"
       }
     },
@@ -1969,14 +2027,35 @@
             "Value": "0,0,6.02386856"
           }
         ],
-        "MovedObjects": []
+        "MovedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111145"
+            },
+            "NewParent": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "NewContainerProperty": "Components",
+            "IsNewContainerArray": true,
+            "NewPreviousElement": {
+              "Type": "Component",
+              "IdValue": "c8e4fa03-3456-7890-abcd-ef1234567806"
+            }
+          }
+        ]
       },
       "__PrefabIdToInstanceId": {
         "b1010004-1111-4111-8111-111111111104": "c8e4fa03-3456-7890-abcd-ef1234567801",
+        "b1010004-1111-4111-8111-111111111152": "496e1a01-f55c-8c75-b9b5-90233bc040dd",
+        "b1010004-1111-4111-8111-111111111154": "d09af3f7-97b0-8aaf-93b2-911e8beadb3c",
         "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa03",
         "b1010004-1111-4111-8111-111111111142": "c8e4fa03-3456-7890-abcd-ef1234567803",
         "b1010004-1111-4111-8111-111111111143": "c8e4fa03-3456-7890-abcd-ef1234567804",
         "b1010004-1111-4111-8111-111111111144": "c8e4fa03-3456-7890-abcd-ef1234567805",
+        "b1010004-1111-4111-8111-111111111145": "29227ae3-42ff-8bf5-8c5e-c9ea93cedb7f",
+        "b1010004-1111-4111-8111-111111111153": "8c3fe494-9bca-80d0-8974-05b1386b2c96",
         "b1010004-1111-4111-8111-111111111141": "c8e4fa03-3456-7890-abcd-ef1234567802"
       }
     },
@@ -2088,14 +2167,35 @@
             "Value": "Meats"
           }
         ],
-        "MovedObjects": []
+        "MovedObjects": [
+          {
+            "Id": {
+              "Type": "Component",
+              "IdValue": "b1010004-1111-4111-8111-111111111145"
+            },
+            "NewParent": {
+              "Type": "GameObject",
+              "IdValue": "b1010004-1111-4111-8111-111111111104"
+            },
+            "NewContainerProperty": "Components",
+            "IsNewContainerArray": true,
+            "NewPreviousElement": {
+              "Type": "Component",
+              "IdValue": "c8e4fa04-3456-7890-abcd-ef1234567806"
+            }
+          }
+        ]
       },
       "__PrefabIdToInstanceId": {
         "b1010004-1111-4111-8111-111111111104": "c8e4fa04-3456-7890-abcd-ef1234567801",
+        "b1010004-1111-4111-8111-111111111152": "c5baab24-cf66-801b-98ef-221969f0d3ec",
+        "b1010004-1111-4111-8111-111111111154": "2535a773-8632-8aca-b163-65ddf6c22370",
         "b1010004-1111-4111-8111-111111111151": "34121e8d-f9f4-8acf-9f73-f727fbf1fa04",
         "b1010004-1111-4111-8111-111111111142": "c8e4fa04-3456-7890-abcd-ef1234567803",
         "b1010004-1111-4111-8111-111111111143": "c8e4fa04-3456-7890-abcd-ef1234567804",
         "b1010004-1111-4111-8111-111111111144": "c8e4fa04-3456-7890-abcd-ef1234567805",
+        "b1010004-1111-4111-8111-111111111145": "45b6de67-b634-875c-a2ec-7940e2a7d0f1",
+        "b1010004-1111-4111-8111-111111111153": "ef258737-e00e-8b6a-9f7c-888a2aace309",
         "b1010004-1111-4111-8111-111111111141": "c8e4fa04-3456-7890-abcd-ef1234567802"
       }
     },
@@ -2133,14 +2233,6 @@
             },
             "Property": "Rotation",
             "Value": "0,0,0.986855745,0.161603525"
-          },
-          {
-            "Target": {
-              "Type": "GameObject",
-              "IdValue": "69f3dff5-c417-479e-b35f-3f458fde47ab"
-            },
-            "Property": "Scale",
-            "Value": "0.0199999996,0.0299999993,0.0500000007"
           },
           {
             "Target": {
@@ -2357,14 +2449,6 @@
             },
             "Property": "Position",
             "Value": "-544,-511.999939,8.79685116"
-          },
-          {
-            "Target": {
-              "Type": "Component",
-              "IdValue": "8e1059a4-a59e-4304-b444-d636b4ff6301"
-            },
-            "Property": "Static",
-            "Value": true
           }
         ],
         "MovedObjects": []
@@ -2402,8 +2486,88 @@
               "Type": "Component",
               "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
             },
+            "Property": "BlockAction",
+            "Value": null
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BlockDebugColor",
+            "Value": "0,0,0,0"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BlockFootprintFillAlpha",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BlockGroundArcHeightOffset",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BlockGuardSampleCount",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BlockSampleSphereRadius",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BlockShellHeightPadding",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BlockSparkCount",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BlockSparkLengthMeters",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BolaFullChargeSeconds",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
             "Property": "BolaFullRangeMeters",
-            "Value": 22
+            "Value": 0
           },
           {
             "Target": {
@@ -2411,7 +2575,15 @@
               "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
             },
             "Property": "BolaLaunchLiftDegrees",
-            "Value": 8
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BolaMinChargeSeconds",
+            "Value": 0
           },
           {
             "Target": {
@@ -2419,7 +2591,575 @@
               "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
             },
             "Property": "BolaMinRangeMeters",
-            "Value": 6
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BolaRootSeconds",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowAdsCameraDistanceScale",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowFullDrawLevelRangeMeters",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowFullDrawSeconds",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowLaunchSpeedMultiplier",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowMaxAimConePixels",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowMinDrawPower",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowMinHoldToFireSeconds",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "BowMinWeaponDamageContribution",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "EnableServerPrimaryAttackValidation",
+            "Value": false
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "FallbackWeaponClass",
+            "Value": null
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "HeavyReadyFlashSeconds",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackArcDegreeStep",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackForwardArcForwardScale",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackForwardArcForwardScaleStart",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackForwardArcVerticalScale",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackForwardMaxReachFraction",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackForwardPathReachScale",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackForwardPivotForwardLocal",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackForwardPivotForwardLocalEnd",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackForwardPlaneRightOffset",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackForwardReachActiveMultiplier",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackForwardReachEndMultiplier",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackForwardReachStartMultiplier",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackTiltDegreesForward",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackTiltDegreesLeft",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackTiltDegreesRight",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeAttackZaxisStart",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeBaseCombatDamageMultiplier",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeBladeHeelFraction",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeBlockBodyRadius",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeBlockFrontArcDegrees",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeDebugOverlayDuration",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeHitVolumeThickness",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeMaxTargetsHit",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSweepSubstepLength",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSwingForwardOffsetMeters",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSwingMaxPitchDegrees",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeSwingMinPitchDegrees",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeWeaponBaseDamage",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "MeleeWindupTelegraphThickness",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "PrimaryAttackAction",
+            "Value": null
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "PunchCooldownSeconds",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "PunchWindupSeconds",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "RecoveryDefenderShoveBlockSeconds",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "RecoveryDefenderShoveSeconds",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "RecoveryShoveCombatLockSeconds",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "ServerEyeHeight",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "ShoveAction",
+            "Value": null
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "ShoveDamage",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "ShoveHitRadiusMeters",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "ShoveRangeMeters",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "ShoveStaminaCost",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "ShowBlockSparks",
+            "Value": false
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "ShowHeavyReadyFlash",
+            "Value": false
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "ShowSwingSlashTrail",
+            "Value": false
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingAxisDeadzone",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingEvidenceDecaySeconds",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingFlipCommitPixels",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingFlipCommitUpFromSideMul",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingInvertLookYForUp",
+            "Value": false
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingLateralFlipExtraPixels",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingLiveAxisWinRatio",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingLiveMicroMotionPixels",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingMinFlipHoldMs",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingMouseEvidenceDeadzonePixels",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingMouseEvidenceMaxStepPixels",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingSlashColor",
+            "Value": "0,0,0,0"
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingSlashTrailSeconds",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingSlashWidthFraction",
+            "Value": 0
+          },
+          {
+            "Target": {
+              "Type": "Component",
+              "IdValue": "92a3b4c5-d6e7-5678-2345-789012345678"
+            },
+            "Property": "SwingUpFromSideWinRatio",
+            "Value": 0
           },
           {
             "Target": {
@@ -2442,18 +3182,18 @@
         "1a2b3c4d-5e6f-7890-abcd-ef1234567890": "23c62f4e-a077-41cf-a6d5-070fa6526a0a",
         "2b3c4d5e-6f70-8901-bcde-f12345678901": "39563fea-dece-44ee-8d27-5175fa6f9b60",
         "fa1b2c3d-4e5f-6789-abcd-ef1234567890": "c99d9b75-c4b0-4f28-b118-544cfaebf0d9",
-        "6f708192-a3b4-2345-f012-456789012345": "d3331949-1c4c-414c-8a54-a80b9f3f0f45",
-        "708192a3-b4c5-3456-0123-567890123456": "ba5bac20-ed34-47f6-bd73-e22a2e4499ba",
-        "92a3b4c5-d6e7-5678-2345-789012345678": "ad660636-c891-4ee4-b305-091d890927c1",
-        "a3b4c5d6-e7f8-6789-3456-890123456789": "04b5c270-cb39-4ee8-a4c5-33b7423f8141",
-        "b4c5d6e7-f809-7890-4567-901234567890": "b96e3749-bf81-4e86-900e-c6bc301850a2",
-        "c5d6e7f8-091a-8901-5678-012345678901": "cc77853c-62aa-4cb1-b407-d89e3b1618d2",
         "d6e7f809-1a2b-9012-6789-123456789012": "03637c4c-6bca-4e70-b5c6-ff38f4e1c9ae",
         "e7f8091a-2b3c-0123-789a-234567890123": "01b40498-a75f-49d6-bc02-9fe7534322fc",
         "f8091a2b-3c4d-1234-89ab-345678901234": "8219108d-b822-4d20-9dc7-8408f61071b2",
         "3c4d5e6f-7081-9012-cdef-123456789012": "442efc46-cc2e-46a8-899c-f6c0c00a97cb",
         "4d5e6f70-8192-0123-def0-234567890123": "d04976f9-9d7f-4033-bd15-0e0acc6ea00d",
-        "5e6f7081-92a3-1234-ef01-345678901234": "ad04b250-0b34-4253-9840-dc834d5e308c"
+        "5e6f7081-92a3-1234-ef01-345678901234": "ad04b250-0b34-4253-9840-dc834d5e308c",
+        "6f708192-a3b4-2345-f012-456789012345": "d3331949-1c4c-414c-8a54-a80b9f3f0f45",
+        "708192a3-b4c5-3456-0123-567890123456": "ba5bac20-ed34-47f6-bd73-e22a2e4499ba",
+        "92a3b4c5-d6e7-5678-2345-789012345678": "ad660636-c891-4ee4-b305-091d890927c1",
+        "a3b4c5d6-e7f8-6789-3456-890123456789": "04b5c270-cb39-4ee8-a4c5-33b7423f8141",
+        "b4c5d6e7-f809-7890-4567-901234567890": "b96e3749-bf81-4e86-900e-c6bc301850a2",
+        "c5d6e7f8-091a-8901-5678-012345678901": "cc77853c-62aa-4cb1-b407-d89e3b1618d2"
       }
     },
     {
@@ -149958,7 +150698,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "23c4dd7b-4b13-8bcb-918e-d72d57b4e8e8"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "d06d89d0-4d39-8efb-a7da-4c94e94ca196"
           }
         },
         {
@@ -150000,7 +150740,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "83290aec-0e38-8832-8954-36a609e7e3cb"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "06ca9a78-82a4-83fb-9ee5-e509245816a6"
           }
         },
         {
@@ -150042,7 +150782,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "14133966-5606-8e09-bdde-28b2490cc2a5"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "abc8703a-996f-80d1-a3b1-987d08876334"
           }
         },
         {
@@ -150084,7 +150824,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "e26244f3-9a46-89b2-bd74-12f7b9f28585"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "931b04dc-2839-8730-930f-720539daca86"
           }
         },
         {
@@ -150126,7 +150866,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "2c463b83-4cf0-8f4c-a6d4-d9e971845948"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "a9e23bb4-6aea-8bf8-b205-ddb26f6bc564"
           }
         },
         {
@@ -150176,7 +150916,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "e3f1f8df-8577-874d-9c21-cbf1272bc149"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "7d86f327-fbae-8f14-844d-5c601dd4d0df"
           }
         },
         {
@@ -150226,7 +150966,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "3b6b7a5f-e15b-8523-a3ae-f3befff45d0e"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "ab499043-1309-83a1-8352-99c69e735f24"
           }
         },
         {
@@ -150276,7 +151016,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "2ac557b7-68af-8883-b214-b9d535161eb0"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "08080e59-34f8-8fa8-943e-31ab2b0c522e"
           }
         },
         {
@@ -150326,7 +151066,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "be30df93-cf70-8dac-aeef-759fbd55c41b"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "1de6a766-0739-8267-9809-05d0c3eb47dd"
           }
         },
         {
@@ -150376,7 +151116,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "871652ab-a894-8f28-a8f3-87728e797a6a"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "b86ed1bf-41e2-84a8-bba8-16ac9f7b8065"
           }
         },
         {
@@ -150426,7 +151166,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "33c0b149-e2c2-8a81-8d59-41c65ba17fd9"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "aebed44b-e885-8cdf-8191-c2fd280647b0"
           }
         },
         {
@@ -150476,7 +151216,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "db0b55f6-c766-8665-9d9b-c09e30ba4363"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "886c2598-0458-88cf-8107-edfa4b52d1f1"
           }
         },
         {
@@ -150518,7 +151258,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "73075903-6d20-8c4d-8e64-01328de844e9"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "1c2de862-2360-8977-865d-708340c46ab7"
           }
         },
         {
@@ -150568,7 +151308,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "7e52fd46-88ce-81a1-a08c-649754262df6"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "3ad06b31-e71d-8cf7-98f5-ba6d58914871"
           }
         },
         {
@@ -150618,7 +151358,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "1ff44c8b-a29f-81e3-b412-296e43304f8d"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "ee1b6452-02f9-80a5-b81c-4580ee33b9ad"
           }
         },
         {
@@ -150668,7 +151408,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "bbf20478-000c-858b-8dac-273f9fa4a69d"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "ca1739cc-39e4-845f-acab-aaf8f4738c7a"
           }
         },
         {
@@ -150718,7 +151458,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "afc59db1-d180-89dc-a7bf-57d4fad754a1"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "b5a7a831-bde7-8d9d-9e47-7aa308d3c8ae"
           }
         },
         {
@@ -150768,7 +151508,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "3fc25aad-fac7-86be-917c-a136fbcb9bb5"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "373027f5-6d85-81c1-9da6-a7268da7cc48"
           }
         },
         {
@@ -150818,7 +151558,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "fc04f7f7-c1b2-8904-9550-da36abfaeddd"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "a9c19b72-ce66-861f-8bda-e44c7a7c025e"
           }
         },
         {
@@ -150868,7 +151608,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "4d662e4a-6c1b-8522-a204-42bfc9e2551d"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "113fced5-0342-8507-a0be-873c7261321d"
           }
         },
         {
@@ -150918,7 +151658,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "275a00b4-8de7-8f88-8bc7-47fcfa9b2550"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "6455e31f-1a37-8281-ad39-b7357f9f0a4b"
           }
         },
         {
@@ -150968,7 +151708,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "6f28b3a2-fcf0-82d0-a234-eadac11460b5"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "48a5c181-f9f1-8800-ba34-6ec1ee645f77"
           }
         },
         {
@@ -151018,7 +151758,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "efbd2a83-27bc-8daa-a98e-00ddd8162a5b"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "c192ddcb-8532-83a5-a44e-1cd9e9d26cf0"
           }
         },
         {
@@ -151068,7 +151808,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "072336a5-eb62-8cfd-8d87-cc259c31c0b0"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "e727d26c-54db-82f9-942a-99c957c60568"
           }
         },
         {
@@ -151118,7 +151858,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "27fed395-2758-8b2a-afe9-00edc6c20151"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "01dbf3c4-540d-876e-a806-0990b1492fd2"
           }
         },
         {
@@ -151168,7 +151908,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "11b64c15-a31a-8286-b75d-1a8332bcb094"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "3d72bfe7-8740-8dab-9dc0-1418c3635a74"
           }
         },
         {
@@ -151218,7 +151958,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "9bf16751-9248-84e6-bf7f-92cd28d6bc9c"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "a47a881c-dcf8-8b32-bdc8-44acdac9f0f8"
           }
         },
         {
@@ -151268,7 +152008,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "6b0e9e85-5302-80e0-81ff-aee5b295db4f"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "54419e14-8414-8636-8eed-e32b963b146c"
           }
         },
         {
@@ -151318,7 +152058,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "85e7c898-2ec5-84c9-bc76-1cfbc9d30b16"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "42195f37-af84-8ca4-bde3-b3b9e064a805"
           }
         },
         {
@@ -151368,7 +152108,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "7519bd0c-d77d-8a0c-823b-42ffd0b60a42"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "b3237de7-a563-8029-acb9-48a1c3523518"
           }
         },
         {
@@ -151418,7 +152158,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "2b5169ed-e352-812d-9da0-dd9eba85f167"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "d0a5125f-90ce-83e5-82a3-7530c1f49962"
           }
         },
         {
@@ -151468,7 +152208,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "4866252d-855f-8314-b48d-ae4bc973b42a"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "96610705-3543-8892-b644-5c4a7f39015f"
           }
         },
         {
@@ -151518,7 +152258,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "81ff40c2-267c-8728-8d01-0eb6e340c6d3"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "74255eba-21a3-8db0-9d27-7263faaa191c"
           }
         },
         {
@@ -151568,7 +152308,7 @@
             "MovedObjects": []
           },
           "__PrefabIdToInstanceId": {
-            "22562ade-a36b-4140-87ce-d307e9fb8cf0": "8c923309-4cb4-8352-9551-22e510e8ea1e"
+            "43e920ed-5059-4b52-aa21-92899a9db9b0": "9578a956-dcd4-84a5-9cc2-0e06e7309a26"
           }
         }
       ]
@@ -152232,6 +152972,7 @@
               "FaceTarget": null,
               "FinishedHoldSeconds": 4,
               "GoBeep": null,
+              "LendGrapple": false,
               "LogTimeTrial": true,
               "OnComponentDestroy": null,
               "OnComponentDisabled": null,
@@ -159134,20 +159875,20 @@
           "CastShadows": false,
           "ClumpModels": [
             {
-              "Id": "25bd536b-37ed-44db-a7f9-6d575a1e07c4",
-              "Path": "models/environment/cloverhills/groundfoliage/grass/grass_clump1.vmdl"
+              "Id": "2da83897-0b58-471a-9869-0b93419b17bb",
+              "Path": "models/environment/cloverhills/groundfoliage/grass/grass_clump1_v2.vmdl"
             },
             {
-              "Id": "7042c5e6-3e06-4c8b-a6f5-4edf5fd9574d",
-              "Path": "models/environment/cloverhills/groundfoliage/grass/grass_clump2.vmdl"
+              "Id": "d2a11b01-9747-42a6-ac9b-0ffcafd9e0ec",
+              "Path": "models/environment/cloverhills/groundfoliage/grass/grass_clump2_v2.vmdl"
             },
             {
-              "Id": "d333d867-7a48-4254-9108-e7ad4e3e9d77",
-              "Path": "models/environment/cloverhills/groundfoliage/grass/grass_clump3.vmdl"
+              "Id": "0c44ef93-737d-46a3-92ed-2448e368b726",
+              "Path": "models/environment/cloverhills/groundfoliage/grass/grass_clump3_v2.vmdl"
             },
             {
-              "Id": "4ddb150e-0e33-4dea-b310-524f25143158",
-              "Path": "models/environment/cloverhills/groundfoliage/grass/grass_clump4.vmdl"
+              "Id": "d5211eeb-9a20-4412-8397-7dc4650e5817",
+              "Path": "models/environment/cloverhills/groundfoliage/grass/grass_clump4_v2.vmdl"
             }
           ],
           "ClumpsPerSquareMeter": 3,
@@ -159213,6 +159954,7 @@
           "__enabled": true,
           "Flags": 0,
           "BaseStrength01": 0.25,
+          "BreezeDriftMetersPerSecond": 4,
           "GustPeriodSeconds": 7,
           "GustStrength01": 0.8,
           "GustVariationPeriodSeconds": 45,
@@ -159222,6 +159964,13 @@
           "OnComponentFixedUpdate": null,
           "OnComponentStart": null,
           "OnComponentUpdate": null,
+          "OrbCount": 6,
+          "OrbLifeSeconds": 10,
+          "OrbRadiusMaxMeters": 12,
+          "OrbRadiusMinMeters": 5,
+          "OrbRangeMeters": 70,
+          "OrbSpeedMetersPerSecond": 7,
+          "OrbStrength": 1,
           "RandomHeadingOnStart": true,
           "WanderDegrees": 10,
           "WanderPeriodSeconds": 120,
@@ -159486,6 +160235,8 @@
                 "go": "7405f8b4-cb8a-4ae7-a35a-0c943b687f6b"
               },
               "ArenaRadiusMeters": 25,
+              "BettingWindowSeconds": 0,
+              "CameramanSpawn": null,
               "CountdownBeatSeconds": 1,
               "FinishedHoldSeconds": 4,
               "LogArena": true,
@@ -160420,7 +161171,7 @@
             "go": "7da60134-240f-4ee6-b894-424e5f58c54b",
             "component_type": "DirectionalLight"
           },
-          "NightAmbientBrightness": 0.06,
+          "NightAmbientBrightness": 0.6,
           "NightMaxExposure": 1,
           "NightSeconds": 240,
           "NightSkyAmbient": "0.22,0.28,0.42,1",
@@ -160438,7 +161189,9 @@
             "go": "47575d29-eced-4eaf-9f38-23339b9b5e06",
             "component_type": "SkyDome"
           },
+          "SkyPresetBlendSeconds": 45,
           "SkyPresetId": "clear",
+          "SleepTimeScale": 10,
           "StartHour": 6,
           "SunBloomBrightness": 4,
           "SunDisk": {
@@ -160974,7 +161727,7 @@
       "AgentRadius": 16,
       "AgentStepSize": 40,
       "AgentMaxSlope": 55,
-      "ExcludedBodies": "",
+      "ExcludedBodies": "blueprint",
       "IncludedBodies": "",
       "DeferGeneration": false,
       "CustomBounds": true,

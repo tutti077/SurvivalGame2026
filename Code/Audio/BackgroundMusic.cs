@@ -4,6 +4,7 @@ namespace Survival;
 
 /// <summary>
 /// Quiet looping 2D track via <see cref="MusicPlayer"/>. Attach once per playable scene.
+/// Scaled by the player's music volume (<see cref="AudioVolumeSettings"/>).
 /// </summary>
 [Title( "Background Music" )]
 [Category( "Audio" )]
@@ -36,12 +37,16 @@ public sealed class BackgroundMusic : Component
 		if ( _music is null )
 			return;
 
-		if ( Math.Abs( Volume - _appliedVolume ) < 0.0001f )
+		var volume = EffectiveVolume;
+		if ( Math.Abs( volume - _appliedVolume ) < 0.0001f )
 			return;
 
-		_music.Volume = Volume;
-		_appliedVolume = Volume;
+		_music.Volume = volume;
+		_appliedVolume = volume;
 	}
+
+	/// <summary>The track's own level times the player's Settings → Audio → Music slider.</summary>
+	float EffectiveVolume => Volume * AudioVolumeSettings.MusicVolume;
 
 	protected override void OnDestroy()
 	{
@@ -72,8 +77,14 @@ public sealed class BackgroundMusic : Component
 		// (default origin) and fades with distance like a proximity emitter.
 		_music.ListenLocal = true;
 		_music.Repeat = Loop;
-		_music.Volume = Volume;
-		_appliedVolume = Volume;
+
+		// On the Music mixer, so the sound effects slider (every other mixer) never scales it.
+		var mixer = AudioVolumeSettings.MusicMixer;
+		if ( mixer is not null )
+			_music.TargetMixer = mixer;
+
+		_music.Volume = EffectiveVolume;
+		_appliedVolume = _music.Volume;
 	}
 
 	public void Stop()

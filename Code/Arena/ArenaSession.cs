@@ -11,6 +11,16 @@ public enum ArenaPhase
 	Countdown,
 	Fighting,
 	Finished,
+	/// <summary>Teams are filled and named, nobody has moved yet: the betting window (<see cref="ArenaSession.BettingWindowSeconds"/>).</summary>
+	Announced,
+}
+
+/// <summary>Who fought, on which team, and who won (-1 = void match). Raised on the host when a match ends or is voided.</summary>
+public sealed class ArenaMatchResult
+{
+	public readonly List<(GameObject Root, string Name, int Team)> Fighters = new();
+	public readonly List<string> TeamNames = new();
+	public int WinningTeam = -1;
 }
 
 /// <summary>
@@ -46,7 +56,34 @@ public sealed class ArenaSession : Component
 	[Property, Group( "Timing" ), Title( "Finished Hold Seconds" ), Range( 1f, 20f )]
 	public float FinishedHoldSeconds { get; set; } = 6f;
 
+	/// <summary>
+	/// &gt; 0: a filled match is announced and waits this long before anyone is moved, so spectators can bet on it
+	/// (the hub's bet NPC, <see cref="HubBetBoard"/>). 0 = fight starts the moment the teams fill.
+	/// </summary>
+	[Property, Group( "Betting" ), Title( "Betting Window (s)" ), Range( 0f, 120f )]
+	public float BettingWindowSeconds { get; set; }
+
+	/// <summary>Where the volunteer cameraman stands when the fight starts (none = no cameraman role in this arena).</summary>
+	[Property, Group( "Cameraman" ), Title( "Cameraman Spawn (optional)" )]
+	public GameObject CameramanSpawn { get; set; }
+
 	[Property, Group( "Debug" )] public bool LogArena { get; set; }
+
+	/// <summary>
+	/// The player who volunteered to film the next fight (host → all; default = nobody). First come, one per fight: they
+	/// go in with the fighters, cannot be hurt or attack, wear the referee outfit, and their view joins the bar screen's
+	/// rotation (<see cref="HubArenaScreen"/>). Cleared when the fight ends.
+	/// </summary>
+	[Sync( SyncFlags.FromHost )] public Guid CameramanId { get; private set; }
+
+	/// <summary>True while the cameraman is in the arena (from the fight's start to everyone's restore).</summary>
+	[Sync( SyncFlags.FromHost )] public bool CameramanFilming { get; private set; }
+
+	/// <summary>Host: a match ended (winner known) or was voided (winner -1).</summary>
+	public static event Action<ArenaSession, ArenaMatchResult> HostMatchResolved;
+
+	/// <summary>Seconds of the betting window left (host → all; 0 outside <see cref="ArenaPhase.Announced"/>).</summary>
+	[Sync( SyncFlags.FromHost )] public float AnnouncedSecondsLeft { get; private set; }
 
 	[Sync( SyncFlags.FromHost )] public ArenaPhase Phase { get; private set; } = ArenaPhase.Idle;
 
@@ -78,6 +115,9 @@ public sealed class ArenaSession : Component
 	int _countdownValue;
 	double _finishedUntil;
 	double _nextFightTickAt;
+	double _announcedUntil;
+	Vector3 _cameramanReturnPos;
+	Rotation _cameramanReturnRot;
 
 	bool HasHostAuthority =>
 		GameObject.Network is not { Active: true } || Networking.IsHost;
@@ -140,6 +180,9 @@ public sealed class ArenaSession : Component
 				if ( Time.NowDouble >= _finishedUntil )
 					HostFinishAndRestore();
 				break;
+			case ArenaPhase.Announced:
+				TickAnnounced();
+				break;
 		}
 	}
 
@@ -158,6 +201,13 @@ public sealed class ArenaSession : Component
 		{
 			if ( LogArena )
 				Log.Info( "[Arena] Queue rejected — only the crew leader can queue." );
+			return;
+		}
+
+		if ( playerId == CameramanId )
+		{
+			if ( LogArena )
+				Log.Info( "[Arena] Queue rejected — the cameraman films, they do not fight." );
 			return;
 		}
 
@@ -196,6 +246,88 @@ public sealed class ArenaSession : Component
 			if ( LogArena )
 				Log.Info( $"[Arena] {CrewRegistry.ResolvePawnDisplayName( playerRoot )} cancelled the arena queue." );
 		}
+	}
+
+	// ── Cameraman ───────────────────────────────────────────────────────────────
+
+	public bool HasCameramanRole => CameramanSpawn is { IsValid: true };
+
+	/// <summary>The cameraman's pawn, on any peer (null when nobody volunteered or they left).</summary>
+	public GameObject CameramanPawn => CameramanId == default ? null : FindPawnByPlayerId( CameramanId );
+
+	/// <summary>Host: volunteer (or step down) as the next fight's cameraman.</summary>
+	public void HostTrySetCameraman( GameObject playerRoot, bool volunteer )
+	{
+		if ( !HasHostAuthority || !HasCameramanRole || playerRoot is null || !playerRoot.IsValid() )
+			return;
+
+		var playerId = TimeTrialSession.ResolvePlayerKey( playerRoot );
+		if ( !volunteer )
+		{
+			if ( CameramanId == playerId && !CameramanFilming )
+				CameramanId = default;
+			return;
+		}
+
+		if ( CameramanId != default || IsQueuedOrFighting( playerId ) )
+			return;
+
+		CameramanId = playerId;
+		if ( LogArena )
+			Log.Info( $"[Arena] {CrewRegistry.ResolvePawnDisplayName( playerRoot )} will film the next fight." );
+	}
+
+	bool IsQueuedOrFighting( Guid playerId )
+	{
+		foreach ( var p in _participants )
+		{
+			if ( p.PlayerId == playerId )
+				return true;
+		}
+
+		var crewKey = CrewRegistry.GetCrewOf( playerId )?.Key ?? playerId;
+		foreach ( var q in _queue )
+		{
+			if ( q.CrewKey == crewKey )
+				return true;
+		}
+
+		return false;
+	}
+
+	void HostCameramanIn()
+	{
+		var pawn = CameramanPawn;
+		if ( pawn is null || IsQueuedOrFighting( CameramanId ) || !HasCameramanRole )
+		{
+			CameramanId = default;
+			return;
+		}
+
+		_cameramanReturnPos = pawn.WorldPosition;
+		_cameramanReturnRot = pawn.WorldRotation;
+		pawn.Components.Get<PlayerVitals>()?.HostSetEventInvulnerable( true );
+		pawn.Components.Get<PlayerCombat>()?.HostSetEventNoCombat( true );
+		pawn.Components.Get<PlayerAnimation>()?.HostSetEventOutfit( "referee" );
+		pawn.Components.Get<PlayerMovement>()?.HostApplyEventSpawn( CameramanSpawn.WorldPosition, CameramanSpawn.WorldRotation );
+		CameramanFilming = true;
+	}
+
+	void HostCameramanOut()
+	{
+		var pawn = CameramanPawn;
+		if ( pawn is not null && CameramanFilming )
+		{
+			pawn.Components.Get<PlayerVitals>()?.HostSetEventInvulnerable( false );
+			pawn.Components.Get<PlayerCombat>()?.HostSetEventNoCombat( false );
+			pawn.Components.Get<PlayerAnimation>()?.HostSetEventOutfit( "" );
+			var pos = ReturnPoint is { IsValid: true } rp ? rp.WorldPosition + Vector3.Up * 40f : _cameramanReturnPos;
+			var rot = ReturnPoint is { IsValid: true } rp2 ? rp2.WorldRotation : _cameramanReturnRot;
+			pawn.Components.Get<PlayerMovement>()?.HostApplyEventSpawn( pos, rot );
+		}
+
+		CameramanFilming = false;
+		CameramanId = default;
 	}
 
 	/// <summary>Crew membership changed (join/leave/disband) — its waiting queue entry is void.</summary>
@@ -402,8 +534,51 @@ public sealed class ArenaSession : Component
 		PushQueueBlob();
 
 		_activeMode = mode;
+		if ( BettingWindowSeconds > 0f )
+		{
+			Phase = ArenaPhase.Announced;
+			_announcedUntil = Time.NowDouble + BettingWindowSeconds;
+			AnnouncedSecondsLeft = BettingWindowSeconds;
+			if ( LogArena )
+				Log.Info( $"[Arena] {ArenaModeInfo.Display( mode )} announced — bets open for {BettingWindowSeconds:0}s." );
+			return;
+		}
+
+		HostBeginFight();
+	}
+
+	void TickAnnounced()
+	{
+		AnnouncedSecondsLeft = MathF.Max( 0f, (float)(_announcedUntil - Time.NowDouble) );
+
+		// Someone left during the betting window: void the match (bets are refunded).
+		for ( var t = 0; t < _teamNames.Count; t++ )
+		{
+			if ( CountAliveOnTeam( t ) != 0 )
+				continue;
+
+			Log.Info( "[Arena] Announced match voided — a team lost all its players." );
+			RaiseResolved( -1 );
+			_participants.Clear();
+			_teamNames.Clear();
+			Phase = ArenaPhase.Idle;
+			AnnouncedSecondsLeft = 0f;
+			TryMatchmake();
+			return;
+		}
+
+		if ( Time.NowDouble >= _announcedUntil )
+			HostBeginFight();
+	}
+
+	void HostBeginFight()
+	{
+		AnnouncedSecondsLeft = 0f;
+		HostCameramanIn();
 		foreach ( var p in _participants )
 		{
+			if ( p.Root is not { IsValid: true } )
+				continue;
 			p.ReturnPos = p.Root.WorldPosition;
 			p.ReturnRot = p.Root.WorldRotation;
 			var movement = p.Root.Components.Get<PlayerMovement>();
@@ -417,7 +592,7 @@ public sealed class ArenaSession : Component
 		_countdownBeatAt = Time.NowDouble;
 		RpcBroadcastArenaText( "3" );
 		if ( LogArena )
-			Log.Info( $"[Arena] {ArenaModeInfo.Display( mode )} starting — {_participants.Count} players." );
+			Log.Info( $"[Arena] {ArenaModeInfo.Display( _activeMode )} starting — {_participants.Count} players." );
 	}
 
 	void AppendTeamName( int team, string crewName )
@@ -548,6 +723,7 @@ public sealed class ArenaSession : Component
 			? $"{_teamNames[lastAliveTeam]} wins the arena!"
 			: "Arena battle over!";
 		RpcBroadcastArenaText( banner );
+		RaiseResolved( lastAliveTeam );
 		if ( LogArena )
 			Log.Info( $"[Arena] {banner}" );
 	}
@@ -638,11 +814,61 @@ public sealed class ArenaSession : Component
 
 		_participants.Clear();
 		_teamNames.Clear();
+		HostCameramanOut();
 		Phase = ArenaPhase.Idle;
 		if ( LogArena )
 			Log.Info( "[Arena] Everyone restored — arena idle." );
 
 		TryMatchmake();
+	}
+
+	void RaiseResolved( int winningTeam )
+	{
+		if ( HostMatchResolved is null )
+			return;
+
+		var result = new ArenaMatchResult { WinningTeam = winningTeam };
+		result.TeamNames.AddRange( _teamNames );
+		foreach ( var p in _participants )
+			result.Fighters.Add( (p.Root, p.Name, p.TeamIndex) );
+		HostMatchResolved.Invoke( this, result );
+	}
+
+	/// <summary>Host: the match being announced / fought right now (names per team), for the bet board.</summary>
+	public bool HostTryDescribeCurrent( out List<string> teamNames, out List<(GameObject Root, string Name, int Team)> fighters )
+	{
+		teamNames = new List<string>( _teamNames );
+		fighters = new List<(GameObject, string, int)>();
+		if ( Phase == ArenaPhase.Idle || _participants.Count == 0 )
+			return false;
+		foreach ( var p in _participants )
+			fighters.Add( (p.Root, p.Name, p.TeamIndex) );
+		return true;
+	}
+
+	/// <summary>Host: who is waiting in the queue for each mode (names), for the bet board's "next fights" list.</summary>
+	public List<(ArenaMode Mode, List<string> Names)> HostDescribeQueue()
+	{
+		var list = new List<(ArenaMode, List<string>)>();
+		foreach ( var entry in _queue )
+		{
+			var names = new List<string>();
+			var members = CrewRegistry.GetCrewMembers( entry.CrewKey );
+			if ( members is not null )
+			{
+				foreach ( var m in members )
+					names.Add( m.DisplayName );
+			}
+			else
+			{
+				var root = FindPawnByPlayerId( entry.CrewKey );
+				names.Add( root is not null ? CrewRegistry.ResolvePawnDisplayName( root ) : "Player" );
+			}
+
+			list.Add( (entry.Mode, names) );
+		}
+
+		return list;
 	}
 
 	[Rpc.Broadcast]

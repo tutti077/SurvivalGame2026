@@ -184,6 +184,32 @@ def report(events: list[dict]) -> None:
         c = Counter((e.get("def"), e.get("outcome"), "parry" if e.get("parry") else "block") for e in by["block"])
         table(["defender", "outcome", "type", "count"], [[d, o, t, n] for (d, o, t), n in c.most_common()])
 
+    # ---- blows past a worked guard ("I blocked in time and got hit anyway")
+    if by["guard_miss"]:
+        section("blows past the guard")
+        c = Counter((e.get("def"), e.get("reason")) for e in by["guard_miss"])
+        table(["defender", "why the guard failed", "count"], [[d, r, n] for (d, r), n in c.most_common()])
+        inputs = sorted(by["block_input"], key=lambda e: e.get("hostT", 0.0))
+        rows = []
+        for e in by["guard_miss"]:
+            # the defender's last block press before this blow, both on the host clock (hostT)
+            press = None
+            for i in inputs:
+                if i.get("player") == e.get("def") and i.get("down") and i.get("hostT", 0.0) <= e.get("hostT", 0.0):
+                    press = i
+            before = e["hostT"] - press["hostT"] if press else None
+            rows.append([
+                mmss(e["t"]), e.get("def"), e.get("atk"), e.get("swing", ""), e.get("reason"),
+                fmt(before * 1000, 0) + " ms" if before is not None else "-",
+                fmt(press.get("lagS", 0.0) * 1000, 0) + " ms" if press else "-",
+                (press.get("why") or ("raised" if press.get("guardUp") else "not raised")) if press else "-",
+                fmt(e.get("guardAgeS", -1) * 1000, 0) + " / " + fmt(e.get("needS", 0) * 1000, 0) + " ms" if e.get("guardUp") else "down",
+                (e.get("guardDir") or "") + " vs " + (e.get("inSide") or ""),
+                ",".join(k for k in ("usedUp", "locked", "exhausted", "swinging") if e.get(k)) or "-",
+            ])
+        table(["time", "defender", "attacker", "swing", "reason", "press arrived before blow", "press lag (host - client clock)",
+               "press on his screen", "guard age / needed", "guard vs blade side", "host flags"], rows)
+
     # ---- stamina
     section("stamina")
     rows = []

@@ -180,6 +180,27 @@ public sealed partial class PlayerInventoryInteraction
 		SendArenaIntent( session, 0, cancel: true );
 	}
 
+	/// <summary>Owner: volunteer as (or step down from) the next fight's cameraman.</summary>
+	public void OwnerArenaCameraman( bool volunteer )
+	{
+		var session = ResolveArenaSession();
+		if ( session is null )
+			return;
+
+		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
+			session.HostTrySetCameraman( GameObject, volunteer );
+		else
+			RpcHostArenaCameraman( volunteer );
+	}
+
+	[Rpc.Host]
+	void RpcHostArenaCameraman( bool volunteer )
+	{
+		if ( GameObject.Network is { Active: true, Owner: { } owner } && Rpc.Caller is { } caller && caller.Id != owner.Id )
+			return;
+		ArenaSession.Instance?.HostTrySetCameraman( GameObject, volunteer );
+	}
+
 	void SendArenaIntent( ArenaSession session, int modeInt, bool cancel )
 	{
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )

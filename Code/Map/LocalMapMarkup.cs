@@ -61,7 +61,7 @@ public static class LocalMapMarkup
 	public static void EnsureLoaded()
 	{
 		var playerKey = QuestTracker.PlayerKey;
-		var worldKey = ResolveWorldKey();
+		var worldKey = ResolveWorldKey( out var legacyKey );
 		if ( _file is not null
 		     && string.Equals( playerKey, _loadedPlayerKey, StringComparison.Ordinal )
 		     && string.Equals( worldKey, _loadedWorldKey, StringComparison.Ordinal ) )
@@ -69,13 +69,27 @@ public static class LocalMapMarkup
 
 		_loadedPlayerKey = playerKey;
 		_loadedWorldKey = worldKey;
-		_file = MapMarkupSaveStore.Load( playerKey, worldKey ) ?? new MapMarkupSaveFile();
+		_file = MapMarkupSaveStore.LoadOrMigrate( playerKey, worldKey, legacyKey ) ?? new MapMarkupSaveFile();
 		Version++;
 	}
 
-	/// <summary>World name + seed when a TerrainWorld is streaming; otherwise the scene name (hand-built test scenes).</summary>
-	static string ResolveWorldKey()
+	/// <summary>Drop the loaded copy so the next read goes back to disk (the scratch-world wipe deleted the file).</summary>
+	public static void Forget()
 	{
+		_file = null;
+		_loadedPlayerKey = null;
+		_loadedWorldKey = null;
+		Version++;
+	}
+
+	/// <summary>
+	/// The save's game ID (<see cref="TerrainWorldManager.WorldId"/>) when a TerrainWorld is streaming — world name + seed
+	/// until the ID is known, and the scene name in hand-built test scenes. <paramref name="legacyKey"/> is the old
+	/// name + seed key, for moving pins saved before game IDs.
+	/// </summary>
+	static string ResolveWorldKey( out string legacyKey )
+	{
+		legacyKey = null;
 		var scene = Sandbox.Game.ActiveScene;
 		if ( scene is null || !scene.IsValid() )
 			return "world";
@@ -85,7 +99,8 @@ public static class LocalMapMarkup
 			if ( manager is null || !manager.IsValid() )
 				continue;
 
-			return $"{manager.WorldName}_{manager.WorldSeed}";
+			legacyKey = MapMarkupSaveStore.LegacyWorldKey( manager.WorldName, manager.WorldSeed );
+			return string.IsNullOrWhiteSpace( manager.WorldId ) ? legacyKey : manager.WorldId;
 		}
 
 		return $"scene_{scene.Name}";

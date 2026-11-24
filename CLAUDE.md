@@ -96,7 +96,7 @@ The build kit's old 50 u/m was retired 2026-11-08 (Valheim scale: a 2 m wall is 
 72-unit pawn). A floor meets other pieces at its **face**, never its mid-plane
 (`BuildSnapPlacement.ApplyFloorFaceOffset`), so a 0.25 m deck does not eat the room's headroom.
 
-### 6. One prompt at a time on the editor — never steal the MCP
+### 6. One prompt at a time on the editor — take turns in the MCP queue
 
 The s&box editor serves **one prompt at a time**. Before any editor call (play start / stop, open
 scene, `run_csharp`, console commands, screenshots), check that no other session is using it
@@ -104,6 +104,32 @@ scene, `run_csharp`, console commands, screenshots), check that no other session
 is busy, do the work that needs no editor and **wait** for it to go idle. Never stop, restart or
 re-scene another prompt's play session, never open a second editor, and never retry a denied
 `play_start` more than once. Mark 2026-11-09: "One prompt can't stop on another and steal the MCP."
+
+**The MCP queue** (Mark 2026-11-18). When several sessions need the editor, they take turns in a
+queue so it is in use nonstop until all the work is done. Mark gives each session its priority
+number (1 = first); a session that was not given one asks before touching the editor.
+
+- **Slot 1 holds the editor. Slot 2 is next. Slot 3 and beyond wait** — they do editor-free work
+  and do not touch the MCP.
+- **Hold the editor only while you are using it.** The moment the holder goes back to code (fixing
+  what the test showed) it **releases**: let a running suite print `RESULT`, stop its own play
+  session, put temporary settings back, leave the editor idle. Releasing drops it to slot 2 and
+  moves slot 2 up to slot 1. So the top two sessions swap back and forth, each testing while the
+  other codes.
+- **A session leaves the queue** when its work is completely finished or it is waiting on Mark. It
+  releases the editor first. Everyone behind moves up one slot, so the first waiting session joins
+  the top pair.
+- **A session Mark answers takes its old priority back.** The top pair is always the two
+  lowest-numbered sessions that have work: priority 3 never works the MCP while priority 1 sits
+  behind it. The returning session does not interrupt — if a higher-numbered session holds the
+  editor, wait for it to release, then flip; that session goes back to waiting.
+- **Take the editor only when you are in slot 1 and it is idle.** In slot 2, wait for the holder to
+  release — never take it from them. Say in your reply when you take and when you release.
+
+```
+1 2 3  →  1 releases  →  2 1 3  →  2 releases  →  1 2 3  …  1 finishes  →  2 3  →  3 2  →  2 3  …
+1 waits on Mark  →  2 3  →  3 2  →  Mark answers 1  →  3 releases  →  1 2 3
+```
 
 ---
 
@@ -148,7 +174,7 @@ If you cannot say what cheat or boundary failure a check stops, it does not belo
   on the project if no editor is running (check `sbox-cli --list` first so you never open a second one).
 - **Only if that still fails, pause and tell Mark what is blocked.** Never branch the work off or land
   it untested. Work that needs no editor (docs, JSON, Blender) can continue meanwhile.
-- Autonomous never means grabbing a busy editor: commandment 6 — wait until the other prompt is done.
+- Autonomous never means grabbing a busy editor: commandment 6 — wait for your turn in the MCP queue.
 
 ### Shared main, several sessions
 
@@ -247,6 +273,10 @@ Targets: `lakePatchCount` ≤ 24 · `medianLakeDiameterMeters` ≥ 600 · `lakeA
   bloom and tonemap. **Never** a screen-space pixelation, dither or cel / toon filter (all tried and
   rejected). Local lights (fires, torches, lanterns) are steppy (`PixelLightSteps`); the sun stays
   smooth. Detail: `Code/Environment/docs/ENVIRONMENT.md`.
+- **Environment textures are never smaller than 128×128 and never one solid colour** (Mark 2026-11-23): every
+  surface carries grain, and a ground piece matches the terrain's texel size (~128 texels / m; the crashed pod's 9.6 m
+  crater is 1024 px). A flat tint over a surface (the old tilled-soil brown) counts as a solid colour. A palette
+  texture is no exception: `plants_palette.png` is 128 px of grained swatches and each face spreads its UVs over its swatch.
 - **Low-poly models:** varied face sizes, no primitive-readable silhouettes, foliage = layered alpha
   leaf cards. Elm bark that was accepted: a sparse connected crack net, varied line weight, 3–4
   low-contrast grey-brown tones — hue shifts, moss, dither and speckle read as creepy.
@@ -335,9 +365,15 @@ Code/
   World/Environment/  WeatherSystem (data/weather.json: wind + sky per state, `weather`), EnvironmentDayNightCycle, SkyDome, AerialPerspective (distance fog pass + the camera biome's mist / shade), BiomeAtmosphere (data/biome_atmosphere.json: per-biome air, `atmosphere`), CalderaRing (the far mountain wall), SkyPresetCatalog, SunShadowDistance
   World/Terrain/   streaming, chunk mesh, biome population, sea, rivers, grass, world save IO, TerrainPerfBench
   World/TerrainPreview/  offline world generation pipeline + settings   (docs/TERRAIN_PREVIEW.md)
-  World/Voxel/     voxel digging: field, mesher, chunk set, edit log; prototype scene + live-world columns (TerrainWorldManager.Voxel.cs)   (docs/VOXEL.md)
-  Hacks/           GameHacks, ConsoleHelp
+  World/Pipes/     pipe systems, the first cyber layer: PipeSystemCatalog (data/pipe_systems.json), PipeRoutePlanner (one seeded route per world cell);
+                   spawned per chunk by TerrainWorldManager.Pipes.cs (pipe_info); kit in {models,materials,prefabs}/environment/cyber/pipes/
+  World/Voxel/     voxel digging: field, mesher, chunk set, edit log; prototype scene + live-world columns (TerrainWorldManager.Voxel.cs);
+                   Underground (data/underground.json: 100 m layers, pockets, pickaxe tiers, bedrock, loot rooms; TerrainWorldManager.Underground.cs)   (docs/VOXEL.md)
+  Hub/             HubWorld (prefab root, returns), HubPortal (to hub / back / teleport pads), HubKiosk, HubBetBoard (bets +
+                   arena records), StratagemMachine (+ StratagemGame) + StratagemCatalog, HubArenaScreen, HubStore (Steam-ID records)
+  Hacks/           GameHacks, ConsoleHelp, DevToolsSettings (host-wide dev flags), DevPlayerControls (dev tools: bring / go to / respawn players)
   Playtest/        PlaytestLog (playtest_log / playtest_mark host telemetry → data/2Tgames/playtest/*.jsonl; Tools/playtest_report.py reads it)
+  BugReports/      BugReports (settings bug icon form → host → data/2Tgames/bugReports/*.json; editor host also copies to bugReports/ at the root with a host log tail, Editor/BugReportProjectMirror.cs)
   UI/              PlayerScreenHud, HUDs, Menu/ sections, Circuits/, Theme/ (UiTheme + UiStyle + UiThemeStyleSheet; themes in data/ui_themes.json; docs/UI_THEME.md)
   Networking/      host spawn, synced UI content, connection identity
   GameBuildLabel.cs
@@ -354,16 +390,20 @@ Assets/
                    a Tripo FBX keeps its textures/ folder beside the model
   materials/terrain/   terrain_ground.vmat (+ _far), ground_*.png tiles
   shaders/         pixel_lit (F_WIND, F_TERRAIN_SPLAT), grass_blade, sea_waves.hlsl, riverwater, environment/sky_dome
-  scenes/          terrainTest · testscene1 · lightingTest (look playground) · dungeonBoxTest · caveVertTest · voxelTest
+  scenes/          main (the menu's world, saves persist) · terrainTest (scratch copy, save wiped each play) · testscene1 · lightingTest (look playground) · dungeonBoxTest · caveVertTest · voxelTest
   terrain/preview/ Generate Preview bundles + .latest_preview.json
-Tools/             make_human_sword_assets.py (regenerates the sword model + graph from the engine's citizen_human sources)
+Tools/             hub/generate_hub.py (the hub: textures, materials, barrel, prefabs/hub/hub.prefab + build/hub_portal.prefab)
+                   item_icons/draw_item_icons.py (64 px PIL icons for items without a painted one)
+                   combat_sounds/generate_combat_sounds.py (synthesised melee hit / block / heavy block / parry WAVs + .sound events in Assets/sounds/combat/)
+                   make_human_sword_assets.py (regenerates the sword model + graph from the engine's citizen_human sources)
                    item_models/ (generate_item_models.py: the 51 inventory item models - resources, tools, weapons, armor, food, seeds, trophies -
                    built from faceted primitives in plain Python, OBJ + vmdl + 256 px texture per item under Assets/models/<category>/<name>/; README there)
-Blender/scripts/   create_* / split_* generators; create_stasis_pod.py (spawn pod: models, textures, vmdls, prefab, previews); create_sword_anims.py (human-rig sword clips); create_mineable_rocks.py (stone drops, breakable rocks, sectioned boulders + spires: models, LODs, prefabs); import_artist_pack.py for Rumple's Tripo packs
+Tools/small_textures/make_clovertree_cap.py (the clover tree's cut-face colour + roughness, 128 px)
+Blender/scripts/   create_* / split_* generators; create_stasis_pod.py (spawn pod: models, textures, vmdls, prefab, previews); create_pod_scooter.py (pod scooter: parts, folded package, atlas, prefab, item icon); create_sword_anims.py (human-rig sword clips); create_mineable_rocks.py (stone drops, breakable rocks, sectioned boulders + spires: models, LODs, prefabs); import_artist_pack.py for Rumple's Tripo packs; create_twig.py (pick-up twig); split_chest_lid.py (Rumple's chest → body + closed lid); create_camp_props.py (thatch huts, fences, campfire, hive box, roasting spit + textures + prefabs; `-- spit` builds only the spit); create_crashed_pod.py (the crashed stasis pod POI: crushes create_stasis_pod.py's hull, sections, scorch, shards, prefab); create_bird_nests.py (nests + egg); create_pipe_kit.py (pipe systems kit: models, LODs, textures, vmdls, prefabs, renders); create_grapple_gear.py (forearm gauntlet, hook head, rope segment)
                    (Blender X → engine Y, weapons origin at the butt, build pieces bbox-centred + SizesMeters row)
                    Blender 5.1: "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe" -b --python <script>
 combat_timings.csv · VERIFY.md · IDEAS.md · AGENTS.md · .claude/ROUTINES.md · .claude/skills/
-.claude/settings.json + .claude/hooks/   automated-test gates (combat_test_gate.py)
+.claude/settings.json + .claude/hooks/   automated-test gates (combat_test_gate.py, anim_test_gate.py, inventory_test_gate.py)
 ```
 
 ---

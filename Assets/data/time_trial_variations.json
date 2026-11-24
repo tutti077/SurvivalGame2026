@@ -3,12 +3,30 @@
     {
       "id": "race1_bunny_slope",
       "displayName": "Race 1 - Bunny slope",
-      "checkpointOrders": [0, 1]
+      "checkpointOrders": [
+        0,
+        1
+      ]
     },
     {
       "id": "race2_full_map",
       "displayName": "Race 2 - Full Map",
-      "checkpointOrders": [0, 2]
+      "checkpointOrders": [
+        0,
+        2
+      ]
+    },
+    {
+      "id": "hub_grapple_bars",
+      "displayName": "Grapple Bars",
+      "checkpointOrders": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ]
     }
   ]
 }

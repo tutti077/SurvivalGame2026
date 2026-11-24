@@ -124,6 +124,30 @@ public sealed class TimeTrialCheckpoint : Component
 		}
 	}
 
+	/// <summary>True when every Order of this route has a checkpoint in the scene (quiet — for menus).</summary>
+	public static bool HasRoute( IReadOnlyList<int> orders )
+	{
+		if ( orders is null || orders.Count < 2 )
+			return false;
+		foreach ( var want in orders )
+		{
+			var found = false;
+			foreach ( var cp in Active )
+			{
+				if ( cp is not null && cp.IsValid() && cp.Enabled && cp.Order == want )
+				{
+					found = true;
+					break;
+				}
+			}
+
+			if ( !found )
+				return false;
+		}
+
+		return true;
+	}
+
 	/// <summary>Resolves checkpoints in the exact variation sequence (Order ids).</summary>
 	public static bool TryGetRoute( IReadOnlyList<int> orders, out List<TimeTrialCheckpoint> route )
 	{

@@ -13,6 +13,16 @@
             "type": "command",
             "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/anim_test_gate.py\" post",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/inventory_test_gate.py\" post",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/grapple_test_gate.py\" post",
+            "timeout": 15
           }
         ]
       }
@@ -28,6 +38,16 @@
           {
             "type": "command",
             "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/anim_test_gate.py\" stop",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/inventory_test_gate.py\" stop",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/grapple_test_gate.py\" stop",
             "timeout": 15
           }
         ]

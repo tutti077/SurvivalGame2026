@@ -34,3 +34,8 @@ __pycache__/
 
 # Local recordings
 *.mp4
+
+# Local research footage, in-game bug report copies, Blender preview renders
+Research/
+bugReports/
+Blender/renders/
