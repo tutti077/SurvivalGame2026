@@ -1,0 +1,7 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.700"
+	TextureColor "models/tools/grapple_gear/grapple_gear.png"
+}

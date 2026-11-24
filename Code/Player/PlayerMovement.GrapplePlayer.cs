@@ -4,16 +4,32 @@ using Sandbox;
 namespace Survival;
 
 /// <summary>
-/// Player-vs-player grapple: hook other pawns, break their rope, and apply a short re-grapple lockout.
-/// Attacker rope state is independent — if the victim hooks a tree, the attacker's hook on them stays.
-/// The attacker owns the rope: the victim is reeled toward the attacker (never the reverse), so the
-/// pendulum/swing constraint is skipped entirely for player attaches.
+/// Player-vs-player grapple: a short tether (Mark 2026-11-16: "it should only stay connected for 1s at most, and slow
+/// the players down 50% for that 1s"). The host breaks the rope after <see cref="PlayerTetherSeconds"/>; while it holds,
+/// the hooked pawn moves at <see cref="HookedPlayerSpeedScale"/> of its speed and loses its own rope (plus the
+/// re-grapple lockout). The shooter keeps full walk / run speed, jump and sprint (playtest 2026-11-18: "grappling other
+/// players slows you down as well. not just the person you grappled" was a bug report - Mark: "Full speed"; the shooter
+/// used to be planted for the tether).
+/// Nobody is pulled: the rope just stretches between the two. The swing constraint is skipped for player attaches.
+/// Hosts and clients run the same path — the client sends whom it aimed at, the host validates and sets the synced
+/// ids, and the hooked pawn's owner applies its own slow from them.
 /// </summary>
 partial class PlayerMovement
 {
 	/// <summary>Seconds after being hooked before this pawn may attach their own grapple again.</summary>
 	[Property, Group( "Grapple PvP" ), Title( "Victim Re-grapple Cooldown (s)" ), Range( 0f, 10f ), Step( 0.25f )]
 	public float GrappleVictimCooldownSeconds { get; set; } = 3f;
+
+	/// <summary>Longest a hook on another player holds before the host breaks it.</summary>
+	[Property, Group( "Grapple PvP" ), Title( "Player Tether (s)" ), Range( 0.1f, 5f ), Step( 0.1f )]
+	public float PlayerTetherSeconds { get; set; } = 1f;
+
+	/// <summary>Walk / run multiplier for a pawn on someone's hook (0.5 = half speed).</summary>
+	[Property, Group( "Grapple PvP" ), Title( "Hooked Player Speed (x)" ), Range( 0.05f, 1f ), Step( 0.05f )]
+	public float HookedPlayerSpeedScale { get; set; } = 0.5f;
+
+	/// <summary>Host: when this pawn's hook on a player breaks by itself.</summary>
+	double _playerTetherEndsAt;
 
 	/// <summary>Host-synced player anchor when <see cref="GrappleAttached"/> targets a pawn; empty = static world point.</summary>
 	[Sync( SyncFlags.FromHost )] public Guid GrappleAttachPlayerId { get; private set; }
@@ -215,6 +231,12 @@ partial class PlayerMovement
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
 			return;
 
+		if ( Time.NowDouble >= _playerTetherEndsAt )
+		{
+			ServerDetach( "player tether expired" );
+			return;
+		}
+
 		if ( !TryResolveGrapplePlayerTarget( GrappleAttachPlayerId, out var target ) )
 		{
 			ServerDetach( "player target lost" );
@@ -253,42 +275,26 @@ partial class PlayerMovement
 			GrappledByPlayerId = Guid.Empty;
 	}
 
+	/// <summary>Host: a hook just landed on a player — start the tether clock.</summary>
+	void HostStartPlayerTether() =>
+		_playerTetherEndsAt = Time.NowDouble + Math.Max( 0.05f, PlayerTetherSeconds );
+
+	/// <summary>Walk / run multiplier while on someone's hook; 1 when free. Read by the plain-locomotion speed pass.</summary>
+	float HookedSpeedScale() => IsHeldByPlayerGrapple ? Math.Clamp( HookedPlayerSpeedScale, 0.05f, 1f ) : 1f;
+
 	/// <summary>
-	/// Victim-side pull, on the victim's owning machine (position is owner-authored). The attacker's
-	/// hand is the anchor: walking away or winching E drags this pawn in; nothing here ever moves the
-	/// attacker, which is what gives the rope holder ultimate control.
+	/// <c>grapple_test</c> only: lend this pawn a grapple (without the control-scheme prompt a real equip raises) and run
+	/// the host attach a client's <c>RpcRequestAttach</c> runs, aimed at <paramref name="target"/>. True = hooked.
 	/// </summary>
-	void TickGrappledByPlayerPull()
+	internal bool TestHostHookPlayer( GameObject target )
 	{
-		if ( GrappledByPlayerId == Guid.Empty || IsGrappleLedgePulling )
-			return;
+		if ( !target.IsValid() )
+			return false;
 
-		if ( !TryResolveGrapplePlayerTarget( GrappledByPlayerId, out var attackerGo ) )
-			return;
-
-		var attacker = attackerGo.Components.Get<PlayerMovement>();
-		if ( attacker is null || !attacker.GrappleAttached || attacker.GrappleAttachPlayerId != GameObject.Id )
-			return; // Host clear is still in flight — do not pull on stale state.
-
-		var maxLen = Math.Max( 1f, attacker.GrappleRopeLengthEngine );
-		var anchor = attacker.ResolveLeftArmWorldPoint();
-		var attachWorld = GameObject.WorldTransform.PointToWorld( attacker.GrappleAttachLocalOffset );
-		var toAttach = attachWorld - anchor;
-		var dist = toAttach.Length;
-		if ( dist <= maxLen + 1f || dist < 1e-4f )
-			return;
-
-		var radial = toAttach / dist;
-		GameObject.WorldPosition -= radial * ( dist - maxLen );
-		Transform.ClearInterpolation();
-
-		var body = ResolveGrappleBody();
-		if ( body is not null && body.IsValid() )
-		{
-			var vRad = Vector3.Dot( body.Velocity, radial );
-			if ( vRad > 0f )
-				body.Velocity -= radial * vRad;
-		}
+		_grappleWasEquippedForControlPrompt = true;
+		HostSetEventGrappleLoan( true );
+		ServerTryAttach( target.WorldPosition + Vector3.Up * 36f, target.Id );
+		return IsPlayerGrappleAttach && GrappleAttachPlayerId == target.Id;
 	}
 
 	void ClearGrapplePlayerAttachState()

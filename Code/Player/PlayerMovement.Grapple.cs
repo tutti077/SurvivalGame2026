@@ -12,16 +12,6 @@ partial class PlayerMovement
 {
 	public const string GrappleSurfaceTag = "grapple";
 
-	static readonly string[] LeftArmBoneCandidates =
-	{
-		"hand_L",
-		"hold_L",
-		"arm_lower_L",
-		"lower_arm_L",
-		"LeftHand",
-		"hand_left",
-	};
-
 	[Property, Group( "Grapple Input" )] public string GrappleAction { get; set; } = "Grapple";
 	/// <summary>Shorten rope (default E).</summary>
 	[Property, Group( "Grapple Input" )] public string RetractAction { get; set; } = "GrappleRetract";
@@ -158,9 +148,6 @@ partial class PlayerMovement
 	[Property, Group( "Grapple Aim Assist" ), Title( "Lock Smooth" )]
 	public float AssistLockSmooth { get; set; } = 14f;
 
-	[Property, Group( "Grapple Visual" )]
-	public bool DrawDebugRope { get; set; } = true;
-
 	/// <summary>On-screen swing speed / velocity while attached (local driver).</summary>
 	[Property, Group( "Grapple Debug" ), Title( "Show Speed Overlay" )]
 	public bool ShowSpeedDebug { get; set; }
@@ -176,6 +163,32 @@ partial class PlayerMovement
 
 	/// <summary>Host-synced current rope length in engine units.</summary>
 	[Sync( SyncFlags.FromHost )] public float GrappleRopeLengthEngine { get; private set; }
+
+	/// <summary>
+	/// Host-synced: the grapple this pawn has equipped (Grapple slot, or an event loan), empty = none. Only the host and
+	/// the owner know the slots, so this is what every peer's <see cref="PlayerAnimation"/> builds the forearm gauntlet from.
+	/// </summary>
+	[Sync( SyncFlags.FromHost )] public string GrappleGearResourceId { get; private set; } = string.Empty;
+
+	/// <summary>Where the rope's far end is right now (world): the fixed point, or the live point on a player / log / ridden body.</summary>
+	public Vector3 GrappleRopeAnchorWorld => ResolveGrappleAttachWorldPoint();
+
+	PlayerAnimation _grappleAnimation;
+	double _nextGrappleGearSyncAt;
+
+	/// <summary>Host, four times a second: publish which grapple is equipped (a slot read, written only on change).</summary>
+	void HostTickGrappleGearSync()
+	{
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
+			return;
+		if ( Time.NowDouble < _nextGrappleGearSyncAt )
+			return;
+
+		_nextGrappleGearSyncAt = Time.NowDouble + 0.25;
+		var id = TryGetEquippedGrappleProfile( out var profile ) && profile is not null ? profile.ResourceId ?? string.Empty : string.Empty;
+		if ( !string.Equals( id, GrappleGearResourceId, StringComparison.Ordinal ) )
+			GrappleGearResourceId = id;
+	}
 
 	/// <summary>Local aim UI: crosshair should draw.</summary>
 	public bool IsAimHudActive { get; private set; }
@@ -249,10 +262,7 @@ partial class PlayerMovement
 	void TickGrappleUpdate()
 	{
 		if ( !IsLocalMovementDriver() )
-		{
-			DrawRopeIfNeeded();
 			return;
-		}
 
 		RefreshTuningFromEquipment();
 		PollGrappleControlSchemePrompt();
@@ -279,7 +289,6 @@ partial class PlayerMovement
 			UpdatePressingOverride( false );
 			if ( GrappleAttached )
 				RequestDetach();
-			DrawRopeIfNeeded();
 			return;
 		}
 
@@ -290,7 +299,6 @@ partial class PlayerMovement
 			HasValidAimTarget = false;
 			UpdateAimHudVisibility( forceHide: true );
 			UpdatePressingOverride( false );
-			DrawRopeIfNeeded();
 			return;
 		}
 
@@ -298,7 +306,6 @@ partial class PlayerMovement
 		PollToggleInput();
 		PollLengthHoldState();
 		UpdateAimHudVisibility( forceHide: false );
-		DrawRopeIfNeeded();
 		DrawSpeedDebugIfNeeded();
 	}
 
@@ -315,11 +322,10 @@ partial class PlayerMovement
 	{
 		TickGrappleReleaseWeight();
 		TickGrappleControllerOverride();
-		TickGrappledByPlayerPull();
 		TickGrappleTowHoldback();
 
 		// Mantle broke the rope this instant — no winch / stamina while the host detach lands.
-		if ( !GrappleAttached || IsGrappleLedgePulling )
+		if ( !GrappleAttached || IsLedgePulling )
 			return;
 
 		PollLengthHoldState();
@@ -449,16 +455,34 @@ partial class PlayerMovement
 	/// <summary>True when the Grapple paperdoll slot holds a grapple tool profile.</summary>
 	public bool HasGrappleEquipped() => TryGetEquippedGrappleProfile( out _ );
 
+	/// <summary>
+	/// Host-synced: an event lends this pawn a grapple for its duration (the hub time trial's grapple bars, Mark
+	/// 2026-11-10) — the pawn grapples with <see cref="LoanGrappleResourceId"/>'s profile when its own Grapple slot is
+	/// empty. Nothing goes into the inventory.
+	/// </summary>
+	[Sync( SyncFlags.FromHost )]
+	public bool EventGrappleLoan { get; private set; }
+
+	/// <summary>The equipment profile lent by <see cref="EventGrappleLoan"/>.</summary>
+	[Property, Group( "Grapple Range" ), Title( "Loan Grapple Item" )]
+	public string LoanGrappleResourceId { get; set; } = "basic_hook";
+
+	public void HostSetEventGrappleLoan( bool lent )
+	{
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
+			return;
+		EventGrappleLoan = lent;
+	}
+
 	bool TryGetEquippedGrappleProfile( out EquipmentProfileData profile )
 	{
 		profile = null;
 		if ( _equipment is null )
 			_equipment = Components.Get<PlayerEquipment>();
 
-		if ( _equipment is null )
-			return false;
-
-		var resourceId = _equipment.GetSlotResourceId( EquipmentSlot.Grapple );
+		var resourceId = _equipment?.GetSlotResourceId( EquipmentSlot.Grapple );
+		if ( string.IsNullOrWhiteSpace( resourceId ) && EventGrappleLoan )
+			resourceId = LoanGrappleResourceId;
 		if ( string.IsNullOrWhiteSpace( resourceId ) )
 			return false;
 
@@ -597,7 +621,7 @@ partial class PlayerMovement
 			return;
 
 		// Mid ledge pull: no new rope until the vault finishes.
-		if ( IsGrappleLedgePulling )
+		if ( IsLedgePulling )
 			return;
 
 		if ( IsGrappleVictimCooldownActive() || IsHeldByPlayerGrapple )
@@ -1376,7 +1400,8 @@ partial class PlayerMovement
 		if ( _controller is null )
 			_controller = Components.Get<PlayerController>();
 
-		if ( _controller is not null && _controller.IsOnGround )
+		// Sliding behind a vehicle is a ride on the ground, not a hang.
+		if ( _rideTowSliding || (_controller is not null && _controller.IsOnGround) )
 		{
 			FlushAirborneStaminaDebt();
 			return;
@@ -1411,15 +1436,13 @@ partial class PlayerMovement
 			return;
 		}
 
-		var grappleId = _equipment?.GetSlotResourceId( EquipmentSlot.Grapple ) ?? string.Empty;
-
 		if ( GameObject.Network is not { Active: true } || Networking.IsHost )
 		{
-			ServerTryAttach( hitPoint, grappleId, intendedPlayerId );
+			ServerTryAttach( hitPoint, intendedPlayerId );
 			return;
 		}
 
-		RpcRequestAttach( hitPoint, grappleId, intendedPlayerId );
+		RpcRequestAttach( hitPoint, intendedPlayerId );
 	}
 
 	void RequestDetach()
@@ -1445,7 +1468,7 @@ partial class PlayerMovement
 	}
 
 	[Rpc.Host]
-	void RpcRequestAttach( Vector3 hitPoint, string clientGrappleResourceId, Guid intendedPlayerId )
+	void RpcRequestAttach( Vector3 hitPoint, Guid intendedPlayerId )
 	{
 		if ( !Networking.IsHost || !GameObject.IsValid() )
 			return;
@@ -1454,7 +1477,7 @@ partial class PlayerMovement
 		     && !ConnectionIdentity.SameClient( caller, owner ) )
 			return;
 
-		ServerTryAttach( hitPoint, clientGrappleResourceId, intendedPlayerId );
+		ServerTryAttach( hitPoint, intendedPlayerId );
 	}
 
 	[Rpc.Host]
@@ -1483,7 +1506,7 @@ partial class PlayerMovement
 		ServerAdjustLength( deltaEngine );
 	}
 
-	void ServerTryAttach( Vector3 clientHitPoint, string clientGrappleResourceId = null, Guid intendedPlayerId = default )
+	void ServerTryAttach( Vector3 clientHitPoint, Guid intendedPlayerId = default )
 	{
 		if ( GrappleAttached )
 			return;
@@ -1493,19 +1516,9 @@ partial class PlayerMovement
 
 		if ( !HasGrappleEquipped() )
 		{
-			// Paperdoll RPC can lag behind the client's local equip — accept a valid client-reported hook.
-			if ( _equipment is null )
-				_equipment = Components.Get<PlayerEquipment>();
-
-			if ( _equipment is null || !_equipment.HostAcceptClientGrappleEquip( clientGrappleResourceId ) )
-			{
-				if ( LogGrapple )
-					Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host rejected attach — no grapple equipped." );
-				return;
-			}
-
 			if ( LogGrapple )
-				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host mirrored client grapple '{clientGrappleResourceId}'." );
+				Log.Info( $"[PlayerMovement.Grapple] {GameObject.Name}: host rejected attach - no grapple equipped." );
+			return;
 		}
 
 		if ( !TryValidateAttachPoint( clientHitPoint, intendedPlayerId, out var validatedPoint, out var length, out var playerTargetId, out var towTargetId ) )
@@ -1536,6 +1549,7 @@ partial class PlayerMovement
 		{
 			GrappleAttachPlayerId = playerTargetId;
 			GrappleAttachLocalOffset = target.WorldTransform.PointToLocal( validatedPoint );
+			HostStartPlayerTether();
 			target.Components.Get<PlayerMovement>()?.HostNotifyGrappledByPlayer( GameObject.Id );
 		}
 		else if ( towTargetId != Guid.Empty && TryResolveGrappleTowTarget( towTargetId, out var towed ) )
@@ -1695,16 +1709,6 @@ partial class PlayerMovement
 		return direction.LengthSquared > 1e-8f;
 	}
 
-	void DrawRopeIfNeeded()
-	{
-		// Ledge mantle broke the rope this instant — don't draw it while the host detach lands.
-		if ( !DrawDebugRope || !GrappleAttached || IsGrappleLedgePulling )
-			return;
-
-		var from = ResolveLeftArmWorldPoint();
-		DebugOverlay.Line( from, ResolveGrappleAttachWorldPoint(), Color.Black, 0f );
-	}
-
 	void DrawSpeedDebugIfNeeded()
 	{
 		if ( !ShowSpeedDebug || !GrappleAttached )
@@ -1756,22 +1760,14 @@ partial class PlayerMovement
 			size: 12f );
 	}
 
+	/// <summary>Where the rope leaves the pawn: the gauntlet's muzzle as <see cref="PlayerAnimation"/> placed it last frame.</summary>
 	Vector3 ResolveLeftArmWorldPoint()
 	{
-		var renderer = Components.Get<SkinnedModelRenderer>( FindMode.EverythingInSelfAndDescendants );
-		if ( renderer is not null && renderer.IsValid() )
-		{
-			for ( var i = 0; i < LeftArmBoneCandidates.Length; i++ )
-			{
-				if ( !renderer.TryGetBoneTransform( LeftArmBoneCandidates[i], out var tx ) )
-					continue;
+		_grappleAnimation ??= Components.Get<PlayerAnimation>();
+		if ( _grappleAnimation is not null && _grappleAnimation.IsValid() && _grappleAnimation.TryGetGrappleMuzzleWorld( out var muzzle ) )
+			return muzzle;
 
-				if ( tx.Position.LengthSquared > 1e-6f )
-					return tx.Position;
-			}
-		}
-
-		// Fallback: left-of-chest offset in pawn space.
+		// No gauntlet on the arm (hidden, or a peer that has not built it yet): left-of-chest offset in pawn space.
 		return GameObject.WorldPosition
 		       + GameObject.WorldRotation.Left * TerrainWorldUnits.MetersToEngine( 0.35f )
 		       + Vector3.Up * TerrainWorldUnits.MetersToEngine( 1.2f );

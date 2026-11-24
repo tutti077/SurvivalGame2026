@@ -39,6 +39,7 @@ public static class ConsoleHelp
 		new( "Hacks", "day_lock", "[0|1]", "Host: jump the clock to noon and hold it there on every peer (Settings > Dev tools > Lock daytime). No argument prints it.", "day_lock 1" ),
 		new( "Hacks", "swing", "[holdSeconds]", "Click the primary attack and hold it this long; held past the windup (e.g. 0.7) it turns heavy. A click mid-swing queues one follow-up.", "swing 0.7" ),
 		new( "Hacks", "block", "[holdSeconds]", "Hold the block action (Attack2) as a mouse would — shield raise / guard checks.", "block 2" ),
+		new( "Hacks", "jump_press", "", "Press Space once as the key would - drive an airborne ledge grab / air hop / wingsuit deploy from the editor.", "jump_press" ),
 		new( "Hacks", "sneak", "[holdSeconds]", "Hold the crouch / sneak action as a key would — taming offers (crouch + food in hand), sneak footsteps.", "sneak 20" ),
 		new( "Hacks", "status", "<effectId> <seconds>", "Apply a buff / debuff from status_effects.json to your pawn; 0 removes it; 'status clear' drops all. (Engine owns a 'status' command — if nothing happens, this one lost the name.)", "status poisoned 10" ),
 		new( "Hacks", "spawnPatrolBot", "", "Host drops a patrol bot 3 m in front of your pawn (Medusa Eye / Hackd testing).", "spawnPatrolBot" ),
