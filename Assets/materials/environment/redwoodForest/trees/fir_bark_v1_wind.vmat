@@ -1,0 +1,21 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+	F_WIND 1
+
+	PixelRoughness "1.000"
+	PixelNormalStrength "1.000"
+	TextureColor "materials/environment/redwoodForest/trees/fir_bark_v1.png"
+	TextureNormal "materials/environment/redwoodForest/trees/fir_bark_v1_normal.png"
+	TextureRoughness "materials/environment/redwoodForest/trees/fir_bark_v1_rough.png"
+
+	WindTreeHeightMeters "24.000"
+	WindCrownRadiusMeters "5.000"
+	WindTrunkSwayMeters "1.000"
+	WindTrunkRockHz "0.450"
+	WindLimbBobMeters "0.350"
+	WindLimbHz "0.600"
+	WindBendPower "1.500"
+	WindFadeStartMeters "300.000"
+	WindFadeEndMeters "360.000"
+}

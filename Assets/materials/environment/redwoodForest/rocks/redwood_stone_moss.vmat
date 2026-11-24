@@ -1,0 +1,11 @@
+// Redwood forest stone (Blender/scripts/create_redwood_boulders.py): 256 px point-filtered, faceted, tiled x1 -
+// the slab UVs are authored at 2 m per tile = 128 texels / m.
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "0.900"
+	PixelFlatShading "1.000"
+	PixelTexCoordScale "[1.000 1.000]"
+	TextureColor "materials/environment/redwoodForest/rocks/redwood_stone_moss.png"
+}

@@ -1,0 +1,104 @@
+{
+  "RootObject": {
+    "__guid": "4f5fddf2-22d9-4195-8d40-1193294be2ea",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "environment_redwood4_log_v2",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "tow",
+    "Enabled": true,
+    "NetworkMode": 1,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 0,
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": [],
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "5eb8822f-5d03-4239-a7da-d54d9879d181",
+        "__enabled": true,
+        "Model": "models/environment/redwoodForest/trees/environment_redwood4_log_v2.vmdl",
+        "RenderType": "On",
+        "Tint": "1,1,1,1",
+        "BodyGroups": 18446744073709551615
+      },
+      {
+        "__type": "Sandbox.ModelCollider",
+        "__guid": "1cdf8dcf-c966-4f0f-9e0e-9c2531316ded",
+        "__enabled": true,
+        "Model": "models/environment/redwoodForest/trees/environment_redwood4_log_v2.vmdl",
+        "IsTrigger": false,
+        "Static": false,
+        "Friction": 0.9,
+        "Elasticity": 0.35
+      },
+      {
+        "__type": "Survival.TowableProp",
+        "__guid": "3cf48fe6-ec03-4134-b6e7-63dd803e478e",
+        "__enabled": true,
+        "IdleHorizontalDamping": 15,
+        "IdleSpinDamping": 8,
+        "RestingVerticalSpeed": 20
+      },
+      {
+        "__type": "Sandbox.Rigidbody",
+        "__guid": "740cde91-fe02-483a-9cd7-a6ecb3b4b499",
+        "__enabled": true,
+        "Gravity": true,
+        "MassOverride": 3000.0
+      },
+      {
+        "__type": "Survival.DamageReceiver",
+        "__guid": "1fc23d42-80b0-4e26-8f4c-47446e99e124",
+        "__enabled": true,
+        "DamageMultiplier": 1
+      },
+      {
+        "__type": "Survival.ChopableTree",
+        "__guid": "3ce0bf4d-6c88-4594-a108-a03886434e33",
+        "__enabled": true,
+        "RequireAxe": true,
+        "WoodResourceId": "resource_woodBasic",
+        "LogChop": false,
+        "MaxHealth": 16,
+        "CurrentHealth": 16,
+        "WoodDropMin": 0,
+        "WoodDropMax": 0,
+        "SplitPiecePrefab": "prefabs/environment/redwoodForest/trees/environment_redwood4_loghalf_v2.prefab",
+        "SplitPieceOffsetMeters": 5.0,
+        "SplitCenterOffsetMeters": 10.0
+      }
+    ],
+    "Children": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

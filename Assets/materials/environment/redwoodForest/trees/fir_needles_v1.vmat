@@ -1,0 +1,27 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+	F_ALPHA_TEST 1
+	F_RENDER_BACKFACES 1
+	F_WIND 1
+
+	PixelRoughness "0.900"
+	PixelAlphaCutoff "0.500"
+	PixelNormalUp "0.000"
+	PixelDirectMax "0.550"
+	TextureColor "materials/environment/redwoodForest/trees/fir_needles_v1.png"
+	TextureTranslucency "materials/environment/redwoodForest/trees/fir_needles_v1_mask.png"
+
+	WindTreeHeightMeters "24.000"
+	WindCrownRadiusMeters "5.000"
+	WindTrunkSwayMeters "1.000"
+	WindTrunkRockHz "0.450"
+	WindLimbBobMeters "0.350"
+	WindLimbHz "0.600"
+	WindBendPower "1.500"
+	WindFadeStartMeters "300.000"
+	WindFadeEndMeters "360.000"
+	WindLeafFlutterMeters "0.060"
+	WindLeafHz "2.200"
+	WindLeafGustMeters "0.300"
+}

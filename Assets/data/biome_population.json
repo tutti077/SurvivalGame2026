@@ -66,6 +66,58 @@
           "near": null
         }
       ]
+    },
+    "RedwoodForest": {
+      "entries": [
+        {
+          "entityId": "whitetail",
+          "prefab": "prefabs/entity/whitetail.prefab",
+          "species": "Whitetail",
+          "spacingMeters": 150,
+          "spawnWeight": 1.0,
+          "groupChance": 0.75,
+          "groupMin": 2,
+          "groupMax": 4,
+          "groupRadiusMeters": 9,
+          "respawn": true,
+          "respawnDelaySeconds": 300,
+          "near": null
+        },
+        {
+          "entityId": "blackbear",
+          "prefab": "prefabs/entity/blackbear.prefab",
+          "species": "BlackBear",
+          "spacingMeters": 320,
+          "spawnWeight": 0.6,
+          "respawn": true,
+          "respawnDelaySeconds": 420,
+          "near": null
+        },
+        {
+          "entityId": "lynx",
+          "prefab": "prefabs/entity/lynx.prefab",
+          "species": "Lynx",
+          "spacingMeters": 260,
+          "spawnWeight": 0.7,
+          "respawn": true,
+          "respawnDelaySeconds": 300,
+          "near": null
+        },
+        {
+          "entityId": "giantspider",
+          "prefab": "prefabs/entity/giantspider.prefab",
+          "species": "GiantSpider",
+          "spacingMeters": 220,
+          "spawnWeight": 0.7,
+          "groupChance": 0.3,
+          "groupMin": 2,
+          "groupMax": 3,
+          "groupRadiusMeters": 8,
+          "respawn": true,
+          "respawnDelaySeconds": 300,
+          "near": null
+        }
+      ]
     }
   }
 }

@@ -1,0 +1,10 @@
+Layer0
+{
+	shader "shaders/pixel_lit.shader"
+
+	PixelRoughness "1.000"
+	PixelNormalStrength "1.000"
+	TextureColor "materials/environment/redwoodForest/trees/fir_bark_v1.png"
+	TextureNormal "materials/environment/redwoodForest/trees/fir_bark_v1_normal.png"
+	TextureRoughness "materials/environment/redwoodForest/trees/fir_bark_v1_rough.png"
+}

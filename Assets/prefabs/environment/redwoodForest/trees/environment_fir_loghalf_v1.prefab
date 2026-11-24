@@ -1,0 +1,101 @@
+{
+  "RootObject": {
+    "__guid": "17bcfe13-cb19-43e9-8d21-dc673bcf0159",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "environment_fir_loghalf_v1",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "tow",
+    "Enabled": true,
+    "NetworkMode": 1,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 0,
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": [],
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "a7470205-de02-4ff4-863b-b34df3331ee7",
+        "__enabled": true,
+        "Model": "models/environment/redwoodForest/trees/environment_fir_loghalf_v1.vmdl",
+        "RenderType": "On",
+        "Tint": "1,1,1,1",
+        "BodyGroups": 18446744073709551615
+      },
+      {
+        "__type": "Sandbox.ModelCollider",
+        "__guid": "4c30a954-572a-4274-9ae1-8be2e0c09476",
+        "__enabled": true,
+        "Model": "models/environment/redwoodForest/trees/environment_fir_loghalf_v1.vmdl",
+        "IsTrigger": false,
+        "Static": false,
+        "Friction": 0.9,
+        "Elasticity": 0.35
+      },
+      {
+        "__type": "Survival.TowableProp",
+        "__guid": "748c3291-015b-418d-9c79-d8aba1f495f3",
+        "__enabled": true,
+        "IdleHorizontalDamping": 15,
+        "IdleSpinDamping": 8,
+        "RestingVerticalSpeed": 20
+      },
+      {
+        "__type": "Sandbox.Rigidbody",
+        "__guid": "7afe9592-ff4b-4340-9284-9acd54b1d4ae",
+        "__enabled": true,
+        "Gravity": true,
+        "MassOverride": 1500.0
+      },
+      {
+        "__type": "Survival.DamageReceiver",
+        "__guid": "f0211bcd-3ff0-4a77-b3f8-56a4d3c46319",
+        "__enabled": true,
+        "DamageMultiplier": 1
+      },
+      {
+        "__type": "Survival.ChopableTree",
+        "__guid": "f484e7f4-567c-42b5-b14f-514cea28d114",
+        "__enabled": true,
+        "RequireAxe": true,
+        "WoodResourceId": "resource_woodBasic",
+        "LogChop": false,
+        "MaxHealth": 12,
+        "CurrentHealth": 12,
+        "WoodDropMin": 8,
+        "WoodDropMax": 10
+      }
+    ],
+    "Children": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

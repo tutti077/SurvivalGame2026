@@ -1,0 +1,90 @@
+{
+  "RootObject": {
+    "__guid": "6ce307c8-3b7f-485a-aa0f-55f33b279c3c",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "environment_redwood5_v2",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "grapple",
+    "Enabled": true,
+    "NetworkMode": 0,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 0,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 0,
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": [],
+    "Components": [
+      {
+        "__type": "Sandbox.ModelRenderer",
+        "__guid": "8d21764e-cf69-41bd-8e3b-079a57de1f1e",
+        "__enabled": true,
+        "Model": "models/environment/redwoodForest/trees/environment_redwood5_v2.vmdl",
+        "RenderType": "On",
+        "Tint": "1,1,1,1",
+        "BodyGroups": 18446744073709551615
+      },
+      {
+        "__type": "Sandbox.ModelCollider",
+        "__guid": "e59b9a0f-9366-47d9-88bb-fdfb179e922e",
+        "__enabled": true,
+        "Model": "models/environment/redwoodForest/trees/environment_redwood5_v2.vmdl",
+        "IsTrigger": false,
+        "Static": true
+      },
+      {
+        "__type": "Survival.DamageReceiver",
+        "__guid": "59442213-409a-4cf8-9213-ac27d52c0d7a",
+        "__enabled": true,
+        "DamageMultiplier": 1
+      },
+      {
+        "__type": "Survival.ChopableTree",
+        "__guid": "5ab46495-0926-407d-a200-d22669071fc2",
+        "__enabled": true,
+        "RequireAxe": true,
+        "WoodResourceId": "resource_woodBasic",
+        "LogChop": false,
+        "MaxHealth": 40,
+        "CurrentHealth": 40,
+        "StumpModel": "models/environment/redwoodForest/trees/environment_redwood5_stump_v2.vmdl",
+        "StumpTopMeters": 1.0,
+        "FelledLogPrefab": "prefabs/environment/redwoodForest/trees/environment_redwood5_log_v2.prefab",
+        "StumpHealth": 12,
+        "StumpWoodMin": 3,
+        "StumpWoodMax": 4,
+        "WoodDropMin": 0,
+        "WoodDropMax": 0
+      }
+    ],
+    "Children": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

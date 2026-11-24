@@ -1,0 +1,79 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:modeldoc30:version{8c2d7a91-9c42-4bf0-883a-5a3b1762d4f1} -->
+// stone bit a mined redwood slab section bursts into - Blender/scripts/create_redwood_boulders.py
+{
+	rootNode =
+	{
+		_class = "RootNode"
+		children =
+		[
+			{
+				_class = "MaterialGroupList"
+				children =
+				[
+					{
+						_class = "DefaultMaterialGroup"
+						remaps =
+						[
+						{
+							from = "redwood_stone.vmat"
+							to = "materials/environment/redwoodForest/rocks/redwood_stone.vmat"
+						},
+						{
+							from = "redwood_stone_mossedge.vmat"
+							to = "materials/environment/redwoodForest/rocks/redwood_stone_mossedge.vmat"
+						},
+						{
+							from = "redwood_stone_moss.vmat"
+							to = "materials/environment/redwoodForest/rocks/redwood_stone_moss.vmat"
+						},
+						]
+						use_global_default = false
+						global_default_material = "materials/environment/redwoodForest/rocks/redwood_stone.vmat"
+					},
+				]
+			},
+			{
+				_class = "PhysicsShapeList"
+				children =
+				[
+					{
+						_class = "PhysicsHullFromRender"
+						parent_bone = ""
+						surface_prop = "rock"
+						collision_tags = "solid"
+						faceMergeAngle = 10.0
+						maxHullVertices = 32
+						hull_mode = "SingleHull"
+					},
+				]
+			},
+			{
+				_class = "RenderMeshList"
+				children =
+				[
+					{
+						_class = "RenderMeshFile"
+						name = "redwood_rock_bit1_v1"
+						filename = "models/environment/redwoodForest/rocks/redwood_rock_bits_v1.fbx"
+						import_translation = [ 0.0, 0.0, 0.0 ]
+						import_rotation = [ 0.0, 0.0, 0.0 ]
+						import_scale = 0.4
+						align_origin_x_type = "None"
+						align_origin_y_type = "None"
+						align_origin_z_type = "None"
+						parent_bone = ""
+						import_filter =
+						{
+							exclude_by_default = true
+							exception_list = [ "redwood_rock_bit1_v1" ]
+						}
+					},
+				]
+			},
+		]
+		model_archetype = ""
+		primary_associated_entity = ""
+		anim_graph_name = ""
+		base_model_name = ""
+	}
+}

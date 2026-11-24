@@ -214,7 +214,11 @@ static partial class TerrainPreviewBiomeTerrainShaper
 			var laplacian = ((mxp + mxm - (2f * mc)) + (myp + mym - (2f * mc))) / (lp * lp);
 			var bowl = laplacian * 250f / Math.Max( 0.02f, grade );
 			var basin01 = SmoothStep01( Math.Clamp( (bowl - 0.6f) / 0.8f, 0f, 1f ) );
-			height *= 1f - basin01;
+			// The same for a tight HIGH: a contour ringing a small hilltop made a cone with a cliff skirt (Mark 2026-11-16:
+			// the shelves "don't look great" - the pointed rock knobs). Rings under ~250 m across fade, gone under ~110 m.
+			var dome = -laplacian * 150f / Math.Max( 0.02f, grade );
+			var dome01 = SmoothStep01( Math.Clamp( (dome - 0.6f) / 0.8f, 0f, 1f ) );
+			height *= (1f - basin01) * (1f - dome01);
 			if ( height < 0.25f )
 				return 0f;
 		}
@@ -239,13 +243,22 @@ static partial class TerrainPreviewBiomeTerrainShaper
 		// A tall ledge spreads its face so it is never steeper than Face Slope: 30 m at 70° is an 11 m face the
 		// 2 m grid resolves over several rows, instead of a 1 m step the vertex snapping had to fake (fins).
 		var faceSlopeTan = MathF.Tan( Math.Clamp( settings.BiomeRedwoodLedgeFaceSlopeDegrees, 45f, 89f ) * MathF.PI / 180f );
-		var faceWidth = Math.Max( Math.Clamp( settings.BiomeRedwoodLedgeFaceWidthMeters, 0.2f, 6f ), height / faceSlopeTan );
+		// The scarp profile below is steepest at the lip (1.75x its mean slope), so its run is 1.75x height / tan(Face
+		// Slope); never under two 2 m grid cells, or a short drop lands inside one quad row and the grid saws it into
+		// teeth along the line (2026-11-16).
+		var faceWidth = Math.Max( Math.Max( Math.Clamp( settings.BiomeRedwoodLedgeFaceWidthMeters, 0.2f, 6f ), MinScarpRunMeters ), ScarpPeakSlope * height / faceSlopeTan );
 		var rampGrade = Math.Clamp( settings.BiomeRedwoodLedgeRampGradeDegrees, 5f, 45f ) * MathF.PI / 180f;
 		// The ramp profile below peaks at 1.15× its mean slope; 1.15× the run keeps the notch centre at the knob's grade.
 		var rampRun = 1.15f * height / MathF.Tan( rampGrade );
 		// A notch stays local: never more than 45 % of the gap to the next ledge line, or it would merge into it.
 		var localRun = Math.Min( Math.Max( 1f, rampRun ), 0.45f * interval / grade );
 		var width = Lerp( faceWidth, localRun, ramp01 );
+
+		// Buttresses and alcoves: the face steps out and back by up to ~3 m along the line (22 m wavelength) so the lip
+		// is a ragged rock edge, not a contour line drawn with a ruler. The shift stays well inside one terrace period.
+		var buttress = (TerrainPreviewNoise.Fbm( seed + 740, worldX / 22f, worldY / 22f, 2 ) - 0.5f) * 2f;
+		d += buttress * Math.Min( 3f, 0.3f * height ) * (1f - ramp01);
+		signedDistanceMeters = d;
 
 		// Ledge line nearby → tell the mesh builder which side this point is on (always, so triangulation can keep
 		// terraces apart even at notch edges) and how wide the drop is (it only moves vertices onto sharp drops).
@@ -259,11 +272,16 @@ static partial class TerrainPreviewBiomeTerrainShaper
 				DirectionX = gx / gradLength,
 				DirectionY = gy / gradLength,
 				HalfFaceWidthMeters = width * 0.5f,
+				HalfScarpWidthMeters = faceWidth * 0.5f,
 			};
 		}
 
+		// Scarp profile (foot → lip): a scree apron easing out of the lower bench, steepening to a rock face that meets
+		// the upper bench at a hard lip. Notches keep the old even ramp so the walk-up stays at its grade.
 		var t = Math.Clamp( (d / width) + 0.5f, 0f, 1f );
-		var profile = (0.3f * SmoothStep01( t )) + (0.7f * t);
+		var scarp = (0.25f * t) + (0.75f * t * t);
+		var even = (0.3f * SmoothStep01( t )) + (0.7f * t);
+		var profile = Lerp( scarp, even, ramp01 );
 		return (k + profile - f) * height;
 	}
 
@@ -333,4 +351,10 @@ static partial class TerrainPreviewBiomeTerrainShaper
 	}
 
 	static float SmoothStep01( float t ) => t * t * (3f - (2f * t));
+
+	/// <summary>Peak slope of the scarp profile 0.25 t + 0.75 t² relative to its mean (at the lip).</summary>
+	const float ScarpPeakSlope = 1.75f;
+
+	/// <summary>Shortest horizontal run of a ledge face: two cells of the 2 m near-terrain grid.</summary>
+	const float MinScarpRunMeters = 4f;
 }
