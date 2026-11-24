@@ -227,7 +227,7 @@ def bone_sword(rng):
 	rows = []
 	n = 9
 	for i, t in enumerate(np.linspace(0, 1, n)):
-		x = 0.22 + t * 0.6
+		x = 0.22 + t * 0.82   # blade 0.82 m, 1.05 m overall (Mark 2026-11-23: swords longer)
 		w = 0.03 * (1 - t ** 3.5) + 0.002 * (1 - t)
 		th = 0.013 * (1 - 0.75 * t)
 		rows.append([(x, -th / 2, -w), (x, -th, 0), (x, -th / 2, w), (x, th / 2, w), (x, th, 0), (x, th / 2, -w)])
@@ -238,9 +238,9 @@ def bone_sword(rng):
 	blade.add(fan(g[-1], mat=0))
 	m = blade
 	# jagged spine along the back edge (+Z): a row of swept-back bony teeth, shrinking toward the tip
-	for i in range(9):
-		t = i / 9
-		x = 0.26 + t * 0.5
+	for i in range(12):
+		t = i / 12
+		x = 0.26 + t * 0.7
 		h = 0.034 * (1 - 0.6 * t) + 0.004 * ((i % 2) * 2 - 1)
 		tooth = prism([(-0.014, 0), (0.016, 0), (-0.028, h)], 0.009, mat=1, side_mat=1, rng=rng, jitter=0.003)
 		tooth.rotate("x", 90).translate(x, 0.0045, 0.03 * (1 - t ** 3.5) - 0.004)

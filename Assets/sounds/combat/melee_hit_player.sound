@@ -1,0 +1,22 @@
+{
+  "UI": false,
+  "Volume": "1.00,1.00,0",
+  "Pitch": "0.94,1.06,0",
+  "Decibels": 70,
+  "SelectionMode": "Random",
+  "Sounds": [
+    "sounds/combat/hit_player_01.vsnd",
+    "sounds/combat/hit_player_02.vsnd",
+    "sounds/combat/hit_player_03.vsnd",
+    "sounds/combat/hit_player_04.vsnd"
+  ],
+  "Occlusion": true,
+  "Reflections": true,
+  "AirAbsorption": true,
+  "Transmission": true,
+  "OcclusionRadius": 64,
+  "DistanceAttenuation": true,
+  "ResourceVersion": 0,
+  "__version": 0,
+  "__references": []
+}

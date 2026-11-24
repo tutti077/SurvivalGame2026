@@ -6,11 +6,11 @@
       "healthDamage": 0,
       "staminaCost": 8
     },
-    "parry": {
-      "tier": "Light",
+    "blockHeavy": {
+      "tier": "Heavy",
       "durationSeconds": 0,
       "healthDamage": 0,
-      "staminaCost": 0
+      "staminaCost": 18
     }
   }
 }

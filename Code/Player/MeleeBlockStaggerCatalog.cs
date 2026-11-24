@@ -29,12 +29,16 @@ public static class MeleeBlockStaggerCatalog
 	}
 
 	public const string BlockId = "block";
-	public const string ParryId = "parry";
+	/// <summary>A blocked heavy swing (its own row; the blocker's stagger comes from the attacker's weapon class).</summary>
+	public const string BlockHeavyId = "blockHeavy";
+	/// <summary>Outcome id of a chamber (built in code — it costs nothing and is not a row).</summary>
+	public const string ChamberId = "chamber";
 
-	public static MeleeBlockOutcome Resolve( bool perfectParry )
+	/// <summary>The outcome for a stopped hit: a heavy swing's block row, else the light one.</summary>
+	public static MeleeBlockOutcome Resolve( bool heavy = false )
 	{
 		EnsureLoaded();
-		var id = perfectParry ? ParryId : BlockId;
+		var id = heavy ? BlockHeavyId : BlockId;
 
 		if ( !Outcomes.TryGetValue( id, out var row ) || row is null )
 			row = CreateFallback( id );
@@ -46,9 +50,16 @@ public static class MeleeBlockStaggerCatalog
 			DurationSeconds = Math.Max( 0f, row.DurationSeconds ),
 			HealthDamage = Math.Max( 0f, row.HealthDamage ),
 			StaminaCost = Math.Max( 0f, row.StaminaCost ),
-			WasPerfectParry = perfectParry,
 		};
 	}
+
+	/// <summary>A chamber: the defender's swing intercepted the blade — no damage, no stamina, no stagger.</summary>
+	public static MeleeBlockOutcome Chamber() => new()
+	{
+		OutcomeId = ChamberId,
+		Tier = MeleeStaggerTier.None,
+		WasChambered = true,
+	};
 
 	static void ReloadFromDisk()
 	{
@@ -107,7 +118,7 @@ public static class MeleeBlockStaggerCatalog
 
 	static void EnsureRequiredKeys()
 	{
-		foreach ( var id in new[] { BlockId, ParryId } )
+		foreach ( var id in new[] { BlockId, BlockHeavyId } )
 		{
 			if ( !Outcomes.ContainsKey( id ) )
 				Outcomes[id] = CreateFallback( id );
@@ -117,13 +128,13 @@ public static class MeleeBlockStaggerCatalog
 	static void SeedFallbacks()
 	{
 		Outcomes[BlockId] = CreateFallback( BlockId );
-		Outcomes[ParryId] = CreateFallback( ParryId );
+		Outcomes[BlockHeavyId] = CreateFallback( BlockHeavyId );
 	}
 
 	static MeleeBlockStaggerOutcomeData CreateFallback( string id ) => id switch
 	{
 		BlockId => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 8f },
-		ParryId => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 0f },
+		BlockHeavyId => new MeleeBlockStaggerOutcomeData { Tier = "Heavy", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 18f },
 		_ => new MeleeBlockStaggerOutcomeData { Tier = "Light", DurationSeconds = 0f, HealthDamage = 0f, StaminaCost = 8f },
 	};
 

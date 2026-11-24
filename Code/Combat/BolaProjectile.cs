@@ -204,10 +204,7 @@ public sealed class BolaProjectile : Component
 		var drop = go.Components.Create<WorldDroppedResource>();
 		drop.Configure( BolaResourceId, 1 );
 		drop.SetDespawnAfterSeconds( 120f );
-		var sphere = go.Components.Create<SphereCollider>();
-		sphere.Static = true;
-		sphere.Radius = 6f;
-		go.Tags.Add( "worlddrop" );
+		go.Tags.Add( "worlddrop" );   // no collider: the magnet takes it through the drop registry
 		HostNetworkSpawn.TrySpawn( go );
 	}
 

@@ -41,5 +41,6 @@ public readonly struct MeleeBlockOutcome
 	public float DurationSeconds { get; init; }
 	public float HealthDamage { get; init; }
 	public float StaminaCost { get; init; }
-	public bool WasPerfectParry { get; init; }
+	/// <summary>Not a block at all: the defender's own swing intercepted the blade (a chamber — no cost, no stagger).</summary>
+	public bool WasChambered { get; init; }
 }

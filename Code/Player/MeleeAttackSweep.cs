@@ -129,7 +129,7 @@ public static class MeleeAttackSweep
 				TargetsHitCount = targetsHitCount,
 				TargetWasAlreadyHit = false,
 				WasBlocked = true,
-				WasParried = blockFirstOutcome.WasPerfectParry,
+				WasChambered = blockFirstOutcome.WasChambered,
 				IncomingAngleDegrees = MeleeBlockResolution.ComputeIncomingAngleFromAttacker(
 					blockFirstDefender, attackerRoot.WorldPosition )
 			} );
@@ -181,7 +181,7 @@ public static class MeleeAttackSweep
 				TargetsHitCount = ++targetsHitCount,
 				TargetWasAlreadyHit = false,
 				WasBlocked = true,
-				WasParried = blockOutcome.WasPerfectParry,
+				WasChambered = blockOutcome.WasChambered,
 				IncomingAngleDegrees = incomingAngle
 			} );
 
@@ -195,8 +195,7 @@ public static class MeleeAttackSweep
 		}
 
 		var bodyDealt = bodyReceiver.TakeDamage( bodyDmgAmount, attackerCombat );
-		var bodyVitals = CombatAuthority.ResolvePlayerVitalsForDamageReceiver( bodyReceiver );
-		attackerCombat.ApplyMeleeStaggerToVictim( bodyVitals, bodyStaggerApplied );
+		attackerCombat.ApplyMeleeStaggerToVictim( bodyReceiver, bodyStaggerApplied );
 		targetsHitCount++;
 
 		onHitReported?.Invoke( new MeleeHitResult
@@ -401,7 +400,7 @@ public static class MeleeAttackSweep
 				TargetsHitCount = targetsHitCount,
 				TargetWasAlreadyHit = false,
 				WasBlocked = true,
-				WasParried = blockOutcome.WasPerfectParry,
+				WasChambered = blockOutcome.WasChambered,
 				IncomingAngleDegrees = incomingAngle
 			} );
 
@@ -415,8 +414,7 @@ public static class MeleeAttackSweep
 		}
 
 		var dealt = dmg.TakeDamage( dmgAmount, attackerCombat );
-		var vitals = CombatAuthority.ResolvePlayerVitalsForDamageReceiver( dmg );
-		attackerCombat.ApplyMeleeStaggerToVictim( vitals, staggerAppliedAmount );
+		attackerCombat.ApplyMeleeStaggerToVictim( dmg, staggerAppliedAmount );
 
 		targetsHitCount++;
 

@@ -8,11 +8,15 @@ namespace Survival;
 /// <summary>
 /// One melee weapon class row (oneHanded / twoHanded / spear / dagger …). Edited in the inspector on
 /// <see cref="MeleeWeaponTimingLibrary"/>; <c>data/melee_weapon_classes.json</c> is the fallback for
-/// scenes without that component. Attack pattern (Mark 2026-11-04): click → windup (cocked, hanging) → active
-/// (damage swoop) → the next attack may start at once; only a blocked / parried swing locks the attacker out.
-/// Holding the button past the windup turns the swing heavy: it hangs until <c>heavyWindupSeconds</c>, hits for
-/// <c>heavyDamageMultiplier</c>, costs <c>staminaHeavyCost</c>, breaks a guard that blocks it and is punished harder
-/// when parried (Mark 2026-11-04).
+/// scenes without that component. Directional exchange (Mark 2026-11-14, Last Oasis spec v0.1): every swing is
+/// windup → release (the only damaging phase) → recovery. A chained follow-up skips the recovery and winds up in
+/// <c>comboWindupSeconds</c> when it changes direction; the third chained swing ends in <c>comboEndRecoverySeconds</c>.
+/// Held past the light windup a swing turns heavy (its own windup / release / recovery, ×<c>heavyDamageMultiplier</c>).
+/// A blocked or chambered swing stops on contact and recovers for <c>recoveryBlockedSeconds</c> (a heavy for
+/// <c>recoveryBlockedHeavySeconds</c>). Hits stagger the victim (<c>hitStaggerSeconds</c> / <c>heavyHitStaggerSeconds</c>),
+/// a blocked heavy staggers the blocker (<c>heavyBlockStaggerSeconds</c>), and the blocker of a light gets one counter
+/// swing that winds up in <c>counterWindupSeconds</c>. The rules that do not depend on the weapon live on
+/// <see cref="PlayerCombat"/> (PlayerCombat.Exchange.cs).
 /// </summary>
 public sealed class MeleeWeaponClassData
 {
@@ -21,31 +25,56 @@ public sealed class MeleeWeaponClassData
 
 	public string DisplayName { get; set; } = string.Empty;
 
-	// --- Combat timings (click → windup → active; no recovery after a miss or a hit) ---
+	// --- Light swing: windup → release → recovery ---
 
-	/// <summary>Click → damage starts. The sword snaps to its cocked pose on the click and hangs there this long.</summary>
-	public float WindupSeconds { get; set; } = 0.6f;
+	/// <summary>Click → release, for a swing from neutral (and a chained one in the same direction).</summary>
+	public float WindupSeconds { get; set; } = 0.2f;
 
-	/// <summary>Damage swoop: the blade sweeps the attack path and deals damage for this long.</summary>
-	public float ActiveSeconds { get; set; } = 0.2f;
+	/// <summary>Windup of a chained follow-up that changes direction (right → left → overhead).</summary>
+	public float ComboWindupSeconds { get; set; } = 0.15f;
 
-	/// <summary>Attacker lockout after the swing was blocked (no attack / block until it ends).</summary>
-	public float RecoveryBlockedSeconds { get; set; } = 0.1f;
+	/// <summary>Release: the blade sweeps the attack path and deals damage for this long.</summary>
+	public float ActiveSeconds { get; set; } = 0.18f;
 
-	/// <summary>Attacker lockout after the swing was perfect-parried.</summary>
-	public float RecoveryParriedSeconds { get; set; } = 0.2f;
+	/// <summary>Recovery after an unchained swing (hit or miss).</summary>
+	public float RecoverySeconds { get; set; } = 0.25f;
 
-	/// <summary>Click → damage for a heavy (button still held when the light windup ends; the cocked pose keeps hanging).</summary>
-	public float HeavyWindupSeconds { get; set; } = 0.8f;
+	/// <summary>Recovery after the last swing of a full combo (it cannot be chained out of).</summary>
+	public float ComboEndRecoverySeconds { get; set; } = 0.4f;
+
+	/// <summary>Recovery after a light swing was blocked or chambered (it stops on contact).</summary>
+	public float RecoveryBlockedSeconds { get; set; } = 0.25f;
+
+	// --- Heavy (held past the light windup) ---
+
+	/// <summary>Click → heavy release, at the earliest (the strike comes on the button release).</summary>
+	public float HeavyWindupSeconds { get; set; } = 0.35f;
+
+	public float HeavyActiveSeconds { get; set; } = 0.22f;
+
+	public float HeavyRecoverySeconds { get; set; } = 0.4f;
+
+	/// <summary>Recovery after a heavy was blocked — shorter than the blocker's stagger, so the attacker keeps the initiative.</summary>
+	public float RecoveryBlockedHeavySeconds { get; set; } = 0.15f;
 
 	/// <summary>Heavy damage = light damage × this.</summary>
-	public float HeavyDamageMultiplier { get; set; } = 2f;
+	public float HeavyDamageMultiplier { get; set; } = 1.5f;
 
-	/// <summary>Attacker lockout after a heavy was perfect-parried.</summary>
-	public float RecoveryParriedHeavySeconds { get; set; } = 0.3f;
+	// --- What the swing does to the other side ---
 
-	/// <summary>A blocked heavy breaks the guard: the defender can neither block nor attack for this long.</summary>
-	public float HeavyGuardBreakSeconds { get; set; } = 0.4f;
+	/// <summary>A landed light swing staggers the victim this long (and interrupts its attack).</summary>
+	public float HitStaggerSeconds { get; set; } = 0.15f;
+
+	/// <summary>A landed heavy staggers the victim this long (a hard stagger).</summary>
+	public float HeavyHitStaggerSeconds { get; set; } = 0.3f;
+
+	/// <summary>A blocked heavy staggers the blocker this long (no attacks; the guard stays up; a hard stagger).</summary>
+	public float HeavyBlockStaggerSeconds { get; set; } = 0.25f;
+
+	/// <summary>The first swing after blocking a light (inside the counter window) winds up this fast.</summary>
+	public float CounterWindupSeconds { get; set; } = 0.15f;
+
+	// --- Reach and arcs ---
 
 	/// <summary>Blade reach for the overhead/forward attack, in meters (converted once per pawn via BodyHeight/1.8).</summary>
 	public float ReachForwardMeters { get; set; } = 1.54f;
@@ -53,11 +82,11 @@ public sealed class MeleeWeaponClassData
 	/// <summary>Blade reach for left/right slashes, in meters.</summary>
 	public float ReachLateralMeters { get; set; } = 1.54f;
 
-	/// <summary>Stamina spent per swing.</summary>
-	public float StaminaCost { get; set; } = 8f;
+	/// <summary>Stamina spent per light swing.</summary>
+	public float StaminaCost { get; set; } = 10f;
 
 	/// <summary>Total stamina a heavy costs (the light cost on the click, the rest when it turns heavy).</summary>
-	public float StaminaHeavyCost { get; set; } = 16f;
+	public float StaminaHeavyCost { get; set; } = 20f;
 
 	/// <summary>Total horizontal span (°) of left/right slashes — narrow for a spear jab, wide for a two-hander.</summary>
 	public float LateralArcDegrees { get; set; } = 150f;
@@ -68,40 +97,26 @@ public sealed class MeleeWeaponClassData
 	/// <summary>Start angle on the vertical overhead arc (0° = forward, 90° = up). Higher = more raised at windup.</summary>
 	public float ForwardArcStartDegrees { get; set; } = 146f;
 
-	/// <summary>
-	/// Spear: the "up" cursor attack is a straight forward thrust (the stab pattern at light timings) instead of an
-	/// overhead swing; left / right stay the narrow lateral swoops. Read from the JSON row as well as the inspector
-	/// library (a library row saved before the flag existed keeps the JSON value).
-	/// </summary>
-	public bool ForwardAttackIsThrust { get; set; }
-
-	// --- Special attack (Q on the ground, static combo mode only; Mark 2026-11-06) ---
-
-	/// <summary>
-	/// The weapon's Q special: <c>"stab"</c> (sword / club: a straight jab that winds up for
-	/// <see cref="SpecialWindupSeconds"/> and hits for <see cref="SpecialDamageMultiplier"/>) or empty for none. Read from
-	/// the JSON row as well as the inspector library (a library row saved before the field existed keeps the JSON value).
-	/// </summary>
-	public string SpecialAttack { get; set; } = string.Empty;
-
-	/// <summary>Q → the special's damage starts (the cocked stab hangs this long). Mark 2026-11-06: 1.2 s.</summary>
-	public float SpecialWindupSeconds { get; set; } = 1.2f;
-
-	/// <summary>Special damage = light damage × this. Mark 2026-11-06: 2.</summary>
-	public float SpecialDamageMultiplier { get; set; } = 2f;
 }
 
 /// <summary>Optional per-weapon overrides in <c>equipment_profiles.json</c> — only set fields replace the class value.</summary>
 public sealed class MeleeTimingOverridesData
 {
 	public float? WindupSeconds { get; set; }
+	public float? ComboWindupSeconds { get; set; }
 	public float? ActiveSeconds { get; set; }
+	public float? RecoverySeconds { get; set; }
+	public float? ComboEndRecoverySeconds { get; set; }
 	public float? RecoveryBlockedSeconds { get; set; }
-	public float? RecoveryParriedSeconds { get; set; }
 	public float? HeavyWindupSeconds { get; set; }
+	public float? HeavyActiveSeconds { get; set; }
+	public float? HeavyRecoverySeconds { get; set; }
+	public float? RecoveryBlockedHeavySeconds { get; set; }
 	public float? HeavyDamageMultiplier { get; set; }
-	public float? RecoveryParriedHeavySeconds { get; set; }
-	public float? HeavyGuardBreakSeconds { get; set; }
+	public float? HitStaggerSeconds { get; set; }
+	public float? HeavyHitStaggerSeconds { get; set; }
+	public float? HeavyBlockStaggerSeconds { get; set; }
+	public float? CounterWindupSeconds { get; set; }
 	public float? ReachForwardMeters { get; set; }
 	public float? ReachLateralMeters { get; set; }
 	public float? StaminaCost { get; set; }
@@ -116,13 +131,20 @@ public readonly struct MeleeWeaponTimings
 {
 	public string ClassId { get; init; }
 	public float WindupSeconds { get; init; }
+	public float ComboWindupSeconds { get; init; }
 	public float ActiveSeconds { get; init; }
+	public float RecoverySeconds { get; init; }
+	public float ComboEndRecoverySeconds { get; init; }
 	public float RecoveryBlockedSeconds { get; init; }
-	public float RecoveryParriedSeconds { get; init; }
 	public float HeavyWindupSeconds { get; init; }
+	public float HeavyActiveSeconds { get; init; }
+	public float HeavyRecoverySeconds { get; init; }
+	public float RecoveryBlockedHeavySeconds { get; init; }
 	public float HeavyDamageMultiplier { get; init; }
-	public float RecoveryParriedHeavySeconds { get; init; }
-	public float HeavyGuardBreakSeconds { get; init; }
+	public float HitStaggerSeconds { get; init; }
+	public float HeavyHitStaggerSeconds { get; init; }
+	public float HeavyBlockStaggerSeconds { get; init; }
+	public float CounterWindupSeconds { get; init; }
 	public float ReachForwardMeters { get; init; }
 	public float ReachLateralMeters { get; init; }
 	public float StaminaCost { get; init; }
@@ -130,20 +152,9 @@ public readonly struct MeleeWeaponTimings
 	public float LateralArcDegrees { get; init; }
 	public float ForwardArcTotalDegrees { get; init; }
 	public float ForwardArcStartDegrees { get; init; }
-	/// <summary>Up-cursor attack is a forward thrust (spear).</summary>
-	public bool ForwardAttackIsThrust { get; init; }
-	/// <summary>Q special id (<see cref="MeleeWeaponClassData.SpecialAttack"/>), empty = none.</summary>
-	public string SpecialAttack { get; init; }
-	public float SpecialWindupSeconds { get; init; }
-	public float SpecialDamageMultiplier { get; init; }
-	/// <summary>Q on the ground is a stab (sword / club).</summary>
-	public bool HasStabSpecial => string.Equals( SpecialAttack, MeleeSpecialAttacks.Stab, StringComparison.OrdinalIgnoreCase );
-}
 
-/// <summary>Ids for <see cref="MeleeWeaponClassData.SpecialAttack"/>.</summary>
-public static class MeleeSpecialAttacks
-{
-	public const string Stab = "stab";
+	/// <summary>Release length for a light or a heavy swing.</summary>
+	public float ActiveFor( bool heavy ) => heavy ? HeavyActiveSeconds : ActiveSeconds;
 }
 
 /// <summary>
@@ -261,25 +272,27 @@ public static class MeleeWeaponClassCatalog
 		// Semantic flags live in the JSON row too: an inspector row saved before the flag existed holds false.
 		EnsureLoaded();
 		ByClassId.TryGetValue( data.ClassId ?? string.Empty, out var jsonRow );
-		var forwardIsThrust = data.ForwardAttackIsThrust || jsonRow is { ForwardAttackIsThrust: true };
-		var special = !string.IsNullOrWhiteSpace( data.SpecialAttack ) ? data.SpecialAttack.Trim() : jsonRow?.SpecialAttack?.Trim() ?? string.Empty;
+		var windup = Math.Max( 0f, overrides?.WindupSeconds ?? data.WindupSeconds );
 
 		return new MeleeWeaponTimings
 		{
 			ClassId = data.ClassId,
-			ForwardAttackIsThrust = forwardIsThrust,
-			SpecialAttack = special,
-			SpecialWindupSeconds = Math.Max( 0f, data.SpecialWindupSeconds ),
-			SpecialDamageMultiplier = Math.Max( 0f, data.SpecialDamageMultiplier ),
-			WindupSeconds = Math.Max( 0f, overrides?.WindupSeconds ?? data.WindupSeconds ),
+			WindupSeconds = windup,
+			ComboWindupSeconds = Math.Max( 0f, overrides?.ComboWindupSeconds ?? data.ComboWindupSeconds ),
 			ActiveSeconds = Math.Max( 0.04f, overrides?.ActiveSeconds ?? data.ActiveSeconds ),
+			RecoverySeconds = Math.Max( 0f, overrides?.RecoverySeconds ?? data.RecoverySeconds ),
+			ComboEndRecoverySeconds = Math.Max( 0f, overrides?.ComboEndRecoverySeconds ?? data.ComboEndRecoverySeconds ),
 			RecoveryBlockedSeconds = Math.Max( 0f, overrides?.RecoveryBlockedSeconds ?? data.RecoveryBlockedSeconds ),
-			RecoveryParriedSeconds = Math.Max( 0f, overrides?.RecoveryParriedSeconds ?? data.RecoveryParriedSeconds ),
 			// A heavy can never wind up faster than the light it grows out of.
-			HeavyWindupSeconds = Math.Max( Math.Max( 0f, overrides?.WindupSeconds ?? data.WindupSeconds ), overrides?.HeavyWindupSeconds ?? data.HeavyWindupSeconds ),
+			HeavyWindupSeconds = Math.Max( windup, overrides?.HeavyWindupSeconds ?? data.HeavyWindupSeconds ),
+			HeavyActiveSeconds = Math.Max( 0.04f, overrides?.HeavyActiveSeconds ?? data.HeavyActiveSeconds ),
+			HeavyRecoverySeconds = Math.Max( 0f, overrides?.HeavyRecoverySeconds ?? data.HeavyRecoverySeconds ),
+			RecoveryBlockedHeavySeconds = Math.Max( 0f, overrides?.RecoveryBlockedHeavySeconds ?? data.RecoveryBlockedHeavySeconds ),
 			HeavyDamageMultiplier = Math.Max( 0f, overrides?.HeavyDamageMultiplier ?? data.HeavyDamageMultiplier ),
-			RecoveryParriedHeavySeconds = Math.Max( 0f, overrides?.RecoveryParriedHeavySeconds ?? data.RecoveryParriedHeavySeconds ),
-			HeavyGuardBreakSeconds = Math.Max( 0f, overrides?.HeavyGuardBreakSeconds ?? data.HeavyGuardBreakSeconds ),
+			HitStaggerSeconds = Math.Max( 0f, overrides?.HitStaggerSeconds ?? data.HitStaggerSeconds ),
+			HeavyHitStaggerSeconds = Math.Max( 0f, overrides?.HeavyHitStaggerSeconds ?? data.HeavyHitStaggerSeconds ),
+			HeavyBlockStaggerSeconds = Math.Max( 0f, overrides?.HeavyBlockStaggerSeconds ?? data.HeavyBlockStaggerSeconds ),
+			CounterWindupSeconds = Math.Max( 0f, overrides?.CounterWindupSeconds ?? data.CounterWindupSeconds ),
 			ReachForwardMeters = Math.Max( 0.3f, overrides?.ReachForwardMeters ?? data.ReachForwardMeters ),
 			ReachLateralMeters = Math.Max( 0.3f, overrides?.ReachLateralMeters ?? data.ReachLateralMeters ),
 			StaminaCost = Math.Max( 0f, overrides?.StaminaCost ?? data.StaminaCost ),
@@ -341,81 +354,139 @@ public static class MeleeWeaponClassCatalog
 			ClassId = "oneHanded",
 			DisplayName = "One-Handed",
 			WindupSeconds = 0.6f,
+			ComboWindupSeconds = 0.5f,
 			ActiveSeconds = 0.2f,
-			RecoveryBlockedSeconds = 0.1f,
-			RecoveryParriedSeconds = 0.2f,
+			RecoverySeconds = 0.5f,
+			ComboEndRecoverySeconds = 0.75f,
+			RecoveryBlockedSeconds = 0.2f,
+			HeavyWindupSeconds = 0.9f,
+			HeavyActiveSeconds = 0.25f,
+			HeavyRecoverySeconds = 0.75f,
+			RecoveryBlockedHeavySeconds = 0.4f,
+			HeavyDamageMultiplier = 1.5f,
+			HitStaggerSeconds = 0.4f,
+			HeavyHitStaggerSeconds = 0.75f,
+			HeavyBlockStaggerSeconds = 0.6f,
+			CounterWindupSeconds = 0.5f,
 			ReachForwardMeters = 1.54f,
 			ReachLateralMeters = 1.54f,
-			StaminaCost = 8f,
-			StaminaHeavyCost = 16f,
-			HeavyWindupSeconds = 0.8f,
-			HeavyDamageMultiplier = 2f,
-			RecoveryParriedHeavySeconds = 0.3f,
-			HeavyGuardBreakSeconds = 0.4f,
-			SpecialAttack = MeleeSpecialAttacks.Stab,
+			StaminaCost = 10f,
+			StaminaHeavyCost = 20f,
+			LateralArcDegrees = 150f,
+			ForwardArcTotalDegrees = 158f,
+			ForwardArcStartDegrees = 146f,
 		};
 
 		yield return new MeleeWeaponClassData
 		{
 			ClassId = "twoHanded",
 			DisplayName = "Two-Handed",
-			WindupSeconds = 0.32f,
-			ActiveSeconds = 0.14f,
+			WindupSeconds = 0.9f,
+			ComboWindupSeconds = 0.75f,
+			ActiveSeconds = 0.25f,
+			RecoverySeconds = 0.7f,
+			ComboEndRecoverySeconds = 0.95f,
 			RecoveryBlockedSeconds = 0.3f,
-			RecoveryParriedSeconds = 0.6f,
+			HeavyWindupSeconds = 1.3f,
+			HeavyActiveSeconds = 0.3f,
+			HeavyRecoverySeconds = 0.95f,
+			RecoveryBlockedHeavySeconds = 0.55f,
+			HeavyDamageMultiplier = 1.5f,
+			HitStaggerSeconds = 0.55f,
+			HeavyHitStaggerSeconds = 0.85f,
+			HeavyBlockStaggerSeconds = 0.7f,
+			CounterWindupSeconds = 0.75f,
 			ReachForwardMeters = 1.78f,
 			ReachLateralMeters = 1.78f,
-			StaminaCost = 12f,
-			StaminaHeavyCost = 24f,
-			HeavyWindupSeconds = 0.52f,
-			HeavyDamageMultiplier = 2f,
-			RecoveryParriedHeavySeconds = 0.7f,
-			HeavyGuardBreakSeconds = 0.4f,
+			StaminaCost = 14f,
+			StaminaHeavyCost = 28f,
 			LateralArcDegrees = 170f,
 			ForwardArcTotalDegrees = 165f,
-			ForwardArcStartDegrees = 150f
+			ForwardArcStartDegrees = 150f,
 		};
 
 		yield return new MeleeWeaponClassData
 		{
 			ClassId = "spear",
 			DisplayName = "Spear",
-			WindupSeconds = 0.26f,
-			ActiveSeconds = 0.12f,
+			WindupSeconds = 0.8f,
+			ComboWindupSeconds = 0.65f,
+			ActiveSeconds = 0.2f,
+			RecoverySeconds = 0.6f,
+			ComboEndRecoverySeconds = 0.85f,
 			RecoveryBlockedSeconds = 0.25f,
-			RecoveryParriedSeconds = 0.5f,
+			HeavyWindupSeconds = 1.15f,
+			HeavyActiveSeconds = 0.25f,
+			HeavyRecoverySeconds = 0.85f,
+			RecoveryBlockedHeavySeconds = 0.5f,
+			HeavyDamageMultiplier = 1.5f,
+			HitStaggerSeconds = 0.4f,
+			HeavyHitStaggerSeconds = 0.75f,
+			HeavyBlockStaggerSeconds = 0.6f,
+			CounterWindupSeconds = 0.65f,
 			ReachForwardMeters = 2.11f,
-			ReachLateralMeters = 1.30f,
-			StaminaCost = 9f,
-			StaminaHeavyCost = 18f,
-			HeavyWindupSeconds = 0.46f,
-			HeavyDamageMultiplier = 2f,
-			RecoveryParriedHeavySeconds = 0.6f,
-			HeavyGuardBreakSeconds = 0.4f,
-			LateralArcDegrees = 70f,
+			ReachLateralMeters = 1.94f,
+			StaminaCost = 12f,
+			StaminaHeavyCost = 24f,
+			LateralArcDegrees = 34f,
 			ForwardArcTotalDegrees = 110f,
-			ForwardArcStartDegrees = 125f
+			ForwardArcStartDegrees = 125f,
+		};
+
+		yield return new MeleeWeaponClassData
+		{
+			ClassId = "trainingDummy",
+			DisplayName = "Training Dummy",
+			WindupSeconds = 0.6f,
+			ComboWindupSeconds = 0.5f,
+			ActiveSeconds = 0.2f,
+			RecoverySeconds = 0.5f,
+			ComboEndRecoverySeconds = 0.75f,
+			RecoveryBlockedSeconds = 0.2f,
+			HeavyWindupSeconds = 0.9f,
+			HeavyActiveSeconds = 0.25f,
+			HeavyRecoverySeconds = 0.75f,
+			RecoveryBlockedHeavySeconds = 0.4f,
+			HeavyDamageMultiplier = 1.5f,
+			HitStaggerSeconds = 0.4f,
+			HeavyHitStaggerSeconds = 0.75f,
+			HeavyBlockStaggerSeconds = 0.6f,
+			CounterWindupSeconds = 0.5f,
+			ReachForwardMeters = 1.71f,
+			ReachLateralMeters = 1.71f,
+			StaminaCost = 10f,
+			StaminaHeavyCost = 20f,
+			LateralArcDegrees = 150f,
+			ForwardArcTotalDegrees = 168f,
+			ForwardArcStartDegrees = 118f,
 		};
 
 		yield return new MeleeWeaponClassData
 		{
 			ClassId = "dagger",
 			DisplayName = "Dagger",
-			WindupSeconds = 0.12f,
-			ActiveSeconds = 0.07f,
-			RecoveryBlockedSeconds = 0.1f,
-			RecoveryParriedSeconds = 0.25f,
+			WindupSeconds = 0.45f,
+			ComboWindupSeconds = 0.35f,
+			ActiveSeconds = 0.15f,
+			RecoverySeconds = 0.35f,
+			ComboEndRecoverySeconds = 0.55f,
+			RecoveryBlockedSeconds = 0.15f,
+			HeavyWindupSeconds = 0.7f,
+			HeavyActiveSeconds = 0.15f,
+			HeavyRecoverySeconds = 0.55f,
+			RecoveryBlockedHeavySeconds = 0.3f,
+			HeavyDamageMultiplier = 1.5f,
+			HitStaggerSeconds = 0.3f,
+			HeavyHitStaggerSeconds = 0.65f,
+			HeavyBlockStaggerSeconds = 0.5f,
+			CounterWindupSeconds = 0.35f,
 			ReachForwardMeters = 1.05f,
 			ReachLateralMeters = 0.97f,
-			StaminaCost = 5f,
-			StaminaHeavyCost = 10f,
-			HeavyWindupSeconds = 0.32f,
-			HeavyDamageMultiplier = 2f,
-			RecoveryParriedHeavySeconds = 0.35f,
-			HeavyGuardBreakSeconds = 0.4f,
+			StaminaCost = 7f,
+			StaminaHeavyCost = 14f,
 			LateralArcDegrees = 110f,
 			ForwardArcTotalDegrees = 120f,
-			ForwardArcStartDegrees = 130f
+			ForwardArcStartDegrees = 130f,
 		};
 	}
 

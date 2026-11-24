@@ -23,9 +23,9 @@ public partial class PlayerCombat
 		Components.Get<PlayerAnimation>()?.ServerBeginHitReaction( durationSeconds );
 
 	/// <summary>
-	/// Called by <see cref="PlayerAnimation"/> when a reaction starts. A hit never breaks an attack (Mark 2026-11-05):
-	/// a swing in its windup, held as a heavy or striking plays on, and a queued click still fires once the reaction
-	/// lock ends — only a leftover recovery pose gives way to the flail.
+	/// Called by <see cref="PlayerAnimation"/> when a reaction starts. A melee stagger already interrupted this pawn's
+	/// swing on the host (<see cref="HostTryStagger"/>, broadcast as a swing cancel); a punch never does. Here only a
+	/// leftover recovery pose gives way to the flail.
 	/// </summary>
 	internal void OnHitReactionBegan() => ClearCombatRecoveryPresentation( pushOwnerClear: false );
 }

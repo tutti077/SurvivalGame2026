@@ -25,14 +25,14 @@ public partial class PlayerCombat
 	public float ShoveHitRadiusMeters { get; set; } = 0.3f;
 
 	[Property, Group( "Combat — Shove" ), Title( "Shove stamina cost" )]
-	public float ShoveStaminaCost { get; set; } = 10f;
+	public float ShoveStaminaCost { get; set; } = 15f;
 
 	void TickOwnerShoveInput()
 	{
 		if ( !IsLocalCombatDriver() )
 			return;
 
-		if ( string.IsNullOrWhiteSpace( ShoveAction ) || !Input.Pressed( ShoveAction ) )
+		if ( string.IsNullOrWhiteSpace( ShoveAction ) || !Input.Pressed( ShoveAction ) || IsHandsOffCombat )
 			return;
 
 		OwnerTryShove();
@@ -69,7 +69,6 @@ public partial class PlayerCombat
 				return false;
 		}
 
-		BeginShoveFacingLock();
 		_ownerLastPunchAt = Time.NowDouble;
 		OwnerRequestShove();
 		return true;
@@ -121,16 +120,16 @@ public partial class PlayerCombat
 
 	/// <summary>Click → the punch lands (readable, still quicker than the 0.6 s one-handed windup). The lockout runs this plus <see cref="RecoveryShoveCombatLockSeconds"/>.</summary>
 	[Property, Group( "Combat — Shove" ), Title( "Punch windup (s)" ), Range( 0f, 1f ), Step( 0.01f )]
-	public float PunchWindupSeconds { get; set; } = 0.3f;
+	public float PunchWindupSeconds { get; set; } = 0.4f;
 
 	/// <summary>
 	/// No second punch for this long after one (Mark 2026-11-05: punches could stagger a bot forever). The exchange it
 	/// protects: punch lands → puncher free after <see cref="RecoveryShoveCombatLockSeconds"/> (0.15) and its light swing
-	/// hits 0.4 s later (0.55) → the punched pawn is free after <see cref="RecoveryDefenderShoveSeconds"/> (0.4) and a held
-	/// guard is up by 0.45 — the punch buys initiative, not a free hit, and never a chain.
+	/// (0.2 s one-handed windup) hits before the punched pawn is free after <see cref="RecoveryDefenderShoveSeconds"/> (0.7) —
+	/// the punch buys one free follow-up (Mark 2026-11-12), never a chain.
 	/// </summary>
 	[Property, Group( "Combat — Shove" ), Title( "Punch cooldown (s)" ), Range( 0f, 5f ), Step( 0.05f )]
-	public float PunchCooldownSeconds { get; set; } = 1.5f;
+	public float PunchCooldownSeconds { get; set; } = 2f;
 
 	double _hostLastPunchAt = double.NegativeInfinity;
 	double _ownerLastPunchAt = double.NegativeInfinity;
@@ -169,18 +168,35 @@ public partial class PlayerCombat
 				return false;
 		}
 
-		// A flat punch at chest height along the facing at the click.
-		var forward = GetViewDirectionForIntent().WithZ( 0f );
-		if ( forward.LengthSquared < 1e-4f )
-			forward = GameObject.WorldRotation.Forward.WithZ( 0f );
-
-		_pendingPunchForward = forward.Normal;
+		// A flat punch at chest height along the look at the click.
+		_pendingPunchForward = GetServerPunchForward();
 		_pendingPunchAt = Time.NowDouble + Math.Max( 0f, PunchWindupSeconds );
 		_pendingPunch = true;
 		_hostLastPunchAt = Time.NowDouble;
 		ServerBeginShoveAttackerRecovery();
 		ServerTickPendingPunch();
 		return true;
+	}
+
+	/// <summary>
+	/// Host: the flat direction this pawn looks. Its own camera when this machine drives the pawn; otherwise the
+	/// owner-synced <c>PlayerController.EyeAngles</c> (a remote owner, a scripted pawn), then the body. Never
+	/// <c>Scene.Camera</c> for someone else's pawn: that is this machine's view, and it aimed a remote player's
+	/// punch wherever the host happened to be looking.
+	/// </summary>
+	Vector3 GetServerPunchForward()
+	{
+		if ( IsLocalCombatDriver() )
+		{
+			var view = GetViewDirectionForIntent().WithZ( 0f );
+			if ( view.LengthSquared >= 1e-4f )
+				return view.Normal;
+		}
+
+		// Disabled too: a proxy / scripted pawn still carries the synced EyeAngles.
+		var controller = Components.Get<PlayerController>( FindMode.EverythingInSelf );
+		var yaw = controller is not null ? controller.EyeAngles.yaw : GameObject.WorldRotation.Angles().yaw;
+		return Rotation.FromYaw( yaw ).Forward;
 	}
 
 	/// <summary>Host, every tick (with the swing runtime): land the pending punch when its windup has run.</summary>
@@ -333,7 +349,7 @@ public partial class PlayerCombat
 		if ( !IsServerSideForMeleeAuthority() )
 			return;
 
-		ConsumeAuthoritativeMeleeBlock( wasPerfectParry: false );
+		ConsumeAuthoritativeMeleeBlock();
 		ServerBeginHitReaction( RecoveryDefenderShoveBlockSeconds );
 		Log.Info( $"[MeleeBlock] shove-vs-block {GameObject.Name} from {attacker?.GameObject?.Name}" );
 	}

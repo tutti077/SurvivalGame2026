@@ -196,10 +196,8 @@ public static class MeleeBlockPath
 		var localRight = Vector3.Dot( to, basis.Right );
 		var localUp = Vector3.Dot( to, basis.Up );
 
-		// Allow a tiny behind-origin pad so near-side hits still register on the shell.
-		if ( localForward < -Math.Max( 1f, extraThickness ) - 1e-4f )
-			return false;
-
+		// The front arc alone bounds the shell. (A "nothing behind the shoulder line" cut used to sit here: it made the
+		// shell a half disc whatever the arc said, so a blow from the side the marker called was never a block.)
 		var angleDeg = MathF.Atan2( localRight, localForward ) * (180f / MathF.PI);
 		if ( MeleeBlockResolution.IsOutsideFrontArc( pc, angleDeg ) )
 			return false;

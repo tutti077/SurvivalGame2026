@@ -33,6 +33,21 @@ public partial class PlayerCombat : Component
 {
 	const string CombatClientLogVersion = "press-fire-v4";
 
+	/// <summary>Host-synced: an event takes this pawn out of combat (the hub's arena cameraman) — no attacks, bow, bola or shove.</summary>
+	[Sync( SyncFlags.FromHost )]
+	public bool EventNoCombat { get; private set; }
+
+	public void HostSetEventNoCombat( bool on )
+	{
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
+			return;
+		EventNoCombat = on;
+	}
+
+	/// <summary>Hands off combat: driving a vehicle, inside the stasis pod, or <see cref="EventNoCombat"/>.</summary>
+	bool IsHandsOffCombat =>
+		EventNoCombat || Components.Get<PlayerMovement>() is { IsSeatedDriver: true } or { PodLocked: true };
+
 	// --- Debug (inspector toggles at top) ---
 
 	[Property, Group( "Combat — Debug" )] public bool ShowCombatInputDebug { get; set; } = true;
@@ -71,8 +86,6 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Input" )] public string PrimaryAttackAction { get; set; } = "Attack1";
 	[Property, Group( "Input" )] public string BlockAction { get; set; } = "Attack2";
 
-	[Property, Group( "Combat — Block" )] public float BlockCooldownAfterRelease { get; set; } = 0.5f;
-
 	[Property, Group( "Combat — Server validation" )] public float ServerEyeHeight { get; set; } = 64f;
 
 	/// <summary>Scene <see cref="CombatAuthority"/> (e.g. on your network manager). If unset, <see cref="CombatAuthority.Instance"/> is used when enabled.</summary>
@@ -88,16 +101,20 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee" ), Title( "Fallback weapon class" )]
 	public string FallbackWeaponClass { get; set; } = MeleeWeaponClassCatalog.DefaultClassId;
 
-	/// <summary>
-	/// A heavy strikes when the button comes up (never before the class heavy windup); held this long it lets go by
-	/// itself, so a stuck / forgotten button cannot pin the pawn in the cocked pose.
-	/// </summary>
-	[Property, Group( "Combat — Timings" ), Title( "Heavy max hold (s)" ), Range( 0.6f, 10f ), Step( 0.1f )]
-	public float HeavyMaxHoldSeconds { get; set; } = 3f;
+	EntityCombat _entityCombat;
+	bool _entityCombatLooked;
 
-	/// <summary>An Attack1 click while the previous swing is still sweeping (or a block / parry lockout runs) queues one follow-up, if it is at most this old when the chain frees up. 0 disables queueing.</summary>
-	[Property, Group( "Combat — Timings" ), Title( "Queued attack max age (s)" ), Range( 0f, 2f ), Step( 0.05f )]
-	public float QueuedAttackMaxAgeSeconds { get; set; } = 0.75f;
+	/// <summary>The weapon profile an entity's <see cref="EntityCombat"/> holds (looked up once); empty on a player pawn.</summary>
+	string EntityWeaponProfileId()
+	{
+		if ( !_entityCombatLooked )
+		{
+			_entityCombatLooked = true;
+			_entityCombat = Components.Get<EntityCombat>();
+		}
+
+		return _entityCombat.IsValid() ? _entityCombat.WeaponProfileId ?? string.Empty : string.Empty;
+	}
 
 	string _resolvedTimingsEquippedId;
 	int _resolvedTimingsCatalogVersion = -1;
@@ -118,7 +135,18 @@ public partial class PlayerCombat : Component
 		if ( _timingsFrameStamp == Time.Now )
 			return _timingsThisFrame;
 
-		var equippedId = Components.Get<PlayerEquippedItem>()?.EquippedResourceId ?? string.Empty;
+		// The weapon in hand as this machine knows it: the host and the owner read the pawn's own slots; any other peer
+		// has no slots for it and reads the host's synced main-hand id - without it a client resolved every other pawn
+		// to the fallback class, so its slash ribbon (and the red marker's reach) ignored the weapon's own reach.
+		var equippedId = GameObject.Network is { Active: true } && GameObject.IsProxy && !Networking.IsHost
+			? Components.Get<PlayerEquipment>()?.NetworkedMainHandResourceId ?? string.Empty
+			: string.Empty;
+		if ( string.IsNullOrWhiteSpace( equippedId ) )
+			equippedId = Components.Get<PlayerEquippedItem>()?.EquippedResourceId ?? string.Empty;
+		// An entity (scav) has no equipment slots: its weapon is the one its EntityCombat holds, so its reach is that
+		// item's - without this a scav swung the bare class arc (1.54 m) around a 0.68 m club.
+		if ( string.IsNullOrWhiteSpace( equippedId ) )
+			equippedId = EntityWeaponProfileId();
 
 		// Inspector library present → resolve LIVE every call so play-mode tuning hits the next
 		// swing immediately. The cache only serves the JSON-file path.
@@ -181,7 +209,7 @@ public partial class PlayerCombat : Component
 	public float GetMeleeAttackRangeUnits( byte attackType )
 	{
 		var t = GetMeleeWeaponTimings();
-		var meters = attackType is MeleeAttackTypes.Stab or MeleeAttackTypes.Forward
+		var meters = attackType == MeleeAttackTypes.Forward
 			? t.ReachForwardMeters
 			: t.ReachLateralMeters;
 		return meters * GetPawnUnitsPerMeter();
@@ -303,9 +331,6 @@ public partial class PlayerCombat : Component
 	[Property, Group( "Combat — Melee (attack action)" ), Title( "Swing max pitch (° look-down cap)" )]
 	public float MeleeSwingMaxPitchDegrees { get; set; } = 50f;
 
-	/// <summary>How long a pawn this swing hits flails (Mark 2026-11-04: 100 ms). 0 = no hit reaction.</summary>
-	[Property, Group( "Combat — Melee (attack action)" ), Title( "Victim hit reaction (s)" ), Range( 0f, 1f ), Step( 0.05f )]
-	public float MeleeHitReactionSeconds { get; set; } = 0.1f;
 
 
 	[Property, Group( "Combat — Melee (attack action)" )] public float MeleeBladeHeelFraction { get; set; } = 0.22f;
@@ -391,8 +416,6 @@ public partial class PlayerCombat : Component
 	string _combatNetDiag = "—";
 
 	bool _combatAuthorityDiagComplete;
-	AttackReleaseIntent _pendingSwingVisualIntent;
-	bool _hasPendingSwingVisualIntent;
 
 	/// <summary>
 	/// Per-hold sum of raw <see cref="Input.MouseDelta"/> (screen pixels) while the block button is down.
@@ -401,6 +424,7 @@ public partial class PlayerCombat : Component
 	/// </summary>
 	Vector2 _blockLookAccum;
 	bool _wasBlockButtonDownLastFrame;
+	bool _wasBlockInputDownLastFrame;
 
 	/// <summary>Live L/R/U from mouse evidence — block preview uses screen-aligned cardinals; attack stores mirrored L/R for combat.</summary>
 	byte _primaryLiveSwingDir = SwingDirs.Up;
@@ -436,7 +460,7 @@ public partial class PlayerCombat : Component
 
 	/// <summary>Direction the click locked (L / R / U) — the swing commits on the click, so this is the swing direction.</summary>
 	byte _lockedPrimaryAttackSwingDir;
-	/// <summary>Attack1 clicked while the chain was busy — fires one follow-up when the chain frees (aged by <see cref="QueuedAttackMaxAgeSeconds"/>), in the direction locked at that click.</summary>
+	/// <summary>Attack1 clicked while a swing runs — chained at the release end or kept for <see cref="AttackInputBufferSeconds"/>, in the direction locked at that click.</summary>
 	bool _hasQueuedAttackPress;
 	double _queuedAttackPressedAtSandbox;
 	byte _queuedAttackSwingDir;
@@ -468,12 +492,8 @@ public partial class PlayerCombat : Component
 
 	/// <summary>When set, non-local attack/block paths use intent yaw instead of pawn body rotation.</summary>
 	float? _meleeIntentBasisYawOverride;
-	/// <summary>Look yaw (PlayerController.EyeAngles, synced from the owner) when the swing committed — the turn since then carries the arc.</summary>
-	float _meleeSwingLastEyeYaw;
-	/// <summary>Turn since the swing committed, summed frame by frame so ±180° (all the way round) never wraps.</summary>
-	float _meleeSwingTurnAccum;
-	float _meleeSwingTurnUpdatedAt;
-	bool _meleeSwingTurnTracked;
+	/// <summary>Unwrapped body yaw (<see cref="PlayerMovement.BodyYawUnwrapped"/>) when the swing committed — the body's turn since then carries the arc; NaN on pawns without a body tracker (scavs).</summary>
+	float _meleeSwingBodyYaw0 = float.NaN;
 	bool _meleeIntentPitchCaptured;
 	float _meleeIntentStartPitchDegrees;
 
@@ -519,9 +539,7 @@ public partial class PlayerCombat : Component
 			if ( !GameObject.IsProxy || !Networking.IsActive )
 				MaybeTickServerMeleeAttackAction();
 
-			TickMeleeAttackLookLockFromSync();
-
-			if ( IsLocalCombatDriver() )
+				if ( IsLocalCombatDriver() )
 			{
 				// CombatAuthority already ticks companions scene-wide; avoid double-advance (sparse arcs).
 				if ( CombatAuthority.Instance is null || !CombatAuthority.Instance.IsValid() )
@@ -540,7 +558,6 @@ public partial class PlayerCombat : Component
 		// (avoids double-ticking when both run).
 		if ( IsServerSideForMeleeAuthority() && !GameObject.IsProxy )
 		{
-			ServerTickMeleeBlockTimers();
 			ServerTickCombatRecovery();
 		}
 
@@ -558,7 +575,7 @@ public partial class PlayerCombat : Component
 			return;
 
 		// Dev: console `swing` / `block` hold the attack / block action for a few frames (GameHacks) — same path as a real press.
-		GameHacks.ApplySimulatedInput( PrimaryAttackAction, BlockAction, SpecialAttackAction );
+		GameHacks.ApplySimulatedInput( PrimaryAttackAction, BlockAction );
 
 		var menuController = Components.Get<PlayerGameMenuController>();
 		if ( menuController is not null && menuController.IsMenuOpen )
@@ -568,8 +585,9 @@ public partial class PlayerCombat : Component
 			return;
 		}
 
-		// Vehicle driver: hands on the wheel, no attacks or blocks (passengers keep everything).
-		if ( Components.Get<PlayerMovement>() is { IsSeatedDriver: true } or { PodLocked: true } )
+		// Vehicle driver: hands on the wheel, no attacks or blocks (passengers keep everything). Same for the arena
+		// cameraman (EventNoCombat).
+		if ( IsHandsOffCombat )
 		{
 			CancelBowCharge();
 			_bowAdsActive = false;
@@ -597,28 +615,26 @@ public partial class PlayerCombat : Component
 
 		if ( hasMeleeWeapon )
 		{
-			// Click = attack (Mark 2026-11-04): the swing commits on the click — the sword snaps to its cocked
-			// pose and the damage swoop opens one class windup later. Holding the button does nothing more.
-			// A click while the previous swing is still sweeping (or a block / parry lockout runs) queues
-			// exactly one follow-up in the direction locked at that click; it fires the moment the chain frees.
+			// Click = attack (Mark 2026-11-14, directional exchange): the swing commits on the click in the direction the
+			// mouse picked — the sword snaps to its cocked pose and the release opens one windup later. A click while a
+			// swing runs chains (last part of the release) or waits in the input buffer (PlayerCombat.Exchange.cs).
 			// The click is the button going down (a rising edge of Input.Down): the same as Input.Pressed for a real
 			// mouse, and correct for the `swing` dev hold, whose Input.SetAction reports Pressed on every held frame.
 			var primaryDown = Input.Down( PrimaryAttackAction );
 			var clicked = primaryDown && !_primaryWasDownLastFrame;
 			_primaryWasDownLastFrame = primaryDown;
-			// Dev toggle: static right → left → overhead combo + Q special, the mouse picks nothing (PlayerCombat.StaticCombo.cs).
-			if ( StaticComboActive )
-				TickOwnerStaticCombo( clicked );
-			else if ( clicked && !IsBlockPreventingAttack() )
+			// Fluid block: attack pressed on a held guard is the block pivot - it holds the guard's side
+			// (IsGuardSideHeld); it is not a swing and stores none.
+			if ( clicked && !IsBlockPivotInput() )
 			{
 				LockPreparedPrimaryAttackDirection();
-				if ( IsMeleeAttackChainBusy() )
-				{
-					QueueAttackPress( _lockedPrimaryAttackSwingDir );
-					LogCombatDiag( "CLIENT / OWNER", $"Attack click queued — {FormatMeleePhaseBusyReason()}" );
-				}
+				// A click while the guard is still up waits in the input buffer and fires as the guard drops (Mark
+				// 2026-11-16: attack > guard tap (feint) > new side > attack - the feint's tap raises the guard for its
+				// minimum hold, and a quick follow-up click was thrown away).
+				if ( IsBlockPreventingAttack() )
+					QueueAttackPress( _lockedPrimaryAttackSwingDir, chain: false );
 				else
-					TryFirePrimaryAttack( _lockedPrimaryAttackSwingDir, "click" );
+					OwnerHandleAttackClick( _lockedPrimaryAttackSwingDir );
 			}
 
 			MaybeFireQueuedAttackPress();
@@ -627,18 +643,28 @@ public partial class PlayerCombat : Component
 
 		_block.Step( BlockAction, CanStartBlock, CanContinueBlock, GetViewDirectionForIntent, GetCameraPositionForIntent, GetBlockRules(), OnOwnerValidBlockRelease, allowHeldStart: true );
 
+		var blockButtonPressed = Input.Down( BlockAction ) && !_wasBlockInputDownLastFrame;
+		_wasBlockInputDownLastFrame = Input.Down( BlockAction );
+		// The guard button on a held heavy starts its morph; during the early windup (or a light still held) it feints the
+		// swing; any stored click is dropped either way.
+		if ( blockButtonPressed )
+		{
+			if ( !OwnerTryBeginHeavyMorph() )
+				OwnerTryFeint();
+			ClearQueuedAttackPress();
+		}
+
 		var blockStartedThisFrame = _block.Down && !_wasBlockButtonDownLastFrame;
 		if ( blockStartedThisFrame )
 		{
 			_blockLookAccum = default;
 			OnBlockPressCommitGuardDirection();
-			CancelAllAttackActivity();
-			ResetOwnerStaticCombo();
 		}
 
 		_wasBlockButtonDownLastFrame = _block.Down;
 
 		TickSwingLookAccumulatorsAfterCombatStep();
+		TickOwnerHeavyMorph();
 
 		TickAuthoritativeMeleeBlockState();
 		TickCombatStateMachine();
@@ -655,7 +681,7 @@ public partial class PlayerCombat : Component
 	void TickSwingLookAccumulatorsAfterCombatStep()
 	{
 		var dt = MathF.Max( 0f, Time.Delta );
-		var decay = SwingEvidenceDecaySeconds > 1e-4f ? MathF.Exp( -dt / SwingEvidenceDecaySeconds ) : 0f;
+		var decay = SwingEvidenceDecayFactor( dt );
 		var rawFrame = Input.MouseDelta;
 		var frame = FilterSwingMouseEvidenceDelta( rawFrame );
 
@@ -680,8 +706,17 @@ public partial class PlayerCombat : Component
 			if ( MathF.Abs( yawDelta ) > 1e-4f )
 				_blockSwingEvidence = RotateSwingEvidenceDegrees( _blockSwingEvidence, -yawDelta );
 
-			_blockSwingEvidence = _blockSwingEvidence * decay + frame;
-			ApplyLiveSwingFromEvidence( _blockSwingEvidence, ref _heldBlockGuardDir, ref _blockLastFlipRealSeconds );
+			if ( IsGuardSideHeld() )
+			{
+				// The guard keeps its side whatever the mouse does; no stored flick may move it the moment the hold ends.
+				_blockSwingEvidence = default;
+			}
+			else
+			{
+				_blockSwingEvidence = _blockSwingEvidence * decay + frame;
+				ApplyLiveSwingFromEvidence( _blockSwingEvidence, ref _heldBlockGuardDir, ref _blockLastFlipRealSeconds );
+			}
+
 			_blockLiveSwingDir = _heldBlockGuardDir;
 		}
 		else
@@ -693,6 +728,16 @@ public partial class PlayerCombat : Component
 
 		if ( Input.Down( BlockAction ) )
 			_blockLookAccum += rawFrame;
+	}
+
+	/// <summary>
+	/// Per-frame decay of the mouse evidence. The player's combat sensitivity (<see cref="CombatControlSettings"/>)
+	/// stretches the time constant, so at a high level a slower, deliberate movement still adds up to a flip.
+	/// </summary>
+	float SwingEvidenceDecayFactor( float dt )
+	{
+		var seconds = SwingEvidenceDecaySeconds * CombatControlSettings.DirectionEvidenceDecayScale;
+		return seconds > 1e-4f ? MathF.Exp( -dt / seconds ) : 0f;
 	}
 
 	/// <summary>Deadzone + per-frame cap on magnitude; direction preserved. Used only for swing cardinal evidence / crosshair, not drag sums.</summary>
@@ -730,52 +775,19 @@ public partial class PlayerCombat : Component
 	void LockPreparedPrimaryAttackDirection()
 	{
 		var dt = MathF.Max( 0f, Time.Delta );
-		var decay = SwingEvidenceDecaySeconds > 1e-4f ? MathF.Exp( -dt / SwingEvidenceDecaySeconds ) : 0f;
+		var decay = SwingEvidenceDecayFactor( dt );
 		var e = _primarySwingEvidence * decay + FilterSwingMouseEvidenceDelta( Input.MouseDelta );
 		_primarySwingEvidence = e;
 		_lockedPrimaryAttackSwingDir = ClassifyAttackLiveSwingFrame( e, _primaryLiveSwingDir );
 	}
 
-	void QueueAttackPress( byte swingDir, byte comboStep = 0, bool special = false )
-	{
-		if ( QueuedAttackMaxAgeSeconds <= 1e-4f )
-			return;
-
-		_hasQueuedAttackPress = true;
-		_queuedAttackPressedAtSandbox = Time.NowDouble;
-		_queuedAttackSwingDir = swingDir;
-		_queuedComboStep = comboStep;
-		_queuedSpecial = special;
-	}
-
-	void ClearQueuedAttackPress() => _hasQueuedAttackPress = false;
-
-	/// <summary>Owner: fire the single queued follow-up click once the melee chain is free.</summary>
-	void MaybeFireQueuedAttackPress()
-	{
-		if ( !_hasQueuedAttackPress )
-			return;
-
-		if ( Time.NowDouble - _queuedAttackPressedAtSandbox > Math.Max( 0f, QueuedAttackMaxAgeSeconds ) )
-		{
-			_hasQueuedAttackPress = false;
-			return;
-		}
-
-		if ( IsOwnerAttackGateBusy() || IsBlockPreventingAttack() )
-			return;
-
-		_hasQueuedAttackPress = false;
-		TryFirePrimaryAttack( _queuedAttackSwingDir, "queued click", _queuedComboStep, _queuedSpecial );
-	}
-
 	/// <summary>
-	/// Owner: commit one swing now — cocked pose on screen at once, strike predicted one class windup later,
-	/// intent to the host (which re-validates once and owns the damage window).
+	/// Owner: commit one swing now — cocked pose on screen at once, release predicted one windup later (the chained /
+	/// counter / class windup, PlayerCombat.Exchange.cs), intent to the host (which re-validates once and owns the damage).
 	/// </summary>
-	bool TryFirePrimaryAttack( byte swingDir, string source, byte comboStep = 0, bool special = false )
+	bool TryFirePrimaryAttack( byte swingDir, string source, bool chained )
 	{
-		if ( IsActiveMainHandBroken() )
+		if ( IsActiveMainHandBroken() || IsStaminaExhausted )
 			return false;
 
 		var vitals = Components.Get<PlayerVitals>();
@@ -789,31 +801,28 @@ public partial class PlayerCombat : Component
 			return false;
 		}
 
-		var intent = BuildPrimaryAttackIntent( swingDir, GetViewDirectionForIntent(), GetCameraPositionForIntent(), comboStep, special );
+		var windup = OwnerWindupFor( chained );
+		var comboStep = (byte)(chained ? Math.Min( 250, _ownerSwingStep + 1 ) : 1);
+		var intent = BuildPrimaryAttackIntent( swingDir, GetViewDirectionForIntent(), GetCameraPositionForIntent(), comboStep );
 
 		var animation = Components.Get<PlayerAnimation>();
 		animation?.BeginMeleeSwingSnap( intent.AttackType );
 		// Owner prediction of the host's windup; the host re-schedules with its own number when it accepts.
-		animation?.ReleaseMeleeSwingSnap( intent.AttackType, special ? GetMeleeWeaponTimings().SpecialWindupSeconds : GetMeleeWindupSeconds() );
+		animation?.ReleaseMeleeSwingSnap( intent.AttackType, windup );
 
 		if ( LogAttackStaminaDebug )
 			Log.Info( $"[PlayerCombat/Stamina] predict cost={GetPrimaryAttackStaminaCost():0.#}" );
 
 		_combatNetDiag = $"{source} → dispatch";
 		LogCombatDiag( "CLIENT / OWNER",
-			$"{CombatClientLogVersion} — {source} seq={intent.IntentSequence} dir={SwingDirs.Letter( intent.SwingDir )} — dispatch now" );
+			$"{CombatClientLogVersion} — {source} seq={intent.IntentSequence} dir={SwingDirs.Letter( intent.SwingDir )} step={comboStep} wind={windup:0.###}s — dispatch now" );
 
+		BeginOwnerSwingTimeline( intent.IntentSequence, windup, chained );
+		BeginOwnerHeavyMorphTracking( intent.AttackType );
 		DispatchPrimaryAttackReleaseToAuthority( intent );
 
-		_ownerSwingTracking = true;
-		_ownerSwingSeq = intent.IntentSequence;
-		_ownerSwingClickAt = Time.NowDouble;
-		_ownerSwingHeavy = false;
-		_ownerHeavyFlashPlayed = false;
-		OnOwnerSwingFired( comboStep, special );
-		// A queued click fires later: it is only a heavy if the button is (still / again) held when it fires.
-		// The Q special never turns heavy.
-		_ownerSwingHolding = !special && Input.Down( PrimaryAttackAction );
+		// A buffered / chained click fires later: it is only a heavy if the button is (still / again) held when it fires.
+		_ownerSwingHolding = Input.Down( PrimaryAttackAction );
 		if ( !_ownerSwingHolding )
 			SubmitPrimaryAttackReleased( _ownerSwingSeq );
 		return true;
@@ -821,49 +830,94 @@ public partial class PlayerCombat : Component
 
 	/// <summary>
 	/// Owner: the button came up. Before the light windup ended the swing stays light; on a heavy it is the strike
-	/// (never earlier than the heavy windup). Either way the host hears it (it decides on its own clock).
+	/// (never earlier than the heavy windup, nor before a morphed weapon settled). A heavy is never let go by itself
+	/// (Mark 2026-11-16) - only an empty stamina bar does, as on the host. Either way the host hears it.
 	/// </summary>
 	void TickOwnerHeavyHold()
 	{
 		if ( !_ownerSwingTracking )
 			return;
 
-		if ( _ownerSwingHolding && !Input.Down( PrimaryAttackAction ) )
+		var letGo = _ownerSwingHolding && (!Input.Down( PrimaryAttackAction ) || (_ownerSwingHeavy && OwnerHeavyHoldOutOfStamina()));
+		if ( letGo )
 		{
-			_ownerSwingHolding = false;
+			OwnerLetGoOfSwing();
 			SubmitPrimaryAttackReleased( _ownerSwingSeq );
-			if ( _ownerSwingHeavy )
-			{
-				var strikeAt = Math.Max( Time.NowDouble, _ownerSwingClickAt + GetMeleeWeaponTimings().HeavyWindupSeconds );
-				Components.Get<PlayerAnimation>()?.RescheduleOwnerStrike( strikeAt );
-			}
 		}
 
-		// Heavy-ready glint on the owner's own clock: the swing went heavy and the heavy windup has run.
-		if ( _ownerSwingHeavy && !_ownerHeavyFlashPlayed
-		     && Time.NowDouble - _ownerSwingClickAt >= GetMeleeWeaponTimings().HeavyWindupSeconds )
+		// Heavy-ready glint on the owner's own clock: the swing went heavy and the heavy windup has run (or, after a
+		// morph, the re-arm - it plays again on every new side, still held).
+		if ( _ownerSwingHeavy && _ownerSwingHolding && !_ownerHeavyFlashPlayed && Time.NowDouble >= OwnerHeavyArmedAt() )
 		{
 			_ownerHeavyFlashPlayed = true;
 			PlayHeavyReadyFlashLocal();
 		}
 
-		if ( Time.NowDouble - _ownerSwingClickAt > Math.Max( HeavyMaxHoldSeconds, GetMeleeWeaponTimings().HeavyWindupSeconds ) + 0.5 )
-			_ownerSwingTracking = false;
 	}
 
-	/// <summary>Owner: the held / queued swing was cancelled (right click raises the guard) — stop tracking it.</summary>
-	void ClearOwnerSwingTracking() => _ownerSwingTracking = false;
+	/// <summary>Owner: the held swing is let go (the button came up, the bar ran dry, or the host released it after a chamber).</summary>
+	void OwnerLetGoOfSwing()
+	{
+		_ownerSwingHolding = false;
+		EndOwnerHeavyMorph();
+		if ( !_ownerSwingHeavy )
+			return;
+
+		// Let go inside a morph's re-arm: it strikes from the new side as a light (as the host decides).
+		if ( OwnerHasMorphed && Time.NowDouble < OwnerHeavyArmedAt() )
+			_ownerSwingHeavy = false;
+		var strikeAt = Math.Max( Time.NowDouble, OwnerHeavyStrikeFloor() );
+		_ownerStrikeAt = strikeAt;
+		Components.Get<PlayerAnimation>()?.RescheduleOwnerStrike( strikeAt );
+	}
+
+	/// <summary>
+	/// Host: this pawn's held swing just chambered a blow - it now strikes as if the button had come up (Mark 2026-11-18:
+	/// "it should block the hit and then swing the sword after ... its kinda 2 phases"). The owner hears it too, so its
+	/// own cocked pose strikes although the button is still down.
+	/// </summary>
+	internal void HostReleaseHeldSwingAfterChamber()
+	{
+		if ( _serverMeleeAttack is not { } runtime )
+			return;
+
+		var seq = runtime.IntentSequence;
+		HostNotePrimaryAttackReleased( seq );
+		if ( GameObject.Network is { Active: true, Owner: not null } )
+			RpcOwnerSwingReleasedByChamber( seq );
+		else
+			OwnerSwingReleasedByChamber( seq );
+	}
+
+	[Rpc.Owner]
+	void RpcOwnerSwingReleasedByChamber( ushort seq ) => OwnerSwingReleasedByChamber( seq );
+
+	void OwnerSwingReleasedByChamber( ushort seq )
+	{
+		if ( _ownerSwingTracking && _ownerSwingSeq == seq && _ownerSwingHolding )
+			OwnerLetGoOfSwing();
+	}
+
+	/// <summary>Host: this pawn's swing in flight is still winding up with the attack button held (its type, for the held chamber).</summary>
+	internal bool TryGetServerHeldWindup( out byte attackType )
+	{
+		attackType = 0;
+		if ( _serverMeleeAttack is not { IsWindupHeld: true } runtime )
+			return false;
+
+		attackType = runtime.AttackType;
+		return true;
+	}
 
 	/// <summary>
 	/// Owner prediction, asked by <see cref="PlayerAnimation"/> the moment the light strike would fire: still holding
 	/// (and able to pay the heavy's extra stamina) → this swing is heavy and the cocked pose keeps hanging until the
-	/// release (<see cref="TickOwnerHeavyHold"/> moves the strike there) or <see cref="HeavyMaxHoldSeconds"/>
-	/// (<paramref name="strikeAtSandbox"/>).
+	/// release (<see cref="TickOwnerHeavyHold"/> moves the strike there); <paramref name="strikeAtSandbox"/> is "never".
 	/// </summary>
 	internal bool TryExtendOwnerSwingToHeavy( out double strikeAtSandbox )
 	{
 		strikeAtSandbox = 0;
-		if ( !_ownerSwingTracking || _ownerSwingHeavy || !_ownerSwingHolding || _ownerSwingSpecial || !IsLocalCombatDriver() )
+		if ( !_ownerSwingTracking || _ownerSwingHeavy || !_ownerSwingHolding || !IsLocalCombatDriver() )
 			return false;
 
 		var vitals = Components.Get<PlayerVitals>();
@@ -871,8 +925,8 @@ public partial class PlayerCombat : Component
 			return false;
 
 		_ownerSwingHeavy = true;
-		OnOwnerSwingTurnedHeavy();
-		strikeAtSandbox = _ownerSwingClickAt + Math.Max( HeavyMaxHoldSeconds, GetMeleeWeaponTimings().HeavyWindupSeconds );
+		strikeAtSandbox = double.MaxValue;
+		_ownerStrikeAt = strikeAtSandbox;
 		return true;
 	}
 
@@ -922,19 +976,46 @@ public partial class PlayerCombat : Component
 	bool IsBlockPreventingAttack() =>
 		LocalBlockInputActive() || IsAuthoritativeMeleeBlocking;
 
+	/// <summary>
+	/// Owner, fluid block on (<see cref="CombatControlSettings.FluidBlock"/>): the attack button held on a held guard is
+	/// the <b>block pivot</b> (Mark 2026-11-18: "right click then left click at the same time and thatll keep the block
+	/// where it is (left/right/overhead)") - the guard stays on its side while the look turns the body, so the sword can
+	/// be carried into a blow. The block button itself must be down: a click inside a tapped guard's minimum hold is
+	/// still an attack waiting for the guard to drop.
+	/// </summary>
+	bool IsBlockPivotInput() =>
+		CombatControlSettings.FluidBlock && Input.Down( BlockAction ) && Input.Down( PrimaryAttackAction ) && LocalBlockInputActive();
+
+	/// <summary>
+	/// Owner: mouse flicks may not move the raised guard to another side right now - the block pivot holds it, or fluid
+	/// block is off (the guard keeps the side it rose on; a new side needs a release and a fresh press). A flick that
+	/// lands while the guard is still rising belongs to that press either way (<see cref="BlockActivationSeconds"/>).
+	/// </summary>
+	bool IsGuardSideHeld()
+	{
+		if ( IsBlockPivotInput() )
+			return true;
+
+		return !CombatControlSettings.FluidBlock
+		       && _localGuardUpSince > 0 && Time.NowDouble - _localGuardUpSince >= Math.Max( 0f, BlockActivationSeconds );
+	}
+
 	/// <summary>The guard is up as this peer sees it: the owner's held block, or the host-confirmed block on other peers. Drives the shield raise (<c>PlayerAnimation.Shield.cs</c>).</summary>
 	public bool IsGuardShown => IsBlockPreventingAttack();
 
 	// Consumed-awaiting-release stays a hard gate: a broken/eaten block requires an actual release
 	// before re-guarding — held-start must not bypass that, only the cooldown/recovery wait.
+	/// <summary>The guard rises only with the arm free: no recovery / stagger, no swing of its own in flight, stamina not exhausted.</summary>
 	protected virtual bool CanStartBlock() =>
-		!IsCombatActionLocked && !_meleeBlockConsumedAwaitingRelease;
+		!IsCombatActionLocked && !_meleeBlockConsumedAwaitingRelease && !IsOwnerSwingHoldingGuard() && !IsStaminaExhausted;
 
 	protected virtual bool CanContinueBlock() =>
 		!IsCombatActionLocked && !_meleeBlockConsumedAwaitingRelease;
 
+	/// <summary>Owner: the guard is up — the button is held, or it was let go inside the minimum hold.</summary>
 	bool LocalBlockInputActive() =>
-		IsLocalCombatDriver() && _block.Down && !_meleeBlockConsumedAwaitingRelease;
+		IsLocalCombatDriver() && !_meleeBlockConsumedAwaitingRelease
+		&& (_block.Down || _testGuardHeld || (_localGuardUpSince > 0 && Time.NowDouble - _localGuardUpSince < Math.Max( 0f, BlockMinHoldSeconds )));
 
 	/// <summary>
 	/// Camera for view / crosshair: first <see cref="CameraComponent"/> on this pawn or its descendants,
@@ -1019,10 +1100,6 @@ public partial class PlayerCombat : Component
 				SwingForwardWorldXzFromHorizontalView( viewForwardForUpSwing, out xz );
 				v = 1f;
 				return;
-			case SwingDirs.Down:
-				SwingForwardWorldXzFromHorizontalView( viewForwardForUpSwing, out xz );
-				v = -1f;
-				return;
 			case SwingDirs.Left:
 				xz = -CameraRightWorldXz();
 				v = 0f;
@@ -1059,11 +1136,12 @@ public partial class PlayerCombat : Component
 	/// |evidence| above a small floor; otherwise returns <paramref name="current"/> to limit flicker.
 	/// Input is the time-decayed accumulator (screen pixels, y positive = mouse moved down), not a single frame's delta.
 	/// </summary>
-	byte ClassifyLiveSwingFrame( Vector2 mouseDelta, byte current, bool allowDown = false )
+	byte ClassifyLiveSwingFrame( Vector2 mouseDelta, byte current )
 	{
-		// Attacks read down as the jab; a guard has no down side, so there down still falls to the nearer side.
-		var down = allowDown ? SwingDirs.Down : (mouseDelta.x > 0f ? SwingDirs.Right : SwingDirs.Left);
-		var min = Math.Max( SwingLiveMicroMotionPixels, SwingAxisDeadzone * 0.25f );
+		// No down side (no stab): a downward flick falls to the nearer side.
+		var down = mouseDelta.x > 0f ? SwingDirs.Right : SwingDirs.Left;
+		// Combat sensitivity scales every pixel gate: the floor here and the commit threshold (SwingFlipCommitThreshold).
+		var min = Math.Max( SwingLiveMicroMotionPixels, SwingAxisDeadzone * 0.25f ) * CombatControlSettings.DirectionFlipPixelScale;
 		var yUp = SwingVerticalEvidence( mouseDelta );
 		var dx = mouseDelta.x;
 		var ax = MathF.Abs( dx );
@@ -1106,8 +1184,6 @@ public partial class PlayerCombat : Component
 			return SwingDirs.Up;
 		if ( yUp < -min )
 		{
-			if ( allowDown )
-				return SwingDirs.Down;
 			if ( dx > min )
 				return SwingDirs.Right;
 			if ( dx < -min )
@@ -1122,7 +1198,7 @@ public partial class PlayerCombat : Component
 		return current;
 	}
 
-	/// <summary>Upward evidence (pixels); negative is down (the jab).</summary>
+	/// <summary>Upward evidence (pixels); negative is down.</summary>
 	float SwingVerticalEvidence( Vector2 mouseDelta ) =>
 		SwingInvertLookYForUp ? -mouseDelta.y : mouseDelta.y;
 
@@ -1135,8 +1211,6 @@ public partial class PlayerCombat : Component
 			return MathF.Max( 0f, -dx );
 		if ( cardinal == SwingDirs.Right )
 			return MathF.Max( 0f, dx );
-		if ( cardinal == SwingDirs.Down )
-			return MathF.Max( 0f, -yUp );
 		return MathF.Max( 0f, yUp );
 	}
 
@@ -1150,7 +1224,7 @@ public partial class PlayerCombat : Component
 		bool invertAttackLateral = false )
 	{
 		var classifyCurrent = invertAttackLateral ? SwingDirs.MirrorLateral( currentDir ) : currentDir;
-		var desire = ClassifyLiveSwingFrame( evidence, classifyCurrent, allowDown: invertAttackLateral );
+		var desire = ClassifyLiveSwingFrame( evidence, classifyCurrent );
 		if ( invertAttackLateral )
 			desire = SwingDirs.MirrorLateral( desire );
 		if ( desire == currentDir )
@@ -1174,15 +1248,12 @@ public partial class PlayerCombat : Component
 	}
 
 	byte ClassifyAttackLiveSwingFrame( Vector2 evidence, byte currentAttackDir ) =>
-		SwingDirs.MirrorLateral( ClassifyLiveSwingFrame( evidence, SwingDirs.MirrorLateral( currentAttackDir ), allowDown: true ) );
+		SwingDirs.MirrorLateral( ClassifyLiveSwingFrame( evidence, SwingDirs.MirrorLateral( currentAttackDir ) ) );
 
 	/// <summary>
 	/// Screen-space teardrop direction for the unified crosshair (<see cref="PlayerCrosshair"/>);
 	/// +x right, +y down. The live attack cursor; the block morph while the guard button is held.
 	/// </summary>
-	/// <summary>Crosshair attack arrow: hidden in static combo mode (the mouse picks nothing) unless the guard is held.</summary>
-	public bool ShowsAttackTeardrop => !StaticComboActive || Input.Down( BlockAction );
-
 	public Vector2 GetTeardropScreenDirection()
 	{
 		byte swingPreview;
@@ -1212,8 +1283,6 @@ public partial class PlayerCombat : Component
 			return new Vector2( -1f, 0f );
 		if ( cardinal == SwingDirs.Right )
 			return new Vector2( 1f, 0f );
-		if ( cardinal == SwingDirs.Down )
-			return new Vector2( 0f, 1f );
 		return new Vector2( 0f, -1f );
 	}
 
@@ -1333,50 +1402,34 @@ public partial class PlayerCombat : Component
 
 	/// <summary>
 	/// Pin the swing basis (yaw + pitch) from the submitted intent — every pawn, local owner included — and remember
-	/// the look yaw at that moment. Turning during the swing (free in the windup, slowed during the strike, never limited —
-	/// Mark 2026-11-05) carries the arc, the body facing and the damage with it: one basis for all
-	/// of them, so the painted fan still matches the damage. A right-to-left swing turned 90° left reaches what was
-	/// behind the shoulder at the click.
+	/// the body yaw at that moment. The body keeps following the look during the swing (at the body turn cap,
+	/// <see cref="PlayerMovement.BodyTurnDegreesPerSecond"/>, the same in every phase), and its turn
+	/// (<see cref="GetSwingTurnDegrees"/>) carries the arc and the damage with it: one basis for the body, the painted
+	/// fan and the damage.
 	/// </summary>
 	internal void PushMeleeAttackBasisFromIntent( in AttackReleaseIntent intent, byte attackType )
 	{
 		_meleeIntentBasisYawOverride = ResolveIntentCombatBasisYaw( intent, attackType );
 		_meleeIntentStartPitchDegrees = ClampMeleeSwingPitchDegrees( ResolveIntentViewPitchDegrees( intent ) );
 		_meleeIntentPitchCaptured = true;
-		// Disabled too: a proxy / scripted pawn still carries the synced EyeAngles.
-		var controller = Components.Get<PlayerController>( FindMode.EverythingInSelf );
-		_meleeSwingTurnTracked = controller is not null;
-		_meleeSwingLastEyeYaw = controller is not null ? controller.EyeAngles.yaw : 0f;
-		_meleeSwingTurnAccum = 0f;
-		_meleeSwingTurnUpdatedAt = Time.Now;
+		_meleeSwingBodyYaw0 = SwingBodyYawUnwrapped();
 	}
 
 	internal void ClearMeleeAttackBasisFromIntent()
 	{
 		_meleeIntentBasisYawOverride = null;
 		_meleeIntentPitchCaptured = false;
-		_meleeSwingTurnTracked = false;
+		_meleeSwingBodyYaw0 = float.NaN;
 	}
 
-	/// <summary>
-	/// How far this pawn has turned since its swing committed — no limit (Mark 2026-11-05: "let players spin as much as
-	/// they want, it should just be slow"; the slow is the look lock during the strike). Summed from the per-frame look
-	/// change once per frame, so turning past 180° one way never wraps round to the other side.
-	/// </summary>
+	/// <summary>How far the body (and with it the swing basis) has turned since the swing committed; unwrapped, so a long spin never wraps.</summary>
 	float GetSwingTurnDegrees()
 	{
-		if ( !_meleeSwingTurnTracked || Components.Get<PlayerController>( FindMode.EverythingInSelf ) is not { } controller )
+		if ( float.IsNaN( _meleeSwingBodyYaw0 ) )
 			return 0f;
 
-		if ( _meleeSwingTurnUpdatedAt != Time.Now )
-		{
-			_meleeSwingTurnUpdatedAt = Time.Now;
-			var eye = controller.EyeAngles.yaw;
-			_meleeSwingTurnAccum += NormalizeDegreesDelta( eye - _meleeSwingLastEyeYaw );
-			_meleeSwingLastEyeYaw = eye;
-		}
-
-		return _meleeSwingTurnAccum;
+		var now = SwingBodyYawUnwrapped();
+		return float.IsNaN( now ) ? 0f : now - _meleeSwingBodyYaw0;
 	}
 
 	/// <summary>The committed swing's yaw including the turn since the click; null when no swing is pinned.</summary>
@@ -1415,10 +1468,14 @@ public partial class PlayerCombat : Component
 		return Rotation.LookAt( forward.Normal ).Angles().pitch;
 	}
 
-	/// <summary>Live aim for melee paths — camera yaw plus influenced pitch for every swing type.</summary>
+	/// <summary>
+	/// Live aim for melee paths — the body's yaw (a swing leaves where the body faces, not where the camera already is;
+	/// the camera yaw on pawns without a body tracker) plus influenced pitch for every swing type.
+	/// </summary>
 	public Rotation GetMeleeCombatBasisRotation( byte attackType )
 	{
-		var yaw = LiveSwingBasisYaw ?? GetCameraAimRotation().Angles().yaw;
+		var yaw = LiveSwingBasisYaw
+		          ?? (Components.Get<PlayerMovement>( FindMode.EverythingInSelf ) is { } movement ? movement.BodyYawDegrees : GetCameraAimRotation().Angles().yaw);
 		return GetMeleeCombatBasisRotationForYaw( attackType, yaw );
 	}
 
@@ -1436,7 +1493,8 @@ public partial class PlayerCombat : Component
 	public Rotation GetMeleeCombatBasisRotationForYaw( byte attackType, float yawDegrees ) =>
 		new Angles( GetMeleeSwingPitchDegrees( attackType ), yawDegrees, 0f ).ToRotation();
 
-	CombatChannelRules GetBlockRules() => new CombatChannelRules { CooldownAfterValidReleaseSeconds = BlockCooldownAfterRelease };
+	/// <summary>No re-guard cooldown: the guard is responsive (the minimum hold keeps a tap up for <see cref="BlockMinHoldSeconds"/>).</summary>
+	CombatChannelRules GetBlockRules() => new CombatChannelRules { CooldownAfterValidReleaseSeconds = 0f };
 
 	/// <summary>Stamina spent per swing (class <c>staminaCost</c>).</summary>
 	public float GetPrimaryAttackStaminaCost() => GetMeleeWeaponTimings().StaminaCost;
@@ -1448,72 +1506,12 @@ public partial class PlayerCombat : Component
 		return Math.Max( 0f, t.StaminaHeavyCost - t.StaminaCost );
 	}
 
-	double _shoveFacingUntilSandbox;
-	float _shoveFacingYaw;
-
-	/// <summary>Shove is instantaneous — hold the camera-facing visual through its combat lock window.</summary>
-	internal void BeginShoveFacingLock()
-	{
-		_shoveFacingYaw = GetCameraYawRotation().Angles().yaw;
-		_shoveFacingUntilSandbox = Time.NowDouble + Math.Max( 0.1f, RecoveryShoveCombatLockSeconds );
-	}
-
-	/// <summary>True while a committed swing is in flight (basis pinned) — movement freezes root rotation for its duration.</summary>
-	internal bool IsSwingFacingPinned => _meleeIntentBasisYawOverride is not null;
-
-	/// <summary>
-	/// Yaw the pawn's VISUAL should face right now, when a combat action owns the facing. Pure data —
-	/// no transform writes here. <see cref="PlayerAnimation"/> applies it to the renderer child only
-	/// (never the physics root, which the controller + rigidbody interpolation fight over — that
-	/// fight was the visible facing spazz). Sources in priority order: in-flight swing basis, the
-	/// broadcast windup telegraph (any peer), the authoritative block guard (any peer), local
-	/// attack before the host confirms it, then the shove window. The bow's archer stance is not here — it is a
-	/// pose with its own sideways yaw, owned by PlayerAnimation (PlayerAnimation.Bow.cs).
-	/// </summary>
-	internal bool TryGetCombatFacingYaw( out float yawDegrees )
-	{
-		if ( LiveSwingBasisYaw is { } pinnedSwingYaw )
-		{
-			yawDegrees = pinnedSwingYaw;
-			return true;
-		}
-
-		if ( _windupTelegraphActive )
-		{
-			yawDegrees = _windupTelegraphBasisYaw;
-			return true;
-		}
-
-		if ( IsAuthoritativeMeleeBlocking || LocalBlockInputActive() )
-		{
-			yawDegrees = GetBlockCombatBasisYaw();
-			return true;
-		}
-
-		// Owner on a pure client between its click and the host confirming the swing (the basis is not pinned yet).
-		// (The bow's sideways archer stance is PlayerAnimation's own facing — PlayerAnimation.Bow.cs.)
-		if ( IsLocalCombatDriver() && _ownerExpectsHostMeleeBusy )
-		{
-			yawDegrees = GetCameraYawRotation().Angles().yaw;
-			return true;
-		}
-
-		if ( Time.NowDouble < _shoveFacingUntilSandbox )
-		{
-			yawDegrees = _shoveFacingYaw;
-			return true;
-		}
-
-		yawDegrees = 0f;
-		return false;
-	}
-
 	/// <summary>Owner → host intent for a swing committed on the click (press = release: there is no hold).</summary>
-	AttackReleaseIntent BuildPrimaryAttackIntent( byte swingDir, Vector3 view, Vector3 camera, byte comboStep = 0, bool special = false )
+	AttackReleaseIntent BuildPrimaryAttackIntent( byte swingDir, Vector3 view, Vector3 camera, byte comboStep = 1 )
 	{
 		_attackIntentSequence++;
 		CardinalVectors( swingDir, view, out var swingXz, out var swingV );
-		var attackType = special ? MeleeAttackTypes.Stab : ResolveAttackTypeFromCursorDir( swingDir );
+		var attackType = ResolveAttackTypeFromCursorDir( swingDir );
 		var now = RealTime.GlobalNow;
 
 		return new AttackReleaseIntent
@@ -1538,8 +1536,7 @@ public partial class PlayerCombat : Component
 			AttackType = attackType,
 			CombatBasisYawDegrees = GetMeleeCombatBasisYaw( attackType ),
 			CombatBasisPitchDegrees = GetMeleeCursorAlignedPitchDegrees( attackType ),
-			ComboStep = comboStep,
-			IsSpecial = special
+			ComboStep = comboStep
 		};
 	}
 
@@ -1592,8 +1589,6 @@ public partial class PlayerCombat : Component
 		SetOwnerExpectsHostMeleeBusy( true );
 		_combatNetDiag = Networking.IsHost ? "host→Rpc.Host (single server pass)" : "RPC->host sent (await result)";
 		LogCombatDiag( "CLIENT (dispatch)", "RpcSubmitPrimaryAttackRelease -> host (see editor Output)" );
-		_pendingSwingVisualIntent = intent;
-		_hasPendingSwingVisualIntent = true;
 		RpcSubmitPrimaryAttackRelease( intent );
 	}
 
@@ -1609,46 +1604,16 @@ public partial class PlayerCombat : Component
 		var hadBusy = _ownerExpectsHostMeleeBusy;
 		SetOwnerExpectsHostMeleeBusy( false );
 
-		_hasPendingSwingVisualIntent = false;
-
 		if ( hadBusy && !string.IsNullOrWhiteSpace( reason ) )
 			LogCombatDiag( "CLIENT / OWNER", $"Cleared owner melee busy expect ({reason})" );
 	}
 
 	/// <summary>
-	/// One gate for "a swing owns this pawn": the host swing (windup + damage swoop), a block / parry
-	/// lockout and the hit reaction. While true a click queues exactly one follow-up instead of firing.
-	/// The strike clip's settle frames are NOT busy (Mark 2026-11-04: the next windup starts the moment the
-	/// damage ends) — the graph's <c>b_sword_interrupt</c> cuts them short when the next click cocks.
+	/// One gate for "a swing owns this pawn" on its driver: the recovery / hit-reaction lock, the host swing (windup,
+	/// release, recovery) or the owner's own predicted swing timeline (PlayerCombat.Exchange.cs).
 	/// </summary>
-	bool IsMeleeAttackChainBusy()
-	{
-		if ( IsCombatActionLocked )
-			return true;
-
-		if ( ServerHasActiveMeleeAttackAction )
-			return true;
-
-		// Pure clients need this until RpcOwner sweep-complete. Listen-server host uses ServerHasActive above —
-		// keeping ownerExpects after sweep end locked out the next press for ~a second / forever.
-		if ( GameObject.Network is { Active: true }
-		     && !Networking.IsHost
-		     && _ownerExpectsHostMeleeBusy )
-		{
-			if ( _ownerExpectsHostMeleeBusySince > 0
-			     && Time.NowDouble - _ownerExpectsHostMeleeBusySince > OwnerExpectsHostMeleeBusyTimeoutSeconds )
-			{
-				LogCombatDiag( "CLIENT / OWNER",
-					$"ownerExpectsHostMeleeBusy timed out after {OwnerExpectsHostMeleeBusyTimeoutSeconds:0.##}s — unlocking Attack1" );
-				ClearOwnerMeleeBusyExpect( "timeout" );
-				return false;
-			}
-
-			return true;
-		}
-
-		return false;
-	}
+	bool IsMeleeAttackChainBusy() =>
+		IsCombatActionLocked || ServerHasActiveMeleeAttackAction || OwnerSwingPhaseNow() != MeleeSwingPhase.None;
 
 	[Rpc.Host]
 	public void RpcSubmitPrimaryAttackRelease( AttackReleaseIntent intent )
@@ -1703,19 +1668,10 @@ public partial class PlayerCombat : Component
 		_combatNetDiag = $"rpc owner: acc={result.Accepted} hit={result.Hit} dmg={result.DamageDealt:0.#}";
 		LogCombatDiag( "CLIENT (Rpc.Owner)", FormatAttackResultLog( result ) );
 
-		// Rejected (including RejectMeleeBusy): the swing is simply lost — the player must press again.
+		// Rejected (including RejectMeleeBusy): the swing is simply lost — drop the predicted swing, press again.
 		if ( !result.Accepted )
-			ClearOwnerMeleeBusyExpect( $"reject {result.DebugCode}" );
+			OwnerOnSwingRejected( result );
 
-		// Backup: if HostOnly broadcast was missed, still show the local slash path on the attacking client.
-		if ( result.Accepted
-		     && _hasPendingSwingVisualIntent
-		     && ClientMeleeSwingTraceDebug )
-		{
-			StartClientMeleeSwingTracePlayback( _pendingSwingVisualIntent );
-		}
-
-		_hasPendingSwingVisualIntent = false;
 	}
 
 	[Rpc.Owner]
@@ -1814,7 +1770,8 @@ public partial class PlayerCombat : Component
 
 	float SwingFlipCommitThreshold( byte current, byte desire )
 	{
-		var t = SwingFlipCommitPixels;
+		// The player's combat sensitivity: level 1 = these pixels as tuned, level 10 = ~14x (about 100 px of travel).
+		var t = SwingFlipCommitPixels * CombatControlSettings.DirectionFlipPixelScale;
 		if ( IsOpposingLateralSwing( current, desire ) )
 			t += Math.Max( 0f, SwingLateralFlipExtraPixels );
 		if ( IsLateralToUp( current, desire ) )
@@ -1845,9 +1802,9 @@ public partial class PlayerCombat : Component
 			$"last block rel: {CombatAuthority.FormatSwingLog( _blockReleaseSwingXz, _blockReleaseSwingVerticalHint, _blockReleaseSwingDir )}",
 			size: 12f );
 		y += 16f;
-		// Facing diagnostics: if faceTarget == body while the model LOOKS rotated, the rotation is
+		// Facing diagnostics: if target == body while the model LOOKS rotated, the rotation is
 		// baked in the animation clip, not the facing write.
-		var faceTarget = TryGetCombatFacingYaw( out var facingYaw ) ? $"{facingYaw:0.#}" : "—";
+		var faceTarget = Components.Get<PlayerMovement>( FindMode.EverythingInSelf ) is { } facingMovement ? $"{facingMovement.BodyYawDegrees:0.#}" : "—";
 		var bodyYaw = Components.Get<PlayerAnimation>()?.GetBodyVisualYawDegrees() is { } by ? $"{by:0.#}" : "—";
 		DebugOverlay.ScreenText( new Vector2( debugScreenX, y ),
 			$"facing: target={faceTarget} body={bodyYaw} root={WorldRotation.Angles().yaw:0.#} cam={GetCameraAimRotation().Angles().yaw:0.#}",

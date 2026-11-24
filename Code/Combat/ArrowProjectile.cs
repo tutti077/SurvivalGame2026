@@ -59,6 +59,17 @@ public sealed class ArrowProjectile : Component
 	ArrowFlightTrail _trail;
 	bool _trailOwnResolved;
 
+	/// <summary>Shooter's client only: a local, un-networked twin flown from the release (<see cref="ClientSpawnPredicted"/>).</summary>
+	bool _predicted;
+	/// <summary>Shooter's client: this is the host's arrow and the predicted twin is the one on screen.</summary>
+	bool _hiddenForPrediction;
+	bool _hitTickSent;
+	/// <summary>Host: flight time still to make up for the shooter's latency (<see cref="HostCatchUp"/>).</summary>
+	float _catchUp;
+
+	/// <summary>Host: the shot left the shooter's bow this long ago on their own machine.</summary>
+	internal void HostCatchUp( float seconds ) => _catchUp = Math.Max( 0f, seconds );
+
 	public void Configure(
 		GameObject attackerRoot,
 		Component attackerCombat,
@@ -93,15 +104,46 @@ public sealed class ArrowProjectile : Component
 		base.OnStart();
 		_trail = ArrowFlightTrail.Create( Scene );
 		_trail?.Push( WorldPosition );
+		if ( _predicted && _trail is not null )
+		{
+			_trail.IsOwn = true;
+			_trailOwnResolved = true;
+		}
 	}
 
 	protected override void OnUpdate()
 	{
 		base.OnUpdate();
-		if ( !GameObject.IsValid() || _trail is null || !_trail.IsValid() || _trail.Ended )
+		if ( !GameObject.IsValid() )
+			return;
+
+		if ( _hiddenForPrediction )
+		{
+			// The shooter already watches the predicted twin: this one only brings the host's verdict.
+			if ( ImpactKind == ImpactHitCreature && !_hitTickSent )
+			{
+				_hitTickSent = true;
+				ResolveShooterCombat()?.NotifyOwnArrowHit();
+			}
+			return;
+		}
+
+		if ( _trail is null || !_trail.IsValid() || _trail.Ended )
 			return;
 
 		ResolveTrailOwner();
+
+		// A client's own arrow as the host sends it back: late by the round trip. The predicted twin flew from the
+		// release, so hide this one on the shooter's machine (Mark 2026-11-17: "make his game predict them").
+		if ( !_predicted && _trailOwnResolved && _trail.IsOwn && Networking.IsActive && !Networking.IsHost
+		     && GameObject.Network is { Active: true } )
+		{
+			_hiddenForPrediction = true;
+			foreach ( var r in Components.GetAll<ModelRenderer>( FindMode.EverythingInSelfAndDescendants ) )
+				r.Enabled = false;
+			_trail.End( null );
+			return;
+		}
 
 		if ( ImpactKind != ImpactNone )
 		{
@@ -170,19 +212,35 @@ public sealed class ArrowProjectile : Component
 			return;
 		}
 
-		_age += dt;
-		if ( _age >= LifetimeSeconds )
-		{
-			// Lost in flight — no recovery.
-			DestroySelf();
-			return;
-		}
-
 		var scene = Scene.IsValid() ? Scene : Sandbox.Game.ActiveScene;
 		if ( scene is null || !scene.IsValid() )
 		{
 			DestroySelf();
 			return;
+		}
+
+		// A remote owner's shot reached the host late: fly the missed time first, in ordinary steps, so the arrow is
+		// where the shooter's predicted one is.
+		while ( _catchUp > 1e-4f )
+		{
+			var step = Math.Min( _catchUp, dt );
+			_catchUp -= step;
+			if ( FlightStep( scene, step ) )
+				return;
+		}
+
+		FlightStep( scene, dt );
+	}
+
+	/// <summary>One step of flight: gravity, the swept trace, the landing. True when the flight ended.</summary>
+	bool FlightStep( Scene scene, float dt )
+	{
+		_age += dt;
+		if ( _age >= LifetimeSeconds )
+		{
+			// Lost in flight — no recovery.
+			DestroySelf();
+			return true;
 		}
 
 		var gravity = scene.PhysicsWorld?.Gravity ?? new Vector3( 0f, 0f, -800f );
@@ -202,15 +260,34 @@ public sealed class ArrowProjectile : Component
 		var tr = trace.Run();
 		if ( tr.Hit )
 		{
+			if ( _predicted )
+			{
+				PredictedLand( tr.HitPosition );
+				return true;
+			}
+
 			var hitCreature = TryApplyHit( tr );
 			HostEmbedAsPickup( scene, tr );
 			HostLand( tr.HitPosition, hitCreature );
-			return;
+			return true;
 		}
 
 		WorldPosition = end;
 		if ( _velocity.LengthSquared > 1e-6f )
 			WorldRotation = Rotation.LookAt( _velocity.Normal, Vector3.Up );
+		return false;
+	}
+
+	/// <summary>Shooter's predicted twin: the flight ends where this machine sees it land. No damage, no pickup - the host's arrow decides those.</summary>
+	void PredictedLand( Vector3 at )
+	{
+		_spent = true;
+		_spentAge = 0f;
+		WorldPosition = at;
+		foreach ( var r in Components.GetAll<ModelRenderer>( FindMode.EverythingInSelfAndDescendants ) )
+			r.Enabled = false;
+		if ( _trail is { IsValid: true } && !_trail.Ended )
+			_trail.End( at );
 	}
 
 	void HostEmbedAsPickup( Scene scene, SceneTraceResult tr )
@@ -291,19 +368,12 @@ public sealed class ArrowProjectile : Component
 
 		go.Tags.Add( "worlddrop" );
 
+		// Never a collider on a stuck arrow, in a victim or in the ground: pickup is registry-driven, and a loose
+		// item blocks nothing (Mark 2026-11-23). Only ApplyLoosePhysics gives it one, for the fall.
 		if ( hitObject.IsValid() && receiver is not null )
 		{
-			// No collider while riding a victim: a child collider would fold into the entity's
-			// rigidbody and clutter its traces. Pickup is registry-driven, not collider-driven.
 			var stuck = go.Components.Create<StuckArrow>();
 			stuck.HostAttach( hitObject, receiver, shaftLength, thickness );
-		}
-		else
-		{
-			var sphere = go.Components.Create<SphereCollider>();
-			sphere.Static = true;
-			sphere.Radius = Math.Max( 3f, shaftLength * 0.22f );
-			sphere.Friction = 1f;
 		}
 
 		go.Enabled = true;
@@ -369,6 +439,9 @@ public sealed class ArrowProjectile : Component
 		if ( !CombatAuthority.IsDamageVictimAlive( dmg ) )
 			return false;
 
+		if ( TryHostBlockArrow( dmg, tr.HitPosition ) )
+			return false;
+
 		var creature = CombatAuthority.ResolveEntityVitalsForDamageReceiver( dmg ) is not null
 		               || CombatAuthority.ResolvePlayerVitalsForDamageReceiver( dmg ) is not null;
 		using ( PlaytestLog.Kind( "arrow" ) )
@@ -376,6 +449,38 @@ public sealed class ArrowProjectile : Component
 		if ( creature && _burnDamage > 0f )
 			BurnEffect.HostApply( dmg, _burnDamage, _burnSeconds, _attackerCombat );
 		return creature;
+	}
+
+	/// <summary>
+	/// Host: a raised guard (sword or shield) stops an arrow coming from the front (Mark 2026-11-12). Same rules as a
+	/// melee block - front arc, guard activation time - judged from the direction the arrow flew in, but any guard
+	/// direction stops it; the blocker pays the light block row (<see cref="MeleeBlockStaggerCatalog"/>) instead of the
+	/// arrow damage.
+	/// </summary>
+	bool TryHostBlockArrow( DamageReceiver dmg, Vector3 hitPosition )
+	{
+		if ( MeleeBlockResolution.FindDefenderCombat( dmg ) is not { IsAuthoritativeMeleeBlocking: true } defender )
+			return false;
+
+		var flightDir = _velocity.LengthSquared > 1e-6f ? _velocity.Normal : WorldRotation.Forward;
+		var contact = new MeleeBlockContact
+		{
+			AttackerRoot = _attackerRoot,
+			AttackerPosition = hitPosition - flightDir * 200f,
+			DefenderRoot = defender.GameObject,
+			DefenderCombat = defender,
+			HitPosition = hitPosition,
+			HitSandboxTime = Time.NowDouble,
+			AttackRayGeometryValidated = true,
+			IgnoreGuardDirection = true
+		};
+		if ( !defender.TryServerResolveBlock( in contact, defender.LogMeleeBlockRejectionsToConsole, out var outcome, out _ ) )
+			return false;
+
+		defender.NotifyAuthoritativeMeleeBlockIntercepted();
+		// An arrow does not break the guard (the shield keeps covering); only melee blows do.
+		defender.ServerApplyBlockOutcome( in outcome, _attackerCombat, hitPosition, breaksGuard: false );
+		return true;
 	}
 
 	/// <summary>Host: the flight is over - publish where and how it landed, hide the shaft, despawn shortly.</summary>
@@ -395,6 +500,38 @@ public sealed class ArrowProjectile : Component
 		_spent = true;
 		if ( GameObject.IsValid() )
 			GameObject.Destroy();
+	}
+
+	/// <summary>
+	/// Shooter's client: the arrow this machine sees the moment the string is let go - local only, same launch and
+	/// ballistics as the host's, no damage. The host's arrow arrives a round trip later and stays hidden here.
+	/// </summary>
+	public static void ClientSpawnPredicted( Scene scene, Vector3 origin, Vector3 velocity, GameObject attackerRoot, string ammoResourceId )
+	{
+		if ( scene is null || !scene.IsValid() )
+			return;
+
+		var go = new GameObject( true, "arrow_projectile_predicted" );
+		go.NetworkMode = NetworkMode.Never;
+		go.Parent = scene;
+		go.WorldPosition = origin;
+		if ( velocity.LengthSquared > 1e-6f )
+			go.WorldRotation = Rotation.LookAt( velocity.Normal, Vector3.Up );
+
+		var unitsPerMeter = 40f;
+		var controller = attackerRoot?.Components.Get<PlayerController>();
+		if ( controller is not null && controller.IsValid() )
+			unitsPerMeter = Math.Max( 24f, controller.BodyHeight ) / 1.8f;
+
+		var length = ShaftLengthMeters * unitsPerMeter;
+		var thickness = ShaftThicknessMeters * unitsPerMeter;
+		AttachArrowVisual( go, ammoResourceId, length, thickness );
+
+		var proj = go.Components.Create<ArrowProjectile>();
+		proj._predicted = true;
+		proj.Configure( attackerRoot, null, velocity, 0f, hostAuthority: true, ammoResourceId: ammoResourceId, shaftLength: length );
+		proj.Radius = Math.Max( 1.2f, thickness * 0.75f );
+		go.Enabled = true;
 	}
 
 	/// <summary>Host/offline: spawn a networked arrow and start simulation.</summary>

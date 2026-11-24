@@ -10,17 +10,17 @@ namespace Survival;
 /// </summary>
 public partial class PlayerCombat
 {
-	// Attacker lockouts after a blocked / parried swing live in melee_weapon_classes.json per weapon
+	// Attacker lockouts after a blocked / chambered swing live in melee_weapon_classes.json per weapon
 	// class — the properties below cover the pawn-level reactions that have no weapon class: the shove.
 
 	[Property, Group( "Combat — Timings" ), Title( "Defender recovery after shove-vs-block (s)" )]
-	public float RecoveryDefenderShoveBlockSeconds { get; set; } = 0.4f;
+	public float RecoveryDefenderShoveBlockSeconds { get; set; } = 0.5f;
 
 	[Property, Group( "Combat — Timings" ), Title( "Defender recovery after shove (unblocked) (s)" )]
-	public float RecoveryDefenderShoveSeconds { get; set; } = 0.4f;
+	public float RecoveryDefenderShoveSeconds { get; set; } = 0.9f;
 
 	[Property, Group( "Combat — Timings" ), Title( "Attacker shove combat lock (s)" ), Description( "After a punch / shield bash: no sword, block or punch for this long (the punch pose itself may play on; a swing or a raised guard cuts it)." ), Range( 0.05f, 2f ), Step( 0.05f )]
-	public float RecoveryShoveCombatLockSeconds { get; set; } = 0.15f;
+	public float RecoveryShoveCombatLockSeconds { get; set; } = 0.2f;
 
 	float _combatRecoveryRemaining;
 	CombatRecoveryAnim _combatRecoveryAnim = CombatRecoveryAnim.None;
@@ -372,13 +372,7 @@ public partial class PlayerCombat
 			var seq = CombatRecoveryAnims.MeleePunchLeft;
 			if ( animation.IsPlayingCombatSequence( seq ) )
 			{
-				if ( animation.IsCombatSequenceFinished() )
-				{
-					LogShoveAnim( "punch clip finished — release pose (combat lock continues)" );
-					animation.ExitCombatSequenceToLocomotion();
-					return;
-				}
-
+				// The clip's end hands the body back on every peer (PlayerAnimation.TickPunchPoseExit); the lock runs on.
 				animation.MaintainCombatSequencePose( seq, keepMeleeSwordVisible: true );
 				return;
 			}
@@ -443,26 +437,47 @@ public partial class PlayerCombat
 	}
 
 	/// <summary>
-	/// Attacker lockout after the swing resolves (Mark 2026-11-04): a miss or a landed hit has none — the next
-	/// click's windup may start the moment the damage swoop ends; a blocked swing locks the attacker out for
-	/// the class <c>recoveryBlockedSeconds</c> (100 ms one-handed), a perfect parry for <c>recoveryParriedSeconds</c> (200 ms),
-	/// a parried heavy for <c>recoveryParriedHeavySeconds</c> (300 ms).
+	/// Attacker lockout when the swing was stopped (Mark 2026-11-14): a hit or a miss recovers inside the swing runtime
+	/// (or chains); a blocked or chambered swing ends on contact and locks the attacker out — no attack, no guard — for the
+	/// class <c>recoveryBlockedSeconds</c> (250 ms one-handed; a blocked heavy only <c>recoveryBlockedHeavySeconds</c>,
+	/// 150 ms, so the heavy keeps the initiative; a chambered heavy gets the full light lockout). The combo is over.
 	/// </summary>
 	void ApplyAttackerRecoveryFromFinish( in MeleeAttackFinishOutcome outcome )
 	{
-		if ( outcome.IsShove )
+		if ( outcome.IsShove || !(outcome.WasBlocked || outcome.WasChambered) )
 			return;
 
 		var t = GetMeleeWeaponTimings();
+		HostResetExchange();
+		var seconds = outcome.IsHeavy && !outcome.WasChambered ? t.RecoveryBlockedHeavySeconds : t.RecoveryBlockedSeconds;
+		ServerBeginCombatRecovery( seconds, CombatRecoveryAnim.Rpg2hAttackMoving );
 
-		if ( outcome.WasParried )
-		{
-			ServerBeginCombatRecovery( outcome.IsHeavy ? t.RecoveryParriedHeavySeconds : t.RecoveryParriedSeconds,
-				CombatRecoveryAnim.Rpg2hAttackMoving );
-			return;
-		}
-
-		if ( outcome.WasBlocked )
-			ServerBeginCombatRecovery( t.RecoveryBlockedSeconds, CombatRecoveryAnim.Rpg2hAttackMoving );
+		// The owner predicts its own swing (release + the class recovery) and keeps the guard down while it runs
+		// (CanStartBlock / IsOwnerSwingHoldingGuard). Stopped on contact, that prediction is wrong: the lockout above is all
+		// there is. Left running, a HELD guard came up ~0.7 s after the block - after the blocker's counter had landed
+		// (Mark 2026-11-17: "Scav uses its initiative, i hold block and it goes right through and hits me anyway").
+		if ( GameObject.Network is { Active: true } && !IsLocalCombatDriver() )
+			RpcOwnerSwingStoppedOnContact();
+		else
+			OwnerOnSwingStoppedOnContact();
 	}
+
+	[Rpc.Owner( NetFlags.Reliable )]
+	void RpcOwnerSwingStoppedOnContact() => OwnerOnSwingStoppedOnContact();
+
+	/// <summary>
+	/// Owner: the host stopped this pawn's swing on a block / chamber - drop the predicted release and recovery. Only the
+	/// machine that predicted the swing has one to drop.
+	/// </summary>
+	void OwnerOnSwingStoppedOnContact()
+	{
+		if ( _ownerSwingTracking )
+			ClearOwnerSwingTracking();
+	}
+
+	/// <summary>combat_test: the owner's predicted swing phase (None once dropped).</summary>
+	internal MeleeSwingPhase TestOwnerSwingPhase => OwnerSwingPhaseNow();
+
+	/// <summary>combat_test: start the owner's predicted timeline for a light swing, as a real click does.</summary>
+	internal void TestBeginOwnerSwing( ushort seq ) => BeginOwnerSwingTimeline( seq, GetMeleeWeaponTimings().WindupSeconds, chained: false );
 }

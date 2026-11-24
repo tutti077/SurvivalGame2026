@@ -25,8 +25,15 @@ public partial class PlayerCombat
 	[Property, Group( "Combat — Bow" ), Title( "Min draw power (0-1)" ), Range( 0.1f, 1f ), Step( 0.05f )]
 	public float BowMinDrawPower { get; set; } = 0.35f;
 
-	[Property, Group( "Combat — Bow" ), Title( "Max aim cone radius (px)" ), Description( "Draw-ring outer size at min charge; shrinks to the classic crosshair at full draw." ), Range( 16f, 120f ), Step( 1f )]
+	[Property, Group( "Combat — Bow" ), Title( "Max aim cone radius (px)" ), Description( "Draw-ring outer size through the whole power phase; shrinks to the classic crosshair over the accuracy phase." ), Range( 16f, 120f ), Step( 1f )]
 	public float BowMaxAimConePixels { get; set; } = 56f;
+
+	/// <summary>
+	/// The draw is two phases (Mark 2026-11-18): this share of <see cref="BowFullDrawSeconds"/> is POWER (launch speed and
+	/// bow damage go min → max, the cone stays widest), the rest is ACCURACY (power stays full, the cone narrows).
+	/// </summary>
+	[Property, Group( "Combat — Bow" ), Title( "Power phase share of the draw (0-1)" ), Description( "First part of the full draw time: range and damage charge up, the aim cone stays widest. The rest of the draw narrows the cone at full power." ), Range( 0.1f, 0.9f ), Step( 0.05f )]
+	public float BowPowerPhaseFraction { get; set; } = 0.5f;
 
 	/// <summary>
 	/// Multiplies current third-person camera distance while holding Attack2 with a bow.
@@ -88,6 +95,9 @@ public partial class PlayerCombat
 
 	public bool IsBowCharging => _bowCharging;
 
+	/// <summary>Aiming an arrow: drawing it (Attack1 held) or ADS (Attack2 held). Movement takes <see cref="PlayerMovement.BowAimSpeedPenalty"/> instead of the plain weapon-out penalty.</summary>
+	public bool IsBowAiming => _bowCharging || _bowAdsActive;
+
 	/// <summary>True while bow ADS (Attack2 held). Camera pull-in is applied in <see cref="PlayerMovement"/> PostCameraSetup.</summary>
 	public bool IsBowAdsActive => _bowAdsActive;
 
@@ -100,16 +110,37 @@ public partial class PlayerCombat
 		return Math.Clamp( BowAdsCameraDistanceScale, 0.25f, 1f );
 	}
 
-	/// <summary>Screen-space draw ring radius for the crosshair (pixels).</summary>
-	public float GetBowDrawRingRadiusPixels()
-	{
-		if ( !_bowCharging )
-			return 0f;
+	/// <summary>Where the power phase ends on the 0..1 draw. A scene saved before the property existed loads it as 0.</summary>
+	float BowPowerPhaseSplit01 => BowPowerPhaseFraction > 0f ? Math.Clamp( BowPowerPhaseFraction, 0.1f, 0.9f ) : 0.5f;
 
+	/// <summary>
+	/// POWER of a shot at <paramref name="draw01"/> of the full draw: 0 → 1 across the power phase, 1 from there on.
+	/// The one mapping the launch speed, the bow damage and the crosshair's yellow charge all read
+	/// (owner prediction, host, predicted client arrow, HUD).
+	/// </summary>
+	public float BowPowerFraction( float draw01 ) =>
+		Math.Clamp( Math.Clamp( draw01, 0f, 1f ) / BowPowerPhaseSplit01, 0f, 1f );
+
+	/// <summary>
+	/// ACCURACY of a shot at <paramref name="draw01"/> of the full draw: 0 (widest cone) through the power phase, then
+	/// 0 → 1 across the rest. The one mapping the shot spread and the crosshair's draw ring both read.
+	/// </summary>
+	public float BowAccuracyFraction( float draw01 )
+	{
+		var split = BowPowerPhaseSplit01;
+		return Math.Clamp( (Math.Clamp( draw01, 0f, 1f ) - split) / (1f - split), 0f, 1f );
+	}
+
+	/// <summary>Aim cone radius on screen (px) at <paramref name="draw01"/>: the draw ring's size and the spread's outer bound.</summary>
+	float BowAimConeRadiusPixels( float draw01 )
+	{
 		const float minRadius = 7f;
 		var maxRadius = Math.Max( minRadius + 1f, BowMaxAimConePixels );
-		return MathX.Lerp( maxRadius, minRadius, BowDrawCharge01 );
+		return MathX.Lerp( maxRadius, minRadius, BowAccuracyFraction( draw01 ) );
 	}
+
+	/// <summary>Screen-space draw ring radius for the crosshair (pixels).</summary>
+	public float GetBowDrawRingRadiusPixels() => _bowCharging ? BowAimConeRadiusPixels( BowDrawCharge01 ) : 0f;
 
 	void TickOwnerRangedInput()
 	{
@@ -211,6 +242,9 @@ public partial class PlayerCombat
 	{
 		var charge01 = Math.Clamp( holdSeconds / Math.Max( 0.05f, BowFullDrawSeconds ), 0f, 1f );
 		ResolveBowShot( out var origin, out var direction );
+		// The spread is rolled here, on the machine whose crosshair shows the cone: host and shooter then fly the
+		// same arrow (the host has no view of a remote owner's screen to size the cone with).
+		direction = ApplyBowInaccuracy( direction, charge01, (uint)( Time.NowDouble * 1000.0 ) ^ (uint)GameObject.Id.GetHashCode() );
 
 		var preferred = Components.Get<PlayerAmmoPreference>()?.PreferredAmmoResourceId ?? string.Empty;
 		var intent = new BowFireIntent
@@ -222,8 +256,7 @@ public partial class PlayerCombat
 			DirX = direction.x,
 			DirY = direction.y,
 			DirZ = direction.z,
-			PreferredAmmoResourceId = preferred ?? string.Empty,
-			ClientSeed = (uint)( Time.NowDouble * 1000.0 ) ^ (uint)GameObject.Id.GetHashCode()
+			PreferredAmmoResourceId = preferred ?? string.Empty
 		};
 
 		if ( GameObject.Network is not { Active: true } )
@@ -233,9 +266,29 @@ public partial class PlayerCombat
 		}
 
 		if ( Networking.IsHost )
+		{
 			ServerTryFireBow( intent );
-		else
-			RpcHostFireBow( intent );
+			return;
+		}
+
+		RpcHostFireBow( intent );
+
+		// Client: fly the arrow now instead of waiting a round trip for the host's (Mark 2026-11-17: "arrows are barely
+		// working for him, can you make his game predict them?"). Same launch as the host computes; the host's arrow
+		// still decides the hit and stays hidden on this machine (ArrowProjectile).
+		if ( IsCombatActionLocked || IsHandsOffCombat )
+			return;
+
+		var ammoId = string.IsNullOrWhiteSpace( preferred ) ? "arrow_wood" : preferred;
+		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
+		ArrowProjectile.ClientSpawnPredicted( scene, origin, ComputeBowLaunchVelocity( direction, charge01 ), GameObject, ammoId );
+	}
+
+	/// <summary>Launch velocity of a shot at <paramref name="charge01"/> draw along <paramref name="aimDir"/> (host and predicting shooter).</summary>
+	Vector3 ComputeBowLaunchVelocity( Vector3 aimDir, float charge01 )
+	{
+		var power = MathX.Lerp( Math.Clamp( BowMinDrawPower, 0.05f, 1f ), 1f, BowPowerFraction( charge01 ) );
+		return aimDir * (ComputeFullDrawSpeed() * power * Math.Max( 0.1f, BowLaunchSpeedMultiplier ));
 	}
 
 	/// <summary>Farthest the camera ray looks for the point under the crosshair (m).</summary>
@@ -333,7 +386,7 @@ public partial class PlayerCombat
 		if ( IsCombatActionLocked )
 			return;
 
-		if ( Components.Get<PlayerMovement>() is { IsSeatedDriver: true } or { PodLocked: true } )
+		if ( IsHandsOffCombat )
 			return;
 
 		var weaponId = ResolveEquippedMainHandId();
@@ -352,14 +405,13 @@ public partial class PlayerCombat
 			return;
 
 		var charge01 = Math.Clamp( intent.Charge01, 0f, 1f );
-		var power = MathX.Lerp( Math.Clamp( BowMinDrawPower, 0.05f, 1f ), 1f, charge01 );
 
 		var ammoDamage = AmmoCatalog.GetAmmoDamage( ammoId );
 		var weaponDamage = EquipmentUpgrade.ScaleStat( AmmoCatalog.GetWeaponDamage( weaponId ), GetActiveWeaponTier() );
 		var weaponContribution = MathX.Lerp(
 			Math.Clamp( BowMinWeaponDamageContribution, 0f, Math.Max( 0f, weaponDamage ) ),
 			Math.Max( 0f, weaponDamage ),
-			charge01 );
+			BowPowerFraction( charge01 ) );
 		var damage = ammoDamage + weaponContribution;
 
 		var aimDir = new Vector3( intent.DirX, intent.DirY, intent.DirZ );
@@ -372,13 +424,14 @@ public partial class PlayerCombat
 		var bodyHeight = ResolveBowUnitsPerMeter() * 1.8f;
 		if ( (origin - (WorldPosition + Vector3.Up * (bodyHeight * 0.6f))).Length > bodyHeight )
 			origin = ResolveBowHandEstimate( aimDir );
-		aimDir = ApplyBowInaccuracy( aimDir, charge01, intent.ClientSeed );
 
-		var speed = ComputeFullDrawSpeed() * power * Math.Max( 0.1f, BowLaunchSpeedMultiplier );
-		var velocity = aimDir * speed;
+		var velocity = ComputeBowLaunchVelocity( aimDir, charge01 );
 
 		var scene = GameObject.Scene.IsValid() ? GameObject.Scene : Sandbox.Game.ActiveScene;
-		ArrowProjectile.HostSpawn( scene, origin, velocity, damage, GameObject, this, ammoId );
+		var arrow = ArrowProjectile.HostSpawn( scene, origin, velocity, damage, GameObject, this, ammoId );
+		// A remote owner let go one trip ago: the host's arrow makes up that flight time first.
+		if ( arrow.IsValid() && HostOwnerLatencySeconds() is var late and > 0f )
+			arrow.Components.Get<ArrowProjectile>()?.HostCatchUp( late );
 
 		// Bow durability: 1 tick per shot fired, hit or miss.
 		HostAddWearToActiveMainHand();
@@ -386,8 +439,8 @@ public partial class PlayerCombat
 
 	Vector3 ApplyBowInaccuracy( Vector3 aimDir, float charge01, uint seed )
 	{
-		// Full draw ≈ perfect center; low charge = random point inside the draw cone.
-		var spread01 = 1f - Math.Clamp( charge01, 0f, 1f );
+		// Full draw ≈ perfect center; through the power phase and early in the accuracy phase = a random point inside the draw cone.
+		var spread01 = 1f - BowAccuracyFraction( charge01 );
 		if ( spread01 <= 0.01f )
 			return aimDir;
 
@@ -395,7 +448,7 @@ public partial class PlayerCombat
 		var fov = cam.IsValid() ? Math.Clamp( cam.FieldOfView, 20f, 110f ) : 80f;
 		var screenH = cam.IsValid() ? Math.Max( 1f, cam.ScreenRect.Height ) : 1080f;
 
-		var ringPx = MathX.Lerp( Math.Max( 8f, BowMaxAimConePixels ), 7f, charge01 );
+		var ringPx = BowAimConeRadiusPixels( charge01 );
 		// Random radius inside circle (sqrt for uniform disk).
 		var rng = new Random( (int)seed );
 		var u = (float)rng.NextDouble();
@@ -445,5 +498,4 @@ public struct BowFireIntent
 	public float DirY;
 	public float DirZ;
 	public string PreferredAmmoResourceId;
-	public uint ClientSeed;
 }

@@ -10,11 +10,9 @@ public static class MeleeAttackTypes
 	public const byte Right = 1;
 	public const byte Forward = 2;
 
-	/// <summary>Straight jab along the look direction: the down cursor with any weapon (Mark 2026-11-05: "a club jab"), and every direction of a thrust weapon.</summary>
-	public const byte Stab = 3;
-
 	/// <summary>
-	/// Maps cursor cardinal to attack type. Default: right→Right, left→Left, up→Forward, down→Stab.
+	/// Maps cursor cardinal to attack type: right→Right, left→Left, up→Forward (the overhead). There is no thrust
+	/// (Mark 2026-11-14: Last Oasis has no stab - left, right and overhead only).
 	/// When <paramref name="southpawSwing"/> is true, left/right are swapped (legacy inverted mapping).
 	/// </summary>
 	public static byte FromCursorDir( byte cursorDir, bool southpawSwing = false )
@@ -23,17 +21,25 @@ public static class MeleeAttackTypes
 			return southpawSwing ? Left : Right;
 		if ( cursorDir == SwingDirs.Left )
 			return southpawSwing ? Right : Left;
-		if ( cursorDir == SwingDirs.Down )
-			return Stab;
 		return Forward;
 	}
+
+	/// <summary>
+	/// The swing that chambers <paramref name="attackType"/> (Mark 2026-11-16: "it needs to mirror the attack. Overhead to
+	/// overhead then left attack vs right and right attack vs left").
+	/// </summary>
+	public static byte Mirror( byte attackType ) => attackType switch
+	{
+		Left => Right,
+		Right => Left,
+		_ => Forward,
+	};
 
 	public static string Label( byte attackType )
 	{
 		if ( attackType == Left ) return "LeftAttack";
 		if ( attackType == Right ) return "RightAttack";
 		if ( attackType == Forward ) return "ForwardAttack";
-		if ( attackType == Stab ) return "StabAttack";
 		return "?";
 	}
 }
@@ -73,7 +79,7 @@ public readonly record struct MeleeHitResult
 	public int TargetsHitCount { get; init; }
 	public bool TargetWasAlreadyHit { get; init; }
 	public bool WasBlocked { get; init; }
-	/// <summary>True when the hit was intercepted by a perfect parry (subset of <see cref="WasBlocked"/>).</summary>
-	public bool WasParried { get; init; }
+	/// <summary>True when the defender's own swing intercepted this one (a chamber; subset of <see cref="WasBlocked"/>).</summary>
+	public bool WasChambered { get; init; }
 	public float IncomingAngleDegrees { get; init; }
 }

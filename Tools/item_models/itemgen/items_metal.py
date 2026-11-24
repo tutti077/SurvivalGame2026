@@ -113,7 +113,7 @@ def tier_trim_blade(rng, m, tier, x0, length, w, th):
 	return m
 
 
-def make_sword(rng, tier, blade_len=0.72, w=0.026, th=0.009, grip=0.17, guard=0.08, style="cross", jag=0.0):
+def make_sword(rng, tier, blade_len=0.9, w=0.026, th=0.009, grip=0.17, guard=0.08, style="cross", jag=0.0):
 	m = sword_hilt(rng, tier, grip, guard, style=style)
 	x0 = grip + 0.022
 	m.add(blade(rng, x0, blade_len, w, th, tip=0.16, taper=0.3, jag=jag))
@@ -132,7 +132,7 @@ def _sword(name, tier, **kw):
 
 _sword("sword_scrap", "scrap", jag=0.25)
 _sword("sword_iron", "iron")
-_sword("sword_titanium", "titanium", w=0.024, style="swept", blade_len=0.76)
+_sword("sword_titanium", "titanium", w=0.024, style="swept", blade_len=0.94)
 _sword("sword_arcsteel", "arcsteel", style="swept", w=0.028)
 
 
@@ -145,11 +145,11 @@ def sword_pulse(rng):
 	housing = loft(rng, 0.07, lambda s: 0.022 * (1 - 0.3 * s), lambda s: 0.036 * (1 - 0.2 * s), rings=3, segs=8, mat=M_DARK).translate(0.2, 0, 0)
 	m.add(housing)
 	m.add(torus(rng, 0.03, 0.004, n=10, segs=4, mat=7, axis="x").translate(0.245, 0, 0))
-	core = blade(rng, 0.26, 0.66, 0.016, 0.006, tip=0.2, taper=0.2)
+	core = blade(rng, 0.26, 0.84, 0.016, 0.006, tip=0.2, taper=0.2)
 	core.mat[:] = 7
 	m.add(core)
 	for s in (-1, 1):
-		rail = path_tube(rng, np.array([(0.26 + 0.66 * u, 0, s * (0.024 * (1 - 0.6 * u) + 0.002)) for u in np.linspace(0, 0.93, 6)]), radius=0.0045, segs=5,
+		rail = path_tube(rng, np.array([(0.26 + 0.84 * u, 0, s * (0.024 * (1 - 0.6 * u) + 0.002)) for u in np.linspace(0, 0.93, 6)]), radius=0.0045, segs=5,
 						 jitter=0.0, radius_fn=lambda u: 1.0 - 0.5 * u, mat=M_EDGE)
 		m.add(rail)
 	m.add(blob(rng, 0.008, subdiv=1, jitter=0.1, noise=0.05, mat=8).translate(0.24, 0.0, 0.0))

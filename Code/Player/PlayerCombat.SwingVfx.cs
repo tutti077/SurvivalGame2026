@@ -70,7 +70,7 @@ public partial class PlayerCombat
 	/// </summary>
 	internal void FeedSwingVfxFromDamageArc( byte attackType, float progress01 )
 	{
-		if ( !ShowSwingSlashTrail || attackType == MeleeAttackTypes.Stab || !GameObject.IsValid() )
+		if ( !ShowSwingSlashTrail || !GameObject.IsValid() )
 			return;
 
 		var vfx = ResolveSwingVfx();
@@ -162,19 +162,24 @@ public partial class PlayerCombat
 	internal bool WantsHeavyFlashBlade => _swingVfx is { WantsFlashBlade: true };
 
 	/// <summary>Host: a block landed on this pawn - every peer plays the streaks off its shield.</summary>
-	void ServerBroadcastBlockSparks( Vector3 hitWorld )
+	/// <param name="meetPush">World offset that carries the guarding weapon to the contact (zero = none; <see cref="PlayerAnimation.StartGuardMeet"/>).</param>
+	void ServerBroadcastBlockSparks( Vector3 hitWorld, Vector3 meetPush )
 	{
 		if ( GameObject.Network is { Active: true } )
-			RpcPlayBlockSparks( hitWorld );
+			RpcPlayBlockSparks( hitWorld, meetPush );
 		else
-			PlayBlockSparksLocal( hitWorld );
+			PlayBlockSparksLocal( hitWorld, meetPush );
 	}
 
 	[Rpc.Broadcast( NetFlags.HostOnly | NetFlags.Reliable )]
-	void RpcPlayBlockSparks( Vector3 hitWorld ) => PlayBlockSparksLocal( hitWorld );
+	void RpcPlayBlockSparks( Vector3 hitWorld, Vector3 meetPush ) => PlayBlockSparksLocal( hitWorld, meetPush );
 
-	void PlayBlockSparksLocal( Vector3 hitWorld )
+	void PlayBlockSparksLocal( Vector3 hitWorld, Vector3 meetPush )
 	{
+		// The sword reaches out to the contact; a raised shield is already what took the blow.
+		if ( Components.Get<PlayerAnimation>() is { IsValid: true } meetAnim && !meetAnim.TryGetShieldWorld( out _, out _ ) )
+			meetAnim.StartGuardMeet( meetPush );
+
 		if ( !ShowBlockSparks )
 			return;
 

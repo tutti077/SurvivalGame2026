@@ -21,9 +21,6 @@ public sealed class CombatAuthority : Component
 	[Property, Group( "Combat — Server validation" )]
 	public float MaxPlayerRootVsServerDelta { get; set; } = 256f;
 
-	[Property, Group( "Combat — Debug" )]
-	public bool LogMeleeStaminaSettlement { get; set; }
-
 	readonly Dictionary<Guid, double> _lastAcceptedAttackByAttacker = new();
 
 	protected override void OnEnabled()
@@ -189,48 +186,8 @@ public sealed class CombatAuthority : Component
 		if ( !double.IsFinite( intent.PressedGlobalSeconds ) || !double.IsFinite( intent.ReleasedGlobalSeconds ) )
 			return Fail( AttackReleaseDebugCode.RejectDirection, "attack intent timing not finite" );
 
-		if ( !pc.ServerCanBeginMeleeAttackAction() )
-			return Fail( AttackReleaseDebugCode.RejectMeleeBusy, "melee attack action busy or cannot begin on host" );
-
-		// Q special (static combo mode): the class must have one and the pawn must stand on the ground.
-		if ( intent.IsSpecial && !pc.HostMaySpecialAttack( out var specialReason ) )
-			return Fail( AttackReleaseDebugCode.RejectSpecialNotAllowed, specialReason );
-
-		var staminaCost = pc.GetPrimaryAttackStaminaCost();
-		if ( staminaCost > 1e-4f )
-		{
-			if ( pv is null )
-			{
-				return Fail( AttackReleaseDebugCode.RejectInsufficientStamina,
-					$"need {staminaCost:0.#} stamina, attacker has no PlayerVitals" );
-			}
-
-			if ( VitalsAuthority.Instance is { } vAuth )
-			{
-				if ( !vAuth.TryApplyDeltas( attacker, 0f, -staminaCost, pv ) )
-				{
-					return Fail( AttackReleaseDebugCode.RejectInsufficientStamina,
-						$"need {staminaCost:0.#} st, have {pv.CurrentStamina:0.#}" );
-				}
-			}
-			else
-			{
-				if ( !pv.HasStaminaFor( staminaCost ) )
-				{
-					return Fail( AttackReleaseDebugCode.RejectInsufficientStamina,
-						$"need {staminaCost:0.#} st, have {pv.CurrentStamina:0.#} (no VitalsAuthority)" );
-				}
-
-				if ( !pv.RequestVitalsDelta( 0f, -staminaCost ) )
-				{
-					return Fail( AttackReleaseDebugCode.RejectInsufficientStamina,
-						"stamina spend rejected" );
-				}
-			}
-
-			if ( LogMeleeStaminaSettlement )
-				Log.Info( $"[CombatAuthority/Stamina] {attacker.Name} drain cost={staminaCost:0.#} → st={pv.CurrentStamina:0.#}/{pv.CurrentStaminaMax:0.#}" );
-		}
+		if ( pv is not null && pv.IsExhausted )
+			return Fail( AttackReleaseDebugCode.RejectInsufficientStamina, $"exhausted — stamina must reach {pv.ExhaustionRecoverStamina:0.#} first" );
 
 		var swingAuth = ServerNormalizeSwingFromXz( intent.SwingFromX, intent.SwingFromY, attacker.WorldRotation );
 		var swingVert = ServerClampSwingVertical( intent.SwingVerticalHint );
@@ -238,23 +195,14 @@ public sealed class CombatAuthority : Component
 		var swingNote =
 			$" {FormatSwingLog( swingAuth, swingVert, intent.SwingDir )} type={MeleeAttackTypes.Label( attackType )}";
 
-		// Players commit on the click, so the host always plays the full class windup: client press / release
-		// times are never trusted to shorten it (that would let a client skip the readable windup). Held past it, the
-		// swing turns heavy unless the owner's release reached the host first (HostNotePrimaryAttackReleased).
-		// The Q special never turns heavy.
-		pc.ServerStartMeleeAttackAction( intent, 0f, swingNote, canTurnHeavy: !intent.IsSpecial );
-
-		_lastAcceptedAttackByAttacker[attacker.Id] = RealTime.GlobalNow;
-
-		return new AttackReleaseResult
-		{
-			Accepted = true,
-			Hit = false,
-			DamageDealt = 0f,
-			TargetGameObjectId = Guid.Empty,
-			DebugCode = AttackReleaseDebugCode.OkMeleeSweepStarted,
-			DebugDetail = $"scheduled host sweep seq={intent.IntentSequence} type={MeleeAttackTypes.Label( attackType )} wind={pc.GetMeleeWindupSeconds():0.###}s active={MeleeAttackPath.GetActiveDurationSeconds( pc ):0.###}s{swingNote}"
-		};
+		// Players commit on the click; the host picks the windup itself (class / chained / counter — client press and
+		// release times never shorten it), pays the stamina when the swing actually starts, and keeps a click that
+		// cannot fire yet as the one pending press (PlayerCombat.Exchange.cs). Held past the light windup the swing
+		// turns heavy unless the owner's release reached the host first (HostNotePrimaryAttackReleased).
+		var result = pc.HostSubmitPlayerSwing( intent, swingNote );
+		if ( result.Accepted )
+			_lastAcceptedAttackByAttacker[attacker.Id] = RealTime.GlobalNow;
+		return result;
 	}
 
 	public static Vector2 ServerNormalizeSwingFromXz( float sx, float sy, Rotation pawnWorldRot )

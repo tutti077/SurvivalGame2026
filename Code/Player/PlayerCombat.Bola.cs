@@ -120,7 +120,7 @@ public partial class PlayerCombat
 		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
 			return;
 
-		if ( IsCombatActionLocked || Components.Get<PlayerMovement>() is { IsSeatedDriver: true } or { PodLocked: true } )
+		if ( IsCombatActionLocked || IsHandsOffCombat )
 			return;
 
 		var weaponId = ResolveEquippedMainHandId();

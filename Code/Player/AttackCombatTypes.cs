@@ -39,7 +39,7 @@ public readonly record struct AttackReleaseIntent
 	/// </summary>
 	public float SwingVerticalHint { get; init; }
 
-	/// <summary>Discrete swing-from: <see cref="SwingDirs.Left"/>, <see cref="SwingDirs.Right"/>, <see cref="SwingDirs.Up"/> or <see cref="SwingDirs.Down"/>.</summary>
+	/// <summary>Discrete swing-from: <see cref="SwingDirs.Left"/>, <see cref="SwingDirs.Right"/>, or <see cref="SwingDirs.Up"/>.</summary>
 	public byte SwingDir { get; init; }
 
 	/// <summary>Locked attack pattern from cursor via <see cref="PlayerCombat.ResolveAttackTypeFromCursorDir"/> (informational; host re-resolves from <see cref="SwingDir"/>).</summary>
@@ -51,27 +51,29 @@ public readonly record struct AttackReleaseIntent
 	/// <summary>Cursor-aligned swing pitch (degrees) when submitted; unset (NaN) = derive from view forward.</summary>
 	public float CombatBasisPitchDegrees { get; init; }
 
-	/// <summary>Static combo mode: which combo swing the owner clicked (1 right, 2 left, 3 overhead); 0 = free aim / entity. The host recounts it.</summary>
+	/// <summary>
+	/// The owner's predicted combo step: 1 = from neutral, 2+ = fired as a chain at the end of the previous release
+	/// (PlayerCombat.Exchange.cs). The host only reads "claims a chain" and counts the combo itself; entities send 0.
+	/// </summary>
 	public byte ComboStep { get; init; }
 
-	/// <summary>Q special (static combo mode): the class special attack (sword / club stab). Host checks it once.</summary>
-	public bool IsSpecial { get; init; }
+	/// <summary>Host → peers only: the windup the host gave this swing (chain / counter / class), for the swing replay.</summary>
+	public float HostWindupSeconds { get; init; }
 }
 
-/// <summary>Melee cursor directions: left, right, up (overhead) and down (the jab, Mark 2026-11-05). Guards use L / R / U only.</summary>
+/// <summary>Melee cursor directions: left, right, up (overhead). Attacks and guards use L / R / U only (Mark 2026-11-14:
+/// three directions, no stab).</summary>
 public static class SwingDirs
 {
 	public const byte Left = 0;
 	public const byte Right = 1;
 	public const byte Up = 2;
-	public const byte Down = 3;
 
 	public static string Letter( byte c )
 	{
 		if ( c == Left ) return "L";
 		if ( c == Right ) return "R";
 		if ( c == Up ) return "U";
-		if ( c == Down ) return "D";
 		return "?";
 	}
 
@@ -116,7 +118,6 @@ public static class AttackReleaseDebugCode
 	public const int OkMeleeSweepStarted = 15;
 	public const int RejectMeleeBusy = 16;
 	public const int RejectNoMeleeItemEquipped = 17;
-	public const int RejectSpecialNotAllowed = 18;
 }
 
 public interface IDamageable
