@@ -13,6 +13,8 @@ the character faces -Y, its right side is -X, Z up; engine x,y,z = -bY, bX, bZ):
                                      human limits (natural hammer grip, pronation and flex budgets), the
                                      elbow leaning toward the hint direction
   ["left", [hand], [pole]]           left arm: two-bone reach for the left hand, elbow toward the pole point
+  ["right", [hand], [pole]]          the same reach for the right hand (poses without a sword: the wingsuit)
+  ["open_hands"]                     both hands to the rig's rest (straight wrist, open fingers); before the reaches
 
 The wrist is never set free-hand: the hand's orientation always comes from the measured grip of the
 engine's own right-hand item pose, so the sword sits in a closed fist with the blade at the grip angle.
@@ -291,10 +293,10 @@ def solve_grip(rig, grip, fist_world, blade_world, elbow_hint_world):
               f"fist {tuple(round(v, 2) for v in fist)} want {tuple(round(v, 2) for v in fist_world)}")
 
 
-def solve_left(rig, target_world, pole_world):
-    """Two-bone reach for the left hand: the hand keeps its item-pose orientation relative to the forearm."""
+def solve_left(rig, target_world, pole_world, side="L"):
+    """Two-bone reach for a hand (the left by default): the hand keeps its orientation relative to the forearm."""
     pb = rig.pose.bones
-    hand, lower, upper = pb["hand_L"], pb["arm_lower_L"], pb["arm_upper_L"]
+    hand, lower, upper = pb["hand_" + side], pb["arm_lower_" + side], pb["arm_upper_" + side]
     T, Pl = Vector(target_world), Vector(pole_world)
     S, E, H = bone_world(rig, upper.name), bone_world(rig, lower.name), bone_world(rig, hand.name)
     l1, l2 = (E - S).length, (H - E).length
@@ -343,7 +345,7 @@ def apply_pose(rig, base, grip, base_head, ops):
     torso_done = False
     for op in ops:
         kind = op[0]
-        if kind in ("grip", "left") and not torso_done:
+        if kind in ("grip", "left", "right") and not torso_done:
             keep_head(rig, base_head)
             torso_done = True
         if kind == "twist":
@@ -358,6 +360,15 @@ def apply_pose(rig, base, grip, base_head, ops):
             solve_grip(rig, grip, op[1], op[2], op[3])
         elif kind == "left":
             solve_left(rig, op[1], op[2])
+        elif kind == "right":
+            solve_left(rig, op[1], op[2], "R")
+        elif kind == "open_hands":
+            # both hands back to the rig's rest: straight wrist, open fingers (no sword in a wingsuit), so the
+            # two arms are the same pose mirrored
+            for b in pb:
+                if b.name in ("hand_L", "hand_R") or (b.name.startswith("finger_") and b.name[-2:] in ("_L", "_R")):
+                    b.matrix_basis = Matrix.Identity(4)
+            bpy.context.view_layer.update()
         else:
             raise ValueError("unknown op " + str(op))
     if not torso_done:
@@ -498,7 +509,8 @@ LEFT_BALANCE = ["left", [0.20, -0.30, 1.08], [0.55, 0.05, 0.80]]    # forward fo
 WINGSUIT_A = [  # wings out: arms spread wide at shoulder height a little behind the body (a dihedral once flat), chest
     # arched, head tipped back so the face looks along the flight, legs a little apart, feet pointed
     ["lean", -8],
-    ["grip", [-0.70, 0.10, 1.42], [0.0, -1.0, 0.0], [0.0, 0.6, 1.0]],
+    ["open_hands"],
+    ["right", [-0.70, 0.10, 1.42], [-0.30, 0.60, 1.80]],
     ["left", [0.70, 0.10, 1.42], [0.30, 0.60, 1.80]],
     ["rot", "neck_0", "x", -20], ["rot", "head", "x", -35],
     ["rot", "leg_upper_L", "y", -10], ["rot", "leg_upper_R", "y", 10],
@@ -506,32 +518,26 @@ WINGSUIT_A = [  # wings out: arms spread wide at shoulder height a little behind
 ]
 WINGSUIT_B = [  # the slow wing flex of the glide loop: arms a little higher and further back
     ["lean", -10],
-    ["grip", [-0.69, 0.14, 1.47], [0.0, -1.0, 0.0], [0.0, 0.6, 1.0]],
+    ["open_hands"],
+    ["right", [-0.69, 0.14, 1.47], [-0.30, 0.60, 1.80]],
     ["left", [0.69, 0.14, 1.47], [0.30, 0.60, 1.80]],
     ["rot", "neck_0", "x", -20], ["rot", "head", "x", -35],
     ["rot", "leg_upper_L", "y", -12], ["rot", "leg_upper_R", "y", 12],
     ["rot", "ankle_L", "x", 35], ["rot", "ankle_R", "x", 35],
 ]
 
-REST_R = [  # shoulder carry: fist in front of the right shoulder, blade back over it
-    ["lean", 3],
-    ["grip", [-0.18, -0.30, 1.22], [-0.10, 0.60, 0.79], [-0.3, 0.1, -1.0]],
+# Idle carry (Mark 2026-11-17: "the players 'weapon equipped but idle' position has the weapon by their waist ... When we
+# change from left right overhead dont change the pose or position of the weapon, that only happens when we actually
+# initiate an attack"): one rest pose whatever side the cursor aims; the wind-ups draw up out of it.
+REST_WAIST = [  # fist by the right hip, a little forward; blade pointing forward, a little down (low ready)
+    ["lean", 2],
+    ["grip", [-0.24, -0.18, 0.98], [-0.12, -0.94, -0.33], [-0.2, 0.6, -0.8]],
     LEFT_GUARD,
 ]
-REST_UP = [  # aiming up: arm lifted above the shoulder, blade tipped back over the head, ready to slam down
-    ["twist", -8], ["lean", -3],
-    ["grip", [-0.20, -0.10, 1.58], [-0.05, 0.80, 0.60], [-1.0, 0.1, 0.0]],
-    LEFT_BALANCE,
-]
-SWAP_MID = [  # changing shoulders: sword brought up in front, point up, well clear of the face
+SWAP_MID = [  # a held heavy morphed across the face (right / overhead <-> left): sword up in front, point up, clear of the face
     ["twist", 4], ["lean", 4],
     ["grip", [-0.04, -0.46, 1.24], [0.10, -0.25, 0.96], [-0.6, 0.1, -0.8]],
     LEFT_GUARD,
-]
-REST_L = [  # sword crossed to rest back over the left shoulder
-    ["twist", 8], ["lean", 3],
-    ["grip", [0.06, -0.26, 1.18], [0.38, 0.62, 0.69], [-0.35, -0.35, -1.0]],
-    ["left", [0.24, -0.06, 0.97], [0.45, 0.45, 1.15]],
 ]
 # COCKED_R / COCKED_L and the strike frames inside the host active window are not authored here: they are solved
 # from the debug attack path (see "debug attack path" below) so the blade tip follows the hit spheres.
@@ -552,14 +558,14 @@ SWING_L_END = [  # follow-through out on the right: arm reaching out past the ri
     ["grip", [-0.52, -0.26, 1.10], [-0.78, 0.10, -0.62], [-0.3, 0.6, -0.8]],
     LEFT_BALANCE,
 ]
-SWING_L_SETTLE = [  # recovery comes up in front (like the shoulder swap) before laying onto the left shoulder
+SWING_L_SETTLE = [  # recovery comes up in front before dropping to the waist
     ["twist", -2], ["lean", 5],
     ["grip", [-0.06, -0.45, 1.22], [0.08, -0.25, 0.96], [-0.6, 0.1, -0.8]],
     LEFT_GUARD,
 ]
 
 # Wind-ups (Mark 2026-11-05, the Last Oasis reference video): the cocked poses are WOUND UP behind the head / shoulder
-# with a bent elbow, reached by a drawn motion (Sword_Cocked_* clips: WIND_* -> COCKED_* over WIND_DRAW_S), never a
+# with a bent elbow, reached by a drawn motion (Sword_Cocked_* clips: WIND_* -> COCKED_*, playhead driven by the windup progress), never a
 # straight arm held out on the hit path.
 WIND_R = [  # forehand draw, halfway: fist up at the right shoulder, blade standing up
     ["twist", -10], ["lean", 0],
@@ -590,12 +596,13 @@ RELEASE_R = [  # forehand release (2 frames in), the mirror of RELEASE_L: fist d
 ]
 ENTRY_L = [  # backhand entry (3 frames in): fist out in front of the left shoulder, level blade pointing out left
     ["twist", 12], ["lean", 6],
-    ["grip", [0.36, -0.30, 1.36], [0.92, 0.38, -0.05], [0.0, -1.0, -0.4]],
+    ["grip", [0.36, -0.36, 1.36], [0.92, 0.38, -0.05], [0.0, -1.0, -0.4]],
     LEFT_BALANCE,
 ]
-RELEASE_L = [  # backhand release (2 frames in): fist driving forward-left, club swinging out left behind it
+RELEASE_L = [  # backhand release (2 frames in): fist driving forward-left, club swinging out left behind it (fist 4 cm
+    # further forward 2026-11-14: from the fully drawn cock of the 0.45 s windup the graph blend put the forearm 6 mm into the chest)
     ["twist", 16], ["lean", 2],
-    ["grip", [0.26, -0.36, 1.36], [0.82, 0.48, 0.30], [-0.2, -0.8, -0.6]],
+    ["grip", [0.26, -0.40, 1.36], [0.82, 0.48, 0.30], [-0.2, -0.8, -0.6]],
     LEFT_BALANCE,
 ]
 WIND_OVER = [  # overhead draw, halfway: fist rising in front of the right shoulder, blade up
@@ -624,33 +631,23 @@ CHOP_SETTLE = [
     LEFT_GUARD,
 ]
 
-WIND_STAB = [  # jab draw, halfway: fist coming down off the shoulder in front of the chest, club tipping forward
-    ["twist", -12], ["lean", 2],
-    ["grip", [-0.24, -0.20, 1.20], [0.0, -0.70, 0.71], [-0.3, 1.0, -0.6]],
-    ["left", [0.14, -0.38, 1.16], [0.55, -0.05, 0.85]],
-]
-COCKED_STAB = [  # jab cocked - the telegraph (Mark 2026-11-05: "clear that a stab is coming"): a hip chamber - fist
-    # pulled back beside the right hip with the elbow behind the body and bent ~90 degrees (a fist by the shoulder folded
-    # the elbow to 38 degrees and flared it up: "elbow is wonky"), club level and aimed at the target, body turned away,
-    # free hand reaching out at the target. Twist 22: looking 70 degrees aside, 30 put the chest 66 degrees off the hips.
-    ["twist", -22], ["lean", -2],
-    ["grip", [-0.24, 0.12, 1.08], [0.04, -0.98, 0.18], [-0.3, 1.0, -0.4]],
-    ["left", [0.10, -0.52, 1.34], [0.55, -0.10, 0.90]],
-]
-STAB_END = [  # full extension: arm nearly straight at chest height, club in line with the forearm, elbow underneath
-    ["twist", 14], ["lean", 10],
-    ["grip", [-0.12, -0.58, 1.28], [0.03, -1.0, 0.03], [-0.6, 0.3, -1.0]],
-    ["left", [0.26, -0.02, 1.02], [0.70, 0.30, 0.90]],
-]
-STAB_SETTLE = [
-    ["twist", 0], ["lean", 6],
-    ["grip", [-0.18, -0.32, 1.14], [-0.12, 0.30, 0.95], [-0.4, 0.1, -1.0]],
+# Guards (Mark 2026-11-14: "new animations for blocking left blocking right and kinda blend between them as we hold our
+# block position"): one pose per guard direction, the graph cross-fades between them (sword_guard_dir selector).
+BLOCK_UP = [  # overhead guard: blade held level ABOVE the head, at the height of the side guards' tips (Mark 2026-11-18:
+    # "needs to be above the player more ... right now its too low and makes a kinda H when you swap from left right to
+    # overhead" - it was level at 1.56 m, in front of the face; the side blades stand from 1.24 m to ~2.05 m)
+    ["twist", 4], ["lean", 2],
+    ["grip", [-0.36, -0.22, 1.86], [1.0, -0.10, 0.12], [-1.0, 0.2, -0.5]],
     LEFT_GUARD,
 ]
-
-BLOCK = [  # guard up (Mark 2026-11-04): blade held level in front of the head, fist out on the right, point to the left
-    ["twist", 4], ["lean", 2],
-    ["grip", [-0.42, -0.34, 1.56], [1.0, -0.10, 0.05], [-1.0, 0.2, -0.5]],
+BLOCK_L = [  # left guard: fist in front of the left chest, blade standing up on the left side, edge out
+    ["twist", 14], ["lean", 2],
+    ["grip", [0.20, -0.40, 1.24], [0.28, -0.12, 0.95], [-0.5, 0.1, -0.9]],
+    ["left", [0.30, 0.02, 0.98], [0.60, 0.30, 0.90]],
+]
+BLOCK_R = [  # right guard: fist out in front of the right chest, blade standing up on the right side, edge out
+    ["twist", -10], ["lean", 2],
+    ["grip", [-0.40, -0.36, 1.24], [-0.28, -0.12, 0.95], [-0.9, 0.2, -0.5]],
     LEFT_GUARD,
 ]
 
@@ -663,10 +660,10 @@ PATH_ARC_DEG = 150.0         # lateralArcDegrees
 PATH_PIVOT_Y_U = 54.0        # ServerEyeHeight 64 + MeleeAttackZaxisStart -10 (the pitch pivot, shoulder height)
 PATH_TILT_DEG = {"R": 25.0, "L": 25.0}   # MeleeAttackTiltDegreesRight / Left: mirrored, a slight downward swoop (Mark 2026-11-05)
 PATH_PUSH_U = 8.0            # MeleeSwingForwardOffsetMeters 0.2 x 40
-PATH_ACTIVE_S = 0.20         # activeSeconds (Mark 2026-11-04: 200 ms damage swoop): the strike clip starts when the host's active window opens
+PATH_ACTIVE_S = 0.18         # activeSeconds (Mark 2026-11-14 spec: 180 ms release): the strike clip starts when the host's release opens
 U_PER_M = 39.37              # human model units per Blender metre
 SWORD_TIP_M = 40.0 / U_PER_M  # sword_reforged.vmdl is 40 u butt -> tip and its butt sits on hold_R (grip along 0)
-STRIKE_FPS = 60              # lateral strikes are baked at 60 fps: 13 path samples inside the 0.2 s active window
+STRIKE_FPS = 60              # lateral strikes are baked at 60 fps: 12 path samples inside the 0.18 s release
 PATH_STEPS = int(round(PATH_ACTIVE_S * STRIKE_FPS))
 PATH_MARGIN = 0.5            # path poses stay this far inside LIMITS (see violations) so the bake between them passes
 PATH_KINDS = {"R": (PATH_ARC_DEG * 0.5, -PATH_ARC_DEG * 0.5),   # Right: right -> left (MeleeAttackPath.GetArcDegreeSpan)
@@ -838,42 +835,54 @@ STRIKE_ENTRY_FRAMES = {"R": 4, "L": 6}   # cocked (behind the shoulder) -> relea
 # onto the path in small steps (one big step slerped the blade up over the head).
 STRIKE_ENTRY = {"R": [(2, "RELEASE_R")],
                 "L": [(2, "RELEASE_L"), (3, "ENTRY_L"), (4, "PATH_L_02"), (5, "PATH_L_04")]}
-FOLLOW_AT, FOLLOW_HOLD, SETTLE_AT, STRIKE_END = 0.28, 0.42, 0.54, 0.64   # PlayerAnimation.MeleeStrikeClipSeconds
-WIND_DRAW_S = 0.26           # Sword_Cocked_* draw (after the 0.12 s pose cross-fade): wound up ~0.38 s in (one-handed windup 0.6 s, scav 0.35 s - the draw stays short enough for both)
+# The visible swoop is slower than the host's 0.18 s damage window (Mark 2026-11-16: "slower strike phase"; the combat
+# timings stay): the same solved path frames play over STRIKE_SWOOP_S, so the blade crosses the arc in 0.30 s.
+STRIKE_SWOOP_S = 0.30
+SWOOP_SCALE = STRIKE_SWOOP_S / PATH_ACTIVE_S
+FOLLOW_AT, FOLLOW_HOLD, SETTLE_AT, STRIKE_END = 0.40, 0.47, 0.56, 0.64   # PlayerAnimation.MeleeStrikeClipSeconds (unchanged)
+# Sword_Cocked_* draws: waist -> wind -> cocked. Their playhead follows the windup's progress (graph sword_wind, set
+# by PlayerAnimation every frame), so the length only shapes the motion: the sword rises out of the waist carry through
+# the whole windup and reaches the cocked frame as the strike fires (Mark 2026-11-16: "the windup should be moving
+# through the whole thing"; 2026-11-17: the weapon only leaves the waist when an attack starts). A click out of a strike's
+# follow-through or out of the guard starts the playhead on the WIND frame (PlayerAnimation "Wind-up start out of a
+# strike / guard" = WIND_AT_S / WIND_END_S), so a chain never dips back to the waist.
+WIND_AT_S = 0.30
+WIND_END_S = 0.60
+
+
+def wind_up(wind, cocked):
+    return [(0.0, "REST_WAIST"), (WIND_AT_S, wind, "smooth"), (WIND_END_S, cocked, "out")]
 
 
 def lateral_strike(kind, follow, settle, rest):
     """Cocked pose -> onto the path in STRIKE_ENTRY_FRAMES, the path frames for the rest of the active window (linear:
     the host sweeps the arc at constant speed), then the follow-through decelerating, held, the settle and rest."""
-    keys = [(0.0, f"COCKED_{kind}")] + [(f / STRIKE_FPS, pose, "linear") for f, pose in STRIKE_ENTRY[kind]]
-    keys += [(i / STRIKE_FPS, f"PATH_{kind}_{i:02d}", "linear") for i in range(STRIKE_ENTRY_FRAMES[kind], PATH_STEPS + 1)]
+    keys = [(0.0, f"COCKED_{kind}")] + [(f / STRIKE_FPS * SWOOP_SCALE, pose, "linear") for f, pose in STRIKE_ENTRY[kind]]
+    keys += [(i / STRIKE_FPS * SWOOP_SCALE, f"PATH_{kind}_{i:02d}", "linear")
+             for i in range(STRIKE_ENTRY_FRAMES[kind], PATH_STEPS + 1)]
     return keys + [(FOLLOW_AT, follow, "out"), (FOLLOW_HOLD, follow, "linear"), (SETTLE_AT, settle, "smooth"),
                    (STRIKE_END, rest, "smooth")]
 
 
-# Strike timing (0.64 s, PlayerAnimation.MeleeStrikeClipSeconds). Left / right: cocked -> the debug path over the 0.2 s
-# active window (the clip starts when it opens), follow-through 0.28 held to 0.42, settle 0.54, rest 0.64. Overhead:
-# cocked -> over the top 0.08 -> chopped through 0.20 -> held -> settle -> rest. A follow-up click or the guard cuts the
+# Strike timing (0.64 s, PlayerAnimation.MeleeStrikeClipSeconds). Left / right: cocked -> the debug path over
+# STRIKE_SWOOP_S 0.30 (the clip starts when the host's 0.18 s damage window opens), follow-through 0.40 held to 0.47,
+# settle 0.56, rest 0.64. Overhead: cocked -> over the top 0.13 -> chopped through 0.33 -> held -> settle -> rest. A follow-up click or the guard cuts the
 # hold short in the graph (b_sword_interrupt), so the next wind-up draws from the follow-through.
 CLIPS = {
-    "Sword_Rest_R": ("human@sword_rest_r.fbx", [(0.0, "REST_R")]),
-    "Sword_Rest_L": ("human@sword_rest_l.fbx", [(0.0, "REST_L")]),
+    "Sword_Rest": ("human@sword_rest.fbx", [(0.0, "REST_WAIST")]),
     "Sword_Swap_Mid": ("human@sword_swap_mid.fbx", [(0.0, "SWAP_MID")]),
-    "Sword_Rest_Up": ("human@sword_rest_up.fbx", [(0.0, "REST_UP")]),
-    "Sword_Block": ("human@sword_block.fbx", [(0.0, "BLOCK")]),
-    "Sword_Cocked_R": ("human@sword_cocked_r.fbx", [(0.0, "WIND_R"), (WIND_DRAW_S, "COCKED_R", "out")], STRIKE_FPS),
-    "Sword_Cocked_L": ("human@sword_cocked_l.fbx", [(0.0, "WIND_L"), (WIND_DRAW_S, "COCKED_L", "out")], STRIKE_FPS),
-    "Sword_Cocked_Over": ("human@sword_cocked_over.fbx", [(0.0, "WIND_OVER"), (WIND_DRAW_S, "COCKED_OVER", "out")], STRIKE_FPS),
-    "Sword_Cocked_Stab": ("human@sword_cocked_stab.fbx", [(0.0, "WIND_STAB"), (WIND_DRAW_S, "COCKED_STAB", "out")], STRIKE_FPS),
-    "Sword_Attack_R": ("human@sword_attack_r.fbx", lateral_strike("R", "SWING_R_END", "SWING_R_SETTLE", "REST_R"), STRIKE_FPS),
-    "Sword_Attack_L": ("human@sword_attack_l.fbx", lateral_strike("L", "SWING_L_END", "SWING_L_SETTLE", "REST_L"), STRIKE_FPS),
+    "Sword_Block_L": ("human@sword_block_l.fbx", [(0.0, "BLOCK_L")]),
+    "Sword_Block_R": ("human@sword_block_r.fbx", [(0.0, "BLOCK_R")]),
+    "Sword_Block_Up": ("human@sword_block_up.fbx", [(0.0, "BLOCK_UP")]),
+    "Sword_Cocked_R": ("human@sword_cocked_r.fbx", wind_up("WIND_R", "COCKED_R"), STRIKE_FPS),
+    "Sword_Cocked_L": ("human@sword_cocked_l.fbx", wind_up("WIND_L", "COCKED_L"), STRIKE_FPS),
+    "Sword_Cocked_Over": ("human@sword_cocked_over.fbx", wind_up("WIND_OVER", "COCKED_OVER"), STRIKE_FPS),
+    "Sword_Attack_R": ("human@sword_attack_r.fbx", lateral_strike("R", "SWING_R_END", "SWING_R_SETTLE", "REST_WAIST"), STRIKE_FPS),
+    "Sword_Attack_L": ("human@sword_attack_l.fbx", lateral_strike("L", "SWING_L_END", "SWING_L_SETTLE", "REST_WAIST"), STRIKE_FPS),
     "Sword_Attack_Over": ("human@sword_attack_over.fbx",
-                          [(0.0, "COCKED_OVER"), (0.08, "CHOP_MID"), (0.20, "CHOP_END", "linear"),
+                          [(0.0, "COCKED_OVER"), (0.08 * SWOOP_SCALE, "CHOP_MID"), (0.20 * SWOOP_SCALE, "CHOP_END", "linear"),
                            (FOLLOW_HOLD, "CHOP_END", "linear"), (SETTLE_AT, "CHOP_SETTLE", "smooth"),
-                           (STRIKE_END, "REST_R", "smooth")]),
-    "Sword_Attack_Stab": ("human@sword_attack_stab.fbx",
-                          [(0.0, "COCKED_STAB"), (0.20, "STAB_END", "out"), (FOLLOW_HOLD - 0.08, "STAB_END", "linear"),
-                           (SETTLE_AT, "STAB_SETTLE", "smooth"), (STRIKE_END, "REST_R", "smooth")], STRIKE_FPS),
+                           (STRIKE_END, "REST_WAIST", "smooth")]),
     "Wingsuit_Glide": ("human@wingsuit_glide.fbx",
                        [(0.0, "WINGSUIT_A"), (0.8, "WINGSUIT_B", "smooth"), (1.6, "WINGSUIT_A", "smooth")]),
 }
@@ -881,28 +890,25 @@ POSES = {k: v for k, v in dict(globals()).items()
          if k.isupper() and isinstance(v, list) and v and isinstance(v[0], list) and isinstance(v[0][0], str)}
 
 # Blends the engine graph performs between static poses (selector cross-fades): every one is checked
-# frame by frame like a clip. The shoulder swap is two short blends through SWAP_MID, never R <-> L direct.
+# frame by frame like a clip. The rest carry is one pose (no stance swaps); a held heavy morphed across the face goes
+# through SWAP_MID, never COCKED_R / COCKED_OVER <-> COCKED_L direct.
+GUARDS = ("BLOCK_L", "BLOCK_R", "BLOCK_UP")
 GRAPH_BLENDS = [
-    ("REST_R", "SWAP_MID"), ("SWAP_MID", "REST_L"),
-    ("REST_R", "WIND_R"), ("REST_L", "WIND_L"),
-    ("REST_R", "WIND_OVER"), ("REST_L", "WIND_OVER"),
-    ("REST_R", "WIND_STAB"), ("REST_L", "WIND_STAB"),
-    # a press during a swap / right after an aim flip cocks from wherever the pose is
-    ("SWAP_MID", "WIND_R"), ("SWAP_MID", "WIND_L"), ("SWAP_MID", "WIND_OVER"), ("SWAP_MID", "WIND_STAB"),
-    ("REST_R", "WIND_L"), ("REST_L", "WIND_R"),
-    # aiming up: raised stance <-> right shoulder directly, <-> left shoulder through SWAP_MID; any press from it
-    ("REST_R", "REST_UP"), ("REST_UP", "SWAP_MID"),
-    ("REST_UP", "WIND_OVER"), ("REST_UP", "WIND_R"), ("REST_UP", "WIND_L"), ("REST_UP", "WIND_STAB"),
-    # guard up / down from any stance (a held heavy hangs cocked; right click raises the guard from it), and a click
-    # straight out of the guard
-    ("REST_R", "BLOCK"), ("REST_L", "BLOCK"), ("REST_UP", "BLOCK"), ("SWAP_MID", "BLOCK"),
-    ("COCKED_R", "BLOCK"), ("COCKED_L", "BLOCK"), ("COCKED_OVER", "BLOCK"), ("COCKED_STAB", "BLOCK"),
-    ("BLOCK", "WIND_R"), ("BLOCK", "WIND_L"), ("BLOCK", "WIND_OVER"), ("BLOCK", "WIND_STAB"),
-]
+    # heavy morph between the cocked poses: right <-> overhead direct, anything <-> left through SWAP_MID
+    ("COCKED_R", "COCKED_OVER"), ("COCKED_R", "SWAP_MID"), ("COCKED_OVER", "SWAP_MID"), ("SWAP_MID", "COCKED_L"),
+    # a click out of a strike: the pose under the strike (its cocked pose until the settle, then the waist) into the
+    # wind frame; the underlay dropping to the waist at the settle
+] + [(c, w) for c in ("COCKED_R", "COCKED_L", "COCKED_OVER", "REST_WAIST") for w in ("WIND_R", "WIND_L", "WIND_OVER")] \
+  + [(c, "REST_WAIST") for c in ("COCKED_R", "COCKED_L", "COCKED_OVER")] + [
+    # guard up / down from the rest or a held cocked pose (right click on a held light), and a click straight out of the
+    # guard (its draw starts on the WIND frame)
+] + [(a, g) for g in GUARDS for a in ("REST_WAIST", "SWAP_MID", "COCKED_R", "COCKED_L", "COCKED_OVER")] \
+  + [(g, w) for g in GUARDS for w in ("WIND_R", "WIND_L", "WIND_OVER")] \
+  + [("BLOCK_L", "BLOCK_UP"), ("BLOCK_UP", "BLOCK_R"), ("BLOCK_L", "BLOCK_R")]   # moving the guard while it is held
 # b_sword_interrupt cuts a strike at the end of its damage window into the next cocked pose or the guard
 # (PATH_* end frames exist once solve_strike_paths ran; check_all adds them).
-INTERRUPT_FROM = ["CHOP_END", "STAB_END", "SWING_R_END", "SWING_L_END"]
-INTERRUPT_TO = ["WIND_R", "WIND_L", "WIND_OVER", "WIND_STAB", "BLOCK"]
+INTERRUPT_FROM = ["CHOP_END", "SWING_R_END", "SWING_L_END"]
+INTERRUPT_TO = ["WIND_R", "WIND_L", "WIND_OVER", *GUARDS]
 
 
 def graph_blends():

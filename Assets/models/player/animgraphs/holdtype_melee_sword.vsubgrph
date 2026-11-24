@@ -307,16 +307,16 @@
 			{
 				key =
 				{
-					m_id = 1860012000
+					m_id = 1860012500
 				}
 				value =
 				{
 					_class = "CSequenceAnimNode"
 					m_sName = "Sword_Cocked_L"
-					m_vecPosition = [ -2560.0, -512.0 ]
+					m_vecPosition = [ -2752.0, -512.0 ]
 					m_nNodeID =
 					{
-						m_id = 1860012000
+						m_id = 1860012500
 					}
 					m_sNote = ""
 					m_tagSpans = [  ]
@@ -328,12 +328,45 @@
 			{
 				key =
 				{
+					m_id = 1860012000
+				}
+				value =
+				{
+					_class = "CCycleControlAnimNode"
+					m_sName = "Sword_Cocked_L (sword_wind)"
+					m_vecPosition = [ -2560.0, -512.0 ]
+					m_nNodeID =
+					{
+						m_id = 1860012000
+					}
+					m_sNote = ""
+					m_inputConnection =
+					{
+						m_nodeID =
+						{
+							m_id = 1860012500
+						}
+						m_outputID =
+						{
+							m_id = 4294967295
+						}
+					}
+					m_valueSource = "Parameter"
+					m_param =
+					{
+						m_id = 1860011006
+					}
+				}
+			},
+			{
+				key =
+				{
 					m_id = 1860012001
 				}
 				value =
 				{
 					_class = "CSequenceAnimNode"
-					m_sName = "Sword_Rest_L"
+					m_sName = "Sword_Rest"
 					m_vecPosition = [ -2560.0, -416.0 ]
 					m_nNodeID =
 					{
@@ -341,7 +374,7 @@
 					}
 					m_sNote = ""
 					m_tagSpans = [  ]
-					m_sequenceName = "Sword_Rest_L"
+					m_sequenceName = "Sword_Rest"
 					m_playbackSpeed = 1.0
 					m_bLoop = true
 				}
@@ -349,37 +382,16 @@
 			{
 				key =
 				{
-					m_id = 1860012002
-				}
-				value =
-				{
-					_class = "CSequenceAnimNode"
-					m_sName = "Sword_Rest_R"
-					m_vecPosition = [ -2560.0, -320.0 ]
-					m_nNodeID =
-					{
-						m_id = 1860012002
-					}
-					m_sNote = ""
-					m_tagSpans = [  ]
-					m_sequenceName = "Sword_Rest_R"
-					m_playbackSpeed = 1.0
-					m_bLoop = true
-				}
-			},
-			{
-				key =
-				{
-					m_id = 1860012003
+					m_id = 1860012502
 				}
 				value =
 				{
 					_class = "CSequenceAnimNode"
 					m_sName = "Sword_Cocked_R"
-					m_vecPosition = [ -2560.0, -224.0 ]
+					m_vecPosition = [ -2752.0, -320.0 ]
 					m_nNodeID =
 					{
-						m_id = 1860012003
+						m_id = 1860012502
 					}
 					m_sNote = ""
 					m_tagSpans = [  ]
@@ -391,16 +403,49 @@
 			{
 				key =
 				{
-					m_id = 1860012004
+					m_id = 1860012002
+				}
+				value =
+				{
+					_class = "CCycleControlAnimNode"
+					m_sName = "Sword_Cocked_R (sword_wind)"
+					m_vecPosition = [ -2560.0, -320.0 ]
+					m_nNodeID =
+					{
+						m_id = 1860012002
+					}
+					m_sNote = ""
+					m_inputConnection =
+					{
+						m_nodeID =
+						{
+							m_id = 1860012502
+						}
+						m_outputID =
+						{
+							m_id = 4294967295
+						}
+					}
+					m_valueSource = "Parameter"
+					m_param =
+					{
+						m_id = 1860011006
+					}
+				}
+			},
+			{
+				key =
+				{
+					m_id = 1860012503
 				}
 				value =
 				{
 					_class = "CSequenceAnimNode"
 					m_sName = "Sword_Cocked_Over"
-					m_vecPosition = [ -2560.0, -128.0 ]
+					m_vecPosition = [ -2752.0, -224.0 ]
 					m_nNodeID =
 					{
-						m_id = 1860012004
+						m_id = 1860012503
 					}
 					m_sNote = ""
 					m_tagSpans = [  ]
@@ -412,62 +457,53 @@
 			{
 				key =
 				{
-					m_id = 1860012005
+					m_id = 1860012003
 				}
 				value =
 				{
-					_class = "CSequenceAnimNode"
-					m_sName = "Sword_Cocked_Stab"
-					m_vecPosition = [ -2560.0, -32.0 ]
+					_class = "CCycleControlAnimNode"
+					m_sName = "Sword_Cocked_Over (sword_wind)"
+					m_vecPosition = [ -2560.0, -224.0 ]
 					m_nNodeID =
 					{
-						m_id = 1860012005
+						m_id = 1860012003
 					}
 					m_sNote = ""
-					m_tagSpans = [  ]
-					m_sequenceName = "Sword_Cocked_Stab"
-					m_playbackSpeed = 1.0
-					m_bLoop = false
+					m_inputConnection =
+					{
+						m_nodeID =
+						{
+							m_id = 1860012503
+						}
+						m_outputID =
+						{
+							m_id = 4294967295
+						}
+					}
+					m_valueSource = "Parameter"
+					m_param =
+					{
+						m_id = 1860011006
+					}
 				}
 			},
 			{
 				key =
 				{
-					m_id = 1860012006
+					m_id = 1860012004
 				}
 				value =
 				{
 					_class = "CSequenceAnimNode"
 					m_sName = "Sword_Swap_Mid"
-					m_vecPosition = [ -2560.0, 64.0 ]
+					m_vecPosition = [ -2560.0, -128.0 ]
 					m_nNodeID =
 					{
-						m_id = 1860012006
+						m_id = 1860012004
 					}
 					m_sNote = ""
 					m_tagSpans = [  ]
 					m_sequenceName = "Sword_Swap_Mid"
-					m_playbackSpeed = 1.0
-					m_bLoop = true
-				}
-			},
-			{
-				key =
-				{
-					m_id = 1860012007
-				}
-				value =
-				{
-					_class = "CSequenceAnimNode"
-					m_sName = "Sword_Rest_Up"
-					m_vecPosition = [ -2560.0, 160.0 ]
-					m_nNodeID =
-					{
-						m_id = 1860012007
-					}
-					m_sNote = ""
-					m_tagSpans = [  ]
-					m_sequenceName = "Sword_Rest_Up"
 					m_playbackSpeed = 1.0
 					m_bLoop = true
 				}
@@ -539,48 +575,9 @@
 								m_id = 4294967295
 							}
 						},
-						{
-							m_nodeID =
-							{
-								m_id = 1860012005
-							}
-							m_outputID =
-							{
-								m_id = 4294967295
-							}
-						},
-						{
-							m_nodeID =
-							{
-								m_id = 1860012006
-							}
-							m_outputID =
-							{
-								m_id = 4294967295
-							}
-						},
-						{
-							m_nodeID =
-							{
-								m_id = 1860012007
-							}
-							m_outputID =
-							{
-								m_id = 4294967295
-							}
-						},
 					]
 					m_tags =
 					[
-						{
-							m_id = 4294967295
-						},
-						{
-							m_id = 4294967295
-						},
-						{
-							m_id = 4294967295
-						},
 						{
 							m_id = 4294967295
 						},
@@ -611,17 +608,80 @@
 						m_id = 1860011001
 					}
 					m_intParamMinValue = 0
-					m_intParamMaxValue = 7
-					m_blendDuration = 0.12
+					m_intParamMaxValue = 4
+					m_blendDuration = 0.125
 					m_tagBehavior = "SelectorTagBehavior_OnWhileCurrent"
 					m_bResetOnChange = true
 					m_bSyncCyclesOnChange = false
 					m_blendCurve =
 					{
-						m_vControlPoint1 = [ 0.314815, 0.0 ]
-						m_vControlPoint2 = [ 0.111111, 1.0 ]
+						m_vControlPoint1 = [ 0.333333, 0.333333 ]
+						m_vControlPoint2 = [ 0.666667, 0.666667 ]
 					}
 					m_intParamNames = [  ]
+				}
+			},
+			{
+				key =
+				{
+					m_id = 1860012400
+				}
+				value =
+				{
+					_class = "CSequenceAnimNode"
+					m_sName = "Sword_Block_L"
+					m_vecPosition = [ -2560.0, 320.0 ]
+					m_nNodeID =
+					{
+						m_id = 1860012400
+					}
+					m_sNote = ""
+					m_tagSpans = [  ]
+					m_sequenceName = "Sword_Block_L"
+					m_playbackSpeed = 1.0
+					m_bLoop = true
+				}
+			},
+			{
+				key =
+				{
+					m_id = 1860012401
+				}
+				value =
+				{
+					_class = "CSequenceAnimNode"
+					m_sName = "Sword_Block_R"
+					m_vecPosition = [ -2560.0, 416.0 ]
+					m_nNodeID =
+					{
+						m_id = 1860012401
+					}
+					m_sNote = ""
+					m_tagSpans = [  ]
+					m_sequenceName = "Sword_Block_R"
+					m_playbackSpeed = 1.0
+					m_bLoop = true
+				}
+			},
+			{
+				key =
+				{
+					m_id = 1860012402
+				}
+				value =
+				{
+					_class = "CSequenceAnimNode"
+					m_sName = "Sword_Block_Up"
+					m_vecPosition = [ -2560.0, 512.0 ]
+					m_nNodeID =
+					{
+						m_id = 1860012402
+					}
+					m_sNote = ""
+					m_tagSpans = [  ]
+					m_sequenceName = "Sword_Block_Up"
+					m_playbackSpeed = 1.0
+					m_bLoop = true
 				}
 			},
 			{
@@ -631,18 +691,84 @@
 				}
 				value =
 				{
-					_class = "CSequenceAnimNode"
-					m_sName = "Sword_Block"
+					_class = "CSelectorAnimNode"
+					m_sName = "Guard direction (sword_guard_dir)"
 					m_vecPosition = [ -2400.0, -96.0 ]
 					m_nNodeID =
 					{
 						m_id = 1860012301
 					}
-					m_sNote = ""
-					m_tagSpans = [  ]
-					m_sequenceName = "Sword_Block"
-					m_playbackSpeed = 1.0
-					m_bLoop = true
+					m_sNote = "Generated by Tools/make_human_sword_assets.py"
+					m_children =
+					[
+						{
+							m_nodeID =
+							{
+								m_id = 1860012400
+							}
+							m_outputID =
+							{
+								m_id = 4294967295
+							}
+						},
+						{
+							m_nodeID =
+							{
+								m_id = 1860012401
+							}
+							m_outputID =
+							{
+								m_id = 4294967295
+							}
+						},
+						{
+							m_nodeID =
+							{
+								m_id = 1860012402
+							}
+							m_outputID =
+							{
+								m_id = 4294967295
+							}
+						},
+					]
+					m_tags =
+					[
+						{
+							m_id = 4294967295
+						},
+						{
+							m_id = 4294967295
+						},
+						{
+							m_id = 4294967295
+						},
+					]
+					m_selectionSource = "SelectionSource_Int"
+					m_boolParamID =
+					{
+						m_id = 4294967295
+					}
+					m_enumParamID =
+					{
+						m_id = 4294967295
+					}
+					m_intParamID =
+					{
+						m_id = 1860011005
+					}
+					m_intParamMinValue = 0
+					m_intParamMaxValue = 2
+					m_blendDuration = 0.15
+					m_tagBehavior = "SelectorTagBehavior_OnWhileCurrent"
+					m_bResetOnChange = false
+					m_bSyncCyclesOnChange = false
+					m_blendCurve =
+					{
+						m_vControlPoint1 = [ 0.333333, 0.333333 ]
+						m_vControlPoint2 = [ 0.666667, 0.666667 ]
+					}
+					m_intParamNames = [  ]
 				}
 			},
 			{
@@ -707,14 +833,14 @@
 					}
 					m_intParamMinValue = 0
 					m_intParamMaxValue = 1
-					m_blendDuration = 0.05
+					m_blendDuration = 0.15
 					m_tagBehavior = "SelectorTagBehavior_OnWhileCurrent"
 					m_bResetOnChange = false
 					m_bSyncCyclesOnChange = false
 					m_blendCurve =
 					{
-						m_vControlPoint1 = [ 0.314815, 0.0 ]
-						m_vControlPoint2 = [ 0.111111, 1.0 ]
+						m_vControlPoint1 = [ 0.333333, 0.333333 ]
+						m_vControlPoint2 = [ 0.666667, 0.666667 ]
 					}
 					m_intParamNames = [  ]
 				}
@@ -1192,27 +1318,6 @@
 			{
 				key =
 				{
-					m_id = 1860012103
-				}
-				value =
-				{
-					_class = "CSequenceAnimNode"
-					m_sName = "Sword_Attack_Stab"
-					m_vecPosition = [ -1344.0, 672.0 ]
-					m_nNodeID =
-					{
-						m_id = 1860012103
-					}
-					m_sNote = ""
-					m_tagSpans = [  ]
-					m_sequenceName = "Sword_Attack_Stab"
-					m_playbackSpeed = 1.0
-					m_bLoop = false
-				}
-			},
-			{
-				key =
-				{
 					m_id = 967987431
 				}
 				value =
@@ -1257,22 +1362,9 @@
 								m_id = 4294967295
 							}
 						},
-						{
-							m_nodeID =
-							{
-								m_id = 1860012103
-							}
-							m_outputID =
-							{
-								m_id = 4294967295
-							}
-						},
 					]
 					m_tags =
 					[
-						{
-							m_id = 4294967295
-						},
 						{
 							m_id = 4294967295
 						},
@@ -1297,7 +1389,7 @@
 						m_id = 1860011002
 					}
 					m_intParamMinValue = 0
-					m_intParamMaxValue = 3
+					m_intParamMaxValue = 2
 					m_blendDuration = 0.0
 					m_tagBehavior = "SelectorTagBehavior_OnWhileCurrent"
 					m_bResetOnChange = true
@@ -1495,7 +1587,7 @@
 											}
 										},
 									]
-									m_blendDuration = 0.05
+									m_blendDuration = 0.15
 									m_destState =
 									{
 										m_id = 1228346111
@@ -2267,7 +2359,7 @@
 			m_bAutoReset = false
 			m_defaultValue = 0
 			m_minValue = 0
-			m_maxValue = 7
+			m_maxValue = 4
 		},
 		{
 			_class = "CIntAnimParameter"
@@ -2281,7 +2373,21 @@
 			m_bAutoReset = false
 			m_defaultValue = 0
 			m_minValue = 0
-			m_maxValue = 3
+			m_maxValue = 2
+		},
+		{
+			_class = "CIntAnimParameter"
+			m_name = "sword_guard_dir"
+			m_id =
+			{
+				m_id = 1860011005
+			}
+			m_previewButton = "ANIMPARAM_BUTTON_NONE"
+			m_bUseMostRecentValue = true
+			m_bAutoReset = false
+			m_defaultValue = 0
+			m_minValue = 0
+			m_maxValue = 2
 		},
 		{
 			_class = "CBoolAnimParameter"
@@ -2306,6 +2412,20 @@
 			m_bUseMostRecentValue = true
 			m_bAutoReset = false
 			m_bDefaultValue = false
+		},
+		{
+			_class = "CFloatAnimParameter"
+			m_name = "sword_wind"
+			m_id =
+			{
+				m_id = 1860011006
+			}
+			m_previewButton = "ANIMPARAM_BUTTON_NONE"
+			m_bUseMostRecentValue = true
+			m_bAutoReset = false
+			m_fDefaultValue = 0.0
+			m_fMinValue = 0.0
+			m_fMaxValue = 1.0
 		},
 	]
 	m_localTags = [  ]

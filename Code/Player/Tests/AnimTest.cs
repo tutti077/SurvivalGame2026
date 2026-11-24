@@ -36,12 +36,23 @@ public sealed class AnimTest : Component
 	/// The strike is 0.30 s (Mark 2026-11-01: half the time between attacks): a full-speed cut peaks around 19.5 m/s at
 	/// the fist and ~960°/s at the chest, athletic but human; the snaps this exists to catch measured 1750–2800°/s.
 	const float HandSpeedMax = 22f, PelvisSpeedMax = 1.5f, HeadSpeedMax = 4.5f, PelvisTurnMax = 400f, ChestTurnMax = 1200f, HeadTurnMax = 1200f;
+	/// <summary>
+	/// While the crouch blend travels (the engine's stock Duck spring, the same on every hold type): the hips drop or
+	/// rise ~0.45 m in about a tenth of a second — measured 7.9 m/s and 622°/s at the pelvis. That is the crouch itself,
+	/// not a snap, so the pelvis and head caps widen for <see cref="DuckTravelSeconds"/> after the crouch input flips.
+	/// </summary>
+	const float DuckTravelSeconds = 0.5f, DuckPelvisSpeedMax = 10f, DuckHeadSpeedMax = 10f, DuckPelvisTurnMax = 800f;
 	/// <summary>The sword must stay rigid in the fist.</summary>
 	const float GripSlipMax = 0.01f, GripTurnMax = 2f;
 
 	readonly List<string> _failures = new();
 	int _passed;
 	GameObject _pawn;
+	/// <summary>
+	/// The ground the pawn stands on. Without it the pawn free-fell from the arena height for ~25 s and landed in the
+	/// middle of a scenario (the landing pose read as a pelvis snap), and everything before that ran airborne.
+	/// </summary>
+	GameObject _floor;
 	PlayerAnimation _anim;
 	PlayerCombat _combat;
 	PlayerController _controller;
@@ -63,10 +74,13 @@ public sealed class AnimTest : Component
 	bool _traceLogged;
 
 	static AnimTest _running;
+	/// <summary><c>anim_test &lt;text&gt;</c>: every sampled frame of the scenarios whose name contains the text is logged.</summary>
+	static string _traceFilter;
 
 	[ConCmd( "anim_test" )]
-	public static void ConCmdAnimTest()
+	public static void ConCmdAnimTest( string traceFilter = "" )
 	{
+		_traceFilter = traceFilter;
 		var scene = Sandbox.Game.ActiveScene;
 		if ( !scene.IsValid() || !Sandbox.Game.IsPlaying )
 		{
@@ -88,7 +102,11 @@ public sealed class AnimTest : Component
 
 	protected override void OnStart() => _ = RunAsync();
 
-	protected override void OnDestroy() => _pawn?.Destroy();
+	protected override void OnDestroy()
+	{
+		_pawn?.Destroy();
+		_floor?.Destroy();
+	}
 
 	async System.Threading.Tasks.Task RunAsync()
 	{
@@ -108,7 +126,15 @@ public sealed class AnimTest : Component
 				}
 
 				Check( "pawn holds the sword", armed, $"could not equip {WeaponId}" );
-				if ( armed )
+
+				// Every scenario measures a standing pawn: wait for it to settle on the suite's floor.
+				until = Time.NowDouble + 3.0;
+				while ( !_controller.IsOnGround && Time.NowDouble < until )
+					await Task.Frame();
+				Check( "pawn stands on the floor", _controller.IsOnGround,
+					$"still airborne after 3 s at z {_pawn.WorldPosition.z:0} (floor at {ArenaOrigin.z + 10f:0})" );
+
+				if ( armed && _controller.IsOnGround )
 					await RunScenarios();
 			}
 		}
@@ -131,10 +157,21 @@ public sealed class AnimTest : Component
 		if ( template is null )
 			return false;
 
-		_pawn = template.Clone( new global::Transform( ArenaOrigin ), name: "AnimTest_Pawn" );
+		_floor = Scene.CreateObject();
+		_floor.Name = "AnimTest_Floor";
+		_floor.NetworkMode = NetworkMode.Never;
+		_floor.WorldPosition = ArenaOrigin;
+		var box = _floor.Components.Create<BoxCollider>();
+		box.Scale = new Vector3( 2000f, 2000f, 20f );
+		box.Static = true;
+
+		_pawn = template.Clone( new global::Transform( ArenaOrigin + Vector3.Up * 14f ), name: "AnimTest_Pawn" );
 		_pawn.NetworkMode = NetworkMode.Never;
 		// PlayerSpawnSeparation culls local-only player pawns as ghosts; this one is local on purpose.
 		_pawn.Tags.Add( "test_pawn" );
+		// A scripted pawn must not load or overwrite the player's saved hotbar bindings.
+		if ( _pawn.Components.Get<PlayerHotbar>() is { } scriptedHotbar )
+			scriptedHotbar.UsesSavedBindings = false;
 
 		_controller = _pawn.Components.Get<PlayerController>();
 		_anim = _pawn.Components.Get<PlayerAnimation>();
@@ -198,6 +235,16 @@ public sealed class AnimTest : Component
 	/// <summary>Look set by the test, relative to the pawn (the controller's EyeAngles getter throws on a scripted pawn).</summary>
 	float _lookYaw, _lookPitch;
 
+	double _duckChangedAt = double.MinValue;
+
+	/// <summary>Crouch input inside a sampled scenario: remembers when it flipped (see <see cref="DuckTravelSeconds"/>).</summary>
+	void SetDucking( bool ducking )
+	{
+		if ( _controller.IsDucking != ducking )
+			_duckChangedAt = Time.NowDouble;
+		_controller.IsDucking = ducking;
+	}
+
 	void Look( float yawRel, float pitch )
 	{
 		_lookYaw = yawRel;
@@ -209,50 +256,27 @@ public sealed class AnimTest : Component
 
 	async System.Threading.Tasks.Task RunScenarios()
 	{
-		// Neutral reference for chest / head twist: rest right, looking straight ahead.
+		// Neutral reference for chest / head twist: the waist carry, looking straight ahead.
 		Look( 0f, 0f );
 		_combat.TestSetLiveSwingDir( SwingDirs.Right );
 		await Hold( 1.0f, sample: false );
 		CaptureRest();
 
-		await Scenario( "rest right, standing", async () => await Hold( 1.0f ) );
+		await Scenario( "waist rest, standing", async () => await Hold( 1.0f ) );
 
-		await Scenario( "swap right to left shoulder", async () => await Aim( SwingDirs.Left, 1.0f ) );
-
-		await Scenario( "swap left to right shoulder", async () => await Aim( SwingDirs.Right, 1.0f ) );
-
-		await Scenario( "swap back and forth quickly", async () =>
+		// Mark 2026-11-17: "When we change from left right overhead dont change the pose or position of the weapon, that
+		// only happens when we actually initiate an attack".
+		await Scenario( "aim changes keep the waist carry", async () =>
 		{
+			foreach ( var dir in new[] { SwingDirs.Left, SwingDirs.Up, SwingDirs.Right, SwingDirs.Left, SwingDirs.Right } )
+				await Aim( dir, 0.3f );
 			for ( var i = 0; i < 4; i++ )
-			{
-				_combat.TestSetLiveSwingDir( i % 2 == 0 ? SwingDirs.Left : SwingDirs.Right );
-				await Hold( 0.12f );
-			}
-
-			await Aim( SwingDirs.Right, 0.8f );
+				await Aim( i % 2 == 0 ? SwingDirs.Left : SwingDirs.Up, 0.12f );
+			await Aim( SwingDirs.Right, 0.3f );
 		} );
 
-		await Scenario( "raise for overhead and back", async () =>
-		{
-			await Aim( SwingDirs.Up, 0.8f );
-			await Aim( SwingDirs.Right, 0.8f );
-		} );
-
-		await Scenario( "raised to left shoulder and back", async () =>
-		{
-			await Aim( SwingDirs.Up, 0.8f );
-			await Aim( SwingDirs.Left, 0.8f );
-			await Aim( SwingDirs.Up, 0.8f );
-		} );
-
-		await Scenario( "look sweep all the way round (raised)", async () => await SweepLook( 0f ) );
 		_combat.TestSetLiveSwingDir( SwingDirs.Right );
-		await Hold( 0.8f, sample: false );
-
-		await Scenario( "look sweep all the way round (rest right)", async () => await SweepLook( 0f ) );
-		_combat.TestSetLiveSwingDir( SwingDirs.Left );
-		await Hold( 0.8f, sample: false );
-		await Scenario( "look sweep all the way round (rest left)", async () => await SweepLook( 0f ) );
+		await Scenario( "look sweep all the way round", async () => await SweepLook( 0f ) );
 		await Scenario( "look up / down while turned", async () =>
 		{
 			foreach ( var (yaw, pitch) in new[] { (90f, -70f), (90f, 70f), (-150f, -70f), (-150f, 70f), (179f, 0f), (-179f, 0f) } )
@@ -269,8 +293,7 @@ public sealed class AnimTest : Component
 		         {
 			         (MeleeAttackTypes.Right, SwingDirs.Right, "right attack"),
 			         (MeleeAttackTypes.Left, SwingDirs.Left, "left attack"),
-			         (MeleeAttackTypes.Forward, SwingDirs.Up, "overhead attack"),
-			         (MeleeAttackTypes.Stab, SwingDirs.Right, "stab")
+			         (MeleeAttackTypes.Forward, SwingDirs.Up, "overhead attack")
 		         } )
 		{
 			_combat.TestSetLiveSwingDir( dir );
@@ -294,14 +317,42 @@ public sealed class AnimTest : Component
 			await Hold( 1.0f );
 		} );
 
-		// Guard up: the blade level in front of the head (also straight out of a settling strike).
+		// Guards: left / right / overhead (Sword_Block_*), then the held guard moving L -> U -> R -> L (the graph's
+		// sword_guard_dir cross-fade), and a guard straight out of a settling strike.
 		_combat.TestSetLiveSwingDir( SwingDirs.Right );
 		await Hold( 0.8f, sample: false );
-		await Scenario( "block pose", async () =>
+		var guardHand = new System.Collections.Generic.Dictionary<byte, Vector3>();
+		foreach ( var (guardDir, label) in new[] { (SwingDirs.Left, "left guard"), (SwingDirs.Right, "right guard"), (SwingDirs.Up, "overhead guard") } )
 		{
-			_combat.TestSubmitBlockIntent( true, Time.NowDouble, _pawn.WorldRotation.Angles().yaw );
-			await Hold( 0.8f );
-			_combat.TestSubmitBlockIntent( false, 0d, _pawn.WorldRotation.Angles().yaw );
+			await Scenario( label, async () =>
+			{
+				_combat.TestHoldGuard( true, guardDir );
+				await Hold( 0.8f );
+				guardHand[guardDir] = _pawn.WorldTransform.PointToLocal( Bone( "hold_R" ) );
+				_combat.TestHoldGuard( false );
+				await Hold( 0.6f );
+			} );
+		}
+
+		// Each guard is its own pose (2026-11-14: the graph's guard clips shared node ids with its selectors, every
+		// guard showed the same pose and the cases above still passed): the sword hand sits left of the right guard's
+		// (pawn local +Y is left), and higher for the overhead guard.
+		if ( guardHand.Count == 3 )
+		{
+			var l = guardHand[SwingDirs.Left];
+			var r = guardHand[SwingDirs.Right];
+			var u = guardHand[SwingDirs.Up];
+			Check( "each guard direction has its own pose", l.y - r.y >= 10f && u.z - Math.Max( l.z, r.z ) >= 6f,
+				$"sword hand local L {l:0} R {r:0} U {u:0} (want L.y - R.y >= 10, U.z above both by >= 6)" );
+		}
+		await Scenario( "guard moves while held", async () =>
+		{
+			foreach ( var guardDir in new[] { SwingDirs.Left, SwingDirs.Up, SwingDirs.Right, SwingDirs.Left } )
+			{
+				_combat.TestHoldGuard( true, guardDir );
+				await Hold( 0.4f );
+			}
+			_combat.TestHoldGuard( false );
 			await Hold( 0.6f );
 		} );
 		await Scenario( "block out of a strike", async () =>
@@ -309,9 +360,9 @@ public sealed class AnimTest : Component
 			_anim.BeginMeleeSwingSnap( MeleeAttackTypes.Right );
 			_anim.ReleaseMeleeSwingSnap( MeleeAttackTypes.Right, timings.WindupSeconds );
 			await Hold( timings.WindupSeconds + timings.ActiveSeconds + 0.02f );
-			_combat.TestSubmitBlockIntent( true, Time.NowDouble, _pawn.WorldRotation.Angles().yaw );
+			_combat.TestHoldGuard( true );
 			await Hold( 0.6f );
-			_combat.TestSubmitBlockIntent( false, 0d, _pawn.WorldRotation.Angles().yaw );
+			_combat.TestHoldGuard( false );
 			await Hold( 0.6f );
 		} );
 
@@ -322,11 +373,27 @@ public sealed class AnimTest : Component
 			await Attack( MeleeAttackTypes.Left, hold: 0.1f );
 		} );
 
-		await Scenario( "overhead from the left shoulder", async () =>
+		await Scenario( "overhead after aiming left", async () =>
 		{
 			_combat.TestSetLiveSwingDir( SwingDirs.Left );
 			await Hold( 0.8f );
 			await Attack( MeleeAttackTypes.Forward, hold: 0.2f );
+		} );
+
+		// A held wind-up morphed across the face (heavy morph): right -> left passes up in front, left -> overhead too,
+		// overhead -> right goes straight across; then the strike.
+		await Scenario( "held windup morphed across the face", async () =>
+		{
+			_anim.BeginMeleeSwingSnap( MeleeAttackTypes.Right );
+			await Hold( timings.WindupSeconds + 0.1f );
+			foreach ( var type in new[] { MeleeAttackTypes.Left, MeleeAttackTypes.Forward, MeleeAttackTypes.Right } )
+			{
+				_anim.MorphCockedSwing( type );
+				await Hold( 0.5f );
+			}
+
+			_anim.ReleaseMeleeSwingSnap( MeleeAttackTypes.Right, 0.05f );
+			await Hold( 1.0f );
 		} );
 
 		// ── Crouched: the same stances, swaps, look limits and attacks (the crouch input used to ignore the stance).
@@ -336,26 +403,10 @@ public sealed class AnimTest : Component
 		await Hold( 1.0f, sample: false );
 		CaptureRest();
 
-		await Scenario( "crouched: right, left, raised and back", async () =>
+		await Scenario( "crouched: aim changes keep the waist carry", async () =>
 		{
 			foreach ( var dir in new[] { SwingDirs.Left, SwingDirs.Up, SwingDirs.Right, SwingDirs.Up, SwingDirs.Left, SwingDirs.Right } )
-				await Aim( dir, 0.7f );
-		} );
-
-		await Scenario( "crouched: stance actually follows the cursor", async () =>
-		{
-			var seen = new HashSet<int>();
-			foreach ( var dir in new[] { SwingDirs.Right, SwingDirs.Left, SwingDirs.Up } )
-			{
-				_combat.TestSetLiveSwingDir( dir );
-				await Hold( 0.7f );
-				seen.Add( _body.GetInt( "sword_pose" ) );
-			}
-
-			if ( seen.Count < 3 )
-				_problems.Add( $"sword_pose took {seen.Count} distinct values for right / left / up" );
-			_combat.TestSetLiveSwingDir( SwingDirs.Right );
-			await Hold( 0.7f );
+				await Aim( dir, 0.4f );
 		} );
 
 		await Scenario( "crouched: look sweep all the way round", async () => await SweepLook( 0f ) );
@@ -364,8 +415,7 @@ public sealed class AnimTest : Component
 		         {
 			         (MeleeAttackTypes.Right, SwingDirs.Right, "crouched: right attack"),
 			         (MeleeAttackTypes.Left, SwingDirs.Left, "crouched: left attack"),
-			         (MeleeAttackTypes.Forward, SwingDirs.Up, "crouched: overhead attack"),
-			         (MeleeAttackTypes.Stab, SwingDirs.Right, "crouched: stab")
+			         (MeleeAttackTypes.Forward, SwingDirs.Up, "crouched: overhead attack")
 		         } )
 		{
 			_combat.TestSetLiveSwingDir( dir );
@@ -373,13 +423,13 @@ public sealed class AnimTest : Component
 			await Scenario( label, async () => await Attack( type, hold: 0.2f ) );
 		}
 
-		await Scenario( "crouch and stand while on the left shoulder", async () =>
+		await Scenario( "crouch and stand while aiming left", async () =>
 		{
 			_combat.TestSetLiveSwingDir( SwingDirs.Left );
 			await Hold( 0.8f );
-			_controller.IsDucking = false;
+			SetDucking( false );
 			await Hold( 0.8f );
-			_controller.IsDucking = true;
+			SetDucking( true );
 			await Hold( 0.8f );
 		} );
 
@@ -413,15 +463,21 @@ public sealed class AnimTest : Component
 			$"{_problems.Count} bad frames of {_frames}; first: {string.Join( " | ", _problems.GetRange( 0, Math.Min( 3, _problems.Count ) ) )}" );
 	}
 
-	/// <summary>Set the aim side, hold, and require the graph's stance to have reached the expected pose.</summary>
+	/// <summary>
+	/// Set the aim side and hold: the carry must stay the waist rest pose and the sword hand must not move (the weapon
+	/// only leaves the waist when an attack starts, Mark 2026-11-17).
+	/// </summary>
 	async System.Threading.Tasks.Task Aim( byte dir, float seconds )
 	{
+		var handBefore = _pawn.WorldTransform.PointToLocal( Bone( "hold_R" ) );
 		_combat.TestSetLiveSwingDir( dir );
 		await Hold( seconds );
-		var want = dir == SwingDirs.Left ? 1 : dir == SwingDirs.Up ? 7 : 2;
 		var got = _body.GetInt( "sword_pose" );
-		if ( got != want )
-			_problems.Add( $"stance for aim {dir} is sword_pose {got}, want {want}" );
+		if ( got != PlayerAnimation.SwordPose.Rest )
+			_problems.Add( $"carry for aim {dir} is sword_pose {got}, want the waist rest {PlayerAnimation.SwordPose.Rest}" );
+		var moved = (_pawn.WorldTransform.PointToLocal( Bone( "hold_R" ) ) - handBefore).Length;
+		if ( moved > 1.5f )
+			_problems.Add( $"sword hand moved {moved:0.0} u on an aim change to {dir}" );
 	}
 
 	async System.Threading.Tasks.Task Hold( float seconds, bool sample = true )
@@ -692,9 +748,10 @@ public sealed class AnimTest : Component
 			}
 
 			Speed( "hand", hand, _prevHand, HandSpeedMax );
-			Speed( "pelvis", pel, _prevPelvis, PelvisSpeedMax );
-			Speed( "head", hd, _prevHead, HeadSpeedMax );
-			Turn( "pelvis", pelvisRot, _prevPelvisRot, PelvisTurnMax );
+			var duckTravel = Time.NowDouble - _duckChangedAt < DuckTravelSeconds;
+			Speed( "pelvis", pel, _prevPelvis, duckTravel ? DuckPelvisSpeedMax : PelvisSpeedMax );
+			Speed( "head", hd, _prevHead, duckTravel ? DuckHeadSpeedMax : HeadSpeedMax );
+			Turn( "pelvis", pelvisRot, _prevPelvisRot, duckTravel ? DuckPelvisTurnMax : PelvisTurnMax );
 			Turn( "chest", chestRot, _prevChestRot, ChestTurnMax );
 			Turn( "head", headRot, _prevHeadRot, HeadTurnMax );
 		}
@@ -711,6 +768,14 @@ public sealed class AnimTest : Component
 		              $"duck={_body.GetFloat( "duck" ):0.0} chestVsHips={AngleDeg( pelvisRot, chestRot ):0} bodyYaw={_body.WorldRotation.Yaw():0} " +
 		              $"hand=({hand.x / M:0.00},{hand.y / M:0.00},{hand.z / M:0.00})";
 		_trace.Enqueue( summary );
+		if ( !string.IsNullOrEmpty( _traceFilter ) && _scenario.Contains( _traceFilter, StringComparison.OrdinalIgnoreCase ) )
+		{
+			var aim = _body.GetVector( "aim_body" );
+			Log.Info( $"{Tag} frame {summary} look={_lookYaw:0.0} aimBodyYaw={MathF.Atan2( aim.y, aim.x ) * 57.29578f:0.0} " +
+			          $"pelvis=({pel.x / M:0.000},{pel.y / M:0.000},{pel.z / M:0.000}) pelvisYaw={pelvisRot.Yaw():0.0} chestYaw={chestRot.Yaw():0.0} headYaw={headRot.Yaw():0.0} " +
+			          $"ground={_controller.IsOnGround} rootZ={_pawn.WorldPosition.z:0.0}" );
+		}
+
 		while ( _trace.Count > 6 )
 			_trace.Dequeue();
 

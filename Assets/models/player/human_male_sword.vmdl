@@ -201,7 +201,7 @@
 							},
 							{
 								from = "male_body.vmat"
-								to = "models/citizen_human/bodies/male/body_mode_dark.vmat"
+								to = "models/citizen_human/bodies/male/body_mode_dark_03.vmat"
 							},
 							{
 								from = "m_playermodelmouth.vmat"
@@ -241,6 +241,10 @@
 						remaps = 
 						[
 							{
+								from = "models/citizen_human/bodies/male/body_mode_dark_03.vmat"
+								to = "models/citizen_human/bodies/male/body_mode_dark.vmat"
+							},
+							{
 								from = "m_playermodel_lightskin_02.vmat"
 								to = "models/citizen_human/heads/citizen_human_malehead03/citizen_human_malehead03.vmat"
 							},
@@ -256,7 +260,7 @@
 						remaps = 
 						[
 							{
-								from = "models/citizen_human/bodies/male/body_mode_dark.vmat"
+								from = "models/citizen_human/bodies/male/body_mode_dark_03.vmat"
 								to = "models/citizen_human/bodies/male/body_male_light.vmat"
 							},
 							{
@@ -279,7 +283,7 @@
 						remaps = 
 						[
 							{
-								from = "models/citizen_human/bodies/male/body_mode_dark.vmat"
+								from = "models/citizen_human/bodies/male/body_mode_dark_03.vmat"
 								to = "models/citizen_human/bodies/male/body_mode_dark_03.vmat"
 							},
 							{
@@ -298,7 +302,7 @@
 						remaps = 
 						[
 							{
-								from = "models/citizen_human/bodies/male/body_mode_dark.vmat"
+								from = "models/citizen_human/bodies/male/body_mode_dark_03.vmat"
 								to = "models/citizen_human/bodies/male/body_male_light_02.vmat"
 							},
 							{
@@ -321,7 +325,7 @@
 						remaps = 
 						[
 							{
-								from = "models/citizen_human/bodies/male/body_mode_dark.vmat"
+								from = "models/citizen_human/bodies/male/body_mode_dark_03.vmat"
 								to = "models/citizen_human/bodies/male/body_male_light.vmat"
 							},
 							{
@@ -344,7 +348,7 @@
 						remaps = 
 						[
 							{
-								from = "models/citizen_human/bodies/male/body_mode_dark.vmat"
+								from = "models/citizen_human/bodies/male/body_mode_dark_03.vmat"
 								to = "models/citizen_human/bodies/male/body_mode_dark.vmat"
 							},
 							{
@@ -363,7 +367,7 @@
 						remaps = 
 						[
 							{
-								from = "models/citizen_human/bodies/male/body_mode_dark.vmat"
+								from = "models/citizen_human/bodies/male/body_mode_dark_03.vmat"
 								to = "models/citizen_human/bodies/male/body_male_light_03.vmat"
 							},
 							{
@@ -386,7 +390,7 @@
 						remaps = 
 						[
 							{
-								from = "models/citizen_human/bodies/male/body_mode_dark.vmat"
+								from = "models/citizen_human/bodies/male/body_mode_dark_03.vmat"
 								to = "models/citizen_human/bodies/male/body_mode_dark_02.vmat"
 							},
 							{
@@ -405,7 +409,7 @@
 						remaps = 
 						[
 							{
-								from = "models/citizen_human/bodies/male/body_mode_dark.vmat"
+								from = "models/citizen_human/bodies/male/body_mode_dark_03.vmat"
 								to = "models/citizen_human/bodies/male/body_male_light_04.vmat"
 							},
 							{
@@ -633,7 +637,7 @@
 							},
 							{
 								_class = "AnimFile"
-								name = "Sword_Rest_L"
+								name = "Sword_Rest"
 								activity_name = ""
 								activity_weight = 1
 								weight_list_name = ""
@@ -647,30 +651,7 @@
 								disable_compression = true
 								disable_interpolation = false
 								enable_scale = false
-								source_filename = "models/player/animations/human@sword_rest_l.fbx"
-								start_frame = -1
-								end_frame = -1
-								framerate = -1.0
-								take = 0
-								reverse = false
-							},
-							{
-								_class = "AnimFile"
-								name = "Sword_Rest_R"
-								activity_name = ""
-								activity_weight = 1
-								weight_list_name = ""
-								fade_in_time = 0.15
-								fade_out_time = 0.15
-								looping = true
-								delta = false
-								worldSpace = false
-								hidden = false
-								anim_markup_ordered = false
-								disable_compression = true
-								disable_interpolation = false
-								enable_scale = false
-								source_filename = "models/player/animations/human@sword_rest_r.fbx"
+								source_filename = "models/player/animations/human@sword_rest.fbx"
 								start_frame = -1
 								end_frame = -1
 								framerate = -1.0
@@ -725,29 +706,6 @@
 							},
 							{
 								_class = "AnimFile"
-								name = "Sword_Cocked_Stab"
-								activity_name = ""
-								activity_weight = 1
-								weight_list_name = ""
-								fade_in_time = 0.15
-								fade_out_time = 0.15
-								looping = false
-								delta = false
-								worldSpace = false
-								hidden = false
-								anim_markup_ordered = false
-								disable_compression = true
-								disable_interpolation = false
-								enable_scale = false
-								source_filename = "models/player/animations/human@sword_cocked_stab.fbx"
-								start_frame = -1
-								end_frame = -1
-								framerate = -1.0
-								take = 0
-								reverse = false
-							},
-							{
-								_class = "AnimFile"
 								name = "Sword_Swap_Mid"
 								activity_name = ""
 								activity_weight = 1
@@ -771,7 +729,7 @@
 							},
 							{
 								_class = "AnimFile"
-								name = "Sword_Rest_Up"
+								name = "Sword_Block_L"
 								activity_name = ""
 								activity_weight = 1
 								weight_list_name = ""
@@ -785,7 +743,7 @@
 								disable_compression = true
 								disable_interpolation = false
 								enable_scale = false
-								source_filename = "models/player/animations/human@sword_rest_up.fbx"
+								source_filename = "models/player/animations/human@sword_block_l.fbx"
 								start_frame = -1
 								end_frame = -1
 								framerate = -1.0
@@ -794,7 +752,7 @@
 							},
 							{
 								_class = "AnimFile"
-								name = "Sword_Block"
+								name = "Sword_Block_R"
 								activity_name = ""
 								activity_weight = 1
 								weight_list_name = ""
@@ -808,7 +766,30 @@
 								disable_compression = true
 								disable_interpolation = false
 								enable_scale = false
-								source_filename = "models/player/animations/human@sword_block.fbx"
+								source_filename = "models/player/animations/human@sword_block_r.fbx"
+								start_frame = -1
+								end_frame = -1
+								framerate = -1.0
+								take = 0
+								reverse = false
+							},
+							{
+								_class = "AnimFile"
+								name = "Sword_Block_Up"
+								activity_name = ""
+								activity_weight = 1
+								weight_list_name = ""
+								fade_in_time = 0.15
+								fade_out_time = 0.15
+								looping = true
+								delta = false
+								worldSpace = false
+								hidden = false
+								anim_markup_ordered = false
+								disable_compression = true
+								disable_interpolation = false
+								enable_scale = false
+								source_filename = "models/player/animations/human@sword_block_up.fbx"
 								start_frame = -1
 								end_frame = -1
 								framerate = -1.0
@@ -878,29 +859,6 @@
 								disable_interpolation = false
 								enable_scale = false
 								source_filename = "models/player/animations/human@sword_attack_over.fbx"
-								start_frame = -1
-								end_frame = -1
-								framerate = -1.0
-								take = 0
-								reverse = false
-							},
-							{
-								_class = "AnimFile"
-								name = "Sword_Attack_Stab"
-								activity_name = ""
-								activity_weight = 1
-								weight_list_name = ""
-								fade_in_time = 0.0
-								fade_out_time = 0.2
-								looping = false
-								delta = false
-								worldSpace = false
-								hidden = false
-								anim_markup_ordered = false
-								disable_compression = true
-								disable_interpolation = false
-								enable_scale = false
-								source_filename = "models/player/animations/human@sword_attack_stab.fbx"
 								start_frame = -1
 								end_frame = -1
 								framerate = -1.0

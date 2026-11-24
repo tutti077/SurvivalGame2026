@@ -50,6 +50,18 @@ public sealed partial class PlayerAnimation
 		ApplyDodgeRollPose();
 	}
 
+	/// <summary>
+	/// Every peer, right after the roll tick: the one-shot punch clip hands the body back to the animgraph the moment
+	/// it ends. The pose's exit lives here, with the pose (like the hit reaction's), because the combat recovery state
+	/// that used to end it is not reliable on a peer that only watches the pawn - the host's punch froze the host's
+	/// model on clients on the clip's last frame, sword swings included (playtest 2026-11-18).
+	/// </summary>
+	void TickPunchPoseExit()
+	{
+		if ( IsPlayingCombatSequence( CombatRecoveryAnims.MeleePunchLeft ) && IsCombatSequenceFinished() )
+			ExitCombatSequenceToLocomotion();
+	}
+
 	/// <summary>Ticked from OnUpdate and OnPreRender, right after the mantle tick.</summary>
 	void TickDodgeRollPose()
 	{

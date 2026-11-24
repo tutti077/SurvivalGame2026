@@ -164,6 +164,7 @@ public sealed partial class PlayerAnimation : Component
 		TickHitReactionPose();
 		TickLedgeMantlePose();
 		TickDodgeRollPose();
+		TickPunchPoseExit();
 		TickHoldPose();
 		TickSeatedPose();
 		TickMeleeSwing();
@@ -173,6 +174,7 @@ public sealed partial class PlayerAnimation : Component
 		TickCombatFacingPresentation( advance: true );
 		TickLookAimLimits( advance: true );
 		TickWingsuitPose();
+		TickBedPose();
 	}
 
 	bool _combatFacingApplied;
@@ -185,45 +187,9 @@ public sealed partial class PlayerAnimation : Component
 			return;
 
 		_combatFacingApplied = false;
-		_wasdFacingApplied = false;
 		var body = ResolveBody();
 		if ( body is not null && body.IsValid() && body.GameObject != GameObject )
 			body.GameObject.LocalRotation = Rotation.Identity;
-	}
-
-	float _wasdFacingYaw;
-	bool _wasdFacingApplied;
-
-	/// <summary>
-	/// Body turns with WASD (Settings → Dev tools, <see cref="DevToolsSettings.WasdBodyFacing"/>): eases the body yaw
-	/// toward <see cref="PlayerMovement.TryGetWasdFacingTargetYaw"/> with <see cref="PlayerMovement.WasdFacingTurnSeconds"/>.
-	/// In: starts from wherever the body faces (a swing or guard may have just pinned it). Out: no writes - the body
-	/// stays where it was, like a swing release.
-	/// </summary>
-	bool TryGetWasdFacingYaw( PlayerMovement movement, bool advance, out float yaw )
-	{
-		yaw = _wasdFacingYaw;
-		if ( movement is null || !movement.IsValid() || !movement.Enabled || !movement.TryGetWasdFacingTargetYaw( out var target ) )
-		{
-			_wasdFacingApplied = false;
-			return false;
-		}
-
-		if ( !advance )
-			return _wasdFacingApplied;
-
-		if ( !_wasdFacingApplied )
-		{
-			var body = ResolveBody();
-			_wasdFacingYaw = body is { IsValid: true } ? body.WorldRotation.Yaw() : target;
-		}
-
-		var tau = MathF.Max( 0.02f, movement.WasdFacingTurnSeconds );
-		var k = 1f - MathF.Exp( -Time.Delta / tau );
-		_wasdFacingYaw += Angles.NormalizeAngle( target - _wasdFacingYaw ) * k;
-		_wasdFacingApplied = true;
-		yaw = _wasdFacingYaw;
-		return true;
 	}
 
 	/// <summary>
@@ -251,46 +217,21 @@ public sealed partial class PlayerAnimation : Component
 		{
 			_combatFacingYaw = bowYaw;
 			_combatFacingApplied = true;
-			_wasdFacingApplied = false;
 			body.GameObject.WorldRotation = new Angles( 0f, bowYaw, 0f ).ToRotation();
 			return;
 		}
 
-		var combat = ResolveCombat();
-		if ( combat is not null && combat.Enabled && combat.TryGetCombatFacingYaw( out var activeYaw ) )
+		// The body faces the mouse look at the body turn cap (PlayerMovement.BodyTurn.cs) — standing, moving, swinging
+		// or blocking alike; a swing's arc turns with it (PlayerCombat basis), so the model and the damage agree.
+		if ( movement is { OwnsBodyFacing: true } )
 		{
-			_combatFacingYaw = activeYaw;
+			_combatFacingYaw = movement.BodyYawDegrees;
 			_combatFacingApplied = true;
-			_wasdFacingApplied = false;
 			body.GameObject.WorldRotation = new Angles( 0f, _combatFacingYaw, 0f ).ToRotation();
 			return;
 		}
 
-		// Body turns with WASD (dev tools): walk-facing toward the travel direction - S walks toward the camera.
-		if ( TryGetWasdFacingYaw( movement, advance, out var wasdYaw ) )
-		{
-			_combatFacingYaw = wasdYaw;
-			_combatFacingApplied = true;
-			body.GameObject.WorldRotation = new Angles( 0f, wasdYaw, 0f ).ToRotation();
-			return;
-		}
-
-		if ( !_combatFacingApplied )
-			return;
-
-		if ( !advance )
-		{
-			// Keep the pinned yaw through OnPreRender until the owning OnUpdate hands back.
-			body.GameObject.WorldRotation = new Angles( 0f, _combatFacingYaw, 0f ).ToRotation();
-			return;
-		}
-
-		// Combat no longer owns the facing: hand the body back to the PlayerController EXACTLY
-		// where the swing pinned it, with NO rotation writes. The controller rotates the BODY
-		// CHILD (the physics root never turns — it keeps its spawn yaw forever), so any blend
-		// toward "root facing" here turned the waist toward the SPAWN direction after every
-		// swing. Standing still, the model lingers on the swing facing; once the player moves,
-		// the controller turns the body toward locomotion at its design rate.
+		// Seated / in the stasis pod: those systems pose the body child themselves.
 		_combatFacingApplied = false;
 	}
 
@@ -383,6 +324,7 @@ public sealed partial class PlayerAnimation : Component
 		TickHitReactionPose();
 		TickLedgeMantlePose();
 		TickDodgeRollPose();
+		TickPunchPoseExit();
 		TickHoldPose();
 		TickSeatedPose();
 		TickWornClothing();
@@ -390,21 +332,28 @@ public sealed partial class PlayerAnimation : Component
 		TickCombatFacingPresentation( advance: false );
 		TickLookAimLimits( advance: false );
 		TickWingsuitPose();
+		TickBedPose();
+		TickGrappleArmRelease();   // before every arm solve of this frame, so its clear costs them nothing
+		TickFirstPersonPresentation();   // the owner's first-person body and rest grip, before the sword is placed on it
+		TickGuardMeet();   // a landed block reaches the sword hand out to the contact (PlayerAnimation.GuardMeet.cs)
 		TickMeleeDemoStickTransform();
 		TickHeavyFlashFromHeldBlade();
 		TickHeldLightProp();
 		TickBolaProp();
 		TickOffhandShield();
 		TickHeldBow();
+		TickGrappleGear();   // last: its arm solve owns the left arm while a rope is out
 	}
 
 	protected override void OnDestroy()
 	{
 		DestroyMeleeDemoStick();
+		DestroyFirstPersonArms();
 		DestroyHeldLightProp();
 		DestroyBolaProp();
 		DestroyOffhandShield();
 		DestroyHeldBow();
+		DestroyGrappleGear();
 		ClearStuckNegativeBodyScale();
 		base.OnDestroy();
 	}
@@ -1082,7 +1031,10 @@ public sealed partial class PlayerAnimation : Component
 		if ( body is null || !body.IsValid() )
 			return;
 
-		if ( !TryGetFirstBoneTransform( body, DemoStickRightBoneCandidates, out var hold ) )
+		Transform hold;
+		if ( _firstPersonSwordHold is { } fpHold )
+			hold = fpHold;   // first-person rest grip (PlayerAnimation.FirstPerson.cs): this frame's solve, not last frame's bone
+		else if ( !TryGetFirstBoneTransform( body, DemoStickRightBoneCandidates, out hold ) )
 			return;
 
 		var tipWorld = hold.Rotation.Up;

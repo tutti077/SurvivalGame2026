@@ -101,7 +101,7 @@ public sealed partial class PlayerAnimation
 				controller.UseAnimatorControls = false;
 			_ownsControllerAnimation = true;
 
-			if ( Components.Get<PlayerMovement>() is { IsSeated: true } )
+			if ( Components.Get<PlayerMovement>() is { IsSeated: true } or { IsInBed: true } )
 			{
 				_aimSmoothedValid = false;
 				return;
@@ -110,7 +110,7 @@ public sealed partial class PlayerAnimation
 			if ( body.UseAnimGraph )
 				controller.UpdateAnimation( body );
 		}
-		else if ( !_ownsControllerAnimation || Components.Get<PlayerMovement>() is { IsSeated: true } )
+		else if ( !_ownsControllerAnimation || Components.Get<PlayerMovement>() is { IsSeated: true } or { IsInBed: true } )
 		{
 			return;
 		}

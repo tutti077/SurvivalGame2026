@@ -52,7 +52,7 @@ public sealed partial class PlayerAnimation
 	[Property, Group( "Shield" ), Title( "Block: tilt back (°)" ), Range( -30f, 45f ), Step( 1f )]
 	public float ShieldBlockTiltDegrees { get; set; } = 8f;
 
-	/// <summary>Seconds for the shield to travel arm → centre when the guard goes up (and back when it drops) — matches <see cref="PlayerCombat.BlockRaiseSeconds"/> (Mark 2026-11-04: the block shows and blocks in 50 ms).</summary>
+	/// <summary>Seconds for the shield to travel arm → centre when the guard goes up (and back when it drops) — matches <see cref="PlayerCombat.BlockActivationSeconds"/>.</summary>
 	/// <summary>Shield bash (F with a shield out, Mark 2026-11-05): the whole thrust-and-return, seconds.</summary>
 	[Property, Group( "Shield" ), Title( "Bash: time (s)" ), Range( 0.15f, 1f ), Step( 0.01f )]
 	public float ShieldBashSeconds { get; set; } = 0.35f;
@@ -62,7 +62,7 @@ public sealed partial class PlayerAnimation
 	public float ShieldBashForwardMeters { get; set; } = 0.35f;
 
 	[Property, Group( "Shield" ), Title( "Raise / lower time (s)" ), Range( 0.02f, 0.6f ), Step( 0.01f )]
-	public float ShieldRaiseSeconds { get; set; } = 0.05f;
+	public float ShieldRaiseSeconds { get; set; } = 0.1f;
 
 	/// <summary>
 	/// While the shield is raised, the left arm is solved onto it (Mark 2026-11-02: "make the arm follow
@@ -333,10 +333,23 @@ public sealed partial class PlayerAnimation
 
 		var newHandRot = handRotTarget ?? newLowerRot * lowerTx.Rotation.Inverse * handTx.Rotation;
 
+		// The forearm as this solve leaves it, for what is strapped to it (the grapple gauntlet).
+		if ( lowerName == "arm_lower_L" && body == ResolveBody() )
+		{
+			_leftArmSolveTime = Time.NowDouble;
+			_leftArmSolveAnimElbow = elbow;
+			_leftArmSolveElbow = newElbow;
+			_leftArmSolveDelta = newLowerRot * lowerTx.Rotation.Inverse;
+		}
+
 		var world = body.Transform.World;
 		body.SetBoneTransform( upperBone, world.ToLocal( new Transform( shoulder, newUpperRot ) ) );
 		body.SetBoneTransform( lowerBone, world.ToLocal( new Transform( newElbow, newLowerRot ) ) );
 		body.SetBoneTransform( handBone, world.ToLocal( new Transform( newHand, newHandRot ) ) );
+		// First person: the owner sees the arms-only renderer (FirstPerson.cs), posed from the animation - it takes the solve too
+		if ( _firstPersonShown && body == ResolveBody() )
+			MirrorArmSolveToFirstPerson( body, upperName, lowerName, handName, upperTx, lowerTx, handTx,
+				new Transform( shoulder, newUpperRot ), new Transform( newElbow, newLowerRot ), new Transform( newHand, newHandRot ) );
 		return new Transform( newHand, newHandRot );
 	}
 
@@ -367,7 +380,7 @@ public sealed partial class PlayerAnimation
 			return;
 
 		_shieldIkActive = false;
-		// No per-bone clear exists; nothing else on the pawn writes bone overrides (grep SetBoneTransform / SetBoneOverride).
+		// No per-bone clear exists; the bow is hidden while the shield is out and the grapple arm solves after this every frame.
 		if ( body is not null && body.IsValid() )
 			body.SceneModel?.ClearBoneOverrides();
 	}

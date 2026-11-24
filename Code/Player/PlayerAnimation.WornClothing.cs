@@ -12,6 +12,31 @@ namespace Survival;
 /// </summary>
 public sealed partial class PlayerAnimation
 {
+	/// <summary>
+	/// Host-synced: an event outfit that replaces the worn clothing while it is set (the hub's arena cameraman wears
+	/// <c>referee</c>). Empty = the paperdoll's clothing as usual.
+	/// </summary>
+	[Sync( SyncFlags.FromHost )]
+	public string EventOutfit { get; private set; } = string.Empty;
+
+	public void HostSetEventOutfit( string outfitId )
+	{
+		if ( GameObject.Network is { Active: true } && !Networking.IsHost )
+			return;
+		EventOutfit = outfitId ?? string.Empty;
+	}
+
+	/// <summary>Event outfits: clothing resources, and a material laid over any piece whose model path contains the key.</summary>
+	static readonly Dictionary<string, (string[] Clothing, string ModelMatch, string Material)> EventOutfits =
+		new( StringComparer.OrdinalIgnoreCase )
+		{
+			["referee"] = ( new[]
+			{
+				"models/citizen_clothes/shirt/Polo_Shirt/polo_shirt_white.clothing",
+				"models/citizen_clothes/trousers/TrackieBottoms/trackie_bottoms_black.clothing",
+			}, "polo_shirt", "materials/hub/hub_referee_stripes.vmat" ),
+		};
+
 	PlayerEquipment _clothingEquipment;
 	string _appliedClothingKey;
 	readonly List<GameObject> _wornClothingObjects = new();
@@ -25,7 +50,10 @@ public sealed partial class PlayerAnimation
 		if ( _clothingEquipment is null )
 			return;
 
-		var key = _clothingEquipment.NetworkedWornClothing ?? string.Empty;
+		var outfit = EventOutfit ?? string.Empty;
+		var key = outfit.Length > 0 && EventOutfits.ContainsKey( outfit )
+			? "outfit:" + outfit
+			: _clothingEquipment.NetworkedWornClothing ?? string.Empty;
 		if ( string.Equals( key, _appliedClothingKey, StringComparison.Ordinal ) )
 			return;
 
@@ -49,9 +77,15 @@ public sealed partial class PlayerAnimation
 		_wornClothingObjects.Clear();
 
 		var container = new ClothingContainer();
-		if ( !string.IsNullOrWhiteSpace( key ) )
+		(string[] Clothing, string ModelMatch, string Material) outfit = default;
+		var isOutfit = key.StartsWith( "outfit:", StringComparison.Ordinal )
+		               && EventOutfits.TryGetValue( key.Substring( 7 ), out outfit );
+		var paths = isOutfit
+			? outfit.Clothing
+			: key.Split( '|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries );
+		if ( paths.Length > 0 )
 		{
-			foreach ( var path in key.Split( '|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries ) )
+			foreach ( var path in paths )
 			{
 				if ( ResourceLibrary.TryGet<Clothing>( path, out var clothing ) && clothing is not null )
 				{
@@ -79,6 +113,15 @@ public sealed partial class PlayerAnimation
 			child.NetworkMode = NetworkMode.Never;
 			child.Flags |= GameObjectFlags.NotSaved;
 			_wornClothingObjects.Add( child );
+
+			if ( isOutfit && !string.IsNullOrEmpty( outfit.Material ) )
+			{
+				foreach ( var r in child.Components.GetAll<ModelRenderer>( FindMode.EverythingInSelfAndDescendants ) )
+				{
+					if ( r.Model?.ResourcePath?.Contains( outfit.ModelMatch, StringComparison.OrdinalIgnoreCase ) == true )
+						r.MaterialOverride = Material.Load( outfit.Material );
+				}
+			}
 		}
 	}
 }
