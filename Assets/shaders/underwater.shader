@@ -148,7 +148,16 @@ PS
 			// Snell's window: inside acos(1/1.33) ≈ 48.6° the sky comes through (Fresnel climbs toward the edge); outside,
 			// total internal reflection mirrors the water below
 			float window = smoothstep( 0.63, 0.72, cosUp );
-			float2 swim = n * 0.01;
+			// ...but the shore is not the sky: trees, banks, a boat or a player standing above the water show through the
+			// surface at any angle but the flattest (Mark 2026-11-18: "when I'm under water and look up and to the trees
+			// next to the water I can't see them"). A real surface squeezes them into the window's rim, where nobody could
+			// read them; here they stay where they stand, rippled, and only the sky keeps the round window.
+			if ( !sky )
+				window = max( window, smoothstep( 0.02, 0.12, cosUp ) );
+			// The sky swims with the ripples; scenery is read where it stands. Shifted, a pixel on a tree's outline picked
+			// up the bright sky beside it - every crown wore a white fringe (Mark 2026-11-18: "the math that blends them
+			// fails") - and the caustic web below drew pale bars across the trunks.
+			float2 swim = sky ? n * 0.01 : float2( 0.0, 0.0 );
 			float3 through = g_tColorBuffer.SampleLevel( g_sBilinearClamp, i.uv + swim, 0 ).rgb;
 			float3 mirrored = scatter * lightHere * (0.30 * daylight) * (0.55 + 0.12 * n.x);
 			float rim = smoothstep( 0.6, 0.66, cosUp ) * (1.0 - smoothstep( 0.66, 0.76, cosUp ));
@@ -156,7 +165,7 @@ PS
 			float2 netUv = hitM / 6.0;
 			float netA = g_tUnderwaterCaustics.SampleLevel( g_sUnderwaterWrap, netUv + t * float2( 0.02, 0.012 ), 2.0 ).r;
 			float netB = g_tUnderwaterCaustics.SampleLevel( g_sUnderwaterWrap, netUv * 0.83 + float2( 0.41, 0.17 ) - t * float2( 0.016, -0.014 ), 2.0 ).r;
-			float net = min( netA, netB ) * (1.0 - smoothstep( 8.0, 40.0, surfDist / UNITS_PER_METER ));
+			float net = sky ? min( netA, netB ) * (1.0 - smoothstep( 8.0, 40.0, surfDist / UNITS_PER_METER )) : 0.0;
 			color = lerp( mirrored, through * (0.9 + 0.25 * net), window ) + (rim + net * 0.1) * scatter * daylight * 0.25;
 			pathM = surfDist / UNITS_PER_METER;
 		}
@@ -185,6 +194,12 @@ PS
 			}
 			pathM = sky ? 4000.0 : sceneDist / UNITS_PER_METER;
 		}
+
+		// Nothing seen through a stretch of water is darker than the water itself: the light the water scatters toward the
+		// eye fills in with distance. Without this floor a far slope in the sun's shadow stayed darker than the water round
+		// it and drew a black slit behind every ridge of the bed (Mark 2026-11-23: "ocean terrain still has that black
+		// slit"). Nothing at the eye (a rock's dark side beside the diver keeps its shadow), all of it by 0.6 clear distances.
+		color = max( color, waterColor * saturate( pathM / max( clearM * 0.6, 0.5 ) ) );
 
 		// Through the water to the camera
 		float3 keep = pow( tint, min( pathM, 4000.0 ) / clearM );

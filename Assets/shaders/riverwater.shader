@@ -51,6 +51,9 @@ COMMON
 {
 	#define S_SPECULAR 1
 	#define BLEND_MODE_ALREADY_SET 1
+	// The mesh tangent is the flow direction (mitred at the joints): the pixel shader's along / across frame
+	#define VS_INPUT_HAS_TANGENT_BASIS 1
+	#define PS_INPUT_HAS_TANGENT_BASIS 1
 	#include "common/shared.hlsl"
 }
 
@@ -199,6 +202,8 @@ PS
 	// ---- flow
 	float FlowSpeed < Default( 1.5 ); Range( 0.0, 10.0 ); UiGroup( "Flow,20/10" ); >;   // metres per second at the median slope
 	float RippleStrength < Default( 1.0 ); Range( 0.0, 4.0 ); UiGroup( "Flow,20/40" ); >;
+	// Long streaks running with the current (slope of the stretched swell layers)
+	float FlowLineStrength < Default( 0.14 ); Range( 0.0, 1.0 ); UiGroup( "Flow,20/45" ); >;
 	// Extra chop where the current is fast (× the current multiple above 1)
 	float FastWaterChop < Default( 0.6 ); Range( 0.0, 2.0 ); UiGroup( "Flow,20/60" ); >;
 	// Rapids on the steepest stretches: more foam clumps and bubbles, milky, much less see-through
@@ -336,9 +341,9 @@ PS
 		// (river_mouths.hlsl); the strip itself ends at the shoreline. A mouth not listed: the old shore-distance fade.
 		float riverAlpha = 1.0;
 		float2 pm = worldPos.xy / UNITS_PER_METER;
-		float4 mouth = RiverMouthAt( pm );
-		if ( mouth.z > 0.01 )
-			riverAlpha = 1.0 - mouth.w;
+		float2 mouth = RiverMouthRiverFade( pm, worldPos.z / UNITS_PER_METER );
+		if ( mouth.y > 0.01 )
+			riverAlpha = 1.0 - mouth.x;
 		else if ( openDepth > 0.0 )
 		{
 			float2 g = float2(
@@ -346,13 +351,13 @@ PS
 				OpenWaterDepthMeters( pm + float2( 0.0, 1.0 ) ) - OpenWaterDepthMeters( pm - float2( 0.0, 1.0 ) ) ) * 0.5;
 			riverAlpha = 1.0 - smoothstep( 0.0, MouthFadeMeters, openDepth / max( length( g ), 1e-3 ) );
 		}
-		// The across-river direction in the world: the gradient of the across coordinate (continuous everywhere; the
-		// along coordinate wraps every 64 m, so its derivatives are not used). Along = across rotated a quarter turn.
-		float2 dvds = float2( ddx( flowMeters.y ), ddy( flowMeters.y ) );
-		float detJ = dpdx.x * dpdy.y - dpdx.y * dpdy.x;
-		float2 acrossWs = float2( dvds.x * dpdy.y - dvds.y * dpdx.y, dvds.y * dpdx.x - dvds.x * dpdy.x ) / (abs( detJ ) > 1e-8 ? detJ : 1e-8);
-		acrossWs = normalize( acrossWs + float2( 1e-6, 0 ) );
-		float2 alongWs = float2( acrossWs.y, -acrossWs.x );
+		// The flow frame from the mesh: the tangent is the flow direction, turning smoothly through each bend. (It used to
+		// be rebuilt from screen derivatives, divided by the projected area of the pixel: edge-on to the camera that area
+		// is ~0, the frame went to infinity / NaN, and one NaN pixel through the bloom is a red and blue block on the
+		// water - Mark 2026-11-18.)
+		float2 alongWs = i.vTangentUWs.xy;
+		alongWs = dot( alongWs, alongWs ) > 1e-6 ? normalize( alongWs ) : float2( 1.0, 0.0 );
+		float2 acrossWs = float2( -alongWs.y, alongWs.x );
 
 		float3 baseNormal = normalize( i.vNormalWs );
 		if ( !i.bIsFrontface )
@@ -371,6 +376,13 @@ PS
 		float2 slope = RippleLayer( flowMeters, 2.0, 0.0, false, false, 1.0, phaseNoise ) * 0.10
 			+ RippleLayer( flowMeters, 8.0, 0.6, false, true, 0.92, phaseNoise + 0.33 ) * 0.08
 			+ RippleLayer( flowMeters, 32.0, 0.0, true, false, 0.8, phaseNoise + 0.66 ) * 0.05;
+		// Flow lines: the broad swells drawn out six times along the current and racing ahead of the chop - long streaks
+		// that run WITH the river, stronger the faster it goes. They are what reads as water going somewhere; the three
+		// layers above alone read as a pond sliding sideways (Mark 2026-11-18: "needs to look more flowing").
+		float2 streak = RippleLayer( float2( flowMeters.x / 6.0, flowMeters.y ), 4.0, 0.0, false, true, 1.6 / 6.0, phaseNoise + 0.21 )
+			+ RippleLayer( float2( flowMeters.x / 4.0, flowMeters.y ), 16.0, 0.35, false, true, 1.25 / 4.0, phaseNoise + 0.57 ) * 0.7;
+		// Stretched along the flow, a slope texture tilts almost only ACROSS it: keep that component
+		slope.y += streak.y * FlowLineStrength * (0.35 + 0.65 * saturate( speedMul ));
 		slope *= RippleStrength * (1.0 + FastWaterChop * saturate( speedMul - 1.0 ));
 		float2 slopeWs = slope.x * alongWs + slope.y * acrossWs;
 
@@ -396,7 +408,19 @@ PS
 		float flNDotVFlat = max( dot( baseNormal, V ), 0.08 );
 		float meshDepthU = depth01 * RIVER_DEPTH_COLOR_RANGE_METERS * UNITS_PER_METER;
 		float flPathU = lerp( min( meshDepthU / flNDotVFlat, 2400.0 ), clamp( thicknessU, 0.0, 4000.0 ), trust );
-		float waterDepthU = lerp( meshDepthU, clamp( thicknessU, 0.0, 4000.0 ) * saturate( V.z ), trust );
+		// Depth below the surface = the path times the view's angle to the SURFACE, not to the horizon: a river coming down
+		// a slope, seen from further down, is looked at from below its own height (V.z < 0) though still from its upper
+		// side. With V.z the depth read 0 there, the soft bank edge below took the pixel for dry land and the whole
+		// stretch vanished - a chute of bare sand above the lake (Mark 2026-11-18: the water "unrenders at times").
+		float waterDepthU = lerp( meshDepthU, clamp( thicknessU, 0.0, 4000.0 ) * flNDotVFlat, trust );
+
+		// Open air behind the water: where the river goes over a lip (a mountain river leaving its top, a chute) the view
+		// passes through the water and out of the carved notch, and what the depth buffer holds behind the surface is the
+		// valley hundreds of metres beyond. The path was clamped at 100 m, which at this clarity still lets half of it
+		// through - trees standing "in" the water, clear as day (Mark 2026-11-18). No river bed lies more than the depth
+		// range under its surface: anything further down than that is not in the water, and the water there is the white
+		// curtain of the fall.
+		float beyondBed = trust * smoothstep( 1.25, 1.75, thicknessU * flNDotVFlat / (RIVER_DEPTH_COLOR_RANGE_METERS * UNITS_PER_METER) );
 
 		float2 uv = i.vPositionSs.xy * g_vInvViewportSize;
 		// Refraction bends the view by a world-space amount, so on screen it shrinks with distance (beyond 6 m); a fixed
@@ -447,7 +471,7 @@ PS
 		{
 			float3 bedOffset = vViewRayWs * flPathU;
 			float bedVis = g_DirectionalLightCascadeCount > 0 ? WaterShadow( lightPos + bedOffset + normalize( -g_DirectionalLightDirection.xyz ) * 40.0, vReceiverNormalWs, i.vPositionSs ) : 1.0;
-			float bedDepthM = flPathU * saturate( V.z ) / UNITS_PER_METER;
+			float bedDepthM = flPathU * flNDotVFlat / UNITS_PER_METER;
 			float c = WaterCaustics( (worldPos.xy + bedOffset.xy) / UNITS_PER_METER, bedDepthM, g_flTime, footprintMeters );
 			sceneColor *= 1.0 + c * CausticStrength * bedVis * saturate( dot( sunInWater, float3( 0.30, 0.59, 0.11 ) ) );
 		}
@@ -457,6 +481,7 @@ PS
 		// Rapids are full of air and churned sediment: far less see-through (Mark 2026-10-25: on a steep stretch he
 		// could see clean through the water to the ground behind)
 		transmittance *= 1.0 - 0.45 * rapids;
+		transmittance *= 1.0 - beyondBed;
 		float3 skyUp = SkyReflection( float3( 0, 0, 1 ) );
 		// What the water scatters back has been through the water too: tinted by its own absorption (red goes first — clear
 		// water reads teal-blue in the deep, tannin water brown), normalised so the brightest channel keeps the light
@@ -467,11 +492,15 @@ PS
 		float3 seen = lerp( (skyUp * InScatter + sunInWater * (columnVis * SunInScatter)) * scatterTint, sceneColor, transmittance );
 		// Aerated water scatters light back white whatever its tint: rapids read milky, not dark tea
 		float3 milky = (skyUp * 0.32 + sunInWater * (0.08 * columnVis)) * float3( 0.86, 0.9, 0.92 );
-		seen = lerp( seen, milky, rapids * 0.3 );
+		seen = lerp( seen, milky, max( rapids * 0.3, beyondBed * 0.85 ) );
 
 		// ---- reflection: the sky, unless the reflected ray meets the bank + treeline first
 		float3 R = reflect( vViewRayWs, normal );
-		float reflectRough = saturate( footprintMeters * DistanceReflectionBlur );
+		// A ripple tilted past the view ray still mirrors what is above the water, never a point under it (as seawater):
+		// a downward ray took the bank branch below and read the frame buffer at a meaningless screen position
+		R.z = abs( R.z );
+		// Never a crisp mirror: sharp clouds through the ripples break into shards
+		float reflectRough = saturate( max( footprintMeters * DistanceReflectionBlur, 0.08 ) );
 		float3 reflection = SkyReflectionRough( R, reflectRough );
 
 		float rs = dot( R.xy, acrossWs );
@@ -483,7 +512,7 @@ PS
 		float jag = g_tCloudNoise.Sample( g_sCloudSampler, float2( hitAlong / 16.0, rs >= 0.0 ? 0.25 : 0.75 ) ).g;
 		wallHeight = 1.0 + max( wallHeight - 1.0, 0.0 ) * lerp( 1.0, 0.55 + 0.9 * jag, TreelineJitter );
 		float rayHeight = tWall * R.z;
-		float occluded = R.z <= 0.0 ? 1.0 : saturate( (wallHeight - rayHeight) / (0.15 * wallHeight + 0.3) );
+		float occluded = saturate( (wallHeight - rayHeight) / (0.15 * wallHeight + 0.3) );
 		occluded *= BankReflection;
 		if ( occluded > 0.001 )
 		{
@@ -501,6 +530,9 @@ PS
 				float2 edge = saturate( min( suv, 1.0 - suv ) * 12.0 );
 				float onScreen = edge.x * edge.y;
 				float3 fb = g_tFrameBufferCopyTexture.SampleLevel( g_sTrilinearMirror, saturate( suv ) * float2( 1.0, 1.0 ), 0 ).rgb;
+				// A mirrored bank is never brighter than a bright sky: a fire, a lamp or the sun disc behind that screen point
+				// came through at full HDR and bloomed in its own colour on the water
+				fb = min( fb, max( reflection * 2.0, 1.0 ) );
 				bank = lerp( silhouette, fb, onScreen );
 			}
 			reflection = lerp( reflection, bank, occluded );
@@ -519,6 +551,7 @@ PS
 		// Per-light cap, as a multiple of that light's own colour: the GGX term's 1 / (4 VdotH²) runs to ~100x at a grazing far
 		// view, and the old cap was absolute (4.0) — so a dim moon or a torch beside a distant river still made a 4.0 HDR blob
 		// that bloomed blue across the hill (Mark 2026-11-03). Near ripples keep their sparkle; a far pixel is a sheen.
+		// SpecularGGX itself is Smith-bounded since 2026-11-10 (water_common.hlsl): the cap is a backstop, not the limiter.
 		float specCap = lerp( 40.0, 1.5, saturate( footprintMeters / 1.5 ) );
 		float3 glint = 0;
 		float3 foamLight = 0;
@@ -632,8 +665,26 @@ PS
 
 		// Soft banks: the water fades in over EdgeSoftnessMeters of real depth
 		float edgeAlpha = lerp( 1.0, smoothstep( 0.0, EdgeSoftnessMeters * UNITS_PER_METER, waterDepthU ), trust );
+		// The vertex stage pulls the surface 0.2 % of its distance toward the camera, so far away - seen at a low angle -
+		// the part of the strip that is buried in the bank wins the depth test and draws on top of the ground: a flickering
+		// line of bright sky pixels along a distant river's edge, which the bloom spreads (Mark 2026-11-18: the twinkle
+		// "only occurs at an angle"). Where the scene in front is nearer than the true surface there is no water to see.
+		if ( depthValid )
+			edgeAlpha *= smoothstep( -(surfDist * 0.0015 + 6.0), -(surfDist * 0.0003 + 1.0), thicknessU );
 		// Fades against the copied scene, alpha 1 (see seawater.shader: hardware alpha broke the frame-buffer copy)
 		color = lerp( CopyTap( uv ).rgb, color, edgeAlpha );
+		// Backstop: nothing non-finite ever leaves the water (bloom spreads one such pixel over a block of the screen)
+		if ( any( isnan( color ) ) || any( isinf( color ) ) )
+			color = CopyTap( uv ).rgb;
+		// ...and nothing negative or blinding: the brightest channel is held to a ceiling that falls with distance (6x near,
+		// where a sun sparkle on a ripple is wanted; 1.2x once a pixel covers 0.75 m of water, about as bright as sunlit
+		// snow). The whole colour is scaled, so a capped pixel keeps its hue instead of clipping to pure red or blue. With
+		// this the river surface cannot be the source of a coloured bloom blob (Mark 2026-11-18: the red twinkle on a far
+		// mountain river).
+		color = max( color, 0.0 );
+		float ceiling = lerp( 6.0, 1.2, saturate( footprintMeters / 0.75 ) );
+		float peak = max( color.r, max( color.g, color.b ) );
+		color *= min( 1.0, ceiling / max( peak, 1e-4 ) );
 		return float4( color, saturate( riverAlpha * i.flJoin ) );
 	}
 }

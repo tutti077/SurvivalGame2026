@@ -190,25 +190,35 @@ float WaterCaustics( float2 bedMeters, float depthMeters, float t, float footpri
 	return min( a, b ) * fade;
 }
 
-// GGX highlight of one light on the water (Kelemen visibility). Fresnel by the half vector.
+// GGX highlight of one light on the water, height-correlated Smith visibility, Fresnel by the half vector.
+// Not Kelemen (1 / 4 VdotH²): with a low sun or moon beyond a far river, at a grazing view, L + V nearly cancels, the half
+// vector points anywhere and that term ran to ~100x — a band of pure light colour (red at dusk, blue under the moon)
+// across distant water that bloomed (Mark 2026-11-10). Smith stays bounded (≤ D·F / 2α), and a degenerate half vector
+// or a ripple facing away from the eye or the light reflects nothing.
 float SpecularGGX( float3 N, float3 V, float3 L, float alpha, float f0 )
 {
-	float3 H = normalize( L + V );
-	float NdotH = saturate( dot( N, H ) );
+	float3 hv = L + V;
+	float hv2 = dot( hv, hv );
 	float NdotL = saturate( dot( N, L ) );
-	float VdotH = max( dot( V, H ), 0.05 );
+	float NdotV = saturate( dot( N, V ) );
+	if ( hv2 < 1e-4 || NdotL <= 0.0 || NdotV <= 0.0 )
+		return 0.0;
+	float3 H = hv * rsqrt( hv2 );
+	float NdotH = saturate( dot( N, H ) );
+	float VdotH = saturate( dot( V, H ) );
 	float a2 = alpha * alpha;
 	float denom = NdotH * NdotH * (a2 - 1.0) + 1.0;
 	float D = a2 / (3.14159265 * denom * denom);
 	float F = f0 + (1.0 - f0) * pow( 1.0 - VdotH, 5.0 );
-	return D * F * NdotL / (4.0 * VdotH * VdotH);
+	float vis = 0.5 / (NdotL * sqrt( NdotV * NdotV * (1.0 - a2) + a2 ) + NdotV * sqrt( NdotL * NdotL * (1.0 - a2) + a2 ) + 1e-5);
+	return D * F * vis * NdotL;
 }
 
 // ---- open water (sea + lakes), for surfaces that meet it: published by TerrainWorldManager.SeaWater. The same depth
 // as seawater.shader's SeaDepthMeters (keep the two in step): 0 on land, the carved depth over lakes and the sea.
 float4 g_vOpenWaterShape < Attribute( "SeaShape" ); Default4( 20000.0, 20000.0, 300.0, 900.0 ); >;
 float4 g_vOpenWaterLake < Attribute( "SeaLake" ); Default4( 2.0, 8.0, 100.0, 1500.0 ); >;
-float4 g_vOpenWaterShelf < Attribute( "SeaShelf" ); Default4( 30.0, 700.0, 0.0, 0.0 ); >;
+float4 g_vOpenWaterShelf < Attribute( "SeaShelf" ); Default4( 30.0, 300.0, 15.0, 300.0 ); >;
 float4 g_vOpenWaterClock < Attribute( "SeaClock" ); Default4( 0.0, 2.5, 512.0, 0.0 ); >;
 Texture2D g_tOpenWaterLakeMask < Attribute( "SeaLakeMask" ); SrgbRead( false ); >;
 SamplerState g_sOpenWaterMaskSampler < Filter( BILINEAR ); AddressU( CLAMP ); AddressV( CLAMP ); >;
@@ -248,7 +258,7 @@ float OpenWaterDepthMeters( float2 xyMeters )
 		float past = dist - landRadius;
 		float t = saturate( past / max( 1.0, g_vOpenWaterShape.w ) );
 		float d = saturate( (past - g_vOpenWaterShape.w) / max( 1.0, g_vOpenWaterShelf.y ) );
-		return g_vOpenWaterShelf.x * t * (2.0 - t) + max( g_vOpenWaterShape.z - g_vOpenWaterShelf.x, 0.0 ) * d * d * (3.0 - 2.0 * d);   // TerrainPreviewPipeline.OceanDepthMeters
+		return g_vOpenWaterShelf.x * t * (2.0 - t) + max( g_vOpenWaterShape.z - g_vOpenWaterShelf.x, 0.0 ) * d * (2.0 - d);   // TerrainPreviewPipeline.OceanDepthMeters
 	}
 	float diameter = worldRadius * 2.0;
 	float2 uv = float2( 1.0 - (xyMeters.x + worldRadius) / diameter, (xyMeters.y + worldRadius) / diameter );
@@ -267,7 +277,9 @@ float OpenWaterDepthMeters( float2 xyMeters )
 	float grad = length( float2( gx, gy ) ) / (2.0 * texel * worldRadius * 2.0);   // per metre
 	float into = grad > 1e-7 ? excess / grad : 1e6;
 	float t = saturate( into / max( 1.0, g_vOpenWaterLake.z ) );
-	return g_vOpenWaterLake.y * t * (2.0 - t);
+	float d = saturate( (into - g_vOpenWaterLake.z) / max( 1.0, g_vOpenWaterShelf.w ) );
+	float lakeShelf = min( g_vOpenWaterShelf.z, g_vOpenWaterLake.y );
+	return lakeShelf * t * (2.0 - t) + (g_vOpenWaterLake.y - lakeShelf) * d * (2.0 - d);   // TerrainPreviewPipeline.LakeDepthMeters
 }
 
 // ---- foam lace: what real foam looks like up close — a net of bubbles with holes, never a tiled picture. Domain-warped,

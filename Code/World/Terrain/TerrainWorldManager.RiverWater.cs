@@ -562,7 +562,11 @@ public sealed partial class TerrainWorldManager
 					var bed = TerrainPreviewPipeline.Sample( settings, cx - (dir.x * 3f), cy - (dir.y * 3f) ).HeightMeters;
 					var handOver = Math.Clamp( halfW * RiverMouthHandOverWidths, RiverMouthHandOverMinMeters, RiverMouthHandOverMaxMeters );
 					data[n * 2] = new Vector4( cx, cy, dir.x, dir.y );
-					data[(n * 2) + 1] = new Vector4( halfW, Math.Max( 0.3f, level - bed ), handOver, 0f );
+					// w: the lake / sea level the river runs into. The river may only fade out where that surface can really cover
+					// its channel - on a river that comes down a slope into the lake the hand-over stretch lies above the lake, and
+					// fading there left a band of dry sand between the two waters (Mark 2026-11-18: "they unrender")
+					var openLevel = TerrainPreviewLandDiskFields.SampleWaterSurfaceMeters( settings, cx + (dir.x * 2f), cy + (dir.y * 2f) );
+					data[(n * 2) + 1] = new Vector4( halfW, Math.Max( 0.3f, level - bed ), handOver, openLevel );
 					n++;
 					break;
 				}
@@ -600,7 +604,11 @@ public sealed partial class TerrainWorldManager
 			{
 				var m = data[i * 2];
 				var kind = MathF.Sqrt( (m.x * m.x) + (m.y * m.y) ) >= land - 30f ? "ocean" : "lake";
-				Log.Info( $"[RiverMouth] {i}: {kind} at {m.x:0},{m.y:0}, flowing {m.z:0.00},{m.w:0.00}, half width {data[(i * 2) + 1].x:0.0} m" );
+				// How far the river still stands above the water it runs into, one hand-over length upstream (0 = a level mouth)
+				var b2 = data[(i * 2) + 1];
+				var up = TerrainPreviewLandDiskFields.SampleRiver( manager._loadSettings, m.x - (m.z * b2.z), m.y - (m.w * b2.z) );
+				var drop = up.Near ? up.Level - b2.w : 0f;
+				Log.Info( $"[RiverMouth] {i}: {kind} at {m.x:0},{m.y:0}, flowing {m.z:0.00},{m.w:0.00}, half width {b2.x:0.0} m, hand-over {b2.z:0} m, river {drop:0.0} m above the open water at its start" );
 			}
 			return;
 		}
@@ -795,7 +803,7 @@ public sealed partial class TerrainWorldManager
 		var quads = 0;
 		for ( var q = 0; q < segments.Count; q++ )
 		{
-			rows[q] = IsJoinTail( net, segments[q].Index ) ? 8 : 1;
+			rows[q] = IsJoinTail( net, segments[q].Index ) ? 8 : RiverSurfaceRows;
 			quads += rows[q];
 		}
 		var mesh = new Mesh( material, MeshPrimitiveType.Triangles );
@@ -843,7 +851,29 @@ public sealed partial class TerrainWorldManager
 				var endB = segments[q].B;
 				var dA = Math.Clamp( endA.Depth / RiverDepthColorRangeMeters, 0f, 1f );
 				var dB = Math.Clamp( endB.Depth / RiverDepthColorRangeMeters, 0f, 1f );
-				var tangent = new Vector4( dir.x, dir.y, 0f, 1f );
+				// The flow direction at each end (the bisector with the neighbour, like the sides): the tangent turns through
+				// the bend instead of snapping at the joint - riverwater.shader's along / across frame
+				var dirA = hasPrev ? Bisector( SegmentDirection( net, si - 1 ), dir ) : dir;
+				var dirB = hasNext && !cut ? Bisector( dir, SegmentDirection( net, si + 1 ) ) : dir;
+				// The water level along the segment: a monotone cubic through the two ends whose grade at each joint is shared
+				// with the neighbour, so the surface rolls from one grade into the next. Straight from end to end it was a
+				// row of flat planks that changed slope at every 20 m joint (Mark 2026-11-18: "very flat and just kinda randomly
+				// changes slope").
+				var segLength = Math.Max( 0.5f, MathF.Sqrt( ((s.Bx - s.Ax) * (s.Bx - s.Ax)) + ((s.By - s.Ay) * (s.By - s.Ay)) ) );
+				var grade = (s.LevelB - s.LevelA) / segLength;
+				var gradeA = hasPrev ? SharedGrade( SegmentGrade( net, si - 1 ), grade ) : grade;
+				var gradeB = hasNext ? SharedGrade( grade, SegmentGrade( net, si + 1 ) ) : grade;
+				// ...but never far from the straight line between the ends: the bed is carved, and swimmers float, on that line.
+				// Where a steep stretch meets a flat one the free cubic sagged 1-2 m under it (the water sank into its bed: a
+				// band of dry sand across the river above a lake) or bulged as far over it (a sheet of water standing above
+				// the banks, over tree trunks) - Mark 2026-11-18: "I can see through objects, they unrender at times". The end
+				// grades are pulled toward the segment's own until the curve stays within RiverLevelCurveMaxMeters of the line.
+				var bendA = segLength * (gradeA - grade);
+				var bendB = segLength * (gradeB - grade);
+				var keep = Math.Min( 1f, RiverLevelCurveMaxMeters / ((0.1482f * (MathF.Abs( bendA ) + MathF.Abs( bendB ))) + 1e-5f) );
+				gradeA = grade + ((gradeA - grade) * keep);
+				gradeB = grade + ((gradeB - grade) * keep);
+				var lift = RiverSurfaceLiftMeters + WaterStencilLiftMeters;
 
 				// A at -side, centre, +side; B likewise. (The vertex span is ref-like, so no local function may touch it.)
 				var metres = new[]
@@ -871,6 +901,16 @@ public sealed partial class TerrainWorldManager
 						var col = c % 3;
 						var t = (c < 3 ? k : k + 1) / (float)rows[q];
 						var m = Vector3.Lerp( metres[col], metres[col + 3], t );
+						// u = how far along the whole segment this row is (a mouth cut stops short of B)
+						var u = t * segments[q].ReachB;
+						var u2 = u * u;
+						var u3 = u2 * u;
+						m.z = (((2f * u3) - (3f * u2) + 1f) * s.LevelA) + ((u3 - (2f * u2) + u) * segLength * gradeA)
+							+ (((-2f * u3) + (3f * u2)) * s.LevelB) + ((u3 - u2) * segLength * gradeB) + lift;
+						var gradeHere = ((((6f * u2) - (6f * u)) * s.LevelA) + (((-6f * u2) + (6f * u)) * s.LevelB)) / segLength
+							+ (((3f * u2) - (4f * u) + 1f) * gradeA) + (((3f * u2) - (2f * u)) * gradeB);
+						var flow = Vector2.Lerp( dirA, dirB, t );
+						flow = flow.LengthSquared < 1e-6f ? dir : flow.Normal;
 						// TexCoord1.y carries the confluence fade in its hundreds (bank heights stay under 100 m), unpacked
 						// per vertex in riverwater.shader's VS: a tributary fades out where it enters the channel it flows
 						// into, so the two surfaces meet instead of the tributary's straight end lying on the other river
@@ -884,8 +924,8 @@ public sealed partial class TerrainWorldManager
 						vertices[v++] = new Vertex
 						{
 							Position = p,
-							Normal = Vector3.Up,
-							Tangent = tangent,
+							Normal = new Vector3( -flow.x * gradeHere, -flow.y * gradeHere, 1f ).Normal,   // the surface's real tilt: the lights follow the grade
+							Tangent = new Vector4( flow.x, flow.y, 0f, 1f ),
 							TexCoord0 = Vector2.Lerp( uvs[col], uvs[col + 3], t ),
 							TexCoord1 = occ,
 							Color = new Color(
@@ -917,6 +957,24 @@ public sealed partial class TerrainWorldManager
 		mesh.Bounds = new BBox( lo - new Vector3( 1f ), hi + new Vector3( 1f ) );
 		return new ModelBuilder().AddMesh( mesh ).Create();
 	}
+
+	/// <summary>Rows each river segment's surface is cut into along the flow (about 4 m apiece on the 20 m segments): enough for the level to curve.</summary>
+	const int RiverSurfaceRows = 5;
+
+	/// <summary>The most the curved water level may leave the straight line between a segment's ends (m): the bed and the swim level follow that line.</summary>
+	const float RiverLevelCurveMaxMeters = 0.12f;
+
+	/// <summary>A segment's water grade, metres of level per metre downstream (negative or zero: rivers only fall).</summary>
+	static float SegmentGrade( TerrainPreviewRivers.Network net, int index )
+	{
+		ref var s = ref net.Segments[index];
+		var length = MathF.Sqrt( ((s.Bx - s.Ax) * (s.Bx - s.Ax)) + ((s.By - s.Ay) * (s.By - s.Ay)) );
+		return length < 0.5f ? 0f : (s.LevelB - s.LevelA) / length;
+	}
+
+	/// <summary>The grade two neighbouring segments share at their joint: the harmonic mean (0 beside a level stretch), which keeps the cubic between them from overshooting either end.</summary>
+	static float SharedGrade( float a, float b )
+		=> a * b <= 0f ? 0f : (2f * a * b) / (a + b);
 
 	static Vector2 SegmentDirection( TerrainPreviewRivers.Network net, int index )
 	{

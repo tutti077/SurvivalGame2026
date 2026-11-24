@@ -14,9 +14,10 @@ public sealed partial class TerrainWorldManager
 	const string UnderwaterShaderPath = "shaders/underwater.shader";
 	/// <summary>
 	/// Underwater visibility, metres: the same Beer-Lambert the water surfaces use, sized for a swimmer's view (6 m read as
-	/// murk — Mark 2026-10-25: "view distance under water should be increased by quite a bit").
+	/// murk — Mark 2026-10-25: "view distance under water should be increased by quite a bit"; 20 m still hid everything
+	/// past 30 m — Mark 2026-11-18: "that should be increased to like 100m").
 	/// </summary>
-	const float UnderwaterClearMeters = 20f;
+	const float UnderwaterClearMeters = 65f;
 	/// <summary>How far daylight reaches down (m) before only the absorption colour is left: bluer and dimmer with depth.</summary>
 	const float UnderwaterLightClearMeters = 40f;
 	/// <summary>The water's absorption colour (seawater.vmat AbsorbTint): what light keeps after the clear distance.</summary>

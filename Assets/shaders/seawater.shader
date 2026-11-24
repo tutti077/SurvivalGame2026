@@ -10,9 +10,11 @@
 //   depth  : recomputed here exactly as the terrain carve does it (TerrainPreviewPipeline LakeFloorMeters /
 //            SampleRimOcean): the lake mask raster (SeaLakeMask) past the shore threshold for lakes, the shelf past the
 //            land edge for the ocean. Shore foam, wave height and clarity all come from it.
-//   waves  : sea_waves.hlsl — 14 swells on the travel field (crests refract to the beach, shoal, break at 0.39 x depth)
-//            and 10 chop waves from the live wind; SeaWaves.cs evaluates the same sum on the CPU for things that float.
-//   shore  : laps timed from the arriving crests running up the sand, breaking white water, a lacy waterline.
+//   waves  : sea_waves.hlsl — 14 swells on the travel field (crests refract to the beach, shoal, lean forward and
+//            break at 0.39 x depth) and 10 chop waves from the live wind; SeaWaves.cs evaluates the same sum on the CPU
+//            for things that float. On top, fine ripples that keep re-forming and gusts crossing as ruffled patches.
+//   shore  : white water on the bores' front faces, the swell's own crests running up the sand as laps and draining
+//            back, the chop lapping in between, a lacy waterline.
 //
 HEADER
 {
@@ -76,9 +78,10 @@ VS
 		float3 n;
 		float folding;
 		float breaking;
-		float3 disp = SeaWaveSum( p, depth, openness, spacing, n, folding, breaking );
+		float roller;
+		float3 disp = SeaWaveSum( p, depth, openness, spacing, n, folding, breaking, roller );
 		ws += disp * SEA_UNITS_PER_METER;
-		// The shore: breakers rolling in over the shallows, laps running up the sand. Within the run-up reach the land
+		// The shore: the laps running in over the last metres and up the sand. Within the run-up reach the land
 		// keeps the surface (the terrain hides it where the ground is higher); further in the grid ducks under the ground
 		// (lying a few centimetres under it, it z-fought the sand)
 		float energy = SeaShoreEnergy( p );
@@ -88,8 +91,7 @@ VS
 			if ( depth < 6.0 )
 			{
 				float x = SeaShoreX( p );
-				float crest;
-				ws.z += (SeaShoreLaps( p, x, energy, t ).x + SeaBreakers( p, x, depth, energy, t, crest )) * SEA_UNITS_PER_METER;
+				ws.z += SeaShoreLaps( p, x, energy, t ).x * SEA_UNITS_PER_METER;
 			}
 		}
 		else
@@ -155,7 +157,14 @@ PS
 	// Deep water fills with the sky's light (and the sun's) — the ocean's blue is the sky's
 	float InScatter < Default( 0.12 ); Range( 0.0, 1.0 ); UiGroup( "Water,10/25" ); >;
 	float SunInScatter < Default( 0.03 ); Range( 0.0, 0.5 ); UiGroup( "Water,10/27" ); >;
-	float RefractionStrength < Default( 0.25 ); Range( 0.0, 1.0 ); UiGroup( "Water,10/40" ); >;
+	// Deeper and bluer the deeper it gets (Mark 2026-11-23): what the water body sends back goes from the clear-water
+	// teal above to this blue with the VERTICAL depth — half way at DeepColorHalfDepthMeters. Lit by the same sky / sun
+	// light as the in-scatter (so it darkens at night), times DeepColorBrightness.
+	float3 DeepColor < UiType( Color ); Default3( 0.05, 0.25, 0.70 ); UiGroup( "Water,10/28" ); >;
+	float DeepColorHalfDepthMeters < Default( 8.0 ); Range( 0.5, 200.0 ); UiGroup( "Water,10/29" ); >;
+	float DeepColorBrightness < Default( 2.0 ); Range( 0.0, 8.0 ); UiGroup( "Water,10/30" ); >;
+	// How far a ripple's tilt shifts the bed point sideways, per metre of water the view crosses (0.25 ≈ physical)
+	float RefractionStrength < Default( 0.4 ); Range( 0.0, 1.0 ); UiGroup( "Water,10/40" ); >;
 	float BedBlurPixels < Default( 6.0 ); Range( 0.0, 24.0 ); UiGroup( "Water,10/50" ); >;
 	float BedBlurDistanceMeters < Default( 6.0 ); Range( 0.5, 40.0 ); UiGroup( "Water,10/52" ); >;
 
@@ -216,6 +225,23 @@ PS
 		return WaterShadow( pos, receiverNormal, vPositionSs );
 	}
 
+	// The sea's foam lace: bubbles, 0..1 about uniform. Most of the weight is in the small scales (1.5 m and 0.4 m) and
+	// the domain warp is a metre, not seven: water_common's FoamLace warps a 6 m noise by 7 m, which is the recipe for
+	// marbled paper — over a whole surf zone the foam read as swirls of white paint (2026-11-19).
+	float SeaFoamLace( float2 p, float t )
+	{
+		float2 warp = float2(
+			g_tCloudNoise.Sample( g_sCloudSampler, p * 0.047 + float2( 0.17, 0.61 ) + t * 0.004 ).g,
+			g_tCloudNoise.Sample( g_sCloudSampler, p * 0.041 + float2( 0.53, 0.29 ) - t * 0.003 ).r ) - 0.5;
+		float2 q = p + warp * 1.2;
+		float2 q1 = float2( q.x * 0.866 - q.y * 0.5, q.x * 0.5 + q.y * 0.866 );
+		float2 q2 = float2( q.x * 0.342 + q.y * 0.940, -q.x * 0.940 + q.y * 0.342 );
+		float a = g_tCloudNoise.Sample( g_sCloudSampler, q1 * 0.21 + float2( t * 0.011, 0.0 ) ).r;
+		float b = g_tCloudNoise.Sample( g_sCloudSampler, q2 * 0.67 - float2( 0.0, t * 0.017 ) ).g;
+		float c = g_tCloudNoise.Sample( g_sCloudSampler, q * 2.3 + 0.41 ).r;
+		return saturate( (a * 0.36 + b * 0.36 + c * 0.28 - 0.5) * 1.8 + 0.5 );
+	}
+
 	float4 MainPs( PixelInput i ) : SV_Target0
 	{
 		float3 worldPos = i.vPositionWithOffsetWs.xyz + g_vCameraPositionWs;
@@ -248,9 +274,10 @@ PS
 		float3 waveNormal;
 		float folding;
 		float breaking;
+		float roller;
 		// A wave is drawn in the normal only while it spans many pixels: short chop fades out well before it could read
 		// as regular parallel bands across distant water (the sub-pixel rest is the reflection blur's job)
-		SeaWaveSum( p, depth, openness, max( footprintMeters * 4.0, 0.05 ), waveNormal, folding, breaking );
+		SeaWaveSum( p, depth, openness, max( footprintMeters * 4.0, 0.05 ), waveNormal, folding, breaking, roller );
 
 		// Fine ripples drifting downwind on top (two scales, world metres)
 		float2 wind = normalize( g_vSeaWindDirection.xy + float2( 1e-4, 0.0 ) );
@@ -261,15 +288,27 @@ PS
 		// an off-ratio scale, all of them are warped by a slow noise field so no tile matches its neighbour, and a very
 		// large wind-slick pattern varies the roughness itself — glassy patches beside rough ones, as on real water
 		float2 warp = (g_tCloudNoise.Sample( g_sCloudSampler, p / 173.0 + 0.31 ).rg - 0.5) * 9.0;
-		float2 pw = p - drift + warp;
+		float2 pw = p + warp;
 		float2x2 rot1 = float2x2( 0.878, -0.479, 0.479, 0.878 );    // 0.5 rad
 		float2x2 rot2 = float2x2( 0.622, 0.783, -0.783, 0.622 );    // -0.9 rad
 		float2x2 rot3 = float2x2( -0.505, -0.863, 0.863, -0.505 );  // 2.1 rad
-		float2 r1 = mul( rot1, g_tRipples.Sample( g_sRippleSampler, mul( rot1, pw ) / 3.1 ).rg * 2.0 - 1.0 );
-		float2 r2 = mul( rot2, g_tRipples.Sample( g_sRippleSampler, mul( rot2, pw + drift * 0.3 ) / 11.3 + 0.37 ).ba * 2.0 - 1.0 );
-		float2 r3 = mul( rot3, g_tRipples.Sample( g_sRippleSampler, mul( rot3, pw ) / 41.7 + 0.71 ).rg * 2.0 - 1.0 );
+		// The fine and the middle layer are each TWO copies of the tile sliding across each other — both downwind, fanned
+		// half a radian apart, at different paces — so where their ripples cross the pattern keeps re-forming, as crossing
+		// wavelets do. One copy per layer was a frozen picture sliding by (Mark 2026-11-19: "some baseline hardcoded
+		// water wiggle"): nothing on it ever changed shape.
+		float2 driftA = float2( drift.x * 0.878 - drift.y * 0.479, drift.x * 0.479 + drift.y * 0.878 );
+		float2 driftB = float2( drift.x * 0.825 + drift.y * 0.565, -drift.x * 0.565 + drift.y * 0.825 );
+		float2 r1 = mul( g_tRipples.Sample( g_sRippleSampler, mul( rot1, pw - driftA ) / 3.1 ).rg * 2.0 - 1.0, rot1 )
+			+ mul( g_tRipples.Sample( g_sRippleSampler, mul( rot3, pw - driftB * 0.7 ) / 2.3 + 0.19 ).ba * 2.0 - 1.0, rot3 );
+		float2 r2 = mul( g_tRipples.Sample( g_sRippleSampler, mul( rot2, pw - driftB * 0.45 ) / 11.3 + 0.37 ).ba * 2.0 - 1.0, rot2 )
+			+ mul( g_tRipples.Sample( g_sRippleSampler, mul( rot1, pw - driftA * 0.6 ) / 8.7 + 0.83 ).rg * 2.0 - 1.0, rot1 );
+		float2 r3 = mul( g_tRipples.Sample( g_sRippleSampler, mul( rot3, pw - drift * 0.35 ) / 41.7 + 0.71 ).rg * 2.0 - 1.0, rot3 );
 		float slick = smoothstep( 0.2, 0.8, g_tCloudNoise.Sample( g_sCloudSampler, p / 430.0 + g_vSeaClock.x * 0.0007 ).r );
-		float2 slope = (r1 * 0.08 + r2 * 0.06 + r3 * 0.04) * RippleStrength * (0.4 + windAmt) * lerp( 0.3, 1.25, slick );
+		// Cat's paws: a gust crosses the water as a ruffled patch racing downwind at the wind's own pace, far ahead of
+		// any wave — the patches between them lie smoother and mirror more sky
+		float paws = smoothstep( 0.3, 0.75, g_tCloudNoise.Sample( g_sCloudSampler, (p - g_vSeaRippleTravel.xy * 9.0) / 140.0 + 0.57 ).g );
+		float ruffle = lerp( 0.3, 1.25, slick ) * lerp( 0.6, 1.5, paws );
+		float2 slope = (r1 * 0.06 + r2 * 0.045 + r3 * 0.04) * RippleStrength * (0.4 + windAmt) * ruffle;
 
 		float3 swim = WaterRings( worldPos );
 		slope += swim.xy * 0.12;
@@ -297,11 +336,32 @@ PS
 		float carvePathU = min( depth * UNITS_PER_METER / max( V.z, 0.08 ), 4000.0 );
 		float flPathU = lerp( carvePathU, clamp( thicknessU, 0.0, 8000.0 ), trust );
 		float realDepth = lerp( depth, clamp( thicknessU, 0.0, 8000.0 ) * saturate( V.z ) / UNITS_PER_METER, trust );
-		float waterDepthU = realDepth * UNITS_PER_METER;
 		float2 uv = i.vPositionSs.xy * g_vInvViewportSize;
-		// Refraction bends the view by a world-space amount, so on screen it shrinks with distance (beyond 6 m); a fixed
-		// screen offset dragged the bank into distant shallows in bands
-		float2 uvR = uv + normal.xy * RefractionStrength * 0.05 * saturate( waterDepthU / 40.0 ) * min( 1.0, 240.0 / max( surfDist, 1.0 ) );
+		// Refraction (Mark 2026-11-23: "we can see trees and different stuff perfectly through the water"): the surface's
+		// tilt shifts the point seen behind it sideways IN THE WORLD, by the water the view crosses (at most 10 m of it),
+		// and that shifted point is projected back to the screen — so the bend is zero at the waterline and right in front
+		// of a submerged trunk, grows with depth and at a grazing view, and shrinks with distance by perspective. (Before:
+		// world normal.xy as a screen offset of a pixel or two, gone past 6 m — a straight view in practice.)
+		float2 uvR = uv;
+		if ( !bOrtho && trust > 0.0 )
+		{
+			float2 tilt = normal.xy * min( 1.0, 0.3 / max( length( normal.xy ), 1e-4 ) );
+			float3 bedRel = i.vPositionWithOffsetWs.xyz + vViewRayWs * flPathU;
+			float3 bentRel = bedRel + float3( tilt * (RefractionStrength * min( flPathU, 10.0 * UNITS_PER_METER ) * trust), 0.0 );
+			float4 ps0 = Position3WsToPs( bedRel + g_vCameraPositionWs );
+			float4 ps1 = Position3WsToPs( bentRel + g_vCameraPositionWs );
+			if ( ps0.w > 0.0 && ps1.w > 0.0 )
+			{
+				float2 bend = (ps1.xy / ps1.w - ps0.xy / ps0.w) * float2( 0.5, -0.5 );
+				// Only what lies UNDER the water may be bent into view: the scene point at the bent pixel, rebuilt on the
+				// ray to the bent point, has to be below this surface (fully from 0.25 m under it). A far bank, a tree or
+				// anything else above the water is farther than the surface too, so the in-front test below never caught it.
+				float distR = Depth::GetLinear( (uv + bend) / g_vInvViewportSize );
+				float zR = bentRel.z * distR / max( dot( bentRel, g_vCameraDirWs ), 1.0 );
+				float under = (i.vPositionWithOffsetWs.z - zR) * (i.bIsFrontface ? 1.0 : -1.0);
+				uvR = uv + bend * saturate( under / (0.25 * UNITS_PER_METER) );
+			}
+		}
 		// Never refract something that stands in front of the water (a leg, a rock): keep the straight view there
 		if ( trust > 0.0 && Depth::GetLinear( uvR / g_vInvViewportSize ) < surfDist )
 			uvR = uv;
@@ -360,7 +420,12 @@ PS
 		scatterTint /= max( max( scatterTint.r, scatterTint.g ), max( scatterTint.b, 1e-3 ) );
 		// …and strongly absorbing water scatters little at all: tannin water is dark tea, not a glowing beige
 		scatterTint *= saturate( dot( AbsorbTint, float3( 0.333, 0.333, 0.333 ) ) * 2.0 );
-		float3 seen = lerp( (skyUp * InScatter + sunInWater * (columnVis * SunInScatter)) * scatterTint, sceneColor, transmittance );
+		float3 bodyLight = skyUp * InScatter + sunInWater * (columnVis * SunInScatter);
+		// Deeper = bluer: the body colour runs from the clear-water tint to DeepColor with the vertical depth (the carve's,
+		// or the real one where that is deeper — the same from every view angle, so no band where the depth chain ends)
+		float deepT = 1.0 - exp2( -max( depth, realDepth ) / max( DeepColorHalfDepthMeters, 0.01 ) );
+		float3 body = lerp( bodyLight * scatterTint, DeepColor * (dot( bodyLight, float3( 0.30, 0.59, 0.11 ) ) * DeepColorBrightness), deepT );
+		float3 seen = lerp( body, sceneColor, transmittance );
 
 		// ---- reflection: the sky by Fresnel; no sheen in the shade
 		float3 R = reflect( vViewRayWs, normal );
@@ -379,7 +444,8 @@ PS
 		// ---- lights
 		float alpha = min( sqrt( SurfaceRoughness * SurfaceRoughness + DistanceRoughness * DistanceRoughness * footprintMeters * footprintMeters ), 0.45 );
 		// Per-light cap as a multiple of the light's own colour (as riverwater.shader): an absolute cap let a dim moon / torch
-		// make a 4.0 HDR blob on far water once the grazing 1 / (4 VdotH²) term ran away
+		// make a 4.0 HDR blob on far water once the grazing 1 / (4 VdotH²) term ran away (gone since 2026-11-10: SpecularGGX is
+		// Smith-bounded in water_common.hlsl; the cap is a backstop)
 		float specCap = lerp( 40.0, 1.5, saturate( footprintMeters / 1.5 ) );
 		float3 glint = 0;
 		float3 foamLight = 0;
@@ -424,26 +490,27 @@ PS
 		if ( any( isnan( glint ) ) || any( isinf( glint ) ) )
 			glint = 0;
 
-		// ---- foam (Mark 2026-10-22: "REAL … identical to Valheim"): the surf comes in as laps — a bright, thin
-		// front running up the shallows to the waterline, a lace trail behind it that spreads and dissolves as it ages,
-		// two laps out of phase — plus a lacy line at the waterline, whitecaps where crests fold, and swimmers. Every
+		// ---- foam (Mark 2026-10-22: "REAL … identical to Valheim"): the surf comes in as bores, white on their front
+		// faces, then as laps — a churned band behind the front running up the sand, a lace trail behind it that spreads
+		// and dissolves as it ages — plus a lacy line at the waterline, whitecaps where crests fold, and swimmers. Every
 		// amount goes through the same lace, so foam thins into wisps and holes instead of fading like a decal.
 		float t = g_vSeaClock.x;
 		// The lace is laid out where the water IS (the displaced point): taken at the grid point it was dragged into
 		// marbled swirls by the Gerstner sideways displacement (2026-10-26, a few metres on a breaking crest)
-		float lace = FoamLace( worldPos.xy / UNITS_PER_METER, t );
+		float lace = SeaFoamLace( worldPos.xy / UNITS_PER_METER, t );
 		// The real distance to the waterline: the real depth over the carve's slope here (the carve's depth and distance
 		// only give the slope — the terrain mesh decides where the water actually ends)
 		float realShore = shoreX > 0.0 ? realDepth * shoreDistance / max( depth, 0.02 ) : shoreX;
-		float breakerFoam;
-		SeaBreakers( p, shoreX, depth, shoreEnergy, t, breakerFoam );
-		// The ocean swell breaking over the shallows: white where its sharpened crests fold
-		// The swell breaking: where the set stands over the breaking height (SeaWaveSum), white on the crests
-		float swellBreak = smoothstep( 0.0, 0.6, breaking ) * smoothstep( 0.1, 0.45, folding ) * saturate( shoreEnergy );
-		float surf = max( max( SeaShoreLaps( p, realShore, shoreEnergy, t ).y, breakerFoam ), swellBreak );
+		// The swell breaking: where the set stands over the breaking height, white on the bores' front faces
+		float swellBreak = SeaBreakFoam( breaking, roller, depth ) * saturate( shoreEnergy );
+		float surf = max( SeaShoreLaps( p, realShore, shoreEnergy, t ).y, swellBreak );
 		// The waterline itself: a near-continuous lacy line in the last metre before the sand (distance, not depth — a
 		// flat shelf a few centimetres deep would otherwise foam across all of it)
-		float waterline = (1.0 - smoothstep( 0.0, 1.2, realShore )) * (1.0 - smoothstep( 0.1, 0.5, realDepth )) * 1.2;
+		// …and up on the sand only the sheet's very edge (its last few centimetres of water): the whole thin sheet drawn
+		// white made every lap a white slab lying on the beach
+		float waterline = shoreX > 0.0
+			? (1.0 - smoothstep( 0.0, 1.2, realShore )) * (1.0 - smoothstep( 0.1, 0.5, realDepth )) * 1.2
+			: (1.0 - smoothstep( 0.01, 0.07, realDepth )) * 0.9;
 		// Surf needs wave energy: open-ocean beaches break, a calm lake only shows a faint line where it meets the sand
 		// (Valheim lakes have no surf — only rings round whoever wades in)
 		float surfEnergy = saturate( shoreEnergy );
@@ -462,7 +529,9 @@ PS
 		float memFoam = 0.0;
 		if ( g_vSeaFoamRect.w > 0.5 )
 		{
-			float2 fuv = (worldPos.xy - g_vSeaFoamRect.xy) / g_vSeaFoamRect.z;
+			// Read where the water CAME from (the grid point the memory was written at): foam rides with the water. Read
+			// at the displaced point it slid against the waves and smeared
+			float2 fuv = (p * UNITS_PER_METER - g_vSeaFoamRect.xy) / g_vSeaFoamRect.z;
 			// Fades out over the last 40 m of the rect, so its edge never draws a line across the water
 			float2 edge = min( fuv, 1.0 - fuv ) * g_vSeaFoamRect.z / UNITS_PER_METER;
 			float inside = smoothstep( 0.0, 40.0, min( edge.x, edge.y ) );

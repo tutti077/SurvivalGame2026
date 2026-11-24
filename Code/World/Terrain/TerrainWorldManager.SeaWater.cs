@@ -33,11 +33,11 @@ public sealed partial class TerrainWorldManager
 	[Property, Group( "Sea" ), Title( "Shore Lap (m)" ), Range( 0f, 1f ), Step( 0.01f ), Description( "The little lap that still reaches the waterline once the waves are depth-limited (Mark 2026-10-22: 'at the shore just a little wake')." )]
 	public float SeaShoreLapMeters { get; set; } = 0.12f;
 
-	[Property, Group( "Sea" ), Title( "Swell Min Depth (m)" ), Range( 0f, 100f ), Step( 1f ), Description( "Lakes: swell starts building where a lake is this deep (Mark 2026-10-25: big waves only over deep water); lakes are at most Lake Max Depth deep, so above that they keep only their chop. The ocean ignores it — its swell runs all the way to the beach, depth-limited, and breaks there." )]
-	public float SeaSwellMinDepthMeters { get; set; } = 10f;
+	[Property, Group( "Sea" ), Title( "Swell Min Depth (m)" ), Range( 0f, 100f ), Step( 1f ), Description( "Inside the land: swell starts building where the water is this deep (Mark 2026-10-25: big waves only over deep water; 2026-11-18: no huge waves in a tiny lake whatever the weather). A pond never gets there and keeps only its chop. The rim ocean ignores it — its swell runs all the way to the beach, depth-limited, and breaks there." )]
+	public float SeaSwellMinDepthMeters { get; set; } = 15f;
 
-	[Property, Group( "Sea" ), Title( "Swell Full Depth (m)" ), Range( 1f, 300f ), Step( 1f ), Description( "Lakes: water this deep carries the full swell (the ocean ignores it)." )]
-	public float SeaSwellFullDepthMeters { get; set; } = 30f;
+	[Property, Group( "Sea" ), Title( "Swell Full Depth (m)" ), Range( 1f, 1000f ), Step( 1f ), Description( "Inside the land: water this deep carries the full swell (the rim ocean ignores it). 150 m: an enclosed lake at its 50 m floor carries about a fifth of it, an ocean past its drop-off all of it." )]
+	public float SeaSwellFullDepthMeters { get; set; } = 150f;
 
 	[Property, Group( "Sea" ), Title( "Shore Surge (m)" ), Range( 0f, 1f ), Step( 0.01f ), Description( "How high each lap's sheet of water stands as it runs up the sand (the swash), at default shore energy." )]
 	public float SeaShoreSurgeMeters { get; set; } = 0.45f;
@@ -45,14 +45,8 @@ public sealed partial class TerrainWorldManager
 	[Property, Group( "Sea" ), Title( "Run-Up Reach (m)" ), Range( 2f, 40f ), Step( 0.5f ), Description( "How far onto the land a lap may run at full shore energy; the terrain hides the sheet wherever the ground stands higher, so a lap runs far up a flat beach and a little way up a steep one." )]
 	public float SeaRunUpMeters { get; set; } = 15f;
 
-	[Property, Group( "Sea" ), Title( "Lake Lap Period (s)" ), Range( 2f, 20f ), Step( 0.5f ), Description( "Lakes: seconds between laps reaching the shore (the ocean's laps are timed from the arriving swell crests)." )]
-	public float SeaLapPeriodSeconds { get; set; } = 7f;
-
 	[Property, Group( "Sea" ), Title( "Shore Foam Width (m)" ), Range( 0.5f, 30f ), Step( 0.5f ), Description( "Within this many metres of the waterline the laps run in and break into bubbles." )]
 	public float SeaShoreFoamWidthMeters { get; set; } = 4f;
-
-	[Property, Group( "Sea" ), Title( "Lake Breaker Height (m)" ), Range( 0f, 3f ), Step( 0.05f ), Description( "Lakes: height of the small breakers rolling in over the shallows (the ocean's breakers are the swell itself)." )]
-	public float SeaLakeBreakerMeters { get; set; } = 0.5f;
 
 	[Property, Group( "Sea" ), Title( "Swell Energy Follow (s)" ), Range( 5f, 300f ), Step( 5f ), Description( "How long the swell takes to follow the weather (WindSystem base strength + gusts): a storm builds the sea over this long and it dies down as slowly." )]
 	public float SeaEnergyFollowSeconds { get; set; } = 40f;
@@ -78,6 +72,8 @@ public sealed partial class TerrainWorldManager
 	ModelRenderer _seaSurfaceRenderer;
 	Texture _seaLakeMaskTexture;
 	Texture _seaLakeShoreTexture;
+	/// <summary>1 over ocean (water joined to the rim), 0 over enclosed water, per lake-mask cell: how deep the bed may go (TerrainPreviewPipeline.WaterDepthMeters).</summary>
+	Texture _seaOceannessTexture;
 	/// <summary>Metres the sheet is lifted above sea level per lake-mask cell: tarns on mountain tops (TerrainPreviewMountainLakes), 0 elsewhere.</summary>
 	Texture _seaLakeLevelTexture;
 	Texture _seaSwellFieldTexture;
@@ -131,6 +127,7 @@ public sealed partial class TerrainWorldManager
 		{
 			if ( _seaSurfaceRenderer is not null && _seaSurfaceRenderer.IsValid() )
 				_seaSurfaceRenderer.Enabled = false;
+			Scene.RenderAttributes.Set( "SeaFogPlane", Vector4.Zero );
 			return;
 		}
 
@@ -155,6 +152,15 @@ public sealed partial class TerrainWorldManager
 				.Finish();
 		}
 		if ( _seaLakeShoreTexture is null )
+			return;
+		if ( _seaOceannessTexture is null && TerrainPreviewLandDiskFields.TryGetOceannessRaster( out var oceanness, out var oceanRes ) )
+		{
+			_seaOceannessTexture = Texture.Create( oceanRes, oceanRes, ImageFormat.R32F )
+				.WithData( new ReadOnlySpan<float>( oceanness, 0, oceanRes * oceanRes ) )
+				.WithName( "sea_oceanness" )
+				.Finish();
+		}
+		if ( _seaOceannessTexture is null )
 			return;
 		if ( _seaLakeLevelTexture is null && TerrainPreviewLandDiskFields.TryGetWaterSurfaceLiftRaster( _loadSettings, out var lift, out var liftRes ) )
 		{
@@ -230,8 +236,11 @@ public sealed partial class TerrainWorldManager
 		_seaSurfaceObject.WorldPosition = new Vector3( camPos.x, camPos.y, TerrainWorldUnits.MetersToEngine( settings.SeaLevelMeters + WaterStencilLiftMeters ) );
 
 		var attrs = Scene.RenderAttributes;
+		// The fog pass (aerial_perspective.shader) cannot see the translucent sea in the depth: it fogs a downward ray at sea level
+		attrs.Set( "SeaFogPlane", new Vector4( TerrainWorldUnits.MetersToEngine( settings.SeaLevelMeters ), 0f, 0f, 1f ) );
 		attrs.Set( "SeaLakeMask", _seaLakeMaskTexture );
 		attrs.Set( "SeaLakeShore", _seaLakeShoreTexture );
+		attrs.Set( "SeaOceanness", _seaOceannessTexture );
 		attrs.Set( "SeaLakeLevel", _seaLakeLevelTexture );
 		if ( _seaSwellFieldTexture is not null && field is not null )
 		{
@@ -243,12 +252,12 @@ public sealed partial class TerrainWorldManager
 			var d = _seaSwellHeading.LengthSquared > 1e-6f ? _seaSwellHeading : new Vector2( 1f, 0f );
 			attrs.Set( "SeaSwellFieldInfo", new Vector4( 0f, 0f, d.x, d.y ) );
 		}
-		attrs.Set( "SeaShore", new Vector4( SeaShoreFoamWidthMeters, SeaLapPeriodSeconds, SeaShoreSurgeMeters, SeaRunUpMeters ) );
-		attrs.Set( "SeaShore2", new Vector4( SeaLakeBreakerMeters, 0f, 0f, 0f ) );
+		attrs.Set( "SeaShore", new Vector4( SeaShoreFoamWidthMeters, 0f, SeaShoreSurgeMeters, SeaRunUpMeters ) );
 		attrs.Set( "SeaShape", new Vector4( settings.WorldRadiusMeters, settings.LandRadiusMeters, Math.Max( 0f, settings.OceanMaxDepthMeters ), Math.Max( 1f, settings.OceanShelfWidthMeters ) ) );
-		attrs.Set( "SeaLake", new Vector4( TerrainPreviewLandDiskFields.GetOpenWaterThreshold01( settings ), Math.Max( 0f, settings.LakeMaxDepthMeters ), Math.Max( 1f, settings.LakeShelfWidthMeters ), 0f ) );
+		attrs.Set( "SeaLake", new Vector4( TerrainPreviewLandDiskFields.GetOpenWaterThreshold01( settings ), Math.Max( 0f, settings.LakeMaxDepthMeters ), Math.Max( 1f, settings.LakeShelfWidthMeters ), TerrainPreviewPipeline.DeepRunPerMeter ) );
 		attrs.Set( "SeaSwellDepth", new Vector4( SeaSwellMinDepthMeters, Math.Max( SeaSwellMinDepthMeters + 0.1f, SeaSwellFullDepthMeters ), 0f, 0f ) );
-		attrs.Set( "SeaShelf", new Vector4( Math.Max( 0f, settings.OceanShelfDepthMeters ), Math.Max( 1f, settings.OceanDropOffWidthMeters ), 0f, 0f ) );
+		attrs.Set( "SeaShelf", new Vector4( Math.Max( 0f, settings.OceanShelfDepthMeters ), Math.Max( 1f, settings.OceanDropOffWidthMeters ),
+			Math.Clamp( settings.LakeShelfDepthMeters, 0f, Math.Max( 0f, settings.LakeMaxDepthMeters ) ), Math.Max( 1f, settings.LakeDropOffWidthMeters ) ) );
 		attrs.Set( "SeaWaves", new Vector4( SeaSwellAmplitudeMeters, SeaChopAmplitudeMeters, SeaLakeChopShare, SeaShoreLapMeters ) );
 		attrs.Set( "SeaClock", new Vector4( Time.Now, FarTerrainEnabled ? Math.Max( 0f, FarSinkMeters ) : 0f, 0f, 1f ) );
 
@@ -268,6 +277,10 @@ public sealed partial class TerrainWorldManager
 		attrs.Set( "SeaSwellC", new Vector4( a[8], a[9], a[10], a[11] ) );
 		attrs.Set( "SeaSwellD", new Vector4( a[12], a[13], sea.Crest, sea.Total ) );
 		attrs.Set( "SeaSwellE", new Vector4( sea.Peak, sea.Rms, 0f, 0f ) );
+		var chopShares = sea.ChopShares;
+		attrs.Set( "SeaChopA", new Vector4( chopShares[0], chopShares[1], chopShares[2], chopShares[3] ) );
+		attrs.Set( "SeaChopB", new Vector4( chopShares[4], chopShares[5], chopShares[6], chopShares[7] ) );
+		attrs.Set( "SeaChopC", new Vector4( chopShares[8], chopShares[9], sea.ChopCrest, sea.ChopPeak ) );
 
 		TickSeaVolumeUnderCamera( camPos, settings );
 		TickSeaFoamMemory( camPos );
@@ -362,6 +375,8 @@ public sealed partial class TerrainWorldManager
 		_seaLakeMaskTexture = null;
 		_seaLakeShoreTexture?.Dispose();
 		_seaLakeShoreTexture = null;
+		_seaOceannessTexture?.Dispose();
+		_seaOceannessTexture = null;
 		_seaLakeLevelTexture?.Dispose();
 		_seaLakeLevelTexture = null;
 		_seaSwellFieldTexture?.Dispose();
@@ -550,7 +565,7 @@ public sealed partial class TerrainWorldManager
 				+ $"swell rms {sea.Rms:0.00} m, breaking height here {SeaWaves.BreakingRatio * depth:0.00} m" );
 		}
 		var st = manager._loadSettings;
-		Log.Info( $"[Sea] settings: ocean max {st.OceanMaxDepthMeters} m, shelf {st.OceanShelfDepthMeters} m over {st.OceanShelfWidthMeters} m, drop-off {st.OceanDropOffWidthMeters} m; lake max {st.LakeMaxDepthMeters} m over {st.LakeShelfWidthMeters} m; beach {st.BeachWidthMeters} m, wet line {st.WetLineHeightMeters} m" );
+		Log.Info( $"[Sea] settings: ocean max {st.OceanMaxDepthMeters} m, shelf {st.OceanShelfDepthMeters} m over {st.OceanShelfWidthMeters} m, drop-off {st.OceanDropOffWidthMeters} m; lake shelf {st.LakeShelfDepthMeters} m over {st.LakeShelfWidthMeters} m, then {st.LakeMaxDepthMeters} m over {st.LakeDropOffWidthMeters} m; beach {st.BeachWidthMeters} m, wet line {st.WetLineHeightMeters} m" );
 	}
 
 	/// <summary>Usage: <c>sea_tune &lt;swell m&gt; [chop m]</c> — set the live Swell / Chop Amplitude (the component values; not saved).</summary>

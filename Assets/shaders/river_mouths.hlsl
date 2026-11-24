@@ -5,7 +5,7 @@
 // stops at the shoreline — fades out. One water body, no strip edges sticking out, the colour changing over tens of
 // metres like a real river mixing into a lake. Both water shaders include this (the sea in its vertex stage too).
 //
-// Per mouth, two float4: ( x, y, flow dir x, flow dir y ) in metres, ( half width m, bed depth m, hand-over m, 0 ).
+// Per mouth, two float4: ( x, y, flow dir x, flow dir y ) in metres, ( half width m, bed depth m, hand-over m, open-water level m ).
 //
 #define RIVER_MOUTH_CAPACITY 64
 StructuredBuffer<float4> g_RiverMouths < Attribute( "RiverMouths" ); >;
@@ -36,6 +36,37 @@ float4 RiverMouthAt( float2 pMeters )
 		float progress = smoothstep( -handOver, 0.0, along );
 		float depth = u < 1.0 ? b.y * (1.0 - u * u) : 0.0;
 		best = float4( lerp( 1.0, progress, side ), depth, side, progress );
+	}
+	return best;
+}
+
+// How much the RIVER surface has faded out here (0 = all river, 1 = gone), for a river surface at surfaceMeters. Over the
+// hand-over stretch it fades only where the lake / sea surface can really take over - where the river is down at that
+// level. A river that comes down a slope into the lake is still above it there: faded by distance alone, it left a band
+// of dry bed between the two waters (Mark 2026-11-18). Such a river keeps its surface to the shoreline and thins out over
+// the last 3 m. x = the fade, y = inside a mouth's channel (0..1).
+float2 RiverMouthRiverFade( float2 pMeters, float surfaceMeters )
+{
+	float2 best = float2( 1.0, 0.0 );
+	int count = min( (int)g_vRiverMouthInfo.x, RIVER_MOUTH_CAPACITY );
+	[loop]
+	for ( int k = 0; k < count; k++ )
+	{
+		float4 a = g_RiverMouths[k * 2];
+		float4 b = g_RiverMouths[k * 2 + 1];
+		float handOver = max( b.z, 1.0 );
+		float2 d = pMeters - a.xy;
+		float along = dot( d, a.zw );
+		if ( along < -handOver - 4.0 || along > handOver )
+			continue;
+		float halfW = max( b.x, 0.5 );
+		float u = abs( d.x * a.w - d.y * a.z ) / halfW;
+		float side = 1.0 - smoothstep( 0.8, 1.15, u );
+		if ( side <= best.y )
+			continue;
+		float covered = 1.0 - smoothstep( 0.15, 0.6, surfaceMeters - b.w );
+		float fade = max( smoothstep( -handOver, 0.0, along ) * covered, smoothstep( -3.0, 0.0, along ) );
+		best = float2( fade, side );
 	}
 	return best;
 }

@@ -27,7 +27,7 @@ public static class SeaSwellTravelField
 	const float ShadowHalfMeters = 2500f;
 	const float LandIndex = 8f;
 	/// <summary>Bump when the march changes, so a cached field is rebuilt.</summary>
-	const int FieldVersion = 2;
+	const int FieldVersion = 3;
 
 	/// <summary>One built field (immutable once published).</summary>
 	public sealed class Field
@@ -42,6 +42,9 @@ public static class SeaSwellTravelField
 
 	static Field _field;
 	static int _buildingFingerprint = int.MinValue;
+	/// <summary>The water depth at every node (m, 0 = land), built once per world and shared by every heading's march.</summary>
+	static float[] _depths;
+	static int _depthsFingerprint = int.MinValue;
 
 	public static Field Current => _field;
 
@@ -73,11 +76,17 @@ public static class SeaSwellTravelField
 		return (L( 0 ), new Vector2( L( 1 ), L( 2 ) ), L( 3 ));
 	}
 
-	/// <summary>Fingerprint of what the field depends on: the carve's ocean shape and the swell heading (to a degree).</summary>
+	/// <summary>Fingerprint of what the field depends on: the carved water (the world and its depth settings) and the swell heading (to a degree).</summary>
 	public static int FingerprintFor( TerrainPreviewSettings settings, Vector2 windDirection )
 	{
 		var yaw = MathF.Round( MathF.Atan2( windDirection.y, windDirection.x ) * 180f / MathF.PI );
-		return HashCode.Combine( FieldVersion, settings.LandRadiusMeters, settings.OceanShelfDepthMeters, settings.OceanShelfWidthMeters, settings.OceanMaxDepthMeters, settings.OceanDropOffWidthMeters, yaw );
+		return HashCode.Combine( DepthsFingerprintFor( settings ), yaw );
+	}
+
+	static int DepthsFingerprintFor( TerrainPreviewSettings settings )
+	{
+		var ocean = HashCode.Combine( FieldVersion, settings.WorldSeed, settings.LandRadiusMeters, settings.OceanShelfDepthMeters, settings.OceanShelfWidthMeters, settings.OceanMaxDepthMeters, settings.OceanDropOffWidthMeters );
+		return HashCode.Combine( ocean, settings.LakeMaxDepthMeters, settings.LakeShelfDepthMeters, settings.LakeShelfWidthMeters, settings.LakeDropOffWidthMeters, settings.EnableInteriorWaterLayer );
 	}
 
 	/// <summary>
@@ -94,14 +103,20 @@ public static class SeaSwellTravelField
 		_buildingFingerprint = fingerprint;
 		var dir = windDirection.LengthSquared > 1e-6f ? windDirection.Normal : new Vector2( 1f, 0f );
 		var land = settings.LandRadiusMeters;
-		var shelfDepth = Math.Max( 0f, settings.OceanShelfDepthMeters );
-		var shelfWidth = Math.Max( 1f, settings.OceanShelfWidthMeters );
-		var maxDepth = Math.Max( shelfDepth, settings.OceanMaxDepthMeters );
-		var dropWidth = Math.Max( 1f, settings.OceanDropOffWidthMeters );
+		var depthsFingerprint = DepthsFingerprintFor( settings );
+		TerrainPreviewLandDiskFields.EnsureReady( settings );   // main thread: the worker below only reads the water rasters
 		_ = GameTask.RunInThreadAsync( () =>
 		{
 			var sw = System.Diagnostics.Stopwatch.StartNew();
-			var built = Build( land, shelfDepth, shelfWidth, maxDepth, dropWidth, dir, fingerprint );
+			var depths = _depths;
+			if ( depths is null || _depthsFingerprint != depthsFingerprint )
+			{
+				depths = BuildDepths( settings, land );
+				_depths = depths;
+				_depthsFingerprint = depthsFingerprint;
+				Log.Info( $"[Sea] swell depth grid built in {sw.ElapsedMilliseconds} ms" );
+			}
+			var built = Build( land, depths, dir, fingerprint );
 			_field = built;
 			Log.Info( $"[Sea] swell travel field {built.Nodes}² nodes ({NodeMeters} m) for heading {MathF.Atan2( dir.y, dir.x ) * 180f / MathF.PI:0}° built in {sw.ElapsedMilliseconds} ms" );
 		} );
@@ -114,13 +129,36 @@ public static class SeaSwellTravelField
 		_buildingFingerprint = int.MinValue;
 	}
 
-	static float OceanDepth( float past, float shelfDepth, float shelfWidth, float maxDepth, float dropWidth )
+	static void GridSize( float landRadius, out int n, out float half )
 	{
-		if ( past <= 0f )
-			return 0f;
-		var t = Math.Clamp( past / shelfWidth, 0f, 1f );
-		var d = Math.Clamp( (past - shelfWidth) / dropWidth, 0f, 1f );
-		return (shelfDepth * t * (2f - t)) + ((maxDepth - shelfDepth) * d * d * (3f - (2f * d)));
+		half = landRadius + MarginMeters;
+		n = (int)MathF.Ceiling( (half * 2f) / NodeMeters ) + 1;
+		half = (n - 1) * NodeMeters * 0.5f;
+	}
+
+	/// <summary>
+	/// The real water under every node: the rim ocean outside the land disc and the seas and lakes inside it
+	/// (TerrainPreviewPipeline, smooth - no bed relief). The march used to see the whole disc as one island, so an ocean
+	/// that runs through the disc's edge had a "beach" along the circle: a band of slowed, bunched-up swell drawn across
+	/// open water (2026-11-18). Enclosed lakes stay unreached by the march and read as plane waves, as before.
+	/// </summary>
+	static float[] BuildDepths( TerrainPreviewSettings settings, float landRadius )
+	{
+		GridSize( landRadius, out var n, out var half );
+		var depths = new float[n * n];
+		for ( var y = 0; y < n; y++ )
+		{
+			var py = (y * NodeMeters) - half;
+			for ( var x = 0; x < n; x++ )
+			{
+				var px = (x * NodeMeters) - half;
+				var r = MathF.Sqrt( (px * px) + (py * py) );
+				depths[(y * n) + x] = r >= landRadius
+					? TerrainPreviewPipeline.RimOceanDepthMeters( settings, px, py, r, relief: false )
+					: TerrainPreviewPipeline.InteriorWaterDepthMeters( settings, px, py, relief: false );
+			}
+		}
+		return depths;
 	}
 
 	/// <summary>Refractive index of the reference swell over this depth: c_deep / c(d), c = sqrt( g/k · tanh( k d ) ).</summary>
@@ -134,11 +172,9 @@ public static class SeaSwellTravelField
 	}
 
 	/// <summary>First-order fast marching of |∇S| = n(d) from the upwind boundary (where S = wind · p) inward.</summary>
-	static Field Build( float landRadius, float shelfDepth, float shelfWidth, float maxDepth, float dropWidth, Vector2 dir, int fingerprint )
+	static Field Build( float landRadius, float[] depths, Vector2 dir, int fingerprint )
 	{
-		var half = landRadius + MarginMeters;
-		var n = (int)MathF.Ceiling( (half * 2f) / NodeMeters ) + 1;
-		half = (n - 1) * NodeMeters * 0.5f;
+		GridSize( landRadius, out var n, out var half );
 		var count = n * n;
 		var index = new float[count];
 		var S = new float[count];
@@ -150,11 +186,8 @@ public static class SeaSwellTravelField
 		{
 			for ( var x = 0; x < n; x++ )
 			{
-				var px = (x * h) - half;
-				var py = (y * h) - half;
-				var r = MathF.Sqrt( (px * px) + (py * py) );
-				var depth = OceanDepth( r - landRadius, shelfDepth, shelfWidth, maxDepth, dropWidth );
 				var i = (y * n) + x;
+				var depth = depths[i];
 				index[i] = IndexAt( depth );
 				S[i] = float.PositiveInfinity;
 				landDist[i] = depth > 0f ? 0 : int.MaxValue;

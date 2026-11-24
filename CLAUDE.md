@@ -253,8 +253,9 @@ Targets: `lakePatchCount` ≤ 24 · `medianLakeDiameterMeters` ≥ 600 · `lakeA
 - **Scatter / foliage** (plants, mushrooms, ferns, weeds, rocks …) is always **one standalone object
   per model**, never a baked cluster; clusters come from several instances with varied height / tilt /
   yaw. Small plants are 2.5–5× life size so they read at distance.
-- **Water:** no invented water colour, no pattern lines, no mirrored objects — the bed shows through,
-  the sky comes in by Fresnel, silhouettes mask the sky.
+- **Water:** no pattern lines, no mirrored objects — the bed shows through shallow water and is bent a little by
+  the ripples, deep water goes to a deep blue (Mark 2026-11-23: "deeper and bluer the deeper we get"), the sky comes
+  in by Fresnel, silhouettes mask the sky.
 - **Generated models:** LODs switch at 100 / 200 / 300 m (vmdl `switch_threshold` 400 / 800 / 1200).
   Each iteration gets new versioned names (`…_v2`) and the previous version's files are deleted.
   Inspect every variant's render yourself before sending, then send one individual render per model.

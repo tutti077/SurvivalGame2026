@@ -103,12 +103,11 @@ PS
 		if ( depth > 0.0 )
 		{
 			float3 n;
-			float folding, breaking;
-			SeaWaveSum( p, depth, openness, 0.6, n, folding, breaking );
-			// Breaking crests: white where the set stands over the breaking height and the surface is near a crest
-			// (the crest top only, and only once the set stands well over the limit — a wide threshold painted the
-			// whole surf zone solid white, 2026-10-26)
-			float breakFoam = smoothstep( 0.15, 0.8, breaking ) * smoothstep( 0.3, 0.6, folding ) * 0.7;
+			float folding, breaking, roller;
+			SeaWaveSum( p, depth, openness, 0.6, n, folding, breaking, roller );
+			// Breaking bores: what the surface draws white on their front faces (SeaBreakFoam) stays behind them here as
+			// the streaks a broken wave leaves
+			float breakFoam = SeaBreakFoam( breaking, roller, depth ) * 0.7;
 			// Whitecaps out at sea where crests fold (the surface draws them too; the memory lets them linger as streaks)
 			float caps = smoothstep( 0.55, 0.85, folding ) * smoothstep( 0.25, 0.7, openness ) * 0.35;
 			float lapFoam = 0.0;
@@ -134,4 +133,4 @@ PS
 		return float4( foam, wet, 0.0, 1.0 );
 	}
 }
-// (rebuilt with sea_waves.hlsl — the include is not tracked as a dependency)
+// (rebuilt with sea_waves.hlsl 2026-11-19 b — the include is not tracked as a dependency)
